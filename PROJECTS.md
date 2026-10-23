@@ -19,7 +19,7 @@ Levi highlighted the top three. In the 2026-10-23 meeting, Levi made Trigger eve
 
 A company lead generator. Every week it finds companies that fit Contour's criteria and show signs of needing a new office. Levi approves them, they go into HubSpot, and HubSpot sends them to the right salesperson.
 
-Full details: [projects/LEADS.md](projects/LEADS.md).
+Full details: [projects/leads/LEADS.md](projects/leads/LEADS.md).
 
 ## 2. Meeting prep
 
@@ -58,7 +58,7 @@ It needs good HubSpot data, so the data check comes first.
 
 Draft. Plain words, for Levi's team. Both run on a timer, so nobody has to start them.
 
-**Trigger events** (every week: a ranked list of companies worth calling now). See [projects/LEADS.md](projects/LEADS.md).
+**Trigger events** (every week: a ranked list of companies worth calling now). See [projects/leads/LEADS.md](projects/leads/LEADS.md).
 
 **Meeting prep** (every morning: a one-page brief for each meeting tomorrow)
 

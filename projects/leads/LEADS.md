@@ -7,6 +7,16 @@ Contour's first AI project. In meetings it is called **"Trigger events."**
 - **Signed off by:** Levi Young
 - **Last updated:** 2026-10-23. Anything marked **TBC** is not confirmed yet.
 
+## Files in this folder
+
+| File | What it holds |
+|---|---|
+| [LEADS.md](LEADS.md) | This file: the whole project in one place |
+| [criteria/COMPANY.md](criteria/COMPANY.md) | Which companies to look for (draft) |
+| [criteria/DEAL.md](criteria/DEAL.md) | Contour's deal criteria, and how they differ |
+| [research/PARAMETERS.md](research/PARAMETERS.md) | What the agent searches for and records |
+| [questions/LEVI.md](questions/LEVI.md) | Open questions for Levi |
+
 ---
 
 ## What kind of project is this?
@@ -41,46 +51,11 @@ A company must pass **both** tests.
 - Moving but doesn't fit: too small, wrong city or wrong industry. Not worth calling.
 - **Both: call them this week.**
 
-### Test 1: Does it fit?
+The full rules are in [criteria/COMPANY.md](criteria/COMPANY.md). They are a draft for Levi to confirm.
 
-These rules come from Contour's *Qualified Deal Criteria (revised Q4 2026)*.
+These are **company criteria**: they judge a company before anyone calls. Contour's **deal criteria** judge a project later, after sales meets the client. See [criteria/DEAL.md](criteria/DEAL.md).
 
-| Rule | What the tool checks | If it fails |
-|---|---|---|
-| **Size** | 100 to 600 staff | Under 100: drop it. Over 600: send to a Director to review. |
-| **City** | Melbourne, Adelaide or Perth | Other cities (including Sydney): send to a Director to review |
-| **Industry** | Not on the review list below | On the list: send to a Director to review |
-| **Timing** | The project could happen within 3 years | No sign of moving: drop it |
-| **Who decides** | Decisions are made in Australia, not by an overseas head office | Flag it only (hard to tell from public information) |
-
-**Why staff count matters most.** One number tells us both the office size and the project budget:
-
-- Each person needs about **10 sqm** of office.
-- A fitout costs at least **$1,500 per sqm**.
-- So **100 staff** = about 1,000 sqm = about **$1.5M**.
-- And **600 staff** = about 6,000 sqm = about **$9M**.
-
-That matches Contour's target range of $1.5M to $10M. Projects above $10M are not dropped. A Director looks at them as possible very large deals (the "Whale Pipeline").
-
-**Industries a Director must review:** government, education, industry consultants, law firms (especially the biggest ones), premium banks and financial services, real estate agencies, standard not-for-profits, hospitals and healthcare providers.
-
-**Each company gets one of three results:**
-- **Pass:** goes on the weekly list.
-- **Director review:** goes on the list, marked for a Director.
-- **Drop:** not shown.
-
-### Test 2: Is it moving?
-
-In version 1 the tool looks for four signs. Levi named these in the 2026-10-23 meeting.
-
-| Sign | Example |
-|---|---|
-| **Lease ending** | Their office lease ends in 2027 |
-| **Merger or takeover** | Two companies join and one has an old office |
-| **Big new contract** | They won a contract and need about 100 more office staff |
-| **Fast growth or hiring** | Many job ads for office roles in one city |
-
-More signs come later: moving back to the office, merging several offices into one, a new CEO, new funding.
+Each company gets one result: **Pass**, **Director review**, **Watch** or **Drop**.
 
 ---
 
@@ -142,14 +117,7 @@ One card per company. A made-up example:
 
 ## What the tool cannot check
 
-Contour's criteria have 11 rules. The tool checks 5 from public information. Sales checks the other 6 after the first call:
-
-1. Does the company have a real need for help?
-2. Can Contour reach the decision makers?
-3. Is the project more than 50% likely to go ahead?
-4. Are they open to Contour's full service, not design-only or build-only?
-5. Is a happy competitor already involved?
-6. Any other red flags?
+Contour's deal criteria have 11 rules. The tool checks 5 from public information. Sales checks the other 6 after the first call. The list is in [criteria/DEAL.md](criteria/DEAL.md).
 
 ---
 
@@ -326,21 +294,14 @@ If it finds even a few good leads, that is proof for Levi before we build. It al
 
 ## Questions still open
 
-1. How many leads per week? Suggestion: 10 to 20.
-2. Can Levi rank the four signs from most to least important?
-3. Is 100 to 600 staff the right range?
-4. Who gets which lead: by city, by industry, or taking turns?
-5. How should people be told? HubSpot can send email, HubSpot notifications and Slack. It cannot send to Teams or WhatsApp directly.
-6. What counts as a lead: name and role only, or email and phone too?
-7. What are the privacy and spam rules for contacting new people? Ask Contour's compliance team. This is not legal advice.
-8. Are public ASX announcements enough, or does Contour need a paid ASX data feed?
-9. Will Contour pay for ZoomInfo later, for contact details?
+Questions for Levi are in [questions/LEVI.md](questions/LEVI.md). There are 20, and the five most important are marked at the top.
 
 ---
 
 ## Sources
 
-- Meeting minutes: [2026-10-20](<../minutes of meeting/Minutes of Meeting  (Oct 20,2026) .pdf>), [2026-10-21](<../minutes of meeting/Meeting started 2026_10_21 08_23 PST - Notes by Gemini.pdf>), [2026-10-23](<../minutes of meeting/AI Projects Meeting - 2026_10_23 08_19 PST - Notes by Gemini.pdf>)
-- *Contour Qualified Deal Criteria, revised Q4 2026* (Option 2)
+- Meeting minutes: [2026-10-20](<../../minutes of meeting/Minutes of Meeting  (Oct 20,2026) .pdf>), [2026-10-21](<../../minutes of meeting/Meeting started 2026_10_21 08_23 PST - Notes by Gemini.pdf>), [2026-10-23](<../../minutes of meeting/AI Projects Meeting - 2026_10_23 08_19 PST - Notes by Gemini.pdf>)
+- *Contour Qualified Deal Criteria, revised Q4 2026* (Option 2). Summary: [criteria/DEAL.md](criteria/DEAL.md)
+- Levi's email, 2026-10-23, asking for the questions in [questions/LEVI.md](questions/LEVI.md)
 - Anthropic, "How we built our multi-agent research system" (engineering blog). The design behind the research agent.
-- Overview of all AI projects: [PROJECTS.md](../PROJECTS.md)
+- Overview of all AI projects: [PROJECTS.md](../../PROJECTS.md)
