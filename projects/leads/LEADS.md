@@ -5,7 +5,7 @@ Contour's first AI project. In meetings it is called **"Trigger events."**
 - **Priority:** number 1. Levi Young made it the key priority on 2026-10-23. Meeting prep is on hold until this runs.
 - **Built by:** Al-khair Pama (AI Engineer)
 - **Signed off by:** Levi Young
-- **Last updated:** 2026-10-23. Anything marked **TBC** is not confirmed yet.
+- **Last updated:** 2026-10-24. Anything marked **TBC** is not confirmed yet.
 
 ## Files in this folder
 
@@ -155,17 +155,19 @@ What it keeps:
 
 Why no website in version 1: Levi asked for results by email, with no new logins (2026-10-21). A website takes longer to build and would delay the first weekly list.
 
+When a website is needed, it runs on the same DigitalOcean account. No other hosting platform is needed.
+
 ---
 
 ## Where the data comes from
 
-Safest first. Version 1 uses only the first two.
+Safest first. Version 1 uses the first two, plus Property Daily if its terms allow.
 
 | Source | What it gives | When |
 |---|---|---|
 | **Claude web search** | News, ASX announcements, press releases, company websites | Version 1 |
 | **Official feeds** | News RSS feeds (automatic update lists that sites publish). Public ASX announcements. | Version 1 |
-| **Property Daily** | Lease endings and office moves. Paid, and Contour already has access. | As soon as Levi sends the logins |
+| **Property Daily** | Lease endings and office moves. Paid, and Contour already has access. | Logins received (by 2026-10-24). Checking what it includes and whether its terms let a program read it (**TBC**). |
 | **ZoomInfo** | Decision-maker contacts. Paid. | Later, if Contour pays for it |
 
 ### What web search finds, and what it misses
@@ -222,12 +224,20 @@ Some tools plug in through **MCP**, a standard plug that lets Claude use outside
 | **HubSpot, read only** (MCP or API) | Answers "Is this company in HubSpot? Who owns it?" | Low | Version 1 |
 | **The program** | Our own small program on a rented server (DigitalOcean). Runs the schedule, the rules and the emails. Writes to HubSpot after Levi approves. | Low | Version 1 |
 | **Database** | Postgres, on the same server. The tool's memory. | Low | Version 1 |
-| **Property Daily** | Lease data. Connects through its own HubSpot add-on (PD Connect), not MCP (**TBC**). | Low (licensed) | Next |
+| **Property Daily** | Lease data. Connects through its own HubSpot add-on (PD Connect), not MCP (**TBC**). | Low (licensed) | Logins received. Checking its terms (**TBC**). |
 | **Page reader** (for example Firecrawl) | Turns messy web pages into clean text, one page at a time | Low on public company websites | Only if web fetch struggles |
 | **ZoomInfo** | Decision-maker contacts | Low (licensed) | Later |
 | **Scraping tools** (for example, for LinkedIn or job sites) | Bulk people and job data | High (see below) | To decide with Levi and compliance |
 
 **More tools does not mean more power.** Each tool adds cost, more things that can break, and security risk. Add a tool only when a test run shows a real gap.
+
+**Tools come in steps** (proposed to Levi in SUMMARY, 2026-10-24). Each new tool goes to Levi with its cost and the reason.
+
+| Step | Tools |
+|---|---|
+| Now (version 1) | Claude API, HubSpot workflows, DigitalOcean, Property Daily |
+| Next (after the first weekly lists) | A page reader (Firecrawl) if some sites are hard to read. A side-by-side Breeze test on 5 companies. |
+| Later (only if a test shows a need) | ZoomInfo or Sales Navigator for contacts, after a privacy check. A website and dashboard for the team. |
 
 ---
 
@@ -270,11 +280,14 @@ This is general information, not legal advice. Contour's compliance team or a la
 
 | Need | From | Status |
 |---|---|---|
-| HubSpot admin access | Levi | Agreed 2026-10-23 |
-| Claude account for the program, with a monthly spending cap | Levi (Al-khair to email the details) | Pending |
-| Server account (DigitalOcean), paid by Contour | Contour | **TBC** |
-| HubSpot plan that allows automation | HubSpot admin | **TBC** |
+| HubSpot admin access | Levi | Agreed 2026-10-23. Not set up yet. |
+| Claude API account, with a monthly spending limit | Levi (steps for the office are in QUESTIONS.docx) | Pending. Suggested limit US$300 a month (**TBC**). |
+| Server account (DigitalOcean) | Al-khair opens it with a Contour email and adds Levi or IT as a team member. Contour reimburses the monthly invoice. | Proposed 2026-10-24. Needs Levi's OK. |
+| HubSpot plan that allows automation | HubSpot admin | **TBC** (workflows need Professional or higher) |
 | OK to send company data to Claude and the server | Contour | **TBC** |
+| Property Daily logins | Levi | Received (by 2026-10-24) |
+
+**Running cost for version 1:** about US$115 to $330 a month. That is the Claude API at about US$100 to $300 (billed by use), plus DigitalOcean at about US$15 to $30 (one server and weekly backups). **TBC** until the first test run.
 
 ---
 
@@ -294,7 +307,7 @@ If it finds even a few good leads, that is proof for Levi before we build. It al
 
 ## Questions still open
 
-Questions for Levi are in [questions/LEVI.md](questions/LEVI.md). There are 20, and the five most important are marked at the top.
+Questions for Levi are in [questions/LEVI.md](questions/LEVI.md). There are 19, with the top 5 first. They are written up for Levi (24 Oct 2026): [SUMMARY.pdf](../../documents/SUMMARY.pdf) to read and [QUESTIONS.docx](../../documents/QUESTIONS.docx) to fill in. SUMMARY.docx is the editable copy.
 
 ---
 

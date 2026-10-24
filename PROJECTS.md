@@ -1,7 +1,7 @@
 # Contour AI projects
 
 Source: Levi Young's project list and the follow-up meeting.
-Last updated: 2026-10-23. Anything marked **TBC** is not confirmed.
+Last updated: 2026-10-24. Anything marked **TBC** is not confirmed.
 
 ## The projects
 
@@ -103,15 +103,15 @@ Prices are in USD. n8n prices are from its pricing page on 2026-10-19 and only a
 |---|---|
 | HubSpot plan (Data Hub Professional) | Contour may already have it. Price **TBC**. |
 | HubSpot Credits | Only if we use Breeze. About 1 cent per credit (**TBC**). |
-| Claude API | Billed by use. Not estimated. Set a monthly cap. **TBC** |
-| DigitalOcean server and database | Not estimated. **TBC** |
+| Claude API | Billed by use. Rough estimate for Trigger events: US$100 to $300 a month. Suggested monthly limit US$300. **TBC** until the first test run. |
+| DigitalOcean server and database | About US$15 to $30 a month: one server at US$12 to $24, plus 20% for weekly backups (DigitalOcean pricing page, 2026-10-24) |
 | n8n Cloud (fallback only) | Starter US$20 per month, Pro US$50 per month |
 
 - Our estimate: about 830 research jobs per month (daily Meeting prep, plus a weekly scan of 200 companies with one job per company).
-- **Data location:** Claude API calls go to Anthropic. DigitalOcean has a Sydney region (**TBC**). Contour must approve both for client data. (Dropping n8n Cloud also removes the Frankfurt storage question.)
+- **Data location:** Claude API calls go to Anthropic. DigitalOcean has a Sydney data centre (listed on its pricing page, 2026-10-24). Contour must approve both for client data. (Dropping n8n Cloud also removes the Frankfurt storage question.)
 
-**Billing (proposal):** I am a contractor. Contour creates and pays for the project accounts:
-1. DigitalOcean account, under a Contour email and billing
+**Billing (proposal):** I am a contractor. Contour pays for the project accounts:
+1. DigitalOcean account: I open it with my Contour email, add Levi or IT as a team member, and Contour reimburses the monthly invoice (proposed 2026-10-24, needs Levi's OK). Billing can move to a company card later.
 2. Claude API account, with a monthly cap
 3. A HubSpot Private App token, created by a HubSpot admin (read-only to start, write for notes)
 4. Permission to send email or Teams messages
@@ -120,7 +120,7 @@ Claude Pro is my development tool. Bill it only if agreed in writing. Use sample
 
 ## Next steps
 
-1. Send Levi the cost and setup note.
+1. Send Levi the cost and setup note. Ready to send as [documents/SUMMARY.pdf](documents/SUMMARY.pdf) and [documents/QUESTIONS.docx](documents/QUESTIONS.docx) (2026-10-24).
 2. Ask the HubSpot admin the seven questions in [HUBSPOT.md](HUBSPOT.md), section 15. The first two decide the plan: tier and credits.
 3. Ask Levi what he means by "meeting panel."
 4. Get HubSpot access. Run the data check: are meetings logged, how many companies have contacts, is there a target list, how many notes exist.
