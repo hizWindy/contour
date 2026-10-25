@@ -1,7 +1,9 @@
 """The one settings object. It reads engine/.env. Nothing else reads environment variables."""
 
+from decimal import Decimal
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 from urllib.parse import quote
 
 from pydantic import SecretStr
@@ -38,8 +40,21 @@ class Settings(BaseSettings):
     embedding_model: str = "BAAI/bge-small-en-v1.5"
     embedding_cache_dir: Path = BACKEND_DIR / ".cache" / "fastembed"
 
-    # Claude, used from Phase 1
+    # Claude. Prices per model are in core/claude/pricing.py.
     anthropic_api_key: SecretStr | None = None
+    claude_model: str = "claude-opus-5-5"
+    claude_effort: Literal["low", "medium", "high", "xhigh", "max"] = "medium"
+    claude_timeout_seconds: float = 300
+    claude_concurrency: int = 2  # Claude requests at the same time. New API keys have low limits.
+
+    # Caps for researching one company. Code checks them before every Claude request.
+    company_cap_usd: Decimal = Decimal("2.50")
+    company_max_searches: int = 12
+    searches_per_request: int = 3
+    fetches_per_request: int = 3
+
+    # Memory first: notes younger than this are reused instead of searching again
+    memory_fresh_days: int = 30
 
     def database_url(self, database: str | None = None) -> str:
         """The SQLAlchemy address for psycopg 3. Works for both sync and async engines."""

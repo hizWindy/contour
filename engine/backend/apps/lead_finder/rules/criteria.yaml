@@ -52,6 +52,7 @@ fit:
 triggers:
   window_years: 3
   best_window_years: [1, 3]
+  recent_months: 12 # an event, like a merger, counts if it happened in the last 12 months
   main:
     - id: lease_ending
       label: Lease ending in 1 to 3 years
@@ -96,6 +97,34 @@ never_suggest:
 
 sources_rank: [property_daily, asx_or_official_news, other_news, job_ads]
 
+# Which websites count as which kind of source. A site matches its subdomains too.
+# Anything not listed is other_news. The company's own website counts as official.
+source_domains:
+  property_daily: [] # off in version 1
+  asx_or_official_news: [asx.com.au, gov.au, wgea.gov.au, abr.business.gov.au, asic.gov.au]
+  job_ads: [seek.com.au, indeed.com, jora.com, linkedin.com, glassdoor.com]
+  blocked: # contact-data sellers: weak sources, and they hold personal data
+    - zoominfo.com
+    - rocketreach.co
+    - signalhire.com
+    - contactout.com
+    - lusha.com
+    - apollo.io
+
+# The score, 0 to 100. Stronger and newer signs rank higher.
+score:
+  trigger: { main: 35, other: 25, weak: 10 } # the best trigger counts
+  recency: # how long ago the best trigger happened
+    - { within_days: 30, points: 20 }
+    - { within_days: 90, points: 15 }
+    - { within_days: 365, points: 10 }
+  undated: 5
+  lease_in_best_window: 20 # a lease ending 1 to 3 years out
+  fit: { pass: 15, director_review: 8 }
+  source: { property_daily: 15, asx_or_official_news: 12, other_news: 8, job_ads: 4 }
+  booster_each: 5
+  boosters_max: 15
+
 results: [pass, director_review, watch, drop]
 
 tbc:
@@ -119,3 +148,9 @@ tbc:
     note: All boosters are our proposals.
   - key: never_suggest.dissolved_deal_wait_months
     note: The 12 months is a guess.
+  - key: triggers.recent_months
+    note: Our proposal. How old an event can be and still count as a trigger.
+  - key: source_domains
+    note: First draft. The test set will show which sites matter.
+  - key: score
+    note: All weights are our proposals. LEADS.md says the weights are TBC with Levi.

@@ -24,6 +24,8 @@ From `engine/backend/`:
 | Start with auto-reload while coding | `uv run engine serve --reload` |
 | Apply database changes only | `uv run engine migrate` |
 | Load a HubSpot export | `uv run engine import-hubspot ../../projects/leads/research/COMPANIES.xlsx` |
+| Research one company (costs money) | `uv run lead-finder research "Culture Amp" --city Melbourne` |
+| Run the test set of 10 companies (costs money) | `uv run lead-finder testset --yes` |
 | Fast tests (no database) | `uv run pytest -m "not integration"` |
 | All tests (needs the database) | `uv run pytest` |
 | Lint and format | `uv run ruff check .` and `uv run ruff format .` |
@@ -44,15 +46,26 @@ backend/
     logs.py            structured logs
     api/               the FastAPI app, shared endpoints, the error format
     db/                the database connection, the base model, migrations
+    claude/            Claude with web search and fetch (client.py), prices (pricing.py), caps (budget.py)
+    searches/          the search log: every Claude request and its cost
     memory/            pgvector memory and FastEmbed
-    hubspot/           the HubSpot import (export file now, API later)
+    hubspot/           the HubSpot import, and exact matching (matching.py)
   apps/
     lead_finder/       the first project
       app.py           tells the core this project's name, endpoints and rules
       api.py           the /api/v1/lead-finder endpoints
       rules.py         checks the rules files
       rules/           criteria.yaml, queries.yaml, hubspot_map.yaml
+      research.py      researches one company: memory, search, form, gap check, save
+      fields.py        the answer forms Claude fills in
+      sources.py       the source check (pure code)
+      scoring.py       the rules and the score (pure code)
+      prompts/         the instructions for Claude; prompts.py gives each a version
+      tables.py        the leads table
+      cli.py           the `lead-finder` command
+      testset.yaml     the 10 test companies
   tests/               fast tests, and integration tests marked `integration`
+                       tests/lead_finder/samples.py holds the fake Claude
 ```
 
 ## Coding practices
@@ -73,7 +86,7 @@ backend/
 - Times are stored in UTC with the time zone. Money is stored as exact decimals, never floats.
 - Async from top to bottom: FastAPI, SQLAlchemy and httpx. Slow work that blocks (like FastEmbed or reading a spreadsheet) runs in a thread.
 
-### Working with Claude (from Phase 1)
+### Working with Claude
 
 - Prompts live in files, each with a version. Every run saves the prompt versions it used.
 - Claude's answers are never trusted as they are. Each one is checked against its answer form. A failed check is retried once, then the fact is marked "unknown".

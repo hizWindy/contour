@@ -5,6 +5,7 @@ description = "Contour research engine: a shared core, plus the Lead Finder."
 requires-python = ">=3.12"
 dependencies = [
     "alembic",
+    "anthropic>=2.3.0",
     "fastapi",
     "fastembed",
     "openpyxl",
@@ -20,6 +21,7 @@ dependencies = [
 
 [project.scripts]
 engine = "core.cli:main"
+lead-finder = "apps.lead_finder.cli:main"
 
 [dependency-groups]
 dev = [

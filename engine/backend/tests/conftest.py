@@ -22,6 +22,8 @@ from core.runtime import use_selector_loop_on_windows
 use_selector_loop_on_windows()
 
 TEST_TABLES = (
+    "lead_finder.leads",
+    "core.searches",
     "core.memory",
     "core.hubspot_deals",
     "core.hubspot_offices",

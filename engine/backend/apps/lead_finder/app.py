@@ -11,4 +11,5 @@ APP = AppSpec(
     db_schema="lead_finder",
     router=router,
     check_rules=load_rules,
+    tables_module="apps.lead_finder.tables",
 )

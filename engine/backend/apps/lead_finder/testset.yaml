@@ -1,0 +1,50 @@
+# The first test set: 10 public companies, researched with real searches.
+# They're public companies because using Contour's HubSpot names needs Levi's OK first.
+# Once he agrees, add the 5 Property Daily deals and his past wins.
+#
+# "why" says what each case tests. The expected results are our guesses (TBC) until the
+# first run, and a person checks each card against its sources.
+#
+# Run it from engine/backend: uv run lead-finder testset --yes
+
+companies:
+  - name: Culture Amp
+    city: Melbourne
+    website: cultureamp.com
+    why: A mid-size tech company with a Melbourne head office. Likely fits.
+  - name: Seek
+    city: Melbourne
+    website: seek.com.au
+    why: A large Melbourne head office. Tests the over-600-staff Director rule.
+  - name: Kogan.com
+    city: Melbourne
+    website: kogan.com
+    why: An ASX-listed retailer. Tests a mid-size office with warehouses elsewhere.
+  - name: Elders
+    city: Adelaide
+    website: elders.com.au
+    why: An Adelaide head office for a business spread across regional Australia.
+  - name: Beach Energy
+    city: Adelaide
+    website: beachenergy.com.au
+    why: An energy company with an Adelaide head office. Tests the site-heavy flag.
+  - name: Maptek
+    city: Adelaide
+    website: maptek.com
+    why: A private software firm. Tests what we can find with no ASX filings.
+  - name: Mineral Resources
+    city: Perth
+    website: mineralresources.com.au
+    why: A miner with a large Perth head office. Tests the site-heavy flag and size.
+  - name: Perenti
+    city: Perth
+    website: perenti.com
+    why: A mining services firm in Perth. Tests the site-heavy flag.
+  - name: Bankwest
+    city: Perth
+    website: bankwest.com.au
+    why: Owned by a Sydney bank. Tests the local team rule and the finance Director list.
+  - name: Canva
+    city: Sydney
+    website: canva.com
+    why: A Sydney company. Should go to Director review for its city.

@@ -102,7 +102,7 @@ Stronger and newer signs rank higher.
 
 How often Contour has contacted a company is **not** used. Levi said it doesn't predict new projects.
 
-The exact weights are **TBC** with Levi.
+The exact weights are **TBC** with Levi. Our proposal, out of 100, is in `engine/backend/apps/lead_finder/rules/criteria.yaml` under `score`. Example: a lease ending in 1 to 3 years, reported in the news, for a company that passes, scores 78.
 
 ---
 

@@ -80,6 +80,7 @@ class Item(Strict):
 class Triggers(Strict):
     window_years: int = Field(gt=0)
     best_window_years: tuple[int, int]
+    recent_months: int = Field(gt=0)
     main: list[Item] = Field(min_length=1)
     other: list[Item]
     weak: list[Item]
@@ -107,6 +108,47 @@ class NeverSuggest(Strict):
     do_not_contact: bool
 
 
+class SourceDomains(Strict):
+    property_daily: list[str]
+    asx_or_official_news: list[str]
+    job_ads: list[str]
+    blocked: list[str]
+
+
+class Recency(Strict):
+    within_days: int = Field(gt=0)
+    points: int = Field(ge=0)
+
+
+class Score(Strict):
+    trigger: dict[Literal["main", "other", "weak"], int]
+    recency: list[Recency] = Field(min_length=1)
+    undated: int = Field(ge=0)
+    lease_in_best_window: int = Field(ge=0)
+    fit: dict[Literal["pass", "director_review"], int]
+    source: dict[str, int]
+    booster_each: int = Field(ge=0)
+    boosters_max: int = Field(ge=0)
+
+    @model_validator(mode="after")
+    def check_score(self) -> Self:
+        if set(self.trigger) != {"main", "other", "weak"}:
+            raise ValueError("score.trigger needs main, other and weak")
+        days = [step.within_days for step in self.recency]
+        if days != sorted(set(days)):
+            raise ValueError("score.recency must go from the shortest time to the longest")
+        best = (
+            max(self.trigger.values())
+            + max(self.lease_in_best_window, *(step.points for step in self.recency))
+            + max(self.fit.values())
+            + max(self.source.values())
+            + self.boosters_max
+        )
+        if best > 100:
+            raise ValueError(f"The best possible score is {best}. It must be 100 or less.")
+        return self
+
+
 class TbcNote(Strict):
     key: str
     note: str
@@ -126,8 +168,16 @@ class Criteria(Strict):
     boosters: list[Item]
     never_suggest: NeverSuggest
     sources_rank: list[str] = Field(min_length=1)
+    source_domains: SourceDomains
+    score: Score
     results: list[Result]
     tbc: list[TbcNote]
+
+    @model_validator(mode="after")
+    def check_sources(self) -> Self:
+        if set(self.score.source) != set(self.sources_rank):
+            raise ValueError("score.source needs one entry for each kind in sources_rank")
+        return self
 
     @model_validator(mode="after")
     def check_tbc_keys(self) -> Self:

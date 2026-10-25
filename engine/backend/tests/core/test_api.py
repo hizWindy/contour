@@ -30,7 +30,11 @@ async def test_swagger_lists_the_endpoints(client: httpx.AsyncClient) -> None:
         "/api/v1/memory/search",
         "/api/v1/hubspot/import",
         "/api/v1/hubspot/summary",
+        "/api/v1/searches",
         "/api/v1/lead-finder/rules",
+        "/api/v1/lead-finder/research",
+        "/api/v1/lead-finder/leads",
+        "/api/v1/lead-finder/leads/{lead_id}",
     ):
         assert path in paths, path
 

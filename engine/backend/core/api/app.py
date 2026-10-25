@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from core.api import health, hubspot, memory
+from core.api import health, hubspot, memory, searches
 from core.api.errors import add_error_handlers
 from core.apps import load_apps
 from core.config import get_settings
@@ -48,6 +48,7 @@ def create_app() -> FastAPI:
     api.include_router(health.router)
     api.include_router(memory.router)
     api.include_router(hubspot.router)
+    api.include_router(searches.router)
     for spec in specs:
         api.include_router(spec.router, prefix=spec.route_prefix, tags=[spec.title])
     app.include_router(api)

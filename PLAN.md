@@ -578,6 +578,15 @@ Each phase ends with something that works. Start the next phase only when "Done 
 
 ### Phase 1: Research one company
 
+**Status:** done, 26 Oct 2026. All 105 tests pass, using saved sample answers. One check is left: the first real run, on the 10 test companies, is waiting on a Claude API key in `engine/.env`. That run measures the cost per company (**TBC**) and shows memory making a second look cheaper. How to run it: [engine/README.md](engine/README.md).
+
+How it was built, and what changed from the plan:
+- **Plain steps for now.** The steps are plain async code. LangGraph comes in Phase 2, when runs need many workers and need to survive a crash.
+- **One leads table.** Each lead is one row, with its full card (facts, sources, rule checks). The separate companies, offices, signals and facts tables come when Phase 2 or 3 needs them.
+- **Exact HubSpot matching only.** Same domain, or the same name without "Pty Ltd". Close names and "Possible match" stay in Phase 3. An open deal, or a deal dissolved in the last 12 months, already drops a lead.
+- **Score weights are a proposal.** They're in `criteria.yaml` under `score`, out of 100, all **TBC** with Levi. Example: a lease ending in 1 to 3 years, from a news site, for a company that passes, scores 78.
+- **Server-side fallback is on.** If Claude declines a request, the API retries it on the model Anthropic recommends, inside the same request.
+
 **Build**
 - `POST /lead-finder/research`: one company in, one lead card out.
 - Memory first, then the three search angles, the answer form, the gap check, the source check, and the rules and score.

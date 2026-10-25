@@ -1,10 +1,10 @@
 """Save text to memory, and search it by meaning."""
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.memory.embedder import Embedder
@@ -44,6 +44,61 @@ async def remember(
     await session.commit()
     await session.refresh(item)
     return item
+
+
+@dataclass(frozen=True)
+class Note:
+    """One piece of text to save with remember_many."""
+
+    content: str
+    subject: str | None = None
+    url: str | None = None
+    source_date: date | None = None
+    meta: dict[str, Any] | None = None
+
+
+async def remember_many(
+    session: AsyncSession, embedder: Embedder, notes: list[Note], *, app: str, kind: str
+) -> None:
+    """Saves several notes in one go. The caller commits."""
+    if not notes:
+        return
+    vectors = await embedder.embed_passages([note.content for note in notes])
+    for note, vector in zip(notes, vectors, strict=True):
+        session.add(
+            MemoryItem(
+                app=app,
+                kind=kind,
+                content=note.content,
+                subject=note.subject,
+                url=note.url,
+                source_date=note.source_date,
+                meta=note.meta or {},
+                embedding=vector,
+            )
+        )
+
+
+async def recent(
+    session: AsyncSession,
+    *,
+    app: str,
+    kind: str,
+    subject: str,
+    since: datetime,
+) -> list[MemoryItem]:
+    """Items about one subject saved after `since`, newest first. No embedding needed."""
+    statement = (
+        select(MemoryItem)
+        .where(
+            MemoryItem.app == app,
+            MemoryItem.kind == kind,
+            func.lower(MemoryItem.subject) == subject.lower(),
+            MemoryItem.created_at >= since,
+        )
+        .order_by(MemoryItem.created_at.desc())
+    )
+    return list((await session.scalars(statement)).all())
 
 
 async def search(

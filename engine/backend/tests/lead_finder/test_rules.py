@@ -116,3 +116,17 @@ def test_trigger_without_templates_stops_start_up(tmp_path: Path) -> None:
     )
     with pytest.raises(ValidationError, match="No discovery templates for triggers: hiring_push"):
         read_rules(rules_dir)
+
+
+def test_a_score_over_100_stops_start_up(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    edit(rules_dir / "criteria.yaml", "boosters_max: 15", "boosters_max: 40")
+    with pytest.raises(ValidationError, match="best possible score"):
+        read_rules(rules_dir)
+
+
+def test_every_source_kind_needs_a_score(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    edit(rules_dir / "criteria.yaml", " job_ads: 4 }", " }")
+    with pytest.raises(ValidationError, match="one entry for each kind"):
+        read_rules(rules_dir)
