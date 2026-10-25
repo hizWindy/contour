@@ -5,7 +5,7 @@ Contour's first AI project. In meetings it is called **"Trigger events."**
 - **Priority:** number 1. Levi Young made it the key priority on 2026-10-23. Meeting prep is on hold until this runs.
 - **Built by:** Al-khair Pama (AI Engineer)
 - **Signed off by:** Levi Young
-- **Last updated:** 2026-10-24. Anything marked **TBC** is not confirmed yet.
+- **Last updated:** 2026-10-25. Anything marked **TBC** is not confirmed yet.
 
 ## Files in this folder
 
@@ -15,6 +15,8 @@ Contour's first AI project. In meetings it is called **"Trigger events."**
 | [criteria/COMPANY.md](criteria/COMPANY.md) | Which companies to look for (draft) |
 | [criteria/DEAL.md](criteria/DEAL.md) | Contour's deal criteria, and how they differ |
 | [research/PARAMETERS.md](research/PARAMETERS.md) | What the agent searches for and records |
+| [research/EXPORT.md](research/EXPORT.md) | The HubSpot export run through the criteria, and the 47-company watchlist |
+| [research/COMPANIES.xlsx](research/COMPANIES.xlsx) | Copy of the HubSpot company data, without contacts |
 | [questions/LEVI.md](questions/LEVI.md) | Open questions for Levi |
 
 ---
@@ -45,11 +47,13 @@ A company must pass **both** tests.
 | Test | Question | Example |
 |---|---|---|
 | **1. It fits** | Is it the kind of company Contour wants? | 300 staff, based in Perth, logistics business |
-| **2. It is moving** | Is there a sign it needs a new office soon? | Just won a big contract and is hiring 120 people |
+| **2. It needs an office change** | Is there a sign it needs a new or refitted office soon? | Just won a big contract and is hiring 120 people |
 
-- Fits but not moving: a good company, but no reason to call **now**.
-- Moving but doesn't fit: too small, wrong city or wrong industry. Not worth calling.
+- Fits but no trigger: a good company, but no reason to call **now**. It goes on the Watch list.
+- Has a trigger but doesn't fit: too small, wrong city or wrong industry. Not worth calling.
 - **Both: call them this week.**
+
+An office change is a move **or** a full refit. A company that renews its lease and refits is still a project.
 
 The full rules are in [criteria/COMPANY.md](criteria/COMPANY.md). They are a draft for Levi to confirm.
 
