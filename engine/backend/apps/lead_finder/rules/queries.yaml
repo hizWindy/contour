@@ -1,0 +1,57 @@
+# Search templates for the Lead Finder.
+# The engine fills in {city}, {area}, {company}, {year} and {month_year}.
+# Every trigger in criteria.yaml needs at least one discovery template.
+# The areas and the wording are first drafts (TBC). The hand-test will show what works.
+
+areas:
+  Melbourne:
+    cbd: [Melbourne CBD, Docklands, Southbank]
+    inner: [St Kilda Road, Richmond, Cremorne, Collingwood, South Melbourne]
+  Adelaide:
+    cbd: [Adelaide CBD]
+    inner: [North Adelaide, Kent Town, Keswick, Mile End]
+  Perth:
+    cbd: [Perth CBD]
+    inner: [West Perth, East Perth, Subiaco, Northbridge]
+  Sydney:
+    cbd: [Sydney CBD]
+    inner: [North Sydney, Barangaroo, Pyrmont, Surry Hills]
+
+# Discovery: one slice is one trigger in one city.
+discovery:
+  lease_ending:
+    - "{city} office lease expiry {year} tenant"
+    - "{city} company relocating head office"
+    - "{city} office lease renewal refurbishment"
+  merger_or_takeover:
+    - "{city} company merger announced {month_year}"
+    - "ASX takeover {city} headquartered company"
+  big_new_contract:
+    - "{city} company wins major contract {month_year}"
+    - "{city} contract awarded expansion jobs"
+  fast_growth:
+    - "{city} company expansion hiring {year}"
+    - "{city} fastest growing companies {year}"
+  office_consolidation:
+    - "{city} company consolidating offices into one headquarters"
+  return_to_office:
+    - "{city} company return to office mandate {year}"
+  restructure:
+    - "{city} company restructure {month_year}"
+  new_ceo:
+    - "{city} company appoints new CEO {month_year}"
+  hiring_push:
+    - "{city} company hiring push {year}"
+
+# Watchlist: each company is searched from three angles.
+company:
+  property:
+    - "{company} {city} office lease"
+    - "{company} new office {city}"
+  people:
+    - "{company} hiring {city}"
+    - "{company} staff growth {year}"
+  money:
+    - "{company} contract win"
+    - "{company} acquisition merger"
+    - "{company} annual report lease commitments"

@@ -1,0 +1,20 @@
+# Which Lead Finder field goes to which HubSpot company property (Phase 5).
+# standard: true  = a property every HubSpot account has.
+# standard: false = a new property the HubSpot admin must create first (TBC).
+
+company:
+  name: { property: name, standard: true }
+  domain: { property: domain, standard: true }
+  city: { property: city, standard: true }
+  state: { property: state, standard: true }
+  industry: { property: industry, standard: true }
+  staff: { property: numberofemployees, standard: true }
+  ai_suggested: { property: contour_ai_suggested, standard: false }
+  trigger: { property: contour_ai_trigger, standard: false }
+  trigger_date: { property: contour_ai_trigger_date, standard: false }
+  source_link: { property: contour_ai_source_url, standard: false }
+  score: { property: contour_ai_score, standard: false }
+  result: { property: contour_ai_result, standard: false }
+  research_date: { property: contour_ai_research_date, standard: false }
+
+list_name: AI suggested

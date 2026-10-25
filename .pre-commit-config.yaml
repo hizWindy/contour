@@ -1,0 +1,30 @@
+# Checks that run before each commit. They only run when files in engine/backend change,
+# so commits to the planning documents aren't slowed down.
+# Install once, from engine/backend: uv run pre-commit install
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check (engine)
+        entry: uv run --directory engine/backend ruff check .
+        language: system
+        files: ^engine/backend/
+        pass_filenames: false
+      - id: ruff-format
+        name: ruff format --check (engine)
+        entry: uv run --directory engine/backend ruff format --check .
+        language: system
+        files: ^engine/backend/
+        pass_filenames: false
+      - id: mypy
+        name: mypy (engine)
+        entry: uv run --directory engine/backend mypy
+        language: system
+        files: ^engine/backend/
+        pass_filenames: false
+      - id: fast-tests
+        name: fast tests (engine)
+        entry: uv run --directory engine/backend pytest -m "not integration" -q
+        language: system
+        files: ^engine/backend/
+        pass_filenames: false

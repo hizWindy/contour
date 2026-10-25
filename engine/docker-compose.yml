@@ -1,0 +1,26 @@
+# The database: PostgreSQL 18 with pgvector.
+# Start: docker compose up -d    Stop: docker compose stop
+# It listens on 127.0.0.1:5433 only, so nothing outside this computer can reach it.
+
+services:
+  db:
+    image: pgvector/pgvector:pg18
+    container_name: contour-engine-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-leadfinder}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in engine/.env}
+      POSTGRES_DB: ${POSTGRES_DB:-leadfinder}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      # Postgres 18 images keep their data under /var/lib/postgresql.
+      - contour-engine-pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+volumes:
+  contour-engine-pgdata:

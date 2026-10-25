@@ -1,0 +1,121 @@
+# Lead Finder company criteria.
+# Source: projects/leads/criteria/COMPANY.md (preliminary, 25 Oct 2026).
+# Edit this file when Levi changes a rule. The backend checks it at start-up and won't
+# start if it's wrong. Anything not confirmed is listed under "tbc" at the bottom.
+
+label: Preliminary, 25 Oct 2026
+
+cities:
+  pass: [Melbourne, Adelaide, Perth]
+  director_review: [Sydney]
+  other_cities: director_review # "Sydney or another city" goes to a Director
+
+size:
+  staff_min: 100
+  staff_max: 600 # over this goes to Director review (a possible Whale Pipeline project)
+  staff_counted_in: city
+  office_m2_min: 1000
+  office_m2_max: 6000
+  m2_per_staff: 10 # used only when the office size isn't known
+  director_band_m2: [800, 1000] # just under the minimum goes to a Director, not Drop
+  linkedin_staff_multiplier: 2 # real staff is about LinkedIn staff x 2
+
+fitout:
+  rate_per_m2_aud: 1500 # the minimum rate in the deal criteria
+
+industries:
+  director_review:
+    - Government
+    - Education
+    - Industry consultants
+    - Law firms
+    - Premium banks and finance
+    - Real estate agencies
+    - Standard not-for-profits
+    - Hospitals and healthcare
+  check_office_size: # site-heavy firms: flagged to check the office size, not dropped
+    - Construction
+    - Civil engineering
+    - Mining and metals
+    - Machinery
+    - Manufacturing
+    - Food and beverages
+    - Retail
+    - Automotive
+    - Hospitality
+    - Transport and logistics
+
+fit:
+  local_team_runs_project: true
+  healthy: true # not in administration, and not cutting staff fast
+
+triggers:
+  window_years: 3
+  best_window_years: [1, 3]
+  main:
+    - id: lease_ending
+      label: Lease ending in 1 to 3 years
+    - id: merger_or_takeover
+      label: Merger or takeover, where one company has an old office
+    - id: big_new_contract
+      label: Big new contract, needing about 100 more office staff
+    - id: fast_growth
+      label: Fast growth
+  other:
+    - id: office_consolidation
+      label: Merging several offices into one
+    - id: return_to_office
+      label: Return to office
+    - id: restructure
+      label: Restructure
+  weak:
+    - id: new_ceo
+      label: New CEO or culture change
+    - id: hiring_push
+      label: Hiring push to attract talent
+
+boosters:
+  - id: property_daily_move
+    label: A relocation or lease ending found in Property Daily
+  - id: office_is_due
+    label: Leases rather than owns, and 6+ years in the same office
+  - id: buys_strategy
+    label: Talks about culture, hybrid work or green-building ratings, and hires firms directly
+  - id: can_pay
+    label: Profitable, growing or recently raised money
+  - id: no_rival_in_place
+    label: Not in a competitor's case studies from the last 5 years
+  - id: reachable_decision_maker
+    label: A known role (COO, CFO, Head of Property) or a contact already in HubSpot
+
+never_suggest:
+  already_sent: true
+  open_deal: true
+  dissolved_deal_wait_months: 12
+  do_not_contact: true
+
+sources_rank: [property_daily, asx_or_official_news, other_news, job_ads]
+
+results: [pass, director_review, watch, drop]
+
+tbc:
+  - key: size.staff_counted_in
+    note: Question 6. Does 100+ staff mean in that city, or across the whole company?
+  - key: size.m2_per_staff
+    note: Question 8. Is 10 m² per person right?
+  - key: size.director_band_m2
+    note: Relaxes Levi's 1,000 m² rule. Alvarez & Marsal at 800 m² is Contour Validated.
+  - key: size.linkedin_staff_multiplier
+    note: LinkedIn shows about half the real staff (median 0.51 across 19 HubSpot companies).
+  - key: industries.check_office_size
+    note: From the HubSpot deals. Builders and miners are flagged, not dropped.
+  - key: fit.local_team_runs_project
+    note: Was "decides locally". Some of Contour's clients are owned overseas.
+  - key: fit.healthy
+    note: Our proposal.
+  - key: triggers.best_window_years
+    note: Our proposal. Closer than 1 year, a consultant is probably already hired.
+  - key: boosters
+    note: All boosters are our proposals.
+  - key: never_suggest.dissolved_deal_wait_months
+    note: The 12 months is a guess.

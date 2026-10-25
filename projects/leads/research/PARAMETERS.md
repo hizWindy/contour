@@ -37,6 +37,8 @@ Every fact has a **source link**, a **date** and a label: **confirmed**, **estim
 
 ## 3. Where it looks
 
+Each company is searched from three angles: property (lease, move), people (hiring) and money (contracts, growth).
+
 | Trigger | Where, strongest first |
 |---|---|
 | Lease ending | Property Daily, annual reports (the lease note), property news |
@@ -70,6 +72,9 @@ Why Property Daily comes first: in HubSpot, 4 of 5 Property Daily deals are stil
 | Triggers | Lease, merger, contract, growth |
 | How far back | 30 days the first time, then 7 days each week |
 | Watchlist | HubSpot target lists, checked by name. Start with the 47 companies in [EXPORT.md](EXPORT.md), the 11 likely office-based ones first. |
+| Breadth | How many searches run per slice (**TBC**) |
+| Depth | 1 follow-up round: the gap check |
+| Budget per company | Example: 1 worker and up to 10 searches for a watchlist company (**TBC**) |
 | Limits | Most companies per week, and a spending cap (**TBC**) |
 
 ## 6. Ideas to test

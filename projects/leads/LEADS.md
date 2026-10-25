@@ -15,6 +15,7 @@ Contour's first AI project. In meetings it is called **"Trigger events."**
 | [criteria/COMPANY.md](criteria/COMPANY.md) | Which companies to look for (draft) |
 | [criteria/DEAL.md](criteria/DEAL.md) | Contour's deal criteria, and how they differ |
 | [research/PARAMETERS.md](research/PARAMETERS.md) | How each rule is measured, where the agent looks, and what it records |
+| [research/EXAMPLES.md](research/EXAMPLES.md) | How 13 other research agents work, and what we can borrow |
 | [research/EXPORT.md](research/EXPORT.md) | The HubSpot export run through the criteria, and the 47-company watchlist |
 | [research/COMPANIES.xlsx](research/COMPANIES.xlsx) | Copy of the HubSpot company data, without contacts |
 | [questions/LEVI.md](questions/LEVI.md) | Open questions for Levi |
@@ -143,6 +144,7 @@ What it keeps:
 | Leads | Which week, the result (Pass, Director review or Drop), the score, the card |
 | Feedback | Approved or rejected, useful or not, comments |
 | Runs | Date, companies checked, leads sent, cost |
+| Searches | Each search, what it returned, and its cost. Shows which search caused a wrong lead. |
 
 ---
 
@@ -213,6 +215,23 @@ It follows the same design Anthropic uses for Claude's own Research feature: one
 - Anthropic reports that this kind of research uses about 15 times more AI usage than a normal chat. An AI planner may also search more than needed.
 
 **Version 2:** an AI planner that digs deeper when it finds a promising company. For example: "This company won a contract. Now check its lease and staff numbers." We add this only after version 1 shows us the cost and the quality.
+
+### Ideas borrowed from other research agents
+
+From 13 other research agents ([research/EXAMPLES.md](research/EXAMPLES.md)). None needs a new tool. All are **TBC** until the hand-test.
+
+**How each worker searches**
+- **Same answer form every time.** Each worker returns the same fields, listed in [PARAMETERS.md](research/PARAMETERS.md) section 2. The rules can then score it straight away. (Anthropic)
+- **Three angles per company.** Property (lease, move), people (hiring) and money (contracts, growth). Each angle matches one of our triggers. Example: "ABC Logistics Perth lease", "ABC Logistics hiring Perth", "ABC Logistics contract win". (STORM)
+- **Short notes, not whole pages.** Each worker sends back a short summary with source links, not the pages it read. This keeps the cost down. (LangChain)
+- **Two dials.** Breadth is how many searches run per slice. Depth is how many follow-up rounds. Version 1 uses depth 1. The settings are in [PARAMETERS.md](research/PARAMETERS.md) section 5. (dzhng)
+
+**Controls**
+- **Gap check.** After the first search, if a company is missing office size, city, trigger or source, run one more targeted search, then stop. This is a small, capped version of "dig deeper." (Together AI)
+- **Budget per company.** When the cap is hit, the worker stops, saves what it has and marks the rest "unknown." The company goes to Watch. (Jina)
+- **Source check at the end.** A final step checks that every fact has a real source, ranked as in [PARAMETERS.md](research/PARAMETERS.md) section 4. Low-quality "content farm" sites are dropped. (Anthropic)
+
+**Not in version 1:** an AI planner, a code-running helper, large teams of helpers, or a model trained just for us.
 
 ---
 
@@ -302,6 +321,7 @@ Before writing any code, run the searches by hand:
 1. Search the last 30 days in Perth, Adelaide and Melbourne for the four signs.
 2. Check each company found against Test 1.
 3. Count how many real leads come back.
+4. Test it on our own deals. Take the 5 Property Daily deals in HubSpot ([research/EXPORT.md](research/EXPORT.md)) and Levi's past wins (question 2), about 15 to 25 cases in all. Could a web search have found each one? Example: Shakespeare Financial, Perth, 1,400 m². If Claude finds that move without Property Daily, web search works for leases. If not, Property Daily is essential.
 
 If it finds even a few good leads, that is proof for Levi before we build. It also shows which signs and sources work best.
 
