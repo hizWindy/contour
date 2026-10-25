@@ -6,16 +6,22 @@ requires-python = ">=3.12"
 dependencies = [
     "alembic",
     "anthropic>=2.3.0",
+    "defusedxml>=0.7.1",
     "fastapi",
     "fastembed",
+    "langgraph>=1.2.17",
+    "langgraph-checkpoint-postgres>=3.2.0",
     "openpyxl",
     "pgvector",
+    "psycopg-pool>=3.3.3",
     "psycopg[binary]",
     "pydantic",
     "pydantic-settings",
     "python-multipart",
     "pyyaml",
+    "rapidfuzz>=3.14.6",
     "sqlalchemy[asyncio]",
+    "sse-starlette>=3.5.1",
     "uvicorn[standard]",
 ]
 
