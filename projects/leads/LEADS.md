@@ -14,7 +14,7 @@ Contour's first AI project. In meetings it is called **"Trigger events."**
 | [LEADS.md](LEADS.md) | This file: the whole project in one place |
 | [criteria/COMPANY.md](criteria/COMPANY.md) | Which companies to look for (draft) |
 | [criteria/DEAL.md](criteria/DEAL.md) | Contour's deal criteria, and how they differ |
-| [research/PARAMETERS.md](research/PARAMETERS.md) | What the agent searches for and records |
+| [research/PARAMETERS.md](research/PARAMETERS.md) | How each rule is measured, where the agent looks, and what it records |
 | [research/EXPORT.md](research/EXPORT.md) | The HubSpot export run through the criteria, and the 47-company watchlist |
 | [research/COMPANIES.xlsx](research/COMPANIES.xlsx) | Copy of the HubSpot company data, without contacts |
 | [questions/LEVI.md](questions/LEVI.md) | Open questions for Levi |
@@ -97,7 +97,7 @@ Stronger and newer signs rank higher.
 | Type of sign | Lease ending, move announced | Job ads |
 | How recent | Last week | Two months ago |
 | Fit | Pass | Director review |
-| Source | ASX or official news | Job ads or rumours |
+| Source | Property Daily, ASX or official news | Job ads or rumours |
 
 How often Contour has contacted a company is **not** used. Levi said it doesn't predict new projects.
 
