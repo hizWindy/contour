@@ -184,8 +184,11 @@ async def test_a_missing_key_is_a_clear_error(monkeypatch: pytest.MonkeyPatch) -
 # --- What we send: web tool limits, blocked sites, and a model and effort per call --------------
 
 
-def claude_that_answers(sent: list[httpx2.Request], *messages: BetaMessage) -> AnthropicClaude:
-    """The real client on a fake network. It gives these messages in turn, then repeats the last."""
+def claude_that_answers(
+    sent: list[httpx2.Request], *messages: BetaMessage, **options: Any
+) -> AnthropicClaude:
+    """The real client on a fake network. It gives these messages in turn, then repeats the last.
+    `options` go to `AnthropicClaude` (like `gate=` or `daily=`)."""
     queue = list(messages)
 
     def handler(request: httpx2.Request) -> httpx2.Response:
@@ -196,7 +199,7 @@ def claude_that_answers(sent: list[httpx2.Request], *messages: BetaMessage) -> A
     sdk = anthropic.AsyncAnthropic(
         api_key="test-key", http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(handler))
     )
-    return AnthropicClaude(client=sdk)
+    return AnthropicClaude(client=sdk, **options)
 
 
 FINAL = message([{"type": "text", "text": '{"city": "Perth"}'}], searches=0)

@@ -1,14 +1,17 @@
 """The watchlist preview: the HubSpot companies a watchlist run would research.
 
-Answers 501 until its package builds it (see core/api/stubs.py).
+Local data only: it reads the HubSpot copy in the database and the rules. Nothing goes to
+Claude, so it needs no approval to use HubSpot names.
 """
 
 from typing import Annotated
 
 from fastapi import APIRouter, Query
 
+from apps.lead_finder.rules import load_rules
 from apps.lead_finder.schemas import WatchlistOut
-from core.api.stubs import stub
+from apps.lead_finder.watchlist import load_watchlist
+from core.api.deps import SessionDep
 
 router = APIRouter()
 
@@ -22,8 +25,8 @@ router = APIRouter()
         "rest were left out. Local only: nothing goes to Claude."
     ),
 )
-@stub
 async def get_watchlist(
+    session: SessionDep,
     include_unlikely: Annotated[
         bool, Query(description="Include industries that rarely work in an office")
     ] = True,
@@ -32,4 +35,10 @@ async def get_watchlist(
     ] = False,
     limit: Annotated[int, Query(ge=1, le=200)] = 200,
 ) -> WatchlistOut:
-    raise NotImplementedError
+    return await load_watchlist(
+        session,
+        load_rules(),
+        include_unlikely=include_unlikely,
+        include_director=include_director,
+        limit=limit,
+    )

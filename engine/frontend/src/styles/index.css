@@ -2,6 +2,8 @@
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
 @import './tokens.css';
+/* Leaflet's own rules first, so the map rules at the end of this file win over them. */
+@import 'leaflet/dist/leaflet.css';
 
 /* Tailwind builds only the classes the app uses. Tests mention banned classes on purpose
    (src/test/design-rules.ts), so they are not scanned. */
@@ -198,4 +200,85 @@
       scroll-behavior: auto !important;
     }
   }
+}
+
+/*
+  The map (components/city-map.tsx). Leaflet draws its own controls and tooltips, so they are
+  moved onto the tokens here. Leaflet gives each circle a class when it is made, and these rules
+  colour it (a rule beats the colour attributes Leaflet writes on the path).
+*/
+.leaflet-container {
+  background-color: var(--muted);
+  font-family: var(--font-sans);
+  font-size: var(--size-caption);
+}
+
+.leaflet-container .leaflet-tooltip {
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 4px);
+  background-color: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: var(--elevation-float);
+  font-size: var(--size-caption);
+  line-height: var(--leading-caption);
+}
+
+/* The little arrow of a tooltip is drawn with borders in Leaflet's own colour: left out. */
+.leaflet-container .leaflet-tooltip::before {
+  display: none;
+}
+
+.leaflet-container .leaflet-bar a,
+.leaflet-container .leaflet-control-attribution {
+  border-color: var(--border);
+  background-color: var(--card);
+  color: var(--foreground);
+}
+
+.leaflet-container .leaflet-control-attribution a {
+  color: var(--foreground);
+}
+
+.city-map-city {
+  fill: var(--card);
+  fill-opacity: 0.9;
+  stroke: var(--primary);
+  stroke-width: 2;
+}
+
+.city-map-city-review {
+  stroke: var(--review);
+  stroke-dasharray: 4 3;
+}
+
+.city-map-city-selected {
+  fill: var(--primary);
+  fill-opacity: 0.85;
+}
+
+.city-map-pin {
+  fill-opacity: 0.9;
+  stroke: var(--card);
+  stroke-width: 1.5;
+}
+
+.city-map-pin-pass {
+  fill: var(--pass);
+}
+
+.city-map-pin-director_review {
+  fill: var(--review);
+}
+
+.city-map-pin-watch {
+  fill: var(--watch);
+}
+
+.city-map-pin-drop {
+  fill: var(--muted-foreground);
+}
+
+.city-map-pin-active {
+  stroke: var(--primary);
+  stroke-width: 3;
 }

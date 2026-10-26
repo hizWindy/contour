@@ -14,11 +14,16 @@ from pydantic import BaseModel
 from apps.lead_finder.fields import CompanyFacts, TriggerFound
 from apps.lead_finder.rules import LeadFinderRules, Result
 from apps.lead_finder.sources import host_of, source_kind
-from core.hubspot.matching import HubSpotMatch
+from core.hubspot.matching import CandidateReason, HubSpotMatch
 
 Outcome = Literal["ok", "fail", "director", "unknown", "flag"]
 Group = Literal["main", "other", "weak"]
 DAYS_PER_YEAR = 365.25
+REASON_WORDS: dict[CandidateReason, str] = {
+    "close_name": "close name",
+    "name_in_deal": "name in a deal",
+    "similar_profile": "similar profile",
+}
 
 
 class RuleCheck(BaseModel):
@@ -111,6 +116,8 @@ def _never_suggest(
     facts: CompanyFacts, hubspot: HubSpotMatch, rules: LeadFinderRules, today: date
 ) -> list[RuleCheck]:
     never = rules.criteria.never_suggest
+    if hubspot.status == "possible_match":
+        return [_possible_match(hubspot)]
     if hubspot.status == "open_deal" and never.open_deal:
         names = ", ".join(hubspot.open_deals)
         return [RuleCheck(rule="HubSpot", outcome="fail", detail=f"Open deal in HubSpot: {names}")]
@@ -134,6 +141,23 @@ def _never_suggest(
         return [RuleCheck(rule="HubSpot", outcome="ok", detail="Not in HubSpot yet")]
     owner = f", owner {hubspot.owner}" if hubspot.owner else ""
     return [RuleCheck(rule="HubSpot", outcome="ok", detail=f"In HubSpot{owner}, no open deal")]
+
+
+def _possible_match(hubspot: HubSpotMatch) -> RuleCheck:
+    """A flag, never a fail: the company might be one in HubSpot, and a person confirms. It
+    doesn't change the result or the score by itself, so a wrong guess costs nothing."""
+    if not hubspot.candidates:
+        return RuleCheck(
+            rule="HubSpot", outcome="flag", detail="Possible match in HubSpot. A person confirms."
+        )
+    best = hubspot.candidates[0]
+    detail = f"Possible match with {best.name} ({REASON_WORDS[best.reason]}). A person confirms."
+    if best.open_deals:
+        detail += " It has an open deal."
+    for other in hubspot.candidates[1:]:
+        if other.open_deals:
+            detail += f" {other.name} has an open deal."
+    return RuleCheck(rule="HubSpot", outcome="flag", detail=detail)
 
 
 def city_of(place: str, rules: LeadFinderRules) -> str | None:

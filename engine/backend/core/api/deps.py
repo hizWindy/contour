@@ -6,10 +6,11 @@ from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.api.errors import Problem
-from core.claude.client import Claude, ClaudeUnavailable, get_claude
-from core.config import Settings, get_settings
+from core.claude.client import Claude, ClaudeUnavailable, configure_claude, get_claude
+from core.config import Settings
 from core.db.engine import get_session
 from core.memory.embedder import Embedder, get_embedder
+from core.prefs.service import effective_settings
 from core.runs.manager import RunManager
 
 
@@ -38,9 +39,26 @@ def run_manager_dependency(request: Request) -> RunManager:
     return manager
 
 
-def settings_dependency() -> Settings:
-    """The settings in use. For now this is .env only; package B2 adds the saved overrides."""
-    return get_settings()
+async def settings_dependency(
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> Settings:
+    """The settings in use for this request: .env with the saved overrides on top, read fresh
+    every time and never cached, so a change on the Settings page applies to the next request.
+
+    It reads through the request's own session (the same `get_session`, so a test that swaps
+    the session swaps this too) and ends the transaction it started, so no connection is held
+    while the route waits on Claude. A database that can't be reached is NOT answered with the
+    .env settings: the saved caps may be lower than .env, so the request fails instead. The
+    shared Claude is given the same settings (model, effort, how many requests at once).
+    """
+    started = not session.in_transaction()
+    try:
+        settings = await effective_settings(session)
+    finally:
+        if started:
+            await session.rollback()  # a read only: this ends the transaction
+    configure_claude(settings)
+    return settings
 
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]

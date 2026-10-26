@@ -1,8 +1,9 @@
 """Loads and checks the Lead Finder's rules files. The backend won't start if one is wrong.
 
 The files live in rules/: criteria.yaml (the company criteria), queries.yaml (the search
-templates) and hubspot_map.yaml (which field goes where in HubSpot). Each run will save the
-rules version it used, so old results stay explainable after the rules change.
+templates), hubspot_map.yaml (which field goes where in HubSpot) and watchlist.yaml (which
+HubSpot companies are worth watching). Each run will save the rules version it used, so old
+results stay explainable after the rules change.
 """
 
 import hashlib
@@ -16,7 +17,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 RULES_DIR = Path(__file__).resolve().parent / "rules"
-RULE_FILES = ("criteria", "queries", "hubspot_map")
+RULE_FILES = ("criteria", "queries", "hubspot_map", "watchlist")
 PLACEHOLDERS = {"city", "area", "company", "year", "month_year"}
 ANGLES = {"property", "people", "money"}
 
@@ -226,7 +227,66 @@ class HubSpotMap(Strict):
     list_name: str = Field(min_length=1)
 
 
-# --- All three together -----------------------------------------------------------------
+# --- watchlist.yaml ---------------------------------------------------------------------
+
+
+def industry_name_key(name: str) -> str:
+    """How industry names are compared: ignoring case and extra spaces."""
+    return " ".join(name.split()).casefold()
+
+
+class WatchStaff(Strict):
+    missing: Literal["unknown"]
+    staff_max_applies_to_director: bool
+
+
+class WatchlistRules(Strict):
+    """Which HubSpot companies are worth watching. The code is apps/lead_finder/watchlist.py."""
+
+    count_cities: list[str] = Field(min_length=1)
+    staff: WatchStaff
+    director_industries: dict[str, list[str]]  # criteria group -> HubSpot industry names
+    not_office_based: dict[str, list[str]]  # criteria group (or "none") -> industry names
+    tbc: list[TbcNote]
+
+    @model_validator(mode="after")
+    def check_names(self) -> Self:
+        repeated_cities = sorted({c for c in self.count_cities if self.count_cities.count(c) > 1})
+        if repeated_cities:
+            raise ValueError(f"count_cities lists a city twice: {', '.join(repeated_cities)}")
+        seen: dict[str, str] = {}
+        for section, groups in (
+            ("director_industries", self.director_industries),
+            ("not_office_based", self.not_office_based),
+        ):
+            for group, names in groups.items():
+                for name in names:
+                    key = industry_name_key(name)
+                    if not key:
+                        raise ValueError(f"{section}.{group} has an empty industry name")
+                    if key in seen:
+                        raise ValueError(
+                            f"The industry {name!r} is listed twice: in {seen[key]} "
+                            f"and in {section}.{group}"
+                        )
+                    seen[key] = f"{section}.{group}"
+        return self
+
+    @model_validator(mode="after")
+    def check_tbc_keys(self) -> Self:
+        data = self.model_dump()
+        for note in self.tbc:
+            node: Any = data
+            for part in note.key.split("."):
+                if not isinstance(node, dict) or part not in node:
+                    raise ValueError(f"tbc key {note.key!r} doesn't match a watchlist rule")
+                node = node[part]
+        return self
+
+
+# --- All files together -----------------------------------------------------------------
+
+NO_GROUP = "none"  # in watchlist.yaml not_office_based: industries with no criteria group
 
 
 class LeadFinderRules(Strict):
@@ -234,6 +294,37 @@ class LeadFinderRules(Strict):
     criteria: Criteria
     queries: Queries
     hubspot_map: HubSpotMap
+    watchlist: WatchlistRules
+
+    @model_validator(mode="after")
+    def check_watchlist(self) -> Self:
+        criteria, watchlist = self.criteria, self.watchlist
+        every_city = [*criteria.cities.pass_, *criteria.cities.director_review]
+        outside = [c for c in watchlist.count_cities if c not in every_city]
+        if outside:
+            raise ValueError(
+                f"watchlist.count_cities has cities that criteria.cities doesn't: "
+                f"{', '.join(outside)}"
+            )
+        unknown = [
+            g for g in watchlist.director_industries if g not in criteria.industries.director_review
+        ]
+        if unknown:
+            raise ValueError(
+                "watchlist.director_industries has groups that criteria.industries."
+                f"director_review doesn't: {', '.join(unknown)}"
+            )
+        unknown = [
+            g
+            for g in watchlist.not_office_based
+            if g != NO_GROUP and g not in criteria.industries.check_office_size
+        ]
+        if unknown:
+            raise ValueError(
+                "watchlist.not_office_based has groups that criteria.industries."
+                f"check_office_size doesn't: {', '.join(unknown)}"
+            )
+        return self
 
     @model_validator(mode="after")
     def check_together(self) -> Self:

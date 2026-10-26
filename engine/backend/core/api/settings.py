@@ -1,16 +1,17 @@
 """Settings endpoints: read them, change some, put one back to its default.
 
 These are the settings a person may change (caps, concurrency, models, thresholds). The hard
-ceilings and the HubSpot approval switch come from engine/.env and show as read-only rows.
-Every route answers 501 until package B2 builds it (see core/api/stubs.py).
+ceilings, the daily limit and the HubSpot approval switch come from engine/.env and show as
+read-only rows. The rules and the checks are in `core.prefs.service`.
 """
 
 from typing import Annotated
 
 from fastapi import APIRouter, Path
 
+from core.api.deps import SessionDep
 from core.api.models import SafeText
-from core.api.stubs import stub
+from core.prefs import service
 from core.prefs.schemas import SettingsOut, SettingsPatch
 
 router = APIRouter(prefix="/settings", tags=["settings"])
@@ -21,9 +22,8 @@ router = APIRouter(prefix="/settings", tags=["settings"])
     response_model=SettingsOut,
     summary="All settings, with their limits and current values",
 )
-@stub
-async def read_settings() -> SettingsOut:
-    raise NotImplementedError
+async def read_settings(session: SessionDep) -> SettingsOut:
+    return await service.get_settings_out(session)
 
 
 @router.patch(
@@ -38,9 +38,8 @@ async def read_settings() -> SettingsOut:
         "run and the next request. A run in progress keeps the caps it started with."
     ),
 )
-@stub
-async def update_settings(body: SettingsPatch) -> SettingsOut:
-    raise NotImplementedError
+async def update_settings(body: SettingsPatch, session: SessionDep) -> SettingsOut:
+    return await service.patch_settings(session, body.values)
 
 
 @router.delete(
@@ -48,8 +47,8 @@ async def update_settings(body: SettingsPatch) -> SettingsOut:
     response_model=SettingsOut,
     summary="Put one setting back to its default",
 )
-@stub
 async def reset_setting_to_default(
     key: Annotated[SafeText, Path(max_length=64, examples=["run_cap_usd"])],
+    session: SessionDep,
 ) -> SettingsOut:
-    raise NotImplementedError
+    return await service.reset_setting(session, key)

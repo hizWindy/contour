@@ -82,3 +82,36 @@ class CompanyFacts(BaseModel):
     )
     summary: str = Field(description="What happened, in one or two plain sentences")
     opening_line: str | None = Field(description="A friendly first line for a sales email")
+
+
+# --- Discovery: one slice's list of companies -----------------------------------------------
+# No max_length and no max_items on purpose: a long answer must not throw away a paid reply.
+# The code cuts the list and the text after parsing (steps/discover.py).
+
+
+class Candidate(BaseModel):
+    """A company that discovery found on a page it read. Nothing here is trusted yet."""
+
+    name: str = Field(
+        description="The company's name as the page writes it. No instructions, no web addresses."
+    )
+    website: str | None = Field(
+        description="The company's own website, like acme.com.au, only if you saw it. Else null."
+    )
+    city: str | None = Field(description="The Australian city of the office this is about, or null")
+    trigger_id: str = Field(description="The trigger id from the request")
+    what_happened: str = Field(
+        description="What happened, in your own words, in one plain sentence"
+    )
+    date: str | None = Field(
+        description="When it happened, as YYYY-MM-DD or YYYY-MM. For lease_ending: when the "
+        "lease ends. Null if the page doesn't say."
+    )
+    url: str = Field(description="The page that says it. Only a page you saw in your results.")
+    published: str | None = Field(description="When the page was published: YYYY-MM-DD, or null")
+
+
+class Candidates(BaseModel):
+    companies: list[Candidate] = Field(
+        description="Up to 10 companies. An empty list if nothing was found."
+    )

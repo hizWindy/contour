@@ -1,23 +1,89 @@
 """Run endpoints that act: start a run, watch it live, stop it, bring it back.
 
-Every route here has its final path, parameters and response model, and answers 501 until its
-package builds it (see core/api/stubs.py). The routes that only read (estimate, list, summary,
-one run, the log) are in `core/api/runs_read.py`, a second router on the same `/runs` prefix.
+The routes that only read (estimate, list, summary, one run, the log) are in
+`core/api/runs_read.py`, a second router on the same `/runs` prefix.
+
+Two rules for these routes:
+- The run manager is looked up INSIDE the route (`manager_of`), not as a `Depends` parameter.
+  FastAPI runs a dependency before it checks the body and the query, so a dependency that
+  answers 503 would hide a 422 for a bad request. Here a bad request is a 422 first, and only a
+  good one finds out whether the run engine is ready.
+- The events route never uses `SessionDep`. A stream can last an hour, and a database session
+  must not be held that long. The manager opens short sessions of its own.
 """
 
+import json
+import re
 import uuid
-from typing import Annotated
+from collections.abc import AsyncIterator
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Header, Query, Response
+import anyio
+from fastapi import APIRouter, Header, Query, Request, Response
+from sse_starlette.sse import EventSourceResponse
 
+from core.api.deps import run_manager_dependency
 from core.api.errors import ProblemDetails
 from core.api.models import INT32_MAX
-from core.api.stubs import stub
-from core.runs.schemas import RunCreate, RunOut
+from core.runs.manager import RunManager
+from core.runs.schemas import RunCreate, RunOut, dump_event
+from core.runs.types import EventStream
 
 router = APIRouter(prefix="/runs", tags=["runs"])
 
 IDEMPOTENCY_PATTERN = r"^[A-Za-z0-9._:-]+$"
+HEARTBEAT_SECONDS = 15  # a comment line, so proxies and browsers keep the connection open
+SEND_TIMEOUT_SECONDS = 30  # a client that doesn't read for this long is dropped
+_DIGITS = re.compile(r"[0-9]+")
+
+
+def manager_of(request: Request) -> RunManager:
+    """The run manager, or a plain 503 when the run engine isn't running (database down at
+    start-up). Same answer as the `RunManagerDep` dependency; see the module text for why it
+    is a call and not a parameter."""
+    return run_manager_dependency(request)
+
+
+def last_event_id_of(value: str | None) -> int:
+    """The number in a `Last-Event-ID` header. Anything that isn't digits is ignored (0), and
+    a huge number is cut to what a database integer holds, so it can't cause a 500."""
+    if value is None:
+        return 0
+    text = value.strip()
+    if not _DIGITS.fullmatch(text):
+        return 0
+    if len(text) > 12:  # more than any number of events, and `int()` stays fast
+        return INT32_MAX
+    return min(int(text), INT32_MAX)
+
+
+class WatchedStream(EventSourceResponse):
+    """The events response. It gives the watcher slot back whenever the response ends: when the
+    client leaves, when a send times out, and when the response was never started."""
+
+    def __init__(self, stream: EventStream, **options: Any) -> None:
+        super().__init__(self._messages(stream), **options)
+        self._stream = stream
+
+    @staticmethod
+    async def _messages(stream: EventStream) -> AsyncIterator[dict[str, str]]:
+        # `id` and `data` only: no `event`, because the website reads the stream with
+        # `onmessage`, and a listener for a named event would never fire.
+        try:
+            async for event in stream:
+                yield {
+                    "id": str(event.seq),
+                    "data": json.dumps(dump_event(event), separators=(",", ":")),
+                }
+        finally:
+            await stream.aclose()
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            with anyio.CancelScope(shield=True):
+                await self._stream.aclose()
 
 
 @router.post(
@@ -52,9 +118,10 @@ IDEMPOTENCY_PATTERN = r"^[A-Za-z0-9._:-]+$"
         },
     },
 )
-@stub
 async def create_run(
     body: RunCreate,
+    request: Request,
+    response: Response,
     idempotency_key: Annotated[
         str | None,
         Header(
@@ -68,14 +135,15 @@ async def create_run(
         ),
     ] = None,
 ) -> RunOut:
-    raise NotImplementedError
+    manager = manager_of(request)
+    run = await manager.start(body.app, body.mode, body.params, idempotency_key)
+    response.headers["Location"] = f"{request.url.path.rstrip('/')}/{run.id}"
+    return run
 
 
-# When this is built: answer 204 first if `manager.stream_is_over(run_id, after)`, then
-# `stream = await manager.subscribe(run_id, after)`. That call raises the 404 and the 429 as
-# problem answers before any stream starts. Close `stream` in a `finally` (see
-# `RunManager.subscribe`). Do not use `SessionDep` here. Send each event with an `id` (the seq)
-# and `data` only: no `event=`, because the website reads the stream with `onmessage`.
+# Answers 204 first if `manager.stream_is_over(run_id, after)`, then `stream = await
+# manager.subscribe(run_id, after)`. That call raises the 404 and the 429 as problem answers
+# before any stream starts. `WatchedStream` closes `stream` however the response ends.
 @router.get(
     "/{run_id}/events",
     response_model=None,
@@ -103,9 +171,9 @@ async def create_run(
         429: {"description": "Too many people are watching (10 for one run, 50 in all)"},
     },
 )
-@stub
 async def stream_run_events(
     run_id: uuid.UUID,
+    request: Request,
     after: Annotated[
         int, Query(ge=0, le=INT32_MAX, description="Only events with a higher seq")
     ] = 0,
@@ -113,7 +181,12 @@ async def stream_run_events(
         str | None, Header(description="Sent by the browser when it reconnects")
     ] = None,
 ) -> Response:
-    raise NotImplementedError
+    manager = manager_of(request)
+    start = max(after, last_event_id_of(last_event_id))
+    if await manager.stream_is_over(run_id, start):
+        return Response(status_code=204)  # so the browser's EventSource stops trying again
+    stream = await manager.subscribe(run_id, start)
+    return WatchedStream(stream, ping=HEARTBEAT_SECONDS, send_timeout=SEND_TIMEOUT_SECONDS)
 
 
 @router.post(
@@ -125,9 +198,8 @@ async def stream_run_events(
         "or already stopping is returned as it is."
     ),
 )
-@stub
-async def cancel_run(run_id: uuid.UUID) -> RunOut:
-    raise NotImplementedError
+async def cancel_run(run_id: uuid.UUID, request: Request) -> RunOut:
+    return await manager_of(request).cancel(run_id)
 
 
 @router.post(
@@ -140,6 +212,5 @@ async def cancel_run(run_id: uuid.UUID) -> RunOut:
         "3 resumes. Nothing resumes by itself."
     ),
 )
-@stub
-async def resume_run(run_id: uuid.UUID) -> RunOut:
-    raise NotImplementedError
+async def resume_run(run_id: uuid.UUID, request: Request) -> RunOut:
+    return await manager_of(request).resume(run_id)

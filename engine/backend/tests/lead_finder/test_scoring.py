@@ -6,8 +6,8 @@ import pytest
 
 from apps.lead_finder.fields import BoosterFound, TriggerFound
 from apps.lead_finder.rules import load_rules
-from apps.lead_finder.scoring import judge, parse_date
-from core.hubspot.matching import HubSpotMatch
+from apps.lead_finder.scoring import RuleCheck, Verdict, judge, parse_date
+from core.hubspot.matching import CandidateReason, HubSpotMatch, MatchCandidate
 from tests.lead_finder.samples import ASX, NEWS, fact, make_facts
 
 TODAY = date(2026, 10, 26)
@@ -155,3 +155,68 @@ def test_unknown_size_with_a_trigger_needs_a_check() -> None:
 )
 def test_parse_date(text: str | None, expected: date | None) -> None:
     assert parse_date(text) == expected
+
+
+# --- A possible match in HubSpot: a flag a person confirms, never a drop -----------------------
+
+
+def candidate(
+    name: str, reason: CandidateReason = "close_name", open_deals: list[str] | None = None
+) -> MatchCandidate:
+    return MatchCandidate(
+        hubspot_id=name,
+        name=name,
+        owner=None,
+        reason=reason,
+        score=0.92,
+        open_deals=open_deals or [],
+    )
+
+
+def hubspot_check(result: Verdict) -> RuleCheck:
+    (check,) = [check for check in result.checks if check.rule == "HubSpot"]
+    return check
+
+
+@pytest.mark.parametrize(
+    ("reason", "words"),
+    [
+        ("close_name", "close name"),
+        ("name_in_deal", "name in a deal"),
+        ("similar_profile", "similar profile"),
+    ],
+)
+def test_a_possible_match_is_flagged_and_changes_nothing_else(
+    reason: CandidateReason, words: str
+) -> None:
+    hubspot = HubSpotMatch(status="possible_match", candidates=[candidate("Acme Group", reason)])
+    result = verdict(hubspot)
+    assert (result.result, result.score) == (verdict().result, verdict().score)  # pass, 78
+    check = hubspot_check(result)
+    assert check.outcome == "flag"
+    assert check.detail == f"Possible match with Acme Group ({words}). A person confirms."
+
+
+def test_a_possible_match_says_when_a_candidate_has_an_open_deal() -> None:
+    hubspot = HubSpotMatch(
+        status="possible_match",
+        candidates=[
+            candidate("Acme Group", open_deals=["Acme MEL 2,000m2 Office"]),
+            candidate("Acme Holdings"),
+            candidate("Acme Partners", open_deals=["Acme Partners fitout"]),
+        ],
+    )
+    result = verdict(hubspot)
+    assert result.result == "pass"  # an open deal of a maybe-match never drops the lead
+    assert hubspot_check(result).detail == (
+        "Possible match with Acme Group (close name). A person confirms. It has an open deal."
+        " Acme Partners has an open deal."
+    )
+
+
+def test_a_possible_match_with_no_candidate_still_asks_a_person() -> None:
+    check = hubspot_check(verdict(HubSpotMatch(status="possible_match")))
+    assert (check.outcome, check.detail) == (
+        "flag",
+        "Possible match in HubSpot. A person confirms.",
+    )

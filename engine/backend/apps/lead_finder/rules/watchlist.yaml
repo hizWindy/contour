@@ -1,0 +1,50 @@
+# The HubSpot watchlist: which companies already in HubSpot are worth watching for a trigger.
+# Source: projects/leads/research/EXPORT.md (sections 3, 8 and 9). The code is
+# apps/lead_finder/watchlist.py. The backend checks this file at start-up. All of it is TBC
+# with Levi, so every key has a note at the bottom.
+
+# Staff is counted in these cities only. They must be cities listed in criteria.yaml.
+count_cities: [Melbourne, Adelaide, Perth]
+
+staff:
+  missing: unknown # no LinkedIn staff number: listed as unknown, never filled from Employees
+  staff_max_applies_to_director: false # Director companies over size.staff_max stay on the list
+
+# HubSpot industry names that go to a Director, grouped as in criteria.yaml
+# (industries.director_review). A name is matched exactly, ignoring case and extra spaces.
+director_industries:
+  Hospitals and healthcare: [Hospital Health Care]
+  Law firms: [Law Practice]
+  Premium banks and finance: [Financial Services, Insurance, Banking]
+  Real estate agencies: [Real Estate]
+  Education: [Education Management]
+  Industry consultants: [Management Consulting]
+  Standard not-for-profits: [Non Profit Organization Management]
+
+# HubSpot industry names where most staff work on sites or in shops, so the company is listed
+# as unlikely to be office-based. The groups match criteria.yaml (industries.check_office_size).
+# "none" is for names that have no group in criteria.yaml yet.
+not_office_based:
+  Construction: [Construction]
+  Civil engineering: [Civil Engineering]
+  Mining and metals: [Mining Metals]
+  Machinery: [Machinery]
+  Manufacturing: [Electrical Electronic Manufacturing]
+  Food and beverages: [Food Beverages]
+  Retail: [Retail]
+  Automotive: [Automotive]
+  Hospitality: [Hospitality]
+  Transport and logistics: [Transportation Trucking Railroad, Maritime]
+  none: [Oil Energy, Medical Practice]
+
+tbc:
+  - key: count_cities
+    note: Staff is counted in the three pass cities only. Question 6 asks if it should be the whole company.
+  - key: staff.missing
+    note: A missing LinkedIn number stays unknown. The Employees column is often the whole company, so it is never used (BG&E Resources today).
+  - key: staff.staff_max_applies_to_director
+    note: Our proposal. A Director company over 600 staff stays on the Director list (Bayside Health is about 856).
+  - key: director_industries
+    note: Our mapping of HubSpot industry names to the Director groups. Judged from the industry field only.
+  - key: not_office_based
+    note: Our mapping, from the HubSpot deals. Judged from the industry field only. Oil Energy and Medical Practice have no group in criteria.yaml yet.

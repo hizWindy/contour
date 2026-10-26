@@ -1,17 +1,19 @@
 """HubSpot endpoints: load an export file, and see what's loaded."""
 
 import asyncio
+import logging
 
 from fastapi import APIRouter, UploadFile
 from pydantic import BaseModel, Field
 
-from core.api.deps import SessionDep
+from core.api.deps import EmbedderDep, SessionDep
 from core.api.errors import Problem
-from core.api.stubs import stub
 from core.hubspot.importer import ExportError, read_export
+from core.hubspot.profiles import rebuild_profiles as build_profiles
 from core.hubspot.service import HubSpotSummary, ImportResult, save_export, summary
 
 router = APIRouter(prefix="/hubspot", tags=["hubspot"])
+log = logging.getLogger(__name__)
 
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 
@@ -29,7 +31,9 @@ class RebuildResult(BaseModel):
         "Skips any Contacts sheet, because it holds personal data."
     ),
 )
-async def import_export(file: UploadFile, session: SessionDep) -> ImportResult:
+async def import_export(
+    file: UploadFile, session: SessionDep, embedder: EmbedderDep
+) -> ImportResult:
     if not (file.filename or "").lower().endswith(".xlsx"):
         raise Problem(422, "Upload an .xlsx file", "Export the companies from HubSpot as Excel.")
     data = await file.read(MAX_UPLOAD_BYTES + 1)
@@ -39,7 +43,19 @@ async def import_export(file: UploadFile, session: SessionDep) -> ImportResult:
         export = await asyncio.to_thread(read_export, data)
     except ExportError as error:
         raise Problem(422, "This file can't be loaded", str(error)) from error
-    return await save_export(session, export)
+    result = await save_export(session, export)
+    # The companies are saved. Their profiles (for possible matches and look-alikes) follow.
+    try:
+        rebuilt = await build_profiles(session, embedder)
+    except Exception as error:  # the import itself worked, so say what is left to do
+        log.exception("profiles_not_rebuilt_after_import")
+        raise Problem(
+            503,
+            "The companies were loaded, but their profiles weren't built",
+            "Run the rebuild again from the Admin page, or with: uv run engine rebuild-profiles. "
+            "The reason is in the backend log.",
+        ) from error
+    return result.model_copy(update={"profiles_rebuilt": rebuilt})
 
 
 @router.get("/summary", response_model=HubSpotSummary, summary="How much HubSpot data is loaded")
@@ -57,6 +73,5 @@ async def get_summary(session: SessionDep) -> HubSpotSummary:
         "possible match and find look-alike companies. No contacts, phones or streets go in."
     ),
 )
-@stub
-async def rebuild_profiles(session: SessionDep) -> RebuildResult:
-    raise NotImplementedError
+async def rebuild_profiles(session: SessionDep, embedder: EmbedderDep) -> RebuildResult:
+    return RebuildResult(profiles_rebuilt=await build_profiles(session, embedder))

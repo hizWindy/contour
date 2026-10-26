@@ -1,49 +1,44 @@
 """Lead endpoints: the results table, facets, CSV export, the map, one lead, and feedback.
 
-`GET /leads` and `GET /leads/{id}` work now, in a plain form, against the columns of the leads
-table. Package B4c replaces them with the full lead store. The rest answer 501 until their
-package builds them (see core/api/stubs.py).
+Each route checks its request and calls `lead_store` (the leads table) or `similar`
+(look-alikes). The filters are explained once, in `LeadFilters` below.
 
 `/leads/export`, `/leads/facets` and `/leads/map` are declared BEFORE `/leads/{lead_id}`, or
 the id route would swallow them and answer 422.
 """
 
 import uuid
-from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date
-from typing import Annotated, Any
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Response
-from sqlalchemy import ColumnElement, Date, case, cast, func, select
 
-from apps.lead_finder.rules import Result, load_rules
-from apps.lead_finder.sanitize import one_line
+from apps.lead_finder import lead_store
+from apps.lead_finder.lead_store import SORT_COLUMNS, lead_conditions, newest_only
+from apps.lead_finder.rules import Result
 from apps.lead_finder.schemas import (
     HubSpotStatus,
     LeadDetail,
     LeadFacets,
     LeadPage,
     LeadPatch,
-    LeadRow,
     LeadSort,
     LeadStatus,
     MapOut,
-    PreviousLead,
     SimilarOut,
     SortOrder,
 )
-from apps.lead_finder.tables import Lead
-from core.api.deps import SessionDep
+from apps.lead_finder.similar import similar_for
+from core.api.deps import EmbedderDep, SessionDep
 from core.api.errors import Problem
 from core.api.models import INT32_MAX, OFFSET_MAX, SafeText
-from core.api.stubs import stub
+
+__all__ = ["SORT_COLUMNS", "LeadFilters", "lead_conditions", "newest_only", "router"]
 
 router = APIRouter(prefix="/leads", tags=["leads"])
 
 REPEAT = "Repeat the key to match several values"
-MELBOURNE = "Australia/Melbourne"
-PREVIOUS_LIMIT = 10
 
 
 LATEST_DESCRIPTION = (
@@ -57,11 +52,13 @@ LATEST_DESCRIPTION = (
 
 
 @dataclass
-class LeadFilters:
+class LeadFilters(lead_store.LeadFilters):
     """The filters that GET /leads, /leads/facets, /leads/export and /leads/map share.
 
-    Free text is `SafeText` (no NUL character, which the database can't store) and numbers have
-    an upper bound the database accepts, so a bad value is a 422 and never a 500.
+    The store's class of the same name holds the values. This one adds what the query string
+    needs: a description for Swagger, and the limits. Free text is `SafeText` (no NUL character,
+    which the database can't store) and numbers have an upper bound the database accepts, so a
+    bad value is a 422 and never a 500.
     """
 
     result: Annotated[list[Result] | None, Query(description=REPEAT)] = None
@@ -103,133 +100,6 @@ OrderParam = Annotated[SortOrder, Query()]
 LimitParam = Annotated[int, Query(ge=1, le=200)]
 OffsetParam = Annotated[int, Query(ge=0, le=OFFSET_MAX)]
 
-RESULT_RANK = case(
-    {"pass": 0, "director_review": 1, "watch": 2, "drop": 3}, value=Lead.result, else_=4
-)
-SORT_COLUMNS: dict[str, Any] = {
-    "score": Lead.score,
-    "created_at": Lead.created_at,
-    "updated_at": Lead.updated_at,
-    "company": func.lower(Lead.company),
-    "city": Lead.city,
-    "result": RESULT_RANK,
-    "status": Lead.status,
-    "hubspot_status": Lead.hubspot_status,
-    "trigger_date": Lead.trigger_date,
-    "office_m2": Lead.office_m2,
-    "cost_usd": Lead.cost_usd,
-}
-
-
-def newest_only(filters: LeadFilters) -> bool:
-    """Whether to show one row for each company. `latest` when it is given. Otherwise yes,
-    unless a run is asked for: the leads of a run are all shown."""
-    if filters.latest is not None:
-        return filters.latest
-    return filters.run_id is None
-
-
-def _melbourne_day() -> ColumnElement[date]:
-    """The day a lead was researched, read in Australia/Melbourne."""
-    return cast(func.timezone(MELBOURNE, Lead.created_at), Date)
-
-
-def lead_conditions(filters: LeadFilters) -> list[ColumnElement[bool]]:
-    """The WHERE parts for the filters."""
-    where: list[ColumnElement[bool]] = []
-    if filters.result:
-        where.append(Lead.result.in_(filters.result))
-    if filters.city:
-        where.append(Lead.city.in_(filters.city))
-    if filters.trigger:
-        where.append(Lead.trigger_ids.overlap(filters.trigger))
-    if filters.industry:
-        where.append(Lead.industry.in_(filters.industry))
-    if filters.industry_group:
-        where.append(Lead.industry_group.in_(filters.industry_group))
-    if filters.min_score is not None:
-        where.append(Lead.score >= filters.min_score)
-    if filters.office_m2_min is not None:
-        where.append(Lead.office_m2 >= filters.office_m2_min)
-    if filters.office_m2_max is not None:
-        where.append(Lead.office_m2 <= filters.office_m2_max)
-    if filters.hubspot_status:
-        where.append(Lead.hubspot_status.in_(filters.hubspot_status))
-    if filters.status:
-        where.append(Lead.status.in_(filters.status))
-    if filters.run_id is not None:
-        where.append(Lead.run_id == filters.run_id)
-    if filters.created_since is not None:
-        where.append(_melbourne_day() >= filters.created_since)
-    if filters.created_until is not None:
-        where.append(_melbourne_day() <= filters.created_until)
-    if filters.trigger_since is not None:
-        where.append(Lead.trigger_date >= filters.trigger_since)
-    if filters.q:
-        where.append(Lead.company.icontains(filters.q, autoescape=True))
-    tests = [] if filters.include_tests else [Lead.is_test.is_(False)]
-    where += tests
-    if newest_only(filters):
-        # A test lead and a real lead with one company_key are two companies here, so each keeps
-        # its own newest row (and `include_tests=true` doesn't let one hide the other).
-        ranked = (
-            select(
-                Lead.id.label("id"),
-                func.row_number()
-                .over(
-                    partition_by=(Lead.company_key, Lead.is_test),
-                    order_by=(Lead.created_at.desc(), Lead.id.desc()),
-                )
-                .label("rank"),
-            )
-            .where(*tests)
-            .subquery()
-        )
-        where.append(Lead.id.in_(select(ranked.c.id).where(ranked.c.rank == 1)))
-    return where
-
-
-_ROW_COLUMNS = (
-    "id",
-    "company",
-    "city",
-    "suburb",
-    "result",
-    "score",
-    "status",
-    "hubspot_status",
-    "trigger_id",
-    "trigger_date",
-    "office_m2",
-    "office_m2_estimated",
-    "staff_in_city",
-    "industry",
-    "industry_group",
-    "contact_role",
-    "run_id",
-    "origin",
-    "is_test",
-    "useful",
-    "note",
-    "cost_usd",
-    "web_searches",
-    "created_at",
-    "updated_at",
-)
-
-
-def lead_row(lead: Lead, trigger_labels: Mapping[str, str]) -> LeadRow:
-    """One table row from a lead. `reason` is the first line of why the card says it fits."""
-    data: dict[str, Any] = {name: getattr(lead, name) for name in _ROW_COLUMNS}
-    data["trigger_ids"] = list(lead.trigger_ids or [])
-    data["trigger_label"] = trigger_labels.get(lead.trigger_id) if lead.trigger_id else None
-    data["reason"] = one_line(str(lead.card.get("why_it_fits") or ""), 240)
-    return LeadRow.model_validate(data)
-
-
-def trigger_labels() -> dict[str, str]:
-    return {trigger.id: trigger.label for trigger in load_rules().criteria.triggers.every}
-
 
 @router.get(
     "",
@@ -250,20 +120,7 @@ async def list_leads(
     limit: LimitParam = 50,
     offset: OffsetParam = 0,
 ) -> LeadPage:
-    where = lead_conditions(filters)
-    total = await session.scalar(select(func.count()).select_from(Lead).where(*where))
-    column = SORT_COLUMNS[sort]
-    direction = column.desc() if order == "desc" else column.asc()
-    page = (
-        select(Lead)
-        .where(*where)
-        .order_by(direction.nulls_last(), Lead.id)
-        .limit(limit)
-        .offset(offset)
-    )
-    labels = trigger_labels()
-    rows = await session.scalars(page)
-    return LeadPage(total=total or 0, items=[lead_row(row, labels) for row in rows])
+    return await lead_store.list_leads(session, filters, sort, order, limit, offset)
 
 
 @router.get(
@@ -290,11 +147,21 @@ async def list_leads(
         }
     },
 )
-@stub
 async def export_leads(
-    filters: Filters, sort: SortParam = "score", order: OrderParam = "desc"
+    session: SessionDep,
+    filters: Filters,
+    sort: SortParam = "score",
+    order: OrderParam = "desc",
 ) -> Response:
-    raise NotImplementedError
+    rows = await lead_store.export_rows(session, filters, sort, order)
+    return Response(
+        content=lead_store.render_csv(rows),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f"attachment; filename={lead_store.export_filename()}",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 @router.get(
@@ -306,9 +173,8 @@ async def export_leads(
         "its own, so a filter shows what choosing it would give."
     ),
 )
-@stub
-async def lead_facets(filters: Filters) -> LeadFacets:
-    raise NotImplementedError
+async def lead_facets(session: SessionDep, filters: Filters) -> LeadFacets:
+    return await lead_store.lead_facets(session, filters)
 
 
 @router.get(
@@ -320,51 +186,16 @@ async def lead_facets(filters: Filters) -> LeadFacets:
         "the suburb (or the city), moved a little so pins don't sit on top of each other."
     ),
 )
-@stub
-async def lead_map(filters: Filters) -> MapOut:
-    raise NotImplementedError
+async def lead_map(session: SessionDep, filters: Filters) -> MapOut:
+    return await lead_store.map_points(session, filters)
 
 
 @router.get("/{lead_id}", response_model=LeadDetail, summary="One lead card")
 async def get_lead(lead_id: uuid.UUID, session: SessionDep) -> LeadDetail:
-    lead = await session.get(Lead, lead_id)
-    if lead is None:
-        raise Problem(404, "Lead not found", "Check the id. GET /lead-finder/leads lists them.")
-    older = await session.scalars(
-        select(Lead)
-        .where(
-            Lead.company_key == lead.company_key,
-            Lead.id != lead.id,
-            Lead.is_test.is_(lead.is_test),
-            Lead.created_at < lead.created_at,
-        )
-        .order_by(Lead.created_at.desc(), Lead.id)
-        .limit(PREVIOUS_LIMIT)
-    )
-    previous = [
-        PreviousLead.model_validate(
-            {
-                "id": row.id,
-                "created_at": row.created_at,
-                "result": row.result,
-                "score": row.score,
-                "status": row.status,
-            }
-        )
-        for row in older
-    ]
-    extras = {
-        "status": lead.status,
-        "reject_reason": lead.reject_reason,
-        "note": lead.note,
-        "useful": lead.useful,
-        "run_id": lead.run_id,
-        "origin": lead.origin,
-        "is_test": lead.is_test,
-        "updated_at": lead.updated_at,
-        "previous": previous,
-    }
-    return LeadDetail.model_validate({**lead.card, **extras})
+    detail = await lead_store.get_detail(session, lead_id)
+    if detail is None:
+        raise Problem(404, *lead_store.NOT_FOUND)
+    return detail
 
 
 @router.patch(
@@ -379,9 +210,10 @@ async def get_lead(lead_id: uuid.UUID, session: SessionDep) -> LeadDetail:
         "back the exact values it had."
     ),
 )
-@stub
-async def patch_lead(lead_id: uuid.UUID, body: LeadPatch) -> LeadDetail:
-    raise NotImplementedError
+async def patch_lead(
+    lead_id: uuid.UUID, body: LeadPatch, session: SessionDep, embedder: EmbedderDep
+) -> LeadDetail:
+    return await lead_store.patch_lead(session, embedder, lead_id, body)
 
 
 @router.get(
@@ -394,6 +226,5 @@ async def patch_lead(lead_id: uuid.UUID, body: LeadPatch) -> LeadDetail:
         "when the lead has no profile yet, and 404 only for an unknown lead."
     ),
 )
-@stub
-async def similar_leads(lead_id: uuid.UUID) -> SimilarOut:
-    raise NotImplementedError
+async def similar_leads(lead_id: uuid.UUID, session: SessionDep) -> SimilarOut:
+    return await similar_for(session, lead_id)

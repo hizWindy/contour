@@ -32,6 +32,13 @@ def research_prompt() -> Prompt:
     return Prompt("research", text, version)
 
 
+@lru_cache
+def discover_prompt() -> Prompt:
+    """The discovery instructions. They hold no rules and no lists, so the version is the file's."""
+    text, version = _read("discover")
+    return Prompt("discover", text, version)
+
+
 def extract_prompt(rules: LeadFinderRules) -> Prompt:
     """The form-filling instructions, with the trigger, booster and industry lists filled in."""
     template, version = _read("extract")
@@ -47,4 +54,10 @@ def extract_prompt(rules: LeadFinderRules) -> Prompt:
 
 
 def versions(rules: LeadFinderRules) -> str:
+    """The versions a saved lead shows: the two prompts that make a lead."""
     return f"research {research_prompt().version}, extract {extract_prompt(rules).version}"
+
+
+def run_versions(rules: LeadFinderRules) -> str:
+    """The versions a run shows: research, extract and discover (at most 128 characters)."""
+    return f"{versions(rules)}, discover {discover_prompt().version}"

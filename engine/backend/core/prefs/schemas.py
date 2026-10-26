@@ -14,7 +14,7 @@ same way, and its errors come back as `body.values.<key>`.
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from core.api.models import OutModel
 
@@ -65,6 +65,8 @@ class SettingsOut(BaseModel):
 
 class SettingsPatch(BaseModel):
     """Changes some settings. Settings that are not listed stay as they are."""
+
+    model_config = ConfigDict(extra="forbid")  # a typo next to `values` is a 422, not ignored
 
     values: dict[str, SettingValue] = Field(
         min_length=1,

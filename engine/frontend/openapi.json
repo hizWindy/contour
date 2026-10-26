@@ -2013,13 +2013,17 @@
           "version": {
             "title": "Version",
             "type": "string"
+          },
+          "watchlist": {
+            "$ref": "#/components/schemas/WatchlistRules"
           }
         },
         "required": [
           "version",
           "criteria",
           "queries",
-          "hubspot_map"
+          "hubspot_map",
+          "watchlist"
         ],
         "title": "LeadFinderRules",
         "type": "object"
@@ -4892,6 +4896,7 @@
         "type": "object"
       },
       "SettingsPatch": {
+        "additionalProperties": false,
         "description": "Changes some settings. Settings that are not listed stay as they are.",
         "properties": {
           "values": {
@@ -6009,6 +6014,26 @@
         "title": "WatchItem",
         "type": "object"
       },
+      "WatchStaff": {
+        "additionalProperties": false,
+        "properties": {
+          "missing": {
+            "const": "unknown",
+            "title": "Missing",
+            "type": "string"
+          },
+          "staff_max_applies_to_director": {
+            "title": "Staff Max Applies To Director",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "missing",
+          "staff_max_applies_to_director"
+        ],
+        "title": "WatchStaff",
+        "type": "object"
+      },
       "WatchlistOptions": {
         "additionalProperties": false,
         "description": "Which HubSpot companies the watchlist run researches.",
@@ -6091,6 +6116,59 @@
           "counts"
         ],
         "title": "WatchlistOut",
+        "type": "object"
+      },
+      "WatchlistRules": {
+        "additionalProperties": false,
+        "description": "Which HubSpot companies are worth watching. The code is apps/lead_finder/watchlist.py.",
+        "properties": {
+          "count_cities": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Count Cities",
+            "type": "array"
+          },
+          "director_industries": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Director Industries",
+            "type": "object"
+          },
+          "not_office_based": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Not Office Based",
+            "type": "object"
+          },
+          "staff": {
+            "$ref": "#/components/schemas/WatchStaff"
+          },
+          "tbc": {
+            "items": {
+              "$ref": "#/components/schemas/TbcNote"
+            },
+            "title": "Tbc",
+            "type": "array"
+          }
+        },
+        "required": [
+          "count_cities",
+          "staff",
+          "director_industries",
+          "not_office_based",
+          "tbc"
+        ],
+        "title": "WatchlistRules",
         "type": "object"
       }
     }

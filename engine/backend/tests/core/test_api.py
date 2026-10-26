@@ -7,12 +7,17 @@ import pytest
 from fastapi import FastAPI
 
 from core.api.app import create_app
+from core.api.deps import settings_dependency
+from core.config import get_settings
 from core.db.engine import get_session
 
 
 @pytest.fixture
 def app() -> FastAPI:
-    return create_app()
+    created = create_app()
+    # The route reads the settings with the saved overrides on top; here there are none.
+    created.dependency_overrides[settings_dependency] = get_settings
+    return created
 
 
 @pytest.fixture

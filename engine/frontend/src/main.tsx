@@ -10,6 +10,10 @@ import '@fontsource/ibm-plex-serif/latin-ext-400.css'
 
 import './styles/index.css'
 import { App } from './App'
+import { applyTheme, readThemeChoice } from './shell/theme'
+
+// A light or dark choice made in the command menu, kept from the last visit.
+applyTheme(readThemeChoice())
 
 const root = document.getElementById('root')
 if (!root) {

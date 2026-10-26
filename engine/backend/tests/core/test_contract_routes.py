@@ -15,9 +15,10 @@ from collections.abc import AsyncIterator, Iterator
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, get_type_hints
+from typing import Any, cast, get_type_hints
 
 import httpx
+import psycopg
 import pytest
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
@@ -28,9 +29,10 @@ from apps.lead_finder.api import claude_dependency as lead_finder_claude_depende
 from core import cli
 from core.api import app as app_module
 from core.api.app import create_app
-from core.api.deps import claude_dependency
+from core.api.deps import claude_dependency, run_manager_dependency, settings_dependency
 from core.api.routes import api_routes
 from core.api.stubs import is_stub, stub
+from core.config import get_settings
 from core.db.engine import get_session
 from core.runs import lifecycle, reads
 from core.runs import manager as manager_module
@@ -106,6 +108,10 @@ def app(built_app: FastAPI) -> Iterator[FastAPI]:
         yield NoDatabase()
 
     built_app.dependency_overrides[get_session] = no_database
+    # These two resolve before the request is checked, so without them a bad request would meet
+    # a missing manager (503) or the database (500) instead of the 422 being tested.
+    built_app.dependency_overrides[settings_dependency] = get_settings
+    built_app.dependency_overrides[run_manager_dependency] = lambda: cast(Any, object())
     try:
         yield built_app
     finally:
@@ -1000,13 +1006,20 @@ async def test_the_engine_is_still_closed_when_start_up_fails(
     assert steps == ["shutdown", "dispose"]
 
 
-async def test_the_lifecycle_stubs_do_nothing_so_the_app_starts_without_a_run_manager(
+async def test_the_app_starts_without_a_run_manager_when_the_database_is_down(
     app: FastAPI, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     class FakeEngine:
         async def dispose(self) -> None: ...
 
+    class NoDatabaseManager:
+        async def acquire_backend_lock(self) -> bool:
+            raise psycopg.OperationalError("connection refused")
+
+        async def shutdown(self) -> None: ...
+
     monkeypatch.setattr(app_module, "get_engine", FakeEngine)
+    monkeypatch.setattr(lifecycle, "build", lambda _app: NoDatabaseManager())
     async with app.router.lifespan_context(app):
         assert not hasattr(app.state, "run_manager")
 

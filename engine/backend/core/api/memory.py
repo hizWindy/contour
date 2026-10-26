@@ -7,8 +7,10 @@ from typing import Annotated, Any, Literal
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
-from core.api.deps import EmbedderDep, SessionDep
+from core.api.deps import EmbedderDep, SessionDep, SettingsDep
+from core.api.errors import Problem
 from core.api.models import SafeText
+from core.config import Settings
 from core.memory.service import remember, search
 
 router = APIRouter(prefix="/memory", tags=["memory"])
@@ -47,8 +49,46 @@ class MemoryHitOut(MemoryOut):
     similarity: float = Field(description="1 is the same meaning, 0 is unrelated")
 
 
+def check_note_limits(body: MemoryIn, settings: Settings) -> None:
+    """Only a person's NOTE, only for a project this engine runs, and never the HubSpot copy.
+
+    The engine writes the other kinds itself (source notes, profiles, lead outcomes), and a
+    note saved over them could mislead matching and look-alikes. Each wrong field is listed.
+    """
+    errors: list[dict[str, str]] = []
+    if body.kind != "note":
+        errors.append(
+            {
+                "field": "body.kind",
+                "message": "Only notes can be saved here. The engine writes the other kinds.",
+            }
+        )
+    if body.app.casefold() == "hubspot":
+        errors.append(
+            {
+                "field": "body.app",
+                "message": "Notes can't be saved to the HubSpot data. It comes from the import.",
+            }
+        )
+    elif body.app not in settings.apps:
+        errors.append(
+            {
+                "field": "body.app",
+                "message": f"That isn't a project this engine runs. Use one of: "
+                f"{', '.join(settings.apps)}.",
+            }
+        )
+    if errors:
+        raise Problem(
+            422, "The request isn't valid", "Check the fields listed in errors.", errors=errors
+        )
+
+
 @router.post("", status_code=201, response_model=MemoryOut, summary="Save a note to memory")
-async def save_note(body: MemoryIn, session: SessionDep, embedder: EmbedderDep) -> MemoryOut:
+async def save_note(
+    body: MemoryIn, session: SessionDep, embedder: EmbedderDep, settings: SettingsDep
+) -> MemoryOut:
+    check_note_limits(body, settings)
     item = await remember(
         session,
         embedder,

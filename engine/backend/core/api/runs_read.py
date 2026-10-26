@@ -2,9 +2,9 @@
 
 They are split from `core/api/runs.py` (start, watch, stop, resume) so the package that builds
 these and the package that builds those never edit the same file. The two routers share the
-`/runs` prefix and the `runs` tag. They answer 501 until built (see core/api/stubs.py). Each
-route will call the matching `RunManager` method, which calls `core/runs/reads.py` or
-`core/runs/estimate.py`.
+`/runs` prefix and the `runs` tag. Each route calls the matching `RunManager` method, which calls
+`core/runs/reads.py` or `core/runs/estimate.py`. None of them uses `SessionDep`: the reads open
+their own short sessions.
 
 `/runs/summary` and `/runs/estimate` are declared before `/runs/{run_id}`, so the id route can't
 swallow them. This router is included before the other one in `create_app`.
@@ -16,8 +16,8 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
+from core.api.deps import RunManagerDep
 from core.api.models import INT32_MAX, OFFSET_MAX, SafeText
-from core.api.stubs import stub
 from core.runs.schemas import (
     EventLog,
     RunCreate,
@@ -41,9 +41,8 @@ router = APIRouter(prefix="/runs", tags=["runs"])
         "`errors`. `blocked` says why a valid run can't start."
     ),
 )
-@stub
-async def estimate_run(body: RunCreate) -> RunEstimate:
-    raise NotImplementedError
+async def estimate_run(body: RunCreate, manager: RunManagerDep) -> RunEstimate:
+    return await manager.estimate(body)
 
 
 @router.get(
@@ -56,8 +55,8 @@ async def estimate_run(body: RunCreate) -> RunEstimate:
         "after `since` and on or before `until`. `offset` can't pass 1000000."
     ),
 )
-@stub
 async def list_runs(
+    manager: RunManagerDep,
     app: Annotated[SafeText | None, Query(max_length=64, examples=["lead_finder"])] = None,
     mode: Annotated[SafeText | None, Query(max_length=32, examples=["discovery"])] = None,
     status: Annotated[
@@ -72,7 +71,9 @@ async def list_runs(
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0, le=OFFSET_MAX)] = 0,
 ) -> RunPage:
-    raise NotImplementedError
+    return await manager.list_runs(
+        app=app, mode=mode, status=status, since=since, until=until, limit=limit, offset=offset
+    )
 
 
 @router.get(
@@ -84,20 +85,19 @@ async def list_runs(
         "Australia/Melbourne, by the time the run was created."
     ),
 )
-@stub
 async def run_summary(
+    manager: RunManagerDep,
     since: Annotated[
         date | None,
         Query(description="First day (Australia/Melbourne). Default: 30 days ago"),
     ] = None,
 ) -> RunSummary:
-    raise NotImplementedError
+    return await manager.summary(since)
 
 
 @router.get("/{run_id}", response_model=RunOut, summary="One run")
-@stub
-async def get_run(run_id: uuid.UUID) -> RunOut:
-    raise NotImplementedError
+async def get_run(run_id: uuid.UUID, manager: RunManagerDep) -> RunOut:
+    return await manager.get_run(run_id)
 
 
 @router.get(
@@ -109,12 +109,12 @@ async def get_run(run_id: uuid.UUID) -> RunOut:
         "`after` set to the last `seq` you have. `last_seq` is the highest `seq` the run has."
     ),
 )
-@stub
 async def get_run_log(
     run_id: uuid.UUID,
+    manager: RunManagerDep,
     after: Annotated[
         int, Query(ge=0, le=INT32_MAX, description="Only events with a higher seq")
     ] = 0,
     limit: Annotated[int, Query(ge=1, le=200)] = 200,
 ) -> EventLog:
-    raise NotImplementedError
+    return await manager.event_log(run_id, after, limit)

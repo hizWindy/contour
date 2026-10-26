@@ -1,12 +1,33 @@
+import { QueryClientProvider, type QueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
+import type { createBrowserRouter } from 'react-router'
+import { RouterProvider } from 'react-router/dom'
+import { createQueryClient } from '@/api/query'
+import { Toaster } from '@/components/ui/sonner'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { createAppRouter } from '@/router'
+
+type AppRouter = ReturnType<typeof createBrowserRouter>
+
+export interface AppProps {
+  /** For tests: a memory router over the same routes, or a prepared query client. */
+  router?: AppRouter
+  queryClient?: QueryClient
+}
+
 /**
- * A placeholder that proves the toolchain: Titillium Web on the page background, in light and
- * dark. The shell (sidebar, top bar, router) replaces this.
+ * The whole website: the server data cache, the tooltips and toasts every page shares, and the
+ * router with its pages. Both are made once, on the first render.
  */
-export function App() {
+export function App({ router, queryClient }: AppProps) {
+  const [client] = useState(() => queryClient ?? createQueryClient())
+  const [appRouter] = useState(() => router ?? createAppRouter())
   return (
-    <main className="mx-auto flex min-h-svh max-w-(--content-max) flex-col justify-center gap-2 p-8">
-      <h1 className="text-title font-semibold">Lead Finder</h1>
-      <p className="text-ui text-muted-foreground">The website shell is built next.</p>
-    </main>
+    <QueryClientProvider client={client}>
+      <TooltipProvider delayDuration={300}>
+        <RouterProvider router={appRouter} />
+        <Toaster />
+      </TooltipProvider>
+    </QueryClientProvider>
   )
 }
