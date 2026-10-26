@@ -1,0 +1,193 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+@import './tokens.css';
+
+/* Tailwind builds only the classes the app uses. Tests mention banned classes on purpose
+   (src/test/design-rules.ts), so they are not scanned. */
+@source not "../test";
+@source not "../**/*.test.{ts,tsx}";
+
+/*
+  Tailwind 4 wiring for the tokens in tokens.css. No colour is written here: every colour is a
+  var() of a token, so a change in tokens.css reaches every part.
+*/
+
+/*
+  Dark variant. Dark mode follows the computer's setting, and <html data-theme="light|dark">
+  overrides it. Most parts need no dark: classes at all, because the tokens switch by themselves.
+*/
+@custom-variant dark {
+  &:where([data-theme='dark'], [data-theme='dark'] *) {
+    @slot;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-theme='light']), :root:not([data-theme='light']) *) {
+      @slot;
+    }
+  }
+}
+
+/* Switch off Tailwind's looping animations. Enter and exit animations (tw-animate-css) stay. */
+@theme {
+  --animate-spin: initial;
+  --animate-ping: initial;
+  --animate-pulse: initial;
+  --animate-bounce: initial;
+  --animate-caret-blink: initial;
+}
+
+@theme inline {
+  /* Only our colours exist. A palette colour class (like red-500) does nothing, on purpose. */
+  --color-*: initial;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-soft: var(--destructive-soft);
+  --color-destructive-ink: var(--destructive-ink);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-selected: var(--selected);
+  --color-selected-foreground: var(--selected-foreground);
+  --color-overlay: var(--overlay);
+
+  --color-pass: var(--pass);
+  --color-pass-soft: var(--pass-soft);
+  --color-pass-ink: var(--pass-ink);
+  --color-review: var(--review);
+  --color-review-soft: var(--review-soft);
+  --color-review-ink: var(--review-ink);
+  --color-watch: var(--watch);
+  --color-watch-soft: var(--watch-soft);
+  --color-watch-ink: var(--watch-ink);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Type: Titillium Web for everything, IBM Plex Serif for three moments (see DESIGN.md).
+     There is no third typeface, so mono is the text face too. */
+  --font-sans: var(--font-family-text);
+  --font-serif: var(--font-family-serif);
+  --font-mono: var(--font-family-text);
+
+  /* Titillium Web has two weights, 400 and 600. The other names fall to one of them. */
+  --font-weight-thin: var(--weight-regular);
+  --font-weight-extralight: var(--weight-regular);
+  --font-weight-light: var(--weight-regular);
+  --font-weight-normal: var(--weight-regular);
+  --font-weight-medium: var(--weight-semibold);
+  --font-weight-semibold: var(--weight-semibold);
+  --font-weight-bold: var(--weight-semibold);
+  --font-weight-extrabold: var(--weight-semibold);
+  --font-weight-black: var(--weight-semibold);
+
+  /* The type scale. Nothing is smaller than 13px, and there is nothing above the page title. */
+  --text-*: initial;
+  --text-title: var(--size-title);
+  --text-title--line-height: var(--leading-title);
+  --text-section: var(--size-section);
+  --text-section--line-height: var(--leading-section);
+  --text-body: var(--size-body);
+  --text-body--line-height: var(--leading-body);
+  --text-ui: var(--size-ui);
+  --text-ui--line-height: var(--leading-ui);
+  --text-caption: var(--size-caption);
+  --text-caption--line-height: var(--leading-caption);
+  /* shadcn's own names, on the same scale. */
+  --text-xs: var(--size-caption);
+  --text-xs--line-height: var(--leading-caption);
+  --text-sm: var(--size-ui);
+  --text-sm--line-height: var(--leading-ui);
+  --text-base: var(--size-body);
+  --text-base--line-height: var(--leading-body);
+  --text-lg: var(--size-section);
+  --text-lg--line-height: var(--leading-section);
+
+  /* One radius (10px) and the smaller steps for small parts. */
+  --radius-*: initial;
+  --radius-xs: calc(var(--radius) - 8px); /* 2px */
+  --radius-sm: calc(var(--radius) - 4px); /* 6px */
+  --radius-md: calc(var(--radius) - 2px); /* 8px */
+  --radius-lg: var(--radius); /* 10px */
+
+  /* Flat surfaces. Only things that float get a shadow. */
+  --shadow-*: initial;
+  --shadow-float: var(--elevation-float);
+
+  /* One curve. The default transition uses it, at 150ms. Use duration-250 for panels. */
+  --ease-*: initial;
+  --ease-standard: var(--ease);
+  --default-transition-duration: var(--duration-fast);
+  --default-transition-timing-function: var(--ease);
+}
+
+@layer base {
+  /* tw-animate-css reads --tw-ease, and nothing else sets it, so this gives every enter and
+     exit animation the one curve. */
+  *,
+  ::before,
+  ::after,
+  ::backdrop {
+    --tw-ease: var(--ease);
+    border-color: var(--border);
+  }
+
+  /* A visible 2px Navy ring with a 2px gap on everything you can tab to. */
+  :focus-visible {
+    outline: var(--focus-width) solid var(--ring);
+    outline-offset: var(--focus-offset);
+  }
+
+  html {
+    font-family: var(--font-sans);
+    font-synthesis: none;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-size: var(--size-body);
+    line-height: var(--leading-body);
+  }
+
+  /* Reduced motion: if the computer asks for it, motion turns off. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}

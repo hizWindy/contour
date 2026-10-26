@@ -26,6 +26,7 @@ log = logging.getLogger(__name__)
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
 MAX_TOKENS = 16_000
 MAX_CONTINUES = 3  # a long web-tool turn can pause; we resume it at most this many times
+FETCH_MAX_CONTENT_TOKENS = 20_000  # a fetched page is cut to this size before Claude reads it
 
 
 class ClaudeError(Exception):
@@ -43,10 +44,14 @@ class ClaudeUnavailable(ClaudeError):
 
 @dataclass(frozen=True)
 class WebTools:
-    """Turns on web search and web fetch. The caps are enforced by the API itself."""
+    """Turns on web search and web fetch. The caps are enforced by the API itself.
+
+    `blocked_domains` are sites the tools never read, so they are never billed either.
+    """
 
     max_searches: int
     max_fetches: int
+    blocked_domains: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -70,8 +75,18 @@ class Reply[T: BaseModel]:
 
 
 class Claude(Protocol):
+    """`model`, `effort` and `max_continues` are per call. None means the default."""
+
     async def ask[T: BaseModel](
-        self, *, system: str, prompt: str, form: type[T], web: WebTools | None = None
+        self,
+        *,
+        system: str,
+        prompt: str,
+        form: type[T],
+        web: WebTools | None = None,
+        model: str | None = None,
+        effort: str | None = None,
+        max_continues: int | None = None,
     ) -> Reply[T]: ...
 
 
@@ -92,23 +107,42 @@ class AnthropicClaude:
         self._gate = asyncio.Semaphore(settings.claude_concurrency)
 
     async def ask[T: BaseModel](
-        self, *, system: str, prompt: str, form: type[T], web: WebTools | None = None
+        self,
+        *,
+        system: str,
+        prompt: str,
+        form: type[T],
+        web: WebTools | None = None,
+        model: str | None = None,
+        effort: str | None = None,
+        max_continues: int | None = None,
     ) -> Reply[T]:
         tools: list[Any] = []
         if web is not None:
-            tools = [
-                {"type": "web_search_20260209", "name": "web_search", "max_uses": web.max_searches},
-                {"type": "web_fetch_20260209", "name": "web_fetch", "max_uses": web.max_fetches},
-            ]
+            search: dict[str, Any] = {
+                "type": "web_search_20260209",
+                "name": "web_search",
+                "max_uses": web.max_searches,
+            }
+            fetch: dict[str, Any] = {
+                "type": "web_fetch_20260209",
+                "name": "web_fetch",
+                "max_uses": web.max_fetches,
+                "max_content_tokens": FETCH_MAX_CONTENT_TOKENS,
+            }
+            if web.blocked_domains:
+                search["blocked_domains"] = list(web.blocked_domains)
+                fetch["blocked_domains"] = list(web.blocked_domains)
+            tools = [search, fetch]
         messages: list[Any] = [{"role": "user", "content": prompt}]
         params: dict[str, Any] = {
-            "model": self._model,
+            "model": model or self._model,
             "max_tokens": MAX_TOKENS,
             # The fixed instructions come first and are cached. Too-short ones just aren't.
             "system": [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
             "thinking": {"type": "adaptive"},
             "output_config": {
-                "effort": self._effort,
+                "effort": effort or self._effort,
                 "format": {
                     "type": "json_schema",
                     "schema": transform_schema(form.model_json_schema()),
@@ -120,9 +154,10 @@ class AnthropicClaude:
         if tools:
             params["tools"] = tools
 
+        continues = MAX_CONTINUES if max_continues is None else max(0, max_continues)
         responses: list[BetaMessage] = []
         async with self._gate:
-            for _ in range(MAX_CONTINUES + 1):
+            for _ in range(continues + 1):
                 response = await self._send(messages=messages, **params)
                 responses.append(response)
                 if response.stop_reason != "pause_turn":

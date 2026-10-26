@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <title>Lead Finder</title>
+  <style>
+    .ground { fill: #233A56; }
+    .line { fill: none; stroke: #FBFBF8; stroke-width: 2; stroke-linecap: round; }
+    @media (prefers-color-scheme: dark) {
+      .ground { fill: #8EA5C3; }
+      .line { stroke: #26231B; }
+    }
+  </style>
+  <rect class="ground" x="1" y="1" width="30" height="30" rx="6" />
+  <path class="line" d="M6 21c4-8 8-8 10-3s6 5 10-5" />
+  <path class="line" d="M6 15c4-6 8-6 10-2s6 4 10-4" />
+</svg>

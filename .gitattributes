@@ -1,0 +1,13 @@
+# The website is checked out with LF endings on every machine, so Prettier's check and the
+# lock file give the same result on Windows and elsewhere.
+engine/frontend/** text eol=lf
+
+# Binary files in the website folder are not touched.
+engine/frontend/**/*.png binary
+engine/frontend/**/*.jpg binary
+engine/frontend/**/*.jpeg binary
+engine/frontend/**/*.gif binary
+engine/frontend/**/*.webp binary
+engine/frontend/**/*.ico binary
+engine/frontend/**/*.woff binary
+engine/frontend/**/*.woff2 binary

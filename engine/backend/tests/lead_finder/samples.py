@@ -79,7 +79,15 @@ class FakeClaude:
     calls: list[str] = field(default_factory=list)
 
     async def ask[T: BaseModel](
-        self, *, system: str, prompt: str, form: type[T], web: WebTools | None = None
+        self,
+        *,
+        system: str,
+        prompt: str,
+        form: type[T],
+        web: WebTools | None = None,
+        model: str | None = None,
+        effort: str | None = None,
+        max_continues: int | None = None,
     ) -> Reply[T]:
         if form is AngleNotes:
             angle = (

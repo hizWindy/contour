@@ -18,11 +18,12 @@ class SearchLog(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     app: Mapped[str] = mapped_column(String(64))
-    job_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, index=True)  # a run, or one research
+    job_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, index=True)  # a lead or a slice id
+    run_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, index=True)  # the run that asked
     subject: Mapped[str | None] = mapped_column(String(300), index=True)  # like a company name
     step: Mapped[str] = mapped_column(String(64))  # like "search:property" or "extract"
     model: Mapped[str] = mapped_column(String(64))
-    prompt_version: Mapped[str | None] = mapped_column(String(32))
+    prompt_version: Mapped[str | None] = mapped_column(String(64))
     queries: Mapped[list[str]] = mapped_column(JSONB, default=list)
     sources: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list)
     web_searches: Mapped[int] = mapped_column(Integer, default=0)

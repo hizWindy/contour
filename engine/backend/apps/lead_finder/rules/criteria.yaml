@@ -103,7 +103,8 @@ source_domains:
   property_daily: [] # off in version 1
   asx_or_official_news: [asx.com.au, gov.au, wgea.gov.au, abr.business.gov.au, asic.gov.au]
   job_ads: [seek.com.au, indeed.com, jora.com, linkedin.com, glassdoor.com]
-  blocked: # contact-data sellers: weak sources, and they hold personal data
+  blocked: # sites we never read: contact-data sellers (personal data), and Property Daily
+    - propertydaily.com.au # off until its terms allow a program to read it (TBC with Levi)
     - zoominfo.com
     - rocketreach.co
     - signalhire.com

@@ -15,9 +15,10 @@ from core.memory.models import EMBEDDING_DIM
 
 
 class Embedder:
-    def __init__(self, model_name: str, cache_dir: Path) -> None:
+    def __init__(self, model_name: str, cache_dir: Path, threads: int | None = None) -> None:
         self.model_name = model_name
         self.cache_dir = cache_dir
+        self.threads = threads  # None: FastEmbed chooses
         self._model: Any = None
         self._lock = threading.Lock()
 
@@ -28,7 +29,9 @@ class Embedder:
 
                 self.cache_dir.mkdir(parents=True, exist_ok=True)
                 self._model = TextEmbedding(
-                    model_name=self.model_name, cache_dir=str(self.cache_dir)
+                    model_name=self.model_name,
+                    cache_dir=str(self.cache_dir),
+                    threads=self.threads,
                 )
             return self._model
 
@@ -58,4 +61,6 @@ class Embedder:
 @lru_cache
 def get_embedder() -> Embedder:
     settings = get_settings()
-    return Embedder(settings.embedding_model, settings.embedding_cache_dir)
+    return Embedder(
+        settings.embedding_model, settings.embedding_cache_dir, settings.embedding_threads
+    )

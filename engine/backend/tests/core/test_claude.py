@@ -10,9 +10,21 @@ import pytest
 from anthropic.types.beta import BetaMessage
 from pydantic import BaseModel
 
+from apps.lead_finder.fields import AngleNotes
 from core.claude.budget import Budget, BudgetSpent
-from core.claude.client import AnthropicClaude, ClaudeUnavailable, Reply, WebTools, build_reply
+from core.claude.client import (
+    FETCH_MAX_CONTENT_TOKENS,
+    MAX_CONTINUES,
+    AnthropicClaude,
+    Claude,
+    ClaudeUnavailable,
+    Reply,
+    WebTools,
+    build_reply,
+)
 from core.claude.pricing import Usage, cost_usd
+from core.config import get_settings
+from tests.lead_finder.samples import FakeClaude
 
 PAGE = "https://www.afr.com/property/acme-moves"
 
@@ -167,3 +179,141 @@ async def test_a_missing_key_is_a_clear_error(monkeypatch: pytest.MonkeyPatch) -
     )
     with pytest.raises(ClaudeUnavailable, match="No Claude API key"):
         await AnthropicClaude(client=sdk).ask(system="x", prompt="y", form=Answer)
+
+
+# --- What we send: web tool limits, blocked sites, and a model and effort per call --------------
+
+
+def claude_that_answers(sent: list[httpx2.Request], *messages: BetaMessage) -> AnthropicClaude:
+    """The real client on a fake network. It gives these messages in turn, then repeats the last."""
+    queue = list(messages)
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        sent.append(request)
+        answer = queue.pop(0) if len(queue) > 1 else queue[0]
+        return httpx2.Response(200, json=answer.to_dict())
+
+    sdk = anthropic.AsyncAnthropic(
+        api_key="test-key", http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(handler))
+    )
+    return AnthropicClaude(client=sdk)
+
+
+FINAL = message([{"type": "text", "text": '{"city": "Perth"}'}], searches=0)
+
+
+async def test_blocked_domains_go_to_both_web_tools_and_a_fetch_is_capped() -> None:
+    sent: list[httpx2.Request] = []
+    web = WebTools(3, 2, blocked_domains=("propertydaily.com.au", "zoominfo.com"))
+    await claude_that_answers(sent, FINAL).ask(system="s", prompt="p", form=Answer, web=web)
+
+    search, fetch = json.loads(sent[0].content)["tools"]
+    assert (search["name"], search["max_uses"]) == ("web_search", 3)
+    assert (fetch["name"], fetch["max_uses"]) == ("web_fetch", 2)
+    assert search["blocked_domains"] == ["propertydaily.com.au", "zoominfo.com"]
+    assert fetch["blocked_domains"] == ["propertydaily.com.au", "zoominfo.com"]
+    assert fetch["max_content_tokens"] == FETCH_MAX_CONTENT_TOKENS == 20_000
+    assert "max_content_tokens" not in search
+
+
+async def test_no_blocked_domains_means_no_key_at_all() -> None:
+    sent: list[httpx2.Request] = []
+    await claude_that_answers(sent, FINAL).ask(
+        system="s", prompt="p", form=Answer, web=WebTools(3, 2)
+    )
+    search, fetch = json.loads(sent[0].content)["tools"]
+    assert "blocked_domains" not in search
+    assert "blocked_domains" not in fetch
+    assert fetch["max_content_tokens"] == 20_000
+
+
+async def test_no_web_tools_means_no_tools() -> None:
+    sent: list[httpx2.Request] = []
+    await claude_that_answers(sent, FINAL).ask(system="s", prompt="p", form=Answer)
+    assert "tools" not in json.loads(sent[0].content)
+
+
+async def test_the_settings_model_and_effort_are_the_default() -> None:
+    sent: list[httpx2.Request] = []
+    await claude_that_answers(sent, FINAL).ask(system="s", prompt="p", form=Answer)
+    request = json.loads(sent[0].content)
+    assert request["model"] == get_settings().claude_model
+    assert request["output_config"]["effort"] == get_settings().claude_effort
+
+
+async def test_a_model_and_effort_can_be_chosen_for_one_call() -> None:
+    sent: list[httpx2.Request] = []
+    claude = claude_that_answers(sent, FINAL)
+    await claude.ask(system="s", prompt="p", form=Answer, model="claude-haiku-5-5", effort="low")
+    await claude.ask(system="s", prompt="p", form=Answer, model="claude-sonnet-5-5")
+    await claude.ask(system="s", prompt="p", form=Answer)  # nothing is remembered between calls
+
+    first, second, third = (json.loads(request.content) for request in sent)
+    assert (first["model"], first["output_config"]["effort"]) == ("claude-haiku-5-5", "low")
+    assert second["model"] == "claude-sonnet-5-5"
+    assert second["output_config"]["effort"] == get_settings().claude_effort
+    assert third["model"] == get_settings().claude_model
+
+
+PAUSED = message(SEARCH, stop_reason="pause_turn")
+
+
+@pytest.mark.parametrize(
+    ("max_continues", "requests"),
+    [(None, 1 + MAX_CONTINUES), (0, 1), (1, 2), (2, 3)],
+)
+async def test_a_paused_turn_is_resumed_at_most_max_continues_times(
+    max_continues: int | None, requests: int
+) -> None:
+    sent: list[httpx2.Request] = []
+    reply = await claude_that_answers(sent, PAUSED).ask(
+        system="s", prompt="p", form=Answer, web=WebTools(3, 2), max_continues=max_continues
+    )
+    assert len(sent) == requests
+    assert reply.stop_reason == "pause_turn"
+    assert reply.parsed is None
+    assert reply.usage.web_searches == requests  # every paused request is still counted
+
+
+async def test_a_paused_turn_is_sent_back_and_finishes() -> None:
+    sent: list[httpx2.Request] = []
+    reply = await claude_that_answers(sent, PAUSED, FINAL).ask(
+        system="s", prompt="p", form=Answer, web=WebTools(3, 2), max_continues=1
+    )
+    assert reply.parsed == Answer(city="Perth")
+    assert len(sent) == 2
+    second = json.loads(sent[1].content)["messages"]
+    assert [m["role"] for m in second] == ["user", "assistant"]
+
+
+async def test_a_negative_max_continues_means_none() -> None:
+    sent: list[httpx2.Request] = []
+    await claude_that_answers(sent, PAUSED).ask(
+        system="s", prompt="p", form=Answer, web=WebTools(3, 2), max_continues=-4
+    )
+    assert len(sent) == 1
+
+
+async def test_the_real_client_and_the_fake_both_fit_the_protocol() -> None:
+    """mypy checks these two lines. The fake takes the new keywords too."""
+    real: Claude = AnthropicClaude(client=anthropic.AsyncAnthropic(api_key="test-key"))
+    fake: Claude = FakeClaude()
+    assert real is not None
+    reply = await fake.ask(
+        system="s",
+        prompt="Angle: property.",
+        form=AngleNotes,
+        web=WebTools(2, 1),
+        model="claude-haiku-5-5",
+        effort="low",
+        max_continues=0,
+    )
+    assert reply.parsed is not None
+
+
+def test_a_budget_still_takes_a_reply_from_the_client_with_no_hold() -> None:
+    """The old three-line use of Budget (reserve, ask, record) still works as it did."""
+    budget = Budget(cap_usd=Decimal("1.00"), max_searches=5)
+    granted = budget.reserve_searches(3)
+    budget.record(fake_reply("0.10", searches=1), reserved=granted)
+    assert (budget.spent_usd, budget.searches) == (Decimal("0.10"), 1)

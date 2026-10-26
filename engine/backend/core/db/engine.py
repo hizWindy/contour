@@ -10,18 +10,20 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
-from core.config import get_settings
-
-CONNECT_TIMEOUT_SECONDS = 5
+from core.config import CONNECT_TIMEOUT_SECONDS, get_settings
 
 
 @lru_cache
 def get_engine() -> AsyncEngine:
+    settings = get_settings()
     # The timeout matters on Windows: there, psycopg's async connect waits forever on a
     # refused connection unless it has one.
     return create_async_engine(
-        get_settings().database_url(),
+        settings.database_url(),
         pool_pre_ping=True,
+        pool_size=settings.db_pool_size,
+        max_overflow=settings.db_max_overflow,
+        pool_timeout=settings.db_pool_timeout,
         connect_args={"connect_timeout": CONNECT_TIMEOUT_SECONDS},
     )
 

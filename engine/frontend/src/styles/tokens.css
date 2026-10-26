@@ -1,0 +1,150 @@
+/*
+  Design tokens for the Lead Finder website.
+
+  This file is the only place a colour is written down. Everything else uses these names.
+  Source: engine/DESIGN.md ("Colour", "Type", "Space, shape and depth", "Motion" and
+  "Tokens for shadcn"). Update DESIGN.md first, then this file. The contrast test
+  (src/test/contrast.test.ts) reads this file and checks every text pair.
+
+  Dark mode: every colour is written once as light-dark(LIGHT, DARK).
+    - With no override, the page follows the computer's setting (color-scheme: light dark).
+    - <html data-theme="light"> or <html data-theme="dark"> forces one of them.
+
+  Size, font-family and weight tokens have their own names (--size-ui, --font-family-text) on
+  purpose. Tailwind's theme names (--text-*, --font-*) are wired to them in index.css, and the two
+  sets must not share a name.
+*/
+
+:root {
+  color-scheme: light dark;
+
+  /* ---- Surfaces and text (shadcn names) ---------------------------------------------------- */
+  --background: light-dark(#f4f5ef, #26231b);
+  --foreground: light-dark(#26231b, #e5e8db);
+  --card: light-dark(#fbfbf8, #322e25);
+  --card-foreground: var(--foreground);
+  --popover: var(--card);
+  --popover-foreground: var(--foreground);
+
+  /* Navy is the one accent. It is for primary buttons, selected rows, the focus ring and live
+     progress, and nowhere else. In shadcn, --accent means a hover background, not Navy. */
+  --primary: light-dark(#233a56, #8ea5c3);
+  --primary-foreground: light-dark(#fbfbf8, #26231b);
+
+  --secondary: light-dark(#e5e8db, #3a362c);
+  --secondary-foreground: var(--foreground);
+  --muted: var(--secondary);
+  --muted-foreground: light-dark(#5c584e, #b9bcae);
+  --accent: var(--secondary);
+  --accent-foreground: var(--foreground);
+
+  --destructive: light-dark(#b4412d, #d98471);
+  --destructive-foreground: light-dark(#fbfbf8, #26231b);
+
+  --border: light-dark(#d3d7c6, #4a463b);
+  /* The border of form fields. 3:1 on the card and input surface. */
+  --input: light-dark(#8f937f, #7f7a6d);
+  --ring: var(--primary);
+
+  /* Selected rows: a light tint of Navy, with a Navy marker (--primary) at the edge. */
+  --selected: light-dark(#e3e9f0, #2c394a);
+  --selected-foreground: var(--foreground);
+
+  /* The dim layer behind dialogs and sheets. Flat, no blur. */
+  --overlay: light-dark(rgb(38 35 27 / 45%), rgb(0 0 0 / 60%));
+
+  /* ---- Results (DESIGN.md "Results and labels") ------------------------------------------
+     Each result has a fill (icons, map pins, chart marks), a soft tint for the badge
+     background, and an ink step for the badge text. Text always sits on the soft tint. */
+  --pass: light-dark(#5f693a, #a3ae74); /* Olive */
+  --pass-soft: light-dark(#e8ecd6, #343a22);
+  --pass-ink: light-dark(#3f4724, #c9d3a0);
+
+  --review: light-dark(#a8742a, #d9a25a); /* Ochre: Director review, cost near its cap */
+  --review-soft: light-dark(#f5e9d2, #46361b);
+  --review-ink: light-dark(#6b4710, #ebc58b);
+
+  --watch: light-dark(#bba087, #cdb59b); /* Sand: never used for text */
+  --watch-soft: light-dark(#efe7dd, #3f372d);
+  --watch-ink: light-dark(#5e4a36, #dcc8b0);
+
+  --destructive-soft: light-dark(#f6e0da, #4a2b24); /* Terracotta: errors, failed runs, over cap */
+  --destructive-ink: light-dark(#8a2f1f, #eba797);
+
+  /* Drop is a grey outline: --input for the line, --muted-foreground for the text. */
+
+  /* ---- Charts: Navy, Olive, Sand, Ochre, Terracotta (lighter steps in dark) ---------------- */
+  --chart-1: light-dark(#233a56, #8ea5c3);
+  --chart-2: light-dark(#5f693a, #a3ae74);
+  --chart-3: light-dark(#bba087, #cdb59b);
+  --chart-4: light-dark(#a8742a, #d9a25a);
+  --chart-5: light-dark(#b4412d, #d98471);
+
+  /* ---- Sidebar ----------------------------------------------------------------------------- */
+  --sidebar: light-dark(#e5e8db, #1e1b15);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: light-dark(#d3d7c6, #3a362c);
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
+
+  /* ---- Depth: flat surfaces, and a soft shadow only for things that float ------------------ */
+  --elevation-color: light-dark(rgb(38 35 27 / 16%), rgb(0 0 0 / 50%));
+  --elevation-float: 0 8px 24px -8px var(--elevation-color), 0 2px 6px -2px var(--elevation-color);
+
+  /* ---- Type -------------------------------------------------------------------------------- */
+  /* Two typefaces. The system fonts show until Fontsource's files load. */
+  --font-family-text:
+    'Titillium Web', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
+    Arial, sans-serif;
+  --font-family-serif: 'IBM Plex Serif', ui-serif, Georgia, Cambria, 'Times New Roman', serif;
+  /* Titillium Web has no 500 weight, so there are two weights. */
+  --weight-regular: 400;
+  --weight-semibold: 600;
+
+  --size-title: 1.5rem; /* 24px, page title, 600 */
+  --size-section: 1.125rem; /* 18px, section title, 600 */
+  --size-body: 1rem; /* 16px, reading text, 400 */
+  --size-ui: 0.875rem; /* 14px, tables, forms and menus, 400 (600 for headers) */
+  --size-caption: 0.8125rem; /* 13px, labels and captions, 400. Nothing is smaller. */
+  --leading-title: 1.25;
+  --leading-section: 1.4;
+  --leading-body: 1.5;
+  --leading-ui: 1.43;
+  --leading-caption: 1.38;
+
+  /* ---- Space: an 8-point scale. Tailwind's p-2, p-4, p-6, p-8, p-12 and p-16 are these. ---- */
+  --space-1: 0.5rem; /* 8px */
+  --space-2: 1rem; /* 16px */
+  --space-3: 1.5rem; /* 24px */
+  --space-4: 2rem; /* 32px */
+  --space-5: 3rem; /* 48px */
+  --space-6: 4rem; /* 64px */
+
+  /* ---- Shape ------------------------------------------------------------------------------- */
+  --radius: 0.625rem; /* 10px, the one radius. Small parts use the smaller steps in index.css. */
+
+  /* ---- Sizes ------------------------------------------------------------------------------- */
+  --control-height: 2.25rem; /* 36px buttons and fields */
+  --target-min: 1.5rem; /* 24px, the smallest click target */
+  --row-height: 3rem; /* 48px table rows */
+  --row-height-compact: 2.5rem; /* 40px, compact mode */
+  --content-max: 90rem; /* 1440px */
+  --focus-width: 2px;
+  --focus-offset: 2px;
+
+  /* ---- Motion: one curve, two durations --------------------------------------------------- */
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-fast: 150ms; /* hover and other small changes */
+  --duration-slow: 250ms; /* panels and dialogs */
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}

@@ -1,8 +1,9 @@
 """The source check. Pure code: no AI and no database, so it's easy to test.
 
 Every fact needs a link to a page the engine actually read. A fact whose link is missing,
-unseen or on a blocked site becomes unknown. Each kept link gets a source kind, which feeds
-the score.
+not a plain web address, unseen or on a blocked site becomes unknown, and its link is removed
+too. Each kept link gets a source kind, which feeds the score. The website is kept as a bare
+domain, and only if a page on that site was read. Otherwise it becomes unknown.
 """
 
 from collections.abc import Iterable
@@ -12,6 +13,7 @@ from urllib.parse import urlsplit
 
 from apps.lead_finder.fields import CompanyFacts, Fact
 from apps.lead_finder.rules import Criteria
+from apps.lead_finder.sanitize import clean_domain, safe_http_url
 
 FACT_FIELDS = (
     "website",
@@ -67,18 +69,42 @@ class CheckedFacts:
     dropped: list[str]  # what was removed, and why, in plain words
 
 
+def _unknown(fact: Fact[Any]) -> Fact[Any]:
+    """A fact that is dropped: no value, no label and no link, so nothing odd is stored."""
+    return fact.model_copy(
+        update={"value": None, "label": None, "source_url": None, "source_date": None}
+    )
+
+
 def check_sources(
     facts: CompanyFacts, seen_urls: Iterable[str], criteria: Criteria
 ) -> CheckedFacts:
     seen = {url_key(url) for url in seen_urls}
     seen_hosts = {key.split("/", 1)[0].split("?", 1)[0] for key in seen}
-    website = facts.website.value
-    company_domain = host_of(website) if website else None
     dropped: list[str] = []
+
+    # The website is stored as a bare domain, like acme.com.au. It stands only if we read a
+    # page on that site (or on a subdomain of it, like careers.acme.com.au). Otherwise a made-up
+    # or planted domain could steer the HubSpot match and make links count as the company's own.
+    website_fact = facts.website
+    if website_fact.value is not None:
+        domain = clean_domain(website_fact.value)
+        if domain is None:
+            dropped.append("website: not a valid domain name. Marked unknown.")
+            website_fact = _unknown(website_fact)
+        elif not any(on_site(host, [domain]) for host in seen_hosts):
+            dropped.append("website: no page on this site was read. Marked unknown.")
+            website_fact = _unknown(website_fact)
+        elif domain != website_fact.value:
+            website_fact = website_fact.model_copy(update={"value": domain})
+        facts = facts.model_copy(update={"website": website_fact})
+    company_domain = website_fact.value
 
     def problem(url: str | None) -> str | None:
         if not url:
             return "no source link"
+        if not safe_http_url(url):
+            return "not a plain web link (http or https only)"
         if source_kind(url, criteria, company_domain) == BLOCKED:
             return f"blocked site ({host_of(url)})"
         if url_key(url) not in seen:
@@ -89,16 +115,18 @@ def check_sources(
     for name in FACT_FIELDS:
         fact: Fact[Any] = getattr(facts, name)
         if fact.value is None:
+            # Nothing is claimed, so no link is kept either (it could be any text at all).
+            if fact.source_url is not None or fact.source_date is not None:
+                update[name] = fact.model_copy(update={"source_url": None, "source_date": None})
             continue
         issue = problem(fact.source_url)
-        # The website can stand on its own: we read pages on that site.
-        if name == "website" and issue and company_domain in seen_hosts:
-            issue = None
-        if issue:
+        if issue and name == "website":
+            # The site was read (checked above), so the domain stands. Its own link failed the
+            # check, so that link is not kept as a source.
+            update[name] = fact.model_copy(update={"source_url": None, "source_date": None})
+        elif issue:
             dropped.append(f"{name}: {issue}. Marked unknown.")
-            update[name] = fact.model_copy(update={"value": None, "label": None})
-            if name == "website":
-                company_domain = None
+            update[name] = _unknown(fact)
 
     trigger_ids = {t.id for t in criteria.triggers.every}
     triggers = []
