@@ -24,6 +24,11 @@ def get_engine() -> AsyncEngine:
         pool_size=settings.db_pool_size,
         max_overflow=settings.db_max_overflow,
         pool_timeout=settings.db_pool_timeout,
+        # SQLAlchemy's error text shows the SQL but not its list of parameters. That is all
+        # this hides. Postgres's own `DETAIL:` line can still quote the values of the failed
+        # row (`Key (company_key)=(Acme) already exists.`), so the log formatter hides that
+        # line too (core/logs.py: hide_detail). Values can be company names, notes or keys.
+        hide_parameters=True,
         connect_args={"connect_timeout": CONNECT_TIMEOUT_SECONDS},
     )
 

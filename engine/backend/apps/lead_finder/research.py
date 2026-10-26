@@ -18,19 +18,32 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic_core import PydanticCustomError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.lead_finder.fields import AngleNotes, CompanyFacts, Fact
+from apps.lead_finder.params import (
+    NAME_MESSAGE,
+    clean_typed_city,
+    clean_typed_domain,
+)
 from apps.lead_finder.prompts import Prompt, extract_prompt, research_prompt, versions
 from apps.lead_finder.rules import LeadFinderRules, Result
+from apps.lead_finder.sanitize import clean_company_name
 from apps.lead_finder.scoring import RuleCheck, TriggerScore, judge, parse_date
 from apps.lead_finder.sources import check_sources, missing_facts, url_key
 from apps.lead_finder.tables import Lead
 from core.claude.budget import Budget, BudgetSpent
 from core.claude.client import Claude, ClaudeError, ClaudeUnavailable, Reply, WebTools
 from core.config import Settings
-from core.hubspot.matching import HubSpotMatch, match_company
+from core.hubspot.matching import (
+    HubSpotMatch,
+    MatchCandidate,
+    MatchedBy,
+    Status,
+    match_company,
+)
 from core.memory.embedder import Embedder
 from core.memory.service import Note as MemoryNote
 from core.memory.service import recent, remember_many
@@ -51,22 +64,58 @@ log = logging.getLogger(__name__)
 
 
 class ResearchRequest(BaseModel):
-    company: str = Field(min_length=2, max_length=300, examples=["Culture Amp"])
+    """What a person asks for. Where the company came from and which HubSpot company it is are
+    not here: they live in `ResearchContext`, so a caller can't set them."""
+
+    company: str = Field(max_length=300, examples=["Culture Amp"])
     city: str | None = Field(default=None, max_length=120, examples=["Melbourne"])
     website: str | None = Field(default=None, max_length=300, examples=["cultureamp.com"])
     use_memory: bool = Field(
         default=True, description="false searches the web again, even with fresh notes"
     )
 
+    @field_validator("company")
+    @classmethod
+    def _company(cls, value: str) -> str:
+        cleaned = clean_company_name(value)
+        if cleaned is None:
+            raise PydanticCustomError("company_name", NAME_MESSAGE)
+        return cleaned
+
+    @field_validator("city")
+    @classmethod
+    def _city(cls, value: str | None) -> str | None:
+        return clean_typed_city(value)
+
+    @field_validator("website")
+    @classmethod
+    def _website(cls, value: str | None) -> str | None:
+        return clean_typed_domain(value)
+
 
 class HubSpotOut(BaseModel):
-    status: str
+    model_config = ConfigDict(json_schema_serialization_defaults_required=True)
+
+    status: Status
     hubspot_id: str | None
     name: str | None
     owner: str | None
-    matched_by: str | None
+    matched_by: MatchedBy | None
     open_deals: list[str]
     last_dissolved: date | None
+    candidates: list[MatchCandidate] = Field(
+        default_factory=list, description="Companies that might be the same one. A person decides."
+    )
+
+
+class NoteOut(BaseModel):
+    """What one source said, in a short summary (not a quote)."""
+
+    claim: str
+    url: str
+    published: str | None
+    angle: str
+    from_memory: bool
 
 
 class ResearchCost(BaseModel):
@@ -78,6 +127,8 @@ class ResearchCost(BaseModel):
 
 
 class LeadCard(BaseModel):
+    model_config = ConfigDict(json_schema_serialization_defaults_required=True)
+
     id: uuid.UUID
     company: str
     result: Result
@@ -93,6 +144,10 @@ class LeadCard(BaseModel):
     fitout_aud: Decimal | None
     facts: CompanyFacts
     hubspot: HubSpotOut
+    notes: list[NoteOut] = Field(
+        default_factory=list,
+        description="What each source said. A summary of the page, not a quote.",
+    )
     dropped: list[str] = Field(description="Facts the source check removed, and why")
     problems: list[str] = Field(description="Searches that failed, or caps that were reached")
     research: ResearchCost

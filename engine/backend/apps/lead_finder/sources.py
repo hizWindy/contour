@@ -9,11 +9,11 @@ domain, and only if a page on that site was read. Otherwise it becomes unknown.
 from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import SplitResult, urlsplit
 
 from apps.lead_finder.fields import CompanyFacts, Fact
 from apps.lead_finder.rules import Criteria
-from apps.lead_finder.sanitize import clean_domain, safe_http_url
+from apps.lead_finder.sanitize import clean_domain, one_line, safe_http_url
 
 FACT_FIELDS = (
     "website",
@@ -27,21 +27,55 @@ FACT_FIELDS = (
     "expected_move",
 )
 BLOCKED = "blocked"
+ID_MAX_CHARS = 40  # a trigger or booster id, when it is echoed in a message
+
+
+def _split(url: str) -> SplitResult | None:
+    """`urlsplit`, but None instead of an error for text that can't be read as a web address.
+
+    Claude writes some of these links, and a web page can make it write a broken one, like
+    'http://[x'. That must never stop a research that has already been paid for. A broken link
+    is dropped later, by `safe_http_url`, as not a plain web link.
+    """
+    text = url.strip()
+    try:
+        return urlsplit(text if "://" in text else "https://" + text)
+    except ValueError:
+        return None
+
+
+def _clean_host(hostname: str | None) -> str:
+    """Lowercase host (urlsplit lowers it) with no closing dot and no `www.`.
+
+    A closing dot names the same site ('propertydaily.com.au.' is 'propertydaily.com.au'), so
+    it must not be a way round the blocked list.
+    """
+    return (hostname or "").rstrip(".").removeprefix("www.")
 
 
 def host_of(url: str) -> str:
-    value = url.strip().lower()
-    if "://" not in value:
-        value = "https://" + value
-    return (urlsplit(value).hostname or "").removeprefix("www.")
+    """The host of a web address, lowercase, with no `www.` and no closing dot.
+
+    Never raises: text that isn't a readable web address has no host, so it gives ''.
+    """
+    parts = _split(url.lower())
+    return _clean_host(parts.hostname if parts else None)
 
 
 def url_key(url: str) -> str:
-    """The same page, however it's written: no scheme, no www, no #part, no end slash."""
-    parts = urlsplit(url.strip() if "://" in url else "https://" + url.strip())
+    """The same page, however it's written: no scheme, no www, no #part, no end slash.
+
+    Never raises. Text that isn't a readable web address (like 'http://[x') gets the key '/'
+    plus its own lowercase text, so it matches only an identical string. The key starts with
+    '/' because a real key starts with a host: `check_sources` reads the part before the first
+    '/' as a host, and a bare '[x.acme.com.au' would pass there as a page on acme.com.au.
+    """
+    parts = _split(url)
+    if parts is None:
+        return "/" + url.strip().lower()
     path = parts.path.rstrip("/")
     query = f"?{parts.query}" if parts.query else ""
-    return f"{host_of(url)}{path}{query}"
+    return f"{_clean_host(parts.hostname)}{path}{query}"
 
 
 def on_site(host: str, domains: Iterable[str]) -> bool:
@@ -135,7 +169,7 @@ def check_sources(
             "unknown trigger id" if trigger.id not in trigger_ids else problem(trigger.source_url)
         )
         if issue:
-            dropped.append(f"trigger {trigger.id}: {issue}. Removed.")
+            dropped.append(f"trigger {one_line(trigger.id, ID_MAX_CHARS)}: {issue}. Removed.")
         else:
             triggers.append(trigger)
 
@@ -146,7 +180,7 @@ def check_sources(
             "unknown booster id" if booster.id not in booster_ids else problem(booster.source_url)
         )
         if issue:
-            dropped.append(f"booster {booster.id}: {issue}. Removed.")
+            dropped.append(f"booster {one_line(booster.id, ID_MAX_CHARS)}: {issue}. Removed.")
         else:
             boosters.append(booster)
 

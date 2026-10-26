@@ -165,6 +165,14 @@
     outline-offset: var(--focus-offset);
   }
 
+  /* Icons are drawn with a 1.5px line (DESIGN.md "Icons"), and Lucide's own default is 2.
+     Every lucide-react icon is an <svg class="lucide ...">. A CSS rule beats the stroke-width
+     attribute the icon carries, so this holds for every icon, whatever strokeWidth it is given.
+     A utility such as stroke-2 still wins over this base rule, for the rare icon that needs it. */
+  svg.lucide {
+    stroke-width: 1.5;
+  }
+
   html {
     font-family: var(--font-sans);
     font-synthesis: none;

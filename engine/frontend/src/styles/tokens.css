@@ -42,8 +42,8 @@
   --destructive-foreground: light-dark(#fbfbf8, #26231b);
 
   --border: light-dark(#d3d7c6, #4a463b);
-  /* The border of form fields. 3:1 on the card and input surface. */
-  --input: light-dark(#8f937f, #7f7a6d);
+  /* The border of form fields. At least 3:1 on both the page and the card, in light and dark. */
+  --input: light-dark(#8a8e79, #7f7a6d);
   --ring: var(--primary);
 
   /* Selected rows: a light tint of Navy, with a Navy marker (--primary) at the edge. */

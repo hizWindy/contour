@@ -218,7 +218,8 @@ def test_a_fast_test_cannot_reach_the_database_through_the_app(
 
         async def get(path):
             transport = httpx.ASGITransport(app=create_app())
-            async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            base = "http://localhost"
+            async with httpx.AsyncClient(transport=transport, base_url=base) as client:
                 return await client.get(path)
 
 

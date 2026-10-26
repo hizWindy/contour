@@ -34,6 +34,7 @@ from apps.lead_finder.sanitize import (
         ("  Canva  ", "Canva"),
         ("Culture    Amp", "Culture Amp"),
         ("\uff23\uff41\uff4e\uff56\uff41", "Canva"),  # full-width letters become normal ones (NFKC)
+        ("O\ufb03ce Group", "Office Group"),  # a ligature is a letter too, so it is fine
         ("Ab", "Ab"),  # the shortest allowed
         ("A" * 80, "A" * 80),  # the longest allowed
         ("one two three four five six seven eight", "one two three four five six seven eight"),
@@ -97,6 +98,51 @@ def test_invisible_and_control_characters_are_removed(typed: str, cleaned: str) 
     ],
 )
 def test_unusable_names_are_rejected_not_repaired(typed: str | None) -> None:
+    assert clean_company_name(typed) is None
+
+
+@pytest.mark.parametrize(
+    "typed",
+    [
+        "Acme\u2122",  # the trademark sign: NFKC would write it as TM
+        "Acme\u2122 Pty Ltd",
+        "\u2122Acme",
+        "Acme\u2120",  # the service mark sign: SM
+        "Acme\u2121 Group",  # the telephone sign: TEL
+        "Acme\u00a8",  # a modifier symbol (Sk): NFKC would add a space and an accent
+        "Acme\u00b4s",
+        "Acme\u00b2",  # a superscript two (No): NFKC would write a plain 2
+        "Acme \u2167",  # a roman numeral eight (Nl): NFKC would write VIII
+        "Acme \u20a8",  # the rupee sign (Sc): NFKC would write Rs
+        "Acme\u00bd",  # one half (No): NFKC would write 1, a fraction slash and 2
+        "Acme \u2460",  # a circled one (No): NFKC would write a plain 1
+        "\u2160 Group",  # a roman numeral one (Nl) at the start
+        "Acme\u2074",  # a superscript four (No)
+    ],
+)
+def test_a_symbol_that_nfkc_would_rewrite_rejects_the_name(typed: str) -> None:
+    """The name that would be stored is not the one that was typed, so it is rejected."""
+    assert clean_company_name(typed) is None
+    assert normalize(typed) != typed  # normalize alone does rewrite it, which is the problem
+
+
+def test_the_symbol_rule_does_not_touch_letters_digits_or_punctuation() -> None:
+    assert clean_company_name("Acme (Australia) & Co.") == "Acme (Australia) & Co."
+    assert clean_company_name("7-Eleven") == "7-Eleven"
+    assert clean_company_name("\uff21cme\uff11") == "Acme1"  # full-width letter and digit
+    assert clean_company_name("Acme 2") == "Acme 2"  # a plain digit (Nd)
+    assert clean_company_name("Acme \u0663") == "Acme \u0663"  # an Arabic-Indic digit (Nd), as is
+    assert clean_company_name("Z\u00fcrich Insurance") == "Z\u00fcrich Insurance"  # letters (L)
+    assert clean_company_name("O\u2019Connor, Smith & Sons (No. 2)") == (
+        "O\u2019Connor, Smith & Sons (No. 2)"
+    )
+
+
+@pytest.mark.parametrize("typed", ["Acme $", "Acme \u20ac", "Acme \u00a3", "Acme \u20b9"])
+def test_a_currency_sign_that_nfkc_leaves_alone_is_still_not_a_name(typed: str) -> None:
+    """These (category Sc) are not rewritten, but they are not in the list of allowed
+    punctuation either, so the name is refused for that reason."""
+    assert normalize(typed) == typed
     assert clean_company_name(typed) is None
 
 
@@ -197,6 +243,29 @@ def test_valid_domains_become_a_bare_domain(value: str, domain: str) -> None:
 )
 def test_anything_else_is_not_a_domain(value: str | None) -> None:
     assert clean_domain(value) is None
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "\u212amart.com.au",  # the Kelvin sign lowers to a plain k
+        "ACME.\u212aom.au",
+        "HTTPS://\u212amart.com.au",
+        "http\u017f://acme.com.au",  # a long s matches an s when case is ignored
+        "\uff41cme.com.au",  # a full-width letter
+        "acme.com.au\u200b",  # a zero-width space (not removed by strip)
+        "ac\u0131me.com.au",  # a dotless i
+    ],
+)
+def test_a_domain_that_is_not_ascii_is_rejected_before_case_is_lowered(value: str) -> None:
+    assert clean_domain(value) is None
+
+
+def test_the_kelvin_sign_would_have_passed_as_an_ascii_domain() -> None:
+    """Why the ASCII check comes first: after lower() the text looks fine."""
+    assert "\u212amart.com.au".lower() == "kmart.com.au"
+    assert clean_domain("kmart.com.au") == "kmart.com.au"
+    assert clean_domain("\u212amart.com.au") is None
 
 
 def test_a_domain_of_exactly_100_characters_passes_and_101_does_not() -> None:
@@ -346,6 +415,53 @@ def test_plain_web_addresses_pass(url: str) -> None:
 )
 def test_anything_else_is_not_a_safe_address(url: str | None) -> None:
     assert safe_http_url(url) is False
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://propertydaily.com.au./news/x",  # a closing dot names the same site
+        "https://propertydaily.com.au.",
+        "https://propertydaily.com.au.:8443/x",
+        "https://propertydaily.com.au../x",
+        "https://propertydaily%2ecom%2eau/x",  # a browser reads %2e as a dot
+        "https://propertydaily.com%2Eau/x",
+        "https://%70ropertydaily.com.au/x",  # and %70 as a p
+        "https://exam%41ple.com/",
+        "https://example.com%2f.evil.example/",
+        "https://[fe80::1%25eth0]/x",
+        # Look-alikes a browser folds onto the plain site (UTS 46 mapping):
+        "https://\uff50ropertydaily.com.au/x",  # a full-width p
+        "https://propertydaily\u3002com\u3002au/x",  # ideographic full stops
+        "https://propertydaily.com.au\uff0e/x",  # a full-width full stop at the end
+        "https://propertydaily\uff0ecom.au/x",  # a full-width full stop in the middle
+        "https://propertydaily\uff61com.au/x",  # a half-width ideographic full stop
+        "https://\uff41\uff46\uff52.com/x",  # a whole name in full-width letters
+        "https://\ufb01nance.example/x",  # a ligature (fi)
+        "https://\u212aite.example/x",  # the Kelvin sign
+        "https://café.example/x",  # any other non-ASCII letter in the host
+    ],
+)
+def test_a_host_with_a_percent_a_closing_dot_or_a_lookalike_is_not_a_safe_address(
+    url: str,
+) -> None:
+    assert safe_http_url(url) is False
+
+
+def test_a_percent_or_a_dot_after_the_host_is_still_fine() -> None:
+    assert safe_http_url("https://news.example/caf%C3%A9?q=a%20b#x%2e") is True
+    assert safe_http_url("https://news.example/a.b./c.") is True  # in the path, not the host
+
+
+def test_non_ascii_text_after_the_host_is_still_fine() -> None:
+    """Only the host is held to ASCII: a path or a query may carry any letters."""
+    assert safe_http_url("https://news.example/café?q=\uff50") is True
+    assert safe_http_url("https://news.example/\u3002") is True
+
+
+def test_a_site_with_a_non_english_name_passes_in_punycode() -> None:
+    assert safe_http_url("https://xn--caf-dma.example/menu") is True
+    assert safe_http_url("https://news.xn--80ak6aa92e.example/a") is True
 
 
 def test_the_length_limit_is_500_characters() -> None:

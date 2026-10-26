@@ -356,3 +356,35 @@ async def test_a_waiter_that_was_woken_and_then_cancelled_holds_nothing() -> Non
     with pytest.raises(asyncio.CancelledError):
         await waiting
     assert b.reserved_usd == Decimal("1.60")  # the waiter took no hold
+
+
+# --- A request needs at least one search ---------------------------------------------------------
+
+
+@pytest.mark.parametrize("wanted", [0, -1, -50])
+def test_asking_for_fewer_than_one_search_is_a_bug_not_a_hold(wanted: int) -> None:
+    b = budget("2.50")
+    for ask in (b.reserve_request, b.reserve_searches):
+        with pytest.raises(ValueError, match="at least 1 search"):
+            ask(wanted)
+    assert (b.reserved_usd, b.in_flight) == (Decimal(0), False)  # nothing was held
+    assert b.reserve_request(1) == 1  # the budget still works
+
+
+@pytest.mark.parametrize("wanted", [0, -1, -50])
+async def test_acquire_request_refuses_fewer_than_one_search_too(wanted: int) -> None:
+    b = budget("2.50")
+    with pytest.raises(ValueError, match="at least 1 search"):
+        await acquire(b, wanted)
+    assert (b.reserved_usd, b.in_flight, b._waiters) == (Decimal(0), False, [])
+    assert await acquire(b, 1) == 1
+
+
+def test_the_value_error_comes_before_the_cap_check() -> None:
+    """Even a budget that is already spent says what is wrong with the call."""
+    b = budget("1.00")
+    b.record(reply("1.10"))
+    with pytest.raises(ValueError, match="at least 1 search"):
+        b.reserve_request(0)
+    with pytest.raises(BudgetSpent):
+        b.reserve_request(1)

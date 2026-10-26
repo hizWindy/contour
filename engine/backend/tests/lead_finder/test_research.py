@@ -135,7 +135,7 @@ async def client(session: AsyncSession) -> AsyncIterator[httpx.AsyncClient]:
     app.dependency_overrides[get_session] = test_session
     app.dependency_overrides[claude_dependency] = lambda: FakeClaude()
     transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as test_client:
+    async with httpx.AsyncClient(transport=transport, base_url="http://localhost") as test_client:
         yield test_client
 
 

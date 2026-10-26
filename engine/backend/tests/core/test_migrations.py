@@ -2,6 +2,9 @@
 
 Most tests here need the database (`integration`). The ones that move data between versions
 build their own scratch database, so the shared test database is never rolled back.
+
+The chain: 0001 core tables, 0002 searches and leads, 0003 runs and settings, 0004 lead
+columns (with a backfill from the cards), 0005 an index on the search log's time.
 """
 
 import importlib
@@ -138,6 +141,20 @@ def test_upgrade_to_head_is_safe_to_repeat(database_url: str) -> None:
         row = connection.execute("SELECT version_num FROM alembic_version").fetchone()
     assert row is not None
     assert row[0] == head
+
+
+def test_the_migrations_form_one_line_up_to_0005() -> None:
+    """No branches, and each step follows the one before. Later migrations may follow 0005."""
+    script = ScriptDirectory.from_config(alembic_config("postgresql+psycopg://x@127.0.0.1/x"))
+    assert len(script.get_heads()) == 1
+    oldest_first = [revision.revision for revision in reversed(list(script.walk_revisions()))]
+    assert oldest_first[:5] == [
+        "0001_core_tables",
+        "0002_searches_leads",
+        "0003_runs_settings",
+        "0004_lead_columns",
+        "0005_searches_created_at",
+    ]
 
 
 @pytest.mark.integration
@@ -412,6 +429,32 @@ def scratch(database_url: str) -> Iterator[Scratch]:
     finally:
         with psycopg.connect(server, autocommit=True) as connection:
             connection.execute(drop)
+
+
+def search_log_indexes(scratch: Scratch) -> dict[str, str]:
+    """The indexes on core.searches, by name, with their definitions."""
+    with scratch.connect() as connection:
+        rows = connection.execute(
+            "SELECT indexname, indexdef FROM pg_indexes "
+            "WHERE schemaname = 'core' AND tablename = 'searches'"
+        ).fetchall()
+    return {row["indexname"]: row["indexdef"] for row in rows}
+
+
+@pytest.mark.integration
+def test_0005_adds_and_removes_the_index_on_the_search_log_time(scratch: Scratch) -> None:
+    config = alembic_config(scratch.url)
+    command.upgrade(config, "0004_lead_columns")
+    assert "ix_searches_created_at" not in search_log_indexes(scratch)
+
+    command.upgrade(config, "0005_searches_created_at")
+    assert search_log_indexes(scratch)["ix_searches_created_at"].endswith("(created_at)")
+    command.check(config)  # the model declares the same index, so nothing is missing or extra
+
+    command.downgrade(config, "0004_lead_columns")
+    assert "ix_searches_created_at" not in search_log_indexes(scratch)
+    command.upgrade(config, "head")
+    assert "ix_searches_created_at" in search_log_indexes(scratch)
 
 
 def fact(value: Any) -> dict[str, Any]:
@@ -713,11 +756,22 @@ def test_old_leads_are_filled_in_from_their_cards(legacy: Scratch) -> None:
 
 
 @pytest.mark.integration
-def test_downgrade_to_0002_and_back_loses_nothing(legacy: Scratch) -> None:
+def test_downgrade_to_0002_restores_the_card_columns_and_the_way_back_fills_them_again(
+    legacy: Scratch,
+) -> None:
+    """Going down to 0002 puts the Phase 1 leads table back, and going up fills it in again.
+
+    What it loses on the way is on purpose, and this test checks it: downgrading 0004 drops
+    run links, test flags and feedback (run_id, origin, is_test, reject_reason, note and
+    useful), and downgrading 0003 drops the runs, their events and the settings. Coming back
+    up gives those columns their defaults. Everything the cards can rebuild comes back as it
+    was.
+    """
     config = alembic_config(legacy.url)
     command.upgrade(config, "head")
     before = leads_by_company(legacy)
     long_version = "v" * 64
+    run_id = uuid.uuid4()
     with legacy.connect() as connection:
         connection.execute(
             "INSERT INTO core.searches (id, app, run_id, step, model, prompt_version, queries, "
@@ -726,6 +780,27 @@ def test_downgrade_to_0002_and_back_loses_nothing(legacy: Scratch) -> None:
             "'m', %s, '[]', '[]', 0, 0, 0, 0, 0, 0, 0, true)",
             (uuid.uuid4(), uuid.uuid4(), long_version),
         )
+        # One lead with everything the downgrade is going to drop.
+        connection.execute(
+            "INSERT INTO core.runs (id, app, mode) VALUES (%s, 'lead_finder', 'discovery')",
+            (run_id,),
+        )
+        marked = connection.execute(
+            "UPDATE lead_finder.leads SET run_id = %s, origin = 'web', is_test = true, "
+            "useful = true, note = 'Called them', reject_reason = 'Too small' "
+            "WHERE company = 'Mystery Co' "
+            "RETURNING run_id, origin, is_test, useful, note, reject_reason",
+            (run_id,),
+        ).fetchone()
+    assert marked == {
+        "run_id": run_id,
+        "origin": "web",
+        "is_test": True,
+        "useful": True,
+        "note": "Called them",
+        "reject_reason": "Too small",
+    }
+    assert "ix_searches_created_at" in search_log_indexes(legacy)
 
     command.downgrade(config, "0002_searches_leads")
     with legacy.connect() as connection:
@@ -748,6 +823,7 @@ def test_downgrade_to_0002_and_back_loses_nothing(legacy: Scratch) -> None:
     assert {row["column_name"] for row in columns} == PHASE_1_COLUMNS
     assert gone == {"runs": None, "events": None, "settings": None}
     assert "run_id" not in search_columns
+    assert "ix_searches_created_at" not in search_log_indexes(legacy)
     assert search_columns["prompt_version"] == 32
     assert kept is not None
     assert kept["prompt_version"] == long_version[:32]
@@ -759,4 +835,10 @@ def test_downgrade_to_0002_and_back_loses_nothing(legacy: Scratch) -> None:
 
     command.upgrade(config, "head")
     command.check(config)
+    # Every column the cards fill is back as it was, and the dropped ones are at their defaults.
+    # So the lead we marked equals its unmarked self from before.
     assert leads_by_company(legacy) == before
+    assert "ix_searches_created_at" in search_log_indexes(legacy)
+    with legacy.connect() as connection:
+        runs = connection.execute("SELECT count(*) AS n FROM core.runs").fetchone()
+    assert runs == {"n": 0}  # the run, and so the link to it, is gone for good

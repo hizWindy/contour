@@ -21,6 +21,11 @@ from urllib.parse import urlsplit
 DROPPED_CATEGORIES = frozenset({"Cc", "Cf", "Cs", "Co", "Cn"})
 # Besides those, line and paragraph separators, and any kind of space, count as blank.
 BLANK_CATEGORIES = frozenset({"Zs", "Zl", "Zp"})
+# Characters that are not letters but that NFKC may turn into other characters: symbols (other,
+# modifier, currency), like the trademark sign (TM) and the rupee sign (Rs), and numbers that
+# are not plain digits (other, letter-like), like the superscript two (2) and the roman
+# numeral eight (VIII). Plain digits (Nd) are not in this list: full-width digits are fine.
+REWRITTEN_SYMBOL_CATEGORIES = frozenset({"So", "Sk", "Sc", "No", "Nl"})
 # This includes the curly apostrophe (U+2019), as phones type it in O'Connor.
 NAME_PUNCTUATION = frozenset("&'\u2019.,-()/")
 
@@ -54,6 +59,21 @@ def normalize(value: str) -> str:
     return " ".join("".join(kept).split())
 
 
+def _symbol_would_be_rewritten(value: str) -> bool:
+    """True if NFKC would turn a symbol or a special number into other characters.
+
+    The trademark sign becomes the letters TM, the rupee sign becomes Rs, the superscript two
+    becomes a 2 and the roman numeral eight becomes VIII (categories So, Sk, Sc, No and Nl).
+    Letters and digits in another form (full-width, ligatures) are fine: they become plain
+    ones.
+    """
+    return any(
+        unicodedata.category(char) in REWRITTEN_SYMBOL_CATEGORIES
+        and unicodedata.normalize("NFKC", char) != char
+        for char in value
+    )
+
+
 def _allowed_in_name(char: str) -> bool:
     category = unicodedata.category(char)
     return category.startswith("L") or category == "Nd" or char == " " or char in NAME_PUNCTUATION
@@ -65,9 +85,13 @@ def clean_company_name(value: str | None) -> str | None:
     NFKC, unwanted characters dropped, whitespace collapsed. Then only letters, digits, a
     space and & ' . , - ( ) / (or the curly apostrophe) may remain, with at least one letter
     or digit. 2 to 80 characters, at most 8 words. A name that fails any of this is rejected
-    whole.
+    whole. So is a name with a symbol or special number that NFKC would rewrite (the trademark
+    sign becomes the letters TM, a superscript two becomes a 2), because the name that is stored
+    would no longer be the one that was typed.
     """
     if value is None:
+        return None
+    if _symbol_would_be_rewritten(value):
         return None
     name = normalize(value)
     if not NAME_MIN_CHARS <= len(name) <= NAME_MAX_CHARS:
@@ -104,11 +128,17 @@ def clean_domain(value: str | None) -> str | None:
     Case is lowered. A leading http:// or https://, a leading www. and a closing slash are
     removed, because they say nothing more. Anything else beyond the domain (a path, a port,
     a query, a login, a space, a character outside a-z, 0-9, hyphen and dot) makes it invalid.
-    At most 100 characters, with at least one dot.
+    Text that isn't plain ASCII is rejected before its case is lowered. At most 100
+    characters, with at least one dot.
     """
     if value is None:
         return None
-    text = value.strip().lower()
+    text = value.strip()
+    # Before lower(): the Kelvin sign (U+212A) lowers to a plain k, so a non-ASCII domain
+    # would otherwise pass as an ASCII one.
+    if not text.isascii():
+        return None
+    text = text.lower()
     if len(text) > DOMAIN_MAX_CHARS + len("https://www./"):
         return None
     text = _SCHEME.sub("", text, count=1).removesuffix("/").removeprefix("www.")
@@ -155,7 +185,11 @@ def safe_http_url(url: str | None) -> bool:
     """True only for a plain web address we may store and show as a link.
 
     The scheme is http or https, a host is present, there is no login in it (`user:pw@`), no
-    space or control character anywhere, no backslash, and it is at most 500 characters.
+    space or control character anywhere, no backslash, and it is at most 500 characters. The
+    host has no `%`, no closing dot and only plain ASCII characters, because each can hide a
+    blocked site: a browser reads full-width letters, the ideographic full stop and the
+    full-width full stop as the plain letters and dot. A site with a non-English name is
+    written as `xn--...` (punycode), which is ASCII and so still passes.
     """
     if not url or len(url) > URL_MAX_CHARS:
         return False
@@ -170,6 +204,16 @@ def safe_http_url(url: str | None) -> bool:
         return False
     if parts.scheme not in ("http", "https"):
         return False
-    if not parts.hostname:
+    host = parts.hostname
+    if not host:
+        return False
+    # A browser reads %2e as a dot (and %70 as a p), so a host with a % in it could be a
+    # blocked site in disguise. A closing dot names the same site as the host without it.
+    # Browsers also map non-ASCII look-alikes (UTS 46) onto plain letters and dots, so
+    # a full-width p or an ideographic full stop in 'propertydaily.com.au' is the blocked site
+    # too. A real address writes such a name as xn-- (punycode).
+    # The raw netloc is checked, not `host`: `hostname` lowers its text, and the Kelvin sign
+    # (U+212A) lowers to a plain k, so the host would look like ASCII.
+    if "%" in host or host.endswith(".") or not parts.netloc.isascii():
         return False
     return "@" not in parts.netloc

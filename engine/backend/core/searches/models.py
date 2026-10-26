@@ -5,7 +5,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, Integer, Numeric, String, Text, Uuid, text
+from sqlalchemy import Boolean, DateTime, Index, Integer, Numeric, String, Text, Uuid, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -14,7 +14,13 @@ from core.db.base import CORE_SCHEMA, Base
 
 class SearchLog(Base):
     __tablename__ = "searches"
-    __table_args__ = ({"schema": CORE_SCHEMA},)
+    __table_args__ = (
+        # For the Searches page (newest first) and the 24-hour daily-cap sum. Migration 0005
+        # made it. It sits here, with the table, so `alembic check` stays clean whichever
+        # modules are loaded.
+        Index("ix_searches_created_at", "created_at"),
+        {"schema": CORE_SCHEMA},
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     app: Mapped[str] = mapped_column(String(64))

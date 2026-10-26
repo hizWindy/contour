@@ -7,23 +7,34 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Any, TypedDict
 
 import httpx
+import psycopg
 import pytest
 from fastapi import FastAPI
 from langchain_core.runnables import RunnableConfig
+from psycopg import sql
+from psycopg.rows import dict_row
 from sqlalchemy import func, select, text
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import (
+    AsyncConnection,
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 from sse_starlette.sse import AppStatus, EventSourceResponse
 
 from apps.lead_finder.tables import Lead
 from core.config import get_settings
-from core.hubspot.models import HubSpotCompany
+from core.hubspot.models import HubSpotCompany, HubSpotDeal, HubSpotOffice
+from core.memory.models import EMBEDDING_DIM, MemoryItem
 from core.prefs.models import Setting
 from core.runs.models import Run, RunEvent
 from core.searches.models import SearchLog
-from tests.conftest import LANGGRAPH_SCHEMA, TEST_TABLES
+from tests.conftest import CHECKPOINT_SETUP_LOCK, LANGGRAPH_SCHEMA, TEST_TABLES
 
 if TYPE_CHECKING:
     from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+    from langgraph.graph.state import CompiledStateGraph
 
 
 def test_tests_never_use_the_real_database() -> None:
@@ -35,13 +46,13 @@ def test_tests_never_use_the_real_database() -> None:
 
 # --- Database ---------------------------------------------------------------------------------
 
+CHECKPOINT_TABLES = ("checkpoints", "checkpoint_blobs", "checkpoint_writes")
 
-@pytest.mark.integration
-async def test_tables_start_empty_1_fill_every_table(
-    session_factory: async_sessionmaker[AsyncSession],
-) -> None:
+
+async def fill_every_table(factory: async_sessionmaker[AsyncSession]) -> None:
+    """One row in each of the tables in TEST_TABLES, committed."""
     run = Run(app="lead_finder", mode="company")
-    async with session_factory() as db_session:
+    async with factory() as db_session:
         db_session.add_all(
             [
                 run,
@@ -54,11 +65,19 @@ async def test_tables_start_empty_1_fill_every_table(
                     cost_usd=Decimal("0.1"),
                     answer_ok=True,
                 ),
+                MemoryItem(
+                    app="lead_finder",
+                    kind="note",
+                    content="Acme is thinking about a move.",
+                    embedding=[0.1] * EMBEDDING_DIM,
+                ),
             ]
         )
         await db_session.flush()
         db_session.add_all(
             [
+                HubSpotOffice(hubspot_company_id="1", label="Melbourne"),
+                HubSpotDeal(hubspot_deal_id="9", hubspot_company_id="1", name="Acme fit-out"),
                 RunEvent(run_id=run.id, seq=1, type="run_started", data={}),
                 Lead(
                     run_id=run.id,
@@ -78,13 +97,52 @@ async def test_tables_start_empty_1_fill_every_table(
         await db_session.commit()
 
 
+async def row_counts(connection: AsyncConnection) -> dict[str, int]:
+    return {
+        table: int(await connection.scalar(text(f"SELECT count(*) FROM {table}")) or 0)
+        for table in TEST_TABLES
+    }
+
+
+@pytest.fixture
+async def leftover_rows(database_url: str) -> None:
+    """Rows in every table, left behind as an earlier test would leave them.
+
+    A test that asks for this BEFORE `engine` gets them put there first, so what it sees
+    afterwards shows what the `engine` fixture did, whatever order the tests run in.
+    """
+    own = create_async_engine(database_url, connect_args={"connect_timeout": 5})
+    try:
+        await fill_every_table(async_sessionmaker(own, expire_on_commit=False))
+        async with own.connect() as connection:
+            counts = await row_counts(connection)
+    finally:
+        await own.dispose()
+    assert all(count > 0 for count in counts.values()), counts  # the set-up itself worked
+
+
 @pytest.mark.integration
-async def test_tables_start_empty_2_the_next_test_finds_them_empty(engine: AsyncEngine) -> None:
-    """Runs right after the test above, which filled every table."""
+async def test_every_test_table_is_listed_in_the_guard(engine: AsyncEngine) -> None:
+    """A table nobody added to TEST_TABLES would keep its rows from one test to the next."""
     async with engine.connect() as connection:
-        for table in TEST_TABLES:
-            count = await connection.scalar(text(f"SELECT count(*) FROM {table}"))
-            assert count == 0, table
+        found = (
+            await connection.execute(
+                text(
+                    "SELECT table_schema || '.' || table_name FROM information_schema.tables "
+                    "WHERE table_schema IN ('core', 'lead_finder') AND table_type = 'BASE TABLE'"
+                )
+            )
+        ).scalars()
+        assert set(found) == set(TEST_TABLES)
+
+
+@pytest.mark.integration
+async def test_the_engine_fixture_empties_every_table_first(
+    leftover_rows: None, engine: AsyncEngine
+) -> None:
+    """The rows are there before the engine fixture starts. None are left after it."""
+    async with engine.connect() as connection:
+        assert await row_counts(connection) == dict.fromkeys(TEST_TABLES, 0)
 
 
 @pytest.mark.integration
@@ -103,10 +161,10 @@ class Counter(TypedDict):
     n: int
 
 
-@pytest.mark.integration
-async def test_the_checkpointer_keeps_a_graph_state_in_its_own_schema(
-    checkpointer: "AsyncPostgresSaver", engine: AsyncEngine
-) -> None:
+def counter_graph(
+    saver: "AsyncPostgresSaver",
+) -> "CompiledStateGraph[Counter, Any, Counter, Counter]":
+    """A graph of one step that adds 1, saving its state with `saver`."""
     from langgraph.graph import END, START, StateGraph
 
     def add_one(state: Counter) -> Counter:
@@ -116,9 +174,62 @@ async def test_the_checkpointer_keeps_a_graph_state_in_its_own_schema(
     builder.add_node("add_one", add_one)
     builder.add_edge(START, "add_one")
     builder.add_edge("add_one", END)
-    graph = builder.compile(checkpointer=checkpointer)
+    return builder.compile(checkpointer=saver)
 
-    thread: RunnableConfig = {"configurable": {"thread_id": str(uuid.uuid4())}}
+
+def new_thread() -> RunnableConfig:
+    return {"configurable": {"thread_id": str(uuid.uuid4())}}
+
+
+async def checkpoint_counts(connection: AsyncConnection) -> dict[str, int]:
+    return {
+        name: int(
+            await connection.scalar(text(f"SELECT count(*) FROM {LANGGRAPH_SCHEMA}.{name}")) or 0
+        )
+        for name in CHECKPOINT_TABLES
+    }
+
+
+@pytest.fixture
+async def leftover_checkpoint(database_url: str) -> None:
+    """A saved graph state in the `langgraph` schema, left behind as an earlier test would.
+
+    Like `leftover_rows`: a test that asks for this BEFORE `checkpointer` sees what that
+    fixture did to it.
+    """
+    from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+
+    conninfo = get_settings().psycopg_conninfo(options=f"-c search_path={LANGGRAPH_SCHEMA}")
+    async with await psycopg.AsyncConnection.connect(
+        conninfo, autocommit=True, prepare_threshold=0, row_factory=dict_row
+    ) as connection:
+        await connection.execute(
+            sql.SQL("CREATE SCHEMA IF NOT EXISTS {}").format(sql.Identifier(LANGGRAPH_SCHEMA))
+        )
+        await connection.execute("SELECT pg_advisory_lock(%s)", (CHECKPOINT_SETUP_LOCK,))
+        try:
+            saver = AsyncPostgresSaver(connection)
+            try:
+                await saver.setup()
+            except psycopg.errors.UniqueViolation:  # two setups raced. The second is safe.
+                await saver.setup()
+        finally:
+            await connection.execute("SELECT pg_advisory_unlock(%s)", (CHECKPOINT_SETUP_LOCK,))
+        assert (await counter_graph(saver).ainvoke({"n": 1}, new_thread()))["n"] == 2
+        found = await connection.execute(
+            f"SELECT count(*) AS n FROM {LANGGRAPH_SCHEMA}.checkpoints"
+        )
+        row = await found.fetchone()
+    assert row is not None
+    assert row["n"] > 0  # the set-up itself worked
+
+
+@pytest.mark.integration
+async def test_the_checkpointer_keeps_a_graph_state_in_its_own_schema(
+    checkpointer: "AsyncPostgresSaver", engine: AsyncEngine
+) -> None:
+    graph = counter_graph(checkpointer)
+    thread = new_thread()
     assert (await graph.ainvoke({"n": 1}, thread))["n"] == 2
     assert (await graph.aget_state(thread)).values == {"n": 2}
 
@@ -134,13 +245,13 @@ async def test_the_checkpointer_keeps_a_graph_state_in_its_own_schema(
 
 @pytest.mark.integration
 async def test_each_checkpointer_starts_clean_and_can_run_again(
-    checkpointer: "AsyncPostgresSaver", engine: AsyncEngine
+    leftover_checkpoint: None, checkpointer: "AsyncPostgresSaver", engine: AsyncEngine
 ) -> None:
+    """A state was saved before the fixture started. None is left after it, and the saver
+    works: its `setup()` ran a second time on tables that already existed."""
     async with engine.connect() as connection:
-        count = await connection.scalar(
-            text(f"SELECT count(*) FROM {LANGGRAPH_SCHEMA}.checkpoints")
-        )
-    assert count == 0  # the test above left one behind. setup() ran again without trouble.
+        assert await checkpoint_counts(connection) == dict.fromkeys(CHECKPOINT_TABLES, 0)
+    assert (await counter_graph(checkpointer).ainvoke({"n": 5}, new_thread()))["n"] == 6
 
 
 # --- The live server --------------------------------------------------------------------------

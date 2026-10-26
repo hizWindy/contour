@@ -9,9 +9,8 @@ Two kinds of setting:
   here, and then clamps the result to the ceilings with `clamp_to_ceilings`.
 """
 
-import ipaddress
 import re
-from decimal import Decimal
+from decimal import ROUND_DOWN, Decimal
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Final, Literal, get_args
@@ -19,14 +18,18 @@ from urllib.parse import quote, urlsplit
 
 from annotated_types import Ge, Le
 from psycopg.conninfo import make_conninfo
-from pydantic import Field, SecretStr, StrictBool, field_validator
+from pydantic import Field, SecretStr, StrictBool, ValidationError, field_validator, model_validator
+from pydantic_core import InitErrorDetails, PydanticCustomError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 ENGINE_DIR = BACKEND_DIR.parent
 
 CONNECT_TIMEOUT_SECONDS = 5
-LOOPBACK_HOSTS = ("localhost", "127.0.0.1", "::1")
+LOOPBACK_HOSTS = ("localhost", "127.0.0.1", "::1")  # for the web origins in cors_origins
+API_HOSTS = ("localhost", "127.0.0.1")  # for api_host: the host check in core/api accepts these
+# Schemas that belong to something else. The run checkpoints may not live in any of them.
+RESERVED_SCHEMAS = frozenset({"public", "core", "lead_finder", "information_schema"})
 
 ClaudeModel = Literal["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"]
 ClaudeEffort = Literal["low", "medium", "high", "xhigh", "max"]
@@ -71,6 +74,18 @@ CEILINGS: Final[dict[str, str]] = {
     "max_concurrent_runs": "hard_concurrency",
     "claude_concurrency": "hard_concurrency",
 }
+
+
+def discovery_cap_usd(run_cap_usd: Decimal, discovery_share: float) -> Decimal:
+    """The money discovery may spend in a run: its share of the run cap, in whole cents rounded
+    down. `core.runs.types.make_caps` makes the run's discovery cap the same way."""
+    return (run_cap_usd * Decimal(str(discovery_share))).quantize(
+        Decimal("0.01"), rounding=ROUND_DOWN
+    )
+
+
+def _usd(value: Decimal) -> str:
+    return f"${value:.2f}"
 
 
 def _clean_origin(value: str) -> str:
@@ -134,8 +149,10 @@ class Settings(BaseSettings):
     # The Levi data OK: may company names from HubSpot go to Claude? Off until Levi says yes.
     # Only the exact text true or false counts, so a stray "1" or "yes" can't turn it on.
     hubspot_names_to_claude_ok: StrictBool = False
-    hard_run_cap_usd: Decimal = Field(Decimal("50"), gt=0, le=1000)
-    hard_company_cap_usd: Decimal = Field(Decimal("5"), gt=0, le=1000)
+    # A ceiling can't sit below the lowest value its editable settings allow (a test checks this
+    # against CEILINGS), or a valid setting would be clamped to something its own minimum refuses.
+    hard_run_cap_usd: Decimal = Field(Decimal("50"), ge=Decimal("1"), le=1000)
+    hard_company_cap_usd: Decimal = Field(Decimal("5"), ge=Decimal("0.10"), le=1000)
     hard_concurrency: int = Field(4, ge=1, le=16)
     daily_cap_usd: Decimal = Field(Decimal("50"), gt=0, le=10_000)
 
@@ -196,14 +213,8 @@ class Settings(BaseSettings):
     @classmethod
     def _loopback_host(cls, value: str) -> str:
         host = value.strip().lower()
-        if host == "localhost":
-            return host
-        try:
-            address = ipaddress.ip_address(host.strip("[]"))
-        except ValueError as error:
-            raise ValueError("api_host must be 127.0.0.1 or localhost") from error
-        if not address.is_loopback:
-            raise ValueError("api_host must be this computer (127.0.0.1). It is not for a network.")
+        if host not in API_HOSTS:
+            raise ValueError("api_host must be 127.0.0.1 or localhost. It is not for a network.")
         return host
 
     @field_validator("langgraph_schema")
@@ -216,7 +227,54 @@ class Settings(BaseSettings):
                 "langgraph_schema must be lowercase letters, digits and underscores, "
                 "starting with a letter, at most 63 characters"
             )
+        # LangGraph makes its own tables here, so the schema must be one nothing else uses.
+        if name in RESERVED_SCHEMAS or name.startswith("pg_"):
+            raise ValueError(
+                "langgraph_schema needs a schema of its own. It can't be public, core, "
+                "lead_finder, information_schema, or a name that starts with pg_"
+            )
         return name
+
+    @model_validator(mode="after")
+    def _reserves_fit_their_caps(self) -> "Settings":
+        """A reserve bigger than the cap it is held from would make every request fail.
+
+        Each error names every setting involved, so the Settings page can show it beside the
+        one a person just changed: a lone lower `company_cap_usd` is refused here, not
+        accepted and then failing at the first request. Both rules are checked together, so
+        one answer lists every problem.
+        """
+        problems: list[tuple[str, tuple[str, ...]]] = []
+        if self.request_reserve_usd > self.company_cap_usd:
+            message = (
+                f"request_reserve_usd ({_usd(self.request_reserve_usd)}) is more than "
+                f"company_cap_usd ({_usd(self.company_cap_usd)}), so no request could start. "
+                "Lower the reserve or raise the cap."
+            )
+            problems.append((message, ("request_reserve_usd", "company_cap_usd")))
+        room = discovery_cap_usd(self.run_cap_usd, self.discovery_share)
+        if self.slice_reserve_usd > room:
+            message = (
+                f"slice_reserve_usd ({_usd(self.slice_reserve_usd)}) is more than discovery may "
+                f"spend in a run ({_usd(room)}: discovery_share {self.discovery_share:g} of "
+                f"run_cap_usd {_usd(self.run_cap_usd)}), so no discovery request could start. "
+                "Lower the reserve, or raise the run cap or the discovery share."
+            )
+            problems.append((message, ("slice_reserve_usd", "run_cap_usd", "discovery_share")))
+        if problems:
+            raise ValidationError.from_exception_data(
+                "Settings",
+                [
+                    InitErrorDetails(
+                        type=PydanticCustomError("reserve_too_big", "{message}", {"message": text}),
+                        loc=(field,),
+                        input=getattr(self, field),
+                    )
+                    for text, fields in problems
+                    for field in fields
+                ],
+            )
+        return self
 
     # --- Helpers -----------------------------------------------------------------------
 
@@ -274,6 +332,13 @@ def clamp_to_ceilings(settings: Settings) -> Settings:
 
     Overrides can't go above a ceiling, and a ceiling lowered in .env pulls the values down
     with it. Values already within bounds pass through unchanged.
+
+    A reserve follows its cap down, so the copy keeps the rule `Settings` checks: the request
+    reserve is at most the company cap, and the slice reserve is at most what discovery may
+    spend (`discovery_cap_usd`). The one case that can't be kept whole: a run ceiling so low
+    that discovery gets less than $0.10, the slice reserve's own minimum (a $1 ceiling with a
+    discovery share under 0.10). Then the reserve is cut to what discovery has, below that
+    minimum, so a request can still start.
     """
     update: dict[str, Any] = {}
     for key, ceiling in CEILINGS.items():
@@ -281,6 +346,15 @@ def clamp_to_ceilings(settings: Settings) -> Settings:
         limit = getattr(settings, ceiling)
         if value > limit:
             update[key] = limit
+
+    def now(key: str) -> Any:
+        return update.get(key, getattr(settings, key))
+
+    if now("request_reserve_usd") > now("company_cap_usd"):
+        update["request_reserve_usd"] = now("company_cap_usd")
+    room = discovery_cap_usd(now("run_cap_usd"), settings.discovery_share)
+    if now("slice_reserve_usd") > room:
+        update["slice_reserve_usd"] = room
     return settings.model_copy(update=update) if update else settings
 
 

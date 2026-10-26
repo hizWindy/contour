@@ -1,14 +1,28 @@
-"""The HTTP layer's defences: host check, origin guard and security headers."""
+"""The HTTP layer's defences: host check, origin guard and security headers.
 
-from collections.abc import AsyncIterator
+The tests are hermetic: the settings come from the defaults only, with no engine/.env file
+and no settings in the environment (see `clean_environment`).
+"""
+
+from collections.abc import AsyncIterator, Iterator
+from typing import Any
 
 import httpx
 import pytest
 from fastapi import FastAPI, Response, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.types import Message
 
-from core.api.errors import add_error_handlers
-from core.api.security import SECURITY_HEADERS, add_security_layers, allowed_origins
-from core.config import Settings
+from core.api.errors import PROBLEM_JSON, add_error_handlers
+from core.api.security import (
+    SECURITY_HEADERS,
+    TRUSTED_HOSTS,
+    HostGuard,
+    ProblemCORSMiddleware,
+    add_security_layers,
+    allowed_origins,
+)
+from core.config import API_HOSTS, Settings, get_settings
 
 HEADERS = {
     "cache-control": "no-store",
@@ -19,6 +33,21 @@ SWAGGER = "http://127.0.0.1:8000"
 VITE = "http://localhost:5173"
 
 
+@pytest.fixture(autouse=True)
+def clean_environment(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """The test setup puts a few settings in the environment. Take them out of these tests."""
+    for key in Settings.model_fields:
+        monkeypatch.delenv(key.upper(), raising=False)
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()  # so no later test sees values read inside this one
+
+
+def make_settings(**values: Any) -> Settings:
+    """Settings from these values and the defaults only: no .env file, no environment."""
+    return Settings(_env_file=None, **values)
+
+
 def make_app(settings: Settings | None = None, *, handlers: bool = True) -> FastAPI:
     """A tiny app. `calls` records every time a route ran, to prove a refused request didn't."""
     app = FastAPI()
@@ -26,7 +55,7 @@ def make_app(settings: Settings | None = None, *, handlers: bool = True) -> Fast
     app.state.calls = calls
     if handlers:
         add_error_handlers(app)
-    add_security_layers(app, settings or Settings.model_validate({}))
+    add_security_layers(app, settings or make_settings())
 
     @app.get("/ping")
     async def ping() -> dict[str, str]:
@@ -190,7 +219,7 @@ async def test_reading_is_not_blocked_by_the_origin_guard(client: httpx.AsyncCli
 
 
 async def test_the_api_port_comes_from_settings() -> None:
-    app = make_app(Settings.model_validate({"api_port": 9000, "cors_origins": []}))
+    app = make_app(make_settings(api_port=9000, cors_origins=[]))
     async with client_for(app) as client:
         assert (
             await client.post("/act", headers={"Origin": "http://127.0.0.1:9000"})
@@ -203,26 +232,325 @@ async def test_the_api_port_comes_from_settings() -> None:
 
 
 def test_the_allowed_origins() -> None:
-    allowed = allowed_origins(Settings.model_validate({}))
+    allowed = allowed_origins(make_settings())
     assert allowed == {VITE, "http://127.0.0.1:5173", SWAGGER, "http://localhost:8000"}
 
 
 # --- The host check ------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("host", ["evil.example", "evil.example:8000", "localhost.evil.example"])
-async def test_a_foreign_host_name_is_refused(client: httpx.AsyncClient, host: str) -> None:
-    """DNS rebinding: a web page points its own name at this computer."""
-    response = await client.get("/ping", headers={"Host": host})
+FOREIGN_HOSTS = [
+    "evil.example",
+    "evil.example:8000",
+    "localhost.evil.example",
+    "localhost.",  # a closing dot is another name
+    "127.0.0.1.evil.example",
+    "[::1]:8000",  # not one of the two the engine answers to
+    "localhost evil.example",
+    "localhost/x",
+    "",
+]
+
+
+def assert_host_refused(response: httpx.Response) -> None:
+    """A 400 in the engine's own error shape, with the security headers, and no echo of the host."""
     assert response.status_code == 400
+    assert response.headers["content-type"].startswith(PROBLEM_JSON)
+    body = response.json()
+    assert body["type"] == "about:blank"
+    assert (body["title"], body["status"], body["code"]) == (
+        "Request blocked",
+        400,
+        "host_not_allowed",
+    )
+    assert body["detail"] == "The engine only answers to localhost or 127.0.0.1."
     assert has_security_headers(response)
-    post = await client.post("/act", headers={"Host": host})
-    assert post.status_code == 400
+    assert "evil" not in response.text
+
+
+@pytest.mark.parametrize("host", FOREIGN_HOSTS)
+async def test_a_foreign_host_name_is_refused(
+    client: httpx.AsyncClient, app: FastAPI, host: str
+) -> None:
+    """DNS rebinding: a web page points its own name at this computer."""
+    assert_host_refused(await client.get("/ping", headers={"Host": host}))
+    assert_host_refused(await client.post("/act", headers={"Host": host}))
+    assert app.state.calls == []  # no route ran
+
+
+async def test_two_host_headers_are_refused(client: httpx.AsyncClient) -> None:
+    response = await client.get("/ping", headers=[("Host", "localhost"), ("Host", "evil.example")])
+    assert_host_refused(response)
+
+
+async def call_asgi(app: FastAPI, scope: dict[str, Any]) -> list[dict[str, Any]]:
+    """Calls the app once, by hand, and returns the messages it sent."""
+    sent: list[dict[str, Any]] = []
+
+    async def receive() -> dict[str, Any]:
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(message: dict[str, Any]) -> None:
+        sent.append(message)
+
+    await app(scope, receive, send)  # type: ignore[arg-type]
+    return sent
+
+
+async def test_a_missing_host_header_is_refused(app: FastAPI) -> None:
+    """HTTP/1.0 and hand-made requests can leave it out."""
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.0",
+        "method": "GET",
+        "path": "/ping",
+        "raw_path": b"/ping",
+        "query_string": b"",
+        "headers": [],
+        "scheme": "http",
+        "server": ("localhost", 8000),
+        "client": ("127.0.0.1", 50000),
+    }
+    sent = await call_asgi(app, scope)
+    assert sent[0]["status"] == 400
+    assert (b"content-type", b"application/problem+json") in sent[0]["headers"]
+    assert b'"host_not_allowed"' in sent[1]["body"]
+
+
+async def test_a_refused_host_gets_the_same_answer_with_no_error_handlers() -> None:
+    """The refusal is built by the guard itself, so it doesn't depend on the app's handlers."""
+    async with client_for(make_app(handlers=False)) as client:
+        assert_host_refused(await client.get("/ping", headers={"Host": "evil.example"}))
+
+
+async def test_a_websocket_to_a_foreign_host_is_refused_before_it_opens() -> None:
+    sent: list[Message] = []
+    reached: list[bool] = []
+
+    async def inner(scope: Any, receive: Any, send: Any) -> None:
+        reached.append(True)
+
+    async def receive() -> Message:
+        return {"type": "websocket.connect"}
+
+    async def send(message: Message) -> None:
+        sent.append(message)
+
+    guard = HostGuard(inner, allowed_hosts=["localhost", "127.0.0.1"])
+    foreign = {"type": "websocket", "path": "/ws", "headers": [(b"host", b"evil.example")]}
+    await guard(foreign, receive, send)
+    assert sent == [{"type": "websocket.close", "code": 1008}]
+    assert reached == []
+    own = {"type": "websocket", "path": "/ws", "headers": [(b"host", b"localhost:1")]}
+    await guard(own, receive, send)
+    assert reached == [True]
+
+
+async def test_the_lifespan_passes_through_the_host_check() -> None:
+    reached: list[str] = []
+
+    async def inner(scope: Any, receive: Any, send: Any) -> None:
+        reached.append(scope["type"])
+
+    guard = HostGuard(inner, allowed_hosts=["localhost"])
+    await guard({"type": "lifespan"}, None, None)  # type: ignore[arg-type]
+    assert reached == ["lifespan"]
+
+
+# --- A CORS preflight meets the host check first -----------------------------------------------
+
+PREFLIGHT = {
+    "Origin": "https://evil.example",
+    "Access-Control-Request-Method": "POST",
+    "Access-Control-Request-Headers": "content-type",
+}
+
+
+def app_with_cors(*, cors_first: bool) -> FastAPI:
+    """The security layers and a CORS layer, added in either order."""
+    app = FastAPI()
+    add_error_handlers(app)
+
+    def add_cors() -> None:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=[VITE],
+            allow_methods=["GET", "POST"],
+            allow_headers=["*"],
+        )
+
+    if cors_first:
+        add_cors()
+    add_security_layers(app, make_settings())
+    if not cors_first:
+        add_cors()  # added after, so it would be the outermost layer without the wrapping
+
+    @app.post("/act")
+    async def act() -> dict[str, str]:
+        return {"ok": "yes"}
+
+    return app
+
+
+@pytest.mark.parametrize("cors_first", [True, False])
+async def test_a_preflight_from_a_foreign_origin_to_a_foreign_host_gets_the_problem_answer(
+    cors_first: bool,
+) -> None:
+    """The page at evil.example, pointed at this computer, asks permission first. The host check
+    answers before the CORS layer can, in the engine's own error shape."""
+    async with client_for(app_with_cors(cors_first=cors_first)) as client:
+        response = await client.options("/act", headers={**PREFLIGHT, "Host": "evil.example"})
+    assert_host_refused(response)
+    assert "access-control-allow-origin" not in response.headers
+
+
+@pytest.mark.parametrize("cors_first", [True, False])
+async def test_a_normal_preflight_still_reaches_the_cors_layer(cors_first: bool) -> None:
+    async with client_for(app_with_cors(cors_first=cors_first)) as client:
+        response = await client.options(
+            "/act", headers={**PREFLIGHT, "Origin": VITE, "Host": "localhost:8000"}
+        )
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == VITE
 
 
 @pytest.mark.parametrize("host", ["localhost", "localhost:8000", "127.0.0.1", "127.0.0.1:5173"])
 async def test_this_computer_is_accepted_as_the_host(client: httpx.AsyncClient, host: str) -> None:
     assert (await client.get("/ping", headers={"Host": host})).status_code == 200
+
+
+def test_the_trusted_hosts_are_the_api_hosts_of_the_settings_from_one_list() -> None:
+    """`api_host` may be one of these two, and the host check accepts exactly these two."""
+    assert TRUSTED_HOSTS == list(API_HOSTS) == ["localhost", "127.0.0.1"]
+    assert isinstance(TRUSTED_HOSTS, list)
+    assert tuple(TRUSTED_HOSTS) == API_HOSTS  # a list of its own, with the same names
+
+
+@pytest.mark.parametrize("host", API_HOSTS)
+async def test_every_api_host_the_settings_accept_is_a_host_the_check_accepts(host: str) -> None:
+    configured = make_settings(api_host=host).api_host
+    async with client_for(make_app()) as client:
+        response = await client.get("/ping", headers={"Host": f"{configured}:8000"})
+    assert response.status_code == 200
+
+
+# --- The CORS layer answers a refused preflight in the engine's own shape ----------------------
+
+
+def make_cors_app(
+    cors: type[CORSMiddleware] = ProblemCORSMiddleware,
+    *,
+    methods: tuple[str, ...] = ("GET", "POST"),
+) -> FastAPI:
+    """The security layers and a CORS layer of this class, as `create_app` sets them up."""
+    app = FastAPI()
+    add_error_handlers(app)
+    app.add_middleware(
+        cors,
+        allow_origins=[VITE],
+        allow_methods=list(methods),
+        allow_headers=["*"],
+    )
+    add_security_layers(app, make_settings())
+
+    @app.get("/ping")
+    async def ping() -> dict[str, str]:
+        return {"ok": "yes"}
+
+    @app.post("/act")
+    async def act() -> dict[str, str]:
+        return {"ok": "yes"}
+
+    return app
+
+
+async def preflight(app: FastAPI, **headers: str) -> httpx.Response:
+    async with client_for(app) as client:
+        return await client.options(
+            "/act", headers={**PREFLIGHT, "Host": "localhost:8000", **headers}
+        )
+
+
+async def test_a_preflight_from_a_foreign_origin_to_a_valid_host_gets_the_problem_answer() -> None:
+    response = await preflight(make_cors_app())
+    assert response.status_code == 400
+    assert response.headers["content-type"].startswith(PROBLEM_JSON)
+    assert response.json() == {
+        "type": "about:blank",
+        "title": "Request blocked",
+        "status": 400,
+        "detail": "This request came from a web page the engine doesn't trust.",
+        "code": "origin_not_allowed",
+    }
+    assert "evil.example" not in response.text  # the answer never repeats the origin
+    assert "access-control-allow-origin" not in response.headers
+    assert "Origin" in response.headers["vary"]  # a cache must not reuse it for another origin
+    assert has_security_headers(response)
+
+
+async def test_an_allowed_origins_preflight_is_the_same_as_with_starlettes_own_layer() -> None:
+    mine = await preflight(make_cors_app(), Origin=VITE)
+    theirs = await preflight(make_cors_app(CORSMiddleware), Origin=VITE)
+    assert mine.status_code == theirs.status_code == 200
+    assert mine.headers["content-type"] == theirs.headers["content-type"]
+    assert mine.text == theirs.text == "OK"
+    assert mine.headers["access-control-allow-origin"] == VITE
+    assert dict(mine.headers) == dict(theirs.headers)
+
+
+async def test_a_method_that_is_not_allowed_is_refused_in_the_problem_shape_with_its_own_code() -> (
+    None
+):
+    """The origin is fine here, so the answer must not say the origin is the problem."""
+    response = await preflight(
+        make_cors_app(methods=("GET",)), Origin=VITE, **{"Access-Control-Request-Method": "DELETE"}
+    )
+    assert response.status_code == 400
+    assert response.headers["content-type"].startswith(PROBLEM_JSON)
+    assert response.json()["code"] == "cors_not_allowed"
+    assert response.json()["status"] == 400
+    assert "DELETE" not in response.text
+
+
+async def test_a_foreign_host_is_still_refused_by_the_host_check_before_the_cors_layer() -> None:
+    response = await preflight(make_cors_app(), Host="evil.example")
+    assert_host_refused(response)
+
+
+async def test_other_requests_are_not_changed_by_the_problem_cors_layer() -> None:
+    """A normal request from our own page still gets the allow-origin header. A read from a
+    foreign page is answered (the browser keeps the page from reading it) without one."""
+    async with client_for(make_cors_app()) as client:
+        ours = await client.get("/ping", headers={"Origin": VITE})
+        foreign = await client.get("/ping", headers={"Origin": "https://evil.example"})
+        no_origin = await client.get("/ping")
+    assert ours.status_code == foreign.status_code == no_origin.status_code == 200
+    assert ours.headers["access-control-allow-origin"] == VITE
+    assert "access-control-allow-origin" not in foreign.headers
+    assert "access-control-allow-origin" not in no_origin.headers
+
+
+async def test_the_real_app_uses_the_problem_cors_layer(monkeypatch: pytest.MonkeyPatch) -> None:
+    from core.api.app import create_app
+
+    monkeypatch.setattr("core.api.app.setup_logging", lambda: None)  # leave the log handlers alone
+    app = create_app()
+    layers: list[Any] = [layer.cls for layer in app.user_middleware]
+    assert ProblemCORSMiddleware in layers
+    assert CORSMiddleware not in layers  # the plain class is not used anywhere
+    async with client_for(app) as client:
+        refused = await client.options(
+            "/api/v1/runs", headers={**PREFLIGHT, "Host": "127.0.0.1:8000"}
+        )
+        allowed = await client.options(
+            "/api/v1/runs", headers={**PREFLIGHT, "Origin": VITE, "Host": "127.0.0.1:8000"}
+        )
+    assert refused.status_code == 400
+    assert refused.headers["content-type"].startswith(PROBLEM_JSON)
+    assert refused.json()["code"] == "origin_not_allowed"
+    assert allowed.status_code == 200
+    assert allowed.headers["access-control-allow-origin"] == VITE
 
 
 # --- Security headers ----------------------------------------------------------------------
@@ -276,7 +604,7 @@ async def test_the_headers_replace_a_weaker_value_set_by_a_route() -> None:
 
 async def test_adding_the_layers_twice_changes_nothing() -> None:
     app = make_app()
-    add_security_layers(app, Settings.model_validate({}))
+    add_security_layers(app, make_settings())
     async with client_for(app) as client:
         response = await client.get("/ping")
         assert response.headers.get_list("x-content-type-options") == ["nosniff"]

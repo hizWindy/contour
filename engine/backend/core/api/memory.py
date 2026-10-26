@@ -2,12 +2,13 @@
 
 import uuid
 from datetime import date, datetime
-from typing import Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
 from core.api.deps import EmbedderDep, SessionDep
+from core.api.models import SafeText
 from core.memory.service import remember, search
 
 router = APIRouter(prefix="/memory", tags=["memory"])
@@ -16,14 +17,14 @@ Kind = Literal["source_note", "company_profile", "lead_outcome", "note"]
 
 
 class MemoryIn(BaseModel):
-    app: str = Field(max_length=64, examples=["lead_finder"])
+    app: SafeText = Field(max_length=64, examples=["lead_finder"])
     kind: Kind = Field(examples=["source_note"])
-    content: str = Field(
+    content: SafeText = Field(
         min_length=1,
         max_length=20_000,
         examples=["ABC Dairy is moving its Melbourne head office to Docklands next year."],
     )
-    subject: str | None = Field(default=None, max_length=300, examples=["ABC Dairy"])
+    subject: SafeText | None = Field(default=None, max_length=300, examples=["ABC Dairy"])
     url: HttpUrl | None = Field(default=None, examples=["https://example.com/news/abc-dairy"])
     source_date: date | None = Field(default=None, examples=["2026-10-20"])
 
@@ -38,6 +39,7 @@ class MemoryOut(BaseModel):
     content: str
     url: str | None
     source_date: date | None
+    meta: dict[str, Any] = Field(description="Extra facts about the item, like its angle or lead")
     created_at: datetime
 
 
@@ -69,10 +71,12 @@ async def save_note(body: MemoryIn, session: SessionDep, embedder: EmbedderDep) 
 async def search_memory(
     session: SessionDep,
     embedder: EmbedderDep,
-    q: str = Query(min_length=2, max_length=500, examples=["dairy company moving offices"]),
-    app: str | None = Query(default=None, examples=["lead_finder"]),
+    q: Annotated[
+        SafeText, Query(min_length=2, max_length=500, examples=["dairy company moving offices"])
+    ],
+    app: Annotated[SafeText | None, Query(max_length=64, examples=["lead_finder"])] = None,
     kind: Kind | None = None,
-    limit: int = Query(default=5, ge=1, le=50),
+    limit: Annotated[int, Query(ge=1, le=50)] = 5,
 ) -> list[MemoryHitOut]:
     hits = await search(session, embedder, q, app=app, kind=kind, limit=limit)
     return [

@@ -5,8 +5,11 @@ import type { ProxyOptions } from 'vite'
 import { defineConfig } from 'vitest/config'
 
 /**
- * The dev server and the preview server both listen on 5173, because the backend only
- * allows the origin http://localhost:5173. They are never run at the same time.
+ * The dev server and the preview server both listen on 5173, because the backend only allows
+ * web origins on that port (`cors_origins`). They are never run at the same time.
+ * Always open http://localhost:5173. The backend also lists http://127.0.0.1:5173, but on this
+ * machine the dev server listens only on ::1 (what "localhost" resolves to here), so that
+ * address does not connect.
  */
 const PORT = 5173
 
@@ -25,7 +28,8 @@ const API_TARGET = process.env.API_PROXY_TARGET ?? 'http://127.0.0.1:8000'
  *    proxy in between (for example nginx later) holds it back;
  *  - there is no proxy timeout, so a quiet stream is never cut.
  * `changeOrigin` sends `Host: 127.0.0.1:8000`, which the backend's host check accepts. The
- * browser's own `Origin` header (http://localhost:5173) is passed on unchanged.
+ * browser's own `Origin` header (http://localhost:5173, the address to open) is passed on
+ * unchanged.
  */
 const apiProxy: Record<string, ProxyOptions> = {
   '/api': {
@@ -79,7 +83,10 @@ export default defineConfig({
     },
   },
   server: {
-    // No `host` and no `allowedHosts`: the dev server listens on localhost only.
+    // No `host` and no `allowedHosts`: the dev server listens on localhost only. On this machine
+    // "localhost" is the IPv6 address ::1, so http://127.0.0.1:5173 does not connect, even though
+    // the backend lists it. Always open the site as http://localhost:5173 (see PORT above).
+    // Leave `host` alone: `host: true` would open it to the network.
     port: PORT,
     strictPort: true,
     headers: securityHeaders,
@@ -103,7 +110,11 @@ export default defineConfig({
     include: ['src/**/*.test.{ts,tsx}'],
     globals: false,
     css: false,
+    // Nothing a test replaces may leak into the next test: spies are restored, calls are cleared,
+    // and vi.stubGlobal and vi.stubEnv are undone. (Fake timers are reset in src/test/setup.ts.)
     restoreMocks: true,
     clearMocks: true,
+    unstubGlobals: true,
+    unstubEnvs: true,
   },
 })

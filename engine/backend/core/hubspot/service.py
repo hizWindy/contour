@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,11 +12,14 @@ from core.hubspot.models import HubSpotCompany, HubSpotDeal, HubSpotOffice
 
 
 class ImportResult(BaseModel):
+    model_config = ConfigDict(json_schema_serialization_defaults_required=True)
+
     companies: int
     offices: int
     deals: int
     skipped_sheets: list[str]
     skipped_rows: int
+    profiles_rebuilt: int = 0  # company profiles built for memory after the import
 
 
 class HubSpotSummary(BaseModel):

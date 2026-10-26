@@ -17,14 +17,20 @@ def log_reply(
     app: str,
     step: str,
     job_id: uuid.UUID | None = None,
+    run_id: uuid.UUID | None = None,
     subject: str | None = None,
     prompt_version: str | None = None,
     note: str | None = None,
 ) -> SearchLog:
-    """Adds one Claude request to the session. The caller commits."""
+    """Adds one Claude request to the session. The caller commits.
+
+    `job_id` is the lead (research) or the slice (discovery). `run_id` is the run that asked,
+    if any, so the run's cost and its Searches page rows can be found again.
+    """
     row = SearchLog(
         app=app,
         job_id=job_id,
+        run_id=run_id,
         subject=subject,
         step=step,
         model=reply.model,
@@ -52,16 +58,26 @@ async def list_searches(
     *,
     app: str | None = None,
     job_id: uuid.UUID | None = None,
+    run_id: uuid.UUID | None = None,
     subject: str | None = None,
+    step_prefix: str | None = None,
     limit: int = 50,
     offset: int = 0,
 ) -> tuple[list[SearchLog], int]:
-    """Newest first. Returns one page and the total count."""
+    """Newest first. Returns one page and the total count.
+
+    `step_prefix` matches the start of the step, so "search" finds "search:property" and
+    "search:people". Its `%` and `_` are plain characters.
+    """
     statement = select(SearchLog)
     if app is not None:
         statement = statement.where(SearchLog.app == app)
     if job_id is not None:
         statement = statement.where(SearchLog.job_id == job_id)
+    if run_id is not None:
+        statement = statement.where(SearchLog.run_id == run_id)
+    if step_prefix:
+        statement = statement.where(SearchLog.step.startswith(step_prefix, autoescape=True))
     if subject is not None:
         statement = statement.where(func.lower(SearchLog.subject) == subject.lower())
     total = await session.scalar(select(func.count()).select_from(statement.subquery()))

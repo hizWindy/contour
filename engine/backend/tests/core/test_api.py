@@ -18,7 +18,7 @@ def app() -> FastAPI:
 @pytest.fixture
 async def client(app: FastAPI) -> AsyncIterator[httpx.AsyncClient]:
     transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as test_client:
+    async with httpx.AsyncClient(transport=transport, base_url="http://localhost") as test_client:
         yield test_client
 
 
@@ -30,11 +30,32 @@ async def test_swagger_lists_the_endpoints(client: httpx.AsyncClient) -> None:
         "/api/v1/memory/search",
         "/api/v1/hubspot/import",
         "/api/v1/hubspot/summary",
+        "/api/v1/hubspot/profiles/rebuild",
         "/api/v1/searches",
+        "/api/v1/runs",
+        "/api/v1/runs/estimate",
+        "/api/v1/runs/summary",
+        "/api/v1/runs/{run_id}",
+        "/api/v1/runs/{run_id}/log",
+        "/api/v1/runs/{run_id}/events",
+        "/api/v1/runs/{run_id}/cancel",
+        "/api/v1/runs/{run_id}/resume",
+        "/api/v1/settings",
+        "/api/v1/settings/{key}",
         "/api/v1/lead-finder/rules",
+        "/api/v1/lead-finder/run-options",
         "/api/v1/lead-finder/research",
         "/api/v1/lead-finder/leads",
+        "/api/v1/lead-finder/leads/export",
+        "/api/v1/lead-finder/leads/facets",
+        "/api/v1/lead-finder/leads/map",
         "/api/v1/lead-finder/leads/{lead_id}",
+        "/api/v1/lead-finder/leads/{lead_id}/similar",
+        "/api/v1/lead-finder/leads/{lead_id}/recheck",
+        "/api/v1/lead-finder/watchlist",
+        "/api/v1/lead-finder/tests/run",
+        "/api/v1/lead-finder/tests",
+        "/api/v1/lead-finder/tests/{run_id}",
     ):
         assert path in paths, path
 

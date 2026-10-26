@@ -6,8 +6,13 @@ The core finds projects by name only, so it never imports from `apps` directly.
 import importlib
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter
+
+if TYPE_CHECKING:
+    # Only for the type. Importing it would load the Claude client into every migration.
+    from core.runs.types import RunKind
 
 
 @dataclass(frozen=True)
@@ -21,6 +26,7 @@ class AppSpec:
     router: APIRouter
     check_rules: Callable[[], object]  # loads and checks the rules files; raises if one is wrong
     tables_module: str | None = None  # the module that defines its tables, for migrations
+    run_kinds: "tuple[RunKind[Any], ...]" = ()  # the kinds of run it offers, like discovery
 
 
 def load_apps(names: Sequence[str]) -> list[AppSpec]:

@@ -3,15 +3,21 @@
 import asyncio
 
 from fastapi import APIRouter, UploadFile
+from pydantic import BaseModel, Field
 
 from core.api.deps import SessionDep
 from core.api.errors import Problem
+from core.api.stubs import stub
 from core.hubspot.importer import ExportError, read_export
 from core.hubspot.service import HubSpotSummary, ImportResult, save_export, summary
 
 router = APIRouter(prefix="/hubspot", tags=["hubspot"])
 
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+
+
+class RebuildResult(BaseModel):
+    profiles_rebuilt: int = Field(description="Company profiles built from the loaded HubSpot data")
 
 
 @router.post(
@@ -39,3 +45,18 @@ async def import_export(file: UploadFile, session: SessionDep) -> ImportResult:
 @router.get("/summary", response_model=HubSpotSummary, summary="How much HubSpot data is loaded")
 async def get_summary(session: SessionDep) -> HubSpotSummary:
     return await summary(session)
+
+
+@router.post(
+    "/profiles/rebuild",
+    response_model=RebuildResult,
+    summary="Rebuild the HubSpot company profiles in memory",
+    description=(
+        "Builds one profile for each loaded company (industry, office cities, estimated staff, "
+        "deal names and stages) and replaces the old ones. These let the engine spot a "
+        "possible match and find look-alike companies. No contacts, phones or streets go in."
+    ),
+)
+@stub
+async def rebuild_profiles(session: SessionDep) -> RebuildResult:
+    raise NotImplementedError

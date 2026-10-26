@@ -34,6 +34,11 @@ class BudgetSpent(Exception):
     """The cap is reached. The caller stops cleanly and marks what's left as unknown."""
 
 
+def _need_a_search(wanted: int) -> None:
+    if wanted < 1:
+        raise ValueError(f"A request needs at least 1 search, not {wanted}")
+
+
 @dataclass
 class Budget:
     """The caps for researching one company.
@@ -67,8 +72,10 @@ class Budget:
         It also holds `request_reserve_usd`. It raises BudgetSpent unless
         spent + held + this request's hold fits under the cap, or when no search is left.
         Nothing is held when it raises. It has no await, so requests started side by side
-        take their holds one after the other.
+        take their holds one after the other. Asking for fewer than 1 search is a bug in the
+        caller, so it raises ValueError (for a request with no web search, use `check`).
         """
+        _need_a_search(wanted_searches)
         refusal = self._refusal()
         if refusal is not None:
             raise BudgetSpent(refusal)
@@ -83,8 +90,10 @@ class Budget:
         longer could not help). Nothing is held when it raises or is cancelled.
 
         Every request that holds searches must end with `record` or `release`, in a `finally`,
-        or a waiting request would wait for it forever.
+        or a waiting request would wait for it forever. Asking for fewer than 1 search raises
+        ValueError, as it does for `reserve_request`.
         """
+        _need_a_search(wanted_searches)
         while True:
             refusal = self._refusal()
             if refusal is None:

@@ -1,33 +1,23 @@
-"""Lead Finder endpoints, under /api/v1/lead-finder."""
+"""Lead Finder endpoints, under /api/v1/lead-finder.
 
-import uuid
-from datetime import datetime
-from decimal import Decimal
-from typing import Annotated
+This file puts the pieces together: the rules and the synchronous research here, the leads in
+api_leads.py, and the run-related routes in api_runs.py.
+"""
 
-from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, ConfigDict
-from sqlalchemy import func, select
+from fastapi import APIRouter
 
+from apps.lead_finder import api_leads, api_runs
 from apps.lead_finder.research import LeadCard, ResearchRequest, research_company
-from apps.lead_finder.rules import LeadFinderRules, Result, load_rules
-from apps.lead_finder.tables import Lead
-from core.api.deps import EmbedderDep, SessionDep
+from apps.lead_finder.rules import LeadFinderRules, load_rules
+from core.api.deps import ClaudeDep, EmbedderDep, SessionDep, SettingsDep, claude_dependency
 from core.api.errors import Problem
-from core.claude.client import Claude, ClaudeError, ClaudeUnavailable, get_claude
-from core.config import get_settings
+from core.claude.client import ClaudeError, ClaudeUnavailable
+
+# `claude_dependency` is the same function as in core.api.deps, so a test that overrides it
+# here reaches every route that uses it.
+__all__ = ["ClaudeDep", "claude_dependency", "router"]
 
 router = APIRouter()
-
-
-def claude_dependency() -> Claude:
-    try:
-        return get_claude()
-    except ClaudeUnavailable as error:
-        raise Problem(503, error.title, error.detail) from error
-
-
-ClaudeDep = Annotated[Claude, Depends(claude_dependency)]
 
 
 @router.get(
@@ -50,64 +40,27 @@ async def get_rules() -> LeadFinderRules:
     description=(
         "Checks memory first, then searches the web from three angles (property, people, "
         "money), fills the answer form, checks every source, matches HubSpot and applies the "
-        "rules. Costs money: about US$1 per company, capped by COMPANY_CAP_USD. "
-        "Use public companies until Levi approves using HubSpot names."
+        "rules. Costs money: about US$1 per company, capped by the company cap. It also counts "
+        "toward the daily limit. This is for Swagger and the command line: the website uses "
+        "runs. Use public companies until Levi approves using HubSpot names."
     ),
 )
 async def research(
-    body: ResearchRequest, session: SessionDep, embedder: EmbedderDep, claude: ClaudeDep
+    body: ResearchRequest,
+    session: SessionDep,
+    embedder: EmbedderDep,
+    claude: ClaudeDep,
+    settings: SettingsDep,
 ) -> LeadCard:
     try:
-        return await research_company(session, embedder, claude, load_rules(), get_settings(), body)
+        return await research_company(session, embedder, claude, load_rules(), settings, body)
     except ClaudeUnavailable as error:
         raise Problem(503, error.title, error.detail) from error
     except ClaudeError as error:
         raise Problem(502, error.title, error.detail) from error
 
 
-class LeadRow(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: uuid.UUID
-    company: str
-    city: str | None
-    result: str
-    score: int
-    status: str
-    hubspot_status: str
-    cost_usd: Decimal
-    web_searches: int
-    created_at: datetime
-
-
-class LeadPage(BaseModel):
-    total: int
-    items: list[LeadRow]
-
-
-@router.get("/leads", response_model=LeadPage, summary="Lists leads, best score first")
-async def list_leads(
-    session: SessionDep,
-    result: Result | None = None,
-    min_score: int = Query(default=0, ge=0, le=100),
-    company: str | None = Query(default=None, description="Part of the name", examples=["seek"]),
-    limit: int = Query(default=50, ge=1, le=200),
-    offset: int = Query(default=0, ge=0),
-) -> LeadPage:
-    statement = select(Lead).where(Lead.score >= min_score)
-    if result is not None:
-        statement = statement.where(Lead.result == result)
-    if company:
-        statement = statement.where(Lead.company.ilike(f"%{company}%"))
-    total = await session.scalar(select(func.count()).select_from(statement.subquery()))
-    page = statement.order_by(Lead.score.desc(), Lead.created_at.desc()).limit(limit)
-    rows = await session.scalars(page.offset(offset))
-    return LeadPage(total=total or 0, items=[LeadRow.model_validate(row) for row in rows])
-
-
-@router.get("/leads/{lead_id}", response_model=LeadCard, summary="One lead card")
-async def get_lead(lead_id: uuid.UUID, session: SessionDep) -> LeadCard:
-    lead = await session.get(Lead, lead_id)
-    if lead is None:
-        raise Problem(404, "Lead not found", "Check the id. GET /lead-finder/leads lists them.")
-    return LeadCard.model_validate(lead.card)
+# The leads routes go first so their fixed paths (/leads/export, /leads/facets, /leads/map)
+# come before /leads/{lead_id}. Each router keeps its own order too.
+router.include_router(api_leads.router)
+router.include_router(api_runs.router)

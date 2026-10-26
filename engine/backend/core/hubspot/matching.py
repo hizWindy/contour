@@ -1,12 +1,15 @@
-"""Is this company already in HubSpot? Exact matches only, by domain, then by cleaned name.
+"""Is this company already in HubSpot? Exact matches by domain, then by cleaned name.
 
-Phase 3 adds close names and similar profiles from memory, shown as "Possible match".
+Phase 3 adds a HubSpot id (the watchlist), close names, names inside deal names and similar
+profiles from memory. These are shown as "possible match" and a person decides. The types
+below are final. The new matching logic is not written yet, so `match_company` ignores its new
+arguments and behaves as it did in Phase 1.
 """
 
 import re
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,10 +17,28 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.hubspot.importer import normalize_domain
 from core.hubspot.models import HubSpotCompany, HubSpotDeal
 
+if TYPE_CHECKING:
+    from core.memory.embedder import Embedder
+
 DISSOLVED = "dissolved"
 LEGAL_WORDS = {"pty", "ltd", "limited", "inc", "incorporated", "llc", "plc", "corp", "corporation"}
 
-Status = Literal["new", "in_hubspot", "open_deal", "dissolved_deal"]
+Status = Literal["new", "in_hubspot", "open_deal", "dissolved_deal", "possible_match"]
+MatchedBy = Literal["domain", "name", "hubspot_id", "close_name", "similar_profile", "name_in_deal"]
+CandidateReason = Literal["close_name", "similar_profile", "name_in_deal"]
+
+
+@dataclass(frozen=True)
+class MatchCandidate:
+    """A company that might be the same one. A person confirms."""
+
+    hubspot_id: str
+    name: str
+    owner: str | None
+    reason: CandidateReason
+    score: float  # 0 to 1, higher is closer (a text score of 90 out of 100 is 0.90)
+    open_deals: list[str] = field(default_factory=list)
+    last_dissolved: date | None = None  # when the latest dissolved deal closed
 
 
 @dataclass(frozen=True)
@@ -26,9 +47,10 @@ class HubSpotMatch:
     hubspot_id: str | None = None
     name: str | None = None
     owner: str | None = None
-    matched_by: Literal["domain", "name"] | None = None
+    matched_by: MatchedBy | None = None
     open_deals: list[str] = field(default_factory=list)
     last_dissolved: date | None = None  # when the latest dissolved deal closed
+    candidates: list[MatchCandidate] = field(default_factory=list)  # at most 3
 
 
 def clean_name(name: str) -> str:
@@ -38,10 +60,22 @@ def clean_name(name: str) -> str:
 
 
 async def match_company(
-    session: AsyncSession, name: str, website: str | None = None
+    session: AsyncSession,
+    name: str,
+    website: str | None = None,
+    city: str | None = None,
+    embedder: "Embedder | None" = None,
+    hubspot_id: str | None = None,
+    profile_text: str | None = None,
 ) -> HubSpotMatch:
+    """Finds the company in HubSpot. For now only `name` and `website` are used.
+
+    The new arguments are part of the final signature: `city` (the researched metro city),
+    `embedder` and `profile_text` (for similar profiles), and `hubspot_id` (the watchlist
+    already knows which company it is).
+    """
     company: HubSpotCompany | None = None
-    matched_by: Literal["domain", "name"] | None = None
+    matched_by: MatchedBy | None = None
     domain = normalize_domain(website)
     if domain:
         company = await session.scalar(

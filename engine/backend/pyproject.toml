@@ -72,4 +72,8 @@ ignore_missing_imports = true
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-markers = ["integration: needs the database, and downloads the memory model once"]
+markers = [
+    "integration: needs the database, and downloads the memory model once",
+    "contract: the openapi.json file is the one the app writes (a gate, RUN_GATES=1)",
+    "stubs: no route is left as a stub (a gate, RUN_GATES=1)",
+]

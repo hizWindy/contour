@@ -12,7 +12,7 @@ describe('vite.config.ts', () => {
   const server = config.server
   const preview = config.preview
 
-  it('serves on 5173 and refuses another port, because the backend allows only that origin', () => {
+  it('serves on 5173 and refuses another port, because the backend allows only origins on that port', () => {
     expect(server?.port).toBe(5173)
     expect(server?.strictPort).toBe(true)
     expect(preview?.port).toBe(5173)
