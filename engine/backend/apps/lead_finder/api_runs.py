@@ -1,4 +1,4 @@
-"""Lead Finder endpoints that start or describe runs: options, re-check, watchlist and tests.
+"""Lead Finder endpoints that start or describe runs: options, re-check and tests.
 
 Every route answers 501 until its package builds it (see core/api/stubs.py). The routes for the
 generic run engine (start, watch, stop) are in core/api/runs.py. These are the Lead Finder's
@@ -10,7 +10,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from apps.lead_finder.schemas import RunOptions, TestPage, TestReport, WatchlistOut
+from apps.lead_finder.schemas import RunOptions, TestPage, TestReport
 from core.api.models import OFFSET_MAX
 from core.api.stubs import stub
 from core.runs.schemas import RunOut
@@ -45,28 +45,6 @@ async def get_run_options() -> RunOptions:
 )
 @stub
 async def recheck_lead(lead_id: uuid.UUID) -> RunOut:
-    raise NotImplementedError
-
-
-@router.get(
-    "/watchlist",
-    response_model=WatchlistOut,
-    summary="Preview the HubSpot watchlist",
-    description=(
-        "The HubSpot companies a watchlist run would research, with the counts of how the "
-        "rest were left out. Local only: nothing goes to Claude."
-    ),
-)
-@stub
-async def get_watchlist(
-    include_unlikely: Annotated[
-        bool, Query(description="Include industries that rarely work in an office")
-    ] = True,
-    include_director: Annotated[
-        bool, Query(description="Include the Director review list in `items`")
-    ] = False,
-    limit: Annotated[int, Query(ge=1, le=200)] = 200,
-) -> WatchlistOut:
     raise NotImplementedError
 
 

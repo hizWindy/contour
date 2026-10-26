@@ -6,7 +6,7 @@ api_leads.py, and the run-related routes in api_runs.py.
 
 from fastapi import APIRouter
 
-from apps.lead_finder import api_leads, api_runs
+from apps.lead_finder import api_leads, api_runs, api_watchlist
 from apps.lead_finder.research import LeadCard, ResearchRequest, research_company
 from apps.lead_finder.rules import LeadFinderRules, load_rules
 from core.api.deps import ClaudeDep, EmbedderDep, SessionDep, SettingsDep, claude_dependency
@@ -64,3 +64,4 @@ async def research(
 # come before /leads/{lead_id}. Each router keeps its own order too.
 router.include_router(api_leads.router)
 router.include_router(api_runs.router)
+router.include_router(api_watchlist.router)
