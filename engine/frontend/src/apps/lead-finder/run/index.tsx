@@ -166,9 +166,12 @@ function RunView({ runId, run }: { runId: string; run: Run }) {
         />
       ) : null}
 
+      {/* On a phone the two columns become one list, in the order of the `order-` numbers: how
+          far along it is, what it cost, the links, then the companies, the feed and the setup.
+          On a laptop they are two columns and the numbers do nothing. */}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
-        <div className="flex min-w-0 flex-col gap-6">
-          <Card>
+        <div className="flex min-w-0 flex-col gap-6 max-lg:contents">
+          <Card className="max-lg:order-1">
             <CardHeader>
               <CardTitle className="text-section font-semibold">Progress</CardTitle>
             </CardHeader>
@@ -215,9 +218,9 @@ function RunView({ runId, run }: { runId: string; run: Run }) {
             </CardContent>
           </Card>
 
-          <RunCompanies runId={runId} />
+          <RunCompanies runId={runId} className="max-lg:order-4" />
 
-          <Card>
+          <Card className="max-lg:order-5">
             <CardHeader>
               <CardTitle className="text-section font-semibold">What happened</CardTitle>
             </CardHeader>
@@ -227,7 +230,14 @@ function RunView({ runId, run }: { runId: string; run: Run }) {
                   {ended ? 'This run has no events to show.' : 'Waiting for the first event.'}
                 </p>
               ) : (
-                <ol aria-label="Run events" className="flex flex-col gap-2">
+                <ol
+                  aria-label="Run events"
+                  // Newest first, in a box of its own: a long run has hundreds of lines, and the
+                  // page shouldn't be as long as the log. It takes the keyboard's focus so it can
+                  // be scrolled without a mouse.
+                  tabIndex={0}
+                  className="flex max-h-[28rem] flex-col gap-2 overflow-y-auto pr-1"
+                >
                   {[...state.feed].reverse().map((item) => {
                     const Icon = TONE_ICON[item.tone]
                     return (
@@ -258,8 +268,8 @@ function RunView({ runId, run }: { runId: string; run: Run }) {
           </Card>
         </div>
 
-        <aside className="flex flex-col gap-4" aria-label="Cost and links">
-          <Card>
+        <aside className="flex flex-col gap-4 max-lg:contents" aria-label="Cost and links">
+          <Card className="max-lg:order-2">
             <CardHeader>
               <CardTitle className="text-section font-semibold">Cost</CardTitle>
             </CardHeader>
@@ -281,8 +291,8 @@ function RunView({ runId, run }: { runId: string; run: Run }) {
               <RunCostSplit runId={runId} researched={counts.researched} />
             </CardContent>
           </Card>
-          <RunSetupCard run={final} />
-          <Card>
+          <RunSetupCard run={final} className="max-lg:order-6" />
+          <Card className="max-lg:order-3">
             <CardContent className="flex flex-col gap-2 pt-6">
               <Button asChild variant="outline">
                 <Link to={`/results?run_id=${encodeURIComponent(runId)}`}>

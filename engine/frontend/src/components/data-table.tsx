@@ -14,6 +14,8 @@
  *   the box fills the screen from where it starts down to the page buttons (`fill`). The header
  *   row stays at the top of the box, and a column with `meta: { sticky: true }` stays at the left
  *   while the others scroll past it. The page buttons stay in view under the box.
+ * - On a phone a column with `meta: { hideBelow: 'sm' | 'md' }` is hidden, so the rows show only
+ *   what tells them apart. Details are one tap away.
  * - Every cell renders React children, so text from the backend is always plain text.
  */
 import {
@@ -118,6 +120,9 @@ function useFillHeight(enabled: boolean, reserve: number) {
   return { ref, maxHeight: enabled ? maxHeight : null }
 }
 
+/** The classes that hide a column below a screen width (see `meta.hideBelow`). */
+const HIDE_BELOW = { sm: 'max-sm:hidden', md: 'max-md:hidden' } as const
+
 /** A cell that must stay put while the table scrolls: opaque, with the row's tint on top. */
 const STICKY_CELL =
   'bg-card group-hover/row:bg-[color-mix(in_srgb,var(--muted)_60%,var(--card))] group-data-[state=selected]/row:bg-selected sm:sticky sm:left-0 sm:z-10 sm:after:absolute sm:after:inset-y-0 sm:after:right-0 sm:after:w-px sm:after:bg-border'
@@ -217,6 +222,7 @@ export function DataTable<TData>({
                         'sticky top-0 z-10 bg-card',
                         right && 'text-right',
                         meta?.className,
+                        meta?.hideBelow && HIDE_BELOW[meta.hideBelow],
                         // The frozen column's header also stays at the left, over its own cells.
                         meta?.sticky && 'sm:left-0 sm:z-20',
                       )}
@@ -292,6 +298,7 @@ export function DataTable<TData>({
                           className={cn(
                             meta?.align === 'right' && 'text-right',
                             meta?.className,
+                            meta?.hideBelow && HIDE_BELOW[meta.hideBelow],
                             meta?.sticky && STICKY_CELL,
                           )}
                         >

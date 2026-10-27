@@ -31,6 +31,18 @@
   }
 }
 
+/*
+  Touch mode. A phone, or any screen you tap with a finger (pointer: coarse), gets bigger controls
+  (`touch:h-11` and the like): a fingertip needs about 44px, a mouse pointer far less. The
+  breakpoint also counts, so a narrow window on a laptop gets them too, because that is how the
+  site looks on a phone. DESIGN.md lists the sizes.
+*/
+@custom-variant touch {
+  @media (pointer: coarse), (max-width: 639px) {
+    @slot;
+  }
+}
+
 /* Switch off Tailwind's looping animations. Enter and exit animations (tw-animate-css) stay. */
 @theme {
   --animate-spin: initial;
@@ -192,6 +204,16 @@
     * {
       scrollbar-width: thin;
       scrollbar-color: var(--scrollbar-thumb) transparent;
+    }
+  }
+
+  /* iPhones zoom the page in when a field with text under 16px gets focus, and don't zoom back.
+     So on touch screens a field's text is 16px. */
+  @media (pointer: coarse), (max-width: 639px) {
+    input,
+    select,
+    textarea {
+      font-size: 16px;
     }
   }
 

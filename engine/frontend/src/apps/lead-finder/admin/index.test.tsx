@@ -1,4 +1,5 @@
 import { screen, within } from '@testing-library/react'
+import { vi } from 'vitest'
 import { Route, Routes } from 'react-router'
 import { describe, expect, it } from 'vitest'
 import { ADMIN_TABS } from '@/shell/nav'
@@ -25,6 +26,25 @@ function renderAdmin(route: string) {
 function follows(first: Node, second: Node): boolean {
   return (first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
 }
+
+describe('the Admin tabs on a narrow screen', () => {
+  it('stay in one row that scrolls sideways, with the open tab brought into view', async () => {
+    const scrolled = vi.fn()
+    vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(scrolled)
+    const { user } = renderAdmin('/admin/runs')
+    const tabs = screen.getByRole('navigation', { name: 'Admin sections' })
+    // One row: it never wraps, and it scrolls when the screen is too narrow for seven tabs.
+    expect(tabs).toHaveClass('overflow-x-auto')
+    expect(tabs).not.toHaveClass('flex-wrap')
+
+    await user.click(within(tabs).getByRole('link', { name: 'Settings' }))
+
+    const last = scrolled.mock.contexts.at(-1) as HTMLElement
+    expect(last).toHaveAttribute('aria-current', 'page')
+    expect(last).toHaveTextContent('Settings')
+    expect(scrolled).toHaveBeenLastCalledWith({ inline: 'center', block: 'nearest' })
+  })
+})
 
 describe('the Admin tabs', () => {
   it('say what each tab is for, in a sentence, for every tab', () => {

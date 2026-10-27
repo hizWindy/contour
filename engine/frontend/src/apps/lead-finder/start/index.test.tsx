@@ -3,6 +3,7 @@ import { Route, Routes } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
 import type { RunEstimate } from '@/api/types'
 import { renderWithProviders } from '@/test/render'
+import { asPhone } from '@/test/screen'
 import StartPage from './index'
 import { OPTIONS } from './test-options'
 
@@ -128,6 +129,37 @@ describe('the Start page', () => {
     expect(await screen.findByText('Use 2 to 80 characters')).toBeInTheDocument()
     expect(screen.getByLabelText('Name')).toHaveAttribute('aria-invalid', 'true')
     expect(screen.getByRole('button', { name: 'Start run' })).toBeDisabled()
+  })
+
+  it('keeps the cost and the Start button in a bar at the bottom of a phone screen', async () => {
+    asPhone()
+    const seen = mockApi(() => estimate())
+    const { user } = renderStart()
+
+    const bar = await screen.findByRole('button', { name: 'Start run' })
+    // One Start button, in the bar. The cost card above no longer has its own.
+    expect(screen.getAllByRole('button', { name: 'Start run' })).toHaveLength(1)
+    const barBox = bar.closest('[data-slot=start-bar]') as HTMLElement
+    expect(barBox).toHaveClass('sticky', 'bottom-0')
+    expect(await within(barBox).findByText('about US$4.40')).toBeInTheDocument()
+    expect(
+      within(barBox).getByText(/Run limit US\$20\.00\. Left today US\$50\.00\./),
+    ).toBeInTheDocument()
+
+    await waitFor(() => {
+      expect(bar).toBeEnabled()
+    })
+    await user.click(bar)
+    expect(await screen.findByText('The run page')).toBeInTheDocument()
+    expect(seen.starts).toHaveLength(1)
+  })
+
+  it('has no bar on a laptop: the Start button is in the cost card', async () => {
+    mockApi(() => estimate())
+    renderStart()
+    const cost = await screen.findByRole('complementary', { name: 'Cost' })
+    expect(within(cost).getByRole('button', { name: 'Start run' })).toBeInTheDocument()
+    expect(document.querySelector('[data-slot=start-bar]')).toBeNull()
   })
 
   it('starts the run with an Idempotency-Key and opens its page', async () => {

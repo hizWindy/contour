@@ -34,11 +34,11 @@ function Lines({ lines, label }: { lines: DetailLine[]; label: string }) {
   )
 }
 
-export function RunSetupCard({ run }: { run: Run }) {
+export function RunSetupCard({ run, className }: { run: Run; className?: string }) {
   const options = useRunOptions()
   const triggers = new Map((options.data?.triggers ?? []).map((item) => [item.id, item.label]))
   return (
-    <Card>
+    <Card className={className}>
       <CardHeader>
         <CardTitle className="text-section font-semibold">What it looked for</CardTitle>
       </CardHeader>
@@ -122,6 +122,7 @@ const columns = [
   help.accessor('city', {
     header: 'City',
     enableSorting: false,
+    meta: { hideBelow: 'sm' },
     cell: (info) => info.getValue() ?? 'Unknown',
   }),
   help.accessor('cost_usd', {
@@ -132,12 +133,12 @@ const columns = [
   }),
 ]
 
-export function RunCompanies({ runId }: { runId: string }) {
+export function RunCompanies({ runId, className }: { runId: string; className?: string }) {
   const navigate = useNavigate()
   const leads = useLeads({ run_id: runId, sort: 'score', order: 'desc', limit: 100 })
   const items = leads.data?.items ?? []
   return (
-    <Card>
+    <Card className={className}>
       <CardHeader>
         <CardTitle className="text-section font-semibold">Companies researched</CardTitle>
       </CardHeader>

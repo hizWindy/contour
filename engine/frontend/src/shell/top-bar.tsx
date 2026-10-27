@@ -31,28 +31,33 @@ export function TopBar() {
 
   const expanded = isMobile ? openMobile : open
   return (
-    <header className="flex h-14 shrink-0 items-center gap-3 border-b bg-background px-4">
+    <header className="flex h-14 shrink-0 items-center gap-2 border-b bg-background px-3 sm:gap-3 sm:px-4">
       <Button
         type="button"
         variant="ghost"
         size="icon-sm"
+        className="shrink-0"
         aria-label="Show or hide the menu"
         aria-expanded={expanded}
         onClick={toggleSidebar}
       >
         <PanelLeft aria-hidden="true" />
       </Button>
+      {/* One line, however narrow: the earlier crumbs keep their words, and the page you are on
+          shortens with "..." when it must. */}
       <Breadcrumb className="min-w-0 flex-1">
-        <BreadcrumbList>
+        <BreadcrumbList className="flex-nowrap gap-1.5 sm:gap-2">
           {crumbs.map((crumb, index) => (
             <Fragment key={crumb.to}>
-              {index > 0 ? <BreadcrumbSeparator /> : null}
-              <BreadcrumbItem>
+              {index > 0 ? <BreadcrumbSeparator className="shrink-0" /> : null}
+              <BreadcrumbItem className={index === crumbs.length - 1 ? 'min-w-0' : 'shrink-0'}>
                 {index === crumbs.length - 1 ? (
-                  <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
+                  <BreadcrumbPage className="block truncate">{crumb.label}</BreadcrumbPage>
                 ) : (
                   <BreadcrumbLink asChild>
-                    <Link to={crumb.to}>{crumb.label}</Link>
+                    <Link to={crumb.to} className="touch:py-2.5">
+                      {crumb.label}
+                    </Link>
                   </BreadcrumbLink>
                 )}
               </BreadcrumbItem>

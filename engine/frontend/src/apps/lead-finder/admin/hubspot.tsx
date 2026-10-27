@@ -29,6 +29,7 @@ const columns = [
   help.accessor('industry', {
     header: 'Industry',
     enableSorting: false,
+    meta: { hideBelow: 'md' },
     cell: (info) => info.getValue() ?? 'Not known',
   }),
   help.accessor('office_based', {
@@ -39,12 +40,13 @@ const columns = [
   help.accessor('estimated_staff', {
     header: 'Staff (estimated)',
     enableSorting: false,
-    meta: { align: 'right' },
+    meta: { align: 'right', hideBelow: 'sm' },
     cell: (info) => (info.getValue() === null ? 'Not known' : formatStaff(info.getValue())),
   }),
   help.accessor('note', {
     header: 'Note',
     enableSorting: false,
+    meta: { hideBelow: 'md' },
     cell: (info) => info.getValue() ?? '',
   }),
 ]

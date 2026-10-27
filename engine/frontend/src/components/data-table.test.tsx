@@ -14,7 +14,7 @@ interface Row {
 const help = createColumnHelper<Row>()
 const columns = [
   help.accessor('company', { header: 'Company', enableSorting: false, meta: { sticky: true } }),
-  help.accessor('score', { header: 'Score', meta: { align: 'right' } }),
+  help.accessor('score', { header: 'Score', meta: { align: 'right', hideBelow: 'sm' } }),
 ]
 
 const HOSTILE = '<img src=x onerror=alert(1)>'
@@ -215,6 +215,18 @@ describe('DataTable', () => {
     // jsdom's screen is 768px tall and the box starts at 0, less room for the page buttons.
     expect((box as HTMLElement).style.maxHeight).toMatch(/^\d+px$/)
     expect(Number.parseInt((box as HTMLElement).style.maxHeight, 10)).toBeGreaterThanOrEqual(288)
+  })
+
+  it('hides a column below its screen width, in the header and in every row', () => {
+    renderWithProviders(<Harness />)
+    const table = screen.getByRole('table', { name: 'Leads' })
+    const [, scoreHead] = within(table).getAllByRole('columnheader')
+    expect(scoreHead).toHaveClass('max-sm:hidden')
+    for (const row of within(table).getAllByRole('row').slice(1)) {
+      expect(within(row).getAllByRole('cell')[1]).toHaveClass('max-sm:hidden')
+    }
+    // The company column has no such rule: it is always there.
+    expect(within(table).getAllByRole('columnheader')[0]).not.toHaveClass('max-sm:hidden')
   })
 
   it('lets the table be as tall as its rows when fill is turned off', () => {

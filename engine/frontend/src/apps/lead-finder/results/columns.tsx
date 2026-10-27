@@ -18,18 +18,27 @@ const help = createColumnHelper<LeadRow>()
 const company = help.accessor('company', {
   header: 'Company',
   // The name stays in view while the other columns scroll sideways.
-  meta: { sticky: true, className: 'min-w-44 max-w-64' },
-  cell: (info) => (
-    <span className="flex items-center gap-2">
-      <button
-        type="button"
-        className="min-w-0 truncate rounded-sm text-left font-semibold underline-offset-4 hover:underline"
-      >
-        {info.getValue()}
-      </button>
-      {info.row.original.is_test ? <Badge variant="outline">Test set</Badge> : null}
-    </span>
-  ),
+  meta: { sticky: true, className: 'max-w-64 sm:min-w-44' },
+  cell: (info) => {
+    const { score, city, is_test: isTest } = info.row.original
+    return (
+      <span className="flex min-w-0 flex-col">
+        <span className="flex items-center gap-2">
+          <button
+            type="button"
+            className="min-w-0 truncate rounded-sm text-left font-semibold underline-offset-4 hover:underline"
+          >
+            {info.getValue()}
+          </button>
+          {isTest ? <Badge variant="outline">Test set</Badge> : null}
+        </span>
+        {/* On a phone the score and city columns are hidden, so they sit under the name. */}
+        <span className="truncate text-caption text-muted-foreground sm:hidden">
+          {city ? `Score ${String(score)}, ${city}` : `Score ${String(score)}`}
+        </span>
+      </span>
+    )
+  },
 })
 
 const result = help.accessor('result', {
@@ -39,11 +48,12 @@ const result = help.accessor('result', {
 
 const score = help.accessor('score', {
   header: 'Score',
-  meta: { align: 'right', className: 'tabular-nums' },
+  meta: { align: 'right', className: 'tabular-nums', hideBelow: 'sm' },
 })
 
 const city = help.accessor('city', {
   header: 'City',
+  meta: { hideBelow: 'sm' },
   cell: (info) => {
     const { suburb } = info.row.original
     const place = info.getValue()
@@ -56,6 +66,7 @@ const city = help.accessor('city', {
 
 const sign = help.accessor('trigger_date', {
   header: 'Sign',
+  meta: { hideBelow: 'md' },
   cell: (info) => {
     const { trigger_label: label } = info.row.original
     const date = info.getValue()
@@ -69,33 +80,37 @@ const sign = help.accessor('trigger_date', {
 const industry = help.accessor('industry', {
   header: 'Industry',
   enableSorting: false,
+  meta: { hideBelow: 'md' },
   cell: (info) => info.getValue() ?? UNKNOWN,
 })
 
 const office = help.accessor('office_m2', {
   header: 'Office',
-  meta: { align: 'right', className: 'tabular-nums' },
+  meta: { align: 'right', className: 'tabular-nums', hideBelow: 'md' },
   cell: (info) => formatM2(info.getValue(), info.row.original.office_m2_estimated),
 })
 
 const hubspot = help.accessor('hubspot_status', {
   header: 'HubSpot',
+  meta: { hideBelow: 'md' },
   cell: (info) => <HubSpotBadge status={info.getValue()} />,
 })
 
 const status = help.accessor('status', {
   header: 'Status',
+  meta: { hideBelow: 'md' },
   cell: (info) => <StatusBadge status={info.getValue()} />,
 })
 
 const researched = help.accessor('created_at', {
   header: 'Researched',
+  meta: { hideBelow: 'md' },
   cell: (info) => formatDate(info.getValue()),
 })
 
 const cost = help.accessor('cost_usd', {
   header: 'Cost',
-  meta: { align: 'right' },
+  meta: { align: 'right', hideBelow: 'md' },
   cell: (info) => <Money value={info.getValue()} />,
 })
 

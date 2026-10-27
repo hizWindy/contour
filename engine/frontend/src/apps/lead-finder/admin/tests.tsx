@@ -55,7 +55,7 @@ const summaryColumns = [
   summaryHelp.accessor('avg_cost_usd', {
     header: 'Per company',
     enableSorting: false,
-    meta: { align: 'right' },
+    meta: { align: 'right', hideBelow: 'md' },
     cell: (info) => <Money value={info.getValue()} />,
   }),
   summaryHelp.accessor('total_cost_usd', {
@@ -64,7 +64,11 @@ const summaryColumns = [
     meta: { align: 'right' },
     cell: (info) => <Money value={info.getValue()} />,
   }),
-  summaryHelp.accessor('rules_version', { header: 'Rules', enableSorting: false }),
+  summaryHelp.accessor('rules_version', {
+    header: 'Rules',
+    enableSorting: false,
+    meta: { hideBelow: 'md' },
+  }),
 ]
 
 const itemHelp = createColumnHelper<Item>()
@@ -73,6 +77,7 @@ const itemColumns = [
   itemHelp.accessor('expected', {
     header: 'Expected',
     enableSorting: false,
+    meta: { hideBelow: 'md' },
     cell: (info) =>
       info
         .getValue()
@@ -111,12 +116,12 @@ const itemColumns = [
     header: 'Not found',
     enableSorting: false,
     cell: (info) => info.getValue().length,
-    meta: { align: 'right' },
+    meta: { align: 'right', hideBelow: 'md' },
   }),
   itemHelp.accessor('cost_usd', {
     header: 'Cost',
     enableSorting: false,
-    meta: { align: 'right' },
+    meta: { align: 'right', hideBelow: 'sm' },
     cell: (info) => <Money value={info.getValue()} />,
   }),
 ]

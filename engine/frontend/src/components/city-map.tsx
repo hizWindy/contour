@@ -10,13 +10,14 @@
  * buttons are also the keyboard way to pick a city, since a map pin can't take focus.
  */
 import { latLngBounds } from 'leaflet'
-import { useEffect, useEffectEvent } from 'react'
-import { CircleMarker, MapContainer, TileLayer, Tooltip, useMap } from 'react-leaflet'
+import { useCallback, useEffect, useEffectEvent, useState } from 'react'
+import { CircleMarker, MapContainer, TileLayer, Tooltip, useMap, useMapEvents } from 'react-leaflet'
 import type { CityOption, MapPoint } from '@/api/types'
 import { ResultBadge } from '@/components/result-badge'
 import { Toggle } from '@/components/ui/toggle'
 import { RESULT_LABELS, RESULT_ORDER } from '@/lib/labels'
 import { cn } from '@/lib/utils'
+import { labelDirection, labelOffset, labelWidth, placeLabels, type Side } from './city-labels'
 
 /** The middle of Australia's mainland, close enough to show Perth and Sydney at once. */
 const AUSTRALIA: [number, number] = [-29.5, 134]
@@ -71,12 +72,12 @@ function FitView({ spots, labels, maxZoom }: { spots: Spot[]; labels: boolean; m
     if (spots.length === 0 || size.x === 0) {
       return
     }
-    // Most city labels sit to the right of their circle (the eastmost one points left, inward):
-    // keep up to a quarter of the width free for them.
-    const labelRoom = labels ? Math.min(110, Math.round(size.x / 4)) : 32
+    // City names find a free side of their circle (see `placeLabels`), so the circles may use
+    // nearly the whole width: the room kept is for the circle itself and a little air.
+    const edge = labels ? 28 : 32
     map.fitBounds(latLngBounds(spots), {
-      paddingTopLeft: [32, 32],
-      paddingBottomRight: [labelRoom, 32],
+      paddingTopLeft: [edge, edge],
+      paddingBottomRight: [edge, edge],
       maxZoom,
       // No sliding: the map opens already in place, and a resize doesn't make it drift.
       animate: false,
@@ -102,6 +103,91 @@ function cityWords(city: CityOption): string {
   return city.kind === 'director_review' ? `${city.name}, Director review` : city.name
 }
 
+/** A map narrower than this (a phone) writes "Sydney (review)", so the names take less room. */
+const NARROW_MAP_PX = 420
+
+/** The name on the map. The buttons under the map always have the full words. */
+function mapWords(city: CityOption, narrow: boolean): string {
+  return narrow && city.kind === 'director_review' ? `${city.name} (review)` : cityWords(city)
+}
+
+interface CityLayerProps {
+  cities: readonly CityOption[]
+  picked: ReadonlySet<string>
+  onToggleCity?: (name: string) => void
+}
+
+/**
+ * The cities as circles with their names. Each name goes on the side of its circle that is free,
+ * worked out from where the circles are on the screen (so it follows the zoom, a resize and a
+ * different width). Before the map has a size (a test page), names go right, and the eastmost one
+ * goes left, so it stays inside.
+ */
+function CityLayer({ cities, picked, onToggleCity }: CityLayerProps) {
+  const map = useMap()
+  // The layout is worked out while drawing, from where the circles are on the screen now. The map
+  // tells this part to draw again when it moves, zooms or changes size. (This part comes before
+  // `FitView` in the map, so it is listening when the first fit happens.)
+  const [, setView] = useState(0)
+  const redraw = useCallback(() => {
+    setView((count) => count + 1)
+  }, [])
+  useMapEvents({ moveend: redraw, zoomend: redraw, resize: redraw })
+
+  const eastmost = cities.length > 1 ? Math.max(...cities.map((city) => city.lng)) : null
+  const size = map.getSize()
+  const narrow = size.x > 0 && size.x < NARROW_MAP_PX
+  const sides: Record<string, Side> =
+    size.x === 0
+      ? {}
+      : placeLabels(
+          cities.map((city) => {
+            const point = map.latLngToContainerPoint([city.lat, city.lng])
+            return {
+              id: city.name,
+              x: point.x,
+              y: point.y,
+              width: labelWidth(mapWords(city, narrow)),
+            }
+          }),
+          { x: size.x, y: size.y },
+        )
+
+  return cities.map((city) => {
+    const selected = picked.has(city.name)
+    const side: Side = sides[city.name] ?? (city.lng === eastmost ? 'left' : 'right')
+    return (
+      <CircleMarker
+        // Leaflet sets a path's class only when it is made, so a change makes a new one. A new
+        // side or wording does the same for the name.
+        key={`city-${city.name}-${selected ? 'on' : 'off'}-${side}-${narrow ? 'short' : 'long'}`}
+        center={[city.lat, city.lng]}
+        radius={14}
+        // A top-level option, not in pathOptions: React-Leaflet applies pathOptions with
+        // setStyle after the path is made, and setStyle ignores a class.
+        className={cn(
+          'city-map-city',
+          city.kind === 'director_review' && 'city-map-city-review',
+          selected && 'city-map-city-selected',
+        )}
+        eventHandlers={
+          onToggleCity
+            ? {
+                click: () => {
+                  onToggleCity(city.name)
+                },
+              }
+            : undefined
+        }
+      >
+        <Tooltip permanent direction={labelDirection(side)} offset={labelOffset(side)}>
+          {mapWords(city, narrow)}
+        </Tooltip>
+      </CircleMarker>
+    )
+  })
+}
+
 export function CityMap({
   label,
   cities = [],
@@ -117,7 +203,6 @@ export function CityMap({
   className,
 }: CityMapProps) {
   const picked = new Set(selectedCities)
-  const eastmost = cities.length > 1 ? Math.max(...cities.map((city) => city.lng)) : null
   return (
     <figure data-slot="city-map" className={cn('flex flex-col gap-3', className)}>
       <div
@@ -130,8 +215,9 @@ export function CityMap({
         <MapContainer
           center={center}
           zoom={zoom}
-          // Half steps, so the fit to the cities is close at any width (tiles stay sharp enough).
-          zoomSnap={0.5}
+          // Quarter steps, so the fit to the cities is close at any width (the tiles stay sharp
+          // enough at a fraction of a zoom).
+          zoomSnap={0.25}
           scrollWheelZoom
           className="size-full"
         >
@@ -141,6 +227,7 @@ export function CityMap({
             maxZoom={18}
             referrerPolicy={TILE_REFERRER_POLICY}
           />
+          <CityLayer cities={cities} picked={picked} onToggleCity={onToggleCity} />
           {fitToPoints && points.length > 0 ? (
             <FitView
               spots={points.map((point) => [point.lat, point.lng])}
@@ -150,42 +237,6 @@ export function CityMap({
           ) : (
             <FitView spots={cities.map((city) => [city.lat, city.lng])} labels maxZoom={6} />
           )}
-          {cities.map((city) => {
-            const selected = picked.has(city.name)
-            return (
-              <CircleMarker
-                // Leaflet sets a path's class only when it is made, so a change makes a new one.
-                key={`city-${city.name}-${selected ? 'on' : 'off'}`}
-                center={[city.lat, city.lng]}
-                radius={14}
-                // A top-level option, not in pathOptions: React-Leaflet applies pathOptions with
-                // setStyle after the path is made, and setStyle ignores a class.
-                className={cn(
-                  'city-map-city',
-                  city.kind === 'director_review' && 'city-map-city-review',
-                  selected && 'city-map-city-selected',
-                )}
-                eventHandlers={
-                  onToggleCity
-                    ? {
-                        click: () => {
-                          onToggleCity(city.name)
-                        },
-                      }
-                    : undefined
-                }
-              >
-                <Tooltip
-                  permanent
-                  // The eastmost city's label points inward, so it never runs off the map.
-                  direction={city.lng === eastmost ? 'left' : 'right'}
-                  offset={city.lng === eastmost ? [-14, 0] : [14, 0]}
-                >
-                  {cityWords(city)}
-                </Tooltip>
-              </CircleMarker>
-            )
-          })}
           {points.map((point) => {
             const active = point.id === activePointId
             return (

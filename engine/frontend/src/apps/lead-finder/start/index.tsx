@@ -22,6 +22,8 @@ import { Money } from '@/components/money'
 import { PageHeader } from '@/components/page-header'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { formatMoney } from '@/lib/money'
+import { useMediaQuery } from '@/lib/use-media-query'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import {
@@ -69,6 +71,9 @@ function toggle(list: string[], value: string): string[] {
   return list.includes(value) ? list.filter((item) => item !== value) : [...list, value]
 }
 
+/** Below Tailwind's `lg`: the cost card sits under the form, not beside it. */
+const UNDER_LAPTOP = '(max-width: 1023px)'
+
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <Card>
@@ -112,6 +117,10 @@ function StartFormView({ options }: { options: RunOptions }) {
           : !result
             ? 'Working out what it would cost.'
             : null
+
+  // Under 1024px the cost card is far below the form (three screens on a phone), so the money and
+  // the Start button follow you in a bar at the bottom of the screen instead.
+  const barAtBottom = useMediaQuery(UNDER_LAPTOP)
 
   const start = (): void => {
     if (lastStart.current?.body !== bodyKey) {
@@ -471,15 +480,17 @@ function StartFormView({ options }: { options: RunOptions }) {
               </ul>
             ) : null}
             {createRun.error ? <ErrorState error={createRun.error} /> : null}
-            <Button
-              type="button"
-              size="lg"
-              disabled={reason !== null || settling || createRun.isPending}
-              onClick={start}
-            >
-              <Play aria-hidden="true" />
-              {createRun.isPending ? 'Starting.' : 'Start run'}
-            </Button>
+            {barAtBottom ? null : (
+              <Button
+                type="button"
+                size="lg"
+                disabled={reason !== null || settling || createRun.isPending}
+                onClick={start}
+              >
+                <Play aria-hidden="true" />
+                {createRun.isPending ? 'Starting.' : 'Start run'}
+              </Button>
+            )}
             {reason ? (
               <p
                 className="flex items-start gap-2 text-caption text-muted-foreground"
@@ -492,6 +503,36 @@ function StartFormView({ options }: { options: RunOptions }) {
           </CardContent>
         </Card>
       </aside>
+
+      {barAtBottom ? (
+        <div
+          data-slot="start-bar"
+          className="sticky bottom-0 z-30 -mx-4 flex items-center gap-3 border-t bg-background px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:-mx-6 sm:px-6 [@media(max-height:480px)]:static"
+        >
+          <div className="min-w-0 flex-1">
+            {result?.valid ? (
+              <p className="font-semibold">
+                <Money value={result.cost_usd_low} about />
+              </p>
+            ) : null}
+            <p className="line-clamp-2 text-caption text-muted-foreground" role="status">
+              {reason ??
+                (result?.valid
+                  ? `Run limit ${formatMoney(result.cap_usd)}. Left today ${formatMoney(result.daily_left_usd)}.`
+                  : 'Working out what it would cost.')}
+            </p>
+          </div>
+          <Button
+            type="button"
+            size="lg"
+            disabled={reason !== null || settling || createRun.isPending}
+            onClick={start}
+          >
+            <Play aria-hidden="true" />
+            {createRun.isPending ? 'Starting.' : 'Start run'}
+          </Button>
+        </div>
+      ) : null}
     </div>
   )
 }

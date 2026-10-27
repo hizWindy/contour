@@ -217,7 +217,7 @@ function Rules({ lead }: { lead: LeadDetail }) {
           return (
             <li key={`${check.rule}-${index}`}>
               <Collapsible>
-                <CollapsibleTrigger className="group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted">
+                <CollapsibleTrigger className="group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted touch:min-h-11">
                   <Icon aria-hidden="true" className={cn('size-4 shrink-0', meta.tone)} />
                   <span className="font-semibold">{check.rule}</span>
                   <span className="text-muted-foreground">{meta.word}</span>
@@ -429,7 +429,12 @@ function Actions({ lead }: { lead: LeadDetail }) {
 
   const watching = lead.status === 'watching'
   return (
-    <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Actions">
+    <div
+      // A phone gets a tidy two-column grid of equal buttons; wider screens keep one wrapping row.
+      className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center max-sm:[&>button]:w-full"
+      role="group"
+      aria-label="Actions"
+    >
       <Button
         type="button"
         variant="outline"
@@ -514,7 +519,7 @@ function Actions({ lead }: { lead: LeadDetail }) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      <span className="inline-flex items-center gap-2">
+      <span className="inline-flex flex-col gap-2 max-sm:col-span-2 sm:flex-row sm:items-center">
         <Button type="button" variant="outline" disabled aria-describedby={`send-${lead.id}`}>
           <Send aria-hidden="true" />
           Send to HubSpot

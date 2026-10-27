@@ -16,9 +16,9 @@ const toggleVariants = cva(
           "border border-input bg-transparent data-[state=on]:border-primary",
       },
       size: {
-        default: "h-9 min-w-9 px-3",
-        sm: "h-8 min-w-8 px-2.5",
-        lg: "h-10 min-w-10 px-4",
+        default: "h-9 min-w-9 px-3 touch:h-11 touch:min-w-11",
+        sm: "h-8 min-w-8 px-2.5 touch:h-10 touch:min-w-10",
+        lg: "h-10 min-w-10 px-4 touch:h-12 touch:min-w-12",
       },
     },
     defaultVariants: {

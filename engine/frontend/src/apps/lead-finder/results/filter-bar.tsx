@@ -25,7 +25,17 @@ import {
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet'
 import { useDebounced } from '@/hooks/useDebounced'
+import { PHONE, useMediaQuery } from '@/lib/use-media-query'
 import { formatDate, formatDateTime, formatNumber, humanise } from '@/lib/format'
 import {
   HUBSPOT_STATUS_LABELS,
@@ -379,23 +389,27 @@ export function FilterBar({ filters, facets, onChange, onClear, trailing }: Filt
       picked,
     )
   const active = activeFilterCount(filters)
-  return (
-    <div role="search" aria-label="Filter the leads" className="flex flex-wrap items-center gap-2">
-      <div className="relative w-64">
-        <Search
-          aria-hidden="true"
-          className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
-        />
-        <SettledInput
-          aria-label="Search company names"
-          placeholder="Company name"
-          className="h-8 pl-8"
-          value={filters.q}
-          onSettle={(q) => {
-            onChange({ q })
-          }}
-        />
-      </div>
+  const phone = useMediaQuery(PHONE)
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const search = (
+    <div className="relative w-64 max-sm:w-auto max-sm:flex-1">
+      <Search
+        aria-hidden="true"
+        className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
+      />
+      <SettledInput
+        aria-label="Search company names"
+        placeholder="Company name"
+        className="h-8 pl-8 touch:h-11 touch:pl-9"
+        value={filters.q}
+        onSettle={(q) => {
+          onChange({ q })
+        }}
+      />
+    </div>
+  )
+  const controls = (
+    <>
       <PickList
         title="Result"
         options={fixed(RESULT_LABELS, RESULT_ORDER, facets?.result)}
@@ -500,12 +514,58 @@ export function FilterBar({ filters, facets, onChange, onClear, trailing }: Filt
         }}
       />
       <MoreFilters filters={filters} facets={facets} onChange={onChange} />
-      {active > 0 ? (
-        <Button type="button" variant="ghost" size="sm" onClick={onClear}>
-          <X aria-hidden="true" />
-          Clear filters
-        </Button>
-      ) : null}
+    </>
+  )
+  const clear = (
+    <Button type="button" variant="ghost" size="sm" onClick={onClear}>
+      <X aria-hidden="true" />
+      Clear filters
+    </Button>
+  )
+  if (phone) {
+    // Filters other than the name take a screen of their own: six rows of buttons would push the
+    // leads off the first screen. The sheet applies each choice at once, like the bar does.
+    const shown = activeFilterCount({ ...filters, q: '' })
+    return (
+      <div role="search" aria-label="Filter the leads" className="flex items-center gap-2">
+        {search}
+        <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+          <SheetTrigger asChild>
+            <Button type="button" variant="outline" size="sm">
+              <SlidersHorizontal aria-hidden="true" />
+              Filters
+              {shown > 0 ? <Badge variant="outline">{shown}</Badge> : null}
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="bottom" className="max-h-[85dvh] gap-0 overflow-y-auto">
+            <SheetHeader>
+              <SheetTitle>Filters</SheetTitle>
+              <SheetDescription>The list changes as you choose.</SheetDescription>
+            </SheetHeader>
+            <div className="grid grid-cols-2 gap-2 px-4 pb-2 [&>button]:h-11 [&>button]:w-full [&>button]:justify-start">
+              {controls}
+            </div>
+            <SheetFooter className="flex-row justify-between">
+              {shown > 0 ? clear : <span />}
+              <Button
+                type="button"
+                onClick={() => {
+                  setSheetOpen(false)
+                }}
+              >
+                Show the leads
+              </Button>
+            </SheetFooter>
+          </SheetContent>
+        </Sheet>
+      </div>
+    )
+  }
+  return (
+    <div role="search" aria-label="Filter the leads" className="flex flex-wrap items-center gap-2">
+      {search}
+      {controls}
+      {active > 0 ? clear : null}
       {trailing ? <div className="ml-auto flex items-center gap-2">{trailing}</div> : null}
     </div>
   )

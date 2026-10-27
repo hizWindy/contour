@@ -22,7 +22,7 @@ export function BackButton({ fallbackTo, fallbackLabel }: BackButtonProps) {
   const cameFromHere = useLocation().key !== 'default'
   if (!cameFromHere) {
     return (
-      <Button asChild variant="ghost" size="sm" className="-ml-2 w-fit">
+      <Button asChild variant="ghost" size="sm" className="-mb-2 -ml-2 w-fit">
         <Link to={fallbackTo}>
           <ArrowLeft aria-hidden="true" />
           Back to {fallbackLabel}
@@ -35,7 +35,7 @@ export function BackButton({ fallbackTo, fallbackLabel }: BackButtonProps) {
       type="button"
       variant="ghost"
       size="sm"
-      className="-ml-2 w-fit"
+      className="-mb-2 -ml-2 w-fit"
       onClick={() => {
         void navigate(-1)
       }}

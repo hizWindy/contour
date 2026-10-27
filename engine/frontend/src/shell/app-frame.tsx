@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Outlet, ScrollRestoration } from 'react-router'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { AppSidebar } from './app-sidebar'
@@ -13,10 +14,17 @@ export const MAIN_ID = 'page'
  * `min-w-0` on the page area lets it shrink to the window: a wide table then scrolls inside its
  * own box, instead of making the whole page scroll sideways and cutting off the buttons on the
  * right. The padding is smaller on a phone.
+ *
+ * The menu opens wide on a laptop screen (1024px and up). On a tablet it starts folded to its icons,
+ * so the page keeps the room; the button in the top bar opens it. On a phone it is a panel that
+ * slides in.
  */
+const WIDE_SCREEN = '(min-width: 1024px)'
+
 export function AppFrame() {
+  const [openAtStart] = useState(() => window.matchMedia(WIDE_SCREEN).matches)
   return (
-    <SidebarProvider>
+    <SidebarProvider defaultOpen={openAtStart}>
       <a
         href={`#${MAIN_ID}`}
         className="sr-only z-50 rounded-md border bg-card px-4 py-2 text-ui text-foreground focus:not-sr-only focus:fixed focus:top-4 focus:left-4"

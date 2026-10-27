@@ -2,6 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import { Route, Routes, useLocation, useNavigate } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { LeadFacets, LeadRow, MapPoint } from '@/api/types'
+import { asPhone } from '@/test/screen'
 import { renderWithProviders } from '@/test/render'
 import { HOSTILE, LEAD_ID, makeLead } from '../lead/test-lead'
 import ResultsPage from './index'
@@ -329,6 +330,34 @@ describe('the results page', () => {
     expect(address().getAll('city')).toEqual(['Melbourne'])
     expect(address().has('lead')).toBe(false)
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('puts the filters behind one Filters button on a phone, and shows how many are set', async () => {
+    asPhone()
+    const backend = mockApi()
+    const { user } = renderResults('?city=Melbourne')
+    await screen.findByRole('button', { name: 'Acme Software' })
+
+    // The bar is the name search and one button; the ten filters are not on the page yet.
+    expect(screen.getByRole('textbox', { name: 'Search company names' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Filter by Result' })).not.toBeInTheDocument()
+    const open = screen.getByRole('button', { name: /^Filters/ })
+    expect(within(open).getByText('1')).toBeInTheDocument()
+
+    await user.click(open)
+    const sheet = await screen.findByRole('dialog', { name: 'Filters' })
+    await user.click(within(sheet).getByRole('button', { name: 'Filter by Result' }))
+    await user.click(await screen.findByRole('option', { name: /^Watch/ }))
+    expect(address().getAll('result')).toEqual(['watch'])
+    await waitFor(() => {
+      expect(lastQuery(backend, '/leads').getAll('result')).toEqual(['watch'])
+    })
+
+    await user.keyboard('{Escape}')
+    await user.click(within(sheet).getByRole('button', { name: 'Show the leads' }))
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Filters' })).not.toBeInTheDocument()
+    })
   })
 
   it('moves through the rows with J and K, and opens the active one with Enter', async () => {

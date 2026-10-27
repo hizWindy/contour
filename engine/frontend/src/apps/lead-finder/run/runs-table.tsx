@@ -35,11 +35,13 @@ const columns = [
   help.accessor('id', {
     header: 'Run',
     enableSorting: false,
+    meta: { hideBelow: 'sm' },
     cell: (info) => shortId(info.getValue()),
   }),
   help.accessor('mode', {
     header: 'Kind',
     enableSorting: false,
+    meta: { hideBelow: 'sm' },
     cell: (info) => RUN_MODE_LABELS[info.getValue()] ?? info.getValue(),
   }),
   help.accessor('status', {
@@ -51,7 +53,7 @@ const columns = [
     id: 'researched',
     header: 'Researched',
     enableSorting: false,
-    meta: { align: 'right' },
+    meta: { align: 'right', hideBelow: 'md' },
     cell: (info) => formatNumber(info.getValue()),
   }),
   help.accessor('cost_usd', {

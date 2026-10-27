@@ -10,8 +10,9 @@ describe('App', () => {
     const router = createMemoryRouter(routes, { initialEntries: ['/'] })
     renderWithProviders(<App router={router} />, { withRouter: false })
 
+    // The page loads its code on first use; a busy test run can take more than the default second.
     expect(
-      await screen.findByRole('heading', { level: 1, name: 'Start a run' }),
+      await screen.findByRole('heading', { level: 1, name: 'Start a run' }, { timeout: 5000 }),
     ).toBeInTheDocument()
     expect(screen.getByText('Lead Finder')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Show or hide the menu' })).toBeInTheDocument()

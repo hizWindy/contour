@@ -39,11 +39,11 @@ const columns = [
     enableSorting: false,
     cell: (info) => info.getValue() ?? '',
   }),
-  help.accessor('model', { header: 'Model', enableSorting: false }),
+  help.accessor('model', { header: 'Model', enableSorting: false, meta: { hideBelow: 'md' } }),
   help.accessor('web_searches', {
     header: 'Searches',
     enableSorting: false,
-    meta: { align: 'right' },
+    meta: { align: 'right', hideBelow: 'md' },
     cell: (info) => formatNumber(info.getValue()),
   }),
   help.accessor('cost_usd', {
@@ -55,6 +55,7 @@ const columns = [
   help.accessor('answer_ok', {
     header: 'Answer',
     enableSorting: false,
+    meta: { hideBelow: 'md' },
     cell: (info) => (info.getValue() ? 'Fitted the form' : 'Did not fit'),
   }),
 ]

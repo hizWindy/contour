@@ -5,7 +5,8 @@ import { Slot } from "radix-ui"
 import { cn } from "@/lib/utils"
 
 /*
-  Buttons are 36px tall (24px at the smallest, which is the click target minimum). Hover changes
+  Buttons are 36px tall (24px at the smallest, which is the click target minimum). On a touch
+  screen they are 44px (`touch:`, see index.css). Hover changes
   the background only. The focus ring comes from the global :focus-visible rule in index.css.
   Navy (primary) is for the main action on a screen. Links are not Navy.
 */
@@ -25,14 +26,14 @@ const buttonVariants = cva(
         link: "rounded-sm text-foreground underline underline-offset-4 hover:text-muted-foreground",
       },
       size: {
-        default: "h-9 px-4",
-        xs: "h-6 gap-1 rounded-md px-2 text-caption [&_svg:not([class*='size-'])]:size-3.5",
-        sm: "h-8 px-3",
-        lg: "h-10 px-6",
-        icon: "size-9",
-        "icon-xs": "size-6 rounded-md [&_svg:not([class*='size-'])]:size-3.5",
-        "icon-sm": "size-8",
-        "icon-lg": "size-10",
+        default: "h-9 px-4 touch:h-11",
+        xs: "h-6 gap-1 rounded-md px-2 text-caption touch:h-8 [&_svg:not([class*='size-'])]:size-3.5",
+        sm: "h-8 px-3 touch:h-10",
+        lg: "h-10 px-6 touch:h-12",
+        icon: "size-9 touch:size-11",
+        "icon-xs": "size-6 rounded-md touch:size-8 [&_svg:not([class*='size-'])]:size-3.5",
+        "icon-sm": "size-8 touch:size-10",
+        "icon-lg": "size-10 touch:size-12",
       },
     },
     defaultVariants: {

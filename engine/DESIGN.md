@@ -87,7 +87,12 @@ Sizes are in rem, so browser zoom works. Nothing is smaller than 13px. Sentence 
 - **Width:** up to 1440px. Tables and the map can use the full width.
 - **List and detail:** clicking a result opens its lead card in a side panel, so the list stays in view. Each card also has its own page and link.
 - **Map page:** the map and the list sit side by side, with a divider you can drag.
-- **Screens:** built for desktop (1280px and up), and works on a tablet. Phones aren't a goal yet.
+- **Screens:** the site works at every width, from a phone (360px) to a wide laptop.
+  - **Laptop (1024px and up):** the menu is open, and a page may use two columns.
+  - **Tablet (640 to 1023px):** the menu starts folded to its icons so the page keeps the room. The cost card on Start moves under the form, with a bar at the bottom of the screen for the cost and the Start button.
+  - **Phone (under 640px):** one column. The menu is a panel that slides in. The top bar is one line (a search icon, the breadcrumbs shorten with "..."). Admin tabs are one row that scrolls sideways. Tables show only the columns that tell rows apart (the rest are one tap away in the side panel). Results filters sit behind one Filters button that opens a sheet. The run page orders its cards: progress, cost, links, companies, events, setup.
+  - **Nothing scrolls the whole page sideways at any width.** A wide table scrolls inside its own box.
+- **Touch:** a phone, or any screen you tap with a finger, gets bigger controls (the `touch:` variant in `index.css`): buttons, toggles, fields and menu rows are 44px tall, and checkboxes have a larger hit area. Fields use 16px text so iPhones don't zoom in on focus. A mouse keeps the 36px sizes.
 
 ## shadcn parts
 
@@ -133,7 +138,7 @@ Sizes are in rem, so browser zoom works. Nothing is smaller than 13px. Sentence 
 - A visible 2px Navy focus ring, with a 2px gap, on everything you can tab to.
 - Everything works by keyboard. Ctrl+K opens the command menu, J and K move through results, Enter opens one, and Esc closes it.
 - Status is never shown by colour alone. Every badge has an icon and a word.
-- Click targets are at least 24 × 24px, and buttons are 36px tall.
+- Click targets are at least 24 × 24px, and buttons are 36px tall (44px on a touch screen).
 - Icons and map pins have text for screen readers, and tables use real column headers.
 
 ## Banned (no AI slop)

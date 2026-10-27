@@ -469,7 +469,7 @@ const sidebarMenuButtonVariants = cva(
           "border border-sidebar-border bg-sidebar hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
       },
       size: {
-        default: "h-9 text-ui",
+        default: "h-9 text-ui touch:h-11",
         sm: "h-7 text-caption",
         lg: "h-12 text-ui group-data-[collapsible=icon]:p-0!",
       },

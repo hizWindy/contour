@@ -88,14 +88,16 @@ export function CommandMenu(): ReactNode {
         type="button"
         variant="outline"
         size="sm"
-        className="gap-2 text-muted-foreground"
+        // On a phone it is a search icon: the words and the keys would crowd the bar. A touch
+        // screen has no Ctrl key, so the keys go there too.
+        className="gap-2 text-muted-foreground max-sm:w-10 max-sm:px-0"
         onClick={() => {
           setOpen(true)
         }}
       >
         <Search aria-hidden="true" />
-        <span>Go to a page</span>
-        <KbdGroup className="ml-2" aria-hidden="true">
+        <span className="max-sm:sr-only">Go to a page</span>
+        <KbdGroup className="ml-2 touch:hidden" aria-hidden="true">
           <Kbd>Ctrl</Kbd>
           <Kbd>K</Kbd>
         </KbdGroup>
