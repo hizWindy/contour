@@ -11,33 +11,18 @@ import asyncio
 import sys
 from collections.abc import Sequence
 from decimal import Decimal
-from pathlib import Path
 
-import yaml
-from pydantic import BaseModel
 from sqlalchemy.exc import OperationalError
 
 from apps.lead_finder.research import LeadCard, ResearchRequest, research_company
 from apps.lead_finder.rules import load_rules
 from apps.lead_finder.sources import FACT_FIELDS
+from apps.lead_finder.testing import load_testset
 from core.claude.client import ClaudeError, get_claude
 from core.cli import DATABASE_DOWN, migrate
 from core.config import get_settings
 from core.logs import setup_logging
 from core.runtime import loop_factory
-
-TESTSET = Path(__file__).resolve().parent / "testset.yaml"
-
-
-class TestCompany(BaseModel):
-    name: str
-    city: str | None = None
-    website: str | None = None
-    why: str
-
-
-class TestSet(BaseModel):
-    companies: list[TestCompany]
 
 
 def unknown_facts(card: LeadCard) -> list[str]:
@@ -127,7 +112,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             asyncio.run(_research([request]), loop_factory=loop_factory())
         else:
-            testset = TestSet.model_validate(yaml.safe_load(TESTSET.read_text(encoding="utf-8")))
+            testset = load_testset()
             rounds = 2 if args.twice else 1
             most = get_settings().company_cap_usd * len(testset.companies)
             if not args.yes:

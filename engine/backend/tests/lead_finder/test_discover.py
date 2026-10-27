@@ -260,7 +260,7 @@ async def test_the_cost_goes_to_the_budget_and_the_live_totals_as_the_reply_arri
 
 async def test_the_budget_is_made_when_none_is_given_and_it_is_the_slice_budget() -> None:
     budget = slice_budget(SETTINGS)
-    assert budget.cap_usd == SETTINGS.slice_reserve_usd == Decimal("1.00")
+    assert budget.cap_usd == SETTINGS.slice_reserve_usd == Decimal("0.60")
     assert budget.max_searches == SETTINGS.slice_max_searches == 6
     claude = finds()
     await discover(claude)  # no budget given

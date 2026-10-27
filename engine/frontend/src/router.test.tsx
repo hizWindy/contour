@@ -1,10 +1,25 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { routes } from '@/router'
 import { ADMIN_TABS, NAV_ITEMS } from '@/shell/nav'
 import { RouteError } from '@/shell/route-error'
 import { renderWithProviders } from '@/test/render'
+
+// The pages call the API. These tests are about addresses, titles and the menu, so every call
+// answers 404: a page then shows its title and a plain error, which is enough here.
+beforeEach(() => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() =>
+      Promise.resolve(Response.json({ title: 'Not found', status: 404 }, { status: 404 })),
+    ),
+  )
+})
+
+// A page loads its code the first time it is visited (a lazy route). Under a busy test run the
+// first load of a heavy page (the charts) can take more than the 1 s default.
+const LAZY = 5000
 
 function renderAt(path: string) {
   const router = createMemoryRouter(routes, { initialEntries: [path] })
@@ -24,16 +39,13 @@ describe('the router', () => {
   it.each([
     ['/start', 'Start a run', ['Start a run']],
     ['/runs', 'Runs', ['Runs']],
-    ['/runs/0f3c9a2e-1111-2222-3333-444444444444', 'Run', ['Runs', 'Run 0f3c9a2e']],
+    ['/runs/0f3c9a2e-1111-2222-3333-444444444444', 'Run 0f3c9a2e', ['Runs', 'Run 0f3c9a2e']],
     ['/results', 'Results', ['Results']],
     ['/leads/99999999-2222-3333-4444-555555555555', 'Lead', ['Lead']],
   ])('shows the page at %s with its title and breadcrumbs', async (path, title, trail) => {
     renderAt(path)
 
     expect(await screen.findByRole('heading', { level: 1, name: title })).toBeInTheDocument()
-    expect(
-      screen.getByRole('heading', { level: 2, name: 'This page is being built.' }),
-    ).toBeInTheDocument()
     expect(crumbs()).toEqual(trail)
     expect(document.title).toBe(`${trail.at(-1) ?? ''} - Lead Finder`)
   })
@@ -48,10 +60,15 @@ describe('the router', () => {
 
   it('opens the first Admin tab, and every tab has its own address', async () => {
     const { router } = renderAt('/admin')
-    expect(await screen.findByRole('heading', { level: 1, name: 'Admin' })).toBeInTheDocument()
-    await waitFor(() => {
-      expect(router.state.location.pathname).toBe('/admin/runs')
-    })
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Admin' }, { timeout: LAZY }),
+    ).toBeInTheDocument()
+    await waitFor(
+      () => {
+        expect(router.state.location.pathname).toBe('/admin/runs')
+      },
+      { timeout: LAZY },
+    )
 
     const tabs = screen.getByRole('navigation', { name: 'Admin sections' })
     const links = within(tabs).getAllByRole('link')
@@ -65,11 +82,17 @@ describe('the router', () => {
     'shows the Admin tab at %s',
     async (path, label) => {
       renderAt(path)
-      expect(await screen.findByRole('heading', { level: 1, name: 'Admin' })).toBeInTheDocument()
       expect(
-        await screen.findByRole('heading', { level: 3, name: 'This page is being built.' }),
+        await screen.findByRole('heading', { level: 1, name: 'Admin' }, { timeout: LAZY }),
       ).toBeInTheDocument()
-      expect(crumbs()).toEqual(['Admin', label])
+      await waitFor(
+        () => {
+          expect(crumbs()).toEqual(['Admin', label])
+        },
+        { timeout: LAZY },
+      )
+      const tabs = screen.getByRole('navigation', { name: 'Admin sections' })
+      expect(await within(tabs).findByRole('link', { current: 'page' })).toHaveTextContent(label)
     },
   )
 
@@ -88,7 +111,7 @@ describe('the router', () => {
 
   it('lists every main page in the menu, and marks the one you are on', async () => {
     renderAt('/runs/0f3c9a2e-1111-2222-3333-444444444444')
-    await screen.findByRole('heading', { level: 1, name: 'Run' })
+    await screen.findByRole('heading', { level: 1, name: 'Run 0f3c9a2e' })
 
     const menu = within(screen.getByRole('navigation', { name: 'Main menu' }))
     for (const item of NAV_ITEMS) {

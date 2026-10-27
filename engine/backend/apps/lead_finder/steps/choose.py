@@ -235,8 +235,13 @@ def decide(
     today: date,
     max_companies: int,
     settings: Settings,
+    *,
+    ranked: bool = True,
 ) -> Decision:
     """Apply the rules (module text), rank the rest and keep the top `max_companies`.
+
+    - `ranked`: False keeps the order the companies came in instead of ranking them (the
+      watchlist is already in its own order, most likely first, and has no signals to rank by).
 
     - `hubspot_matches`: the HubSpot match of each company, by `Merged.key`. A company with no
       entry counts as not in HubSpot.
@@ -251,7 +256,8 @@ def decide(
 
     kept: list[Merged] = []
     skipped: list[tuple[str, str]] = []
-    for company in sorted(merged, key=lambda c: (c.name.casefold(), c.name)):
+    order = merged if not ranked else sorted(merged, key=lambda c: (c.name.casefold(), c.name))
+    for company in order:
         reason = _hubspot_reason(company, hubspot_matches.get(company.key), rules, today)
         if reason is None:
             leads = [lead for key in company.keys for lead in by_key.get(key, [])]
@@ -261,8 +267,10 @@ def decide(
         else:
             skipped.append((company.name, reason))
 
-    ranked = rank(kept, rules, today)
+    best_first = rank(kept, rules, today) if ranked else kept
     limit = max(0, max_companies)
     return Decision(
-        chosen=ranked[:limit], skipped=skipped, over_limit_count=max(0, len(ranked) - limit)
+        chosen=best_first[:limit],
+        skipped=skipped,
+        over_limit_count=max(0, len(best_first) - limit),
     )

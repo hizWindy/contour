@@ -60,7 +60,7 @@ def test_defaults_are_the_ones_in_the_design() -> None:
     assert (s.company_max_searches, s.searches_per_request, s.fetches_per_request) == (12, 3, 3)
     assert s.request_reserve_usd == Decimal("0.80")
     assert (s.run_max_companies, s.slice_max_searches) == (20, 6)
-    assert s.slice_reserve_usd == Decimal("1.00")
+    assert s.slice_reserve_usd == Decimal("0.60")  # TBC: 12 default slices fit $8.00
     assert s.discovery_share == 0.40
     assert (s.run_company_concurrency, s.run_discover_concurrency) == (2, 3)
     assert (s.max_concurrent_runs, s.claude_concurrency) == (1, 2)
@@ -184,7 +184,7 @@ RESERVE_PROBLEM = (
     "so no request could start. Lower the reserve or raise the cap."
 )
 SLICE_PROBLEM = (
-    "slice_reserve_usd ($1.00) is more than discovery may spend in a run ($0.40: "
+    "slice_reserve_usd ($0.60) is more than discovery may spend in a run ($0.40: "
     "discovery_share 0.4 of run_cap_usd $1.00), so no discovery request could start. "
     "Lower the reserve, or raise the run cap or the discovery share."
 )
@@ -225,7 +225,7 @@ def test_the_same_check_runs_when_the_settings_page_validates_the_overrides() ->
 
 
 def test_a_lone_lower_run_cap_is_refused_because_discovery_could_not_afford_a_slice() -> None:
-    """Discovery may spend 40 percent of $1.00. The slice reserve is $1.00."""
+    """Discovery may spend 40 percent of $1.00. The slice reserve is $0.60."""
     with pytest.raises(ValidationError) as caught:
         make(run_cap_usd="1")
     assert problems(caught.value) == [
@@ -236,16 +236,16 @@ def test_a_lone_lower_run_cap_is_refused_because_discovery_could_not_afford_a_sl
 
 
 def test_a_lone_lower_discovery_share_is_refused_too() -> None:
-    with pytest.raises(ValidationError, match=r"discovery_share 0.05 of run_cap_usd \$15\.00"):
-        make(run_cap_usd="15", discovery_share=0.05)  # 0.05 of $15.00 is $0.75
-    assert make(run_cap_usd="20", discovery_share=0.05).discovery_share == 0.05  # exactly $1.00
+    with pytest.raises(ValidationError, match=r"discovery_share 0.05 of run_cap_usd \$10\.00"):
+        make(run_cap_usd="10", discovery_share=0.05)  # 0.05 of $10.00 is $0.50
+    assert make(run_cap_usd="12", discovery_share=0.05).discovery_share == 0.05  # exactly $0.60
 
 
 def test_the_slice_reserve_is_compared_with_the_discovery_cap_in_whole_cents() -> None:
     """`make_caps` rounds the discovery cap down to the cent, so the check does too."""
-    assert make(run_cap_usd="2.50", discovery_share=0.40).slice_reserve_usd == Decimal("1.00")
-    with pytest.raises(ValidationError, match=r"may spend in a run \(\$0\.99:"):
-        make(run_cap_usd="2.49", discovery_share=0.40)  # 0.996 is $0.99
+    assert make(run_cap_usd="1.50", discovery_share=0.40).slice_reserve_usd == Decimal("0.60")
+    with pytest.raises(ValidationError, match=r"may spend in a run \(\$0\.59:"):
+        make(run_cap_usd="1.49", discovery_share=0.40)  # 0.596 is $0.59
 
 
 def test_a_lone_lower_cap_in_the_environment_stops_the_start(
@@ -482,7 +482,7 @@ def test_the_ceilings_pull_values_down() -> None:
     clamped = clamp_to_ceilings(s)
     assert clamped.company_cap_usd == Decimal("1")  # 2.50 was above the ceiling
     assert clamped.request_reserve_usd == Decimal("0.80")  # already below it
-    assert clamped.slice_reserve_usd == Decimal("1.00")  # equal to it
+    assert clamped.slice_reserve_usd == Decimal("0.60")  # already below it
     assert clamped.run_cap_usd == Decimal("10")
     assert (clamped.run_company_concurrency, clamped.run_discover_concurrency) == (1, 1)
     assert (clamped.max_concurrent_runs, clamped.claude_concurrency) == (1, 1)
@@ -521,7 +521,7 @@ def test_a_lower_company_ceiling_brings_both_reserves_down_with_the_cap() -> Non
 def test_the_clamp_keeps_a_reserve_that_is_already_small_enough() -> None:
     clamped = clamp_to_ceilings(make(hard_company_cap_usd="1", hard_run_cap_usd="10"))
     assert clamped.request_reserve_usd == Decimal("0.80")
-    assert clamped.slice_reserve_usd == Decimal("1.00")  # discovery has $4.00
+    assert clamped.slice_reserve_usd == Decimal("0.60")  # discovery has $4.00
 
 
 def test_the_clamp_pulls_a_reserve_down_with_a_cap_that_was_lowered_outside_the_checks() -> None:

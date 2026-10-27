@@ -1,6 +1,22 @@
-import { PageStub } from '@/shell/page-stub'
+/** Every run, newest first. A row opens the run. */
+import { Link } from 'react-router'
+import { PageHeader } from '@/components/page-header'
+import { Button } from '@/components/ui/button'
+import { RunsTable } from './runs-table'
 
-/** A placeholder: this page is built in a later step. */
 export default function RunsPage() {
-  return <PageStub title="Runs" purpose="Every run, newest first, with its status and cost." />
+  return (
+    <>
+      <PageHeader
+        title="Runs"
+        description="Every run, newest first. Open one to watch it or see what it found."
+        actions={
+          <Button asChild>
+            <Link to="/start">Start a run</Link>
+          </Button>
+        }
+      />
+      <RunsTable />
+    </>
+  )
 }

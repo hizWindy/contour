@@ -227,9 +227,9 @@ def params_of(cities: int, triggers: int) -> DiscoveryParams:
     ("cities", "triggers", "fits"),
     [
         (1, 1, True),
-        (2, 4, True),  # 8 slices x US$1.00 = US$8.00, exactly the discovery cap of US$8.00
-        (3, 3, False),  # 9 slices
-        (3, 4, False),  # 12 slices: the default Start page choice (see the report)
+        (2, 4, True),  # 8 slices x US$0.60 = US$4.80
+        (3, 4, True),  # 12 slices, US$7.20: the default Start page choice fits the defaults
+        (2, 7, False),  # 14 slices, US$8.40: over the discovery cap of US$8.00
         (4, 9, False),
     ],
 )
@@ -252,21 +252,21 @@ def test_the_slices_must_fit_the_discovery_cap_with_the_default_settings(
 def test_the_message_has_the_numbers_and_what_to_do() -> None:
     base = settings()
     with pytest.raises(Problem) as caught:
-        check_discovery_size(params_of(3, 4), base, caps_of(base))
+        check_discovery_size(params_of(4, 4), base, caps_of(base))
     problem = caught.value
     assert problem.detail == (
-        "This run would make 12 discovery searches. Each can cost up to US$1.00, so up to "
-        "US$12.00 in all. Discovery may spend US$8.00 of the run's US$20.00 limit. "
-        "At most 8 fit. Choose fewer cities or triggers, or raise the run limit in Settings."
+        "This run would make 16 discovery searches. Each can cost up to US$0.60, so up to "
+        "US$9.60 in all. Discovery may spend US$8.00 of the run's US$20.00 limit. "
+        "At most 13 fit. Choose fewer cities or triggers, or raise the run limit in Settings."
     )
     assert problem.extra["errors"] == [
         {
             "field": "body.params.cities",
-            "message": "12 searches is too many (the most that fit is 8). Choose fewer.",
+            "message": "16 searches is too many (the most that fit is 13). Choose fewer.",
         },
         {
             "field": "body.params.triggers",
-            "message": "12 searches is too many (the most that fit is 8). Choose fewer.",
+            "message": "16 searches is too many (the most that fit is 13). Choose fewer.",
         },
     ]
 
@@ -275,19 +275,22 @@ def test_the_reserve_and_the_run_cap_change_the_answer() -> None:
     params = params_of(3, 4)  # 12 slices
     cheap = settings(slice_reserve_usd=Decimal("0.60"))  # 12 x 0.60 = 7.20 <= 8.00
     check_discovery_size(params, cheap, caps_of(cheap))
-    bigger = settings(run_cap_usd=Decimal("30"))  # discovery cap 12.00, 12 x 1.00 fits
+    dear = Decimal("1.00")
+    with pytest.raises(Problem):  # 12 x 1.00 = 12.00 is over the default 8.00
+        check_discovery_size(params, settings(slice_reserve_usd=dear), caps_of(settings()))
+    bigger = settings(run_cap_usd=Decimal("30"), slice_reserve_usd=dear)  # cap 12.00: fits
     check_discovery_size(params, bigger, caps_of(bigger))
-    share = settings(discovery_share=0.60)  # 20 x 0.6 = 12.00
+    share = settings(discovery_share=0.60, slice_reserve_usd=dear)  # 20 x 0.6 = 12.00
     check_discovery_size(params, share, caps_of(share))
 
 
 def test_a_lower_run_cap_chosen_by_the_person_lowers_what_fits() -> None:
     base = settings()
     caps = caps_of(base, run_cap_usd=Decimal("10"))  # discovery cap 4.00
-    check_discovery_size(params_of(1, 4), base, caps)
+    check_discovery_size(params_of(2, 3), base, caps)  # 6 x 0.60 = 3.60
     with pytest.raises(Problem) as caught:
-        check_discovery_size(params_of(1, 5), base, caps)
-    assert "At most 4 fit" in str(caught.value.detail)
+        check_discovery_size(params_of(2, 4), base, caps)  # 8 x 0.60 = 4.80
+    assert "At most 6 fit" in str(caught.value.detail)
     assert "US$4.00 of the run's US$10.00 limit" in str(caught.value.detail)
 
 
@@ -311,7 +314,7 @@ def test_the_check_takes_the_rules_it_is_given() -> None:
 
 
 def test_the_reserve_is_slices_times_the_slice_reserve() -> None:
-    assert discovery_reserve_usd(12, settings()) == Decimal("12.00")
+    assert discovery_reserve_usd(12, settings()) == Decimal("7.20")
     assert discovery_reserve_usd(0, settings()) == Decimal("0")
     assert discovery_reserve_usd(3, settings(slice_reserve_usd=Decimal("0.25"))) == Decimal("0.75")
 

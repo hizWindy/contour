@@ -1728,7 +1728,10 @@ async def test_research_still_works_through_the_endpoint_and_the_new_leads_route
         assert response.status_code == 200, response.text
         card = response.json()
         assert card["result"] == "pass"
-        assert card["notes"] == []
+        # What each source said, as a summary, with its link (one note per angle in the sample).
+        assert len(card["notes"]) == 4
+        assert {note["angle"] for note in card["notes"]} == {"property", "people", "money"}
+        assert all(note["url"].startswith("https://") for note in card["notes"])
         assert card["hubspot"]["candidates"] == []
 
         listed = (await client.get(f"{LF}/leads", params={"result": "pass"})).json()

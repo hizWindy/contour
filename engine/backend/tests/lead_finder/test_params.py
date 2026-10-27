@@ -369,7 +369,8 @@ def test_every_kind_gives_the_rules_and_prompt_versions() -> None:
         assert kind.versions is run_versions, kind.mode
     versions = run_versions()
     assert versions.rules == rules.version
-    assert versions.prompts == prompts.versions(rules)
+    assert versions.prompts == prompts.run_versions(rules)  # research, extract and discover
+    assert versions.prompts.startswith(prompts.versions(rules))
     assert versions.prompts.startswith("research ")
     assert 0 < len(versions.rules) <= 32  # the sizes of the run row's columns
     assert 0 < len(versions.prompts) <= 128

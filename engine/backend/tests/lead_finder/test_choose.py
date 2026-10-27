@@ -361,3 +361,14 @@ def test_the_answer_never_depends_on_the_input_order() -> None:
     assert [name for name, _ in first.skipped] == ["Company 3"]  # 7 has a newer signal
     assert len(first.chosen) == 5
     assert first.over_limit_count == 6
+
+
+def test_unranked_keeps_the_order_the_companies_came_in() -> None:
+    companies = [
+        company("Zed Co", signal("new_ceo", "2026-10-20")),
+        company("Best Co", signal("fast_growth", url=ASX)),
+        company("Middle Co"),
+    ]
+    decision = decide(companies, {}, [], RULES, Params(), TODAY, 2, SETTINGS, ranked=False)
+    assert [c.name for c in decision.chosen] == ["Zed Co", "Best Co"]
+    assert decision.over_limit_count == 1

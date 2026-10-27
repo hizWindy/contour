@@ -12,6 +12,7 @@ never be accepted from a caller.
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Any, Literal
 
 from core.claude.client import Reply
@@ -49,4 +50,5 @@ class ResearchContext:
     signals: tuple[Signal, ...] = ()  # found by discovery. Saved to memory before research.
     on_reply: OnReply | None = None  # the run's live totals, updated as each reply arrives
     models: StepModels = StepModels()
-    blocked_domains: tuple[str, ...] = ()  # sites the web tools never read
+    blocked_domains: tuple[str, ...] = ()  # sites the web tools never read. Empty: the rules' list
+    company_cap_usd: Decimal | None = None  # the run's company cap. None: the settings' cap

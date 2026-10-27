@@ -179,7 +179,10 @@ class Settings(BaseSettings):
     # --- Caps for one run --------------------------------------------------------------
     run_cap_usd: Decimal = Field(Decimal("20.00"), ge=Decimal("1"), le=Decimal("50"))
     run_max_companies: int = Field(20, ge=1, le=100)
-    slice_reserve_usd: Decimal = Field(Decimal("1.00"), ge=Decimal("0.10"), le=Decimal("5"))
+    # Held for each discovery request. 0.60 lets the default Start choice (3 cities x 4 main
+    # triggers = 12 requests, US$7.20) fit discovery's share of the default run cap (US$8.00).
+    # A discovery request is expected to cost about US$0.40 (TBC: measure on the first runs).
+    slice_reserve_usd: Decimal = Field(Decimal("0.60"), ge=Decimal("0.10"), le=Decimal("5"))
     slice_max_searches: int = Field(6, ge=1, le=20)
     # The most of the run cap that discovery may use. The rest is for researching companies.
     discovery_share: float = Field(0.40, ge=0.05, le=0.90)

@@ -32,6 +32,14 @@ export const RUN_STATUS_LABELS: Record<RunStatus, string> = {
   interrupted: 'Interrupted',
 }
 
+/** The kinds of run, as the run pages name them. */
+export const RUN_MODE_LABELS: Record<string, string> = {
+  discovery: 'Find new leads',
+  watchlist: 'HubSpot watchlist',
+  company: 'Companies by name',
+  testset: 'Test set',
+}
+
 export const HUBSPOT_STATUS_LABELS: Record<HubSpotStatus, string> = {
   new: 'New',
   in_hubspot: 'In HubSpot',

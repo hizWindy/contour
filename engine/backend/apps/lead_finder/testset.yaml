@@ -2,7 +2,7 @@
 # They're public companies because using Contour's HubSpot names needs Levi's OK first.
 # Once he agrees, add the 5 Property Daily deals and his past wins.
 #
-# "why" says what each case tests. The expected results are our guesses (TBC) until the
+# "why" says what each case tests. "expect" is set only where the rules make the result certain. The expected results are our guesses (TBC) until the
 # first run, and a person checks each card against its sources.
 #
 # Run it from engine/backend: uv run lead-finder testset --yes
@@ -48,3 +48,6 @@ companies:
     city: Sydney
     website: canva.com
     why: A Sydney company. Should go to Director review for its city.
+    # Certain from the rules: Sydney is a Director review city, so never a pass.
+    expect:
+      results: [director_review, watch, drop]

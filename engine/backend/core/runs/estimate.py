@@ -34,7 +34,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from core.api.errors import FieldError, Problem
 from core.config import Settings
-from core.runs.schemas import RunCaps, RunCreate, RunEstimate
+from core.runs.schemas import Blocked, RunCaps, RunCreate, RunEstimate
 from core.runs.types import (
     DEFAULT_COMPANY_USD,
     DEFAULT_SLICE_USD,
@@ -209,15 +209,21 @@ async def estimate_run(
     settings: Settings = await settings_provider()
     params, errors = try_parse_params(kind.params_model, body.params)
     caps = make_caps(settings)  # without the person's own limits, until the params are valid
+    blocked: Blocked | None = None
     if params is not None:
         caps = make_caps(settings, kind.caps_override(params) if kind.caps_override else None)
         if kind.check is not None:
             try:
                 kind.check(params, settings, caps)
             except Problem as problem:
-                if problem.status != 422:
+                if problem.status == 409 and problem.code:
+                    # A refusal a person can't fix in the form (an approval that is missing):
+                    # the estimate still runs, and the Start button shows why it is off.
+                    blocked = Blocked(code=problem.code, message=problem.detail or problem.title)
+                elif problem.status == 422:
+                    errors = field_errors_of(problem)
+                else:
                     raise
-                errors = field_errors_of(problem)
 
     async with session_factory() as session:
         left = daily_left(settings.daily_cap_usd, await spent_last_24h(session))
@@ -241,4 +247,6 @@ async def estimate_run(
         if problem.status != 422:
             raise
         return _invalid(field_errors_of(problem), caps, left)
+    if blocked is not None and estimate.blocked is None:
+        estimate = estimate.model_copy(update={"blocked": blocked})
     return add_limits(estimate, caps, left, costs)
