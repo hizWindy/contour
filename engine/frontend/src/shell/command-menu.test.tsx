@@ -4,6 +4,9 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { routes } from '@/router'
 import { renderWithProviders } from '@/test/render'
 
+// Pages load lazily. A busy test run can take more than the default second to load one.
+const LAZY = 5000
+
 function renderAt(path: string) {
   const router = createMemoryRouter(routes, { initialEntries: [path] })
   const result = renderWithProviders(<RouterProvider router={router} />, { withRouter: false })
@@ -17,7 +20,7 @@ afterEach(() => {
 describe('the command menu', () => {
   it('opens with Ctrl+K and goes to a page typed into it', async () => {
     const { user, router } = renderAt('/start')
-    await screen.findByRole('heading', { level: 1, name: 'Start a run' })
+    await screen.findByRole('heading', { level: 1, name: 'Start a run' }, { timeout: LAZY })
 
     await user.keyboard('{Control>}k{/Control}')
     const input = await screen.findByPlaceholderText('Type a page or an action')
@@ -32,7 +35,7 @@ describe('the command menu', () => {
 
   it('opens with Cmd+K too, and from its button, and Esc closes it', async () => {
     const { user } = renderAt('/results')
-    await screen.findByRole('heading', { level: 1, name: 'Results' })
+    await screen.findByRole('heading', { level: 1, name: 'Results' }, { timeout: LAZY })
 
     await user.keyboard('{Meta>}k{/Meta}')
     expect(await screen.findByRole('dialog', { name: 'Go to a page' })).toBeInTheDocument()
@@ -47,7 +50,7 @@ describe('the command menu', () => {
 
   it('finds a page by one of its other words', async () => {
     const { user, router } = renderAt('/start')
-    await screen.findByRole('heading', { level: 1, name: 'Start a run' })
+    await screen.findByRole('heading', { level: 1, name: 'Start a run' }, { timeout: LAZY })
     await user.keyboard('{Control>}k{/Control}')
     await user.type(await screen.findByPlaceholderText('Type a page or an action'), 'csv')
     await user.keyboard('{Enter}')
@@ -58,7 +61,7 @@ describe('the command menu', () => {
 
   it('switches to dark colours and back to the computer setting, and keeps the choice', async () => {
     const { user } = renderAt('/start')
-    await screen.findByRole('heading', { level: 1, name: 'Start a run' })
+    await screen.findByRole('heading', { level: 1, name: 'Start a run' }, { timeout: LAZY })
 
     await user.keyboard('{Control>}k{/Control}')
     await user.click(await screen.findByRole('option', { name: 'Use dark colours' }))
@@ -73,7 +76,7 @@ describe('the command menu', () => {
 
   it('says so when nothing matches', async () => {
     const { user } = renderAt('/start')
-    await screen.findByRole('heading', { level: 1, name: 'Start a run' })
+    await screen.findByRole('heading', { level: 1, name: 'Start a run' }, { timeout: LAZY })
     await user.keyboard('{Control>}k{/Control}')
     await user.type(await screen.findByPlaceholderText('Type a page or an action'), 'qqqzzz')
     expect(await screen.findByText('Nothing matches. Try another word.')).toBeInTheDocument()

@@ -4,14 +4,38 @@
     {
       "name": "frontend",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "engine/frontend", "run", "dev"],
+      "runtimeArgs": [
+        "--prefix",
+        "engine/frontend",
+        "run",
+        "dev"
+      ],
       "port": 5173,
       "url": "http://localhost:5173"
     },
     {
       "name": "backend",
       "runtimeExecutable": "uv",
-      "runtimeArgs": ["run", "--directory", "engine/backend", "engine", "serve"],
+      "runtimeArgs": [
+        "run",
+        "--directory",
+        "engine/backend",
+        "engine",
+        "serve"
+      ],
+      "port": 8000
+    },
+    {
+      "name": "backend-fake",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": [
+        "run",
+        "--directory",
+        "engine/backend",
+        "python",
+        "-m",
+        "tests.e2e.serve"
+      ],
       "port": 8000
     }
   ]

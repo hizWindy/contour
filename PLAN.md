@@ -3,7 +3,7 @@
 The step-by-step plan to build the Company Lead Finder ([LEADS.md](projects/leads/LEADS.md)). It has two parts: a research engine that finds and checks companies, and a small website to run it and send good leads to HubSpot.
 
 - **Built by:** Al-khair Pama. **Signed off by:** Levi Young.
-- **Last updated:** 2026-10-25. **TBC** means not confirmed yet.
+- **Last updated:** 2026-10-27. **TBC** means not confirmed yet.
 - **Runs on your computer for now.** No hosting yet.
 - **No timer yet.** You start every run by hand, from Swagger or the website, while we test the engine.
 - Nothing reaches HubSpot unless a person clicks.
@@ -606,6 +606,8 @@ How it was built, and what changed from the plan:
 
 **Done when:** a run over the last 30 days in the 3 cities finishes under its cap, returns ranked leads, and logs every search. This run replaces the hand-test in LEADS.md, with the same settings.
 
+**Status:** built on the branch `phase-2-4`, 27 Oct 2026, and tested with saved sample answers: the default run (3 cities, 30 days, 12 searches) finishes under its cap with ranked leads, every search is logged, and Stop, the caps and resume after a crash work. Not merged to `master` yet. The same run with the real Claude waits on the API key, so its real cost is **TBC**.
+
 ### Phase 3: Match with HubSpot (read only)
 
 **Build**
@@ -614,6 +616,8 @@ How it was built, and what changed from the plan:
 - Look-alikes: rank companies by how much they look like the deal companies.
 
 **Done when:** all 12 deal companies match correctly, and a made-up near-duplicate with a different name shows as "Possible match".
+
+**Status:** built and tested on `phase-2-4`, 27 Oct 2026. All 12 deal companies match as the export says, and near-duplicates show as "Possible match". The watchlist and look-alikes work, but a watchlist run stays switched off until Levi's OK on sending HubSpot names to Claude.
 
 **Needs:** Levi's OK on data for watchlist mode and look-alikes. The live HubSpot API comes later, and switching to it is one setting.
 
@@ -624,6 +628,8 @@ How it was built, and what changed from the plan:
 - The Lead Finder pages: Start research (with the map), Watch a run, Results, Lead card and Admin.
 
 **Done when:** you can start a run from the map, watch it, filter the results and open a lead card with its look-alikes, all without Swagger. Every screen passes the design system's check list, in light and dark mode.
+
+**Status:** built on `phase-2-4`, 27 Oct 2026. On the fake backend (the real engine with saved sample answers), a run was started from the map, watched live, filtered on Results and opened as a lead card with look-alikes, in light and dark mode. The design and contrast checks pass as tests. How to try it: [engine/README.md](engine/README.md).
 
 ### Phase 5: Send to HubSpot (click only)
 

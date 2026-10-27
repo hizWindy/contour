@@ -2,7 +2,9 @@
 
 The research engine and website for the Lead Finder. The build plan is [PLAN.md](../PLAN.md). How to work in this code is in [AGENTS.md](AGENTS.md).
 
-**Status:** Phase 1 (research one company) is built and tested with saved sample answers. The first real run is waiting on a Claude API key.
+Last updated: 27 Oct 2026. **TBC** means not confirmed yet.
+
+**Status:** Phases 0 to 4 are built and tested with saved sample answers (Phases 2 to 4 on the branch `phase-2-4`). You can start runs, watch them and review the leads in the website. No run has used the real Claude yet: that waits on an API key, so real costs and results are **TBC**.
 
 ## Start it
 
@@ -14,6 +16,28 @@ The research engine and website for the Lead Finder. The build plan is [PLAN.md]
 6. Open Swagger: http://127.0.0.1:8000/docs
 
 The backend applies any new database changes when it starts.
+
+Then start the website. In `engine/frontend/`, install once with `npm ci`, then run `npm run dev` and open http://localhost:5173.
+
+## Use the website
+
+- **Start a run:** pick the cities, areas, signs and how far back to look. The page shows the likely and the highest cost before you start. Three kinds of run: find new leads, the HubSpot watchlist, or companies you type in.
+- **Runs:** watch a run live, stop it, or resume one that was cut off.
+- **Results:** every lead in a table, or as a list beside a map. Filter, sort and download a CSV. Click a lead to open its card in a side panel.
+- **A lead card:** the result rule by rule, the facts with their sources, HubSpot matches and look-alikes. Watch, reject or re-check it from there. Sending to HubSpot comes in Phase 5.
+- **Admin:** costs by day, the search log, memory, the HubSpot upload, the rules, the test set and the settings.
+
+The HubSpot watchlist stays switched off until Levi approves sending HubSpot company names to Claude. Then set `HUBSPOT_NAMES_TO_CLAUDE_OK=true` in `engine/.env` and restart the backend.
+
+## Try it without Claude
+
+The fake backend is the real engine with saved sample answers instead of Claude. It costs nothing and needs no API key. From `engine/backend/`:
+
+```
+uv run python -m tests.e2e.serve
+```
+
+It uses its own database (`leadfinder_e2e`), which it wipes on every start, and loads the HubSpot export. A run finds made-up companies named "Sample ...", slowly enough to watch. Add `--hubspot-ok` to try the watchlist too. Then start the website as above.
 
 ## Load the HubSpot export
 
@@ -45,9 +69,11 @@ From `engine/backend/`:
 - Fast tests, no database needed: `uv run pytest -m "not integration"`
 - All tests, database needed: `uv run pytest`
 
-Tests use saved sample answers instead of Claude, so they're free.
+From `engine/frontend/`: `npm run lint`, `npm run typecheck`, `npm test` and `npm run build`.
+
+Tests use saved sample answers instead of Claude, so they're free. They can't show what a real run costs or finds: that needs the first live runs (**TBC**).
 
 ## Stop it
 
-- Backend: Ctrl+C.
+- Backend and website: Ctrl+C.
 - Database: `docker compose stop`. The data stays in a Docker volume.

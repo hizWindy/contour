@@ -11,8 +11,8 @@ export function saveFile(blob: Blob, filename: string): void {
   document.body.append(link)
   link.click()
   link.remove()
-  // The click starts the download at once; the URL can go after this task.
+  // Some browsers read the file a little after the click, so the URL is let go later, not at once.
   setTimeout(() => {
     URL.revokeObjectURL(url)
-  }, 0)
+  }, 30_000)
 }

@@ -32,7 +32,20 @@ From `engine/backend/`:
 | Type checks | `uv run mypy` |
 | New database change | `uv run alembic revision --autogenerate -m "what changed"`, then read and fix the file |
 
-Swagger is at http://127.0.0.1:8000/docs while the backend runs. All endpoints sit under `/api/v1/`.
+| Fake backend for the website (no Claude, own database) | `uv run python -m tests.e2e.serve` |
+| Write the API contract the website's types come from | `uv run engine openapi` |
+
+From `engine/frontend/`:
+
+| Task | Command |
+|---|---|
+| Install packages | `npm ci` |
+| Start the website (proxies `/api` to the backend) | `npm run dev` |
+| New types after the API contract changed | `npm run types` |
+| Lint, types, tests, build | `npm run lint`, `npm run typecheck`, `npm test`, `npm run build` |
+| Format | `npm run format` |
+
+Swagger is at http://127.0.0.1:8000/docs while the backend runs. All endpoints sit under `/api/v1/`. Don't run the backend tests and the website tests at the same time on this laptop: together they run out of memory.
 
 ## Map
 
@@ -49,11 +62,18 @@ backend/
     claude/            Claude with web search and fetch (client.py), prices (pricing.py), caps (budget.py)
     searches/          the search log: every Claude request and its cost
     memory/            pgvector memory and FastEmbed
-    hubspot/           the HubSpot import, and exact matching (matching.py)
+    hubspot/           the HubSpot import, matching (matching.py) and company profiles (profiles.py)
+    runs/              the run engine: start, stop, resume, live events, caps (manager.py, events.py, budget.py)
+    prefs/             the settings a person can change on the Settings page
   apps/
     lead_finder/       the first project
       app.py           tells the core this project's name, endpoints and rules
-      api.py           the /api/v1/lead-finder endpoints
+      api.py           the /api/v1/lead-finder endpoints (also api_leads.py, api_runs.py, api_watchlist.py)
+      runs.py          the four kinds of run: find new leads, watchlist, typed companies, test set
+      steps/           the run's steps: plan, discover, merge, choose, company (research one), graph (LangGraph)
+      options.py       what the Start page offers (cities, areas, signs, limits)
+      lead_store.py    lead filters, sorting, facets, the map and the CSV
+      similar.py       look-alikes; watchlist.py the HubSpot watchlist; testing.py the test set report
       rules.py         checks the rules files
       rules/           criteria.yaml, queries.yaml, hubspot_map.yaml
       research.py      researches one company: memory, search, form, gap check, save
@@ -66,6 +86,14 @@ backend/
       testset.yaml     the 10 test companies
   tests/               fast tests, and integration tests marked `integration`
                        tests/lead_finder/samples.py holds the fake Claude
+                       tests/e2e/serve.py is the fake backend for the website
+frontend/
+  openapi.json         the API contract, written by `uv run engine openapi`
+  src/api/             the typed API client and the data hooks
+  src/shell/           the app frame: sidebar, breadcrumbs, Ctrl+K menu
+  src/components/      shared parts: table, map, badges, money; ui/ is shadcn, restyled
+  src/apps/lead-finder/ one folder per page: start, run, results, lead, admin
+  src/test/            test helpers, and the design and contrast checks
 ```
 
 ## Coding practices
@@ -138,7 +166,7 @@ The core doesn't change.
 
 ## Windows note
 
-psycopg's async mode can't use Windows' default event loop. `core/runtime.py` switches to the selector loop. Always start the backend with `uv run engine serve`, and keep the same fix at the top of `tests/conftest.py`.
+psycopg's async mode can't use Windows' default event loop. `core/runtime.py` switches to the selector loop. Always start the backend with `uv run engine serve`, and keep the same fix at the top of `tests/conftest.py`. A script of your own needs it too: `asyncio.run(main(), loop_factory=loop_factory())`.
 
 ## Writing
 

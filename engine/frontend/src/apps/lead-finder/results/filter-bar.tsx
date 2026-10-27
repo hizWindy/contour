@@ -132,8 +132,10 @@ function PickList({ title, options, picked, onChange, single = false }: PickList
           {/* The table has a column with the same name, so a screen reader hears the difference. */}
           <span className="sr-only">Filter by</span> {title}
           {summary ? (
-            <Badge variant="outline" className="max-w-40 truncate">
-              {summary}
+            // The text shrinks inside the badge, so a long run name ends in "..." (a badge
+            // centres its content, which would cut both ends).
+            <Badge variant="outline" className="max-w-40 justify-start" title={summary}>
+              <span className="min-w-0 truncate">{summary}</span>
             </Badge>
           ) : null}
         </Button>
