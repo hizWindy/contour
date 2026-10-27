@@ -119,7 +119,7 @@ function Section({
 function FactRow({ label, value, fact }: { label: string; value: string; fact: Fact }) {
   return (
     <tr className="border-b last:border-0">
-      <th scope="row" className="py-2 pr-4 text-left font-semibold whitespace-nowrap">
+      <th scope="row" className="py-2 pr-4 text-left font-semibold sm:whitespace-nowrap">
         {label}
       </th>
       <td className="py-2 pr-4">{value}</td>
@@ -141,58 +141,61 @@ function Facts({ lead }: { lead: LeadDetail }) {
     typeof fact.value === 'string' && fact.value !== '' ? fact.value : 'Not known'
   return (
     <Section title="Facts">
-      <table className="w-full text-ui">
-        <caption className="sr-only">Facts about {lead.company}, with their sources</caption>
-        <tbody>
-          <tr className="border-b">
-            <th scope="row" className="py-2 pr-4 text-left font-semibold">
-              Website
-            </th>
-            <td className="py-2 pr-4" colSpan={3}>
-              {websiteHref(facts.website.value) ? (
-                <SourceLink
-                  href={websiteHref(facts.website.value)}
-                  label={String(facts.website.value)}
-                />
-              ) : (
-                'Not known'
-              )}
-            </td>
-          </tr>
-          <FactRow label="City" value={text(facts.city)} fact={facts.city} />
-          <FactRow label="Industry" value={text(facts.industry)} fact={facts.industry} />
-          <FactRow label="Owner" value={text(facts.owner)} fact={facts.owner} />
-          <FactRow
-            label="Staff in the city"
-            value={
-              staff === null
-                ? 'Not known'
-                : `${formatStaff(staff)}${facts.staff_from_linkedin ? ' on LinkedIn' : ''}`
-            }
-            fact={facts.staff_in_city}
-          />
-          <FactRow
-            label="Office size"
-            value={m2 === null ? 'Not known' : formatM2(m2, lead.office_m2_estimated)}
-            fact={facts.office_m2}
-          />
-          <FactRow
-            label="Local team runs the project"
-            value={yesNo(facts.local_team_runs_project.value)}
-            fact={facts.local_team_runs_project}
-          />
-          <FactRow
-            label="Healthy business"
-            value={yesNo(facts.healthy.value)}
-            fact={facts.healthy}
-          />
-          <FactRow
-            label="Expected move"
-            value={text(facts.expected_move)}
-            fact={facts.expected_move}
-          />
-        </tbody>
-      </table>
+      {/* On a narrow screen the table scrolls inside the card instead of widening the page. */}
+      <div className="-mx-1 overflow-x-auto px-1">
+        <table className="w-full text-ui">
+          <caption className="sr-only">Facts about {lead.company}, with their sources</caption>
+          <tbody>
+            <tr className="border-b">
+              <th scope="row" className="py-2 pr-4 text-left font-semibold">
+                Website
+              </th>
+              <td className="py-2 pr-4" colSpan={3}>
+                {websiteHref(facts.website.value) ? (
+                  <SourceLink
+                    href={websiteHref(facts.website.value)}
+                    label={String(facts.website.value)}
+                  />
+                ) : (
+                  'Not known'
+                )}
+              </td>
+            </tr>
+            <FactRow label="City" value={text(facts.city)} fact={facts.city} />
+            <FactRow label="Industry" value={text(facts.industry)} fact={facts.industry} />
+            <FactRow label="Owner" value={text(facts.owner)} fact={facts.owner} />
+            <FactRow
+              label="Staff in the city"
+              value={
+                staff === null
+                  ? 'Not known'
+                  : `${formatStaff(staff)}${facts.staff_from_linkedin ? ' on LinkedIn' : ''}`
+              }
+              fact={facts.staff_in_city}
+            />
+            <FactRow
+              label="Office size"
+              value={m2 === null ? 'Not known' : formatM2(m2, lead.office_m2_estimated)}
+              fact={facts.office_m2}
+            />
+            <FactRow
+              label="Local team runs the project"
+              value={yesNo(facts.local_team_runs_project.value)}
+              fact={facts.local_team_runs_project}
+            />
+            <FactRow
+              label="Healthy business"
+              value={yesNo(facts.healthy.value)}
+              fact={facts.healthy}
+            />
+            <FactRow
+              label="Expected move"
+              value={text(facts.expected_move)}
+              fact={facts.expected_move}
+            />
+          </tbody>
+        </table>
+      </div>
       {lead.fitout_aud ? (
         <p className="text-muted-foreground">
           Fitout worth about <Money value={lead.fitout_aud} currency="AUD" decimals={0} />, at the

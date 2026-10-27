@@ -1,6 +1,6 @@
 /**
- * One run, live: what it is doing, what it has found, what it has cost against its cap, and the
- * feed of events. Stop asks the run to stop (it says "Stopping." until it has). Resume continues an
+ * One run, live: what it is doing, what it has found, what it has cost against its cap (and where
+ * the money went), the companies it researched, what it was asked to do, and the feed of events. Stop asks the run to stop (it says "Stopping." until it has). Resume continues an
  * interrupted or failed run. Nothing resumes by itself.
  *
  * The numbers come from the live events (`useRunEvents`). The run row (`useRun`) gives the start:
@@ -39,6 +39,7 @@ import type { FeedTone, RunEventsState } from '@/hooks/run-events'
 import { formatDateTime, formatNumber, formatTime, shortId } from '@/lib/format'
 import { isTerminalRunStatus, RESULT_ORDER, RUN_MODE_LABELS } from '@/lib/labels'
 import { cn } from '@/lib/utils'
+import { FunnelLine, RunCompanies, RunCostSplit, RunSetupCard } from './details'
 
 const TONE_ICON: Record<FeedTone, LucideIcon> = {
   info: Info,
@@ -103,6 +104,15 @@ function RunView({ runId, run }: { runId: string; run: Run }) {
   const stopping = (cancel.isPending || final.cancel_requested_at !== null) && !ended
   const canResume = status === 'interrupted' || status === 'failed'
   const byResult = RESULT_ORDER.filter((result) => (counts.by_result[result] ?? 0) > 0)
+
+  // A company finished: the list of companies and the cost split read it again.
+  const researched = counts.researched
+  useEffect(() => {
+    if (researched > 0) {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.leads.lists() })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.searches.all })
+    }
+  }, [researched, queryClient])
 
   return (
     <>
@@ -182,6 +192,7 @@ function RunView({ runId, run }: { runId: string; run: Run }) {
                 <Stat label="Skipped" value={formatNumber(counts.skipped)} />
                 <Stat label="Failed" value={formatNumber(counts.failed)} />
               </dl>
+              <FunnelLine counts={counts} />
               {byResult.length > 0 ? (
                 <ul aria-label="Results so far" className="flex flex-wrap gap-2">
                   {byResult.map((result) => (
@@ -203,6 +214,8 @@ function RunView({ runId, run }: { runId: string; run: Run }) {
               ) : null}
             </CardContent>
           </Card>
+
+          <RunCompanies runId={runId} />
 
           <Card>
             <CardHeader>
@@ -265,8 +278,10 @@ function RunView({ runId, run }: { runId: string; run: Run }) {
                 />
                 {ended ? 'Finished' : CONNECTION_WORDS[connection]}
               </p>
+              <RunCostSplit runId={runId} researched={counts.researched} />
             </CardContent>
           </Card>
+          <RunSetupCard run={final} />
           <Card>
             <CardContent className="flex flex-col gap-2 pt-6">
               <Button asChild variant="outline">

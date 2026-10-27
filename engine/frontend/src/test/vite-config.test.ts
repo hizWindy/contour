@@ -42,6 +42,18 @@ describe('vite.config.ts', () => {
     expect(config.build?.assetsInlineLimit).toBe(0)
   })
 
+  it('pre-bundles the libraries only lazy pages use, so a page never meets "Outdated Optimize Dep"', () => {
+    expect(config.optimizeDeps?.include).toEqual(
+      expect.arrayContaining([
+        'leaflet',
+        'react-leaflet',
+        'react-day-picker',
+        'react-resizable-panels',
+        'recharts',
+      ]),
+    )
+  })
+
   it('sends frame-ancestors as a real header', () => {
     expect(server?.headers?.['Content-Security-Policy']).toBe("frame-ancestors 'none'")
     expect(server?.headers?.['X-Frame-Options']).toBe('DENY')

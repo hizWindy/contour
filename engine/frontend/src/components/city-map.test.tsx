@@ -145,6 +145,11 @@ describe('CityMap', () => {
     }
   })
 
+  it('keeps its layers inside the map, so a side panel or dialog opens above it', () => {
+    renderWithProviders(<CityMap label="Leads on the map" />)
+    expect(screen.getByRole('region', { name: 'Leads on the map' })).toHaveClass('isolate')
+  })
+
   it('credits OpenStreetMap', () => {
     const { container } = renderWithProviders(<CityMap label="Map" />)
     expect(container.querySelector('.leaflet-control-attribution')).toHaveTextContent(

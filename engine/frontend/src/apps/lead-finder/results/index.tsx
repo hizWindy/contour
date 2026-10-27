@@ -4,8 +4,8 @@
  * - The filters, sort, page, view and the open lead live in the address (`params.ts`), so a link
  *   or Back shows the same list. A filter change goes back to page 1.
  * - Table (F3a): sort by any column header, compact rows, CSV download of what matches.
- * - Map (F3b): the list and the map side by side, with a divider to drag. Pins are coloured by
- *   result and sit at an approximate place.
+ * - Map (F3b): the list and the map side by side, with a divider to drag (on a phone, the map
+ *   above the list). Pins are coloured by result and sit at an approximate place.
  * - A click on a row or a pin opens the lead card in a side panel. J and K move through the rows,
  *   Enter opens the active one and Esc closes the panel.
  */
@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/button'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { saveFile } from '@/lib/download'
+import { useIsMobile } from '@/lib/use-mobile'
 import { formatNumber, pluralise } from '@/lib/format'
 import { toastProblem } from '@/lib/problems'
 import { LIST_COLUMNS, TABLE_COLUMNS } from './columns'
@@ -106,6 +107,7 @@ export default function ResultsPage() {
   const [compact, setCompact] = useState(savedCompact)
   const [active, setActive] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
+  const isMobile = useIsMobile()
 
   const go = (next: ResultsState): void => {
     setParams(writeResults(next), { replace: true, preventScrollReset: true })
@@ -158,6 +160,23 @@ export default function ResultsPage() {
   }
 
   const page: LeadPage | undefined = leads.data
+  const mapPart = (
+    <div className="flex flex-col gap-2">
+      {map.error ? (
+        <ErrorState error={map.error} context="The map couldn't be loaded." />
+      ) : (
+        <CityMap
+          label="Leads on the map"
+          points={map.data?.items ?? []}
+          activePointId={activeRow}
+          onSelectPoint={openLead}
+          approximate
+          fitToPoints
+        />
+      )}
+      <MapNote map={map.data} />
+    </div>
+  )
   const table = (columns: typeof TABLE_COLUMNS, label: string, dense: boolean) => (
     <DataTable
       label={label}
@@ -245,34 +264,28 @@ export default function ResultsPage() {
           onRetry={() => void leads.refetch()}
         />
       ) : mapView ? (
-        <ResizablePanelGroup
-          orientation="horizontal"
-          className="min-h-[36rem] rounded-lg border bg-card"
-        >
-          <ResizablePanel defaultSize="42%" minSize="25%">
-            <div className="h-full overflow-auto p-3">
-              {table(LIST_COLUMNS, 'Leads beside the map', true)}
-            </div>
-          </ResizablePanel>
-          <ResizableHandle withHandle aria-label="Resize the list and the map" />
-          <ResizablePanel defaultSize="58%" minSize="30%">
-            <div className="flex h-full flex-col gap-2 p-3">
-              {map.error ? (
-                <ErrorState error={map.error} context="The map couldn't be loaded." />
-              ) : (
-                <CityMap
-                  label="Leads on the map"
-                  points={map.data?.items ?? []}
-                  activePointId={activeRow}
-                  onSelectPoint={openLead}
-                  approximate
-                  fitToPoints
-                />
-              )}
-              <MapNote map={map.data} />
-            </div>
-          </ResizablePanel>
-        </ResizablePanelGroup>
+        isMobile ? (
+          // A phone has no room for two columns: the map comes first, then the list.
+          <div className="flex flex-col gap-4">
+            {mapPart}
+            {table(LIST_COLUMNS, 'Leads beside the map', true)}
+          </div>
+        ) : (
+          <ResizablePanelGroup
+            orientation="horizontal"
+            className="min-h-[36rem] rounded-lg border bg-card"
+          >
+            <ResizablePanel defaultSize="42%" minSize="25%">
+              <div className="h-full overflow-auto p-3">
+                {table(LIST_COLUMNS, 'Leads beside the map', true)}
+              </div>
+            </ResizablePanel>
+            <ResizableHandle withHandle aria-label="Resize the list and the map" />
+            <ResizablePanel defaultSize="58%" minSize="30%">
+              <div className="h-full p-3">{mapPart}</div>
+            </ResizablePanel>
+          </ResizablePanelGroup>
+        )
       ) : (
         table(TABLE_COLUMNS, 'Leads', compact)
       )}

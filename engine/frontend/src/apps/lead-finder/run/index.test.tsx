@@ -60,7 +60,11 @@ interface Seen {
   posts: string[]
 }
 
-function mockApi(current: () => Run, page: Run[] = [current()]): Seen {
+function mockApi(
+  current: () => Run,
+  page: Run[] = [current()],
+  extra: Record<string, unknown> = {},
+): Seen {
   const seen: Seen = { posts: [] }
   vi.stubGlobal(
     'fetch',
@@ -81,6 +85,9 @@ function mockApi(current: () => Run, page: Run[] = [current()]): Seen {
       if (path === '/api/v1/runs') {
         return Promise.resolve(Response.json({ total: page.length, items: page }))
       }
+      if (path in extra) {
+        return Promise.resolve(Response.json(extra[path]))
+      }
       return Promise.resolve(Response.json({ title: 'Not found', status: 404 }, { status: 404 }))
     }),
   )
@@ -91,6 +98,7 @@ function renderRun() {
   return renderWithProviders(
     <Routes>
       <Route path="/runs/:runId" element={<RunPage />} />
+      <Route path="/leads/:leadId" element={<p>The lead card</p>} />
     </Routes>,
     { route: `/runs/${RUN_ID}` },
   )
@@ -180,6 +188,81 @@ describe('the run page', () => {
 })
 
 describe('the run list', () => {
+  it('shows what a finished run looked for, its companies and where the money went', async () => {
+    const finished = run({
+      mode: 'discovery',
+      status: 'done',
+      params: { cities: ['Melbourne', 'Perth'], triggers: ['lease_ending'], since_days: 30 },
+      cost_usd: '0.900000',
+      claude_requests: 3,
+      finished_at: '2026-10-26T04:13:29Z',
+      counts: {
+        ...COUNTS,
+        slices: 2,
+        slices_done: 2,
+        candidates: 3,
+        unique: 2,
+        chosen: 2,
+        researched: 2,
+        by_result: { director_review: 1, watch: 1 },
+      },
+    })
+    const lead = (id: string, company: string, result: string, score: number, cost: string) => ({
+      id,
+      company,
+      result,
+      score,
+      city: 'Perth',
+      cost_usd: cost,
+    })
+    mockApi(() => finished, [finished], {
+      '/api/v1/lead-finder/leads': {
+        total: 2,
+        items: [
+          lead('11111111-2222-3333-4444-555555555555', 'KBR', 'director_review', 76, '0.36'),
+          lead('22222222-2222-3333-4444-555555555555', 'UGL', 'watch', 68, '0.30'),
+        ],
+      },
+      '/api/v1/searches': {
+        total: 3,
+        items: [
+          { step: 'discover:lease_ending:Melbourne', cost_usd: '0.24' },
+          { step: 'search:property', cost_usd: '0.40' },
+          { step: 'extract', cost_usd: '0.26' },
+        ],
+      },
+      '/api/v1/lead-finder/run-options': {
+        triggers: [{ id: 'lease_ending', label: 'Lease ending in 1 to 3 years' }],
+      },
+    })
+    const { user } = renderRun()
+
+    const companies = await screen.findByRole('table', { name: 'Companies this run researched' })
+    expect(await within(companies).findByText('KBR')).toBeInTheDocument()
+    expect(within(companies).getByText('UGL')).toBeInTheDocument()
+
+    const money = await screen.findByLabelText('Where the money went')
+    expect(within(money).getByText(/Finding companies \(1 request\)/)).toBeInTheDocument()
+    expect(within(money).getByText('US$0.24')).toBeInTheDocument()
+    expect(within(money).getByText('US$0.66')).toBeInTheDocument()
+    expect(within(money).getByText('US$0.33')).toBeInTheDocument()
+
+    const setup = screen.getByLabelText('What the run was asked to do')
+    expect(within(setup).getByText('Melbourne, Perth')).toBeInTheDocument()
+    expect(await within(setup).findByText('Lease ending in 1 to 3 years')).toBeInTheDocument()
+    expect(
+      within(screen.getByLabelText('When it ran')).getByText('13 min 28 s'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        '2 searches of 2, 3 finds, 2 companies after merging, 2 chosen to research.',
+      ),
+    ).toBeInTheDocument()
+
+    await user.click(within(companies).getByRole('button', { name: 'KBR' }))
+    expect(await screen.findByText('The lead card')).toBeInTheDocument()
+  })
+
   it('lists the runs and opens one', async () => {
     mockApi(() =>
       run({ status: 'done', cost_usd: '3.210000', counts: { ...COUNTS, researched: 5 } }),

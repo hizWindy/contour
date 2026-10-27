@@ -92,6 +92,23 @@ export default defineConfig({
     headers: securityHeaders,
     proxy: apiProxy,
   },
+  optimizeDeps: {
+    // Pre-bundle, at start-up, the libraries that only the lazily loaded pages use. Without this,
+    // the dev server finds them the first time such a page opens, bundles them again, and the
+    // page's code it had already handed out goes stale: the browser gets "504 Outdated Optimize
+    // Dep" and the page cannot load until the server is restarted.
+    include: [
+      'leaflet',
+      'react-leaflet',
+      'react-day-picker',
+      'react-resizable-panels',
+      'recharts',
+      'cmdk',
+      'react-hook-form',
+      '@hookform/resolvers/zod',
+      'zod',
+    ],
+  },
   preview: {
     port: PORT,
     strictPort: true,

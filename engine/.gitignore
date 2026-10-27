@@ -15,3 +15,6 @@ __pycache__/
 # Website (Phase 4)
 node_modules/
 dist/
+
+# Output of the dev servers started in the background
+.dev-logs/

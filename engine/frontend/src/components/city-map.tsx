@@ -44,37 +44,51 @@ export interface CityMapProps {
   onSelectPoint?: (id: string) => void
   /** Says under the map that pins are approximate (they are: a suburb's or a city's centre). */
   approximate?: boolean
-  /** Zooms to the pins whenever they change, so a filter for one city shows that city. */
+  /**
+   * Zooms to the pins whenever they change, so a filter for one city shows that city. Without
+   * it (or with no pins), the map fits the cities.
+   */
   fitToPoints?: boolean
   center?: [number, number]
   zoom?: number
   className?: string
 }
 
-/** Inside the map: zooms to the pins when the set of pins changes (not when one is picked). */
-function FitToPoints({ points }: { points: readonly MapPoint[] }) {
+type Spot = [number, number]
+
+/**
+ * Inside the map: shows every spot (the pins, or the cities when there are none), with room for
+ * the labels that sit to the right of each city. It fits again when the spots change (not when
+ * one is picked) and when the map's box changes size: a narrower window, a dragged divider. So
+ * the cities are never cut off at the edge, at any width.
+ */
+function FitView({ spots, labels, maxZoom }: { spots: Spot[]; labels: boolean; maxZoom: number }) {
   const map = useMap()
-  const pins = points.map((point) => point.id).join(',')
+  const key = spots.map(([lat, lng]) => `${lat.toFixed(4)},${lng.toFixed(4)}`).join(';')
   const fit = useEffectEvent(() => {
+    const size = map.getSize()
     // A map that has no size yet (a hidden tab, a test page) can't work out a zoom.
-    if (points.length === 0 || map.getSize().x === 0) {
+    if (spots.length === 0 || size.x === 0) {
       return
     }
-    const bounds = latLngBounds(points.map((point) => [point.lat, point.lng] as [number, number]))
-    map.fitBounds(bounds, { padding: [32, 32], maxZoom: 12 })
+    // Most city labels sit to the right of their circle (the eastmost one points left, inward):
+    // keep up to a quarter of the width free for them.
+    const labelRoom = labels ? Math.min(110, Math.round(size.x / 4)) : 32
+    map.fitBounds(latLngBounds(spots), {
+      paddingTopLeft: [32, 32],
+      paddingBottomRight: [labelRoom, 32],
+      maxZoom,
+      // No sliding: the map opens already in place, and a resize doesn't make it drift.
+      animate: false,
+    })
   })
   useEffect(() => {
     fit()
-  }, [pins])
-  return null
-}
-
-/** Leaflet only notices the window changing size. A dragged divider resizes just the map, so tell it. */
-function TrackSize() {
-  const map = useMap()
+  }, [key])
   useEffect(() => {
     const observer = new ResizeObserver(() => {
       map.invalidateSize()
+      fit()
     })
     observer.observe(map.getContainer())
     return () => {
@@ -103,22 +117,39 @@ export function CityMap({
   className,
 }: CityMapProps) {
   const picked = new Set(selectedCities)
+  const eastmost = cities.length > 1 ? Math.max(...cities.map((city) => city.lng)) : null
   return (
     <figure data-slot="city-map" className={cn('flex flex-col gap-3', className)}>
       <div
         role="region"
         aria-label={label}
-        className="relative h-[28rem] overflow-hidden rounded-lg border bg-muted"
+        // `isolate` keeps Leaflet's own layers (z-index up to 1000) inside the map, so a side
+        // panel, a dialog or a menu always opens above the map, never under it.
+        className="relative isolate h-80 overflow-hidden rounded-lg border bg-muted sm:h-[28rem]"
       >
-        <MapContainer center={center} zoom={zoom} scrollWheelZoom className="size-full">
+        <MapContainer
+          center={center}
+          zoom={zoom}
+          // Half steps, so the fit to the cities is close at any width (tiles stay sharp enough).
+          zoomSnap={0.5}
+          scrollWheelZoom
+          className="size-full"
+        >
           <TileLayer
             url={TILES}
             attribution={CREDIT}
             maxZoom={18}
             referrerPolicy={TILE_REFERRER_POLICY}
           />
-          <TrackSize />
-          {fitToPoints ? <FitToPoints points={points} /> : null}
+          {fitToPoints && points.length > 0 ? (
+            <FitView
+              spots={points.map((point) => [point.lat, point.lng])}
+              labels={false}
+              maxZoom={12}
+            />
+          ) : (
+            <FitView spots={cities.map((city) => [city.lat, city.lng])} labels maxZoom={6} />
+          )}
           {cities.map((city) => {
             const selected = picked.has(city.name)
             return (
@@ -144,7 +175,12 @@ export function CityMap({
                     : undefined
                 }
               >
-                <Tooltip permanent direction="right" offset={[14, 0]}>
+                <Tooltip
+                  permanent
+                  // The eastmost city's label points inward, so it never runs off the map.
+                  direction={city.lng === eastmost ? 'left' : 'right'}
+                  offset={city.lng === eastmost ? [-14, 0] : [14, 0]}
+                >
                   {cityWords(city)}
                 </Tooltip>
               </CircleMarker>
