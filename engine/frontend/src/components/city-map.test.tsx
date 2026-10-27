@@ -134,6 +134,17 @@ describe('CityMap', () => {
     expect(container.querySelector('img[src="x"]')).toBeNull()
   })
 
+  it("asks for tiles with the site's origin, which OpenStreetMap needs, and never the page path", async () => {
+    const { container } = renderWithProviders(<CityMap label="Map" />)
+    await waitFor(() => {
+      expect(container.querySelectorAll('img.leaflet-tile').length).toBeGreaterThan(0)
+    })
+    // Leaflet sets the image's referrerPolicy property (jsdom doesn't mirror it as an attribute).
+    for (const tile of container.querySelectorAll<HTMLImageElement>('img.leaflet-tile')) {
+      expect(tile.referrerPolicy).toBe('strict-origin-when-cross-origin')
+    }
+  })
+
   it('credits OpenStreetMap', () => {
     const { container } = renderWithProviders(<CityMap label="Map" />)
     expect(container.querySelector('.leaflet-control-attribution')).toHaveTextContent(

@@ -23,6 +23,13 @@ const AUSTRALIA: [number, number] = [-29.5, 134]
 const TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
 // Plain text on purpose: Leaflet writes the credit as HTML, so it holds no markup.
 const CREDIT = '© OpenStreetMap contributors'
+/*
+  OpenStreetMap's tile servers block a website that sends no Referer (its tile usage policy), and
+  show an "Access blocked" tile instead. The site's own Referrer-Policy (same-origin) sends none to
+  other sites, so the tiles ask for the origin only: "http://localhost:5173/", never the page's
+  path, so no lead id or filter leaves the site.
+*/
+const TILE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
 
 export interface CityMapProps {
   /** What the map shows, for screen readers: "Cities to search". */
@@ -104,7 +111,12 @@ export function CityMap({
         className="relative h-[28rem] overflow-hidden rounded-lg border bg-muted"
       >
         <MapContainer center={center} zoom={zoom} scrollWheelZoom className="size-full">
-          <TileLayer url={TILES} attribution={CREDIT} maxZoom={18} />
+          <TileLayer
+            url={TILES}
+            attribution={CREDIT}
+            maxZoom={18}
+            referrerPolicy={TILE_REFERRER_POLICY}
+          />
           <TrackSize />
           {fitToPoints ? <FitToPoints points={points} /> : null}
           {cities.map((city) => {
