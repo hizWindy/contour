@@ -45,7 +45,9 @@ describe('the router', () => {
   ])('shows the page at %s with its title and breadcrumbs', async (path, title, trail) => {
     renderAt(path)
 
-    expect(await screen.findByRole('heading', { level: 1, name: title })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { level: 1, name: title }, { timeout: LAZY }),
+    ).toBeInTheDocument()
     expect(crumbs()).toEqual(trail)
     expect(document.title).toBe(`${trail.at(-1) ?? ''} - Lead Finder`)
   })
@@ -130,7 +132,7 @@ describe('the router', () => {
 
   it('has a skip link to the page content, before everything else', async () => {
     renderAt('/results')
-    await screen.findByRole('heading', { level: 1, name: 'Results' })
+    await screen.findByRole('heading', { level: 1, name: 'Results' }, { timeout: LAZY })
     const skip = screen.getByRole('link', { name: 'Skip to the page' })
     const target = document.getElementById(skip.getAttribute('href')?.slice(1) ?? '')
     expect(target).not.toBeNull()

@@ -5,6 +5,7 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query'
+import { melbourneDate } from '@/lib/format'
 import { api, unwrap, type ApiProblem } from '../client'
 import { queryKeys } from '../query'
 import type { LeadDetail, LeadPatch, QueryOf, Run } from '../types'
@@ -37,6 +38,29 @@ export function useLeadMap(query: QueryOf<'lead_map'> = {}) {
       unwrap(await api.GET('/lead-finder/leads/map', { params: { query }, signal })),
     placeholderData: keepPreviousData,
   })
+}
+
+export interface LeadsCsv {
+  blob: Blob
+  filename: string
+}
+
+/**
+ * The leads that match, as a CSV file (`GET /leads/export`, at most 2000 rows). It goes through
+ * fetch, not a link, so a problem (a 413 `too_many_rows`) is thrown as an `ApiProblem` and can be
+ * shown as a toast. The file name comes from the backend, or `leads-YYYY-MM-DD.csv`.
+ */
+export async function fetchLeadsCsv(query: QueryOf<'export_leads'> = {}): Promise<LeadsCsv> {
+  const result = await api.GET('/lead-finder/leads/export', { params: { query }, parseAs: 'blob' })
+  const blob = unwrap(result)
+  return { blob, filename: csvName(result.response.headers.get('content-disposition')) }
+}
+
+/** The file name in a `Content-Disposition` header, kept to safe characters. */
+export function csvName(header: string | null): string {
+  const named = /filename="?([^";]+)"?/i.exec(header ?? '')?.[1] ?? ''
+  const safe = named.replace(/[^\w.-]/g, '').replace(/^\.+/, '')
+  return safe.endsWith('.csv') && safe.length > 4 ? safe : `leads-${melbourneDate()}.csv`
 }
 
 /** One lead with its card. The key is `queryKeys.leads.detail(leadId)`. */

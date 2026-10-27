@@ -9,7 +9,9 @@
  * icon and a word per result, and the city buttons under the map say which cities are picked. The
  * buttons are also the keyboard way to pick a city, since a map pin can't take focus.
  */
-import { CircleMarker, MapContainer, TileLayer, Tooltip } from 'react-leaflet'
+import { latLngBounds } from 'leaflet'
+import { useEffect, useEffectEvent } from 'react'
+import { CircleMarker, MapContainer, TileLayer, Tooltip, useMap } from 'react-leaflet'
 import type { CityOption, MapPoint } from '@/api/types'
 import { ResultBadge } from '@/components/result-badge'
 import { Toggle } from '@/components/ui/toggle'
@@ -35,9 +37,44 @@ export interface CityMapProps {
   onSelectPoint?: (id: string) => void
   /** Says under the map that pins are approximate (they are: a suburb's or a city's centre). */
   approximate?: boolean
+  /** Zooms to the pins whenever they change, so a filter for one city shows that city. */
+  fitToPoints?: boolean
   center?: [number, number]
   zoom?: number
   className?: string
+}
+
+/** Inside the map: zooms to the pins when the set of pins changes (not when one is picked). */
+function FitToPoints({ points }: { points: readonly MapPoint[] }) {
+  const map = useMap()
+  const pins = points.map((point) => point.id).join(',')
+  const fit = useEffectEvent(() => {
+    // A map that has no size yet (a hidden tab, a test page) can't work out a zoom.
+    if (points.length === 0 || map.getSize().x === 0) {
+      return
+    }
+    const bounds = latLngBounds(points.map((point) => [point.lat, point.lng] as [number, number]))
+    map.fitBounds(bounds, { padding: [32, 32], maxZoom: 12 })
+  })
+  useEffect(() => {
+    fit()
+  }, [pins])
+  return null
+}
+
+/** Leaflet only notices the window changing size. A dragged divider resizes just the map, so tell it. */
+function TrackSize() {
+  const map = useMap()
+  useEffect(() => {
+    const observer = new ResizeObserver(() => {
+      map.invalidateSize()
+    })
+    observer.observe(map.getContainer())
+    return () => {
+      observer.disconnect()
+    }
+  }, [map])
+  return null
 }
 
 function cityWords(city: CityOption): string {
@@ -53,6 +90,7 @@ export function CityMap({
   activePointId = null,
   onSelectPoint,
   approximate = false,
+  fitToPoints = false,
   center = AUSTRALIA,
   zoom = 4,
   className,
@@ -67,6 +105,8 @@ export function CityMap({
       >
         <MapContainer center={center} zoom={zoom} scrollWheelZoom className="size-full">
           <TileLayer url={TILES} attribution={CREDIT} maxZoom={18} />
+          <TrackSize />
+          {fitToPoints ? <FitToPoints points={points} /> : null}
           {cities.map((city) => {
             const selected = picked.has(city.name)
             return (
