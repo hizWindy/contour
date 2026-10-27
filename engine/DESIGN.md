@@ -43,7 +43,7 @@ Olive and Terracotta come from Contour's site. Ochre is a muted step of Contour'
 - Text is Ink on Stone, or Stone on Ink. All text passes 4.5:1 contrast: Ink on the page is about 14:1, quieter text about 6.5:1, and light text on Navy about 11:1.
 - Form field borders use `#8F937F`, which passes 3:1, so fields are easy to see. Plain dividers can be lighter.
 - One accent, Navy. No gradients.
-- **Dark mode** follows your computer's setting. Ink becomes the background and Stone the text. Navy steps up to `#8EA5C3`, so it stays visible.
+- **Dark mode** is a choice. The site opens in light colours. The Ctrl+K menu switches to dark, or to follow your computer's setting, and the browser remembers it. In dark mode, Ink becomes the background and Stone the text. Navy steps up to `#8EA5C3`, so it stays visible.
 
 **Results and labels**
 

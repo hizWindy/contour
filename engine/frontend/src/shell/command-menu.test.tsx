@@ -71,7 +71,7 @@ describe('the command menu', () => {
     await user.keyboard('{Control>}k{/Control}')
     await user.click(await screen.findByRole('option', { name: "Follow the computer's colours" }))
     expect(document.documentElement).not.toHaveAttribute('data-theme')
-    expect(window.localStorage.getItem('lead-finder-theme')).toBeNull()
+    expect(window.localStorage.getItem('lead-finder-theme')).toBe('system')
   })
 
   it('says so when nothing matches', async () => {

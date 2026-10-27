@@ -43,8 +43,8 @@ describe('index.html', () => {
     expect(directives().has('frame-ancestors')).toBe(false)
   })
 
-  it('has a language, the title "Lead Finder" and no em dash', () => {
-    expect(html).toMatch(/<html lang="en">/)
+  it('has a language, opens light, has the title "Lead Finder" and no em dash', () => {
+    expect(html).toMatch(/<html lang="en" data-theme="light">/)
     expect(html).toMatch(/<title>Lead Finder<\/title>/)
     expect(html).not.toContain('\u2014')
   })

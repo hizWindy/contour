@@ -7,8 +7,9 @@
   (src/test/contrast.test.ts) reads this file and checks every text pair.
 
   Dark mode: every colour is written once as light-dark(LIGHT, DARK).
-    - With no override, the page follows the computer's setting (color-scheme: light dark).
-    - <html data-theme="light"> or <html data-theme="dark"> forces one of them.
+    - <html data-theme="light"> or <html data-theme="dark"> forces one of them. The site opens
+      with "light" (index.html); src/shell/theme.ts changes it from the command menu.
+    - With no data-theme, the page follows the computer's setting (color-scheme: light dark).
 
   Size, font-family and weight tokens have their own names (--size-ui, --font-family-text) on
   purpose. Tailwind's theme names (--text-*, --font-*) are wired to them in index.css, and the two

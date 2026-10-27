@@ -1,7 +1,8 @@
 /**
- * Light or dark. The colours follow the computer's setting by themselves (tokens.css). A person
- * can also pick one from the command menu: that sets `data-theme` on <html>, which the tokens and
- * the `dark:` variant obey, and the choice is kept in this browser.
+ * Light or dark. The site opens light (index.html starts with `data-theme="light"`). A person can
+ * pick dark, or follow the computer's setting, from the command menu: that sets or removes
+ * `data-theme` on <html>, which the tokens and the `dark:` variant obey, and the choice is kept in
+ * this browser.
  */
 
 export type ThemeChoice = 'light' | 'dark' | 'system'
@@ -12,13 +13,13 @@ function isChoice(value: unknown): value is ThemeChoice {
   return value === 'light' || value === 'dark' || value === 'system'
 }
 
-/** The saved choice, or "system". Storage that is blocked or holds junk counts as "system". */
+/** The saved choice, or "light". Storage that is blocked or holds junk counts as "light". */
 export function readThemeChoice(): ThemeChoice {
   try {
     const saved = window.localStorage.getItem(STORAGE_KEY)
-    return isChoice(saved) ? saved : 'system'
+    return isChoice(saved) ? saved : 'light'
   } catch {
-    return 'system'
+    return 'light'
   }
 }
 
@@ -31,11 +32,8 @@ export function applyTheme(choice: ThemeChoice): void {
     root.setAttribute('data-theme', choice)
   }
   try {
-    if (choice === 'system') {
-      window.localStorage.removeItem(STORAGE_KEY)
-    } else {
-      window.localStorage.setItem(STORAGE_KEY, choice)
-    }
+    // "system" is saved too: with nothing saved, the site opens light.
+    window.localStorage.setItem(STORAGE_KEY, choice)
   } catch {
     // Storage can be blocked (a private window). The choice still holds for this visit.
   }
