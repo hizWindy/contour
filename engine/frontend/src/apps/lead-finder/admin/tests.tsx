@@ -156,8 +156,7 @@ export default function AdminTestsTab() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <p className="max-w-prose text-ui text-muted-foreground">
-          The test set is 10 public companies. Run it after a change to a prompt or a rule, and keep
-          the change only if the score holds.
+          Run it after a change to a prompt or a rule, and keep the change only if the score holds.
         </p>
         <AlertDialog>
           <AlertDialogTrigger asChild>

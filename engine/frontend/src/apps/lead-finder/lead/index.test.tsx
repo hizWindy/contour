@@ -77,6 +77,15 @@ describe('the lead page', () => {
     expect(screen.getByText(/A summary of each page/)).toBeInTheDocument()
   })
 
+  it('has a back button above the title', async () => {
+    mockApi(makeLead())
+    renderLead()
+    const title = await screen.findByRole('heading', { level: 1, name: 'Acme Software' })
+    // Opened directly, so there is no page to go back to: it links to the list and says so.
+    const back = screen.getByRole('link', { name: 'Back to Results' })
+    expect(back.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
   it('shows a hostile note as text and never links to javascript', async () => {
     mockApi(makeLead())
     const { container } = renderLead()

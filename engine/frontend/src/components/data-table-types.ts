@@ -9,5 +9,7 @@ declare module '@tanstack/react-table' {
     align?: 'left' | 'right'
     /** Extra classes for the header cell and for the cells of this column, like a width. */
     className?: string
+    /** Stays in view on the left while the rest of the table scrolls sideways (the name). */
+    sticky?: boolean
   }
 }

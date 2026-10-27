@@ -13,7 +13,7 @@ interface Row {
 
 const help = createColumnHelper<Row>()
 const columns = [
-  help.accessor('company', { header: 'Company', enableSorting: false }),
+  help.accessor('company', { header: 'Company', enableSorting: false, meta: { sticky: true } }),
   help.accessor('score', { header: 'Score', meta: { align: 'right' } }),
 ]
 
@@ -188,5 +188,46 @@ describe('DataTable', () => {
     const field = screen.getByRole('textbox', { name: 'Search' })
     fireEvent.keyDown(field, { key: 'j' })
     expect(bodyRows().every((row) => row.getAttribute('aria-selected') === 'false')).toBe(true)
+  })
+
+  it('keeps the header row and the sticky column in place while the box scrolls', () => {
+    renderWithProviders(<Harness />)
+    const table = screen.getByRole('table', { name: 'Leads' })
+    const [companyHead, scoreHead] = within(table).getAllByRole('columnheader')
+    // Every header cell sticks to the top of the box; the sticky column's also to the left.
+    expect(companyHead).toHaveClass('sticky', 'top-0', 'sm:left-0')
+    expect(scoreHead).toHaveClass('sticky', 'top-0')
+    expect(scoreHead).not.toHaveClass('sm:left-0')
+    const rows = within(table).getAllByRole('row').slice(1)
+    for (const row of rows) {
+      const [name, score] = within(row).getAllByRole('cell')
+      expect(name).toHaveClass('sm:sticky', 'sm:left-0')
+      // Opaque, so the cells that scroll past it never show through.
+      expect(name).toHaveClass('bg-card')
+      expect(score).not.toHaveClass('sm:sticky')
+    }
+  })
+
+  it('scrolls inside its own box, which is as tall as the screen allows', () => {
+    renderWithProviders(<Harness />)
+    const box = screen.getByRole('table', { name: 'Leads' }).closest('[data-slot=table-container]')
+    expect(box).toHaveClass('overflow-auto')
+    // jsdom's screen is 768px tall and the box starts at 0, less room for the page buttons.
+    expect((box as HTMLElement).style.maxHeight).toMatch(/^\d+px$/)
+    expect(Number.parseInt((box as HTMLElement).style.maxHeight, 10)).toBeGreaterThanOrEqual(288)
+  })
+
+  it('lets the table be as tall as its rows when fill is turned off', () => {
+    renderWithProviders(
+      <DataTable
+        label="Leads"
+        columns={columns}
+        data={ROWS}
+        getRowId={(row) => row.id}
+        fill={false}
+      />,
+    )
+    const box = screen.getByRole('table', { name: 'Leads' }).closest('[data-slot=table-container]')
+    expect((box as HTMLElement).style.maxHeight).toBe('')
   })
 })

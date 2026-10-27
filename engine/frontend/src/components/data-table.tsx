@@ -10,6 +10,10 @@
  * - One row can be active (the Navy selection). Clicking a row makes it active and opens it. With
  *   `onActiveRowChange`, J and K move the active row, Enter opens it and Esc calls `onEscape`
  *   (`useListKeyboard`).
+ * - The table scrolls inside its own box, up and down and sideways, so the page doesn't have to:
+ *   the box fills the screen from where it starts down to the page buttons (`fill`). The header
+ *   row stays at the top of the box, and a column with `meta: { sticky: true }` stays at the left
+ *   while the others scroll past it. The page buttons stay in view under the box.
  * - Every cell renders React children, so text from the backend is always plain text.
  */
 import {
@@ -21,7 +25,7 @@ import {
   type SortingState,
 } from '@tanstack/react-table'
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, Rows4 } from 'lucide-react'
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Table,
@@ -70,8 +74,53 @@ export interface DataTableProps<TData> {
   empty?: ReactNode
   /** Filters and buttons above the table. */
   toolbar?: ReactNode
+  /**
+   * The box is as tall as the screen allows (at least 18rem), and scrolls inside. Turn it off to
+   * let the table be as tall as its rows.
+   */
+  fill?: boolean
   className?: string
 }
+
+/** The smallest the filled box gets, in pixels, however short the screen. */
+const FILL_MIN_PX = 288
+/** Room kept under the box: the page buttons, the page's bottom padding and a little air. */
+const RESERVE_WITH_PAGER_PX = 96
+const RESERVE_PX = 48
+
+/**
+ * How tall the table's scroll box may be: from where it starts down to the bottom of the screen,
+ * less room for the page buttons. It is worked out from the box's place on the page (not on the
+ * screen), so scrolling the page doesn't change it, and again when the window or the page above it
+ * changes size.
+ */
+function useFillHeight(enabled: boolean, reserve: number) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [maxHeight, setMaxHeight] = useState<number | null>(null)
+  useLayoutEffect(() => {
+    const box = ref.current
+    if (!enabled || !box) {
+      return undefined
+    }
+    const measure = (): void => {
+      const top = box.getBoundingClientRect().top + window.scrollY
+      setMaxHeight(Math.max(FILL_MIN_PX, Math.round(window.innerHeight - top - reserve)))
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    const observer = new ResizeObserver(measure)
+    observer.observe(document.body)
+    return () => {
+      window.removeEventListener('resize', measure)
+      observer.disconnect()
+    }
+  }, [enabled, reserve])
+  return { ref, maxHeight: enabled ? maxHeight : null }
+}
+
+/** A cell that must stay put while the table scrolls: opaque, with the row's tint on top. */
+const STICKY_CELL =
+  'bg-card group-hover/row:bg-[color-mix(in_srgb,var(--muted)_60%,var(--card))] group-data-[state=selected]/row:bg-selected sm:sticky sm:left-0 sm:z-10 sm:after:absolute sm:after:inset-y-0 sm:after:right-0 sm:after:w-px sm:after:bg-border'
 
 const SORT_WORDS = { asc: 'ascending', desc: 'descending' } as const
 
@@ -92,8 +141,13 @@ export function DataTable<TData>({
   loading = false,
   empty,
   toolbar,
+  fill = true,
   className,
 }: DataTableProps<TData>) {
+  const { ref: boxRef, maxHeight } = useFillHeight(
+    fill,
+    page && onPageChange ? RESERVE_WITH_PAGER_PX : RESERVE_PX,
+  )
   const table = useReactTable({
     data: data as TData[],
     columns,
@@ -134,8 +188,13 @@ export function DataTable<TData>({
   return (
     <div data-slot="data-table" className={cn('flex flex-col gap-3', className)}>
       {toolbar ? <div className="flex flex-wrap items-center gap-2">{toolbar}</div> : null}
-      <div className="rounded-lg border bg-card">
-        <Table compact={compact} aria-busy={loading || undefined}>
+      <div className="overflow-hidden rounded-lg border bg-card">
+        <Table
+          compact={compact}
+          aria-busy={loading || undefined}
+          containerRef={boxRef}
+          containerStyle={maxHeight === null ? undefined : { maxHeight }}
+        >
           <TableCaption className="sr-only">{label}</TableCaption>
           <TableHeader>
             {table.getHeaderGroups().map((group) => (
@@ -153,7 +212,14 @@ export function DataTable<TData>({
                       key={header.id}
                       scope="col"
                       aria-sort={canSort ? (sorted ? SORT_WORDS[sorted] : 'none') : undefined}
-                      className={cn(right && 'text-right', meta?.className)}
+                      className={cn(
+                        // The header row stays at the top of the box, over the rows that scroll.
+                        'sticky top-0 z-10 bg-card',
+                        right && 'text-right',
+                        meta?.className,
+                        // The frozen column's header also stays at the left, over its own cells.
+                        meta?.sticky && 'sm:left-0 sm:z-20',
+                      )}
                     >
                       {canSort ? (
                         <button
@@ -223,7 +289,11 @@ export function DataTable<TData>({
                       return (
                         <TableCell
                           key={cell.id}
-                          className={cn(meta?.align === 'right' && 'text-right', meta?.className)}
+                          className={cn(
+                            meta?.align === 'right' && 'text-right',
+                            meta?.className,
+                            meta?.sticky && STICKY_CELL,
+                          )}
                         >
                           {flexRender(cell.column.columnDef.cell, cell.getContext())}
                         </TableCell>

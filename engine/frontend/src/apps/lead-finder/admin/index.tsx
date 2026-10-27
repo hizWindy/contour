@@ -1,13 +1,14 @@
-import { NavLink, Outlet } from 'react-router'
+import { NavLink, Outlet, useLocation } from 'react-router'
 import { PageHeader } from '@/components/page-header'
 import { cn } from '@/lib/utils'
-import { ADMIN_TABS } from '@/shell/nav'
+import { ADMIN_TABS, adminTabAt } from '@/shell/nav'
 
 /**
  * The Admin page: its tabs are links (each tab has its own address, so a tab can be shared and
  * the back button works), and the open tab shows below them.
  */
 export default function AdminPage() {
+  const tab = adminTabAt(useLocation().pathname)
   return (
     <>
       <PageHeader
@@ -33,6 +34,12 @@ export default function AdminPage() {
           </NavLink>
         ))}
       </nav>
+      {/* What this tab is for, under the tabs and above its content, so it changes with the tab. */}
+      {tab?.purpose ? (
+        <p data-slot="admin-purpose" className="max-w-prose text-ui text-muted-foreground">
+          {tab.purpose}
+        </p>
+      ) : null}
       <Outlet />
     </>
   )

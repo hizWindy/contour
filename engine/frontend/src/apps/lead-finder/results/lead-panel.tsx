@@ -22,9 +22,15 @@ export interface LeadPanelProps {
   /** The lead to show, or nothing to close the panel. */
   leadId: string | null
   onClose: () => void
+  /**
+   * A plain click on "Open the full page" calls this with the lead's id, so the list can drop the
+   * panel from its address before the page opens, and Back then lands on the list, not on the list
+   * with the panel open. A click with Ctrl, Shift or the middle button keeps the link's own way.
+   */
+  onOpenFullPage?: (leadId: string) => void
 }
 
-export function LeadPanel({ leadId, onClose }: LeadPanelProps) {
+export function LeadPanel({ leadId, onClose, onOpenFullPage }: LeadPanelProps) {
   // While the panel slides shut, it keeps showing the lead it had.
   const [shown, setShown] = useState(leadId)
   if (leadId !== null && leadId !== shown) {
@@ -53,6 +59,18 @@ export function LeadPanel({ leadId, onClose }: LeadPanelProps) {
           {shown ? (
             <Link
               to={`/leads/${shown}`}
+              onClick={(event) => {
+                const plain =
+                  event.button === 0 &&
+                  !event.ctrlKey &&
+                  !event.metaKey &&
+                  !event.shiftKey &&
+                  !event.altKey
+                if (onOpenFullPage && plain) {
+                  event.preventDefault()
+                  onOpenFullPage(shown)
+                }
+              }}
               className="inline-flex w-fit items-center gap-1 text-ui underline underline-offset-4"
             >
               <ExternalLink aria-hidden="true" className="size-4" />

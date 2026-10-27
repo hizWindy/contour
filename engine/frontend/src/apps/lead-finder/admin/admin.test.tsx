@@ -349,7 +349,10 @@ describe('Admin, Search log', () => {
     expect(await screen.findByText(/Showing the requests of run 0f3c9a2e/)).toBeInTheDocument()
     expect(calls[0]?.search).toContain(`run_id=${RUN_ID}`)
     await user.click(await screen.findByText('search:property'))
-    expect(await screen.findByText('acme lease melbourne')).toBeInTheDocument()
+    // The details open in a side panel, so they never sit below a long table.
+    const panel = await screen.findByRole('dialog', { name: 'search:property' })
+    expect(within(panel).getByText('Acme Software')).toBeInTheDocument()
+    expect(await within(panel).findByText('acme lease melbourne')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /Acme moves/ })).toHaveAttribute(
       'rel',
       'noopener noreferrer nofollow',

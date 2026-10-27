@@ -161,6 +161,40 @@
     border-color: var(--border);
   }
 
+  /*
+    Scrollbars: thin and quiet. The thumb is a soft grey of the text colour (so it fits light and
+    dark) on a see-through track, with no arrow buttons. It is 10px to grab but only 6px to see
+    (a 2px see-through border around it), and a little darker under the pointer. Browsers with the
+    standard properties but not the -webkit- ones (Firefox) get their own thin bar in the same grey.
+  */
+  :root {
+    --scrollbar-thumb: color-mix(in srgb, var(--muted-foreground) 40%, transparent);
+    --scrollbar-thumb-hover: color-mix(in srgb, var(--muted-foreground) 70%, transparent);
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb);
+    background-clip: padding-box;
+    border: 2px solid transparent;
+    border-radius: var(--radius-sm);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--scrollbar-thumb-hover);
+  }
+  @supports not selector(::-webkit-scrollbar) {
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: var(--scrollbar-thumb) transparent;
+    }
+  }
+
   /* A visible 2px Navy ring with a 2px gap on everything you can tab to. */
   :focus-visible {
     outline: var(--focus-width) solid var(--ring);

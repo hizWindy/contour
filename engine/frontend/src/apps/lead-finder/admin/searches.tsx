@@ -1,6 +1,8 @@
 /**
  * Admin, Search log: every Claude request, newest first, with what it cost. `?run_id=` shows one
- * run's requests (the run page links here). A row shows what it searched and the pages it read.
+ * run's requests (the run page links here). The table scrolls inside its own box. A click (or
+ * Enter) on a row opens a side panel with what it searched and the pages it read, so the details
+ * are never hidden below the table.
  */
 import { createColumnHelper } from '@tanstack/react-table'
 import { FileSearch } from 'lucide-react'
@@ -14,7 +16,13 @@ import { ErrorState } from '@/components/error-state'
 import { Money } from '@/components/money'
 import { SourceLink } from '@/components/source-link'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
 import { formatDateTime, formatNumber, shortId } from '@/lib/format'
 
 const PAGE_SIZE = 50
@@ -53,46 +61,39 @@ const columns = [
 
 function Details({ search }: { search: SearchOut }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-section font-semibold">
-          {search.step}: {search.subject ?? 'no subject'}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="grid gap-4 text-ui md:grid-cols-2">
-        <div className="flex flex-col gap-1">
-          <p className="font-semibold">What it searched</p>
-          {search.queries.length === 0 ? (
-            <p className="text-muted-foreground">No web search.</p>
-          ) : (
-            <ul className="list-disc pl-5">
-              {search.queries.map((query, index) => (
-                <li key={`${query}-${index}`}>{query}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-        <div className="flex flex-col gap-1">
-          <p className="font-semibold">Pages it read</p>
-          {search.sources.length === 0 ? (
-            <p className="text-muted-foreground">None.</p>
-          ) : (
-            <ul className="flex flex-col gap-1">
-              {search.sources.map((source) => (
-                <li key={source.url}>
-                  <SourceLink href={source.url} label={source.title ?? undefined} />
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-        <p className="text-caption text-muted-foreground md:col-span-2">
-          {formatNumber(search.input_tokens)} tokens in, {formatNumber(search.output_tokens)} out,{' '}
-          {formatNumber(search.cache_read_tokens)} read from the cache. Stopped:{' '}
-          {search.stop_reason ?? 'not known'}.
-        </p>
-      </CardContent>
-    </Card>
+    <div className="flex flex-col gap-5 px-4 pb-6 text-ui">
+      <div className="flex flex-col gap-1">
+        <p className="font-semibold">What it searched</p>
+        {search.queries.length === 0 ? (
+          <p className="text-muted-foreground">No web search.</p>
+        ) : (
+          <ul className="list-disc pl-5">
+            {search.queries.map((query, index) => (
+              <li key={`${query}-${index}`}>{query}</li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <div className="flex flex-col gap-1">
+        <p className="font-semibold">Pages it read</p>
+        {search.sources.length === 0 ? (
+          <p className="text-muted-foreground">None.</p>
+        ) : (
+          <ul className="flex flex-col gap-1">
+            {search.sources.map((source) => (
+              <li key={source.url}>
+                <SourceLink href={source.url} label={source.title ?? undefined} />
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <p className="text-caption text-muted-foreground">
+        {formatNumber(search.input_tokens)} tokens in, {formatNumber(search.output_tokens)} out,{' '}
+        {formatNumber(search.cache_read_tokens)} read from the cache. Stopped:{' '}
+        {search.stop_reason ?? 'not known'}.
+      </p>
+    </div>
   )
 }
 
@@ -101,13 +102,19 @@ export default function AdminSearchesTab() {
   const runId = params.get('run_id')
   const [pageIndex, setPageIndex] = useState(0)
   const [active, setActive] = useState<string | null>(null)
+  const [opened, setOpened] = useState<string | null>(null)
   const searches = useSearches({
     limit: PAGE_SIZE,
     offset: pageIndex * PAGE_SIZE,
     ...(runId ? { run_id: runId } : {}),
   })
   const items = searches.data?.items ?? []
-  const selected = items.find((item) => item.id === active)
+  // While the panel slides shut it keeps showing the request it had.
+  const [shown, setShown] = useState<SearchOut | null>(null)
+  const openedItem = items.find((item) => item.id === opened) ?? null
+  if (openedItem !== null && openedItem !== shown) {
+    setShown(openedItem)
+  }
   return (
     <div className="flex flex-col gap-4">
       {runId ? (
@@ -138,6 +145,7 @@ export default function AdminSearchesTab() {
           onPageChange={setPageIndex}
           activeRowId={active}
           onActiveRowChange={setActive}
+          onOpenRow={setOpened}
           onEscape={() => {
             setActive(null)
           }}
@@ -152,7 +160,25 @@ export default function AdminSearchesTab() {
           }
         />
       )}
-      {selected ? <Details search={selected} /> : null}
+      <Sheet
+        open={opened !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setOpened(null)
+          }
+        }}
+      >
+        <SheetContent
+          side="right"
+          className="w-full gap-0 overflow-y-auto data-[side=right]:sm:max-w-xl"
+        >
+          <SheetHeader className="pr-12">
+            <SheetTitle>{shown?.step ?? 'Request'}</SheetTitle>
+            <SheetDescription>{shown?.subject ?? 'No subject'}</SheetDescription>
+          </SheetHeader>
+          {shown ? <Details search={shown} /> : null}
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }

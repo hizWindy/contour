@@ -1,5 +1,5 @@
 import { screen, waitFor, within } from '@testing-library/react'
-import { useLocation } from 'react-router'
+import { Route, Routes, useLocation, useNavigate } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { LeadFacets, LeadRow, MapPoint } from '@/api/types'
 import { renderWithProviders } from '@/test/render'
@@ -284,6 +284,51 @@ describe('the results page', () => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     })
     expect(address().has('lead')).toBe(false)
+  })
+
+  it('opens the full page with the panel dropped, so Back returns to the list as it was', async () => {
+    mockApi()
+    function GoBack() {
+      const navigate = useNavigate()
+      return (
+        <button
+          type="button"
+          onClick={() => {
+            void navigate(-1)
+          }}
+        >
+          Browser back
+        </button>
+      )
+    }
+    const { user } = renderWithProviders(
+      <>
+        <Routes>
+          <Route
+            path="/results"
+            element={
+              <>
+                <ResultsPage />
+                <Address />
+              </>
+            }
+          />
+          <Route path="/leads/:leadId" element={<p>The full page</p>} />
+        </Routes>
+        <GoBack />
+      </>,
+      { route: `/results?city=Melbourne&lead=${LEAD_ID}` },
+    )
+    const panel = await screen.findByRole('dialog', { name: 'Acme Software' })
+
+    await user.click(within(panel).getByRole('link', { name: 'Open the full page' }))
+    expect(await screen.findByText('The full page')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Browser back' }))
+    expect(await screen.findByRole('table', { name: 'Leads' })).toBeInTheDocument()
+    expect(address().getAll('city')).toEqual(['Melbourne'])
+    expect(address().has('lead')).toBe(false)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('moves through the rows with J and K, and opens the active one with Enter', async () => {

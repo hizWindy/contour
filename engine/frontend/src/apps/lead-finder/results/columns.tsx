@@ -17,11 +17,13 @@ const help = createColumnHelper<LeadRow>()
 
 const company = help.accessor('company', {
   header: 'Company',
+  // The name stays in view while the other columns scroll sideways.
+  meta: { sticky: true, className: 'min-w-44 max-w-64' },
   cell: (info) => (
     <span className="flex items-center gap-2">
       <button
         type="button"
-        className="rounded-sm text-left font-semibold underline-offset-4 hover:underline"
+        className="min-w-0 truncate rounded-sm text-left font-semibold underline-offset-4 hover:underline"
       >
         {info.getValue()}
       </button>

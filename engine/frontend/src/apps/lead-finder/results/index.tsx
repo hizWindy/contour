@@ -12,7 +12,7 @@
 import type { OnChangeFn, SortingState } from '@tanstack/react-table'
 import { Download, Map as MapIcon, Table2 } from 'lucide-react'
 import { useState } from 'react'
-import { Link, useSearchParams } from 'react-router'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import { fetchLeadsCsv, useLeadFacets, useLeadMap, useLeads } from '@/api/hooks'
 import type { LeadPage, MapOut } from '@/api/types'
 import { CityMap } from '@/components/city-map'
@@ -103,6 +103,7 @@ function MapNote({ map }: { map: MapOut | undefined }) {
 
 export default function ResultsPage() {
   const [params, setParams] = useSearchParams()
+  const navigate = useNavigate()
   const state = readResults(params)
   const [compact, setCompact] = useState(savedCompact)
   const [active, setActive] = useState<string | null>(null)
@@ -126,6 +127,18 @@ export default function ResultsPage() {
     if (state.lead !== null) {
       go({ ...state, lead: null })
     }
+  }
+
+  // The full page opens after the list has dropped the panel from its address, so Back returns to
+  // the list as it was (same filters and sort), not to the list with the panel open.
+  const openFullPage = (id: string): void => {
+    void (async () => {
+      await navigate(
+        { search: writeResults({ ...state, lead: null }).toString() },
+        { replace: true, preventScrollReset: true },
+      )
+      await navigate(`/leads/${id}`)
+    })()
   }
 
   const filtersQuery = filterQuery(state.filters)
@@ -289,7 +302,7 @@ export default function ResultsPage() {
       ) : (
         table(TABLE_COLUMNS, 'Leads', compact)
       )}
-      <LeadPanel leadId={state.lead} onClose={closeLead} />
+      <LeadPanel leadId={state.lead} onClose={closeLead} onOpenFullPage={openFullPage} />
     </>
   )
 }

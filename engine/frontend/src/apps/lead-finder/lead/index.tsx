@@ -1,6 +1,10 @@
-/** One lead on its own page, so it can be shared. Results also shows it in a side panel. */
+/**
+ * One lead on its own page, so it can be shared. Results also shows it in a side panel. A back
+ * button above the title returns to where the person came from (the list, a run, a search).
+ */
 import { useParams } from 'react-router'
 import { useLead } from '@/api/hooks'
+import { BackButton } from '@/components/back-button'
 import { EmptyState } from '@/components/empty-state'
 import { ErrorState } from '@/components/error-state'
 import { PageHeader } from '@/components/page-header'
@@ -12,6 +16,7 @@ export default function LeadPage() {
   if (lead.error) {
     return (
       <>
+        <BackButton fallbackTo="/results" fallbackLabel="Results" />
         <PageHeader title="Lead" />
         <ErrorState
           error={lead.error}
@@ -22,10 +27,16 @@ export default function LeadPage() {
     )
   }
   if (!lead.data) {
-    return <EmptyState title="Loading the lead." />
+    return (
+      <>
+        <BackButton fallbackTo="/results" fallbackLabel="Results" />
+        <EmptyState title="Loading the lead." />
+      </>
+    )
   }
   return (
     <>
+      <BackButton fallbackTo="/results" fallbackLabel="Results" />
       <PageHeader
         title={lead.data.company}
         description={lead.data.facts.industry.value ?? undefined}
