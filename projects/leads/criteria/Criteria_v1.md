@@ -1,6 +1,6 @@
-# Company criteria
+# Company criteria, version 1
 
-**Preliminary.** Levi to confirm. Last updated 2026-10-25.
+**Preliminary.** Levi to confirm. Last updated 2026-10-25. This is the version the engine follows today. The next draft is [Criteria_v2.md](Criteria_v2.md).
 
 These rules decide which companies the research agent looks for, **before anyone calls them**. They come from three places: what Levi said on 20 and 23 Oct 2026, Contour's 11 deal rules ([DEAL.md](DEAL.md)), and Contour's own deals in HubSpot ([EXPORT.md](../research/EXPORT.md)). Rules marked **TBC** are our proposals.
 

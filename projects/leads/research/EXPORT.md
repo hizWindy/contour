@@ -1,6 +1,6 @@
 # HubSpot export: analysis and watchlist
 
-What Contour's HubSpot companies look like when run through the draft [company criteria](../criteria/COMPANY.md).
+What Contour's HubSpot companies look like when run through the draft [company criteria](../criteria/Criteria_v1.md).
 
 - **Source:** HubSpot export pulled by Al-khair Pama on 25 Oct 2026 (`hubspot_companies_full.xlsx`).
 - **Company data:** [COMPANIES.xlsx](COMPANIES.xlsx), a copy with the Companies, Office Locations and Deals sheets.
@@ -59,7 +59,7 @@ Staff = the company's largest office in Melbourne, Adelaide or Perth, × 2. Trig
 | Baker Bleu | 2,000 | $3,000,000 | INTEL | Dissolved |
 
 - **Open:** 7 deals, $13,430,500. **Dissolved:** 5 deals, $11,535,000. Total $24,965,500.
-- **Every amount with a size is m² × $1,500.** This matches our fitout estimate in [COMPANY.md](../criteria/COMPANY.md).
+- **Every amount with a size is m² × $1,500.** This matches our fitout estimate in [Criteria_v1.md](../criteria/Criteria_v1.md).
 - **Property Daily is the main source:** 5 of 12 deals are "PD Relocation". 4 are "INTEL" (meaning **TBC**).
 - **The size minimum looks softer in practice.** 4 deals are under 1,000 m² (390 to 800 m²), below the $1.5M deal minimum. Alvarez & Marsal at 800 m² is still "Contour Validated".
 - **Finding the decision maker is the bottleneck.** 10 of 12 deals have the next step "Find Decision Maker".

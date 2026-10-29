@@ -9,7 +9,7 @@ Contour's *Qualified Deal Criteria, Option 2, Q4 2026*. Levi shared it on 20 Oct
 | Judges | A company | A project |
 | When | Before anyone calls | After Contour meets the client |
 | Used by | The research agent | Sales and Directors |
-| File | [COMPANY.md](COMPANY.md) | This file |
+| File | [Criteria_v1.md](Criteria_v1.md) | This file |
 
 ## The 11 rules
 

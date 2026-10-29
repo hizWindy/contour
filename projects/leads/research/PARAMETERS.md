@@ -1,6 +1,6 @@
 # Research parameters
 
-How the research agent checks the [company criteria](../criteria/COMPANY.md): how each rule is measured, where it looks, and what it records. The rules themselves are in COMPANY.md, and this file doesn't repeat them.
+How the research agent checks the [company criteria](../criteria/Criteria_v1.md): how each rule is measured, where it looks, and what it records. The rules themselves are in Criteria_v1.md, and this file doesn't repeat them.
 
 Last updated 2026-10-25. **TBC** marks what is not confirmed or not tested yet.
 

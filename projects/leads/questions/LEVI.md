@@ -41,7 +41,7 @@ Section 1 of QUESTIONS.docx.
 
 ### Top 5
 
-1. Is there an official company criteria document? You mentioned one on 20 Oct. If not, is the draft in [../criteria/COMPANY.md](../criteria/COMPANY.md) right? It adds three rules: healthy, office-based, decides locally.
+1. Is there an official company criteria document? You mentioned one on 20 Oct. If not, is the draft in [../criteria/Criteria_v1.md](../criteria/Criteria_v1.md) right? It adds three rules: healthy, office-based, decides locally.
 2. What are your 10 to 20 best past projects? For each one: company, city, staff, and what was happening when they first spoke to Contour.
 3. Rank the main triggers: lease ending, merger, big contract, fast growth. Which ones led to real projects?
 4. What numbers count? For example, how many new jobs is "fast growth"? How big is a "big contract"?

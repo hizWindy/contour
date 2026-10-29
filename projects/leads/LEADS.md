@@ -12,7 +12,8 @@ Contour's first AI project. In meetings it is called **"Trigger events."**
 | File | What it holds |
 |---|---|
 | [LEADS.md](LEADS.md) | This file: the whole project in one place |
-| [criteria/COMPANY.md](criteria/COMPANY.md) | Which companies to look for (draft) |
+| [criteria/Criteria_v1.md](criteria/Criteria_v1.md) | Which companies to look for (draft). The engine follows this one. |
+| [criteria/Criteria_v2.md](criteria/Criteria_v2.md) | The next draft, from the Target Customer Profile, Levi's brief for the tool and the 27 Oct meeting. Levi to confirm. |
 | [criteria/DEAL.md](criteria/DEAL.md) | Contour's deal criteria, and how they differ |
 | [research/PARAMETERS.md](research/PARAMETERS.md) | How each rule is measured, where the agent looks, and what it records |
 | [research/EXAMPLES.md](research/EXAMPLES.md) | How 13 other research agents work, and what we can borrow |
@@ -56,7 +57,7 @@ A company must pass **both** tests.
 
 An office change is a move **or** a full refit. A company that renews its lease and refits is still a project.
 
-The full rules are in [criteria/COMPANY.md](criteria/COMPANY.md). They are a draft for Levi to confirm.
+The full rules are in [criteria/Criteria_v1.md](criteria/Criteria_v1.md). They are a draft for Levi to confirm.
 
 These are **company criteria**: they judge a company before anyone calls. Contour's **deal criteria** judge a project later, after sales meets the client. See [criteria/DEAL.md](criteria/DEAL.md).
 

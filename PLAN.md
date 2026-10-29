@@ -126,7 +126,7 @@ Everything runs on your computer. Exact versions are locked when we install them
    - **Gap check:** if office size, city, trigger or source is missing, one more targeted search, then stop.
    - **Source check:** every fact needs a working link. Sources rank: Property Daily, ASX and official news, other news, job ads. Low-quality sites are dropped.
    - **HubSpot match:** see below.
-   - **Rules and score:** fixed code applies [COMPANY.md](projects/leads/criteria/COMPANY.md). Each company gets Pass, Director review, Watch or Drop, and a score.
+   - **Rules and score:** fixed code applies [Criteria_v1.md](projects/leads/criteria/Criteria_v1.md). Each company gets Pass, Director review, Watch or Drop, and a score.
 4. **Save and show.** Everything goes into the database, including every search and its cost. Each source note and company profile also goes into memory. Claude writes the lead card: what happened, why it fits, a role to contact and an opening line.
 
 ## Memory (pgvector)
@@ -568,7 +568,7 @@ Each phase ends with something that works. Start the next phase only when "Done 
 - The database in Docker: PostgreSQL 18 with pgvector, on port 5433, with the `core` and `lead_finder` schemas.
 - FastEmbed set up. Its model downloads once.
 - FastAPI with `/health`, and Swagger at `/docs`.
-- The rules from COMPANY.md in `criteria.yaml`, and the search templates in `queries.yaml`.
+- The rules from Criteria_v1.md in `criteria.yaml`, and the search templates in `queries.yaml`.
 - The HubSpot export loaded into the database.
 - Your API key in `.env`, and a spend limit in the Anthropic Console.
 
@@ -675,7 +675,7 @@ engine/
         app.py           tells the core this project's name, steps and rules
         steps/           plan, search, check and card (the LangGraph steps)
         rules/
-          criteria.yaml      the rules, from COMPANY.md
+          criteria.yaml      the rules, from Criteria_v1.md
           queries.yaml       the search templates
           hubspot_map.yaml   which field goes where in HubSpot
         prompts/         the instructions for Claude
@@ -732,7 +732,7 @@ Sending Contour's HubSpot company names to Claude also needs his OK.
 
 ## Sources
 
-- Our files: [LEADS.md](projects/leads/LEADS.md), [COMPANY.md](projects/leads/criteria/COMPANY.md), [PARAMETERS.md](projects/leads/research/PARAMETERS.md), [EXAMPLES.md](projects/leads/research/EXAMPLES.md), [EXPORT.md](projects/leads/research/EXPORT.md), [HUBSPOT.md](HUBSPOT.md)
+- Our files: [LEADS.md](projects/leads/LEADS.md), [Criteria_v1.md](projects/leads/criteria/Criteria_v1.md), [PARAMETERS.md](projects/leads/research/PARAMETERS.md), [EXAMPLES.md](projects/leads/research/EXAMPLES.md), [EXPORT.md](projects/leads/research/EXPORT.md), [HUBSPOT.md](HUBSPOT.md)
 - Anthropic pricing: [platform.claude.com/docs/en/about-claude/pricing](https://platform.claude.com/docs/en/about-claude/pricing)
 - Anthropic on embeddings (points to Voyage AI): [platform.claude.com/docs/en/build-with-claude/embeddings](https://platform.claude.com/docs/en/build-with-claude/embeddings)
 - pgvector Docker images for PostgreSQL 18: [docs.pgedge.com](https://docs.pgedge.com/pgvector/v0-8-2/additional-installation-methods/)
