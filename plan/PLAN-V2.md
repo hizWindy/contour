@@ -4,7 +4,7 @@ This plan makes the Lead Finder follow the new company criteria in [Criteria_v2.
 
 - **Built by:** Al-khair Pama. **Signed off by:** Levi Young.
 - **Last updated:** 2026-10-30. **TBC** means not confirmed yet.
-- **Progress:** 5 of 20 steps done.
+- **Progress:** 8 of 20 steps done.
 - **Before this:** [PLAN-V1.md](PLAN-V1.md) built the engine and the website (Phases 0 to 4). They follow [Criteria_v1.md](../projects/leads/criteria/Criteria_v1.md). Phase 5, sending leads to HubSpot, is not started and stays in PLAN-V1.
 
 ## In short
@@ -120,18 +120,18 @@ Each step changes the rules file, the code and Claude's instructions together, a
   - Add `office_age` to `criteria.yaml`: due after 5 years (the low end of Levi's 5 to 8, **TBC**), and a move or fitout in the last 3 years counts as recent.
   - Add the 18-month consultant window. The card shows it as text, because the tool can't see it.
   - **Done when:** tests read the new facts from a saved sample answer, and a card without them still loads.
-- [ ] **B5. Score.**
+- [x] **B5. Score.** Done 2026-10-30, ef746d9.
   - Replace the version 1 weights and boosters with the Profile's 6 parts: trigger 25, project size 20, timing 15, decision-maker access 15, strategic fit 15, competitive opportunity 10.
   - Split each part into small scoring checks with points in `criteria.yaml`. These are our proposal (**TBC**) until Levi fills in the Importance column. Timing uses the office age from B4. Strategic fit uses the tiers from B2.
   - For each check, record the points earned, or "not known yet". The score is the points earned. "Checked" is the most the tool could judge for that lead, like "48 of 60 checked".
   - Show the Profile's band: 75 to 100 research first, 50 to 74 investigate, under 50 nurture. Recommendation (**TBC**): scale to 100 to pick the band, so 48 of 60 counts as 80. Keep "can pay" as a tie-breaker only.
   - Change: `Score` in `rules.py`, `_score` in `scoring.py`, `signal_points` in `choose.py` (ranking uses the trigger and timing parts), `research.py`, and one migration that adds `score_checked`. Old leads stay empty there.
   - **Done when:** a lead with every check known scores out of 100, and one with some unknown shows "x of y checked". The rules loader refuses a score that can go over 100. The migration runs up and down.
-- [ ] **B6. Results and stages.**
+- [x] **B6. Results and stages.** Done 2026-10-30, 930b256. The stage is worked out from the result, so there is no new column. The API shows it in C1.
   - Results don't change. Add the Profile's stage beside each in `criteria.yaml`: Pass and Director review are "Active prospect", Watch is "Target account", Drop is "Not a target".
   - The API returns the stage for every lead.
   - **Done when:** tests cover all four results.
-- [ ] **B7. Where staff and office numbers come from.**
+- [x] **B7. Where staff and office numbers come from.** Done 2026-10-30, 86d1d34.
   - Write the order in `criteria.yaml`: (1) HubSpot's office size, lease expiry and manual headcount, (2) a headcount tool, only if A3 and Levi say yes, (3) LinkedIn × 2, because a LinkedIn count is about half the real staff, (4) the AI's web research.
   - Our export has none of (1) yet. Lease expiry is filled for 1 of 185 offices and last moved for 0. It has no office size or manual headcount. It does hold a LinkedIn staff number for 178 of 185 offices. Use that for a company already in HubSpot until Levi sends a fresh export (A2).
   - The card says where each number came from.
@@ -206,6 +206,7 @@ Start after Part B, because the website reads the API. Follow [DESIGN.md](../eng
 
 Newest first. One line for each tick, pause or surprise.
 
+- 2026-10-30: B5 (ef746d9), B6 (930b256) and B7 (86d1d34) done. Choices made while building, for Levi to confirm. (1) "Can pay" is shown on the card but not scored, because the Profile has no place for it. The tie-break is not built. (2) The band scales the points to the points checked, with a switch in `criteria.yaml` (`band_basis`) to use the raw points. (3) Three checks are "not known yet" by design: a contact in HubSpot, a link to a current customer, and no known contractor relationship. (4) HubSpot fills gaps and never overwrites a figure the research found. (5) The check points inside each part are ours, until the Importance column arrives.
 - 2026-10-30: B2 (08f9ef4), B3 (fa7c5e4) and B4 (3b30823) done. The check is now called "Office" (was "Industry"). A weak trigger in the old tests is now `hiring_push`, because `new_ceo` moved up to Other. Decision made while building: "the office doesn't matter" is a flag, not a Drop, because it is the AI's judgement (Criteria_v2 says a failed rule is a Drop, so Levi should confirm).
 - 2026-10-30: B1 done (af92afa). Backend lint, types and 1,099 lead finder tests pass. The API file (`openapi.json`) and the website types are not refreshed yet. C1 does that, and the website test card needs the new facts then.
 - 2026-10-30: A1 done. Baseline before any change: backend 2,227 passed and 28 skipped (3 min). Website: lint 0 warnings, typecheck clean, 667 tests in 39 files, build OK. Windows App Control did not block anything.

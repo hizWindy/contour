@@ -33,7 +33,9 @@ def make_row(**changes: object) -> ExportRow:
     values: dict[str, object] = {
         "company": "Acme Software",
         "result": "pass",
+        "stage": "Active prospect",
         "score": 78,
+        "score_checked": 77,
         "city": "Melbourne",
         "trigger": "Lease ending",
         "trigger_date": date(2028, 3, 1),
@@ -70,8 +72,8 @@ def test_the_file_starts_with_a_byte_order_mark_and_the_columns_of_the_design() 
     assert data[:3] == b"\xef\xbb\xbf"
     header = data.decode("utf-8-sig").split("\r\n")[0]
     assert header == (
-        "company,result,score,city,trigger,trigger_date,industry,office_m2,"
-        "office_m2_estimated,hubspot_status,status,source_link,created_at"
+        "company,result,stage,score,points_checked,city,trigger,trigger_date,industry,"
+        "office_m2,office_m2_estimated,hubspot_status,status,source_link,created_at"
     )
     assert header.split(",") == list(EXPORT_COLUMNS)
 
@@ -86,7 +88,9 @@ def test_a_row_is_written_in_plain_forms() -> None:
     assert row == {
         "company": "Acme Software",
         "result": "pass",
+        "stage": "Active prospect",
         "score": "78",
+        "points_checked": "77",
         "city": "Melbourne",
         "trigger": "Lease ending",
         "trigger_date": "2028-03-01",
@@ -127,6 +131,7 @@ def test_every_text_column_is_guarded(value: str) -> None:
     row = make_row(
         company=value,
         result=value,
+        stage=value,
         city=value,
         trigger=value,
         industry=value,
@@ -138,6 +143,7 @@ def test_every_text_column_is_guarded(value: str) -> None:
     for column in (
         "company",
         "result",
+        "stage",
         "city",
         "trigger",
         "industry",

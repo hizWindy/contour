@@ -50,6 +50,7 @@ from apps.lead_finder.schemas import (
     SortOrder,
     TriggerFacet,
 )
+from apps.lead_finder.scoring import band_of
 from apps.lead_finder.tables import Lead
 from core.api.errors import Problem
 from core.memory.embedder import Embedder
@@ -240,6 +241,7 @@ _ROW_COLUMNS: Final = (
     "suburb",
     "result",
     "score",
+    "score_checked",
     "status",
     "hubspot_status",
     "trigger_id",
@@ -320,6 +322,10 @@ def _row(data: Mapping[Any, Any], labels: Mapping[str, str]) -> LeadRow:
     values["trigger_ids"] = list(data["trigger_ids"] or [])
     values["trigger_label"] = labels.get(trigger_id, trigger_id) if trigger_id else None
     values["reason"] = reason_of(data["result"], data["checks"], data["why_it_fits"])
+    rules = load_rules()
+    values["stage"] = rules.criteria.stages[data["result"]]
+    checked = data["score_checked"]
+    values["band"] = band_of(data["score"], checked, rules) if checked else None
     return LeadRow.model_validate(values)
 
 
@@ -512,7 +518,9 @@ async def map_points(session: AsyncSession, filters: LeadFilters) -> MapOut:
 EXPORT_COLUMNS: Final = (
     "company",
     "result",
+    "stage",
     "score",
+    "points_checked",
     "city",
     "trigger",
     "trigger_date",
@@ -538,7 +546,9 @@ def csv_safe(value: str) -> str:
 class ExportRow:
     company: str
     result: str
+    stage: str
     score: int
+    score_checked: int | None
     city: str | None
     trigger: str | None
     trigger_date: date | None
@@ -578,7 +588,9 @@ def render_csv(rows: Sequence[ExportRow]) -> bytes:
             for value in (
                 row.company,
                 row.result,
+                row.stage,
                 row.score,
+                row.score_checked,
                 row.city,
                 row.trigger,
                 row.trigger_date,
@@ -615,12 +627,14 @@ async def export_rows(
             code="too_many_rows",
         )
     labels = trigger_labels()
+    stages = {str(name): stage for name, stage in load_rules().criteria.stages.items()}
     source_link = _CARD["triggers"][0]["trigger"]["source_url"].as_string()
     rows = await session.execute(
         select(
             Lead.company,
             Lead.result,
             Lead.score,
+            Lead.score_checked,
             Lead.city,
             Lead.trigger_id,
             Lead.trigger_date,
@@ -640,7 +654,9 @@ async def export_rows(
         ExportRow(
             company=company,
             result=result,
+            stage=stages[result],
             score=score,
+            score_checked=checked,
             city=city,
             trigger=labels.get(trigger_id, trigger_id) if trigger_id else None,
             trigger_date=trigger_date,
@@ -656,6 +672,7 @@ async def export_rows(
             company,
             result,
             score,
+            checked,
             city,
             trigger_id,
             trigger_date,

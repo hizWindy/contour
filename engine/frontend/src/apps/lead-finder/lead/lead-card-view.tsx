@@ -29,7 +29,7 @@ import {
 import { useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { toast } from 'sonner'
-import { usePatchLead, useRecheckLead, useLeadSimilar } from '@/api/hooks'
+import { usePatchLead, useRecheckLead, useLeadSimilar, useRules } from '@/api/hooks'
 import type { LeadDetail, LeadPatch, Schemas } from '@/api/types'
 import { ErrorState } from '@/components/error-state'
 import { HubSpotBadge } from '@/components/hubspot-badge'
@@ -62,12 +62,26 @@ import {
 } from '@/components/ui/dialog'
 import { Field, FieldError, FieldLabel } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
-import { formatDate, formatM2, formatNumber, formatPercent, formatStaff } from '@/lib/format'
+import {
+  formatDate,
+  formatM2,
+  formatNumber,
+  formatPercent,
+  formatScore,
+  formatStaff,
+} from '@/lib/format'
 import { toastProblem } from '@/lib/problems'
 import { cn } from '@/lib/utils'
 
 type RuleCheck = Schemas['RuleCheck']
 type Fact = Schemas['Fact_str_'] | Schemas['Fact_int_'] | Schemas['Fact_bool_']
+type ScorePartOut = Schemas['ScorePart']
+
+const BAND_WORDS: Record<string, string> = {
+  research_first: 'Research first',
+  investigate: 'Investigate',
+  nurture: 'Nurture',
+}
 
 const OUTCOME: Record<RuleCheck['outcome'], { icon: LucideIcon; word: string; tone: string }> = {
   ok: { icon: CircleCheck, word: 'Met', tone: 'text-pass' },
@@ -137,6 +151,7 @@ function Facts({ lead }: { lead: LeadDetail }) {
   const facts = lead.facts
   const staff = typeof facts.staff_in_city.value === 'number' ? facts.staff_in_city.value : null
   const m2 = typeof facts.office_m2.value === 'number' ? facts.office_m2.value : null
+  const needed = typeof facts.size_needed_m2.value === 'number' ? facts.size_needed_m2.value : null
   const text = (fact: Fact): string =>
     typeof fact.value === 'string' && fact.value !== '' ? fact.value : 'Not known'
   return (
@@ -189,13 +204,49 @@ function Facts({ lead }: { lead: LeadDetail }) {
               fact={facts.healthy}
             />
             <FactRow
+              label="The office matters"
+              value={yesNo(facts.office_matters.value)}
+              fact={facts.office_matters}
+            />
+            <FactRow
               label="Expected move"
               value={text(facts.expected_move)}
               fact={facts.expected_move}
             />
+            <FactRow
+              label="At this address since"
+              value={text(facts.office_since)}
+              fact={facts.office_since}
+            />
+            <FactRow
+              label="Last move or fitout"
+              value={text(facts.last_fitout)}
+              fact={facts.last_fitout}
+            />
+            {facts.growth_plan.value === true ? (
+              <FactRow
+                label="Growing"
+                value={
+                  needed === null
+                    ? 'Yes'
+                    : `Will need about ${formatM2(needed)}${facts.growth_by.value ? ` by ${String(facts.growth_by.value)}` : ''}`
+                }
+                fact={facts.growth_plan}
+              />
+            ) : null}
           </tbody>
         </table>
       </div>
+      {lead.from_hubspot.length > 0 ? (
+        <div className="flex flex-col gap-1 text-muted-foreground">
+          <p className="font-semibold text-foreground">From HubSpot</p>
+          <ul className="list-disc pl-5">
+            {lead.from_hubspot.map((note) => (
+              <li key={note}>{note}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       {lead.fitout_aud ? (
         <p className="text-muted-foreground">
           Fitout worth about <Money value={lead.fitout_aud} currency="AUD" decimals={0} />, at the
@@ -238,11 +289,83 @@ function Rules({ lead }: { lead: LeadDetail }) {
   )
 }
 
+function ScoreSection({ lead }: { lead: LeadDetail }) {
+  if (lead.score_parts.length === 0) {
+    return (
+      <Section title="Score">
+        <p className="text-muted-foreground">
+          {lead.result === 'drop'
+            ? 'A dropped company is not scored.'
+            : 'This lead was scored under version 1 of the rules, so it has no parts.'}
+        </p>
+      </Section>
+    )
+  }
+  return (
+    <Section title="Score">
+      <p>
+        The tool could check {formatNumber(lead.score_checked ?? 0)} of the 100 points. Sales fills
+        in the rest after the first call.
+      </p>
+      <ul className="flex flex-col gap-1" aria-label="Each part of the score">
+        {lead.score_parts.map((part: ScorePartOut) => (
+          <li key={part.id}>
+            <Collapsible>
+              <CollapsibleTrigger className="group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted touch:min-h-11">
+                <span className="font-semibold">{part.label}</span>
+                <span className="tabular-nums text-muted-foreground">
+                  {part.earned} of {part.checked} checked
+                </span>
+                <ChevronDown
+                  aria-hidden="true"
+                  className="ml-auto size-4 transition-transform duration-(--duration-fast) ease-(--ease) group-data-[state=open]:rotate-180"
+                />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="px-2 pb-2">
+                <ul className="flex flex-col gap-1 text-muted-foreground">
+                  {part.checks.map((check) => (
+                    <li key={check.id} className="flex flex-wrap gap-x-2">
+                      <span className="text-foreground">{check.label}</span>
+                      <span className="tabular-nums">
+                        {check.known ? `${check.earned} of ${check.max}` : 'Not known yet'}
+                      </span>
+                      {check.known && check.detail ? <span>{check.detail}</span> : null}
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-1 text-caption text-muted-foreground">
+                  The part is worth {part.max} points.
+                </p>
+              </CollapsibleContent>
+            </Collapsible>
+          </li>
+        ))}
+      </ul>
+    </Section>
+  )
+}
+
+/** The Profile's timing advice. The tool can't see when a consultant is appointed. */
+function ConsultantNote() {
+  const rules = useRules()
+  const months = rules.data?.criteria.triggers.consultant_window_months
+  if (!months) {
+    return null
+  }
+  return (
+    <p className="text-caption text-muted-foreground">
+      Best timing is before a consultant is appointed. That is usually within {months} months of the
+      project, and the tool can&apos;t see it.
+    </p>
+  )
+}
+
 function Triggers({ lead }: { lead: LeadDetail }) {
   if (lead.triggers.length === 0) {
     return (
       <Section title="Signs of an office change">
         <p className="text-muted-foreground">No sign that counts was found.</p>
+        <ConsultantNote />
       </Section>
     )
   }
@@ -261,6 +384,7 @@ function Triggers({ lead }: { lead: LeadDetail }) {
           </li>
         ))}
       </ul>
+      <ConsultantNote />
     </Section>
   )
 }
@@ -594,7 +718,12 @@ export function LeadCardView({ lead, compact = false }: LeadCardViewProps) {
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <ResultBadge result={lead.result} />
-          <span className="text-ui tabular-nums">Score {lead.score}</span>
+          {lead.stage ? <span className="text-ui text-muted-foreground">{lead.stage}</span> : null}
+          <span className="text-ui tabular-nums">
+            Score {formatScore(lead.score, lead.score_checked)}
+            {lead.score_checked ? ' checked' : ''}
+          </span>
+          {lead.band ? <Badge variant="outline">{BAND_WORDS[lead.band] ?? lead.band}</Badge> : null}
           <StatusBadge status={lead.status} />
           {lead.is_test ? <Badge variant="outline">Test set</Badge> : null}
         </div>
@@ -606,6 +735,7 @@ export function LeadCardView({ lead, compact = false }: LeadCardViewProps) {
       </div>
       <div className={cn('grid gap-6', !compact && 'xl:grid-cols-2')}>
         <Rules lead={lead} />
+        <ScoreSection lead={lead} />
         <Facts lead={lead} />
         <Triggers lead={lead} />
         <HubSpot lead={lead} />
@@ -613,6 +743,21 @@ export function LeadCardView({ lead, compact = false }: LeadCardViewProps) {
           <p>{lead.contact_role ?? 'Not known yet.'}</p>
           {lead.opening_line ? (
             <p className="font-serif">&ldquo;{lead.opening_line}&rdquo;</p>
+          ) : null}
+          {lead.facts.talking_points.length > 0 ? (
+            <div className="flex flex-col gap-1">
+              <p className="font-semibold">Talking points</p>
+              <ul className="list-disc pl-5">
+                {lead.facts.talking_points.map((point) => (
+                  <li key={point}>{point}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {lead.facts.fitout_contractors.length > 0 ? (
+            <p className="text-muted-foreground">
+              Past fitout firms: {lead.facts.fitout_contractors.join(', ')}
+            </p>
           ) : null}
         </Section>
         <LookAlikes leadId={lead.id} />

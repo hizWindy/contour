@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { LeadDetail } from '@/api/types'
 import { renderWithProviders } from '@/test/render'
 import LeadPage from './index'
-import { HOSTILE, LEAD_ID, makeLead } from './test-lead'
+import { fact, HOSTILE, LEAD_ID, makeLead } from './test-lead'
 
 interface Seen {
   patches: Record<string, unknown>[]
@@ -35,6 +35,13 @@ function mockApi(start: LeadDetail): Seen {
           leads: [],
         })
       }
+      if (path === '/api/v1/lead-finder/rules') {
+        return Response.json({
+          version: 'r1',
+          criteria: { triggers: { consultant_window_months: 18 } },
+          watchlist: { tbc: [] },
+        })
+      }
       if (path === `/api/v1/lead-finder/leads/${LEAD_ID}/recheck`) {
         seen.rechecks += 1
         return Response.json({ id: 'new-run', status: 'queued' }, { status: 201 })
@@ -55,6 +62,8 @@ function renderLead() {
   )
 }
 
+const TAG = '<b onmouseover=alert(1)>hover</b>'
+
 describe('the lead page', () => {
   it('shows the result, the rules, the facts with sources and the notes', async () => {
     mockApi(makeLead())
@@ -63,7 +72,7 @@ describe('the lead page', () => {
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Acme Software' }),
     ).toBeInTheDocument()
-    expect(screen.getByText('Score 78')).toBeInTheDocument()
+    expect(screen.getByText('Score 51 of 77 checked')).toBeInTheDocument()
     const rules = screen.getByRole('list', { name: 'Each rule' })
     await user.click(within(rules).getByRole('button', { name: /City/ }))
     expect(await screen.findByText('Melbourne is a city we work in')).toBeInTheDocument()
@@ -75,6 +84,85 @@ describe('the lead page', () => {
     expect(within(facts).getAllByText('Confirmed').length).toBeGreaterThan(0)
     expect(await screen.findByText('This lead has no profile yet.')).toBeInTheDocument()
     expect(screen.getByText(/A summary of each page/)).toBeInTheDocument()
+  })
+
+  it('shows the stage, the band and the score in parts, with what is not known yet', async () => {
+    mockApi(makeLead())
+    const { user } = renderLead()
+
+    expect(await screen.findByText('Score 51 of 77 checked')).toBeInTheDocument()
+    expect(screen.getByText('Active prospect')).toBeInTheDocument()
+    expect(screen.getByText('Investigate')).toBeInTheDocument()
+    expect(screen.getByText(/The tool could check 77 of the 100 points/)).toBeInTheDocument()
+
+    const parts = screen.getByRole('list', { name: 'Each part of the score' })
+    expect(within(parts).getByText('20 of 25 checked')).toBeInTheDocument()
+    await user.click(within(parts).getByRole('button', { name: /Decision-maker access/ }))
+    expect(await within(parts).findByText('A contact already in HubSpot')).toBeInTheDocument()
+    expect(within(parts).getByText('Not known yet')).toBeInTheDocument()
+    expect(within(parts).getByText('The part is worth 15 points.')).toBeInTheDocument()
+  })
+
+  it('says when a lead was scored under version 1, and that a drop is not scored', async () => {
+    mockApi(makeLead({ score: 78, score_parts: [], score_checked: null, band: null, stage: null }))
+    const first = renderLead()
+    expect(await screen.findByText('Score 78')).toBeInTheDocument()
+    expect(screen.getByText(/scored under version 1 of the rules/)).toBeInTheDocument()
+    first.unmount()
+
+    mockApi(
+      makeLead({
+        result: 'drop',
+        score: 0,
+        score_parts: [],
+        score_checked: null,
+        band: null,
+        stage: 'Not a target',
+      }),
+    )
+    renderLead()
+    expect(await screen.findByText('A dropped company is not scored.')).toBeInTheDocument()
+    expect(screen.getByText('Not a target')).toBeInTheDocument()
+  })
+
+  it('shows the talking points, the past fitout firms and the numbers from HubSpot', async () => {
+    const base = makeLead()
+    mockApi(
+      makeLead({
+        from_hubspot: [
+          'Staff in Melbourne: 60 on LinkedIn, from HubSpot. The real number is about double.',
+        ],
+        facts: {
+          ...base.facts,
+          talking_points: ['Lease ends March 2028', TAG],
+          fitout_contractors: ['Hassell', 'Geyer'],
+          office_matters: fact(true),
+          office_since: fact('2016'),
+          last_fitout: fact('2024-05'),
+          growth_plan: fact(true),
+          size_needed_m2: fact(1500),
+          growth_by: fact('2027-06'),
+        },
+      }),
+    )
+    const { container } = renderLead()
+
+    expect(await screen.findByText('Talking points')).toBeInTheDocument()
+    expect(screen.getByText('Lease ends March 2028')).toBeInTheDocument()
+    expect(screen.getByText(TAG)).toBeInTheDocument() // as text, never as a tag
+    expect(container.querySelector('b')).toBeNull()
+    expect(screen.getByText('Past fitout firms: Hassell, Geyer')).toBeInTheDocument()
+    expect(screen.getByText(/Staff in Melbourne: 60 on LinkedIn, from HubSpot/)).toBeInTheDocument()
+    const facts = screen.getByRole('table', { name: /Facts about Acme Software/ })
+    expect(within(facts).getByText('2016')).toBeInTheDocument()
+    expect(within(facts).getByText('2024-05')).toBeInTheDocument()
+    expect(within(facts).getByText('Will need about 1,500 m² by 2027-06')).toBeInTheDocument()
+  })
+
+  it('says when to talk: before a consultant is appointed', async () => {
+    mockApi(makeLead())
+    renderLead()
+    expect(await screen.findByText(/usually within 18 months of the project/)).toBeInTheDocument()
   })
 
   it('has a back button above the title', async () => {

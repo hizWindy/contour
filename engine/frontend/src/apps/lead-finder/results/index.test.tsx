@@ -14,7 +14,10 @@ function makeRow(changes: Partial<LeadRow> = {}): LeadRow {
     id: LEAD_ID,
     company: 'Acme Software',
     result: 'pass',
-    score: 78,
+    stage: 'Active prospect',
+    score: 51,
+    score_checked: 77,
+    band: 'investigate',
     city: 'Melbourne',
     suburb: 'Richmond',
     contact_role: 'Head of Property',
@@ -49,7 +52,10 @@ const ROWS: LeadRow[] = [
     id: OTHER_ID,
     company: 'Basalt Mining',
     result: 'watch',
+    stage: 'Target account',
     score: 41,
+    score_checked: null,
+    band: null,
     city: 'Perth',
     suburb: null,
     office_m2: 800,
@@ -192,6 +198,12 @@ describe('the results page', () => {
       within(rows[0]).getByText('Lease ending in 1 to 3 years, 1 Mar 2028'),
     ).toBeInTheDocument()
     expect(within(rows[0]).getByText('2,500 m²')).toBeInTheDocument()
+    // The score is the points earned out of the points the tool could check. A lead scored
+    // under version 1 has no "checked", so it shows the points alone.
+    expect(within(rows[0]).getByText('51 of 77')).toBeInTheDocument()
+    expect(within(rows[0]).getByText('Active prospect')).toBeInTheDocument()
+    expect(within(rows[1]).getByText('41')).toBeInTheDocument()
+    expect(within(rows[1]).getByText('Target account')).toBeInTheDocument()
     expect(within(rows[1]).getByText('about 800 m²')).toBeInTheDocument()
     expect(within(rows[1]).getByText('None found')).toBeInTheDocument()
 
@@ -273,7 +285,7 @@ describe('the results page', () => {
     const { user } = renderResults()
     await user.click(await screen.findByRole('button', { name: 'Acme Software' }))
     const panel = await screen.findByRole('dialog', { name: 'Acme Software' })
-    expect(await within(panel).findByText('Score 78')).toBeInTheDocument()
+    expect(await within(panel).findByText('Score 51 of 77 checked')).toBeInTheDocument()
     expect(within(panel).getByRole('link', { name: 'Open the full page' })).toHaveAttribute(
       'href',
       `/leads/${LEAD_ID}`,

@@ -8,6 +8,7 @@ import { ErrorState } from '@/components/error-state'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatNumber } from '@/lib/format'
+import { resultLabel } from '@/lib/labels'
 
 function Block({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -47,11 +48,51 @@ export default function AdminRulesTab() {
         </Block>
         <Block title="Size">
           <p>
-            {formatNumber(criteria.size.staff_min)} to {formatNumber(criteria.size.staff_max)}{' '}
-            staff, counted in the{' '}
-            {criteria.size.staff_counted_in === 'city' ? 'city' : 'whole company'}.
+            An office of {formatNumber(criteria.size.office_m2_min)} to{' '}
+            {formatNumber(criteria.size.office_m2_max)} m² fits. From{' '}
+            {formatNumber(criteria.size.director_band_m2[0])} m² up to the minimum, a Director
+            decides.
+          </p>
+          <p>
+            When the office size isn&apos;t known, staff is only a hint:{' '}
+            {criteria.size.staff_hint_min}+ office staff. Below it a company gets a flag, never a
+            Drop. Over {formatNumber(criteria.size.staff_max)} staff goes to a Director.
+          </p>
+          <p>
+            A small company that will need an office in range within{' '}
+            {criteria.size.grow_into_range_months} months still fits.
           </p>
           <p>LinkedIn staff counts are multiplied by {criteria.size.linkedin_staff_multiplier}.</p>
+        </Block>
+        <Block title="Score">
+          <ul className="list-disc pl-5">
+            {Object.entries(criteria.score.parts).map(([id, part]) => (
+              <li key={id}>
+                {part.label}: {part.points} points
+              </li>
+            ))}
+          </ul>
+          <p>
+            {criteria.score.bands.research_first} to 100 research first,{' '}
+            {criteria.score.bands.investigate} to {criteria.score.bands.research_first - 1}{' '}
+            investigate, under {criteria.score.bands.investigate} nurture.
+            {criteria.score.band_basis === 'scaled'
+              ? ' The points are scaled to the points checked first.'
+              : ''}
+          </p>
+          <p>
+            More than {criteria.office_age.due_years} years at the same address is due. A move or
+            fitout in the last {criteria.office_age.recent_move_years} years is recent.
+          </p>
+        </Block>
+        <Block title="Results and stages">
+          <ul className="list-disc pl-5">
+            {Object.entries(criteria.stages).map(([result, stage]) => (
+              <li key={result}>
+                {resultLabel(result)}: {stage}
+              </li>
+            ))}
+          </ul>
         </Block>
         <Block title="Signs of an office change">
           {(

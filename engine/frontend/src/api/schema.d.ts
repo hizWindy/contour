@@ -616,6 +616,15 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AccessPoints */
+        AccessPoints: {
+            /** Contact Role */
+            contact_role: number;
+            /** Customer Link */
+            customer_link: number;
+            /** Hubspot Contact */
+            hubspot_contact: number;
+        };
         /** AreaOption */
         AreaOption: {
             /**
@@ -633,6 +642,13 @@ export interface components {
              * @description The suburbs searched. Empty for the whole city.
              */
             suburbs: string[];
+        };
+        /** Bands */
+        Bands: {
+            /** Investigate */
+            investigate: number;
+            /** Research First */
+            research_first: number;
         };
         /**
          * Blocked
@@ -801,6 +817,15 @@ export interface components {
             contact_role: string | null;
             /** @description When an office change might happen, like 2027 */
             expected_move: components["schemas"]["Fact_str_"];
+            /**
+             * Fitout Contractors
+             * @description Names of design or fitout firms that did this company's office, only if a note names them. Firm names only. Can be empty.
+             */
+            fitout_contractors: string[];
+            /** @description When it expects to need that office: YYYY-MM or YYYY. Null if no note says. */
+            growth_by: components["schemas"]["Fact_str_"];
+            /** @description true if the company has raised big money or made a big announcement AND plans to hire a lot. Else false or null. */
+            growth_plan: components["schemas"]["Fact_bool_"];
             /** @description false if in administration, or cutting staff fast. Else true or null. */
             healthy: components["schemas"]["Fact_bool_"];
             industry: components["schemas"]["Fact_str_"];
@@ -809,12 +834,18 @@ export interface components {
              * @description If the industry belongs to one of the industry groups in the instructions, that group's name exactly as written. Else null.
              */
             industry_group: string | null;
+            /** @description When that office last had a move, fitout or refit: YYYY-MM or YYYY. The move-in counts too. Null if no note says. */
+            last_fitout: components["schemas"]["Fact_str_"];
             /** @description The local team can run an office project, even if owned overseas */
             local_team_runs_project: components["schemas"]["Fact_bool_"];
             /** Name */
             name: string;
             /** @description The office's floor area in square metres */
             office_m2: components["schemas"]["Fact_int_"];
+            /** @description true if the office matters to how the company works: growth, performance, culture, collaboration or talent. A head office or technical office counts, even for a miner or builder. false if it works mostly from warehouses, plants, sites or shops. Null if no note says. */
+            office_matters: components["schemas"]["Fact_bool_"];
+            /** @description When the company moved into its current office in that city: YYYY or YYYY-MM. Null if no note says. */
+            office_since: components["schemas"]["Fact_str_"];
             /**
              * Opening Line
              * @description A friendly first line for a sales email
@@ -822,6 +853,8 @@ export interface components {
             opening_line: string | null;
             /** @description Like 'ASX-listed, Australian' or 'Private, UK-owned' */
             owner: components["schemas"]["Fact_str_"];
+            /** @description The floor area in square metres of the office it says it will need after that growth. Null if no note says. */
+            size_needed_m2: components["schemas"]["Fact_int_"];
             /**
              * Staff From Linkedin
              * @description true if staff_in_city is a LinkedIn count
@@ -834,6 +867,16 @@ export interface components {
              * @description What happened, in one or two plain sentences
              */
             summary: string;
+            /**
+             * Talking Points
+             * @description 2 or 3 short points for a first call, each tied to the trigger or the office, like 'Lease ends March 2028'. Plain facts, no hype. No people's names, emails or phone numbers. Can be empty.
+             */
+            talking_points: string[];
+            /**
+             * Tier Group
+             * @description If the industry belongs to one of the tier groups in the instructions, that group's name exactly as written. Else null.
+             */
+            tier_group: string | null;
             /**
              * Triggers
              * @description Signs of an office change. Can be empty.
@@ -944,6 +987,13 @@ export interface components {
              */
             type: "company_started";
         };
+        /** CompetitionPoints */
+        CompetitionPoints: {
+            /** No Contractor Relationship */
+            no_contractor_relationship: number;
+            /** No Rival In Place */
+            no_rival_in_place: number;
+        };
         /** Criteria */
         Criteria: {
             /** Boosters */
@@ -955,6 +1005,7 @@ export interface components {
             /** Label */
             label: string;
             never_suggest: components["schemas"]["NeverSuggest"];
+            office_age: components["schemas"]["OfficeAge"];
             /** Results */
             results: ("pass" | "director_review" | "watch" | "drop")[];
             score: components["schemas"]["Score"];
@@ -962,6 +1013,10 @@ export interface components {
             source_domains: components["schemas"]["SourceDomains"];
             /** Sources Rank */
             sources_rank: string[];
+            /** Stages */
+            stages: {
+                [key: string]: string;
+            };
             /** Tbc */
             tbc: components["schemas"]["TbcNote"][];
             triggers: components["schemas"]["Triggers"];
@@ -1108,6 +1163,15 @@ export interface components {
             /** Local Team Runs Project */
             local_team_runs_project: boolean;
         };
+        /** FitPoints */
+        FitPoints: {
+            /** Buys Strategy */
+            buys_strategy: number;
+            /** Tier 1 */
+            tier_1: number;
+            /** Tier 2 */
+            tier_2: number;
+        };
         /** Fitout */
         Fitout: {
             /** Rate Per M2 Aud */
@@ -1206,6 +1270,10 @@ export interface components {
             check_office_size: string[];
             /** Director Review */
             director_review: string[];
+            /** Tier 1 */
+            tier_1: string[];
+            /** Tier 2 */
+            tier_2: string[];
         };
         /** IntRange */
         IntRange: {
@@ -1223,6 +1291,11 @@ export interface components {
         };
         /** LeadCard */
         LeadCard: {
+            /**
+             * Band
+             * @description research_first (75 to 100), investigate (50 to 74) or nurture (under 50)
+             */
+            band: ("research_first" | "investigate" | "nurture") | null;
             /**
              * Checks
              * @description Each rule, and how this company did
@@ -1245,6 +1318,11 @@ export interface components {
             facts: components["schemas"]["CompanyFacts"];
             /** Fitout Aud */
             fitout_aud: string | null;
+            /**
+             * From Hubspot
+             * @description Numbers taken from HubSpot, because the web research found none
+             */
+            from_hubspot: string[];
             hubspot: components["schemas"]["HubSpotOut"];
             /**
              * Id
@@ -1279,9 +1357,24 @@ export interface components {
             rules_version: string;
             /**
              * Score
-             * @description 0 to 100. Stronger and newer signs rank higher.
+             * @description 0 to 100: the points earned in the Profile's six parts.
              */
             score: number;
+            /**
+             * Score Checked
+             * @description The most points the tool could judge, like 48 of 60. Empty for a Drop, and for a card made under version 1.
+             */
+            score_checked: number | null;
+            /**
+             * Score Parts
+             * @description The six parts and their checks. Empty for a Drop, and for a card made under version 1.
+             */
+            score_parts: components["schemas"]["ScorePart"][];
+            /**
+             * Stage
+             * @description The Profile's stage for the result. Empty for a card made under version 1.
+             */
+            stage: string | null;
             /** Summary */
             summary: string;
             /** Triggers */
@@ -1294,6 +1387,11 @@ export interface components {
          * @description The full lead card, and what a person has done with the lead.
          */
         LeadDetail: {
+            /**
+             * Band
+             * @description research_first (75 to 100), investigate (50 to 74) or nurture (under 50)
+             */
+            band: ("research_first" | "investigate" | "nurture") | null;
             /**
              * Checks
              * @description Each rule, and how this company did
@@ -1316,6 +1414,11 @@ export interface components {
             facts: components["schemas"]["CompanyFacts"];
             /** Fitout Aud */
             fitout_aud: string | null;
+            /**
+             * From Hubspot
+             * @description Numbers taken from HubSpot, because the web research found none
+             */
+            from_hubspot: string[];
             hubspot: components["schemas"]["HubSpotOut"];
             /**
              * Id
@@ -1368,9 +1471,24 @@ export interface components {
             run_id: string | null;
             /**
              * Score
-             * @description 0 to 100. Stronger and newer signs rank higher.
+             * @description 0 to 100: the points earned in the Profile's six parts.
              */
             score: number;
+            /**
+             * Score Checked
+             * @description The most points the tool could judge, like 48 of 60. Empty for a Drop, and for a card made under version 1.
+             */
+            score_checked: number | null;
+            /**
+             * Score Parts
+             * @description The six parts and their checks. Empty for a Drop, and for a card made under version 1.
+             */
+            score_parts: components["schemas"]["ScorePart"][];
+            /**
+             * Stage
+             * @description The Profile's stage for the result. Empty for a card made under version 1.
+             */
+            stage: string | null;
             /**
              * Status
              * @enum {string}
@@ -1546,6 +1664,11 @@ export interface components {
          * @description One row of the results table.
          */
         LeadRow: {
+            /**
+             * Band
+             * @description research_first (75 to 100), investigate (50 to 74) or nurture (under 50)
+             */
+            band: ("research_first" | "investigate" | "nurture") | null;
             /** City */
             city: string | null;
             /** Company */
@@ -1598,10 +1721,23 @@ export interface components {
             result: "pass" | "director_review" | "watch" | "drop";
             /** Run Id */
             run_id: string | null;
-            /** Score */
+            /**
+             * Score
+             * @description The points earned, out of the Profile's 100
+             */
             score: number;
+            /**
+             * Score Checked
+             * @description The most points the tool could judge, like 48 of 60. Empty for a Drop, and for a lead scored under version 1.
+             */
+            score_checked: number | null;
             /** Staff In City */
             staff_in_city: number | null;
+            /**
+             * Stage
+             * @description The Profile's stage for the result, like Active prospect
+             */
+            stage: string;
             /**
              * Status
              * @enum {string}
@@ -1870,6 +2006,13 @@ export interface components {
             /** Url */
             url: string;
         };
+        /** OfficeAge */
+        OfficeAge: {
+            /** Due Years */
+            due_years: number;
+            /** Recent Move Years */
+            recent_move_years: number;
+        };
         /** OptionCaps */
         OptionCaps: {
             /** Company Cap Usd */
@@ -1880,6 +2023,13 @@ export interface components {
             max_companies: number;
             /** Run Cap Usd */
             run_cap_usd: string;
+        };
+        /** PartRule */
+        PartRule: {
+            /** Label */
+            label: string;
+            /** Points */
+            points: number;
         };
         /** PlanReadyData */
         PlanReadyData: {
@@ -2571,30 +2721,91 @@ export interface components {
             /** Runs */
             runs: number;
         };
-        /** Score */
+        /**
+         * Score
+         * @description The Target Customer Profile's 100 points in six parts (Criteria_v2.md section 6).
+         */
         Score: {
-            /** Booster Each */
-            booster_each: number;
-            /** Boosters Max */
-            boosters_max: number;
-            /** Fit */
-            fit: {
-                [key: string]: number;
+            access: components["schemas"]["AccessPoints"];
+            /**
+             * Band Basis
+             * @enum {string}
+             */
+            band_basis: "scaled" | "raw";
+            bands: components["schemas"]["Bands"];
+            /** Check Labels */
+            check_labels: {
+                [key: string]: string;
             };
+            competition: components["schemas"]["CompetitionPoints"];
+            fit: components["schemas"]["FitPoints"];
             /** Lease In Best Window */
             lease_in_best_window: number;
+            /** No Recent Move */
+            no_recent_move: number;
+            /** Parts */
+            parts: {
+                [key: string]: components["schemas"]["PartRule"];
+            };
             /** Recency */
             recency: components["schemas"]["Recency"][];
+            size: components["schemas"]["SizePoints"];
             /** Source */
             source: {
                 [key: string]: number;
             };
-            /** Trigger */
-            trigger: {
+            /** Trigger Group */
+            trigger_group: {
                 [key: string]: number;
             };
             /** Undated */
             undated: number;
+            /** Unseen */
+            unseen: string[];
+            /** Years At Address */
+            years_at_address: number;
+        };
+        /** ScoreCheck */
+        ScoreCheck: {
+            /**
+             * Detail
+             * @default
+             */
+            detail: string;
+            /** Earned */
+            earned: number;
+            /** Id */
+            id: string;
+            /**
+             * Known
+             * @description false means 'not known yet': it adds nothing to 'checked'
+             */
+            known: boolean;
+            /** Label */
+            label: string;
+            /** Max */
+            max: number;
+        };
+        /** ScorePart */
+        ScorePart: {
+            /**
+             * Checked
+             * @description The points of the checks the tool could judge
+             */
+            checked: number;
+            /** Checks */
+            checks: components["schemas"]["ScoreCheck"][];
+            /** Earned */
+            earned: number;
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /**
+             * Max
+             * @description The part's points in the Profile's 100
+             */
+            max: number;
         };
         /** SearchOut */
         SearchOut: {
@@ -2767,6 +2978,8 @@ export interface components {
                 number,
                 number
             ];
+            /** Grow Into Range Months */
+            grow_into_range_months: number;
             /** Linkedin Staff Multiplier */
             linkedin_staff_multiplier: number;
             /** M2 Per Staff */
@@ -2780,10 +2993,25 @@ export interface components {
              * @enum {string}
              */
             staff_counted_in: "city" | "company";
+            /** Staff Hint Min */
+            staff_hint_min: number;
             /** Staff Max */
             staff_max: number;
             /** Staff Min */
             staff_min: number;
+            /** Staff Sources */
+            staff_sources: ("hubspot" | "headcount_tool" | "linkedin" | "web_research")[];
+        };
+        /** SizePoints */
+        SizePoints: {
+            /** Confirmed In Range */
+            confirmed_in_range: number;
+            /** Director */
+            director: number;
+            /** Estimated In Range */
+            estimated_in_range: number;
+            /** Growing Into Range */
+            growing_into_range: number;
         };
         /** SliceDoneData */
         SliceDoneData: {
@@ -3054,10 +3282,31 @@ export interface components {
              * @enum {string}
              */
             group: "main" | "other" | "weak";
-            /** Points */
+            /**
+             * Group Points
+             * @description The trigger part of the score
+             * @default 0
+             */
+            group_points: number;
+            /**
+             * Points
+             * @description Group, source and timing together. It ranks the triggers.
+             */
             points: number;
             /** Source Kind */
             source_kind: string;
+            /**
+             * Source Points
+             * @description The trigger part of the score
+             * @default 0
+             */
+            source_points: number;
+            /**
+             * Timing Points
+             * @description How recent, or how near the lease end
+             * @default 0
+             */
+            timing_points: number;
             trigger: components["schemas"]["TriggerFound"];
         };
         /** Triggers */
@@ -3067,6 +3316,8 @@ export interface components {
                 number,
                 number
             ];
+            /** Consultant Window Months */
+            consultant_window_months: number;
             /** Main */
             main: components["schemas"]["Item"][];
             /** Other */

@@ -4,7 +4,7 @@ import type { LeadDetail } from '@/api/types'
 export const LEAD_ID = '99999999-2222-3333-4444-555555555555'
 export const HOSTILE = '<img src=x onerror=alert(1)>'
 
-function fact<T>(value: T, label: 'confirmed' | 'estimated' | null = 'confirmed') {
+export function fact<T>(value: T, label: 'confirmed' | 'estimated' | null = 'confirmed') {
   return {
     value,
     label: value === null ? null : label,
@@ -13,12 +13,69 @@ function fact<T>(value: T, label: 'confirmed' | 'estimated' | null = 'confirmed'
   }
 }
 
+const SCORE_PARTS: LeadDetail['score_parts'] = [
+  {
+    id: 'trigger',
+    label: 'Business or property trigger',
+    max: 25,
+    earned: 20,
+    checked: 25,
+    checks: [
+      {
+        id: 'trigger_group',
+        label: 'The best trigger',
+        earned: 15,
+        max: 15,
+        known: true,
+        detail: "Acme's Collins Street lease ends in March 2028.",
+      },
+      {
+        id: 'source',
+        label: 'How strong its source is',
+        earned: 5,
+        max: 10,
+        known: true,
+        detail: 'other news',
+      },
+    ],
+  },
+  {
+    id: 'access',
+    label: 'Decision-maker access',
+    max: 15,
+    earned: 5,
+    checked: 5,
+    checks: [
+      {
+        id: 'contact_role',
+        label: 'A contact role found',
+        earned: 5,
+        max: 5,
+        known: true,
+        detail: 'Head of Property',
+      },
+      {
+        id: 'hubspot_contact',
+        label: 'A contact already in HubSpot',
+        earned: 0,
+        max: 5,
+        known: false,
+        detail: '',
+      },
+    ],
+  },
+]
+
 export function makeLead(changes: Partial<LeadDetail> = {}): LeadDetail {
   return {
     id: LEAD_ID,
     company: 'Acme Software',
     result: 'pass',
-    score: 78,
+    stage: 'Active prospect',
+    score: 51,
+    score_parts: SCORE_PARTS,
+    score_checked: 77,
+    band: 'investigate',
     summary: "Acme's Melbourne lease ends in 2028 and it is looking for a bigger office.",
     why_it_fits: 'City: Melbourne. Size: about 2,500 m². Result: Pass.',
     contact_role: 'Head of Property',
@@ -39,7 +96,10 @@ export function makeLead(changes: Partial<LeadDetail> = {}): LeadDetail {
         },
         group: 'main',
         source_kind: 'other_news',
-        points: 63,
+        points: 26,
+        group_points: 15,
+        source_points: 5,
+        timing_points: 6,
       },
     ],
     office_m2: 2500,
@@ -60,6 +120,15 @@ export function makeLead(changes: Partial<LeadDetail> = {}): LeadDetail {
       triggers: [],
       boosters: [],
       expected_move: fact('2027', 'estimated'),
+      growth_plan: fact(null),
+      size_needed_m2: fact(null),
+      growth_by: fact(null),
+      office_matters: fact(null),
+      tier_group: null,
+      office_since: fact(null),
+      last_fitout: fact(null),
+      fitout_contractors: [],
+      talking_points: [],
       contact_role: 'Head of Property',
       summary: "Acme's Melbourne lease ends in 2028.",
       opening_line: null,
@@ -90,6 +159,7 @@ export function makeLead(changes: Partial<LeadDetail> = {}): LeadDetail {
         from_memory: true,
       },
     ],
+    from_hubspot: [],
     dropped: [],
     problems: [],
     research: {

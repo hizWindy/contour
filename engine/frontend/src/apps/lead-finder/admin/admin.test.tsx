@@ -240,6 +240,51 @@ describe('Admin, HubSpot', () => {
   })
 })
 
+const RULES_V2 = {
+  version: 'abc123',
+  criteria: {
+    cities: { pass: ['Melbourne'], director_review: ['Sydney'], other_cities: 'director_review' },
+    size: {
+      staff_min: 100,
+      staff_hint_min: 75,
+      staff_max: 600,
+      staff_counted_in: 'city',
+      linkedin_staff_multiplier: 2,
+      office_m2_min: 1000,
+      office_m2_max: 6000,
+      director_band_m2: [800, 1000],
+      grow_into_range_months: 24,
+    },
+    score: {
+      parts: {
+        trigger: { label: 'Business or property trigger', points: 25 },
+        size: { label: 'Project size', points: 20 },
+      },
+      bands: { research_first: 75, investigate: 50 },
+      band_basis: 'scaled',
+    },
+    office_age: { due_years: 5, recent_move_years: 3 },
+    stages: { pass: 'Active prospect', watch: 'Target account' },
+    triggers: {
+      main: [],
+      other: [],
+      weak: [],
+      recent_months: 12,
+      window_years: 3,
+      best_window_years: [1, 3],
+    },
+    never_suggest: {
+      already_sent: true,
+      open_deal: true,
+      dissolved_deal_wait_months: 12,
+      do_not_contact: true,
+    },
+    tbc: [],
+    source_domains: { blocked: ['propertydaily.com.au'] },
+  },
+  watchlist: { tbc: [] },
+}
+
 describe('Admin, Rules', () => {
   it('lists what is still to be confirmed with Levi', async () => {
     mockApi({
@@ -249,10 +294,25 @@ describe('Admin, Rules', () => {
           cities: { pass: ['Melbourne'], director_review: ['Sydney'], other_cities: 'drop' },
           size: {
             staff_min: 100,
+            staff_hint_min: 75,
             staff_max: 600,
             staff_counted_in: 'city',
             linkedin_staff_multiplier: 2,
+            office_m2_min: 1000,
+            office_m2_max: 6000,
+            director_band_m2: [800, 1000],
+            grow_into_range_months: 24,
           },
+          score: {
+            parts: {
+              trigger: { label: 'Business or property trigger', points: 25 },
+              size: { label: 'Project size', points: 20 },
+            },
+            bands: { research_first: 75, investigate: 50 },
+            band_basis: 'scaled',
+          },
+          office_age: { due_years: 5, recent_move_years: 3 },
+          stages: { pass: 'Active prospect', watch: 'Target account' },
           triggers: {
             main: [{ id: 'lease_ending', label: 'Lease ending in 1 to 3 years' }],
             other: [],
@@ -278,6 +338,24 @@ describe('Admin, Rules', () => {
     expect(screen.getByText('Is 10 m² per person right?')).toBeInTheDocument()
     expect(screen.getByText('TBC')).toBeInTheDocument()
     expect(screen.getByText(/propertydaily\.com\.au/)).toBeInTheDocument()
+  })
+
+  it('shows the version 2 rules: the staff hint, the six parts, the bands and the stages', async () => {
+    mockApi({
+      '/api/v1/lead-finder/rules': RULES_V2,
+    })
+    renderWithProviders(<AdminRulesTab />)
+    expect(
+      await screen.findByText(/staff is only a hint: 75\s*\+ office staff/),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Business or property trigger: 25 points')).toBeInTheDocument()
+    expect(
+      screen.getByText(/75 to 100 research first, 50 to 74 investigate, under 50 nurture/),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/scaled to the points checked/)).toBeInTheDocument()
+    expect(screen.getByText('Pass: Active prospect')).toBeInTheDocument()
+    expect(screen.getByText('Watch: Target account')).toBeInTheDocument()
+    expect(screen.getByText(/More than 5 years at the same address is due/)).toBeInTheDocument()
   })
 })
 

@@ -1,6 +1,33 @@
 {
   "components": {
     "schemas": {
+      "AccessPoints": {
+        "additionalProperties": false,
+        "properties": {
+          "contact_role": {
+            "minimum": 0.0,
+            "title": "Contact Role",
+            "type": "integer"
+          },
+          "customer_link": {
+            "minimum": 0.0,
+            "title": "Customer Link",
+            "type": "integer"
+          },
+          "hubspot_contact": {
+            "minimum": 0.0,
+            "title": "Hubspot Contact",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "contact_role",
+          "hubspot_contact",
+          "customer_link"
+        ],
+        "title": "AccessPoints",
+        "type": "object"
+      },
       "AreaOption": {
         "properties": {
           "id": {
@@ -34,6 +61,29 @@
           "suburbs"
         ],
         "title": "AreaOption",
+        "type": "object"
+      },
+      "Bands": {
+        "additionalProperties": false,
+        "properties": {
+          "investigate": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 100.0,
+            "title": "Investigate",
+            "type": "integer"
+          },
+          "research_first": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 100.0,
+            "title": "Research First",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "research_first",
+          "investigate"
+        ],
+        "title": "Bands",
         "type": "object"
       },
       "Blocked": {
@@ -358,6 +408,22 @@
             "$ref": "#/components/schemas/Fact_str_",
             "description": "When an office change might happen, like 2027"
           },
+          "fitout_contractors": {
+            "description": "Names of design or fitout firms that did this company's office, only if a note names them. Firm names only. Can be empty.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Fitout Contractors",
+            "type": "array"
+          },
+          "growth_by": {
+            "$ref": "#/components/schemas/Fact_str_",
+            "description": "When it expects to need that office: YYYY-MM or YYYY. Null if no note says."
+          },
+          "growth_plan": {
+            "$ref": "#/components/schemas/Fact_bool_",
+            "description": "true if the company has raised big money or made a big announcement AND plans to hire a lot. Else false or null."
+          },
           "healthy": {
             "$ref": "#/components/schemas/Fact_bool_",
             "description": "false if in administration, or cutting staff fast. Else true or null."
@@ -377,6 +443,10 @@
             "description": "If the industry belongs to one of the industry groups in the instructions, that group's name exactly as written. Else null.",
             "title": "Industry Group"
           },
+          "last_fitout": {
+            "$ref": "#/components/schemas/Fact_str_",
+            "description": "When that office last had a move, fitout or refit: YYYY-MM or YYYY. The move-in counts too. Null if no note says."
+          },
           "local_team_runs_project": {
             "$ref": "#/components/schemas/Fact_bool_",
             "description": "The local team can run an office project, even if owned overseas"
@@ -388,6 +458,14 @@
           "office_m2": {
             "$ref": "#/components/schemas/Fact_int_",
             "description": "The office's floor area in square metres"
+          },
+          "office_matters": {
+            "$ref": "#/components/schemas/Fact_bool_",
+            "description": "true if the office matters to how the company works: growth, performance, culture, collaboration or talent. A head office or technical office counts, even for a miner or builder. false if it works mostly from warehouses, plants, sites or shops. Null if no note says."
+          },
+          "office_since": {
+            "$ref": "#/components/schemas/Fact_str_",
+            "description": "When the company moved into its current office in that city: YYYY or YYYY-MM. Null if no note says."
           },
           "opening_line": {
             "anyOf": [
@@ -405,6 +483,10 @@
             "$ref": "#/components/schemas/Fact_str_",
             "description": "Like 'ASX-listed, Australian' or 'Private, UK-owned'"
           },
+          "size_needed_m2": {
+            "$ref": "#/components/schemas/Fact_int_",
+            "description": "The floor area in square metres of the office it says it will need after that growth. Null if no note says."
+          },
           "staff_from_linkedin": {
             "description": "true if staff_in_city is a LinkedIn count",
             "title": "Staff From Linkedin",
@@ -418,6 +500,26 @@
             "description": "What happened, in one or two plain sentences",
             "title": "Summary",
             "type": "string"
+          },
+          "talking_points": {
+            "description": "2 or 3 short points for a first call, each tied to the trigger or the office, like 'Lease ends March 2028'. Plain facts, no hype. No people's names, emails or phone numbers. Can be empty.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Talking Points",
+            "type": "array"
+          },
+          "tier_group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "If the industry belongs to one of the tier groups in the instructions, that group's name exactly as written. Else null.",
+            "title": "Tier Group"
           },
           "triggers": {
             "description": "Signs of an office change. Can be empty.",
@@ -438,15 +540,24 @@
           "city",
           "industry",
           "industry_group",
+          "tier_group",
           "owner",
           "staff_in_city",
           "staff_from_linkedin",
           "office_m2",
           "local_team_runs_project",
           "healthy",
+          "office_matters",
           "triggers",
           "boosters",
           "expected_move",
+          "growth_plan",
+          "size_needed_m2",
+          "growth_by",
+          "office_since",
+          "last_fitout",
+          "fitout_contractors",
+          "talking_points",
           "contact_role",
           "summary",
           "opening_line"
@@ -659,6 +770,27 @@
         "title": "CompanyStartedEvent",
         "type": "object"
       },
+      "CompetitionPoints": {
+        "additionalProperties": false,
+        "properties": {
+          "no_contractor_relationship": {
+            "minimum": 0.0,
+            "title": "No Contractor Relationship",
+            "type": "integer"
+          },
+          "no_rival_in_place": {
+            "minimum": 0.0,
+            "title": "No Rival In Place",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "no_rival_in_place",
+          "no_contractor_relationship"
+        ],
+        "title": "CompetitionPoints",
+        "type": "object"
+      },
       "Criteria": {
         "additionalProperties": false,
         "properties": {
@@ -687,6 +819,9 @@
           },
           "never_suggest": {
             "$ref": "#/components/schemas/NeverSuggest"
+          },
+          "office_age": {
+            "$ref": "#/components/schemas/OfficeAge"
           },
           "results": {
             "items": {
@@ -718,6 +853,21 @@
             "title": "Sources Rank",
             "type": "array"
           },
+          "stages": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "enum": [
+                "pass",
+                "director_review",
+                "watch",
+                "drop"
+              ]
+            },
+            "title": "Stages",
+            "type": "object"
+          },
           "tbc": {
             "items": {
               "$ref": "#/components/schemas/TbcNote"
@@ -736,6 +886,7 @@
           "fitout",
           "industries",
           "fit",
+          "office_age",
           "triggers",
           "boosters",
           "never_suggest",
@@ -743,6 +894,7 @@
           "source_domains",
           "score",
           "results",
+          "stages",
           "tbc"
         ],
         "title": "Criteria",
@@ -1127,6 +1279,33 @@
         "title": "Fit",
         "type": "object"
       },
+      "FitPoints": {
+        "additionalProperties": false,
+        "properties": {
+          "buys_strategy": {
+            "minimum": 0.0,
+            "title": "Buys Strategy",
+            "type": "integer"
+          },
+          "tier_1": {
+            "minimum": 0.0,
+            "title": "Tier 1",
+            "type": "integer"
+          },
+          "tier_2": {
+            "minimum": 0.0,
+            "title": "Tier 2",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "buys_strategy",
+          "tier_1",
+          "tier_2"
+        ],
+        "title": "FitPoints",
+        "type": "object"
+      },
       "Fitout": {
         "additionalProperties": false,
         "properties": {
@@ -1417,11 +1596,27 @@
             },
             "title": "Director Review",
             "type": "array"
+          },
+          "tier_1": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tier 1",
+            "type": "array"
+          },
+          "tier_2": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tier 2",
+            "type": "array"
           }
         },
         "required": [
           "director_review",
-          "check_office_size"
+          "check_office_size",
+          "tier_1",
+          "tier_2"
         ],
         "title": "Industries",
         "type": "object"
@@ -1481,6 +1676,23 @@
       },
       "LeadCard": {
         "properties": {
+          "band": {
+            "anyOf": [
+              {
+                "enum": [
+                  "research_first",
+                  "investigate",
+                  "nurture"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "research_first (75 to 100), investigate (50 to 74) or nurture (under 50)",
+            "title": "Band"
+          },
           "checks": {
             "description": "Each rule, and how this company did",
             "items": {
@@ -1530,6 +1742,14 @@
               }
             ],
             "title": "Fitout Aud"
+          },
+          "from_hubspot": {
+            "description": "Numbers taken from HubSpot, because the web research found none",
+            "items": {
+              "type": "string"
+            },
+            "title": "From Hubspot",
+            "type": "array"
           },
           "hubspot": {
             "$ref": "#/components/schemas/HubSpotOut"
@@ -1603,9 +1823,41 @@
             "type": "string"
           },
           "score": {
-            "description": "0 to 100. Stronger and newer signs rank higher.",
+            "description": "0 to 100: the points earned in the Profile's six parts.",
             "title": "Score",
             "type": "integer"
+          },
+          "score_checked": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The most points the tool could judge, like 48 of 60. Empty for a Drop, and for a card made under version 1.",
+            "title": "Score Checked"
+          },
+          "score_parts": {
+            "description": "The six parts and their checks. Empty for a Drop, and for a card made under version 1.",
+            "items": {
+              "$ref": "#/components/schemas/ScorePart"
+            },
+            "title": "Score Parts",
+            "type": "array"
+          },
+          "stage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The Profile's stage for the result. Empty for a card made under version 1.",
+            "title": "Stage"
           },
           "summary": {
             "title": "Summary",
@@ -1627,7 +1879,11 @@
           "id",
           "company",
           "result",
+          "stage",
           "score",
+          "score_parts",
+          "score_checked",
+          "band",
           "summary",
           "why_it_fits",
           "contact_role",
@@ -1640,6 +1896,7 @@
           "facts",
           "hubspot",
           "notes",
+          "from_hubspot",
           "dropped",
           "problems",
           "research",
@@ -1653,6 +1910,23 @@
       "LeadDetail": {
         "description": "The full lead card, and what a person has done with the lead.",
         "properties": {
+          "band": {
+            "anyOf": [
+              {
+                "enum": [
+                  "research_first",
+                  "investigate",
+                  "nurture"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "research_first (75 to 100), investigate (50 to 74) or nurture (under 50)",
+            "title": "Band"
+          },
           "checks": {
             "description": "Each rule, and how this company did",
             "items": {
@@ -1702,6 +1976,14 @@
               }
             ],
             "title": "Fitout Aud"
+          },
+          "from_hubspot": {
+            "description": "Numbers taken from HubSpot, because the web research found none",
+            "items": {
+              "type": "string"
+            },
+            "title": "From Hubspot",
+            "type": "array"
           },
           "hubspot": {
             "$ref": "#/components/schemas/HubSpotOut"
@@ -1830,9 +2112,41 @@
             "title": "Run Id"
           },
           "score": {
-            "description": "0 to 100. Stronger and newer signs rank higher.",
+            "description": "0 to 100: the points earned in the Profile's six parts.",
             "title": "Score",
             "type": "integer"
+          },
+          "score_checked": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The most points the tool could judge, like 48 of 60. Empty for a Drop, and for a card made under version 1.",
+            "title": "Score Checked"
+          },
+          "score_parts": {
+            "description": "The six parts and their checks. Empty for a Drop, and for a card made under version 1.",
+            "items": {
+              "$ref": "#/components/schemas/ScorePart"
+            },
+            "title": "Score Parts",
+            "type": "array"
+          },
+          "stage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The Profile's stage for the result. Empty for a card made under version 1.",
+            "title": "Stage"
           },
           "status": {
             "enum": [
@@ -1880,7 +2194,11 @@
           "id",
           "company",
           "result",
+          "stage",
           "score",
+          "score_parts",
+          "score_checked",
+          "band",
           "summary",
           "why_it_fits",
           "contact_role",
@@ -1893,6 +2211,7 @@
           "facts",
           "hubspot",
           "notes",
+          "from_hubspot",
           "dropped",
           "problems",
           "research",
@@ -2254,6 +2573,23 @@
       "LeadRow": {
         "description": "One row of the results table.",
         "properties": {
+          "band": {
+            "anyOf": [
+              {
+                "enum": [
+                  "research_first",
+                  "investigate",
+                  "nurture"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "research_first (75 to 100), investigate (50 to 74) or nurture (under 50)",
+            "title": "Band"
+          },
           "city": {
             "anyOf": [
               {
@@ -2394,8 +2730,21 @@
             "title": "Run Id"
           },
           "score": {
+            "description": "The points earned, out of the Profile's 100",
             "title": "Score",
             "type": "integer"
+          },
+          "score_checked": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The most points the tool could judge, like 48 of 60. Empty for a Drop, and for a lead scored under version 1.",
+            "title": "Score Checked"
           },
           "staff_in_city": {
             "anyOf": [
@@ -2407,6 +2756,11 @@
               }
             ],
             "title": "Staff In City"
+          },
+          "stage": {
+            "description": "The Profile's stage for the result, like Active prospect",
+            "title": "Stage",
+            "type": "string"
           },
           "status": {
             "enum": [
@@ -2499,7 +2853,10 @@
           "city",
           "suburb",
           "result",
+          "stage",
           "score",
+          "score_checked",
+          "band",
           "status",
           "hubspot_status",
           "trigger_id",
@@ -3091,6 +3448,27 @@
         "title": "NoteOut",
         "type": "object"
       },
+      "OfficeAge": {
+        "additionalProperties": false,
+        "properties": {
+          "due_years": {
+            "exclusiveMinimum": 0.0,
+            "title": "Due Years",
+            "type": "integer"
+          },
+          "recent_move_years": {
+            "exclusiveMinimum": 0.0,
+            "title": "Recent Move Years",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "due_years",
+          "recent_move_years"
+        ],
+        "title": "OfficeAge",
+        "type": "object"
+      },
       "OptionCaps": {
         "properties": {
           "company_cap_usd": {
@@ -3117,6 +3495,27 @@
           "daily_left_usd"
         ],
         "title": "OptionCaps",
+        "type": "object"
+      },
+      "PartRule": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "points": {
+            "exclusiveMinimum": 0.0,
+            "title": "Points",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "label",
+          "points"
+        ],
+        "title": "PartRule",
         "type": "object"
       },
       "PlanReadyData": {
@@ -4497,34 +4896,61 @@
       },
       "Score": {
         "additionalProperties": false,
+        "description": "The Target Customer Profile's 100 points in six parts (Criteria_v2.md section 6).",
         "properties": {
-          "booster_each": {
-            "minimum": 0.0,
-            "title": "Booster Each",
-            "type": "integer"
+          "access": {
+            "$ref": "#/components/schemas/AccessPoints"
           },
-          "boosters_max": {
-            "minimum": 0.0,
-            "title": "Boosters Max",
-            "type": "integer"
+          "band_basis": {
+            "enum": [
+              "scaled",
+              "raw"
+            ],
+            "title": "Band Basis",
+            "type": "string"
+          },
+          "bands": {
+            "$ref": "#/components/schemas/Bands"
+          },
+          "check_labels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Check Labels",
+            "type": "object"
+          },
+          "competition": {
+            "$ref": "#/components/schemas/CompetitionPoints"
           },
           "fit": {
-            "additionalProperties": {
-              "type": "integer"
-            },
-            "propertyNames": {
-              "enum": [
-                "pass",
-                "director_review"
-              ]
-            },
-            "title": "Fit",
-            "type": "object"
+            "$ref": "#/components/schemas/FitPoints"
           },
           "lease_in_best_window": {
             "minimum": 0.0,
             "title": "Lease In Best Window",
             "type": "integer"
+          },
+          "no_recent_move": {
+            "minimum": 0.0,
+            "title": "No Recent Move",
+            "type": "integer"
+          },
+          "parts": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/PartRule"
+            },
+            "propertyNames": {
+              "enum": [
+                "trigger",
+                "size",
+                "timing",
+                "access",
+                "fit",
+                "competition"
+              ]
+            },
+            "title": "Parts",
+            "type": "object"
           },
           "recency": {
             "items": {
@@ -4534,6 +4960,9 @@
             "title": "Recency",
             "type": "array"
           },
+          "size": {
+            "$ref": "#/components/schemas/SizePoints"
+          },
           "source": {
             "additionalProperties": {
               "type": "integer"
@@ -4541,7 +4970,7 @@
             "title": "Source",
             "type": "object"
           },
-          "trigger": {
+          "trigger_group": {
             "additionalProperties": {
               "type": "integer"
             },
@@ -4552,26 +4981,128 @@
                 "weak"
               ]
             },
-            "title": "Trigger",
+            "title": "Trigger Group",
             "type": "object"
           },
           "undated": {
             "minimum": 0.0,
             "title": "Undated",
             "type": "integer"
+          },
+          "unseen": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unseen",
+            "type": "array"
+          },
+          "years_at_address": {
+            "minimum": 0.0,
+            "title": "Years At Address",
+            "type": "integer"
           }
         },
         "required": [
-          "trigger",
+          "parts",
+          "check_labels",
+          "trigger_group",
+          "source",
+          "size",
           "recency",
           "undated",
           "lease_in_best_window",
+          "years_at_address",
+          "no_recent_move",
+          "access",
           "fit",
-          "source",
-          "booster_each",
-          "boosters_max"
+          "competition",
+          "unseen",
+          "bands",
+          "band_basis"
         ],
         "title": "Score",
+        "type": "object"
+      },
+      "ScoreCheck": {
+        "properties": {
+          "detail": {
+            "default": "",
+            "title": "Detail",
+            "type": "string"
+          },
+          "earned": {
+            "title": "Earned",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "known": {
+            "description": "false means 'not known yet': it adds nothing to 'checked'",
+            "title": "Known",
+            "type": "boolean"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "max": {
+            "title": "Max",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "earned",
+          "max",
+          "known"
+        ],
+        "title": "ScoreCheck",
+        "type": "object"
+      },
+      "ScorePart": {
+        "properties": {
+          "checked": {
+            "description": "The points of the checks the tool could judge",
+            "title": "Checked",
+            "type": "integer"
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/ScoreCheck"
+            },
+            "title": "Checks",
+            "type": "array"
+          },
+          "earned": {
+            "title": "Earned",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "max": {
+            "description": "The part's points in the Profile's 100",
+            "title": "Max",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "max",
+          "earned",
+          "checked",
+          "checks"
+        ],
+        "title": "ScorePart",
         "type": "object"
       },
       "SearchOut": {
@@ -5006,6 +5537,11 @@
             "title": "Director Band M2",
             "type": "array"
           },
+          "grow_into_range_months": {
+            "exclusiveMinimum": 0.0,
+            "title": "Grow Into Range Months",
+            "type": "integer"
+          },
           "linkedin_staff_multiplier": {
             "exclusiveMinimum": 0.0,
             "title": "Linkedin Staff Multiplier",
@@ -5034,6 +5570,11 @@
             "title": "Staff Counted In",
             "type": "string"
           },
+          "staff_hint_min": {
+            "exclusiveMinimum": 0.0,
+            "title": "Staff Hint Min",
+            "type": "integer"
+          },
           "staff_max": {
             "exclusiveMinimum": 0.0,
             "title": "Staff Max",
@@ -5043,19 +5584,69 @@
             "exclusiveMinimum": 0.0,
             "title": "Staff Min",
             "type": "integer"
+          },
+          "staff_sources": {
+            "items": {
+              "enum": [
+                "hubspot",
+                "headcount_tool",
+                "linkedin",
+                "web_research"
+              ],
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Staff Sources",
+            "type": "array"
           }
         },
         "required": [
           "staff_min",
+          "staff_hint_min",
           "staff_max",
           "staff_counted_in",
           "office_m2_min",
           "office_m2_max",
           "m2_per_staff",
           "director_band_m2",
-          "linkedin_staff_multiplier"
+          "linkedin_staff_multiplier",
+          "grow_into_range_months",
+          "staff_sources"
         ],
         "title": "Size",
+        "type": "object"
+      },
+      "SizePoints": {
+        "additionalProperties": false,
+        "properties": {
+          "confirmed_in_range": {
+            "minimum": 0.0,
+            "title": "Confirmed In Range",
+            "type": "integer"
+          },
+          "director": {
+            "minimum": 0.0,
+            "title": "Director",
+            "type": "integer"
+          },
+          "estimated_in_range": {
+            "minimum": 0.0,
+            "title": "Estimated In Range",
+            "type": "integer"
+          },
+          "growing_into_range": {
+            "minimum": 0.0,
+            "title": "Growing Into Range",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "confirmed_in_range",
+          "estimated_in_range",
+          "growing_into_range",
+          "director"
+        ],
+        "title": "SizePoints",
         "type": "object"
       },
       "SliceDoneData": {
@@ -5683,13 +6274,32 @@
             "title": "Group",
             "type": "string"
           },
+          "group_points": {
+            "default": 0,
+            "description": "The trigger part of the score",
+            "title": "Group Points",
+            "type": "integer"
+          },
           "points": {
+            "description": "Group, source and timing together. It ranks the triggers.",
             "title": "Points",
             "type": "integer"
           },
           "source_kind": {
             "title": "Source Kind",
             "type": "string"
+          },
+          "source_points": {
+            "default": 0,
+            "description": "The trigger part of the score",
+            "title": "Source Points",
+            "type": "integer"
+          },
+          "timing_points": {
+            "default": 0,
+            "description": "How recent, or how near the lease end",
+            "title": "Timing Points",
+            "type": "integer"
           },
           "trigger": {
             "$ref": "#/components/schemas/TriggerFound"
@@ -5720,6 +6330,11 @@
             ],
             "title": "Best Window Years",
             "type": "array"
+          },
+          "consultant_window_months": {
+            "exclusiveMinimum": 0.0,
+            "title": "Consultant Window Months",
+            "type": "integer"
           },
           "main": {
             "items": {
@@ -5758,6 +6373,7 @@
           "window_years",
           "best_window_years",
           "recent_months",
+          "consultant_window_months",
           "main",
           "other",
           "weak"

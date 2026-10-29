@@ -17,6 +17,7 @@ from apps.lead_finder.context import Origin
 from apps.lead_finder.params import AreaId, LeadFinderRunParams
 from apps.lead_finder.research import LeadCard
 from apps.lead_finder.rules import Result
+from apps.lead_finder.scoring import Band
 from core.api.models import OutModel, SafeText
 from core.hubspot.matching import Status
 from core.runs.schemas import RunStatus
@@ -125,7 +126,15 @@ class LeadRow(BaseModel):
     city: str | None
     suburb: str | None
     result: Result
-    score: int
+    stage: str = Field(description="The Profile's stage for the result, like Active prospect")
+    score: int = Field(description="The points earned, out of the Profile's 100")
+    score_checked: int | None = Field(
+        description="The most points the tool could judge, like 48 of 60. Empty for a Drop, "
+        "and for a lead scored under version 1."
+    )
+    band: Band | None = Field(
+        description="research_first (75 to 100), investigate (50 to 74) or nurture (under 50)"
+    )
     status: LeadStatus
     hubspot_status: HubSpotStatus
     trigger_id: str | None = Field(description="The best trigger that counts")

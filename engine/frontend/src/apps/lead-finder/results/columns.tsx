@@ -11,7 +11,7 @@ import { Money } from '@/components/money'
 import { ResultBadge } from '@/components/result-badge'
 import { StatusBadge } from '@/components/status-badge'
 import { Badge } from '@/components/ui/badge'
-import { formatDate, formatM2, UNKNOWN } from '@/lib/format'
+import { formatDate, formatM2, formatScore, UNKNOWN } from '@/lib/format'
 
 const help = createColumnHelper<LeadRow>()
 
@@ -20,7 +20,8 @@ const company = help.accessor('company', {
   // The name stays in view while the other columns scroll sideways.
   meta: { sticky: true, className: 'max-w-64 sm:min-w-44' },
   cell: (info) => {
-    const { score, city, is_test: isTest } = info.row.original
+    const { score, score_checked: checked, city, is_test: isTest } = info.row.original
+    const points = formatScore(score, checked)
     return (
       <span className="flex min-w-0 flex-col">
         <span className="flex items-center gap-2">
@@ -34,7 +35,7 @@ const company = help.accessor('company', {
         </span>
         {/* On a phone the score and city columns are hidden, so they sit under the name. */}
         <span className="truncate text-caption text-muted-foreground sm:hidden">
-          {city ? `Score ${String(score)}, ${city}` : `Score ${String(score)}`}
+          {city ? `Score ${points}, ${city}` : `Score ${points}`}
         </span>
       </span>
     )
@@ -46,9 +47,16 @@ const result = help.accessor('result', {
   cell: (info) => <ResultBadge result={info.getValue()} />,
 })
 
+const stage = help.accessor('stage', {
+  header: 'Stage',
+  enableSorting: false,
+  meta: { hideBelow: 'md' },
+})
+
 const score = help.accessor('score', {
   header: 'Score',
   meta: { align: 'right', className: 'tabular-nums', hideBelow: 'sm' },
+  cell: (info) => formatScore(info.getValue(), info.row.original.score_checked),
 })
 
 const city = help.accessor('city', {
@@ -118,6 +126,7 @@ const cost = help.accessor('cost_usd', {
 export const TABLE_COLUMNS = [
   company,
   result,
+  stage,
   score,
   city,
   sign,

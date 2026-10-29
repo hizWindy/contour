@@ -196,6 +196,11 @@ export function formatM2(value: number | null | undefined, estimated = false): s
 }
 
 /** `120 staff`. */
+/** "51 of 77" when the tool says how many points it could check, else just "51". */
+export function formatScore(score: number, checked: number | null | undefined): string {
+  return checked ? `${formatNumber(score)} of ${formatNumber(checked)}` : formatNumber(score)
+}
+
 export function formatStaff(value: number | null | undefined): string {
   if (value === null || value === undefined || !Number.isFinite(value)) {
     return UNKNOWN
