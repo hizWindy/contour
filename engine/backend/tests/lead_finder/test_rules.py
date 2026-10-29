@@ -1,4 +1,4 @@
-"""The rules files load, match COMPANY.md, and stop the backend when they're wrong."""
+"""The rules files load, match the criteria documents, and stop the backend when they're wrong."""
 
 import shutil
 from pathlib import Path
@@ -21,12 +21,13 @@ def edit(path: Path, old: str, new: str) -> None:
     path.write_text(content.replace(old, new), encoding="utf-8")
 
 
-def test_rules_match_company_md() -> None:
+def test_rules_match_the_criteria_documents() -> None:
     criteria = load_rules().criteria
     assert criteria.cities.pass_ == ["Melbourne", "Adelaide", "Perth"]
     assert criteria.cities.director_review == ["Sydney"]
     size = criteria.size
-    assert (size.staff_min, size.staff_max) == (100, 600)
+    assert (size.staff_min, size.staff_hint_min, size.staff_max) == (100, 75, 600)
+    assert size.grow_into_range_months == 24
     assert (size.office_m2_min, size.office_m2_max) == (1000, 6000)
     assert size.director_band_m2 == (800, 1000)
     assert criteria.fitout.rate_per_m2_aud == 1500
@@ -83,6 +84,13 @@ def test_impossible_size_stops_start_up(tmp_path: Path) -> None:
     rules_dir = copy_rules(tmp_path)
     edit(rules_dir / "criteria.yaml", "staff_min: 100", "staff_min: 700")
     with pytest.raises(ValidationError, match="staff_min must be below staff_max"):
+        read_rules(rules_dir)
+
+
+def test_a_staff_hint_above_the_minimum_stops_start_up(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    edit(rules_dir / "criteria.yaml", "staff_hint_min: 75", "staff_hint_min: 150")
+    with pytest.raises(ValidationError, match="staff_hint_min must not be above staff_min"):
         read_rules(rules_dir)
 
 

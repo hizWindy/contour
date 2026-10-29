@@ -1,7 +1,7 @@
 """The rules and the score. Pure code: no AI and no database inside.
 
 The same facts always get the same result, so every rule is easy to test. The rules come
-from COMPANY.md, through rules/criteria.yaml.
+from Criteria_v2.md (a draft until Levi confirms it), through rules/criteria.yaml.
 """
 
 import re
@@ -72,7 +72,7 @@ def judge(
     checks: list[RuleCheck] = []
     checks += _never_suggest(facts, hubspot, rules, today)
     checks.append(_city(facts, rules))
-    size_check, office_m2, estimated = _size(facts, rules)
+    size_check, office_m2, estimated = _size(facts, rules, today)
     checks.append(size_check)
     checks.append(_industry(facts, rules))
     checks += _local_and_healthy(facts)
@@ -185,17 +185,26 @@ def _city(facts: CompanyFacts, rules: LeadFinderRules) -> RuleCheck:
     return RuleCheck(rule="City", outcome="director", detail=f"{place}: a Director decides")
 
 
-def _size(facts: CompanyFacts, rules: LeadFinderRules) -> tuple[RuleCheck, int | None, bool]:
+def _size(
+    facts: CompanyFacts, rules: LeadFinderRules, today: date
+) -> tuple[RuleCheck, int | None, bool]:
+    """The size rule. A known office size is judged against the range. A size worked out from
+    staff is only a hint (Criteria_v2): it can raise a flag, never a Drop. A small company that
+    will soon need an office in range still fits (`_growing`)."""
     size = rules.criteria.size
     staff = facts.staff_in_city.value
     if staff is not None and facts.staff_from_linkedin:
         staff = round(staff * size.linkedin_staff_multiplier)
+    from_staff = False
     if facts.office_m2.value is not None:
         m2, estimated, basis = facts.office_m2.value, facts.office_m2.label != "confirmed", ""
     elif staff is not None:
-        m2, estimated = round(staff * size.m2_per_staff), True
+        m2, estimated, from_staff = round(staff * size.m2_per_staff), True, True
         basis = f" (estimated: {staff} staff x {size.m2_per_staff:g} m²)"
     else:
+        grown = _growing(facts, rules, today)
+        if grown is not None:
+            return grown
         return (
             RuleCheck(rule="Size", outcome="unknown", detail="Office size and staff not known"),
             None,
@@ -206,13 +215,50 @@ def _size(facts: CompanyFacts, rules: LeadFinderRules) -> tuple[RuleCheck, int |
     low, _ = size.director_band_m2
     if m2 > size.office_m2_max or (staff is not None and staff > size.staff_max):
         check = RuleCheck(rule="Size", outcome="director", detail=f"{text}: over the top limit")
-    elif m2 >= size.office_m2_min:
-        check = RuleCheck(rule="Size", outcome="ok", detail=text)
+        return check, m2, estimated  # a plan to grow even bigger is no reason to look again
+    if m2 >= size.office_m2_min:
+        return RuleCheck(rule="Size", outcome="ok", detail=text), m2, estimated
+    if from_staff and staff is not None:
+        hint = size.staff_hint_min
+        if staff >= hint:
+            check = RuleCheck(
+                rule="Size", outcome="ok", detail=f"{text}: at the staff hint ({hint}+)"
+            )
+            return check, m2, estimated
+        detail = f"{text}: below the staff hint ({hint}+). Check the office size"
+        check = RuleCheck(rule="Size", outcome="flag", detail=detail)
     elif m2 >= low:
         check = RuleCheck(rule="Size", outcome="director", detail=f"{text}: just under the minimum")
     else:
         check = RuleCheck(rule="Size", outcome="fail", detail=f"{text}: too small")
-    return check, m2, estimated
+    grown = _growing(facts, rules, today)
+    return grown if grown is not None else (check, m2, estimated)
+
+
+def _growing(
+    facts: CompanyFacts, rules: LeadFinderRules, today: date
+) -> tuple[RuleCheck, int, bool] | None:
+    """A company below the range that will soon need an office in it still fits (Levi, 29 Oct):
+    big funding or a big announcement, plus a plan to hire. The office it will need is what
+    counts. None when there is no such plan, or it is further away than `grow_into_range_months`."""
+    size = rules.criteria.size
+    needed = facts.size_needed_m2.value
+    if facts.growth_plan.value is not True or needed is None or needed < size.office_m2_min:
+        return None
+    when = parse_date(facts.growth_by.value)
+    if when is not None and when > today + timedelta(
+        days=round(size.grow_into_range_months * 30.44)
+    ):
+        return None
+    text = f"{needed:,} m²"
+    if needed > size.office_m2_max:
+        detail = f"Growing: will need about {text}, over the top limit"
+        return RuleCheck(rule="Size", outcome="director", detail=detail), needed, True
+    if when is None:
+        detail = f"Growing into the range: will need about {text}. When is not known, so check"
+        return RuleCheck(rule="Size", outcome="flag", detail=detail), needed, True
+    detail = f"Growing into the range: will need about {text} by {facts.growth_by.value}"
+    return RuleCheck(rule="Size", outcome="ok", detail=detail), needed, True
 
 
 def _industry(facts: CompanyFacts, rules: LeadFinderRules) -> RuleCheck:

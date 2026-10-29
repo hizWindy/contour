@@ -34,6 +34,21 @@ def test_a_link_we_never_read_makes_the_fact_unknown() -> None:
     assert_fully_unknown(checked.facts.office_m2)
 
 
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [("growth_plan", True), ("size_needed_m2", 1500), ("growth_by", "2027-06")],
+)
+def test_the_growth_facts_need_a_page_we_read_too(name: str, value: Any) -> None:
+    kept = check_sources(make_facts(**{name: fact(value)}), SEEN, CRITERIA)
+    assert kept.dropped == []
+    assert getattr(kept.facts, name).value == value
+    unread = check_sources(
+        make_facts(**{name: fact(value, "https://made-up.example/page")}), SEEN, CRITERIA
+    )
+    assert_fully_unknown(getattr(unread.facts, name))
+    assert unread.dropped[0].startswith(f"{name}: link not among the pages read")
+
+
 def test_a_fact_without_a_link_is_unknown() -> None:
     checked = check_sources(make_facts(industry=fact("Software", None)), SEEN, CRITERIA)
     assert checked.facts.industry.value is None

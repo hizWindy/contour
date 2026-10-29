@@ -4,12 +4,19 @@ PARAMETERS.md section 2 lists what we record for each company. Every fact has a 
 link, a date and a label. A fact with no source is unknown.
 """
 
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 Label = Literal["confirmed", "estimated", "guessed"]
 Angle = Literal["property", "people", "money", "gaps"]
+
+# Facts added with company criteria version 2. A lead card saved earlier, and a test form that
+# leaves them out, don't have them: they are unknown. Claude's answer always has every fact,
+# because the form asks for all of them, so the form itself has no defaults.
+NEWER_FACTS = ("growth_plan", "size_needed_m2", "growth_by")
+NEWER_LISTS: tuple[str, ...] = ()
+NEWER_TEXTS: tuple[str, ...] = ()
 
 
 # --- Step 1: a search worker's notes --------------------------------------------------
@@ -77,11 +84,39 @@ class CompanyFacts(BaseModel):
     triggers: list[TriggerFound] = Field(description="Signs of an office change. Can be empty.")
     boosters: list[BoosterFound] = Field(description="Can be empty")
     expected_move: Fact[str] = Field(description="When an office change might happen, like 2027")
+    growth_plan: Fact[bool] = Field(
+        description="true if the company has raised big money or made a big announcement AND "
+        "plans to hire a lot. Else false or null."
+    )
+    size_needed_m2: Fact[int] = Field(
+        description="The floor area in square metres of the office it says it will need after "
+        "that growth. Null if no note says."
+    )
+    growth_by: Fact[str] = Field(
+        description="When it expects to need that office: YYYY-MM or YYYY. Null if no note says."
+    )
     contact_role: str | None = Field(
         description="The role to contact first, like Head of Property, COO or CFO. No names."
     )
     summary: str = Field(description="What happened, in one or two plain sentences")
     opening_line: str | None = Field(description="A friendly first line for a sales email")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _fill_newer_facts(cls, data: Any) -> Any:
+        """Facts that didn't exist when a card was saved are unknown, not an error."""
+        if not isinstance(data, dict):
+            return data
+        filled = dict(data)
+        for name in NEWER_FACTS:
+            filled.setdefault(
+                name, {"value": None, "source_url": None, "source_date": None, "label": None}
+            )
+        for name in NEWER_LISTS:
+            filled.setdefault(name, [])
+        for name in NEWER_TEXTS:
+            filled.setdefault(name, None)
+        return filled
 
 
 # --- Discovery: one slice's list of companies -----------------------------------------------

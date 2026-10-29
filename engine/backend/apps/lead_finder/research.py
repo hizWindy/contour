@@ -82,7 +82,8 @@ ANGLE_FOCUS = {
     "people": "its staff: how many work in each Australian city, hiring, growth, return to "
     "office, restructures, staff cuts, and a new CEO",
     "money": "its business: big new contracts, takeovers and mergers, fast growth, money "
-    "raised, profit, and any administration",
+    "raised and any plan to hire or grow (with the office size it says it will need), profit, "
+    "and any administration",
 }
 NOTE_MAX_CHARS = 400  # a note's claim: one line, cut after parsing (a long answer is paid for)
 log = logging.getLogger(__name__)
@@ -532,6 +533,9 @@ def empty_facts(company: str) -> CompanyFacts:
         triggers=[],
         boosters=[],
         expected_move=unknown(),
+        growth_plan=unknown(),
+        size_needed_m2=unknown(),
+        growth_by=unknown(),
         contact_role=None,
         summary="Nothing useful was found.",
         opening_line=None,

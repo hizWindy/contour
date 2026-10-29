@@ -1,6 +1,7 @@
 """The rules and the score, including the edge cases: 99 vs 100 staff, Sydney, an open deal."""
 
 from datetime import date
+from typing import Any
 
 import pytest
 
@@ -32,15 +33,87 @@ def test_a_good_lead_passes_with_its_score() -> None:
     assert result.fitout_aud == 2500 * 1500
 
 
+def size_check(result: Verdict) -> RuleCheck:
+    (check,) = [check for check in result.checks if check.rule == "Size"]
+    return check
+
+
 @pytest.mark.parametrize(
-    ("staff", "expected"),
-    [(99, "director_review"), (100, "pass"), (600, "pass"), (601, "director_review"), (79, "drop")],
+    ("staff", "expected", "outcome"),
+    [
+        (74, "pass", "flag"),  # below the hint: check the office size, never a Drop
+        (75, "pass", "ok"),
+        (99, "pass", "ok"),
+        (100, "pass", "ok"),
+        (600, "pass", "ok"),
+        (601, "director_review", "director"),
+    ],
 )
-def test_staff_limits_when_the_office_size_is_unknown(staff: int, expected: str) -> None:
+def test_staff_is_only_a_hint_when_the_office_size_is_unknown(
+    staff: int, expected: str, outcome: str
+) -> None:
     result = verdict(office_m2=fact(None), staff_in_city=fact(staff))
     assert result.result == expected
+    assert size_check(result).outcome == outcome
     assert result.office_m2 == staff * 10
     assert result.office_m2_estimated
+
+
+GROWING: dict[str, Any] = {
+    "office_m2": fact(None),
+    "staff_in_city": fact(35),
+    "growth_plan": fact(True),
+    "size_needed_m2": fact(1500),
+    "growth_by": fact("2027-06"),
+}
+
+
+def growing(**changes: Any) -> Verdict:
+    """Like Southern Launch: 35 staff and no known office, but funding to grow to 150 staff."""
+    return judge(make_facts(**{**GROWING, **changes}), NEW, load_rules(), TODAY)
+
+
+def test_a_small_company_that_is_growing_into_the_range_fits() -> None:
+    result = growing()
+    assert result.result == "pass"
+    assert (result.office_m2, result.office_m2_estimated) == (1500, True)
+    assert result.fitout_aud == 1500 * 1500
+    check = size_check(result)
+    assert check.outcome == "ok"
+    assert check.detail == "Growing into the range: will need about 1,500 m² by 2027-06"
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"growth_plan": fact(False)},
+        {"growth_plan": fact(None)},
+        {"size_needed_m2": fact(900)},  # still under the range
+        {"size_needed_m2": fact(None)},
+        {"growth_by": fact("2030-01")},  # further away than 24 months
+    ],
+)
+def test_growth_needs_a_plan_a_big_enough_office_and_a_near_date(changes: dict[str, Any]) -> None:
+    check = size_check(growing(**changes))
+    assert "Growing" not in check.detail
+    assert check.outcome == "flag"  # 35 staff is 350 m², below the staff hint
+
+
+def test_growth_with_no_date_is_a_flag_to_check() -> None:
+    result = growing(growth_by=fact(None))
+    check = size_check(result)
+    assert check.outcome == "flag"
+    assert check.detail.endswith("When is not known, so check")
+    assert result.result == "pass"  # a flag never changes the result
+
+
+def test_growth_rescues_a_known_small_office_but_not_one_over_the_limit() -> None:
+    small = {"office_m2": fact(400), "staff_in_city": fact(None)}
+    assert growing(**small).result == "pass"  # 400 m² alone would be a Drop
+    assert growing(**small, growth_plan=fact(False)).result == "drop"
+    over = growing(office_m2=fact(7000), staff_in_city=fact(None))
+    assert over.result == "director_review"
+    assert size_check(over).detail == "7,000 m²: over the top limit"
 
 
 def test_linkedin_staff_count_is_doubled() -> None:

@@ -11,14 +11,16 @@ cities:
   other_cities: director_review # "Sydney or another city" goes to a Director
 
 size:
-  staff_min: 100
+  staff_min: 100 # the brief's "100+ in one office". The HubSpot watchlist lists companies from here
+  staff_hint_min: 75 # the Profile's "75+ office staff". When judging a lead, a size worked out from staff is only a hint: below this it gets a "check office size" flag, never a Drop
   staff_max: 600 # over this goes to Director review (a possible Whale Pipeline project)
   staff_counted_in: city
   office_m2_min: 1000
   office_m2_max: 6000
   m2_per_staff: 10 # used only when the office size isn't known
-  director_band_m2: [800, 1000] # just under the minimum goes to a Director, not Drop
+  director_band_m2: [800, 1000] # a KNOWN office just under the minimum goes to a Director, not Drop
   linkedin_staff_multiplier: 2 # real staff is about LinkedIn staff x 2
+  grow_into_range_months: 24 # a small company that will need an office in range within this long still fits
 
 fitout:
   rate_per_m2_aud: 1500 # the minimum rate in the deal criteria
@@ -133,6 +135,10 @@ tbc:
     note: Question 6. Does 100+ staff mean in that city, or across the whole company?
   - key: size.m2_per_staff
     note: Question 8. Is 10 m² per person right?
+  - key: size.staff_hint_min
+    note: Levi's brief says 100+ in one office. The Profile says 75+. We start at 75, because a flag costs less than a missed lead. Levi picks, and then staff_min should match.
+  - key: size.grow_into_range_months
+    note: Levi's 29 Oct email says a small company that will soon grow into the range counts (Southern Launch, 30 to 40 staff, funding for 150). He didn't say how soon. 24 months is our guess.
   - key: size.director_band_m2
     note: Relaxes Levi's 1,000 m² rule. Alvarez & Marsal at 800 m² is Contour Validated.
   - key: size.linkedin_staff_multiplier

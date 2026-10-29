@@ -13,6 +13,9 @@ What each fact means:
 - local_team_runs_project: true if an Australian head office or local leader runs property decisions, even when the owner is overseas.
 - healthy: false only if a note says the company is in administration, or cutting staff fast.
 - expected_move: when an office change might happen, like "2027", only if a note points to it.
+- growth_plan: true only if a note says the company has raised big money or made a big announcement AND plans to hire a lot. false if a note says it has no such plan. null if no note says.
+- size_needed_m2: the floor area, in square metres, of the office the company says it will need after that growth. If a note gives only the staff it will have, work it out as staff x 10 and label it "estimated". null if no note says.
+- growth_by: when it expects to need that office, like "2027-06" or "2027". null if no note says.
 
 Triggers are signs of an office change. Use these ids only:
 $triggers

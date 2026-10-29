@@ -39,6 +39,7 @@ class Cities(Strict):
 
 class Size(Strict):
     staff_min: int = Field(gt=0)
+    staff_hint_min: int = Field(gt=0)
     staff_max: int = Field(gt=0)
     staff_counted_in: Literal["city", "company"]
     office_m2_min: int = Field(gt=0)
@@ -46,11 +47,14 @@ class Size(Strict):
     m2_per_staff: float = Field(gt=0)
     director_band_m2: tuple[int, int]
     linkedin_staff_multiplier: float = Field(gt=0)
+    grow_into_range_months: int = Field(gt=0)
 
     @model_validator(mode="after")
     def check_ranges(self) -> Self:
         if self.staff_min >= self.staff_max:
             raise ValueError("staff_min must be below staff_max")
+        if self.staff_hint_min > self.staff_min:
+            raise ValueError("staff_hint_min must not be above staff_min")
         if self.office_m2_min >= self.office_m2_max:
             raise ValueError("office_m2_min must be below office_m2_max")
         low, high = self.director_band_m2
