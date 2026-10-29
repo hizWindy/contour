@@ -38,6 +38,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.lead_finder.context import ResearchContext
 from apps.lead_finder.fields import AngleNotes, CompanyFacts, Fact
+from apps.lead_finder.office_numbers import fill_gaps, office_numbers
 from apps.lead_finder.params import (
     NAME_MESSAGE,
     clean_typed_city,
@@ -200,6 +201,10 @@ class LeadCard(BaseModel):
         default_factory=list,
         description="What each source said. A summary of the page, not a quote.",
     )
+    from_hubspot: list[str] = Field(
+        default_factory=list,
+        description="Numbers taken from HubSpot, because the web research found none",
+    )
     dropped: list[str] = Field(description="Facts the source check removed, and why")
     problems: list[str] = Field(description="Searches that failed, or caps that were reached")
     research: ResearchCost
@@ -335,6 +340,9 @@ async def research_company(
         fuzzy_min=settings.match_fuzzy_min,
         profile_min=settings.match_profile_min,
     )
+    # HubSpot may hold a number the research didn't find. It fills the gap and never overwrites.
+    numbers = await office_numbers(session, hubspot.hubspot_id, metro)
+    facts, from_hubspot = fill_gaps(facts, numbers, rules, job.today)
     verdict = judge(facts, hubspot, rules, job.today)
     card = LeadCard(
         id=job.id,
@@ -366,6 +374,7 @@ async def research_company(
             )
             for note in job.notes
         ],
+        from_hubspot=from_hubspot,
         dropped=dropped,
         problems=job.problems,
         research=ResearchCost(

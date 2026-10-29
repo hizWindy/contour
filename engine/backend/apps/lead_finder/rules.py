@@ -37,6 +37,9 @@ class Cities(Strict):
     other_cities: Literal["director_review", "drop"]
 
 
+StaffSource = Literal["hubspot", "headcount_tool", "linkedin", "web_research"]
+
+
 class Size(Strict):
     staff_min: int = Field(gt=0)
     staff_hint_min: int = Field(gt=0)
@@ -48,6 +51,7 @@ class Size(Strict):
     director_band_m2: tuple[int, int]
     linkedin_staff_multiplier: float = Field(gt=0)
     grow_into_range_months: int = Field(gt=0)
+    staff_sources: list[StaffSource] = Field(min_length=1)
 
     @model_validator(mode="after")
     def check_ranges(self) -> Self:
@@ -55,6 +59,8 @@ class Size(Strict):
             raise ValueError("staff_min must be below staff_max")
         if self.staff_hint_min > self.staff_min:
             raise ValueError("staff_hint_min must not be above staff_min")
+        if len(set(self.staff_sources)) != len(self.staff_sources):
+            raise ValueError("staff_sources lists a source twice")
         if self.office_m2_min >= self.office_m2_max:
             raise ValueError("office_m2_min must be below office_m2_max")
         low, high = self.director_band_m2

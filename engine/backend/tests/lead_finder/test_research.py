@@ -19,7 +19,7 @@ from apps.lead_finder.tables import Lead
 from core.api.app import create_app
 from core.config import Settings, get_settings
 from core.db.engine import get_session
-from core.hubspot.models import HubSpotCompany, HubSpotDeal
+from core.hubspot.models import HubSpotCompany, HubSpotDeal, HubSpotOffice
 from core.memory.embedder import get_embedder
 from core.memory.models import MemoryItem
 from core.searches.models import SearchLog
@@ -101,6 +101,30 @@ async def test_notes_citing_pages_never_read_are_thrown_away(session: AsyncSessi
     assert card.facts.city.value is None
     assert card.result == "watch"
     assert await count(session, MemoryItem) == 0
+
+
+async def test_hubspot_staff_fills_a_gap_the_research_left(session: AsyncSession) -> None:
+    link = "https://app.hubspot.com/contacts/1/company/102"
+    session.add(
+        HubSpotCompany(
+            hubspot_id="102", name="Acme Software Pty Ltd", hubspot_url=link, source="export"
+        )
+    )
+    await session.flush()
+    session.add(HubSpotOffice(hubspot_company_id="102", label="Melbourne", linkedin_staff=60))
+    await session.commit()  # research ends its transaction first, so uncommitted rows would go
+
+    claude = FakeClaude(facts=make_facts(office_m2=fact(None), staff_in_city=fact(None)))
+    card = await research(session, claude)
+
+    assert card.hubspot.status == "in_hubspot"
+    assert card.facts.staff_in_city.value == 60
+    assert card.facts.staff_in_city.source_url == link
+    assert card.from_hubspot == [
+        "Staff in Melbourne: 60 on LinkedIn, from HubSpot. The real number is about double."
+    ]
+    assert card.office_m2 == 1200  # 60 on LinkedIn is about 120 staff, at 10 m² each
+    assert card.result == "pass"
 
 
 async def test_an_open_deal_in_hubspot_is_dropped(session: AsyncSession) -> None:
