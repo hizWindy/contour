@@ -35,7 +35,7 @@ industries:
     - Real estate agencies
     - Standard not-for-profits
     - Hospitals and healthcare
-  check_office_size: # site-heavy firms: flagged to check the office size, not dropped
+  check_office_size: # site-heavy industries. Only a hint: a flag when it isn't clear that the office matters
     - Construction
     - Civil engineering
     - Mining and metals
@@ -46,6 +46,18 @@ industries:
     - Automotive
     - Hospitality
     - Transport and logistics
+  # Industry tiers from the Target Customer Profile. A tier adds points to the score. It never
+  # decides whether a company fits.
+  tier_1:
+    - Energy and infrastructure
+    - Mining and resources
+    - Technology and telecommunications
+    - Engineering and technical services
+  tier_2:
+    - Defence and advanced manufacturing
+    - Life sciences and medtech
+    - Selected financial and corporate services
+    - Other corporate professional services
 
 fit:
   local_team_runs_project: true
@@ -144,7 +156,11 @@ tbc:
   - key: size.linkedin_staff_multiplier
     note: LinkedIn shows about half the real staff (median 0.51 across 19 HubSpot companies).
   - key: industries.check_office_size
-    note: From the HubSpot deals. Builders and miners are flagged, not dropped.
+    note: Version 2 judges the office, not the industry (a miner's head office counts). A site-heavy industry gets a flag only when the AI can't tell whether the office matters. The AI's "the office doesn't matter" is flagged, not dropped, because it is a judgement.
+  - key: industries.tier_1
+    note: From the Target Customer Profile, which leadership hasn't approved. Question 1 for Levi.
+  - key: industries.tier_2
+    note: Defence is Tier 2 today, but 5 of the 23 Gold customers are defence or secure sites. Question 1 for Levi.
   - key: fit.local_team_runs_project
     note: Was "decides locally". Some of Contour's clients are owned overseas.
   - key: fit.healthy

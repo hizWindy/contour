@@ -45,9 +45,14 @@ def extract_prompt(rules: LeadFinderRules) -> Prompt:
     criteria = rules.criteria
     triggers = "\n".join(f"- {t.id}: {t.label}" for t in criteria.triggers.every)
     boosters = "\n".join(f"- {b.id}: {b.label}" for b in criteria.boosters)
-    groups = [*criteria.industries.director_review, *criteria.industries.check_office_size]
+    industries = criteria.industries
+    groups = [*industries.director_review, *industries.check_office_size]
+    tiers = [*industries.tier_1, *industries.tier_2]
     text = Template(template).substitute(
-        triggers=triggers, boosters=boosters, industry_groups="\n".join(f"- {g}" for g in groups)
+        triggers=triggers,
+        boosters=boosters,
+        industry_groups="\n".join(f"- {g}" for g in groups),
+        tier_groups="\n".join(f"- {g}" for g in tiers),
     )
     # The lists come from the rules, so their version is part of this prompt's version.
     return Prompt("extract", text, f"{version}+{rules.version[:6]}")

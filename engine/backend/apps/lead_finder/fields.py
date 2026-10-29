@@ -14,9 +14,9 @@ Angle = Literal["property", "people", "money", "gaps"]
 # Facts added with company criteria version 2. A lead card saved earlier, and a test form that
 # leaves them out, don't have them: they are unknown. Claude's answer always has every fact,
 # because the form asks for all of them, so the form itself has no defaults.
-NEWER_FACTS = ("growth_plan", "size_needed_m2", "growth_by")
+NEWER_FACTS = ("growth_plan", "size_needed_m2", "growth_by", "office_matters")
 NEWER_LISTS: tuple[str, ...] = ()
-NEWER_TEXTS: tuple[str, ...] = ()
+NEWER_TEXTS: tuple[str, ...] = ("tier_group",)
 
 
 # --- Step 1: a search worker's notes --------------------------------------------------
@@ -71,6 +71,10 @@ class CompanyFacts(BaseModel):
         description="If the industry belongs to one of the industry groups in the "
         "instructions, that group's name exactly as written. Else null."
     )
+    tier_group: str | None = Field(
+        description="If the industry belongs to one of the tier groups in the instructions, "
+        "that group's name exactly as written. Else null."
+    )
     owner: Fact[str] = Field(description="Like 'ASX-listed, Australian' or 'Private, UK-owned'")
     staff_in_city: Fact[int] = Field(description="Staff at the office in that city")
     staff_from_linkedin: bool = Field(description="true if staff_in_city is a LinkedIn count")
@@ -80,6 +84,12 @@ class CompanyFacts(BaseModel):
     )
     healthy: Fact[bool] = Field(
         description="false if in administration, or cutting staff fast. Else true or null."
+    )
+    office_matters: Fact[bool] = Field(
+        description="true if the office matters to how the company works: growth, performance, "
+        "culture, collaboration or talent. A head office or technical office counts, even for a "
+        "miner or builder. false if it works mostly from warehouses, plants, sites or shops. "
+        "Null if no note says."
     )
     triggers: list[TriggerFound] = Field(description="Signs of an office change. Can be empty.")
     boosters: list[BoosterFound] = Field(description="Can be empty")

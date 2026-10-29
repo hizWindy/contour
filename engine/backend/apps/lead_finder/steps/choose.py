@@ -178,6 +178,8 @@ def _facts_of(company: Merged) -> CompanyFacts:
         growth_plan=_unknown(),
         size_needed_m2=_unknown(),
         growth_by=_unknown(),
+        office_matters=_unknown(),
+        tier_group=None,
         contact_role=None,
         summary="",
         opening_line=None,

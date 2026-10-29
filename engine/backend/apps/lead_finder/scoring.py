@@ -74,7 +74,7 @@ def judge(
     checks.append(_city(facts, rules))
     size_check, office_m2, estimated = _size(facts, rules, today)
     checks.append(size_check)
-    checks.append(_industry(facts, rules))
+    checks.append(_office(facts, rules))
     checks += _local_and_healthy(facts)
     triggers = _triggers(facts, rules, today)
     checks.append(
@@ -261,16 +261,25 @@ def _growing(
     return RuleCheck(rule="Size", outcome="ok", detail=detail), needed, True
 
 
-def _industry(facts: CompanyFacts, rules: LeadFinderRules) -> RuleCheck:
+def _office(facts: CompanyFacts, rules: LeadFinderRules) -> RuleCheck:
+    """Judge the office, not the industry (Criteria_v2): a miner's head office counts. The AI's
+    "the office doesn't matter" is a judgement, so it is a flag to check, never a Drop."""
     industries = rules.criteria.industries
     name = facts.industry.value or "Industry not known"
     group = facts.industry_group
     if group in industries.director_review:
-        return RuleCheck(rule="Industry", outcome="director", detail=f"{name}: {group}")
-    if group in industries.check_office_size:
-        return RuleCheck(rule="Industry", outcome="flag", detail=f"{name}: check the office size")
+        return RuleCheck(rule="Office", outcome="director", detail=f"{name}: {group}")
+    matters = facts.office_matters.value
+    if matters is False:
+        detail = f"{name}: the office may not matter to how they work. Check the office size"
+        return RuleCheck(rule="Office", outcome="flag", detail=detail)
+    if matters is None and group in industries.check_office_size:
+        return RuleCheck(rule="Office", outcome="flag", detail=f"{name}: check the office size")
+    if matters:
+        detail = f"{name}: the office matters to how they work"
+        return RuleCheck(rule="Office", outcome="ok", detail=detail)
     outcome: Outcome = "ok" if facts.industry.value else "unknown"
-    return RuleCheck(rule="Industry", outcome=outcome, detail=name)
+    return RuleCheck(rule="Office", outcome=outcome, detail=name)
 
 
 def _local_and_healthy(facts: CompanyFacts) -> list[RuleCheck]:

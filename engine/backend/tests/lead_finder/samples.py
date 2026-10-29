@@ -88,6 +88,8 @@ def make_facts(**changes: Any) -> CompanyFacts:
         growth_plan=fact(None),
         size_needed_m2=fact(None),
         growth_by=fact(None),
+        office_matters=fact(None),
+        tier_group=None,
         contact_role="Head of Property",
         summary="Acme's Melbourne lease ends in 2028 and it is looking for a bigger office.",
         opening_line="Congratulations on the growth. Is a new office on the cards?",

@@ -47,4 +47,4 @@ tbc:
   - key: director_industries
     note: Our mapping of HubSpot industry names to the Director groups. Judged from the industry field only.
   - key: not_office_based
-    note: Our mapping, from the HubSpot deals. Judged from the industry field only. Oil Energy and Medical Practice have no group in criteria.yaml yet.
+    note: Our mapping, from the HubSpot deals. Judged from the industry field only. Oil Energy and Medical Practice have no group in criteria.yaml yet. Version 2 judges the office, not the industry (a miner's corporate office counts), so some of these may stop being skipped. Levi to say. The list stays as it is until job 1 (the monthly HubSpot ranking) has its own plan.

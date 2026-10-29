@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from apps.lead_finder.prompts import extract_prompt
 from apps.lead_finder.rules import RULE_FILES, RULES_DIR, load_rules, read_rules, rules_version
 
 
@@ -92,6 +93,38 @@ def test_a_staff_hint_above_the_minimum_stops_start_up(tmp_path: Path) -> None:
     edit(rules_dir / "criteria.yaml", "staff_hint_min: 75", "staff_hint_min: 150")
     with pytest.raises(ValidationError, match="staff_hint_min must not be above staff_min"):
         read_rules(rules_dir)
+
+
+def test_the_industry_tiers_come_from_the_profile() -> None:
+    industries = load_rules().criteria.industries
+    assert "Technology and telecommunications" in industries.tier_1
+    assert "Defence and advanced manufacturing" in industries.tier_2
+
+
+def test_a_tier_group_in_both_tiers_stops_start_up(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    edit(
+        rules_dir / "criteria.yaml",
+        "    - Defence and advanced manufacturing",
+        "    - Energy and infrastructure",
+    )
+    with pytest.raises(ValidationError, match="A tier group is listed twice: Energy and infra"):
+        read_rules(rules_dir)
+
+
+def test_the_extract_prompt_lists_every_industry_and_tier_group() -> None:
+    rules = load_rules()
+    text = extract_prompt(rules).text
+    industries = rules.criteria.industries
+    for group in (
+        *industries.director_review,
+        *industries.check_office_size,
+        *industries.tier_1,
+        *industries.tier_2,
+    ):
+        assert f"- {group}" in text
+    assert "$tier_groups" not in text
+    assert "$industry_groups" not in text
 
 
 def test_typo_in_a_key_stops_start_up(tmp_path: Path) -> None:

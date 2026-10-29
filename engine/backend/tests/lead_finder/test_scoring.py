@@ -205,11 +205,39 @@ def test_unhealthy_is_dropped_but_unknown_local_team_is_not() -> None:
     assert verdict(local_team_runs_project=fact(None)).result == "pass"
 
 
-def test_industries() -> None:
-    assert verdict(industry_group="Law firms").result == "director_review"
-    builder = verdict(industry_group="Construction")
-    assert builder.result == "pass"
-    assert any(check.outcome == "flag" for check in builder.checks)
+def office_check(result: Verdict) -> RuleCheck:
+    (check,) = [check for check in result.checks if check.rule == "Office"]
+    return check
+
+
+def test_law_firms_and_other_director_sectors_go_to_a_director() -> None:
+    result = verdict(industry_group="Law firms")
+    assert result.result == "director_review"
+    assert office_check(result).outcome == "director"
+
+
+def test_a_miners_head_office_is_not_flagged_for_its_industry() -> None:
+    miner = verdict(
+        industry=fact("Mining"), industry_group="Mining and metals", office_matters=fact(True)
+    )
+    check = office_check(miner)
+    assert (check.outcome, check.detail) == ("ok", "Mining: the office matters to how they work")
+    assert miner.result == "pass"
+
+
+def test_a_company_that_works_from_sites_is_flagged_to_check_the_office() -> None:
+    result = verdict(industry=fact("Warehousing"), office_matters=fact(False))
+    check = office_check(result)
+    assert check.outcome == "flag"
+    assert check.detail.endswith("Check the office size")
+    assert result.result == "pass"  # a flag, never a Drop
+
+
+def test_when_it_is_unclear_only_a_site_heavy_industry_is_flagged() -> None:
+    mining = verdict(industry=fact("Mining"), industry_group="Mining and metals")
+    assert office_check(mining).outcome == "flag"
+    assert office_check(verdict()).outcome == "ok"  # software, nothing known about the office
+    assert office_check(verdict(industry=fact(None))).outcome == "unknown"
 
 
 def test_unknown_size_with_a_trigger_needs_a_check() -> None:

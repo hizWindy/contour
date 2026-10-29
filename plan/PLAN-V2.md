@@ -4,7 +4,7 @@ This plan makes the Lead Finder follow the new company criteria in [Criteria_v2.
 
 - **Built by:** Al-khair Pama. **Signed off by:** Levi Young.
 - **Last updated:** 2026-10-30. **TBC** means not confirmed yet.
-- **Progress:** 0 of 20 steps done.
+- **Progress:** 2 of 20 steps done.
 - **Before this:** [PLAN-V1.md](PLAN-V1.md) built the engine and the website (Phases 0 to 4). They follow [Criteria_v1.md](../projects/leads/criteria/Criteria_v1.md). Phase 5, sending leads to HubSpot, is not started and stays in PLAN-V1.
 
 ## In short
@@ -75,8 +75,8 @@ Leave the code passing the fast tests. If you can't, say in the log what is brok
 
 Nothing changes in the engine yet.
 
-- [ ] **A1. Make the branch and take a baseline.**
-  - Make `engine-criteria-v2` from `master`, once this plan is merged into it.
+- [x] **A1. Make the branch and take a baseline.** Done 2026-10-30, 6dce0d3.
+  - Make `engine-criteria-v2` from `master`, once this plan is merged into it. It was made from `docs/plan-folder` instead, because the plan is not in `master` yet.
   - From `engine/backend/`, run `uv run pytest`. From `engine/frontend/`, run `npm run lint`, `npm run typecheck`, `npm test` and `npm run build`, one at a time.
   - If a test can't run because Windows App Control blocks files in `.venv`, don't work around it. That happened on 29 Oct (AI Brain note), and tests ran fine again on 30 Oct. Tell Al-khair.
   - Write the numbers in the log.
@@ -98,7 +98,7 @@ Each step changes the rules file, the code and Claude's instructions together, a
 
 **Part B is done when:** every change in Criteria_v2 sections 1 to 8 is in the rules and the code, and `uv run pytest` passes.
 
-- [ ] **B1. Size: staff as a hint, and growing companies.**
+- [x] **B1. Size: staff as a hint, and growing companies.** Done 2026-10-30, af92afa.
   - Staff becomes a hint, not a Drop. Start the hint at 75 office staff (the Profile). Levi's brief says 100 in one office, so he picks (**TBC**).
   - A size worked out from staff gives "check office size" below the hint, and never a Drop. A known office under 800 m² still Drops, as in version 1.
   - Add the growing-into-range rule from Levi's email: big funding or a big announcement, plus a plan to hire. The office it will need is what counts. Start at "within 24 months" (our guess, **TBC**).
@@ -206,6 +206,8 @@ Start after Part B, because the website reads the API. Follow [DESIGN.md](../eng
 
 Newest first. One line for each tick, pause or surprise.
 
+- 2026-10-30: B1 done (af92afa). Backend lint, types and 1,099 lead finder tests pass. The API file (`openapi.json`) and the website types are not refreshed yet. C1 does that, and the website test card needs the new facts then.
+- 2026-10-30: A1 done. Baseline before any change: backend 2,227 passed and 28 skipped (3 min). Website: lint 0 warnings, typecheck clean, 667 tests in 39 files, build OK. Windows App Control did not block anything.
 - 2026-10-30: Plan written. `PLAN.md` moved to `plan/PLAN-V1.md`. No steps started.
 
 ## Sources

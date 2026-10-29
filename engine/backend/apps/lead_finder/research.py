@@ -536,6 +536,8 @@ def empty_facts(company: str) -> CompanyFacts:
         growth_plan=unknown(),
         size_needed_m2=unknown(),
         growth_by=unknown(),
+        office_matters=unknown(),
+        tier_group=None,
         contact_role=None,
         summary="Nothing useful was found.",
         opening_line=None,
@@ -543,7 +545,7 @@ def empty_facts(company: str) -> CompanyFacts:
 
 
 def _why(checks: list[RuleCheck], result: Result) -> str:
-    parts = [f"{c.rule}: {c.detail}" for c in checks if c.rule in ("City", "Size", "Industry")]
+    parts = [f"{c.rule}: {c.detail}" for c in checks if c.rule in ("City", "Size", "Office")]
     reasons = [c.detail for c in checks if c.outcome in ("fail", "director")]
     label = result.replace("_", " ").capitalize()
     because = f" Because: {'; '.join(reasons)}." if reasons and result != "pass" else ""

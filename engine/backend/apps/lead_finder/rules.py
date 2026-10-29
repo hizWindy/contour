@@ -70,6 +70,16 @@ class Fitout(Strict):
 class Industries(Strict):
     director_review: list[str]
     check_office_size: list[str]
+    tier_1: list[str]
+    tier_2: list[str]
+
+    @model_validator(mode="after")
+    def check_tiers(self) -> Self:
+        tiers = [*self.tier_1, *self.tier_2]
+        repeated = sorted({group for group in tiers if tiers.count(group) > 1})
+        if repeated:
+            raise ValueError(f"A tier group is listed twice: {', '.join(repeated)}")
+        return self
 
 
 class Fit(Strict):
