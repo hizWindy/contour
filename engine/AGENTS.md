@@ -26,6 +26,7 @@ From `engine/backend/`:
 | Load a HubSpot export | `uv run engine import-hubspot ../../projects/leads/research/COMPANIES.xlsx` |
 | Research one company (costs money) | `uv run lead-finder research "Culture Amp" --city Melbourne` |
 | Run the test set of 10 companies (costs money) | `uv run lead-finder testset --yes` |
+| Judge the saved leads again with the current rules (free, read only, no migration) | `uv run lead-finder rejudge` |
 | Fast tests (no database) | `uv run pytest -m "not integration"` |
 | All tests (needs the database) | `uv run pytest` |
 | Lint and format | `uv run ruff check .` and `uv run ruff format .` |
