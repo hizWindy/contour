@@ -1,9 +1,9 @@
-# Lead Finder build plan
+# Lead Finder build plan, version 1
 
-The step-by-step plan to build the Company Lead Finder ([LEADS.md](projects/leads/LEADS.md)). It has two parts: a research engine that finds and checks companies, and a small website to run it and send good leads to HubSpot.
+The step-by-step plan to build the Company Lead Finder ([LEADS.md](../projects/leads/LEADS.md)). It has two parts: a research engine that finds and checks companies, and a small website to run it and send good leads to HubSpot. This is version 1. [PLAN-V2.md](PLAN-V2.md) applies the new company criteria.
 
 - **Built by:** Al-khair Pama. **Signed off by:** Levi Young.
-- **Last updated:** 2026-10-27. **TBC** means not confirmed yet.
+- **Last updated:** 2026-10-30. Moved into `plan/` that day. The plan itself is from 2026-10-27. **TBC** means not confirmed yet.
 - **Runs on your computer for now.** No hosting yet.
 - **No timer yet.** You start every run by hand, from Swagger or the website, while we test the engine.
 - Nothing reaches HubSpot unless a person clicks.
@@ -119,14 +119,14 @@ Everything runs on your computer. Exact versions are locked when we install them
 2. **Search (Claude).**
    - First, the engine checks memory for what it already knows, so it doesn't pay to find the same thing twice.
    - Each slice gets one worker: one Claude request with web search and web fetch. Workers run at the same time, starting with 2, because new API keys have low rate limits (**TBC**: check yours).
-   - Each worker returns short notes with source links. A second small step turns the notes into the answer form ([PARAMETERS.md](projects/leads/research/PARAMETERS.md) section 2).
+   - Each worker returns short notes with source links. A second small step turns the notes into the answer form ([PARAMETERS.md](../projects/leads/research/PARAMETERS.md) section 2).
 3. **Check (our code, plus small Claude steps).**
    - **Merge:** the same company found twice becomes one record.
    - **Skip:** companies already sent, with an open deal, or with a deal dissolved in the last 12 months.
    - **Gap check:** if office size, city, trigger or source is missing, one more targeted search, then stop.
    - **Source check:** every fact needs a working link. Sources rank: Property Daily, ASX and official news, other news, job ads. Low-quality sites are dropped.
    - **HubSpot match:** see below.
-   - **Rules and score:** fixed code applies [Criteria_v1.md](projects/leads/criteria/Criteria_v1.md). Each company gets Pass, Director review, Watch or Drop, and a score.
+   - **Rules and score:** fixed code applies [Criteria_v1.md](../projects/leads/criteria/Criteria_v1.md). Each company gets Pass, Director review, Watch or Drop, and a score.
 4. **Save and show.** Everything goes into the database, including every search and its cost. Each source note and company profile also goes into memory. Claude writes the lead card: what happened, why it fits, a role to contact and an opening line.
 
 ## Memory (pgvector)
@@ -202,7 +202,7 @@ Every run saves which version of the rules it used, so old results stay explaina
 
 Every company is checked against HubSpot before it shows as a lead.
 
-- **HubSpot data:** the export you pulled ([COMPANIES.xlsx](projects/leads/research/COMPANIES.xlsx): 100 companies, 12 deals). Later, a read-only sync from the HubSpot API.
+- **HubSpot data:** the export you pulled ([COMPANIES.xlsx](../projects/leads/research/COMPANIES.xlsx): 100 companies, 12 deals). Later, a read-only sync from the HubSpot API.
 - **How it matches, in order:**
   1. Same website domain, like `kyndryl.com`.
   2. Same cleaned name, with "Pty Ltd", "Limited" and punctuation removed.
@@ -227,7 +227,7 @@ Every company is checked against HubSpot before it shows as a lead.
 
 ## Design system (website)
 
-How the website looks and behaves. **Phase 0 copied this section into [engine/DESIGN.md](engine/DESIGN.md) on 25 Oct 2026. Update that file, not this section.**
+How the website looks and behaves. **Phase 0 copied this section into [engine/DESIGN.md](../engine/DESIGN.md) on 25 Oct 2026. Update that file, not this section.**
 
 ### Direction
 
@@ -468,7 +468,7 @@ An endpoint is a web address that does one job, like "start a run". Swagger list
 
 ## Backend coding practices
 
-**Phase 0 copied these into [engine/AGENTS.md](engine/AGENTS.md) on 25 Oct 2026, so Claude Code follows them too. Update that file, not this section.**
+**Phase 0 copied these into [engine/AGENTS.md](../engine/AGENTS.md) on 25 Oct 2026, so Claude Code follows them too. Update that file, not this section.**
 
 ### Structure
 
@@ -559,7 +559,7 @@ Each phase ends with something that works. Start the next phase only when "Done 
 
 ### Phase 0: Set up
 
-**Status:** done, 25 Oct 2026. All 39 tests pass. 100 companies, 185 offices and 12 deals are loaded, and memory search works. How to start it: [engine/README.md](engine/README.md).
+**Status:** done, 25 Oct 2026. All 39 tests pass. 100 companies, 185 offices and 12 deals are loaded, and memory search works. How to start it: [engine/README.md](../engine/README.md).
 
 **Build**
 - An `engine/` folder in this repo, split into a shared core and the Lead Finder (see "Folder layout").
@@ -578,7 +578,7 @@ Each phase ends with something that works. Start the next phase only when "Done 
 
 ### Phase 1: Research one company
 
-**Status:** done, 26 Oct 2026. All 105 tests pass, using saved sample answers. One check is left: the first real run, on the 10 test companies, is waiting on a Claude API key in `engine/.env`. That run measures the cost per company (**TBC**) and shows memory making a second look cheaper. How to run it: [engine/README.md](engine/README.md).
+**Status:** done, 26 Oct 2026. All 105 tests pass, using saved sample answers. One check is left: the first real run, on the 10 test companies, is waiting on a Claude API key in `engine/.env`. That run measures the cost per company (**TBC**) and shows memory making a second look cheaper. How to run it: [engine/README.md](../engine/README.md).
 
 How it was built, and what changed from the plan:
 - **Plain steps for now.** The steps are plain async code. LangGraph comes in Phase 2, when runs need many workers and need to survive a crash.
@@ -612,7 +612,7 @@ How it was built, and what changed from the plan:
 
 **Build**
 - Matching by domain, then name, then a close name or similar profile in the same city, with the five labels.
-- Watchlist mode: re-check the 47 Watch companies from [EXPORT.md](projects/leads/research/EXPORT.md), starting with the 11 likely office-based ones.
+- Watchlist mode: re-check the 47 Watch companies from [EXPORT.md](../projects/leads/research/EXPORT.md), starting with the 11 likely office-based ones.
 - Look-alikes: rank companies by how much they look like the deal companies.
 
 **Done when:** all 12 deal companies match correctly, and a made-up near-duplicate with a different name shows as "Possible match".
@@ -629,7 +629,7 @@ How it was built, and what changed from the plan:
 
 **Done when:** you can start a run from the map, watch it, filter the results and open a lead card with its look-alikes, all without Swagger. Every screen passes the design system's check list, in light and dark mode.
 
-**Status:** built on `phase-2-4`, 27 Oct 2026. On the fake backend (the real engine with saved sample answers), a run was started from the map, watched live, filtered on Results and opened as a lead card with look-alikes, in light and dark mode. The design and contrast checks pass as tests. How to try it: [engine/README.md](engine/README.md).
+**Status:** built on `phase-2-4`, 27 Oct 2026. On the fake backend (the real engine with saved sample answers), a run was started from the map, watched live, filtered on Results and opened as a lead card with look-alikes, in light and dark mode. The design and contrast checks pass as tests. How to try it: [engine/README.md](../engine/README.md).
 
 ### Phase 5: Send to HubSpot (click only)
 
@@ -732,7 +732,7 @@ Sending Contour's HubSpot company names to Claude also needs his OK.
 
 ## Sources
 
-- Our files: [LEADS.md](projects/leads/LEADS.md), [Criteria_v1.md](projects/leads/criteria/Criteria_v1.md), [PARAMETERS.md](projects/leads/research/PARAMETERS.md), [EXAMPLES.md](projects/leads/research/EXAMPLES.md), [EXPORT.md](projects/leads/research/EXPORT.md), [HUBSPOT.md](HUBSPOT.md)
+- Our files: [LEADS.md](../projects/leads/LEADS.md), [Criteria_v1.md](../projects/leads/criteria/Criteria_v1.md), [PARAMETERS.md](../projects/leads/research/PARAMETERS.md), [EXAMPLES.md](../projects/leads/research/EXAMPLES.md), [EXPORT.md](../projects/leads/research/EXPORT.md), [HUBSPOT.md](../HUBSPOT.md)
 - Anthropic pricing: [platform.claude.com/docs/en/about-claude/pricing](https://platform.claude.com/docs/en/about-claude/pricing)
 - Anthropic on embeddings (points to Voyage AI): [platform.claude.com/docs/en/build-with-claude/embeddings](https://platform.claude.com/docs/en/build-with-claude/embeddings)
 - pgvector Docker images for PostgreSQL 18: [docs.pgedge.com](https://docs.pgedge.com/pgvector/v0-8-2/additional-installation-methods/)

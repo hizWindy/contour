@@ -2,8 +2,8 @@
 
 How to work in this code. It applies to people and to AI coding helpers like Claude Code. Read it before changing anything.
 
-- **What this is:** the research engine and website for Contour's Lead Finder. The build plan is [PLAN.md](../PLAN.md).
-- **The rules it applies:** [COMPANY.md](../projects/leads/criteria/COMPANY.md), turned into `backend/apps/lead_finder/rules/criteria.yaml`.
+- **What this is:** the research engine and website for Contour's Lead Finder. The build plans are in [plan/](../plan/): [PLAN-V1.md](../plan/PLAN-V1.md) built it, and [PLAN-V2.md](../plan/PLAN-V2.md) applies the new company criteria.
+- **The rules it applies:** [Criteria_v1.md](../projects/leads/criteria/Criteria_v1.md) today (version 2 is a draft: [Criteria_v2.md](../projects/leads/criteria/Criteria_v2.md)), turned into `backend/apps/lead_finder/rules/criteria.yaml`.
 - **How the website looks:** [DESIGN.md](DESIGN.md).
 
 ## Commands

@@ -1,6 +1,6 @@
 # Design system
 
-How the Lead Finder website looks and behaves. This file is the one to update. It started as a copy of the design system section in [PLAN.md](../PLAN.md) (25 Oct 2026).
+How the Lead Finder website looks and behaves. This file is the one to update. It started as a copy of the design system section in [PLAN-V1.md](../plan/PLAN-V1.md) (25 Oct 2026).
 
 ## Direction
 

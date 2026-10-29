@@ -19,7 +19,7 @@ It holds the plans, research and decisions behind each AI tool Contour is buildi
 | File or folder | What it holds |
 |---|---|
 | [PROJECTS.md](PROJECTS.md) | The overview: every AI project, its priority, and the decisions shared across projects |
-| [PLAN.md](PLAN.md) | The step-by-step build plan for the Lead Finder: research engine, website and tech stack |
+| [plan/](plan/) | The build plans for the Lead Finder. [PLAN-V1.md](plan/PLAN-V1.md) built the research engine and website. [PLAN-V2.md](plan/PLAN-V2.md) applies the new company criteria |
 | [projects/](projects/) | One folder per AI project, holding its files |
 | [HUBSPOT.md](HUBSPOT.md) | A simple guide to HubSpot (Contour's customer database) and how the projects connect to it |
 | [CONTOUR.md](CONTOUR.md) | Background on Contour and the AI Engineer role |

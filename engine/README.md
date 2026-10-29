@@ -1,6 +1,6 @@
 # Contour engine
 
-The research engine and website for the Lead Finder. The build plan is [PLAN.md](../PLAN.md). How to work in this code is in [AGENTS.md](AGENTS.md).
+The research engine and website for the Lead Finder. The build plans are in [plan/](../plan/). How to work in this code is in [AGENTS.md](AGENTS.md).
 
 Last updated: 27 Oct 2026. **TBC** means not confirmed yet.
 
