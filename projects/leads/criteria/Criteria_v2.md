@@ -1,6 +1,6 @@
 # Company criteria, version 2
 
-**Draft.** Levi to confirm. Last updated 2026-10-29. The engine still follows [version 1](Criteria_v1.md). Nothing here is built yet.
+**Draft.** Levi to confirm. Last updated 2026-10-30. The engine on `master` still follows [version 1](Criteria_v1.md). Version 2 is built on the branch `engine-criteria-v2` (see [PLAN-V2.md](../../../plan/PLAN-V2.md)). It goes live only after Levi confirms it.
 
 These rules decide which companies the research agent looks for, **before anyone calls them**. Everything new in this version is **TBC** (to be confirmed) until Levi checks it.
 
@@ -163,6 +163,33 @@ Levi sent 23 Gold customers from HubSpot on 29 Oct, all Active. They let us chec
 
 **Proposal (TBC):** use these 23 as a test set. The tool should rate them as a fit. Their lease and growth news also suits job 1, ranking current HubSpot companies.
 
+### What version 2 says about the 16 leads we have (30 Oct)
+
+The engine judged the 16 leads saved in the dev database again with the version 2 rules, using the facts in their cards. It made no new searches and cost nothing (`uv run lead-finder rejudge`). These cards were made under version 1, so version 2 facts like years at the address are missing. Those checks show as "not known yet", and the points are out of the points the tool could check.
+
+**14 of the 16 keep their result.** Two change, and both were Dropped for size only because their size came from staff alone. Under version 2 staff is a hint, so a small count gives a "check office size" flag, not a Drop. Budget Direct goes to Director review, and JOEST Australia goes to Watch. No lead is in the top band yet, 10 are in the middle band (investigate) and 6 are in the bottom band (nurture). A Watch lead can score in the middle band, because it has no trigger but the other parts still earn points. Whether that is right is for Levi (the bands and how they scale are **TBC**).
+
+| Company | Version 1 | Version 2 | Points | Band | What changed |
+|---|---|---|---|---|---|
+| Budget Direct | Drop | Director review | 31 of 77 | Nurture | Size: not met to check |
+| Acciona | Watch | Watch | 31 of 57 | Investigate | |
+| CPB Contractors | Watch | Watch | 31 of 57 | Investigate | |
+| Cooper & Oxley | Watch | Watch | 5 of 57 | Nurture | |
+| JOEST Australia | Drop | Watch | 5 of 77 | Nurture | Size: not met to check |
+| KBR | Director review | Director review | 31 of 57 | Investigate | |
+| Perenti | Watch | Watch | 15 of 57 | Nurture | |
+| SMEC Australia | Watch | Watch | 31 of 57 | Investigate | |
+| UGL | Watch | Watch | 31 of 57 | Investigate | |
+| ASC | Watch | Watch | 26 of 57 | Nurture | |
+| Canadian Utilities | Watch | Watch | 26 of 57 | Nurture | |
+| SMEC | Watch | Watch | 31 of 57 | Investigate | |
+| Ausgold Limited | Watch | Watch | 34 of 57 | Investigate | |
+| Cygnus Metals Limited | Watch | Watch | 31 of 57 | Investigate | |
+| European Lithium Limited | Watch | Watch | 31 of 57 | Investigate | |
+| GenusPlus | Watch | Watch | 31 of 57 | Investigate | |
+
+**Not done yet:** the same table for the test set and the 23 Gold customers. That needs real searches, which cost money, and Levi's OK to send the customer names to Claude ([PLAN-V2.md](../../../plan/PLAN-V2.md) step D2).
+
 ## 12. Questions for Levi
 
 1. Is the Target Customer Profile approved: the industry tiers, the 75+ staff hint and the 100-point score? Should defence move to Tier 1, since 5 of the 23 Gold customers are defence or secure sites?
@@ -181,4 +208,4 @@ Levi sent 23 Gold customers from HubSpot on 29 Oct, all Active. They let us chec
 
 ## 13. What stays the same
 
-The HubSpot deal evidence and the map of the 11 deal rules are unchanged. See sections 7 and 8 of [version 1](Criteria_v1.md). The engine's `criteria.yaml` follows version 1. Change it only after Levi confirms version 2.
+The HubSpot deal evidence and the map of the 11 deal rules are unchanged. See sections 7 and 8 of [version 1](Criteria_v1.md). On `master`, the engine's `criteria.yaml` follows version 1. The branch `engine-criteria-v2` holds version 2, and it is merged only after Levi confirms it.

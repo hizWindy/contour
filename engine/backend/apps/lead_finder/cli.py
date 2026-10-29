@@ -3,17 +3,22 @@
 Run it from engine/backend:
     uv run lead-finder research "Culture Amp" --city Melbourne
     uv run lead-finder testset --yes
-Both spend money on Claude. Every request is in the search log.
+    uv run lead-finder rejudge
+The first two spend money on Claude. Every request is in the search log. `rejudge` is free: it
+judges the saved leads again with the current rules, from their cards, and saves nothing.
 """
 
 import argparse
 import asyncio
 import sys
 from collections.abc import Sequence
+from datetime import datetime
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.exc import OperationalError
 
+from apps.lead_finder.rejudge import Rejudged, rejudge, table
 from apps.lead_finder.research import LeadCard, ResearchRequest, research_company
 from apps.lead_finder.rules import load_rules
 from apps.lead_finder.sources import FACT_FIELDS
@@ -75,6 +80,27 @@ async def _research(requests: list[ResearchRequest]) -> list[LeadCard]:
     return cards
 
 
+async def _rejudge() -> list[Rejudged]:
+    """The saved leads, judged again with the current rules. Reads only: no migration, no save.
+    It selects the card, not the whole row, so it also works on a database not yet migrated."""
+    from sqlalchemy import select
+
+    from apps.lead_finder.tables import Lead
+    from core.db.engine import get_engine, get_sessionmaker
+
+    rules, today = load_rules(), datetime.now(ZoneInfo("Australia/Melbourne")).date()
+    try:
+        async with get_sessionmaker()() as session:
+            rows = await session.execute(
+                select(Lead.company, Lead.result, Lead.score, Lead.card)
+                .where(Lead.is_test.is_(False))
+                .order_by(Lead.created_at)
+            )
+            return [rejudge(c, r, s, card, rules, today) for c, r, s, card in rows.all()]
+    finally:
+        await get_engine().dispose()
+
+
 def _table(cards: list[LeadCard], label: str) -> None:
     print(f"{label}\n{'Company':<20} {'Result':<16} {'Score':>5} {'Unknown':>7} {'Cost US$':>9}")
     for card in cards:
@@ -99,9 +125,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     tests = commands.add_parser("testset", help="Research the 10 test companies (costs money).")
     tests.add_argument("--twice", action="store_true", help="Run again to show memory savings.")
     tests.add_argument("--yes", action="store_true", help="Confirm the spend.")
+    commands.add_parser(
+        "rejudge",
+        help="Judge the saved leads again with the current rules, from their cards. "
+        "No searches, no cost, and nothing is saved.",
+    )
     args = parser.parse_args(argv)
 
     try:
+        if args.command == "rejudge":  # read only, so it never migrates the database
+            print(table(asyncio.run(_rejudge(), loop_factory=loop_factory())))
+            return 0
         migrate()
         if args.command == "research":
             request = ResearchRequest(
