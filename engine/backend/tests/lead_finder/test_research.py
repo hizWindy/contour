@@ -55,7 +55,8 @@ async def test_research_searches_three_angles_and_saves_everything(session: Asyn
 
     assert sorted(claude.calls) == ["extract", "search:money", "search:people", "search:property"]
     assert card.result == "pass"
-    assert card.score == 78
+    assert card.score == 51  # see test_scoring: a good lead with nothing found for fit or rivals
+    assert (card.score_checked, card.band) == (77, "investigate")
     assert card.research.cost_usd == Decimal("0.400000")  # 3 searches x $0.12 + $0.04
     assert card.research.web_searches == 6
     assert card.hubspot.status == "new"

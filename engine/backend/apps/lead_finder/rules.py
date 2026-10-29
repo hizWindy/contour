@@ -141,32 +141,119 @@ class Recency(Strict):
     points: int = Field(ge=0)
 
 
+PartId = Literal["trigger", "size", "timing", "access", "fit", "competition"]
+PART_IDS: tuple[PartId, ...] = ("trigger", "size", "timing", "access", "fit", "competition")
+# The checks inside the parts. Each earns points, or is "not known yet" for a lead.
+CHECK_IDS: tuple[str, ...] = (
+    "trigger_group",
+    "source",
+    "size",
+    "recency",
+    "years_at_address",
+    "no_recent_move",
+    "contact_role",
+    "hubspot_contact",
+    "customer_link",
+    "buys_strategy",
+    "industry_tier",
+    "no_rival_in_place",
+    "no_contractor_relationship",
+)
+
+
+class PartRule(Strict):
+    label: str = Field(min_length=1)
+    points: int = Field(gt=0)
+
+
+class SizePoints(Strict):
+    confirmed_in_range: int = Field(ge=0)
+    estimated_in_range: int = Field(ge=0)
+    growing_into_range: int = Field(ge=0)
+    director: int = Field(ge=0)
+
+
+class AccessPoints(Strict):
+    contact_role: int = Field(ge=0)
+    hubspot_contact: int = Field(ge=0)
+    customer_link: int = Field(ge=0)
+
+
+class FitPoints(Strict):
+    buys_strategy: int = Field(ge=0)
+    tier_1: int = Field(ge=0)
+    tier_2: int = Field(ge=0)
+
+
+class CompetitionPoints(Strict):
+    no_rival_in_place: int = Field(ge=0)
+    no_contractor_relationship: int = Field(ge=0)
+
+
+class Bands(Strict):
+    research_first: int = Field(gt=0, le=100)
+    investigate: int = Field(gt=0, le=100)
+
+
 class Score(Strict):
-    trigger: dict[Literal["main", "other", "weak"], int]
+    """The Target Customer Profile's 100 points in six parts (Criteria_v2.md section 6)."""
+
+    parts: dict[PartId, PartRule]
+    check_labels: dict[str, str]
+    trigger_group: dict[Literal["main", "other", "weak"], int]
+    source: dict[str, int]
+    size: SizePoints
     recency: list[Recency] = Field(min_length=1)
     undated: int = Field(ge=0)
     lease_in_best_window: int = Field(ge=0)
-    fit: dict[Literal["pass", "director_review"], int]
-    source: dict[str, int]
-    booster_each: int = Field(ge=0)
-    boosters_max: int = Field(ge=0)
+    years_at_address: int = Field(ge=0)
+    no_recent_move: int = Field(ge=0)
+    access: AccessPoints
+    fit: FitPoints
+    competition: CompetitionPoints
+    unseen: list[str]
+    bands: Bands
+    band_basis: Literal["scaled", "raw"]
+
+    @property
+    def recency_max(self) -> int:
+        """The most the timing part's first check can earn."""
+        return max(self.undated, self.lease_in_best_window, *(step.points for step in self.recency))
 
     @model_validator(mode="after")
     def check_score(self) -> Self:
-        if set(self.trigger) != {"main", "other", "weak"}:
-            raise ValueError("score.trigger needs main, other and weak")
+        if set(self.parts) != set(PART_IDS):
+            raise ValueError("score.parts needs trigger, size, timing, access, fit and competition")
+        if set(self.trigger_group) != {"main", "other", "weak"}:
+            raise ValueError("score.trigger_group needs main, other and weak")
+        total = sum(part.points for part in self.parts.values())
+        if total != 100:
+            raise ValueError(f"The six parts add up to {total}. They must add up to 100.")
+        if set(self.check_labels) != set(CHECK_IDS):
+            raise ValueError("score.check_labels needs a label for every check, and no others")
+        unknown = sorted(set(self.unseen) - set(CHECK_IDS))
+        if unknown:
+            raise ValueError(f"score.unseen has checks that don't exist: {', '.join(unknown)}")
         days = [step.within_days for step in self.recency]
         if days != sorted(set(days)):
             raise ValueError("score.recency must go from the shortest time to the longest")
-        best = (
-            max(self.trigger.values())
-            + max(self.lease_in_best_window, *(step.points for step in self.recency))
-            + max(self.fit.values())
-            + max(self.source.values())
-            + self.boosters_max
-        )
-        if best > 100:
-            raise ValueError(f"The best possible score is {best}. It must be 100 or less.")
+        if self.bands.investigate >= self.bands.research_first:
+            raise ValueError("bands.investigate must be below bands.research_first")
+        best = {
+            "trigger": max(self.trigger_group.values()) + max(self.source.values()),
+            "size": max(self.size.model_dump().values()),
+            "timing": self.recency_max + self.years_at_address + self.no_recent_move,
+            "access": sum(self.access.model_dump().values()),
+            "fit": self.fit.buys_strategy + max(self.fit.tier_1, self.fit.tier_2),
+            "competition": sum(self.competition.model_dump().values()),
+        }
+        for part_id, most in best.items():
+            points = self.parts[part_id].points  # type: ignore[index]
+            if most != points:
+                raise ValueError(
+                    f"The checks in part {part_id} add up to {most}, but the part is {points} "
+                    "points. Make them match."
+                )
         return self
 
 

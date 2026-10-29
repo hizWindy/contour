@@ -2,6 +2,10 @@
 
 The same facts always get the same result, so every rule is easy to test. The rules come
 from Criteria_v2.md (a draft until Levi confirms it), through rules/criteria.yaml.
+
+The score is the Target Customer Profile's 100 points in six parts. Each part is a few checks.
+A check earns points, or it is "not known yet" when the tool can't judge it for this lead. The
+score is the points earned. "Checked" is the most the tool could judge, like "48 of 60 checked".
 """
 
 import re
@@ -10,7 +14,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from apps.lead_finder.fields import CompanyFacts, TriggerFound
 from apps.lead_finder.rules import LeadFinderRules, Result
@@ -19,6 +23,8 @@ from core.hubspot.matching import CandidateReason, HubSpotMatch
 
 Outcome = Literal["ok", "fail", "director", "unknown", "flag"]
 Group = Literal["main", "other", "weak"]
+Band = Literal["research_first", "investigate", "nurture"]
+SizeBasis = Literal["confirmed", "estimated", "growing", "director", "below", "none"]
 DAYS_PER_YEAR = 365.25
 REASON_WORDS: dict[CandidateReason, str] = {
     "close_name": "close name",
@@ -37,7 +43,28 @@ class TriggerScore(BaseModel):
     trigger: TriggerFound
     group: Group
     source_kind: str
-    points: int
+    points: int = Field(description="Group, source and timing together. It ranks the triggers.")
+    group_points: int = Field(default=0, description="The trigger part of the score")
+    source_points: int = Field(default=0, description="The trigger part of the score")
+    timing_points: int = Field(default=0, description="How recent, or how near the lease end")
+
+
+class ScoreCheck(BaseModel):
+    id: str
+    label: str
+    earned: int
+    max: int
+    known: bool = Field(description="false means 'not known yet': it adds nothing to 'checked'")
+    detail: str = ""
+
+
+class ScorePart(BaseModel):
+    id: str
+    label: str
+    max: int = Field(description="The part's points in the Profile's 100")
+    earned: int
+    checked: int = Field(description="The points of the checks the tool could judge")
+    checks: list[ScoreCheck]
 
 
 class Verdict(BaseModel):
@@ -48,6 +75,19 @@ class Verdict(BaseModel):
     office_m2_estimated: bool
     fitout_aud: Decimal | None
     triggers: list[TriggerScore]  # the triggers that count, best first
+    parts: list[ScorePart] = Field(default_factory=list)  # empty for a Drop
+    score_checked: int = 0
+    band: Band | None = None
+
+
+@dataclass(frozen=True)
+class SizeJudgement:
+    """The size rule's check, the office size it used, and what that size rests on."""
+
+    check: RuleCheck
+    m2: int | None
+    estimated: bool
+    basis: SizeBasis
 
 
 def parse_date(text: str | None) -> date | None:
@@ -73,8 +113,8 @@ def judge(
     checks: list[RuleCheck] = []
     checks += _never_suggest(facts, hubspot, rules, today)
     checks.append(_city(facts, rules))
-    size_check, office_m2, estimated = _size(facts, rules, today)
-    checks.append(size_check)
+    sized = _size(facts, rules, today)
+    checks.append(sized.check)
     checks.append(_office(facts, rules))
     checks += _local_and_healthy(facts)
     triggers = _triggers(facts, rules, today)
@@ -83,7 +123,8 @@ def judge(
         if triggers
         else RuleCheck(rule="Trigger", outcome="unknown", detail="No sign of an office change yet")
     )
-    history_check = _history_check(office_history(facts, rules, today), rules)
+    history = office_history(facts, rules, today)
+    history_check = _history_check(history, rules)
     if history_check is not None:  # left out when nothing is known, so a card isn't all "unknown"
         checks.append(history_check)
 
@@ -101,15 +142,26 @@ def judge(
     else:
         result = "pass"
 
-    fitout = office_m2 * criteria.fitout.rate_per_m2_aud if office_m2 is not None else None
+    fitout = sized.m2 * criteria.fitout.rate_per_m2_aud if sized.m2 is not None else None
+    parts: list[ScorePart] = []
+    score = checked = 0
+    band: Band | None = None
+    if result != "drop":  # a Drop scores 0: the score never overrides a Drop
+        parts = _score_parts(triggers, facts, sized, history, rules)
+        score = max(0, min(100, sum(part.earned for part in parts)))
+        checked = sum(part.checked for part in parts)
+        band = band_of(score, checked, rules)
     return Verdict(
         result=result,
-        score=_score(result, triggers, facts, rules),
+        score=score,
         checks=checks,
-        office_m2=office_m2,
-        office_m2_estimated=estimated,
+        office_m2=sized.m2,
+        office_m2_estimated=sized.estimated,
         fitout_aud=fitout,
         triggers=triggers,
+        parts=parts,
+        score_checked=checked,
+        band=band,
     )
 
 
@@ -189,9 +241,7 @@ def _city(facts: CompanyFacts, rules: LeadFinderRules) -> RuleCheck:
     return RuleCheck(rule="City", outcome="director", detail=f"{place}: a Director decides")
 
 
-def _size(
-    facts: CompanyFacts, rules: LeadFinderRules, today: date
-) -> tuple[RuleCheck, int | None, bool]:
+def _size(facts: CompanyFacts, rules: LeadFinderRules, today: date) -> SizeJudgement:
     """The size rule. A known office size is judged against the range. A size worked out from
     staff is only a hint (Criteria_v2): it can raise a flag, never a Drop. A small company that
     will soon need an office in range still fits (`_growing`)."""
@@ -209,39 +259,37 @@ def _size(
         grown = _growing(facts, rules, today)
         if grown is not None:
             return grown
-        return (
-            RuleCheck(rule="Size", outcome="unknown", detail="Office size and staff not known"),
-            None,
-            False,
+        unknown = RuleCheck(
+            rule="Size", outcome="unknown", detail="Office size and staff not known"
         )
+        return SizeJudgement(unknown, None, False, "none")
 
     text = f"{m2:,} m²{basis}"
     low, _ = size.director_band_m2
+    got: SizeBasis = "estimated" if estimated else "confirmed"
     if m2 > size.office_m2_max or (staff is not None and staff > size.staff_max):
         check = RuleCheck(rule="Size", outcome="director", detail=f"{text}: over the top limit")
-        return check, m2, estimated  # a plan to grow even bigger is no reason to look again
+        return SizeJudgement(check, m2, estimated, "director")  # no reason to look at growth
     if m2 >= size.office_m2_min:
-        return RuleCheck(rule="Size", outcome="ok", detail=text), m2, estimated
+        return SizeJudgement(RuleCheck(rule="Size", outcome="ok", detail=text), m2, estimated, got)
+    why: SizeBasis = "below"
     if from_staff and staff is not None:
         hint = size.staff_hint_min
         if staff >= hint:
-            check = RuleCheck(
-                rule="Size", outcome="ok", detail=f"{text}: at the staff hint ({hint}+)"
-            )
-            return check, m2, estimated
+            detail = f"{text}: at the staff hint ({hint}+)"
+            return SizeJudgement(RuleCheck(rule="Size", outcome="ok", detail=detail), m2, True, got)
         detail = f"{text}: below the staff hint ({hint}+). Check the office size"
         check = RuleCheck(rule="Size", outcome="flag", detail=detail)
     elif m2 >= low:
+        why = "director"
         check = RuleCheck(rule="Size", outcome="director", detail=f"{text}: just under the minimum")
     else:
         check = RuleCheck(rule="Size", outcome="fail", detail=f"{text}: too small")
     grown = _growing(facts, rules, today)
-    return grown if grown is not None else (check, m2, estimated)
+    return grown if grown is not None else SizeJudgement(check, m2, estimated, why)
 
 
-def _growing(
-    facts: CompanyFacts, rules: LeadFinderRules, today: date
-) -> tuple[RuleCheck, int, bool] | None:
+def _growing(facts: CompanyFacts, rules: LeadFinderRules, today: date) -> SizeJudgement | None:
     """A company below the range that will soon need an office in it still fits (Levi, 29 Oct):
     big funding or a big announcement, plus a plan to hire. The office it will need is what
     counts. None when there is no such plan, or it is further away than `grow_into_range_months`."""
@@ -257,12 +305,18 @@ def _growing(
     text = f"{needed:,} m²"
     if needed > size.office_m2_max:
         detail = f"Growing: will need about {text}, over the top limit"
-        return RuleCheck(rule="Size", outcome="director", detail=detail), needed, True
+        return SizeJudgement(
+            RuleCheck(rule="Size", outcome="director", detail=detail), needed, True, "director"
+        )
     if when is None:
         detail = f"Growing into the range: will need about {text}. When is not known, so check"
-        return RuleCheck(rule="Size", outcome="flag", detail=detail), needed, True
+        return SizeJudgement(
+            RuleCheck(rule="Size", outcome="flag", detail=detail), needed, True, "below"
+        )
     detail = f"Growing into the range: will need about {text} by {facts.growth_by.value}"
-    return RuleCheck(rule="Size", outcome="ok", detail=detail), needed, True
+    return SizeJudgement(
+        RuleCheck(rule="Size", outcome="ok", detail=detail), needed, True, "growing"
+    )
 
 
 def _office(facts: CompanyFacts, rules: LeadFinderRules) -> RuleCheck:
@@ -336,9 +390,8 @@ def _history_check(history: History, rules: LeadFinderRules) -> RuleCheck | None
         return None
     sentences = []
     if history.since is not None and history.years_at is not None:
-        sentences.append(
-            f"At this address since {history.since.year} ({history.years_at:.1f} years)"
-        )
+        since = f"At this address since {history.since.year} ({history.years_at:.1f} years)"
+        sentences.append(since)
     if history.fitout is not None:
         sentences.append(f"Last fitout {history.fitout.year}")
     if history.recent:
@@ -377,37 +430,196 @@ def _triggers(facts: CompanyFacts, rules: LeadFinderRules, today: date) -> list[
             continue
         when = parse_date(trigger.date)
         if when is None:
-            recency = score.undated
+            timing = score.undated
         elif trigger.id == "lease_ending":
             days_out = (when - today).days
             if not 0 <= days_out <= window:
                 continue  # already ended, or too far away
             in_best = low * DAYS_PER_YEAR <= days_out <= high * DAYS_PER_YEAR
-            recency = score.lease_in_best_window if in_best else score.recency[-1].points
+            timing = score.lease_in_best_window if in_best else score.recency[-1].points
         elif when > today:
             if (when - today).days > window:
                 continue
-            recency = score.recency[0].points  # announced and still to come
+            timing = score.recency[0].points  # announced and still to come
         else:
             if today - when > recent:
                 continue  # too old to count
             age = (today - when).days
-            recency = next((s.points for s in score.recency if age <= s.within_days), 0)
+            timing = next((s.points for s in score.recency if age <= s.within_days), 0)
         kind = source_kind(trigger.source_url, criteria, company_domain)
-        points = score.trigger[group] + recency + score.source.get(kind, 0)
-        counted.append(TriggerScore(trigger=trigger, group=group, source_kind=kind, points=points))
+        group_points = score.trigger_group[group]
+        source_points = score.source.get(kind, 0)
+        counted.append(
+            TriggerScore(
+                trigger=trigger,
+                group=group,
+                source_kind=kind,
+                points=group_points + timing + source_points,
+                group_points=group_points,
+                source_points=source_points,
+                timing_points=timing,
+            )
+        )
     return sorted(counted, key=lambda t: t.points, reverse=True)
 
 
-def _score(
-    result: Result, triggers: list[TriggerScore], facts: CompanyFacts, rules: LeadFinderRules
-) -> int:
-    if result == "drop":
-        return 0
-    score = rules.criteria.score
-    total = triggers[0].points if triggers else 0
-    if result in ("pass", "director_review"):
-        total += score.fit[result]
-    booster_ids = {booster.id for booster in facts.boosters}
-    total += min(len(booster_ids) * score.booster_each, score.boosters_max)
-    return max(0, min(100, total))
+# --- The score ---------------------------------------------------------------------------
+
+
+def _score_parts(
+    triggers: list[TriggerScore],
+    facts: CompanyFacts,
+    sized: SizeJudgement,
+    history: History,
+    rules: LeadFinderRules,
+) -> list[ScorePart]:
+    """The six parts of the score, each with its checks. A check is "not known yet" when the tool
+    can't judge it for this lead, and then it adds nothing to `checked`."""
+    criteria = rules.criteria
+    score = criteria.score
+    best = triggers[0] if triggers else None
+    evidence = {booster.id: booster.evidence for booster in facts.boosters}
+
+    def check(
+        id: str, earned: int, most: int, *, known: bool = True, detail: str = ""
+    ) -> ScoreCheck:
+        known = known and id not in score.unseen
+        return ScoreCheck(
+            id=id,
+            label=score.check_labels[id],
+            earned=earned if known else 0,
+            max=most,
+            known=known,
+            detail=detail if known else "",
+        )
+
+    size_points = {
+        "confirmed": score.size.confirmed_in_range,
+        "estimated": score.size.estimated_in_range,
+        "growing": score.size.growing_into_range,
+        "director": score.size.director,
+        "below": 0,
+        "none": 0,
+    }
+    tier = facts.tier_group
+    tier_points = (
+        score.fit.tier_1
+        if tier in criteria.industries.tier_1
+        else score.fit.tier_2
+        if tier in criteria.industries.tier_2
+        else 0
+    )
+    years = f"{history.years_at:.1f} years at this address" if history.years_at is not None else ""
+    last = max((d for d in (history.since, history.fitout) if d is not None), default=None)
+    by_part: dict[str, list[ScoreCheck]] = {
+        "trigger": [
+            check(
+                "trigger_group",
+                best.group_points if best else 0,
+                max(score.trigger_group.values()),
+                detail=best.trigger.what_happened if best else "No sign of an office change yet",
+            ),
+            check(
+                "source",
+                best.source_points if best else 0,
+                max(score.source.values()),
+                detail=best.source_kind.replace("_", " ") if best else "",
+            ),
+        ],
+        "size": [
+            check(
+                "size",
+                size_points[sized.basis],
+                criteria.score.parts["size"].points,
+                known=sized.basis != "none",
+                detail=sized.check.detail,
+            )
+        ],
+        "timing": [
+            check(
+                "recency",
+                best.timing_points if best else 0,
+                score.recency_max,
+                detail="How recent the best trigger is, or how near the lease end",
+            ),
+            check(
+                "years_at_address",
+                score.years_at_address if history.due else 0,
+                score.years_at_address,
+                known=history.years_at is not None,
+                detail=years,
+            ),
+            check(
+                "no_recent_move",
+                score.no_recent_move if history.recent is False else 0,
+                score.no_recent_move,
+                known=history.recent is not None,
+                detail=f"Last move or fitout {last.year}" if last else "",
+            ),
+        ],
+        "access": [
+            check(
+                "contact_role",
+                score.access.contact_role if facts.contact_role else 0,
+                score.access.contact_role,
+                detail=facts.contact_role or "No contact role found",
+            ),
+            check("hubspot_contact", 0, score.access.hubspot_contact, known=False),
+            check("customer_link", 0, score.access.customer_link, known=False),
+        ],
+        "fit": [
+            check(
+                "buys_strategy",
+                score.fit.buys_strategy if "buys_strategy" in evidence else 0,
+                score.fit.buys_strategy,
+                detail=evidence.get("buys_strategy", "No sign found"),
+            ),
+            check(
+                "industry_tier",
+                tier_points,
+                max(score.fit.tier_1, score.fit.tier_2),
+                known=facts.industry.value is not None,
+                detail=tier or "Not in a tier",
+            ),
+        ],
+        "competition": [
+            check(
+                "no_rival_in_place",
+                score.competition.no_rival_in_place if "no_rival_in_place" in evidence else 0,
+                score.competition.no_rival_in_place,
+                detail=evidence.get("no_rival_in_place", "No sign found"),
+            ),
+            check(
+                "no_contractor_relationship",
+                0,
+                score.competition.no_contractor_relationship,
+                known=False,
+            ),
+        ],
+    }
+    return [
+        ScorePart(
+            id=part_id,
+            label=rule.label,
+            max=rule.points,
+            earned=sum(c.earned for c in by_part[part_id]),
+            checked=sum(c.max for c in by_part[part_id] if c.known),
+            checks=by_part[part_id],
+        )
+        for part_id, rule in score.parts.items()
+    ]
+
+
+def band_of(score: int, checked: int, rules: LeadFinderRules) -> Band:
+    """The Profile's bands: 75 to 100 research first, 50 to 74 investigate, under 50 nurture. With
+    `band_basis: scaled` the points earned are scaled to the points checked first, so
+    48 of 60 counts as 80."""
+    rule = rules.criteria.score
+    value = score
+    if rule.band_basis == "scaled":
+        value = round(score * 100 / checked) if checked else 0
+    if value >= rule.bands.research_first:
+        return "research_first"
+    if value >= rule.bands.investigate:
+        return "investigate"
+    return "nurture"

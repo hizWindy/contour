@@ -449,12 +449,38 @@ def test_0005_adds_and_removes_the_index_on_the_search_log_time(scratch: Scratch
 
     command.upgrade(config, "0005_searches_created_at")
     assert search_log_indexes(scratch)["ix_searches_created_at"].endswith("(created_at)")
-    command.check(config)  # the model declares the same index, so nothing is missing or extra
 
     command.downgrade(config, "0004_lead_columns")
     assert "ix_searches_created_at" not in search_log_indexes(scratch)
     command.upgrade(config, "head")
     assert "ix_searches_created_at" in search_log_indexes(scratch)
+    command.check(config)  # the models declare the same index, so nothing is missing or extra
+
+
+def lead_columns(scratch: Scratch) -> dict[str, str]:
+    """The columns of lead_finder.leads, by name, with their types."""
+    with scratch.connect() as connection:
+        rows = connection.execute(
+            "SELECT column_name, data_type FROM information_schema.columns "
+            "WHERE table_schema = 'lead_finder' AND table_name = 'leads'"
+        ).fetchall()
+    return {row["column_name"]: row["data_type"] for row in rows}
+
+
+@pytest.mark.integration
+def test_0006_adds_and_removes_the_checked_points_of_the_score(scratch: Scratch) -> None:
+    config = alembic_config(scratch.url)
+    command.upgrade(config, "0005_searches_created_at")
+    assert "score_checked" not in lead_columns(scratch)
+
+    command.upgrade(config, "0006_score_checked")
+    assert lead_columns(scratch)["score_checked"] == "integer"
+    command.check(config)  # the model declares the same column, so nothing is missing or extra
+
+    command.downgrade(config, "0005_searches_created_at")
+    assert "score_checked" not in lead_columns(scratch)
+    command.upgrade(config, "head")
+    assert "score_checked" in lead_columns(scratch)
 
 
 def fact(value: Any) -> dict[str, Any]:

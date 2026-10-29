@@ -171,15 +171,40 @@ def test_trigger_without_templates_stops_start_up(tmp_path: Path) -> None:
         read_rules(rules_dir)
 
 
-def test_a_score_over_100_stops_start_up(tmp_path: Path) -> None:
+def test_parts_that_do_not_add_up_to_100_stop_start_up(tmp_path: Path) -> None:
     rules_dir = copy_rules(tmp_path)
-    edit(rules_dir / "criteria.yaml", "boosters_max: 15", "boosters_max: 40")
-    with pytest.raises(ValidationError, match="best possible score"):
+    edit(rules_dir / "criteria.yaml", "points: 25 }", "points: 30 }")
+    with pytest.raises(ValidationError, match="The six parts add up to 105"):
+        read_rules(rules_dir)
+
+
+def test_checks_that_do_not_add_up_to_their_part_stop_start_up(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    edit(
+        rules_dir / "criteria.yaml",
+        "{ main: 15, other: 10, weak: 4 }",
+        "{ main: 20, other: 10, weak: 4 }",
+    )
+    with pytest.raises(ValidationError, match="part trigger add up to 30, but the part is 25"):
+        read_rules(rules_dir)
+
+
+def test_a_check_that_does_not_exist_cannot_be_unseen(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    edit(rules_dir / "criteria.yaml", "unseen: [hubspot_contact,", "unseen: [nope,")
+    with pytest.raises(ValidationError, match="checks that don't exist: nope"):
+        read_rules(rules_dir)
+
+
+def test_bands_must_go_from_low_to_high(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    edit(rules_dir / "criteria.yaml", "investigate: 50", "investigate: 80")
+    with pytest.raises(ValidationError, match=r"investigate must be below bands\.research_first"):
         read_rules(rules_dir)
 
 
 def test_every_source_kind_needs_a_score(tmp_path: Path) -> None:
     rules_dir = copy_rules(tmp_path)
-    edit(rules_dir / "criteria.yaml", " job_ads: 4 }", " }")
+    edit(rules_dir / "criteria.yaml", " job_ads: 2 }", " }")
     with pytest.raises(ValidationError, match="one entry for each kind"):
         read_rules(rules_dir)

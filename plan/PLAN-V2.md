@@ -4,7 +4,7 @@ This plan makes the Lead Finder follow the new company criteria in [Criteria_v2.
 
 - **Built by:** Al-khair Pama. **Signed off by:** Levi Young.
 - **Last updated:** 2026-10-30. **TBC** means not confirmed yet.
-- **Progress:** 2 of 20 steps done.
+- **Progress:** 5 of 20 steps done.
 - **Before this:** [PLAN-V1.md](PLAN-V1.md) built the engine and the website (Phases 0 to 4). They follow [Criteria_v1.md](../projects/leads/criteria/Criteria_v1.md). Phase 5, sending leads to HubSpot, is not started and stays in PLAN-V1.
 
 ## In short
@@ -104,18 +104,18 @@ Each step changes the rules file, the code and Claude's instructions together, a
   - Add the growing-into-range rule from Levi's email: big funding or a big announcement, plus a plan to hire. The office it will need is what counts. Start at "within 24 months" (our guess, **TBC**).
   - Change: `size` in `criteria.yaml` and `rules.py`, `_size` in `scoring.py`, new facts `growth_plan` and `size_needed_m2` in `fields.py`, `extract.md`, and the tests.
   - **Done when:** tests pass for 74 and 75 staff and for 799 and 800 m². A Southern Launch sample (30 to 40 staff, funding for 150) passes the size rule.
-- [ ] **B2. Industry: judge the office, not the industry.**
+- [x] **B2. Industry: judge the office, not the industry.** Done 2026-10-30, 08f9ef4.
   - Replace the industry flag with a new fact, `office_matters`: does the office matter to how they work (growth, culture, collaboration, talent)? A miner's head office counts. A warehouse, plant or shop doesn't. If unsure, the company gets "check office size".
   - Add the industry tiers from Criteria_v2 section 3 as lists in `criteria.yaml`. They only add points (B5) and never decide fit. Defence stays in Tier 2 until Levi answers question 1.
   - Keep the Director sectors. Re-check `not_office_based` in `watchlist.yaml`: a miner's corporate office now counts, so some HubSpot industries may stop being skipped (**TBC** with Levi).
   - Change: `_industry` in `scoring.py`, `extract.md`, and the tests.
   - **Done when:** tests show a Perth mining head office isn't flagged for its industry, and a warehouse-only company is.
-- [ ] **B3. Triggers.**
+- [x] **B3. Triggers.** Done 2026-10-30, fa7c5e4.
   - Add 3 to the Other group: a new facility with a big office part, a new business unit, and an underperforming workplace (or a major business or industry change).
   - Move the leadership change up from Weak to Other. It counts only when the strategy changes. Add "culture change" to Weak. Keep the ids `new_ceo` and `hiring_push`, so old leads keep their labels.
   - Match the wording to Criteria_v2 section 4. Add a search template for each new trigger in `queries.yaml`, because the backend won't start without one.
   - **Done when:** the rules load, each trigger has a template, the Start page lists the new triggers, and tests cover each new id.
-- [ ] **B4. Office history and the lead card's new facts.**
+- [x] **B4. Office history and the lead card's new facts.** Done 2026-10-30, 3b30823.
   - New facts in `fields.py` and `extract.md`: `office_since` (the year they moved in), `last_fitout` (the date of the last move or fitout), `fitout_contractors` (past design and fitout firms) and `talking_points` (2 or 3 short points tied to the trigger).
   - Add `office_age` to `criteria.yaml`: due after 5 years (the low end of Levi's 5 to 8, **TBC**), and a move or fitout in the last 3 years counts as recent.
   - Add the 18-month consultant window. The card shows it as text, because the tool can't see it.
@@ -206,6 +206,7 @@ Start after Part B, because the website reads the API. Follow [DESIGN.md](../eng
 
 Newest first. One line for each tick, pause or surprise.
 
+- 2026-10-30: B2 (08f9ef4), B3 (fa7c5e4) and B4 (3b30823) done. The check is now called "Office" (was "Industry"). A weak trigger in the old tests is now `hiring_push`, because `new_ceo` moved up to Other. Decision made while building: "the office doesn't matter" is a flag, not a Drop, because it is the AI's judgement (Criteria_v2 says a failed rule is a Drop, so Levi should confirm).
 - 2026-10-30: B1 done (af92afa). Backend lint, types and 1,099 lead finder tests pass. The API file (`openapi.json`) and the website types are not refreshed yet. C1 does that, and the website test card needs the new facts then.
 - 2026-10-30: A1 done. Baseline before any change: backend 2,227 passed and 28 skipped (3 min). Website: lint 0 warnings, typecheck clean, 667 tests in 39 files, build OK. Windows App Control did not block anything.
 - 2026-10-30: Plan written. `PLAN.md` moved to `plan/PLAN-V1.md`. No steps started.

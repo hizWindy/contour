@@ -7,7 +7,15 @@ import pytest
 
 from apps.lead_finder.fields import BoosterFound, TriggerFound
 from apps.lead_finder.rules import load_rules
-from apps.lead_finder.scoring import RuleCheck, Verdict, judge, parse_date
+from apps.lead_finder.scoring import (
+    RuleCheck,
+    ScoreCheck,
+    ScorePart,
+    Verdict,
+    band_of,
+    judge,
+    parse_date,
+)
 from core.hubspot.matching import CandidateReason, HubSpotMatch, MatchCandidate
 from tests.lead_finder.samples import ASX, NEWS, fact, make_facts
 
@@ -28,9 +36,136 @@ def verdict(hubspot: HubSpotMatch = NEW, **changes: object):  # type: ignore[no-
 def test_a_good_lead_passes_with_its_score() -> None:
     result = verdict()
     assert result.result == "pass"
-    # main trigger 35 + lease 1 to 3 years out 20 + other news 8 + pass 15
-    assert result.score == 78
+    # trigger part: main trigger 15 + other news 5. Size: 2,500 m² confirmed 20. Timing: a lease
+    # 1 to 3 years out 6. Access: a contact role 5. Nothing found for fit or competition.
+    assert result.score == 15 + 5 + 20 + 6 + 5
     assert result.fitout_aud == 2500 * 1500
+
+
+def part_of(result: Verdict, id: str) -> ScorePart:
+    return next(part for part in result.parts if part.id == id)
+
+
+def score_check(result: Verdict, id: str) -> ScoreCheck:
+    return next(check for part in result.parts for check in part.checks if check.id == id)
+
+
+def test_the_score_has_the_profiles_six_parts() -> None:
+    result = verdict()
+    assert [(p.id, p.max) for p in result.parts] == [
+        ("trigger", 25),
+        ("size", 20),
+        ("timing", 15),
+        ("access", 15),
+        ("fit", 15),
+        ("competition", 10),
+    ]
+    assert [p.earned for p in result.parts] == [20, 20, 6, 5, 0, 0]
+    assert sum(p.earned for p in result.parts) == result.score == 51
+    # Checked: trigger 15 + 10, size 20, recency 6, contact role 5, strategy 8, tier 7, rival 6.
+    assert result.score_checked == 77
+    assert result.band == "investigate"  # 51 of 77 checked counts as 66
+    assert result.score <= result.score_checked <= 100
+
+
+def test_the_trigger_points_are_the_sum_of_their_three_parts() -> None:
+    (best,) = verdict().triggers
+    assert (best.group_points, best.source_points, best.timing_points) == (15, 5, 6)
+    assert best.points == 15 + 5 + 6
+
+
+def test_checks_the_tool_cannot_judge_are_not_known_yet() -> None:
+    result = verdict()
+    for id in ("hubspot_contact", "customer_link", "no_contractor_relationship"):
+        check = score_check(result, id)
+        assert (check.known, check.earned) == (False, 0)
+    # Nothing is said about the years at the address or a recent move, so they are not known either.
+    assert not score_check(result, "years_at_address").known
+    assert not score_check(result, "no_recent_move").known
+
+
+def test_the_years_at_the_address_and_a_quiet_office_earn_timing_points() -> None:
+    base = verdict()
+    due = verdict(office_since=fact("2015"))
+    assert score_check(due, "years_at_address").earned == 5
+    assert score_check(due, "no_recent_move").earned == 4
+    assert part_of(due, "timing").earned == 6 + 5 + 4
+    assert due.score_checked == base.score_checked + 5 + 4  # both checks are now known
+    # Moved in last year: known, but it earns nothing for years or a quiet office.
+    moved = verdict(office_since=fact("2026-02"))
+    assert (
+        score_check(moved, "years_at_address").known,
+        score_check(moved, "years_at_address").earned,
+    ) == (True, 0)
+    assert score_check(moved, "no_recent_move").earned == 0
+
+
+@pytest.mark.parametrize(
+    ("group", "points"),
+    [
+        ("Technology and telecommunications", 7),
+        ("Defence and advanced manufacturing", 4),
+        (None, 0),
+    ],
+)
+def test_the_industry_tier_adds_points_to_strategic_fit(group: str | None, points: int) -> None:
+    assert score_check(verdict(tier_group=group), "industry_tier").earned == points
+
+
+def test_the_industry_tier_is_not_known_when_the_industry_is_not() -> None:
+    assert not score_check(verdict(industry=fact(None)), "industry_tier").known
+
+
+@pytest.mark.parametrize(
+    ("changes", "points"),
+    [
+        ({}, 20),  # 2,500 m², confirmed
+        ({"office_m2": fact(2500, label="estimated")}, 16),
+        ({"office_m2": fact(None), "staff_in_city": fact(100)}, 16),  # worked out from staff
+        ({"office_m2": fact(900)}, 10),  # just under the minimum: a Director decides
+        ({"office_m2": fact(None), "staff_in_city": fact(40)}, 0),  # below the hint: a flag
+    ],
+)
+def test_the_size_check_follows_what_the_size_rests_on(
+    changes: dict[str, Any], points: int
+) -> None:
+    check = score_check(verdict(**changes), "size")
+    assert (check.earned, check.known, check.max) == (points, True, 20)
+
+
+def test_a_growing_company_earns_the_growing_points() -> None:
+    assert score_check(growing(), "size").earned == 14
+
+
+def test_an_unknown_size_is_not_known_yet() -> None:
+    check = score_check(verdict(office_m2=fact(None), staff_in_city=fact(None)), "size")
+    assert (check.known, check.earned) == (False, 0)
+
+
+def test_a_drop_scores_zero_and_has_no_parts() -> None:
+    result = verdict(healthy=fact(False))
+    assert (result.result, result.score, result.score_checked) == ("drop", 0, 0)
+    assert (result.parts, result.band) == ([], None)
+
+
+@pytest.mark.parametrize(
+    ("basis", "score", "checked", "band"),
+    [
+        ("scaled", 60, 60, "research_first"),  # 60 of 60 counts as 100
+        ("scaled", 48, 60, "research_first"),  # 80
+        ("scaled", 36, 60, "investigate"),  # 60
+        ("scaled", 20, 60, "nurture"),  # 33
+        ("scaled", 0, 0, "nurture"),
+        ("raw", 48, 60, "nurture"),  # the points earned, as they are: under 50
+        ("raw", 60, 60, "investigate"),
+        ("raw", 75, 80, "research_first"),
+    ],
+)
+def test_the_band_follows_the_profile(basis: str, score: int, checked: int, band: str) -> None:
+    rules = load_rules()
+    changed = rules.criteria.score.model_copy(update={"band_basis": basis})
+    criteria = rules.criteria.model_copy(update={"score": changed})
+    assert band_of(score, checked, rules.model_copy(update={"criteria": criteria})) == band
 
 
 def size_check(result: Verdict) -> RuleCheck:
@@ -194,12 +329,18 @@ def test_an_official_source_scores_higher_than_news() -> None:
     assert asx.triggers[0].source_kind == "asx_or_official_news"
 
 
-def test_boosters_add_up_to_a_cap() -> None:
+def test_evidence_earns_points_in_the_check_it_belongs_to() -> None:
     boosters = [
-        BoosterFound(id=b, evidence="yes", source_url=NEWS)
-        for b in ("office_is_due", "buys_strategy", "can_pay", "no_rival_in_place")
+        BoosterFound(id=b, evidence=f"{b} found", source_url=NEWS)
+        for b in ("buys_strategy", "can_pay", "no_rival_in_place")
     ]
-    assert verdict(boosters=boosters).score == 78 + 15
+    result = verdict(boosters=boosters)
+    assert score_check(result, "buys_strategy").earned == 8
+    assert score_check(result, "buys_strategy").detail == "buys_strategy found"
+    assert score_check(result, "no_rival_in_place").earned == 6
+    assert (
+        result.score == verdict().score + 8 + 6
+    )  # can_pay earns nothing: the Profile has no place for it
 
 
 def test_an_open_deal_is_never_suggested() -> None:

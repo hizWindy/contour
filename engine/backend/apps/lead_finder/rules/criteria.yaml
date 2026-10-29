@@ -102,19 +102,15 @@ triggers:
     - id: hiring_push # the id stays. The label is the Profile's wording
       label: Pressure on talent, client experience or productivity, like a hiring push
 
+# What Claude may report as evidence for the score. Each earns points in a score check below,
+# except can_pay: the Profile has no place for it, so it only shows on the card (and may break ties).
 boosters:
-  - id: property_daily_move
-    label: A relocation or lease ending found in Property Daily
-  - id: office_is_due
-    label: Leases rather than owns, and 6+ years in the same office
   - id: buys_strategy
-    label: Talks about culture, hybrid work or green-building ratings, and hires firms directly
-  - id: can_pay
-    label: Profitable, growing or recently raised money
+    label: Talks about culture, hybrid work or green-building ratings (NABERS, Green Star), and hires firms directly
   - id: no_rival_in_place
     label: Not in a competitor's case studies from the last 5 years
-  - id: reachable_decision_maker
-    label: A known role (COO, CFO, Head of Property) or a contact already in HubSpot
+  - id: can_pay
+    label: Profitable, growing or recently raised money
 
 never_suggest:
   already_sent: true
@@ -139,19 +135,50 @@ source_domains:
     - lusha.com
     - apollo.io
 
-# The score, 0 to 100. Stronger and newer signs rank higher.
+# The score, 0 to 100: the Target Customer Profile's six parts (Criteria_v2.md section 6). The parts
+# add up to 100, and the checks inside each part add up to the part (the backend checks this).
+# The checks and their points are our proposal, TBC until Levi fills in the Importance column.
+# A check is "not known yet" when the tool can't judge it for a lead, and then it adds nothing to
+# "checked". The tool shows points earned out of points checked, like "48 of 60 checked".
 score:
-  trigger: { main: 35, other: 25, weak: 10 } # the best trigger counts
-  recency: # how long ago the best trigger happened
-    - { within_days: 30, points: 20 }
-    - { within_days: 90, points: 15 }
-    - { within_days: 365, points: 10 }
-  undated: 5
-  lease_in_best_window: 20 # a lease ending 1 to 3 years out
-  fit: { pass: 15, director_review: 8 }
-  source: { property_daily: 15, asx_or_official_news: 12, other_news: 8, job_ads: 4 }
-  booster_each: 5
-  boosters_max: 15
+  parts:
+    trigger: { label: Business or property trigger, points: 25 }
+    size: { label: Project size, points: 20 }
+    timing: { label: Timing, points: 15 }
+    access: { label: Decision-maker access, points: 15 }
+    fit: { label: Integrated strategic fit, points: 15 }
+    competition: { label: Competitive opportunity, points: 10 }
+  check_labels:
+    trigger_group: The best trigger
+    source: How strong its source is
+    size: Office size
+    recency: How recent the trigger is, or how near the lease end
+    years_at_address: Years at the same address
+    no_recent_move: No recent move or fitout
+    contact_role: A contact role found
+    hubspot_contact: A contact already in HubSpot
+    customer_link: A link to a current customer
+    buys_strategy: Talks about culture, hybrid work or green ratings
+    industry_tier: Industry tier
+    no_rival_in_place: Not in a competitor's case studies
+    no_contractor_relationship: No known fitout contractor relationship
+  trigger_group: { main: 15, other: 10, weak: 4 } # the best trigger counts
+  source: { property_daily: 10, asx_or_official_news: 8, other_news: 5, job_ads: 2 }
+  size: { confirmed_in_range: 20, estimated_in_range: 16, growing_into_range: 14, director: 10 }
+  recency: # timing: how long ago the best trigger happened
+    - { within_days: 30, points: 6 }
+    - { within_days: 90, points: 4 }
+    - { within_days: 365, points: 2 }
+  undated: 1
+  lease_in_best_window: 6 # a lease ending 1 to 3 years out
+  years_at_address: 5 # more than office_age.due_years at the same address
+  no_recent_move: 4 # no move or fitout in the last office_age.recent_move_years
+  access: { contact_role: 5, hubspot_contact: 5, customer_link: 5 }
+  fit: { buys_strategy: 8, tier_1: 7, tier_2: 4 }
+  competition: { no_rival_in_place: 6, no_contractor_relationship: 4 }
+  unseen: [hubspot_contact, customer_link, no_contractor_relationship] # the tool can't judge these yet
+  bands: { research_first: 75, investigate: 50 } # under investigate is "nurture" (the Profile)
+  band_basis: scaled # scaled: points earned out of points checked, then x100. raw: points earned
 
 results: [pass, director_review, watch, drop]
 
@@ -181,7 +208,7 @@ tbc:
   - key: triggers.best_window_years
     note: Our proposal. Closer than 1 year, a consultant is probably already hired.
   - key: boosters
-    note: All boosters are our proposals.
+    note: The three kinds of evidence Claude may report. All our proposals. can_pay is not scored, because the Profile has no place for it (TBC, use it only to break ties).
   - key: never_suggest.dissolved_deal_wait_months
     note: The 12 months is a guess.
   - key: office_age.due_years
@@ -197,4 +224,6 @@ tbc:
   - key: source_domains
     note: First draft. The test set will show which sites matter.
   - key: score
-    note: All weights are our proposals. LEADS.md says the weights are TBC with Levi.
+    note: The six parts are the Profile's, which leadership hasn't approved. The checks inside them and all their points are our proposal, until Levi fills in the Importance column. Three checks can't be judged yet (a contact in HubSpot, a link to a current customer, no known contractor relationship).
+  - key: score.band_basis
+    note: Our proposal. With scaled, 48 of 60 checked counts as 80 for the band. Raw would use 48.

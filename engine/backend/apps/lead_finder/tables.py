@@ -178,6 +178,9 @@ class Lead(Base):
     office_m2_estimated: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     result: Mapped[str] = mapped_column(_string("lead.result"), index=True)  # pass, watch, ...
     score: Mapped[int] = mapped_column(Integer)
+    # The most points the tool could judge for this lead ("48 of 60 checked"). Empty for a lead
+    # scored under version 1, and for a Drop.
+    score_checked: Mapped[int | None] = mapped_column(Integer)
     trigger_id: Mapped[str | None] = mapped_column(_string("lead.trigger_id"))  # the best one
     trigger_ids: Mapped[list[str]] = mapped_column(
         ARRAY(Text), default=list, server_default=text("'{}'::text[]")

@@ -53,7 +53,15 @@ from apps.lead_finder.sanitize import (
     one_line,
     safe_http_url,
 )
-from apps.lead_finder.scoring import RuleCheck, TriggerScore, city_of, judge, parse_date
+from apps.lead_finder.scoring import (
+    Band,
+    RuleCheck,
+    ScorePart,
+    TriggerScore,
+    city_of,
+    judge,
+    parse_date,
+)
 from apps.lead_finder.sources import check_sources, missing_facts, url_key
 from apps.lead_finder.tables import LIMITS, Lead, clip, company_key
 from core.claude.budget import Budget, BudgetSpent
@@ -158,7 +166,21 @@ class LeadCard(BaseModel):
     id: uuid.UUID
     company: str
     result: Result
-    score: int = Field(description="0 to 100. Stronger and newer signs rank higher.")
+    score: int = Field(description="0 to 100: the points earned in the Profile's six parts.")
+    score_parts: list[ScorePart] = Field(
+        default_factory=list,
+        description="The six parts and their checks. Empty for a Drop, and for a card made "
+        "under version 1.",
+    )
+    score_checked: int | None = Field(
+        default=None,
+        description="The most points the tool could judge, like 48 of 60. Empty for a Drop, "
+        "and for a card made under version 1.",
+    )
+    band: Band | None = Field(
+        default=None,
+        description="research_first (75 to 100), investigate (50 to 74) or nurture (under 50)",
+    )
     summary: str
     why_it_fits: str
     contact_role: str | None
@@ -315,6 +337,9 @@ async def research_company(
         company=facts.name or job.company,
         result=verdict.result,
         score=verdict.score,
+        score_parts=verdict.parts,
+        score_checked=verdict.score_checked or None,
+        band=verdict.band,
         summary=facts.summary,
         why_it_fits=_why(verdict.checks, verdict.result),
         contact_role=facts.contact_role,
@@ -636,6 +661,7 @@ def _lead_values(
         "office_m2_estimated": card.office_m2_estimated,
         "result": card.result,
         "score": card.score,
+        "score_checked": card.score_checked,
         "trigger_id": trigger_ids[0] if trigger_ids else None,
         "trigger_ids": trigger_ids,
         "trigger_date": parse_date(best.date) if best else None,

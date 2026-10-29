@@ -108,22 +108,23 @@ def chosen_names(companies: list[Merged], **kwargs: object) -> list[str]:
 @pytest.mark.parametrize(
     ("sig", "points"),
     [
-        # trigger group + recency + source kind (main 35, other 25, weak 10; news 8, ASX 12)
-        (signal("fast_growth", "2026-10-10"), 35 + 20 + 8),  # 16 days ago
-        (signal("fast_growth", "2026-08-01"), 35 + 15 + 8),  # 86 days ago
-        (signal("fast_growth", "2026-03-01"), 35 + 10 + 8),  # 239 days ago
-        (signal("fast_growth", "2025-01-01"), 35 + 0 + 8),  # older than 12 months: no recency
-        (signal("fast_growth", None), 35 + 5 + 8),  # undated
-        (signal("fast_growth", None, published="2026-10-20"), 35 + 20 + 8),  # the page's date
-        (signal("merger_or_takeover", "2027-03-01"), 35 + 20 + 8),  # announced, still to come
-        (signal("merger_or_takeover", "2031-01-01"), 35 + 0 + 8),  # too far ahead
-        (signal("restructure", "2026-10-20"), 25 + 20 + 8),
-        (signal("hiring_push", "2026-10-20"), 10 + 20 + 8),
-        (signal("fast_growth", "2026-10-10", url=ASX), 35 + 20 + 12),
-        (signal("lease_ending", "2028-06-01"), 35 + 20 + 8),  # 1 to 3 years out: the best window
-        (signal("lease_ending", "2027-03-01"), 35 + 10 + 8),  # under a year: the lowest step
-        (signal("lease_ending", "2024-01-01"), 35 + 0 + 8),  # already ended
-        (signal("lease_ending", None, published="2026-10-20"), 35 + 5 + 8),  # a page date is not
+        # trigger group + timing + source kind (main 15, other 10, weak 4; news 5, ASX 8)
+        (signal("fast_growth", "2026-10-10"), 15 + 6 + 5),  # 16 days ago
+        (signal("fast_growth", "2026-08-01"), 15 + 4 + 5),  # 86 days ago
+        (signal("fast_growth", "2026-03-01"), 15 + 2 + 5),  # 239 days ago
+        (signal("fast_growth", "2025-01-01"), 15 + 0 + 5),  # older than 12 months: no timing
+        (signal("fast_growth", None), 15 + 1 + 5),  # undated
+        (signal("fast_growth", None, published="2026-10-20"), 15 + 6 + 5),  # the page's date
+        (signal("merger_or_takeover", "2027-03-01"), 15 + 6 + 5),  # announced, still to come
+        (signal("merger_or_takeover", "2031-01-01"), 15 + 0 + 5),  # too far ahead
+        (signal("restructure", "2026-10-20"), 10 + 6 + 5),
+        (signal("new_ceo", "2026-10-20"), 10 + 6 + 5),  # a leadership change: Other, not Weak
+        (signal("hiring_push", "2026-10-20"), 4 + 6 + 5),
+        (signal("fast_growth", "2026-10-10", url=ASX), 15 + 6 + 8),
+        (signal("lease_ending", "2028-06-01"), 15 + 6 + 5),  # 1 to 3 years out: the best window
+        (signal("lease_ending", "2027-03-01"), 15 + 2 + 5),  # under a year: the lowest step
+        (signal("lease_ending", "2024-01-01"), 15 + 0 + 5),  # already ended
+        (signal("lease_ending", None, published="2026-10-20"), 15 + 1 + 5),  # a page date is not
         (signal("not_a_trigger", "2026-10-20"), 0),  # the end of the lease
     ],
 )
@@ -133,8 +134,8 @@ def test_signal_points(sig: Signal, points: int) -> None:
 
 def test_the_company_own_website_counts_as_an_official_source() -> None:
     own = signal("fast_growth", "2026-10-10", url="https://boxhill.com.au/news/growing")
-    assert signal_points(own, RULES, TODAY) == 35 + 20 + 8
-    assert signal_points(own, RULES, TODAY, company_domain="boxhill.com.au") == 35 + 20 + 12
+    assert signal_points(own, RULES, TODAY) == 15 + 6 + 5
+    assert signal_points(own, RULES, TODAY, company_domain="boxhill.com.au") == 15 + 6 + 8
 
 
 def test_the_news_day_of_a_lease_is_the_page_date_not_when_the_lease_ends() -> None:
@@ -149,7 +150,7 @@ def test_the_news_day_of_a_lease_is_the_page_date_not_when_the_lease_ends() -> N
 
 def test_a_company_ranks_by_its_best_signal() -> None:
     weak_and_strong = company("Both", signal("hiring_push", "2026-10-20"), signal("fast_growth"))
-    assert rank_candidate(weak_and_strong, RULES, TODAY) == 35 + 20 + 8
+    assert rank_candidate(weak_and_strong, RULES, TODAY) == 15 + 6 + 5
     assert rank_candidate(company("Nothing known", signal("not_a_trigger")), RULES, TODAY) == 0
 
 

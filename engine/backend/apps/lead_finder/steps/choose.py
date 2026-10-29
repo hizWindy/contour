@@ -123,7 +123,7 @@ def signal_points(
         age = (today - when).days
         recency = next((step.points for step in score.recency if age <= step.within_days), 0)
     kind = source_kind(signal.url, criteria, company_domain)
-    return score.trigger[group] + recency + score.source.get(kind, 0)
+    return score.trigger_group[group] + recency + score.source.get(kind, 0)
 
 
 def rank_candidate(company: Merged, rules: LeadFinderRules, today: date) -> int:
