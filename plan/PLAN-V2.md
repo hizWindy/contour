@@ -4,7 +4,7 @@ This plan makes the Lead Finder follow the new company criteria in [Criteria_v2.
 
 - **Built by:** Al-khair Pama. **Signed off by:** Levi Young.
 - **Last updated:** 2026-10-30. **TBC** means not confirmed yet.
-- **Progress:** 8 of 20 steps done.
+- **Progress:** 9 of 20 steps done.
 - **Before this:** [PLAN-V1.md](PLAN-V1.md) built the engine and the website (Phases 0 to 4). They follow [Criteria_v1.md](../projects/leads/criteria/Criteria_v1.md). Phase 5, sending leads to HubSpot, is not started and stays in PLAN-V1.
 
 ## In short
@@ -81,7 +81,7 @@ Nothing changes in the engine yet.
   - If a test can't run because Windows App Control blocks files in `.venv`, don't work around it. That happened on 29 Oct (AI Brain note), and tests ran fine again on 30 Oct. Tell Al-khair.
   - Write the numbers in the log.
   - **Done when:** everything passes and the numbers are in the log.
-- [ ] **A2. Send Levi the questions.**
+- [ ] **A2. Send Levi the questions.** Done so far: the email is drafted in [EMAIL.md](../projects/leads/questions/EMAIL.md). Left: Al-khair sends it.
   - One short email. It holds the 5 questions in [Criteria_v2.md](../projects/leads/criteria/Criteria_v2.md) section 12, plus 3 new ones.
   - New 1: a fresh HubSpot export with office size, lease expiry, last moved and manual headcount per city. Ours has a lease expiry for 1 of 185 offices, no last-moved dates, and no office size or manual headcount ([EXPORT.md](../projects/leads/research/EXPORT.md)).
   - New 2: the Signal Hire account. New 3: his OK to send the Gold customers' company names to Claude.
@@ -141,15 +141,15 @@ Each step changes the rules file, the code and Claude's instructions together, a
 
 Start after Part B, because the website reads the API. Follow [DESIGN.md](../engine/DESIGN.md). Check every page in light and dark mode and at phone width.
 
-- [ ] **C1. API and types.**
+- [x] **C1. API and types.** Done 2026-10-30, 40e525a.
   - The lead endpoints return the score parts, "checked", the band, the stage and the new card facts (`schemas.py`, `api_leads.py`, `lead_store.py`).
   - From `engine/backend/`, run `uv run engine openapi`. From `engine/frontend/`, run `npm run types`.
   - **Done when:** the contract tests pass and the website's types match the API.
-- [ ] **C2. Lead card.**
+- [ ] **C2. Lead card.** Done so far: the code, the tests and the build (40e525a). Left: look at it in the browser, in light and dark and at phone width.
   - Show the 6 score parts with "x of y checked", and "not known yet" for what the tool couldn't judge. Show the stage, the talking points, the office history and the past contractors (`lead/lead-card-view.tsx`).
   - A card made under version 1 says "Scored under version 1".
   - **Done when:** a version 2 lead and a version 1 lead both open, checked in the browser.
-- [ ] **C3. Results, Start and Admin pages.**
+- [ ] **C3. Results, Start and Admin pages.** Done so far: the code, the tests and the build (40e525a). Left: look at the three pages in the browser. The Start page needed no change, because its triggers come from the rules.
   - Results: the score shows as "x of y", there is a stage filter, and the CSV has the new columns (`results/columns.tsx`, `results/filter-bar.tsx`, `results/params.ts`).
   - Start: the new triggers show under the right group. Admin: the Rules tab shows version 2 and its **TBC** notes (`admin/rules.tsx`).
   - **Done when:** lint, typecheck, tests and build pass, and the three pages are checked in the browser.
@@ -206,6 +206,7 @@ Start after Part B, because the website reads the API. Follow [DESIGN.md](../eng
 
 Newest first. One line for each tick, pause or surprise.
 
+- 2026-10-30: C1 done (40e525a). Part B gate: the whole backend suite passes (2,313 passed, 28 skipped; the baseline was 2,227). C1 to C3 went in one commit because the website and the API change together. Website checks pass: lint 0 warnings, typecheck, 672 tests, build. Choices: the stage follows the result, so the Result filter is the stage filter (no new filter). The lead card reads the consultant window from the Rules endpoint. Usage when this was written: 5-hour limit 51%, weekly 62%, the session 76% full, so progress was saved to the AI Brain.
 - 2026-10-30: B5 (ef746d9), B6 (930b256) and B7 (86d1d34) done. Choices made while building, for Levi to confirm. (1) "Can pay" is shown on the card but not scored, because the Profile has no place for it. The tie-break is not built. (2) The band scales the points to the points checked, with a switch in `criteria.yaml` (`band_basis`) to use the raw points. (3) Three checks are "not known yet" by design: a contact in HubSpot, a link to a current customer, and no known contractor relationship. (4) HubSpot fills gaps and never overwrites a figure the research found. (5) The check points inside each part are ours, until the Importance column arrives.
 - 2026-10-30: B2 (08f9ef4), B3 (fa7c5e4) and B4 (3b30823) done. The check is now called "Office" (was "Industry"). A weak trigger in the old tests is now `hiring_push`, because `new_ceo` moved up to Other. Decision made while building: "the office doesn't matter" is a flag, not a Drop, because it is the AI's judgement (Criteria_v2 says a failed rule is a Drop, so Levi should confirm).
 - 2026-10-30: B1 done (af92afa). Backend lint, types and 1,099 lead finder tests pass. The API file (`openapi.json`) and the website types are not refreshed yet. C1 does that, and the website test card needs the new facts then.

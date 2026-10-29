@@ -542,7 +542,7 @@ def _score_parts(
                 "recency",
                 best.timing_points if best else 0,
                 score.recency_max,
-                detail="How recent the best trigger is, or how near the lease end",
+                detail=f"Dated {best.trigger.date}" if best and best.trigger.date else "",
             ),
             check(
                 "years_at_address",
