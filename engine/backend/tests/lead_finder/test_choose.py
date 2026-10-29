@@ -118,7 +118,7 @@ def chosen_names(companies: list[Merged], **kwargs: object) -> list[str]:
         (signal("merger_or_takeover", "2027-03-01"), 35 + 20 + 8),  # announced, still to come
         (signal("merger_or_takeover", "2031-01-01"), 35 + 0 + 8),  # too far ahead
         (signal("restructure", "2026-10-20"), 25 + 20 + 8),
-        (signal("new_ceo", "2026-10-20"), 10 + 20 + 8),
+        (signal("hiring_push", "2026-10-20"), 10 + 20 + 8),
         (signal("fast_growth", "2026-10-10", url=ASX), 35 + 20 + 12),
         (signal("lease_ending", "2028-06-01"), 35 + 20 + 8),  # 1 to 3 years out: the best window
         (signal("lease_ending", "2027-03-01"), 35 + 10 + 8),  # under a year: the lowest step
@@ -148,14 +148,14 @@ def test_the_news_day_of_a_lease_is_the_page_date_not_when_the_lease_ends() -> N
 
 
 def test_a_company_ranks_by_its_best_signal() -> None:
-    weak_and_strong = company("Both", signal("new_ceo", "2026-10-20"), signal("fast_growth"))
+    weak_and_strong = company("Both", signal("hiring_push", "2026-10-20"), signal("fast_growth"))
     assert rank_candidate(weak_and_strong, RULES, TODAY) == 35 + 20 + 8
     assert rank_candidate(company("Nothing known", signal("not_a_trigger")), RULES, TODAY) == 0
 
 
 def test_rank_is_best_first_then_by_name_and_never_depends_on_the_input_order() -> None:
     companies = [
-        company("Weak Co", signal("new_ceo", "2026-10-20")),
+        company("Weak Co", signal("hiring_push", "2026-10-20")),
         company("beta Partners", signal("fast_growth", url=ASX)),
         company("Alpha Partners", signal("fast_growth", url=ASX)),  # same points as beta
         company("Middle Co", signal("restructure", "2026-10-20")),
@@ -316,11 +316,11 @@ def test_an_open_deal_is_the_reason_given_before_a_fresh_lead() -> None:
 
 def test_the_top_companies_are_kept_and_the_rest_counted() -> None:
     companies = [
-        company("Weak Co", signal("new_ceo", "2026-10-20")),
+        company("Weak Co", signal("hiring_push", "2026-10-20")),
         company("Best Co", signal("fast_growth", url=ASX)),
         company("Middle Co", signal("restructure", "2026-10-20")),
         company("Good Co", signal("fast_growth")),
-        company("Lowest Co", signal("new_ceo", "2025-01-01")),
+        company("Lowest Co", signal("hiring_push", "2025-01-01")),
     ]
     decision = choose(companies, max_companies=2)
     assert [c.name for c in decision.chosen] == ["Best Co", "Good Co"]
@@ -365,7 +365,7 @@ def test_the_answer_never_depends_on_the_input_order() -> None:
 
 def test_unranked_keeps_the_order_the_companies_came_in() -> None:
     companies = [
-        company("Zed Co", signal("new_ceo", "2026-10-20")),
+        company("Zed Co", signal("hiring_push", "2026-10-20")),
         company("Best Co", signal("fast_growth", url=ASX)),
         company("Middle Co"),
     ]

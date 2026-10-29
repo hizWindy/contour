@@ -94,7 +94,7 @@ async def test_the_request_is_the_templates_the_city_the_trigger_the_places_and_
     await discover(claude)
     assert claude.requests[0].prompt == (
         'City: "Melbourne"\n'
-        'Trigger: "lease_ending" (Lease ending in 1 to 3 years)\n'
+        'Trigger: "lease_ending" (Lease ending in 1 to 3 years, or a relocation)\n'
         "Focus on: Melbourne CBD, Docklands, Southbank, St Kilda Road, Richmond, Cremorne, "
         "Collingwood, South Melbourne\n"
         "Only events from the last 30 days (today is 2026-10-26).\n"
@@ -111,7 +111,8 @@ async def test_the_area_and_the_days_change_the_focus_and_the_dates() -> None:
     await discover(claude, slice_=a_slice("Adelaide", "merger_or_takeover", "inner"), since_days=7)
     assert claude.requests[0].prompt == (
         'City: "Adelaide"\n'
-        'Trigger: "merger_or_takeover" (Merger or takeover, where one company has an old office)\n'
+        'Trigger: "merger_or_takeover" '
+        "(Merger or acquisition, where one company has an old office)\n"
         "Focus on: North Adelaide, Kent Town, Keswick, Mile End\n"
         "Only events from the last 7 days (today is 2026-10-26).\n"
         "\n"

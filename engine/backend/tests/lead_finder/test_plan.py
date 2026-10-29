@@ -75,7 +75,7 @@ def test_every_slice_id_is_different_and_the_same_params_give_the_same_slices() 
         triggers=[item.id for item in RULES.criteria.triggers.every],
     )
     first = make_slices(params, RULES)
-    assert len({s.id for s in first}) == len(first) == 4 * 9
+    assert len({s.id for s in first}) == len(first) == 4 * len(RULES.criteria.triggers.every)
     assert make_slices(params, RULES) == first
 
 

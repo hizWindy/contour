@@ -644,7 +644,7 @@ async def test_a_row_has_the_reason_the_label_and_its_columns(session: AsyncSess
     [row] = page.items
     assert row.id == found["alpha"].id
     assert row.reason == "Acme signed a new lease."
-    assert row.trigger_label == "Lease ending in 1 to 3 years"
+    assert row.trigger_label == "Lease ending in 1 to 3 years, or a relocation"
     assert row.trigger_ids == ["lease_ending", "new_ceo"]
     assert (row.suburb, row.city, row.score, row.origin, row.is_test) == (
         "Docklands",
@@ -779,8 +779,8 @@ async def test_trigger_facet_counts_each_lead_once_and_gives_the_label(
     await world(session)
     facets = await lead_store.lead_facets(session, LeadFilters())
     triggers = {t.id: (t.label, t.count) for t in facets.trigger}
-    assert triggers["lease_ending"] == ("Lease ending in 1 to 3 years", 3)
-    assert triggers["new_ceo"] == ("New CEO or culture change", 2)
+    assert triggers["lease_ending"] == ("Lease ending in 1 to 3 years, or a relocation", 3)
+    assert triggers["new_ceo"] == ("Leadership change that changes direction or strategy", 2)
     assert [t.id for t in facets.trigger] == ["lease_ending", "new_ceo"]  # by count
 
 
@@ -966,7 +966,7 @@ async def test_export_rows_follow_the_list_filters_and_sort(session: AsyncSessio
     assert [r.company for r in rows] == ["Hotel", "echo", "Alpha"]
     alpha = rows[-1]
     assert (alpha.trigger, alpha.source_link, alpha.trigger_date) == (
-        "Lease ending in 1 to 3 years",
+        "Lease ending in 1 to 3 years, or a relocation",
         "https://www.afr.com/property/acme-moves-2026",
         date(2026, 10, 10),
     )

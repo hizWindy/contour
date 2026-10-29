@@ -1470,7 +1470,7 @@ async def test_the_leads_list_rows_have_the_final_fields(
     await session.commit()
     body = (await db_client.get(f"{LF}/leads")).json()
     row = body["items"][0]
-    assert row["trigger_label"] == "Lease ending in 1 to 3 years"
+    assert row["trigger_label"] == "Lease ending in 1 to 3 years, or a relocation"
     assert row["reason"] == "City: Melbourne. Alpha Pty is a good fit. Result: Pass."  # one line
     assert row["suburb"] == "Docklands"
     assert row["origin"] == "web"

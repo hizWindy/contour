@@ -159,9 +159,26 @@ def test_no_trigger_means_watch() -> None:
 
 
 def test_a_weak_trigger_still_counts_but_scores_lower() -> None:
-    weak = verdict(triggers=[trigger("new_ceo", "2026-10-10")])
+    weak = verdict(triggers=[trigger("hiring_push", "2026-10-10")])
     assert weak.result == "pass"
     assert weak.score < verdict().score
+
+
+@pytest.mark.parametrize(
+    ("trigger_id", "group"),
+    [
+        ("new_ceo", "other"),  # a leadership change that changes strategy: moved up from weak
+        ("new_business_unit", "other"),
+        ("new_facility", "other"),
+        ("underperforming_workplace", "other"),
+        ("culture_change", "weak"),
+        ("hiring_push", "weak"),
+    ],
+)
+def test_the_version_2_triggers_have_their_group(trigger_id: str, group: str) -> None:
+    result = verdict(triggers=[trigger(trigger_id, "2026-10-10")])
+    assert result.result == "pass"
+    assert result.triggers[0].group == group
 
 
 def test_old_or_finished_triggers_dont_count() -> None:

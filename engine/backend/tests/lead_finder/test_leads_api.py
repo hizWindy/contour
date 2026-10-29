@@ -176,7 +176,7 @@ async def test_the_list_gives_total_and_rows_with_every_field(
     assert first["id"] == str(found["alpha"].id)
     assert first["cost_usd"] == "0.400000"  # money is text, never a float
     assert first["reason"] == "Acme signed a new lease."
-    assert first["trigger_label"] == "Lease ending in 1 to 3 years"
+    assert first["trigger_label"] == "Lease ending in 1 to 3 years, or a relocation"
     assert first["run_id"] == str(found["run"].id)
 
 
@@ -292,7 +292,7 @@ async def test_facets_over_http(client: httpx.AsyncClient, session: AsyncSession
     assert (body["runs"][0]["mode"], body["runs"][0]["count"]) == ("discovery", 1)
     assert body["trigger"][0] == {
         "id": "lease_ending",
-        "label": "Lease ending in 1 to 3 years",
+        "label": "Lease ending in 1 to 3 years, or a relocation",
         "count": 2,
     }
 
@@ -343,7 +343,7 @@ async def test_the_export_is_a_utf8_csv_with_the_right_headers(
         "created_at",
     ]
     assert [row["company"] for row in rows] == ["Alpha", "Bravo", "Charlie"]
-    assert rows[0]["trigger"] == "Lease ending in 1 to 3 years"
+    assert rows[0]["trigger"] == "Lease ending in 1 to 3 years, or a relocation"
     assert rows[0]["source_link"] == "https://www.afr.com/property/acme-moves-2026"
     assert rows[0]["office_m2_estimated"] == "false"
 

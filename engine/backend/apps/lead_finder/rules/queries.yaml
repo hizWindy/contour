@@ -40,6 +40,17 @@ discovery:
     - "{city} company restructure {month_year}"
   new_ceo:
     - "{city} company appoints new CEO {month_year}"
+    - "{city} company new chief executive strategy review {year}"
+  new_business_unit:
+    - "{city} company launches new business unit {month_year}"
+  new_facility:
+    - "{city} company opens new engineering or manufacturing facility with offices {year}"
+    - "{city} new project facility headquarters office {year}"
+  underperforming_workplace:
+    - "{city} company office underused workplace review {year}"
+    - "{city} company business downturn restructure offices {month_year}"
+  culture_change:
+    - "{city} company culture change program {year}"
   hiring_push:
     - "{city} company hiring push {year}"
 

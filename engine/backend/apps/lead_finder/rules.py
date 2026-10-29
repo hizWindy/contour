@@ -96,6 +96,7 @@ class Triggers(Strict):
     window_years: int = Field(gt=0)
     best_window_years: tuple[int, int]
     recent_months: int = Field(gt=0)
+    consultant_window_months: int = Field(gt=0)
     main: list[Item] = Field(min_length=1)
     other: list[Item]
     weak: list[Item]
