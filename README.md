@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.png">
+    <img src="assets/logo.png" alt="Contour" width="240">
+  </picture>
+</p>
+
 # Contour AI Projects
 
 This is the workspace for **AI projects at Contour Commercial Interiors**.
@@ -18,6 +25,7 @@ It holds the plans, research and decisions behind each AI tool Contour is buildi
 | [CONTOUR.md](CONTOUR.md) | Background on Contour and the AI Engineer role |
 | [minutes of meeting/](<minutes of meeting/>) | Notes from the AI project meetings with Levi |
 | [CLAUDE.md](CLAUDE.md) | Writing rules for the files in this folder |
+| [assets/](assets/) | The Contour logo, in navy for light pages and cream for dark pages |
 
 ## Where things stand
 
