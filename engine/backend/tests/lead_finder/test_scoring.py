@@ -142,6 +142,22 @@ def test_an_unknown_size_is_not_known_yet() -> None:
     assert (check.known, check.earned) == (False, 0)
 
 
+@pytest.mark.parametrize(
+    ("changes", "result", "stage"),
+    [
+        ({}, "pass", "Active prospect"),
+        ({"city": fact("Sydney")}, "director_review", "Active prospect"),
+        ({"triggers": []}, "watch", "Target account"),
+        ({"healthy": fact(False)}, "drop", "Not a target"),
+    ],
+)
+def test_every_result_has_the_profiles_stage(
+    changes: dict[str, Any], result: str, stage: str
+) -> None:
+    verdict_ = verdict(**changes)
+    assert (verdict_.result, verdict_.stage) == (result, stage)
+
+
 def test_a_drop_scores_zero_and_has_no_parts() -> None:
     result = verdict(healthy=fact(False))
     assert (result.result, result.score, result.score_checked) == ("drop", 0, 0)

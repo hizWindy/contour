@@ -69,6 +69,7 @@ class ScorePart(BaseModel):
 
 class Verdict(BaseModel):
     result: Result
+    stage: str  # the Profile's stage for the result: Active prospect, Target account...
     score: int
     checks: list[RuleCheck]
     office_m2: int | None
@@ -153,6 +154,7 @@ def judge(
         band = band_of(score, checked, rules)
     return Verdict(
         result=result,
+        stage=criteria.stages[result],
         score=score,
         checks=checks,
         office_m2=sized.m2,

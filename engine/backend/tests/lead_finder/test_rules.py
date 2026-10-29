@@ -196,6 +196,13 @@ def test_a_check_that_does_not_exist_cannot_be_unseen(tmp_path: Path) -> None:
         read_rules(rules_dir)
 
 
+def test_each_result_needs_a_stage(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    edit(rules_dir / "criteria.yaml", "  drop: Not a target\n", "")
+    with pytest.raises(ValidationError, match="stages needs a name for each of the results"):
+        read_rules(rules_dir)
+
+
 def test_bands_must_go_from_low_to_high(tmp_path: Path) -> None:
     rules_dir = copy_rules(tmp_path)
     edit(rules_dir / "criteria.yaml", "investigate: 50", "investigate: 80")

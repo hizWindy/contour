@@ -182,6 +182,14 @@ score:
 
 results: [pass, director_review, watch, drop]
 
+# The Profile's stage for each result (Criteria_v2.md section 8). The tool decides only these
+# first stages. The third, a qualified deal, comes after sales meets the client (DEAL.md).
+stages:
+  pass: Active prospect
+  director_review: Active prospect
+  watch: Target account
+  drop: Not a target
+
 tbc:
   - key: size.staff_counted_in
     note: Question 6. Does 100+ staff mean in that city, or across the whole company?

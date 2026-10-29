@@ -166,6 +166,10 @@ class LeadCard(BaseModel):
     id: uuid.UUID
     company: str
     result: Result
+    stage: str | None = Field(
+        default=None,
+        description="The Profile's stage for the result. Empty for a card made under version 1.",
+    )
     score: int = Field(description="0 to 100: the points earned in the Profile's six parts.")
     score_parts: list[ScorePart] = Field(
         default_factory=list,
@@ -336,6 +340,7 @@ async def research_company(
         id=job.id,
         company=facts.name or job.company,
         result=verdict.result,
+        stage=verdict.stage,
         score=verdict.score,
         score_parts=verdict.parts,
         score_checked=verdict.score_checked or None,

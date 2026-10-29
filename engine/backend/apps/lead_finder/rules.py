@@ -280,12 +280,19 @@ class Criteria(Strict):
     source_domains: SourceDomains
     score: Score
     results: list[Result]
+    stages: dict[Result, str]
     tbc: list[TbcNote]
 
     @model_validator(mode="after")
     def check_sources(self) -> Self:
         if set(self.score.source) != set(self.sources_rank):
             raise ValueError("score.source needs one entry for each kind in sources_rank")
+        return self
+
+    @model_validator(mode="after")
+    def check_stages(self) -> Self:
+        if set(self.stages) != set(self.results) or not all(self.stages.values()):
+            raise ValueError("stages needs a name for each of the results, and no others")
         return self
 
     @model_validator(mode="after")
