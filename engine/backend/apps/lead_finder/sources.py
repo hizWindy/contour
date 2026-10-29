@@ -29,6 +29,8 @@ FACT_FIELDS = (
     "size_needed_m2",
     "growth_by",
     "office_matters",
+    "office_since",
+    "last_fitout",
 )
 BLOCKED = "blocked"
 ID_MAX_CHARS = 40  # a trigger or booster id, when it is echoed in a message

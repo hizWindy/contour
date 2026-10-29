@@ -63,6 +63,10 @@ fit:
   local_team_runs_project: true
   healthy: true # not in administration, and not cutting staff fast
 
+office_age:
+  due_years: 5 # more than this many years at the same address adds points (Levi's brief says 5 to 8)
+  recent_move_years: 3 # a move or fitout in the last 3 years lowers the rank
+
 triggers:
   window_years: 3
   best_window_years: [1, 3]
@@ -180,6 +184,10 @@ tbc:
     note: All boosters are our proposals.
   - key: never_suggest.dissolved_deal_wait_months
     note: The 12 months is a guess.
+  - key: office_age.due_years
+    note: Levi's brief says 5 to 8 years at the same address. Gemini's meeting summary said 7 to 8, and the written sources win. We start at the low end, 5, because it adds points and never filters.
+  - key: office_age.recent_move_years
+    note: Answered by the documents. A recent move or fitout means the last 3 years.
   - key: triggers.consultant_window_months
     note: From the Profile and DEAL.md. Shown as text on the lead card. The tool can't see when a consultant is appointed.
   - key: triggers

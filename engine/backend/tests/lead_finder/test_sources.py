@@ -36,9 +36,16 @@ def test_a_link_we_never_read_makes_the_fact_unknown() -> None:
 
 @pytest.mark.parametrize(
     ("name", "value"),
-    [("growth_plan", True), ("size_needed_m2", 1500), ("growth_by", "2027-06")],
+    [
+        ("growth_plan", True),
+        ("size_needed_m2", 1500),
+        ("growth_by", "2027-06"),
+        ("office_matters", True),
+        ("office_since", "2016"),
+        ("last_fitout", "2024-05"),
+    ],
 )
-def test_the_growth_facts_need_a_page_we_read_too(name: str, value: Any) -> None:
+def test_the_version_2_facts_need_a_page_we_read_too(name: str, value: Any) -> None:
     kept = check_sources(make_facts(**{name: fact(value)}), SEEN, CRITERIA)
     assert kept.dropped == []
     assert getattr(kept.facts, name).value == value

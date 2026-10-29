@@ -82,6 +82,11 @@ class Industries(Strict):
         return self
 
 
+class OfficeAge(Strict):
+    due_years: int = Field(gt=0)
+    recent_move_years: int = Field(gt=0)
+
+
 class Fit(Strict):
     local_team_runs_project: bool
     healthy: bool
@@ -180,6 +185,7 @@ class Criteria(Strict):
     fitout: Fitout
     industries: Industries
     fit: Fit
+    office_age: OfficeAge
     triggers: Triggers
     boosters: list[Item]
     never_suggest: NeverSuggest

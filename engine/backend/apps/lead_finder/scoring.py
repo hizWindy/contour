@@ -5,6 +5,7 @@ from Criteria_v2.md (a draft until Levi confirms it), through rules/criteria.yam
 """
 
 import re
+from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import Literal
@@ -82,6 +83,9 @@ def judge(
         if triggers
         else RuleCheck(rule="Trigger", outcome="unknown", detail="No sign of an office change yet")
     )
+    history_check = _history_check(office_history(facts, rules, today), rules)
+    if history_check is not None:  # left out when nothing is known, so a card isn't all "unknown"
+        checks.append(history_check)
 
     outcomes = {check.outcome for check in checks}
     unknown_core = any(c.outcome == "unknown" and c.rule in ("City", "Size") for c in checks)
@@ -295,6 +299,57 @@ def _local_and_healthy(facts: CompanyFacts) -> list[RuleCheck]:
         else:
             checks.append(RuleCheck(rule=rule, outcome="fail", detail=fail_text))
     return checks
+
+
+@dataclass(frozen=True)
+class History:
+    """How long the company has been at its address, and whether it moved or fitted out lately."""
+
+    since: date | None
+    fitout: date | None
+    years_at: float | None  # None when the move-in is not known
+    due: bool | None  # more than `office_age.due_years` at this address
+    recent: bool | None  # a move or fitout lately. None when neither date is known
+
+
+def office_history(facts: CompanyFacts, rules: LeadFinderRules, today: date) -> History:
+    age = rules.criteria.office_age
+    since = parse_date(facts.office_since.value)
+    fitout = parse_date(facts.last_fitout.value)
+    known = [day for day in (since, fitout) if day is not None]
+    years_at = (today - since).days / DAYS_PER_YEAR if since else None
+    return History(
+        since=since,
+        fitout=fitout,
+        years_at=years_at,
+        due=None if years_at is None else years_at > age.due_years,
+        recent=(
+            (today - max(known)).days < age.recent_move_years * DAYS_PER_YEAR if known else None
+        ),
+    )
+
+
+def _history_check(history: History, rules: LeadFinderRules) -> RuleCheck | None:
+    """A note for the card, not a rule: a recent move or fitout makes a new project less likely.
+    None when neither date is known."""
+    if history.recent is None:
+        return None
+    sentences = []
+    if history.since is not None and history.years_at is not None:
+        sentences.append(
+            f"At this address since {history.since.year} ({history.years_at:.1f} years)"
+        )
+    if history.fitout is not None:
+        sentences.append(f"Last fitout {history.fitout.year}")
+    if history.recent:
+        years = rules.criteria.office_age.recent_move_years
+        sentences.append(
+            f"A move or fitout in the last {years} years, so a new project is less likely"
+        )
+    elif history.due:
+        sentences.append("Due for a new fitout")
+    outcome: Outcome = "flag" if history.recent else "ok"
+    return RuleCheck(rule="Office history", outcome=outcome, detail=". ".join(sentences))
 
 
 def _triggers(facts: CompanyFacts, rules: LeadFinderRules, today: date) -> list[TriggerScore]:

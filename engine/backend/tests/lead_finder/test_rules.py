@@ -49,6 +49,7 @@ def test_rules_match_the_criteria_documents() -> None:
     ]
     assert [t.id for t in criteria.triggers.weak] == ["culture_change", "hiring_push"]
     assert criteria.triggers.consultant_window_months == 18
+    assert (criteria.office_age.due_years, criteria.office_age.recent_move_years) == (5, 3)
     assert criteria.never_suggest.dissolved_deal_wait_months == 12
 
 

@@ -23,6 +23,17 @@ def test_a_card_saved_before_a_fact_existed_reads_it_as_unknown(name: str) -> No
     assert (fact.value, fact.source_url, fact.source_date, fact.label) == (None, None, None, None)
 
 
+def test_talking_points_and_firm_names_are_cut_after_parsing() -> None:
+    long_text = "word " * 100
+    facts = make_facts(
+        talking_points=[long_text, "b", "c", "d"], fitout_contractors=["A", " ", *"BCDEF"]
+    )
+    cut = CompanyFacts.model_validate(facts.model_dump(mode="json"))
+    assert len(cut.talking_points) == 3
+    assert all(len(point) <= 200 for point in cut.talking_points)
+    assert cut.fitout_contractors == ["A", "B", "C", "D", "E"]  # the blank one is dropped
+
+
 def test_a_card_with_none_of_the_newer_facts_still_opens() -> None:
     old: dict[str, Any] = make_facts().model_dump(mode="json")
     for name in NEWER:

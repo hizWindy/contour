@@ -13,6 +13,8 @@ What each fact means:
 - local_team_runs_project: true if an Australian head office or local leader runs property decisions, even when the owner is overseas.
 - healthy: false only if a note says the company is in administration, or cutting staff fast.
 - office_matters: true if the office matters to how the company works (growth, performance, culture, collaboration, talent). A head office or a technical office counts, even for a miner or a builder. false if the company works mostly from warehouses, plants, sites or shops. null if no note says.
+- office_since: when the company moved into its current office in that city, like "2016" or "2016-03". null if no note says.
+- last_fitout: when that office last had a move, fitout or refit, like "2024-05". The move-in counts too. null if no note says.
 - expected_move: when an office change might happen, like "2027", only if a note points to it.
 - growth_plan: true only if a note says the company has raised big money or made a big announcement AND plans to hire a lot. false if a note says it has no such plan. null if no note says.
 - size_needed_m2: the floor area, in square metres, of the office the company says it will need after that growth. If a note gives only the staff it will have, work it out as staff x 10 and label it "estimated". null if no note says.
@@ -33,6 +35,8 @@ Tier groups. If the company's industry belongs to one of these, put that group's
 $tier_groups
 
 Then write:
+- fitout_contractors: the names of design or fitout firms that did this company's office, only if a note names them. Firm names only. An empty list if none.
+- talking_points: 2 or 3 short points for a first call, each tied to the trigger or the office, like "Lease ends March 2028". Plain facts, no hype. No people's names, emails or phone numbers. An empty list if there is nothing to say.
 - contact_role: the role to contact first: Head of Property or Workplace, then COO or CFO. A role, never a person's name.
 - summary: what happened, in one or two plain sentences.
 - opening_line: one friendly, specific first line for a sales email, based on the trigger. No hype. Null if there is no trigger.

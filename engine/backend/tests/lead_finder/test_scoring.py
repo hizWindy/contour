@@ -257,6 +257,52 @@ def test_when_it_is_unclear_only_a_site_heavy_industry_is_flagged() -> None:
     assert office_check(verdict(industry=fact(None))).outcome == "unknown"
 
 
+def history_check(result: Verdict) -> RuleCheck | None:
+    found = [check for check in result.checks if check.rule == "Office history"]
+    return found[0] if found else None
+
+
+def test_office_history_is_left_out_when_nothing_is_known() -> None:
+    assert history_check(verdict()) is None
+
+
+@pytest.mark.parametrize(
+    ("changes", "outcome", "phrases"),
+    [
+        (
+            {"office_since": fact("2015")},
+            "ok",
+            ["At this address since 2015", "Due for a new fitout"],
+        ),
+        ({"office_since": fact("2022-01")}, "ok", ["At this address since 2022 (4.8 years)"]),
+        (
+            {"office_since": fact("2025-03")},
+            "flag",
+            ["since 2025", "in the last 3 years", "less likely"],
+        ),
+        (
+            {"office_since": fact("2015"), "last_fitout": fact("2024-05")},
+            "flag",
+            ["Last fitout 2024", "less likely"],
+        ),
+        ({"last_fitout": fact("2019-06")}, "ok", ["Last fitout 2019"]),
+    ],
+)
+def test_office_history_notes_how_long_and_whether_it_moved_lately(
+    changes: dict[str, Any], outcome: str, phrases: list[str]
+) -> None:
+    check = history_check(verdict(**changes))
+    assert check is not None
+    assert check.outcome == outcome
+    for phrase in phrases:
+        assert phrase in check.detail
+
+
+def test_office_history_never_changes_the_result() -> None:
+    recent = verdict(office_since=fact("2025-03"))
+    assert (recent.result, recent.score) == (verdict().result, verdict().score)
+
+
 def test_unknown_size_with_a_trigger_needs_a_check() -> None:
     assert verdict(office_m2=fact(None), staff_in_city=fact(None)).result == "watch"
 

@@ -6,7 +6,7 @@ link, a date and a label. A fact with no source is unknown.
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
 
 Label = Literal["confirmed", "estimated", "guessed"]
 Angle = Literal["property", "people", "money", "gaps"]
@@ -14,8 +14,18 @@ Angle = Literal["property", "people", "money", "gaps"]
 # Facts added with company criteria version 2. A lead card saved earlier, and a test form that
 # leaves them out, don't have them: they are unknown. Claude's answer always has every fact,
 # because the form asks for all of them, so the form itself has no defaults.
-NEWER_FACTS = ("growth_plan", "size_needed_m2", "growth_by", "office_matters")
-NEWER_LISTS: tuple[str, ...] = ()
+NEWER_FACTS = (
+    "growth_plan",
+    "size_needed_m2",
+    "growth_by",
+    "office_matters",
+    "office_since",
+    "last_fitout",
+)
+NEWER_LISTS = ("fitout_contractors", "talking_points")
+MAX_TALKING_POINTS = 3
+MAX_CONTRACTORS = 5
+MAX_LINE_CHARS = 200  # a talking point or a firm name: one line, cut after parsing
 NEWER_TEXTS: tuple[str, ...] = ("tier_group",)
 
 
@@ -105,11 +115,36 @@ class CompanyFacts(BaseModel):
     growth_by: Fact[str] = Field(
         description="When it expects to need that office: YYYY-MM or YYYY. Null if no note says."
     )
+    office_since: Fact[str] = Field(
+        description="When the company moved into its current office in that city: YYYY or "
+        "YYYY-MM. Null if no note says."
+    )
+    last_fitout: Fact[str] = Field(
+        description="When that office last had a move, fitout or refit: YYYY-MM or YYYY. The "
+        "move-in counts too. Null if no note says."
+    )
+    fitout_contractors: list[str] = Field(
+        description="Names of design or fitout firms that did this company's office, only if a "
+        "note names them. Firm names only. Can be empty."
+    )
+    talking_points: list[str] = Field(
+        description="2 or 3 short points for a first call, each tied to the trigger or the "
+        "office, like 'Lease ends March 2028'. Plain facts, no hype. No people's names, emails "
+        "or phone numbers. Can be empty."
+    )
     contact_role: str | None = Field(
         description="The role to contact first, like Head of Property, COO or CFO. No names."
     )
     summary: str = Field(description="What happened, in one or two plain sentences")
     opening_line: str | None = Field(description="A friendly first line for a sales email")
+
+    @field_validator("talking_points", "fitout_contractors", mode="after")
+    @classmethod
+    def _few_short_lines(cls, value: list[str], info: ValidationInfo) -> list[str]:
+        """Cut after parsing, not in the form: a long answer must not throw away a paid reply."""
+        limit = MAX_TALKING_POINTS if info.field_name == "talking_points" else MAX_CONTRACTORS
+        lines = (" ".join(line.split())[:MAX_LINE_CHARS] for line in value)
+        return [line for line in lines if line][:limit]
 
     @model_validator(mode="before")
     @classmethod
