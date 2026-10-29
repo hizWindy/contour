@@ -32,7 +32,7 @@ From `engine/backend/`:
 | Type checks | `uv run mypy` |
 | New database change | `uv run alembic revision --autogenerate -m "what changed"`, then read and fix the file |
 
-| Fake backend for the website (no Claude, own database) | `uv run python -m tests.e2e.serve` |
+| Fake backend for the website (sample companies, no Claude, own database; **not** the real one) | `uv run python -m tests.e2e.serve` |
 | Write the API contract the website's types come from | `uv run engine openapi` |
 
 From `engine/frontend/`:
@@ -46,6 +46,23 @@ From `engine/frontend/`:
 | Format | `npm run format` |
 
 Swagger is at http://127.0.0.1:8000/docs while the backend runs. All endpoints sit under `/api/v1/`. Don't run the backend tests and the website tests at the same time on this laptop: together they run out of memory.
+
+## Which backend is running
+
+The real backend and the fake backend both listen on `127.0.0.1:8000`, and the website talks to whichever one is up. The website looks the same on both, and `/api/v1/health` says `ok` on both. So check before you trust what you see.
+
+| | Real backend | Fake backend |
+|---|---|---|
+| Start (from `engine/backend/`) | `uv run engine serve` | `uv run python -m tests.e2e.serve` |
+| Name in `.claude/launch.json` | `backend` | `backend-fake` |
+| Claude | the real one (costs money) | saved sample answers (free) |
+| Database | `leadfinder` | `leadfinder_e2e`, wiped on every start |
+| Companies | real names | all named "Sample ..." |
+
+- "Run the app", "start the backend" and "run the project" mean the **real** backend. Start the fake one only when the user asks for it by name, and say so in the reply.
+- The real backend needs the database first: `docker compose up -d` in `engine/`.
+- Only one can run at a time, because they share port 8000. Before you start either, check what holds the port: `netstat -ano | findstr :8000`, and `docker ps` for an old container such as `contour-backend` or `contour-backend-fake`. Stop it first, or the new one fails to start.
+- After it starts, check which one answered: `curl.exe "http://127.0.0.1:8000/api/v1/lead-finder/leads?limit=3"`. Names that start with "Sample" mean the fake backend.
 
 ## Map
 
