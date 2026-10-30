@@ -3,7 +3,8 @@
 Every fact needs a link to a page the engine actually read. A fact whose link is missing,
 not a plain web address, unseen or on a blocked site becomes unknown, and its link is removed
 too. Each kept link gets a source kind, which feeds the score. The website is kept as a bare
-domain, and only if a page on that site was read. Otherwise it becomes unknown.
+domain, and only if a page on that site was read. Otherwise it becomes unknown. A decision maker
+(a leader's name and job title) needs a read page too, and never one behind a login.
 """
 
 from collections.abc import Iterable
@@ -34,6 +35,8 @@ FACT_FIELDS = (
 )
 BLOCKED = "blocked"
 ID_MAX_CHARS = 40  # a trigger or booster id, when it is echoed in a message
+# People's pages on these sites need a login, so they are never a decision maker's source.
+LOGIN_SITES = ("linkedin.com",)
 
 
 def _split(url: str) -> SplitResult | None:
@@ -190,7 +193,19 @@ def check_sources(
         else:
             boosters.append(booster)
 
-    update |= {"triggers": triggers, "boosters": boosters}
+    # A decision maker needs a page we read, like any fact. Never a LinkedIn page: profiles sit
+    # behind a login, so a name "from LinkedIn" was not read there. The message names no one.
+    people = []
+    for person in facts.decision_makers:
+        issue = problem(person.source_url)
+        if issue is None and on_site(host_of(person.source_url), LOGIN_SITES):
+            issue = f"a page behind a login ({host_of(person.source_url)})"
+        if issue:
+            dropped.append(f"a decision maker: {issue}. Removed.")
+        else:
+            people.append(person)
+
+    update |= {"triggers": triggers, "boosters": boosters, "decision_makers": people}
     return CheckedFacts(facts=facts.model_copy(update=update), dropped=dropped)
 
 

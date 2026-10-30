@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from apps.lead_finder.fields import BoosterFound, CompanyFacts, Fact, TriggerFound
+from apps.lead_finder.fields import BoosterFound, CompanyFacts, DecisionMaker, Fact, TriggerFound
 from apps.lead_finder.rules import load_rules
 from apps.lead_finder.sanitize import safe_http_url
 from apps.lead_finder.sources import check_sources, host_of, missing_facts, source_kind, url_key
@@ -541,3 +541,40 @@ def test_a_known_id_is_shown_as_it_is() -> None:
         "trigger lease_ending: blocked site (zoominfo.com). Removed.",
         "booster can_pay: blocked site (zoominfo.com). Removed.",
     ]
+
+
+LINKEDIN = "https://www.linkedin.com/in/someone"
+
+
+def _person(name: str, url: str) -> DecisionMaker:
+    return DecisionMaker(
+        name=name, role="Chief Financial Officer", source_url=url, source_date=None
+    )
+
+
+def test_a_decision_maker_on_a_page_we_read_is_kept() -> None:
+    checked = check_sources(
+        make_facts(decision_makers=[_person("Jane Citizen", SITE)]), SEEN, CRITERIA
+    )
+    assert checked.dropped == []
+    assert [p.name for p in checked.facts.decision_makers] == ["Jane Citizen"]
+
+
+@pytest.mark.parametrize(
+    ("url", "read", "why"),
+    [
+        ("https://made-up.example/team", False, "link not among the pages read"),
+        (LINKEDIN, True, "a page behind a login (linkedin.com)"),
+        ("https://www.signalhire.com/companies/acme", True, "blocked site (signalhire.com)"),
+        ("ftp://acme.com.au/team", True, "not a plain web link"),
+    ],
+)
+def test_a_decision_maker_without_a_good_public_page_is_removed_without_naming_them(
+    url: str, read: bool, why: str
+) -> None:
+    facts = make_facts(decision_makers=[_person("Sam Example", url)])
+    checked = check_sources(facts, [*SEEN, url] if read else SEEN, CRITERIA)
+    assert checked.facts.decision_makers == []
+    assert len(checked.dropped) == 1
+    assert checked.dropped[0].startswith(f"a decision maker: {why}")
+    assert "Sam" not in checked.dropped[0]

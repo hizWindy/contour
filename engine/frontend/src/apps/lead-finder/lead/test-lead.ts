@@ -130,6 +130,7 @@ export function makeLead(changes: Partial<LeadDetail> = {}): LeadDetail {
       fitout_contractors: [],
       talking_points: [],
       contact_role: 'Head of Property',
+      decision_makers: [],
       summary: "Acme's Melbourne lease ends in 2028.",
       opening_line: null,
     },

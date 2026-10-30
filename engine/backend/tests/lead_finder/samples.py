@@ -95,6 +95,7 @@ def make_facts(**changes: Any) -> CompanyFacts:
         fitout_contractors=[],
         talking_points=[],
         contact_role="Head of Property",
+        decision_makers=[],
         summary="Acme's Melbourne lease ends in 2028 and it is looking for a bigger office.",
         opening_line="Congratulations on the growth. Is a new office on the cards?",
     )

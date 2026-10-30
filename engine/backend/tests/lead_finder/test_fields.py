@@ -41,3 +41,38 @@ def test_a_card_with_none_of_the_newer_facts_still_opens() -> None:
     facts = CompanyFacts.model_validate(old)
     assert facts.name == "Acme Software"
     assert all(getattr(facts, name) is not None for name in NEWER_LISTS)
+
+
+def test_decision_makers_keep_a_name_and_title_only_and_at_most_three() -> None:
+    def person(name: str, role: str = "Chief Financial Officer") -> dict[str, Any]:
+        return {
+            "name": name,
+            "role": role,
+            "source_url": "https://acme.com.au/team",
+            "source_date": None,
+        }
+
+    data: dict[str, Any] = make_facts().model_dump(mode="json")
+    data["decision_makers"] = [
+        person("  Jane   Citizen "),
+        person("jane citizen", "Chief Executive Officer"),  # the same person twice
+        person("jane@acme.com.au"),  # an email address, not a name
+        person("Sam Example", "COO, 0412 345 678"),  # a phone number in the title
+        person("Agent 47"),  # a name with digits is not a name
+        person("", "CEO"),
+        person("Lee Person", "Head of Property"),
+        person("Kim Person", "Chief Operating Officer"),
+        person("Ash Person", "Chief Executive Officer"),
+    ]
+    people = CompanyFacts.model_validate(data).decision_makers
+    assert [(p.name, p.role) for p in people] == [
+        ("Jane Citizen", "Chief Financial Officer"),
+        ("Lee Person", "Head of Property"),
+        ("Kim Person", "Chief Operating Officer"),
+    ]
+
+
+def test_a_card_saved_before_decision_makers_existed_has_none() -> None:
+    old: dict[str, Any] = make_facts().model_dump(mode="json")
+    del old["decision_makers"]
+    assert CompanyFacts.model_validate(old).decision_makers == []

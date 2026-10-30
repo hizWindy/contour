@@ -159,6 +159,51 @@ describe('the lead page', () => {
     expect(within(facts).getByText('Will need about 1,500 m² by 2027-06')).toBeInTheDocument()
   })
 
+  it('names the decision makers a public page gives, each with its page, as text', async () => {
+    const base = makeLead()
+    mockApi(
+      makeLead({
+        facts: {
+          ...base.facts,
+          decision_makers: [
+            {
+              name: 'Jane Citizen',
+              role: 'Chief Financial Officer',
+              source_url: 'https://acme.com.au/leadership',
+              source_date: '2026-09-01',
+            },
+            {
+              name: TAG,
+              role: 'Head of Property',
+              source_url: 'javascript:alert(1)',
+              source_date: null,
+            },
+          ],
+        },
+      }),
+    )
+    const { container } = renderLead()
+
+    expect(await screen.findByText('Decision makers')).toBeInTheDocument()
+    const jane = screen.getByText('Jane Citizen, Chief Financial Officer').closest('li')
+    expect(jane).not.toBeNull()
+    const person = within(jane as HTMLElement)
+    expect(person.getByText('2026-09-01')).toBeInTheDocument()
+    expect(person.getByRole('link')).toHaveAttribute('href', 'https://acme.com.au/leadership')
+    expect(screen.getByText(`${TAG}, Head of Property`)).toBeInTheDocument() // as text
+    expect(container.querySelector('b')).toBeNull()
+    expect(container.querySelector('a[href^="javascript"]')).toBeNull()
+    expect(screen.getByText(/check before you call/)).toBeInTheDocument()
+  })
+
+  it('says so when no public page names a decision maker', async () => {
+    mockApi(makeLead())
+    renderLead()
+    expect(
+      await screen.findByText('No decision makers named on a public page.'),
+    ).toBeInTheDocument()
+  })
+
   it('says when to talk: before a consultant is appointed', async () => {
     mockApi(makeLead())
     renderLead()

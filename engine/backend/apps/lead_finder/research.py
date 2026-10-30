@@ -89,7 +89,9 @@ ANGLE_FOCUS = {
     "property": "its offices: where they are, how big (m² or floors), who owns the building, "
     "the lease and when it ends, and any move, new office, refit or merging of offices",
     "people": "its staff: how many work in each Australian city, hiring, growth, return to "
-    "office, restructures, staff cuts, and a new CEO",
+    "office, restructures, staff cuts, and a new CEO. Also who leads it: the names and job "
+    "titles of the CEO, COO, CFO and the head of property, facilities or workplace, from its "
+    "own website (a leadership or team page), annual report, ASX announcements or news",
     "money": "its business: big new contracts, takeovers and mergers, fast growth, money "
     "raised and any plan to hire or grow (with the office size it says it will need), profit, "
     "and any administration",
@@ -582,6 +584,7 @@ def empty_facts(company: str) -> CompanyFacts:
         fitout_contractors=[],
         talking_points=[],
         contact_role=None,
+        decision_makers=[],
         summary="Nothing useful was found.",
         opening_line=None,
     )

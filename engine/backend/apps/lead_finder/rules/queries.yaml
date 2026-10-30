@@ -62,6 +62,7 @@ company:
   people:
     - "{company} hiring {city}"
     - "{company} staff growth {year}"
+    - "{company} leadership team"
   money:
     - "{company} contract win"
     - "{company} acquisition merger"

@@ -44,6 +44,10 @@ def describe(card: LeadCard) -> str:
         t = trigger.trigger
         lines.append(f"  Trigger: {t.what_happened} ({t.date or 'no date'}) {t.source_url}")
     lines.append(f"  Contact: {card.contact_role or 'unknown'}")
+    lines += [
+        f"  Decision maker: {person.name}, {person.role} {person.source_url}"
+        for person in card.facts.decision_makers
+    ]
     lines.append(f"  Opening line: {card.opening_line or '-'}")
     lines.append(f"  Unknown: {', '.join(unknown_facts(card)) or 'nothing'}")
     lines += [f"  Removed: {item}" for item in card.dropped]

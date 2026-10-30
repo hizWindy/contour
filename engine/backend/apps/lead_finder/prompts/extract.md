@@ -38,6 +38,7 @@ Then write:
 - fitout_contractors: the names of design or fitout firms that did this company's office, only if a note names them. Firm names only. An empty list if none.
 - talking_points: 2 or 3 short points for a first call, each tied to the trigger or the office, like "Lease ends March 2028". Plain facts, no hype. No people's names, emails or phone numbers. An empty list if there is nothing to say.
 - contact_role: the role to contact first: Head of Property or Workplace, then COO or CFO. A role, never a person's name.
+- decision_makers: up to 3 people a note names as the company's current leaders, best first: the head of property, facilities or workplace, then the COO, the CFO, the CEO. For each: the name and job title exactly as the note says, and the note's link and date. Only people a note names. Never guess or complete a name, and never add an email or phone number. An empty list if no note names one.
 - summary: what happened, in one or two plain sentences.
 - opening_line: one friendly, specific first line for a sales email, based on the trigger. No hype. Null if there is no trigger.
 

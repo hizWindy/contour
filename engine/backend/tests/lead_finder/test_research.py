@@ -13,6 +13,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.lead_finder.api import claude_dependency
+from apps.lead_finder.fields import DecisionMaker
 from apps.lead_finder.research import LeadCard, ResearchRequest, research_company
 from apps.lead_finder.rules import load_rules
 from apps.lead_finder.tables import Lead
@@ -23,7 +24,7 @@ from core.hubspot.models import HubSpotCompany, HubSpotDeal, HubSpotOffice
 from core.memory.embedder import get_embedder
 from core.memory.models import MemoryItem
 from core.searches.models import SearchLog
-from tests.lead_finder.samples import FakeClaude, fact, make_facts
+from tests.lead_finder.samples import SITE, FakeClaude, fact, make_facts
 
 pytestmark = pytest.mark.integration
 
@@ -179,3 +180,32 @@ async def test_the_research_endpoint_returns_a_card_and_lists_it(client: httpx.A
 
     missing = await client.get("/api/v1/lead-finder/leads/00000000-0000-0000-0000-000000000000")
     assert missing.status_code == 404
+
+
+async def test_decision_makers_from_pages_read_reach_the_saved_card(session: AsyncSession) -> None:
+    people = [
+        DecisionMaker(
+            name="Jane Citizen", role="Chief Financial Officer", source_url=SITE, source_date=None
+        ),
+        DecisionMaker(
+            name="Sam Example",
+            role="Head of Property",
+            source_url="https://www.linkedin.com/in/sam-example",
+            source_date=None,
+        ),
+    ]
+    card = await research(session, FakeClaude(facts=make_facts(decision_makers=people)))
+
+    assert [(p.name, p.role, p.source_url) for p in card.facts.decision_makers] == [
+        ("Jane Citizen", "Chief Financial Officer", SITE)
+    ]
+    assert [item for item in card.dropped if item.startswith("a decision maker")] == [
+        "a decision maker: link not among the pages read "
+        "(https://www.linkedin.com/in/sam-example). Removed."
+    ]
+    saved = await session.scalar(select(Lead.card).where(Lead.id == card.id))
+    assert saved is not None
+    assert [p["name"] for p in saved["facts"]["decision_makers"]] == ["Jane Citizen"]
+    # The names stay on the card: the search costs and the search log don't change.
+    assert card.research.cost_usd == Decimal("0.400000")
+    assert await count(session, SearchLog, job_id=card.id) == 4

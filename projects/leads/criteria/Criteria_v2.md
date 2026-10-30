@@ -135,7 +135,8 @@ The third stage, **qualified deal**, comes after sales meets the client and chec
 
 These are not rules. This is what sales sees. Levi said decision makers and talking points would be beneficial (27 Oct).
 - **Result and score:** the result, the score with each part, and the facts with source links.
-- **Contact role:** who to call first, like Head of Property or COO. Roles only. Names are **TBC**.
+- **Contact role:** who to call first, like Head of Property or COO.
+- **Decision makers (new, TBC):** up to 3 leaders by name and job title, like the CFO or the head of property, best first. Only from public pages the research read (the company's site, annual report, ASX or news), each with its link and date. Never from LinkedIn, and never an email or phone number. People change jobs, so the card says to check before calling. Built on 30 Oct (branch `decision-makers`). Whether Contour keeps names is **TBC** with Levi (question 17).
 - **Talking points (new, TBC):** 2 or 3 short points tied to the trigger. Example: "Lease ends March 2028". Today the card has one opening line.
 - **Office history (new, TBC):** years at the current address, and the last move or fitout date.
 - **Links (new, TBC):** past design and fitout contractors, and links to current customers, if known.
@@ -200,7 +201,7 @@ The engine judged the 16 leads saved in the dev database again with the version 
 
 **Still open:**
 - Using a headcount tool for company numbers only.
-- Roles or names for decision makers.
+- Names for decision makers. The engine now notes leaders' names from public pages (section 9). Levi to confirm Contour may keep them.
 - Numbers to set: the exact tenure (5 to 8 years), whether the 1,000 m² minimum should be lower (4 customer projects were under $1.5M), and how soon a growing company must reach the size range.
 - The questions from version 1 in [LEVI.md](../questions/LEVI.md).
 

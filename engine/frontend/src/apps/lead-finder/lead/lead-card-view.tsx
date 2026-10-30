@@ -76,6 +76,7 @@ import { cn } from '@/lib/utils'
 type RuleCheck = Schemas['RuleCheck']
 type Fact = Schemas['Fact_str_'] | Schemas['Fact_int_'] | Schemas['Fact_bool_']
 type ScorePartOut = Schemas['ScorePart']
+type DecisionMaker = Schemas['DecisionMaker']
 
 const BAND_WORDS: Record<string, string> = {
   research_first: 'Research first',
@@ -127,6 +128,37 @@ function Section({
       </CardHeader>
       <CardContent className="flex flex-col gap-3 text-ui">{children}</CardContent>
     </Card>
+  )
+}
+
+/**
+ * Leaders a public page names (the company's site, annual report, ASX or news), each with that
+ * page and its date. People change jobs, so the card says to check before calling.
+ */
+function DecisionMakers({ people }: { people: DecisionMaker[] }) {
+  if (people.length === 0) {
+    return <p className="text-muted-foreground">No decision makers named on a public page.</p>
+  }
+  return (
+    <div className="flex flex-col gap-1">
+      <p className="font-semibold">Decision makers</p>
+      <ul className="flex flex-col gap-2">
+        {people.map((person) => (
+          <li key={`${person.name} ${person.source_url}`} className="flex flex-col gap-0.5">
+            <span>
+              {person.name}, {person.role}
+            </span>
+            <span className="flex flex-wrap items-center gap-x-2 text-caption text-muted-foreground">
+              <SourceLink href={person.source_url} />
+              {person.source_date ? <span>{person.source_date}</span> : null}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="text-caption text-muted-foreground">
+        From public pages. People change jobs, so check before you call.
+      </p>
+    </div>
   )
 }
 
@@ -741,6 +773,7 @@ export function LeadCardView({ lead, compact = false }: LeadCardViewProps) {
         <HubSpot lead={lead} />
         <Section title="Who to talk to">
           <p>{lead.contact_role ?? 'Not known yet.'}</p>
+          <DecisionMakers people={lead.facts.decision_makers} />
           {lead.opening_line ? (
             <p className="font-serif">&ldquo;{lead.opening_line}&rdquo;</p>
           ) : null}

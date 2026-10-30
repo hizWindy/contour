@@ -815,6 +815,11 @@ export interface components {
              * @description The role to contact first, like Head of Property, COO or CFO. No names.
              */
             contact_role: string | null;
+            /**
+             * Decision Makers
+             * @description Up to 3 people a note names as the company's current leaders, best first: the head of property, facilities or workplace, then the COO, the CFO, the CEO. Name and job title only, never an email or phone number. Can be empty.
+             */
+            decision_makers: components["schemas"]["DecisionMaker"][];
             /** @description When an office change might happen, like 2027 */
             expected_move: components["schemas"]["Fact_str_"];
             /**
@@ -1053,6 +1058,32 @@ export interface components {
              * @description 1 is the same, 0 is unrelated
              */
             similarity: number;
+        };
+        /**
+         * DecisionMaker
+         * @description A person a public page names as one of the company's leaders. Name and job title only.
+         */
+        DecisionMaker: {
+            /**
+             * Name
+             * @description The person's full name, exactly as the note writes it
+             */
+            name: string;
+            /**
+             * Role
+             * @description Their job title, like Chief Financial Officer
+             */
+            role: string;
+            /**
+             * Source Date
+             * @description The page's date: YYYY-MM-DD, or null
+             */
+            source_date: string | null;
+            /**
+             * Source Url
+             * @description The note link that names them in this role
+             */
+            source_url: string;
         };
         /**
          * EventLog

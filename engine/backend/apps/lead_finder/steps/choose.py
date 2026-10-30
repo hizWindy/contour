@@ -185,6 +185,7 @@ def _facts_of(company: Merged) -> CompanyFacts:
         fitout_contractors=[],
         talking_points=[],
         contact_role=None,
+        decision_makers=[],
         summary="",
         opening_line=None,
     )

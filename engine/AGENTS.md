@@ -181,7 +181,8 @@ The core doesn't change.
 ## Safety
 
 - Secrets live only in `engine/.env`. Never in code, logs, tests or git.
-- No contact names, emails or phones are stored or sent to Claude. The HubSpot import skips any Contacts sheet.
+- No contact emails or phones are stored or sent to Claude. The HubSpot import skips any Contacts sheet.
+- Decision makers: the research may note up to 3 leaders (CEO, COO, CFO, head of property or workplace) by name and job title, only from public pages it read (the company's site, annual report, ASX, news), each with its link. Never LinkedIn or any page behind a login, never an email or phone number (`fields.py` and `sources.py` remove them). Whether Contour keeps names is **TBC** with Levi (question 17 in `LEVI.md`).
 - Read, don't scrape. Property Daily stays off until its terms allow a program to read it.
 - Nothing is written to HubSpot unless a person clicks "Send to HubSpot".
 - The database listens on `127.0.0.1` only.

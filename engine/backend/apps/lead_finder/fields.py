@@ -22,11 +22,22 @@ NEWER_FACTS = (
     "office_since",
     "last_fitout",
 )
-NEWER_LISTS = ("fitout_contractors", "talking_points")
+NEWER_LISTS = ("fitout_contractors", "talking_points", "decision_makers")
 MAX_TALKING_POINTS = 3
 MAX_CONTRACTORS = 5
 MAX_LINE_CHARS = 200  # a talking point or a firm name: one line, cut after parsing
+MAX_DECISION_MAKERS = 3
+MAX_NAME_CHARS = 120  # a person's name or job title: one line, cut after parsing
 NEWER_TEXTS: tuple[str, ...] = ("tier_group",)
+
+
+def _one_line(text: str, limit: int) -> str:
+    return " ".join(text.split())[:limit]
+
+
+def _holds_contact_details(text: str) -> bool:
+    """An email address or a phone number: never kept, even when a public page shows it."""
+    return "@" in text or sum(char.isdigit() for char in text) >= 6
 
 
 # --- Step 1: a search worker's notes --------------------------------------------------
@@ -70,6 +81,15 @@ class BoosterFound(BaseModel):
     id: str = Field(description="One of the booster ids in the instructions")
     evidence: str = Field(description="One plain sentence")
     source_url: str
+
+
+class DecisionMaker(BaseModel):
+    """A person a public page names as one of the company's leaders. Name and job title only."""
+
+    name: str = Field(description="The person's full name, exactly as the note writes it")
+    role: str = Field(description="Their job title, like Chief Financial Officer")
+    source_url: str = Field(description="The note link that names them in this role")
+    source_date: str | None = Field(description="The page's date: YYYY-MM-DD, or null")
 
 
 class CompanyFacts(BaseModel):
@@ -135,6 +155,11 @@ class CompanyFacts(BaseModel):
     contact_role: str | None = Field(
         description="The role to contact first, like Head of Property, COO or CFO. No names."
     )
+    decision_makers: list[DecisionMaker] = Field(
+        description="Up to 3 people a note names as the company's current leaders, best first: "
+        "the head of property, facilities or workplace, then the COO, the CFO, the CEO. Name and "
+        "job title only, never an email or phone number. Can be empty."
+    )
     summary: str = Field(description="What happened, in one or two plain sentences")
     opening_line: str | None = Field(description="A friendly first line for a sales email")
 
@@ -143,8 +168,31 @@ class CompanyFacts(BaseModel):
     def _few_short_lines(cls, value: list[str], info: ValidationInfo) -> list[str]:
         """Cut after parsing, not in the form: a long answer must not throw away a paid reply."""
         limit = MAX_TALKING_POINTS if info.field_name == "talking_points" else MAX_CONTRACTORS
-        lines = (" ".join(line.split())[:MAX_LINE_CHARS] for line in value)
+        lines = (_one_line(line, MAX_LINE_CHARS) for line in value)
         return [line for line in lines if line][:limit]
+
+    @field_validator("decision_makers", mode="after")
+    @classmethod
+    def _few_people(cls, value: list[DecisionMaker]) -> list[DecisionMaker]:
+        """One line each, no contact details, each person once, and at most three. Cut after
+        parsing, like the lists above."""
+        kept: list[DecisionMaker] = []
+        names: set[str] = set()
+        for person in value:
+            name = _one_line(person.name, MAX_NAME_CHARS)
+            role = _one_line(person.role, MAX_NAME_CHARS)
+            if (
+                not name
+                or not role
+                or any(char.isdigit() for char in name)
+                or _holds_contact_details(name)
+                or _holds_contact_details(role)
+                or name.casefold() in names
+            ):
+                continue
+            names.add(name.casefold())
+            kept.append(person.model_copy(update={"name": name, "role": role}))
+        return kept[:MAX_DECISION_MAKERS]
 
     @model_validator(mode="before")
     @classmethod
