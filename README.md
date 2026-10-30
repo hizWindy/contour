@@ -33,7 +33,9 @@ It holds the plans, research and decisions behind each AI tool Contour is buildi
 |---|---|---|---|
 | **1** | Company Lead Finder ("Trigger events") | Every week, finds companies that fit Contour's criteria and show signs of needing a new office, then hands them to sales | [projects/leads/LEADS.md](projects/leads/LEADS.md) |
 | On hold | Meeting prep | A one-page brief on a client, sent to the team a few days before each meeting | [PROJECTS.md](PROJECTS.md) |
-| Later | Deal review | A weekly health check of open deals in HubSpot | [PROJECTS.md](PROJECTS.md) |
+| Third | Deal review | A weekly health check of open deals in HubSpot | [PROJECTS.md](PROJECTS.md) |
+
+These projects are being built as modules of one central web system. It will join HubSpot, Microsoft Teams and Contour's other tools, and give each person their own access. The details are **TBC**. See [PROJECTS.md](PROJECTS.md).
 
 Start with [projects/leads/LEADS.md](projects/leads/LEADS.md). It is the current priority. Its criteria, research settings and questions for Levi are in folders beside it.
 

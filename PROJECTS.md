@@ -1,7 +1,7 @@
 # Contour AI projects
 
 Source: Levi Young's project list and the follow-up meeting.
-Last updated: 2026-10-24. Anything marked **TBC** is not confirmed.
+Last updated: 2026-10-30. Anything marked **TBC** is not confirmed.
 
 ## The projects
 
@@ -76,17 +76,19 @@ Find meetings -> Pull history -> Research -> Brief, save and send
 ## Decisions
 
 - HubSpot is the source of truth for company history. How complete it is: **TBC**.
-- **Stack (decided 2026-10-22):** HubSpot workflows, Claude as the research engine, a central backend, and a database later. n8n is **dropped**. Details in [HUBSPOT.md](HUBSPOT.md).
+- **Stack (decided 2026-10-22):** HubSpot workflows, Claude as the research engine, a central backend, a database and a website. n8n is **dropped**. Details in [HUBSPOT.md](HUBSPOT.md).
   - **HubSpot workflows** react to results inside HubSpot (tasks, notifications, property updates) and can send a webhook to the backend.
   - **Claude** does the research and writing. Breeze (HubSpot's AI) is a later option, tested on 5 companies if the admin enables it.
   - **Backend** holds research, scoring and memory. **Its own timer** starts the daily and weekly jobs, so no special HubSpot plan is needed for timers.
   - **Webhooks** connect the backend to HubSpot. For long jobs the backend replies "received" at once, works in the background, then saves the result through the HubSpot API.
-- **Central backend, not a central web app.** A backend has no screens.
-- No web app for version 1.
+- **Central web system (changed 2026-10-30).** Levi expects one place that joins HubSpot, Microsoft Teams and Contour's other tools, which are separate today. Each project (Trigger events, Meeting prep, Deal review) is a module inside it. This replaces the earlier decisions "central backend, not a central web app" and "no web app for version 1".
+- **Access levels.** Each person gets their own access and features. The roles are for Levi to decide (**TBC**).
+- **Not confirmed (TBC):** which tools to connect, who uses it, the sign-in method and where it is hosted.
+- **Not built yet:** sign-in, roles, online hosting and the Teams link. The website exists for Trigger events only. It runs on one computer with no login. The plan is one sidebar section per project, with shared Admin apart from each project's own admin.
 - Stages:
   1. Backend and a small database, with Trigger events. Research is one module with a fixed input and output. It searches the web and the HubSpot target lists, and emails ranked lead cards. The database remembers which leads were sent and the feedback, so nobody gets the same lead twice. (Was "backend only"; the database now comes first. **TBC**)
   2. Add Meeting prep on the same research module. It saves the brief in HubSpot and sends the email. Add HubSpot workflows for reactions (tasks, owner alerts).
-  3. Add a front end only if needed: to search past briefs, edit settings, show a dashboard, or serve many users.
+  3. The website. It was built for Trigger events first. It then becomes the central workspace above, with sign-in and roles (**TBC**).
 - Default backend stack (**TBC**): Python with FastAPI, Postgres, a small server on DigitalOcean.
 - **Fallback:** if building and watching the backend becomes a chore, n8n can run that one piece. Make is a close second. Zapier is the weakest fit.
 
@@ -126,6 +128,7 @@ Claude Pro is my development tool. Bill it only if agreed in writing. Use sample
 4. Get HubSpot access. Run the data check: are meetings logged, how many companies have contacts, is there a target list, how many notes exist.
 5. Build Trigger events: backend timer, Claude research, lead cards emailed to sales. Version 1 only needs HubSpot read access. Meeting prep follows.
 6. Update the concept page and this file as answers arrive.
+7. Ask Levi which tools the central system must connect, who will use it, and what each group can see and do.
 
 ## Concept page
 
