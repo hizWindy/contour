@@ -14,7 +14,8 @@ import {
 } from '@/components/ui/command'
 import { Kbd, KbdGroup } from '@/components/ui/kbd'
 import { useSidebar } from '@/components/ui/sidebar'
-import { ADMIN_TABS, NAV_ITEMS, type NavItem } from './nav'
+import { MODULES } from '@/modules'
+import { ADMIN_TABS, HOME, type NavItem } from './nav'
 import { applyTheme, type ThemeChoice } from './theme'
 
 /** True for Ctrl+K, or Cmd+K on a Mac. */
@@ -52,7 +53,8 @@ function PageItem({ item, onSelect }: { item: NavItem; onSelect: (to: string) =>
 
 /**
  * Jump to any page, or run an action, from the keyboard: Ctrl+K (Cmd+K on a Mac) opens it from
- * anywhere, also while typing in a field. It lists the pages, the Admin tabs, and a few actions.
+ * anywhere, also while typing in a field. It lists Home, each project's pages, the Admin tabs, and
+ * a few actions.
  */
 export function CommandMenu(): ReactNode {
   const [open, setOpen] = useState(false)
@@ -114,10 +116,15 @@ export function CommandMenu(): ReactNode {
           <CommandList>
             <CommandEmpty>Nothing matches. Try another word.</CommandEmpty>
             <CommandGroup heading="Pages">
-              {NAV_ITEMS.map((item) => (
-                <PageItem key={item.to} item={item} onSelect={go} />
-              ))}
+              <PageItem item={HOME} onSelect={go} />
             </CommandGroup>
+            {MODULES.map((app) => (
+              <CommandGroup key={app.id} heading={app.name}>
+                {app.pages.map((item) => (
+                  <PageItem key={item.to} item={item} onSelect={go} />
+                ))}
+              </CommandGroup>
+            ))}
             <CommandGroup heading="Admin">
               {ADMIN_TABS.map((item) => (
                 <PageItem key={item.to} item={item} onSelect={go} />

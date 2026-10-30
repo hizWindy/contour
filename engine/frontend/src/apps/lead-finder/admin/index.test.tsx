@@ -33,7 +33,7 @@ describe('the Admin tabs on a narrow screen', () => {
     vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(scrolled)
     const { user } = renderAdmin('/admin/runs')
     const tabs = screen.getByRole('navigation', { name: 'Admin sections' })
-    // One row: it never wraps, and it scrolls when the screen is too narrow for seven tabs.
+    // One row: it never wraps, and it scrolls when the screen is too narrow for all the tabs.
     expect(tabs).toHaveClass('overflow-x-auto')
     expect(tabs).not.toHaveClass('flex-wrap')
 

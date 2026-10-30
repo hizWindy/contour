@@ -1,8 +1,10 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { LEAD_FINDER } from '@/apps/lead-finder/module'
+import { MODULES } from '@/modules'
 import { routes } from '@/router'
-import { ADMIN_TABS, NAV_ITEMS } from '@/shell/nav'
+import { ADMIN, ADMIN_TABS, HOME } from '@/shell/nav'
 import { RouteError } from '@/shell/route-error'
 import { renderWithProviders } from '@/test/render'
 
@@ -42,6 +44,8 @@ describe('the router', () => {
     ['/runs/0f3c9a2e-1111-2222-3333-444444444444', 'Run 0f3c9a2e', ['Runs', 'Run 0f3c9a2e']],
     ['/results', 'Results', ['Results']],
     ['/leads/99999999-2222-3333-4444-555555555555', 'Lead', ['Lead']],
+    ['/rules', 'Rules', ['Rules']],
+    ['/test-set', 'Test set', ['Test set']],
   ])('shows the page at %s with its title and breadcrumbs', async (path, title, trail) => {
     renderAt(path)
 
@@ -49,15 +53,39 @@ describe('the router', () => {
       await screen.findByRole('heading', { level: 1, name: title }, { timeout: LAZY }),
     ).toBeInTheDocument()
     expect(crumbs()).toEqual(trail)
-    expect(document.title).toBe(`${trail.at(-1) ?? ''} - Lead Finder`)
+    expect(document.title).toBe(`${trail.at(-1) ?? ''} - Contour`)
   })
 
-  it('sends the home address to Start a run', async () => {
+  it('shows Home at the home address, with a card for every project and its pages', async () => {
     const { router } = renderAt('/')
     expect(
-      await screen.findByRole('heading', { level: 1, name: 'Start a run' }),
+      await screen.findByRole('heading', { level: 1, name: 'Home' }, { timeout: LAZY }),
     ).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/start')
+    expect(router.state.location.pathname).toBe('/')
+    expect(document.title).toBe('Home - Contour')
+
+    const page = document.getElementById('page') as HTMLElement
+    for (const app of MODULES) {
+      const card = within(page).getByRole('region', { name: app.name })
+      expect(within(card).getByText(app.description)).toBeInTheDocument()
+      for (const item of app.pages) {
+        expect(within(card).getByRole('link', { name: item.label })).toHaveAttribute(
+          'href',
+          item.to,
+        )
+      }
+    }
+  })
+
+  it.each([
+    ['/admin/rules', '/rules', 'Rules'],
+    ['/admin/tests', '/test-set', 'Test set'],
+  ])('sends the old Admin tab %s to its own page', async (old, now, title) => {
+    const { router } = renderAt(old)
+    expect(
+      await screen.findByRole('heading', { level: 1, name: title }, { timeout: LAZY }),
+    ).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe(now)
   })
 
   it('opens the first Admin tab, and every tab has its own address', async () => {
@@ -111,16 +139,34 @@ describe('the router', () => {
     )
   })
 
-  it('lists every main page in the menu, and marks the one you are on', async () => {
+  it('lists Home, each project with its own pages, and Admin, and marks the page you are on', async () => {
     renderAt('/runs/0f3c9a2e-1111-2222-3333-444444444444')
     await screen.findByRole('heading', { level: 1, name: 'Run 0f3c9a2e' })
 
     const menu = within(screen.getByRole('navigation', { name: 'Main menu' }))
-    for (const item of NAV_ITEMS) {
-      expect(menu.getByRole('link', { name: item.label })).toHaveAttribute('href', item.to)
+    expect(menu.getByRole('link', { name: HOME.label })).toHaveAttribute('href', '/')
+    for (const app of MODULES) {
+      const group = within(menu.getByRole('group', { name: app.name }))
+      for (const item of app.pages) {
+        expect(group.getByRole('link', { name: item.label })).toHaveAttribute('href', item.to)
+      }
     }
+    expect(menu.getByRole('link', { name: ADMIN.label })).toHaveAttribute('href', '/admin')
+    // Rules and the Test set are the Lead Finder's own, not shared Admin tabs.
+    const leadFinder = within(menu.getByRole('group', { name: LEAD_FINDER.name }))
+    expect(leadFinder.getByRole('link', { name: 'Rules' })).toHaveAttribute('href', '/rules')
+    expect(ADMIN_TABS.map((tab) => tab.label)).not.toContain('Rules')
+
     expect(menu.getByRole('link', { name: 'Runs' })).toHaveAttribute('aria-current', 'page')
     expect(menu.getByRole('link', { name: 'Results' })).not.toHaveAttribute('aria-current')
+    expect(menu.getByRole('link', { name: 'Home' })).not.toHaveAttribute('aria-current')
+  })
+
+  it('marks Admin in the menu on every Admin tab', async () => {
+    renderAt('/admin/searches')
+    await screen.findByRole('heading', { level: 1, name: 'Admin' }, { timeout: LAZY })
+    const menu = within(screen.getByRole('navigation', { name: 'Main menu' }))
+    expect(menu.getByRole('link', { name: 'Admin' })).toHaveAttribute('aria-current', 'page')
   })
 
   it('keeps Results marked while a lead card is open', async () => {

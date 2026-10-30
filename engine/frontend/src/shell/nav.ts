@@ -1,20 +1,21 @@
 /**
- * The pages of the website, in one list. The sidebar, the command menu and the tests read it, so
+ * The pages of the website. The sidebar, the command menu, Home and the tests read these lists, so
  * a page has one name and one icon everywhere (DESIGN.md: "Same thing, same look").
+ *
+ * Each project is a module (`AppModule`, listed in src/modules.ts) that brings its own pages. Home
+ * and the Admin tabs are shared: they belong to no one project.
  */
 import {
   Database,
   FileSearch,
-  FlaskConical,
+  House,
   ListChecks,
-  MapPinned,
-  ScrollText,
   Settings2,
   SlidersHorizontal,
-  Table2,
   Upload,
   type LucideIcon,
 } from 'lucide-react'
+import type { RouteObject } from 'react-router'
 
 export interface NavItem {
   /** The address, like "/results". */
@@ -26,15 +27,37 @@ export interface NavItem {
   keywords?: string[]
   /** What the page is for, in a sentence a person outside the team would understand. */
   purpose?: string
+  /** Other addresses that count as this page in the menu: a lead card ("/leads") is in Results. */
+  alsoActiveOn?: readonly string[]
 }
 
-/** The main pages, in sidebar order. */
-export const NAV_ITEMS: readonly NavItem[] = [
-  { to: '/start', label: 'Start a run', icon: MapPinned, keywords: ['new', 'discovery', 'map'] },
-  { to: '/runs', label: 'Runs', icon: ListChecks, keywords: ['progress', 'live', 'history'] },
-  { to: '/results', label: 'Results', icon: Table2, keywords: ['leads', 'table', 'csv', 'export'] },
-  { to: '/admin', label: 'Admin', icon: Settings2, keywords: ['settings', 'rules'] },
-]
+/**
+ * A project on the website, like the Lead Finder. It brings its menu pages and its addresses, and
+ * the sidebar, the command menu and Home build themselves from it. Adding a project is its folder
+ * under src/apps/ plus one line in src/modules.ts.
+ */
+export interface AppModule {
+  /** A short name for code and tests, like "lead-finder". */
+  id: string
+  /** The name in the sidebar and on Home. */
+  name: string
+  icon: LucideIcon
+  /** What the project does, in one sentence, for its card on Home. */
+  description: string
+  /** Its pages, in menu order. */
+  pages: readonly NavItem[]
+  /** Its addresses, inside the app frame. */
+  routes: RouteObject[]
+}
+
+/**
+ * The first page: one card per project. No extra words: the command menu matches loosely, and
+ * "projects" would catch "csv" before Results does.
+ */
+export const HOME: NavItem = { to: '/', label: 'Home', icon: House }
+
+/** The shared Admin page, at the bottom of the menu. The command menu lists its tabs instead. */
+export const ADMIN: NavItem = { to: '/admin', label: 'Admin', icon: Settings2 }
 
 /** The tabs of the Admin page, in tab order. Each has its own address under /admin. */
 export const ADMIN_TABS: readonly NavItem[] = [
@@ -71,22 +94,6 @@ export const ADMIN_TABS: readonly NavItem[] = [
       'Load your HubSpot export and see which companies the watchlist would look at again. Nothing is sent back to HubSpot.',
   },
   {
-    to: '/admin/rules',
-    label: 'Rules',
-    icon: ScrollText,
-    keywords: ['criteria', 'tbc'],
-    purpose:
-      "The rules that decide each lead's result: cities, company size and signs of an office change. Read only. Points marked TBC still wait for Levi.",
-  },
-  {
-    to: '/admin/tests',
-    label: 'Test set',
-    icon: FlaskConical,
-    keywords: ['scores', 'quality'],
-    purpose:
-      'Ten public companies to check that a change to a prompt or a rule has not made results worse. Running it costs money.',
-  },
-  {
     to: '/admin/settings',
     label: 'Settings',
     icon: SlidersHorizontal,
@@ -109,4 +116,9 @@ export function adminTabAt(pathname: string): NavItem | undefined {
 /** True when `pathname` is the page `to`, or a page inside it ("/runs/123" is in "/runs"). */
 export function isWithin(pathname: string, to: string): boolean {
   return pathname === to || pathname.startsWith(`${to}/`)
+}
+
+/** True when the menu should mark `item` as the page you are on. */
+export function isHere(pathname: string, item: NavItem): boolean {
+  return [item.to, ...(item.alsoActiveOn ?? [])].some((to) => isWithin(pathname, to))
 }

@@ -14,7 +14,7 @@ import { useSidebar } from '@/components/ui/sidebar'
 import { CommandMenu } from './command-menu'
 import { crumbsOf } from './crumbs'
 
-const APP_NAME = 'Lead Finder'
+const APP_NAME = 'Contour'
 
 /**
  * The bar above every page: the menu button, where you are (breadcrumbs), and the command menu.

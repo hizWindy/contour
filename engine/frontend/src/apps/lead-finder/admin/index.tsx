@@ -5,10 +5,11 @@ import { cn } from '@/lib/utils'
 import { ADMIN_TABS, adminTabAt } from '@/shell/nav'
 
 /**
- * The Admin page: its tabs are links (each tab has its own address, so a tab can be shared and
- * the back button works), and the open tab shows below them.
+ * The Admin page: what every project shares. Its tabs are links (each tab has its own address, so
+ * a tab can be shared and the back button works), and the open tab shows below them. A project's
+ * own admin, like the Lead Finder's Rules, lives in that project's menu instead.
  *
- * The seven tabs stay in one row. When the screen is too narrow for them, the row scrolls sideways
+ * The tabs stay in one row. When the screen is too narrow for them, the row scrolls sideways
  * (it reaches the screen's edges on a phone, so a tab cut off at the edge shows there is more), and the
  * open tab is scrolled into view, so it is never hidden. Three rows of wrapped tabs would push
  * the content a third of a screen down.
@@ -27,7 +28,7 @@ export default function AdminPage() {
     <>
       <PageHeader
         title="Admin"
-        description="Runs and cost, the search log, memory, HubSpot, the rules, the test set and the settings."
+        description="What every project shares: runs and cost, the search log, memory, HubSpot and the settings."
       />
       <nav
         ref={tabs}
