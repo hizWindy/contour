@@ -1,4 +1,7 @@
+import { ChevronRight } from 'lucide-react'
+import { useState } from 'react'
 import { Link, useLocation } from 'react-router'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import {
   Sidebar,
   SidebarContent,
@@ -10,10 +13,14 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   SidebarRail,
+  useSidebar,
 } from '@/components/ui/sidebar'
 import { MODULES, PLANNED } from '@/modules'
-import { ADMIN, HOME, isHere, type NavItem } from './nav'
+import { ADMIN, HOME, isHere, type AppModule, type NavItem } from './nav'
 
 const PLANNED_LABEL_ID = 'menu-planned'
 
@@ -47,10 +54,90 @@ function MenuLink({
   )
 }
 
+/** A page inside a project's dropdown, indented under the project's name. */
+function SubLink({ item, pathname }: { item: NavItem; pathname: string }) {
+  const Icon = item.icon
+  const here = isHere(pathname, item)
+  return (
+    <SidebarMenuSubItem>
+      <SidebarMenuSubButton
+        asChild
+        isActive={here}
+        className="h-9 touch:h-11 data-active:font-semibold [&>svg]:size-5"
+      >
+        <Link to={item.to} aria-current={here ? 'page' : undefined}>
+          <Icon aria-hidden="true" />
+          <span>{item.label}</span>
+        </Link>
+      </SidebarMenuSubButton>
+    </SidebarMenuSubItem>
+  )
+}
+
 /**
- * The left menu: Home, then one group per project with its own pages (from src/modules.ts), the
- * projects still to be developed, and the shared Admin at the bottom. It folds to icons: the group names hide, and each icon keeps a
- * tooltip with the page name. A page shows as selected while you are on it or inside it.
+ * One project in the menu: a row with its name that opens and closes like a dropdown, with its
+ * pages indented under it. It starts open. Closed, the row is marked when you are on one of its
+ * pages, so you still see where you are.
+ *
+ * When the whole menu is folded to icons there is no room for the row, so the pages show as plain
+ * icons (each with its name as a tooltip), and they can always be reached.
+ */
+function ModuleGroup({ app, pathname }: { app: AppModule; pathname: string }) {
+  const { state, isMobile } = useSidebar()
+  const [open, setOpen] = useState(true)
+  const Icon = app.icon
+  const labelId = `menu-${app.id}`
+
+  if (state === 'collapsed' && !isMobile) {
+    return (
+      <SidebarGroup role="group" aria-labelledby={labelId}>
+        <SidebarGroupLabel id={labelId}>{app.name}</SidebarGroupLabel>
+        <SidebarGroupContent>
+          <SidebarMenu>
+            {app.pages.map((item) => (
+              <MenuLink key={item.to} item={item} pathname={pathname} />
+            ))}
+          </SidebarMenu>
+        </SidebarGroupContent>
+      </SidebarGroup>
+    )
+  }
+
+  const inside = app.pages.some((item) => isHere(pathname, item))
+  return (
+    <SidebarGroup role="group" aria-labelledby={labelId}>
+      <SidebarMenu>
+        <Collapsible asChild open={open} onOpenChange={setOpen}>
+          <SidebarMenuItem className="group/collapsible">
+            <CollapsibleTrigger asChild>
+              <SidebarMenuButton id={labelId} isActive={!open && inside}>
+                <Icon aria-hidden="true" />
+                <span className="truncate">{app.name}</span>
+                <ChevronRight
+                  aria-hidden="true"
+                  className="ml-auto size-4! transition-transform duration-(--duration-fast) ease-(--ease) group-data-[state=open]/collapsible:rotate-90"
+                />
+              </SidebarMenuButton>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <SidebarMenuSub>
+                {app.pages.map((item) => (
+                  <SubLink key={item.to} item={item} pathname={pathname} />
+                ))}
+              </SidebarMenuSub>
+            </CollapsibleContent>
+          </SidebarMenuItem>
+        </Collapsible>
+      </SidebarMenu>
+    </SidebarGroup>
+  )
+}
+
+/**
+ * The left menu: Home, then one dropdown per project with its own pages (from src/modules.ts), the
+ * projects still to be developed, and the shared Admin at the bottom. It folds to icons, and each
+ * icon keeps a tooltip with the page name. A page shows as selected while you are on it or inside
+ * it.
  */
 export function AppSidebar() {
   const { pathname } = useLocation()
@@ -71,25 +158,9 @@ export function AppSidebar() {
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
-          {MODULES.map((app) => {
-            const Icon = app.icon
-            const labelId = `menu-${app.id}`
-            return (
-              <SidebarGroup key={app.id} role="group" aria-labelledby={labelId}>
-                <SidebarGroupLabel id={labelId} className="gap-2">
-                  <Icon aria-hidden="true" />
-                  <span>{app.name}</span>
-                </SidebarGroupLabel>
-                <SidebarGroupContent>
-                  <SidebarMenu>
-                    {app.pages.map((item) => (
-                      <MenuLink key={item.to} item={item} pathname={pathname} />
-                    ))}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </SidebarGroup>
-            )
-          })}
+          {MODULES.map((app) => (
+            <ModuleGroup key={app.id} app={app} pathname={pathname} />
+          ))}
           {PLANNED.length > 0 ? (
             <SidebarGroup role="group" aria-labelledby={PLANNED_LABEL_ID}>
               <SidebarGroupLabel id={PLANNED_LABEL_ID}>To be developed</SidebarGroupLabel>
