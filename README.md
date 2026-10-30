@@ -11,8 +11,8 @@ This is the workspace for **AI projects at Contour Commercial Interiors**.
 
 It holds the plans, research and decisions behind each AI tool Contour is building, written in plain words. Anyone at Contour should be able to open a file and understand it without a technical background.
 
-- **AI Engineer:** Al-khair Pama
-- **Project sponsor:** Levi Young
+- **AI Engineer (System Builder):** Al-khair Pama
+- **Client and project lead:** Levi Young, Principal - Business Development (not the CEO)
 
 ## What's inside
 

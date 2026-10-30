@@ -30,9 +30,10 @@ The Insights section publishes articles on office design ROI, commercial lease n
 
 ## My role
 
-- **Title:** AI Engineer
+- **Name and title:** Al-khair Pama, AI Engineer (also called the System Builder). I design and build the AI tools, and the engineering calls are mine: the code, the git branches and merges, and the tools used.
 - **Company:** Contour Commercial Interiors
 - **Start:** 2026-10-19
+- **Client and project lead:** Levi Young, Principal - Business Development. He is my client and one of the leads for these projects. He is not the CEO. He decides what the tools must do and confirms the business rules (for example the company criteria). He does not decide how I build them.
 - **Reports to / team:** TBC
 - **Scope:** TBC (priorities, tools and data access still to be agreed)
 

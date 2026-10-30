@@ -1,6 +1,6 @@
 # Company criteria, version 2
 
-**Draft.** Levi to confirm. Last updated 2026-10-30. The engine on `master` still follows [version 1](Criteria_v1.md). Version 2 is built on the branch `engine-criteria-v2` (see [PLAN-V2.md](../../../plan/PLAN-V2.md)). It goes live only after Levi confirms it.
+**Draft.** Levi to confirm. Last updated 2026-10-30. The engine now follows this version. It was built following [PLAN-V2.md](../../../plan/PLAN-V2.md), and [version 1](Criteria_v1.md) is the old one. Every number here is still **TBC** until Levi confirms it, and the engine reads them from `criteria.yaml`, so a change from Levi is an edit to that file.
 
 These rules decide which companies the research agent looks for, **before anyone calls them**. Everything new in this version is **TBC** (to be confirmed) until Levi checks it.
 
@@ -208,4 +208,4 @@ The engine judged the 16 leads saved in the dev database again with the version 
 
 ## 13. What stays the same
 
-The HubSpot deal evidence and the map of the 11 deal rules are unchanged. See sections 7 and 8 of [version 1](Criteria_v1.md). On `master`, the engine's `criteria.yaml` follows version 1. The branch `engine-criteria-v2` holds version 2, and it is merged only after Levi confirms it.
+The HubSpot deal evidence and the map of the 11 deal rules are unchanged. See sections 7 and 8 of [version 1](Criteria_v1.md). The engine's `criteria.yaml` follows this version now (merged 2026-10-30). Levi still has to confirm the numbers.

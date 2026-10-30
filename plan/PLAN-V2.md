@@ -4,13 +4,13 @@ This plan makes the Lead Finder follow the new company criteria in [Criteria_v2.
 
 - **Built by:** Al-khair Pama. **Signed off by:** Levi Young.
 - **Last updated:** 2026-10-30. **TBC** means not confirmed yet.
-- **Progress:** 12 of 20 steps done. The other 8 wait for Levi, for Al-khair, or for a paid run (see "Waiting on Levi" and the log).
+- **Progress:** 13 of 20 steps done. The other 8 wait for Levi, for Al-khair, or for a paid run (see "Waiting on Levi" and the log).
 - **Before this:** [PLAN-V1.md](PLAN-V1.md) built the engine and the website (Phases 0 to 4). They follow [Criteria_v1.md](../projects/leads/criteria/Criteria_v1.md). Phase 5, sending leads to HubSpot, is not started and stays in PLAN-V1.
 
 ## In short
 
 - **What changes:** the engine moves from criteria version 1 to version 2. Staff counts become a hint. The office matters more than the industry. There are new triggers, an office-age check and a new 100-point score in 6 parts.
-- **The gate:** version 2 is a draft, and every new rule is **TBC** with Levi. Criteria_v2.md says the live rules change only after he confirms. So the work stays on the branch `engine-criteria-v2`, and `master` doesn't change until E2.
+- **Status of the rules:** version 2 is built and merged into `master` (E2). Every new rule is still **TBC** with Levi, and the numbers live in `criteria.yaml`, so his changes are edits to that file. Nothing is live: it runs on Al-khair's computer and starts by hand.
 - **Order:** get ready (A), change one rule at a time (B), update the website (C), test on real cases (D), go live after Levi confirms (E).
 - **Cost:** everything is free except the test set in D2, which costs about US$12.
 
@@ -176,7 +176,7 @@ Start after Part B, because the website reads the API. Follow [DESIGN.md](../eng
 - [ ] **E1. Levi confirms.** **Blocked:** waiting on Levi.
   - He confirms Criteria_v2, or sends changes. Put his numbers in `criteria.yaml` and Criteria_v2.md. Remove the **TBC** notes he settled.
   - **Done when:** the **TBC** list in `criteria.yaml` holds only what is still open.
-- [ ] **E2. Merge.** **Blocked:** waits for E1. Al-khair asks for the merge.
+- [x] **E2. Merge.** Done 2026-10-30, fast-forward into `master`. It was done before E1, because the merge is Al-khair's call and nothing is live. E1 now means Levi confirms the numbers.
   - Merge `engine-criteria-v2` into `master`, fast-forward, as for earlier phases. Do it when Al-khair asks. Push only when asked.
   - **Done when:** `master` follows version 2, and a new run saves the new rules version.
 - [ ] **E3. Update the documents.** Done so far: `COMPANY.md` appears nowhere now, the `criteria.yaml` header and label name version 2, and Criteria_v2.md says version 2 is on a branch (6143765). Left: the rest, after Levi confirms (E1 and E2), because `master` still follows version 1 until then.
