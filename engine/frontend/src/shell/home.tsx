@@ -1,12 +1,13 @@
 /**
- * Home: one card per project, with what it does and a link to each of its pages. The cards come
- * from src/modules.ts, so a new project shows here by itself.
+ * Home: one card per project, with what it does and a link to each of its pages, then the projects
+ * still to be developed. The cards come from src/modules.ts, so a new project shows here by itself.
  */
 import { Link } from 'react-router'
 import { PageHeader } from '@/components/page-header'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { MODULES } from '@/modules'
+import { MODULES, PLANNED } from '@/modules'
 
 export default function HomePage() {
   return (
@@ -47,6 +48,37 @@ export default function HomePage() {
           )
         })}
       </div>
+      {PLANNED.length > 0 ? (
+        <section aria-labelledby="home-planned" className="flex flex-col gap-4">
+          <h2 id="home-planned" className="text-section font-semibold text-foreground">
+            To be developed
+          </h2>
+          <ul className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {PLANNED.map(({ id, name, icon: Icon, to, description, status }) => (
+              <li key={id}>
+                <Card size="sm" className="h-full">
+                  <CardHeader>
+                    <CardTitle className="flex flex-wrap items-center justify-between gap-2">
+                      <h3>
+                        <Link
+                          to={to}
+                          className="flex items-center gap-2 rounded-sm underline-offset-4 hover:underline"
+                        >
+                          <Icon aria-hidden="true" className="size-5 text-muted-foreground" />
+                          {name}
+                        </Link>
+                      </h3>
+                      <Badge variant="outline">To be developed</Badge>
+                    </CardTitle>
+                    <CardDescription>{description}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="text-caption text-muted-foreground">{status}</CardContent>
+                </Card>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
     </>
   )
 }

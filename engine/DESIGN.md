@@ -83,7 +83,7 @@ Sizes are in rem, so browser zoom works. Nothing is smaller than 13px. Sentence 
 
 ## Layout
 
-- **App frame:** a left sidebar that folds to icons, a top bar with breadcrumbs and the command menu, then the page. The sidebar has Home at the top, one group per project (its name, then its pages), and the shared Admin at the bottom. Folded to icons, the group names hide and the page icons stay.
+- **App frame:** a left sidebar that folds to icons, a top bar with breadcrumbs and the command menu, then the page. The sidebar has Home at the top, one group per project (its name, then its pages), a "To be developed" group in quieter text (each opens a page saying what the project will do), and the shared Admin at the bottom. Folded to icons, the group names hide and the page icons stay.
 - **Width:** up to 1440px. Tables and the map can use the full width.
 - **List and detail:** clicking a result opens its lead card in a side panel, so the list stays in view. Each card also has its own page and link.
 - **Map page:** the map and the list sit side by side, with a divider you can drag.

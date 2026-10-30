@@ -51,6 +51,23 @@ export interface AppModule {
 }
 
 /**
+ * A project still to be developed. It has a row in the menu, a card on Home and one page that says
+ * what it will do and where it stands. Once it is built, it becomes an `AppModule`.
+ */
+export interface PlannedModule {
+  /** A short name for code and tests, like "meeting-prep". */
+  id: string
+  name: string
+  icon: LucideIcon
+  /** Its page for now, at the address the project will use, like "/meeting-prep". */
+  to: string
+  /** What it will do, in a sentence or two. */
+  description: string
+  /** Where it stands and who said so, like "On hold (Levi, 23 Oct)". */
+  status: string
+}
+
+/**
  * The first page: one card per project. No extra words: the command menu matches loosely, and
  * "projects" would catch "csv" before Results does.
  */

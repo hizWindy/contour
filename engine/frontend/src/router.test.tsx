@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { LEAD_FINDER } from '@/apps/lead-finder/module'
-import { MODULES } from '@/modules'
+import { MODULES, PLANNED } from '@/modules'
 import { routes } from '@/router'
 import { ADMIN, ADMIN_TABS, HOME } from '@/shell/nav'
 import { RouteError } from '@/shell/route-error'
@@ -167,6 +167,43 @@ describe('the router', () => {
     await screen.findByRole('heading', { level: 1, name: 'Admin' }, { timeout: LAZY })
     const menu = within(screen.getByRole('navigation', { name: 'Main menu' }))
     expect(menu.getByRole('link', { name: 'Admin' })).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('lists the projects still to be developed in their own menu group', async () => {
+    renderAt('/')
+    await screen.findByRole('heading', { level: 1, name: 'Home' }, { timeout: LAZY })
+    const menu = within(screen.getByRole('navigation', { name: 'Main menu' }))
+    const planned = within(menu.getByRole('group', { name: 'To be developed' }))
+    expect(planned.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual(
+      PLANNED.map((project) => project.to),
+    )
+  })
+
+  it.each(PLANNED.map((project) => [project.to, project]))(
+    'shows a "to be developed" page at %s',
+    async (path, project) => {
+      renderAt(path)
+      expect(
+        await screen.findByRole('heading', { level: 1, name: project.name }, { timeout: LAZY }),
+      ).toBeInTheDocument()
+      expect(crumbs()).toEqual([project.name])
+      const page = document.getElementById('page') as HTMLElement
+      expect(within(page).getByText('To be developed')).toBeInTheDocument()
+      expect(within(page).getByText(project.description)).toBeInTheDocument()
+      expect(within(page).getByText(project.status)).toBeInTheDocument()
+      const menu = within(screen.getByRole('navigation', { name: 'Main menu' }))
+      expect(menu.getByRole('link', { name: project.name })).toHaveAttribute('aria-current', 'page')
+    },
+  )
+
+  it('lists the projects still to be developed on Home, each with its page', async () => {
+    renderAt('/')
+    await screen.findByRole('heading', { level: 1, name: 'Home' }, { timeout: LAZY })
+    const section = within(screen.getByRole('region', { name: 'To be developed' }))
+    for (const project of PLANNED) {
+      expect(section.getByRole('link', { name: project.name })).toHaveAttribute('href', project.to)
+      expect(section.getByText(project.status)).toBeInTheDocument()
+    }
   })
 
   it('keeps Results marked while a lead card is open', async () => {

@@ -12,15 +12,31 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from '@/components/ui/sidebar'
-import { MODULES } from '@/modules'
+import { MODULES, PLANNED } from '@/modules'
 import { ADMIN, HOME, isHere, type NavItem } from './nav'
 
-function MenuLink({ item, pathname }: { item: NavItem; pathname: string }) {
+const PLANNED_LABEL_ID = 'menu-planned'
+
+function MenuLink({
+  item,
+  pathname,
+  planned = false,
+}: {
+  item: NavItem
+  pathname: string
+  /** A project still to be developed: quieter text, and the tooltip says so. */
+  planned?: boolean
+}) {
   const Icon = item.icon
   const here = isHere(pathname, item)
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton asChild isActive={here} tooltip={item.label}>
+      <SidebarMenuButton
+        asChild
+        isActive={here}
+        tooltip={planned ? `${item.label} (to be developed)` : item.label}
+        className={planned && !here ? 'text-muted-foreground' : undefined}
+      >
         {/* A plain Link: this menu decides what counts as "here" (a lead card is in Results). */}
         <Link to={item.to} aria-current={here ? 'page' : undefined}>
           <Icon aria-hidden="true" className="size-5" />
@@ -32,8 +48,8 @@ function MenuLink({ item, pathname }: { item: NavItem; pathname: string }) {
 }
 
 /**
- * The left menu: Home, then one group per project with its own pages (from src/modules.ts), and the
- * shared Admin at the bottom. It folds to icons: the group names hide, and each icon keeps a
+ * The left menu: Home, then one group per project with its own pages (from src/modules.ts), the
+ * projects still to be developed, and the shared Admin at the bottom. It folds to icons: the group names hide, and each icon keeps a
  * tooltip with the page name. A page shows as selected while you are on it or inside it.
  */
 export function AppSidebar() {
@@ -74,6 +90,23 @@ export function AppSidebar() {
               </SidebarGroup>
             )
           })}
+          {PLANNED.length > 0 ? (
+            <SidebarGroup role="group" aria-labelledby={PLANNED_LABEL_ID}>
+              <SidebarGroupLabel id={PLANNED_LABEL_ID}>To be developed</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {PLANNED.map(({ to, name, icon }) => (
+                    <MenuLink
+                      key={to}
+                      item={{ to, label: name, icon }}
+                      pathname={pathname}
+                      planned
+                    />
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          ) : null}
         </SidebarContent>
         <SidebarFooter className="border-t border-sidebar-border">
           <SidebarMenu>

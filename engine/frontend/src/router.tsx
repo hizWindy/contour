@@ -4,10 +4,11 @@
  * breadcrumbs (`handle.crumb`).
  *
  * Home and Admin are shared. Each project brings its own addresses in its module (src/modules.ts),
- * so this table doesn't change when a project is added.
+ * so this table doesn't change when a project is added. A project still to be developed gets one
+ * page that says so.
  */
 import { createBrowserRouter, Navigate, type RouteObject } from 'react-router'
-import { MODULES } from '@/modules'
+import { MODULES, PLANNED } from '@/modules'
 import { AppFrame } from '@/shell/app-frame'
 import type { RouteHandle } from '@/shell/crumbs'
 import { adminTabLabel } from '@/shell/nav'
@@ -32,6 +33,12 @@ export const routes: RouteObject[] = [
         ...page(() => import('@/shell/home')),
       },
       ...MODULES.flatMap((app) => app.routes),
+      // A project still to be developed has one page, at the address it will use.
+      ...PLANNED.map((project): RouteObject => ({
+        path: project.to.slice(1),
+        handle: { crumb: project.name } satisfies RouteHandle,
+        ...page(() => import('@/shell/planned')),
+      })),
       {
         path: 'admin',
         handle: { crumb: 'Admin' } satisfies RouteHandle,

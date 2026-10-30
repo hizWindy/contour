@@ -108,7 +108,8 @@ backend/
 frontend/
   openapi.json         the API contract, written by `uv run engine openapi`
   src/api/             the typed API client and the data hooks
-  src/modules.ts       the projects on the website, one line each; the menu, Home and routes read it
+  src/modules.ts       the projects on the website (MODULES) and the ones still to be developed
+                       (PLANNED); the menu, Home, Ctrl+K and routes read both
   src/shell/           the app frame: sidebar, Home, breadcrumbs, Ctrl+K menu, the shared page list (nav.ts)
   src/components/      shared parts: table, map, badges, money; ui/ is shadcn, restyled
   src/apps/lead-finder/ module.tsx (its menu pages and addresses), then one folder per page:
@@ -173,7 +174,7 @@ frontend/
 3. Add the name to `apps` in settings.
 4. Put its tables in its own schema, added with a migration.
 5. Add its pages in `frontend/src/apps/<name>/`, and its tests in `backend/tests/<name>/`.
-6. In `frontend/src/apps/<name>/module.tsx`, define its `AppModule`: name, icon, one-line description, menu pages and routes. Add it to `MODULES` in `frontend/src/modules.ts`. The sidebar group, its card on Home and the Ctrl+K entries then appear by themselves. Its own admin pages go in its menu; only what every project shares goes under Admin.
+6. In `frontend/src/apps/<name>/module.tsx`, define its `AppModule`: name, icon, one-line description, menu pages and routes. Add it to `MODULES` in `frontend/src/modules.ts`, and take it out of `PLANNED` there (the list of projects still to be developed, each with one "to be developed" page). The sidebar group, its card on Home and the Ctrl+K entries then appear by themselves. Its own admin pages go in its menu; only what every project shares goes under Admin.
 
 The core doesn't change.
 
