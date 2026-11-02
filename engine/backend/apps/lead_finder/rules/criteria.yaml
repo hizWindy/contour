@@ -34,10 +34,11 @@ size:
   headcount_tool_multiplier: 2
   # required: use a Signal Hire count only when its Company API has matched the company name to one
   # of its own company pages. optional: also use the name as typed when it can't be checked, and
-  # the lead card says so. Signal Hire's Company API is off for our account (a 403, checked 2 Nov),
-  # so required would count nothing. Use optional until its support switches the Company API on,
-  # then required, because a short or common name can match other companies' people.
-  headcount_tool_name_check: optional
+  # the lead card says so. auto: required while the Company API answers, and the name as typed
+  # while it is switched off. Our account's Company API is off (a 403, checked 2 Nov), so auto
+  # uses the name as typed now, and turns strict by itself once support switches it on: a short
+  # or common name can match other companies' people.
+  headcount_tool_name_check: auto
 
 fitout:
   rate_per_m2_aud: 1500 # the minimum rate in the deal criteria
@@ -219,7 +220,7 @@ tbc:
   - key: size.headcount_tool_multiplier
     note: Signal Hire counts only the people it has on file, which is fewer than the real staff. 2 is our guess, like LinkedIn. The test of 5 companies (PLAN-V3 A4) gives the real ratio, and B1 sets the number. Levi confirms.
   - key: size.headcount_tool_name_check
-    note: A short or common name can match other companies' people. required uses a Signal Hire count only when its Company API has matched the company name. optional also uses the name as typed, and the lead card says the name was not checked. Signal Hire's Company API is off for our account (checked 2 Nov), so we use optional for now, and required once its support switches the Company API on. Levi confirms, after the test shows whether the two give the same counts.
+    note: A short or common name can match other companies' people. required uses a Signal Hire count only when its Company API has matched the company name. optional also uses the name as typed, and the lead card says the name was not checked. auto is required while the Company API answers, and optional while it is off. Our account's Company API is off (checked 2 Nov), so auto works like optional for now, and turns strict by itself once support switches it on. Levi confirms, after the test shows whether the two give the same counts.
   - key: size.grow_into_range_months
     note: Levi's 29 Oct email says a small company that will soon grow into the range counts (Southern Launch, 30 to 40 staff, funding for 150). He didn't say how soon. 24 months is our guess.
   - key: size.director_band_m2

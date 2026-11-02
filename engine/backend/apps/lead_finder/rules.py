@@ -55,7 +55,10 @@ class Size(Strict):
     # Signal Hire's count of the people on file in the city, times this, is the staff estimate. The
     # upper bound only stops a typo (200 for 2) from making every company look big.
     headcount_tool_multiplier: float = Field(gt=0, le=20)
-    headcount_tool_name_check: Literal["required", "optional"]
+    # required: a count needs the Company API to match the name. optional: the name as typed
+    # is used when it can't be matched. auto: required while the Company API answers, and the
+    # name as typed while it is switched off (a 403), so it turns strict by itself (PLAN-V4 C3).
+    headcount_tool_name_check: Literal["required", "optional", "auto"]
 
     @model_validator(mode="after")
     def check_ranges(self) -> Self:

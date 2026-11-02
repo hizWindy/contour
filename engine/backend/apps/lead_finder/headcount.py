@@ -328,16 +328,19 @@ async def _name_to_count(
 ) -> tuple[str | None, bool, str]:
     """The name to count people under, whether Signal Hire's Company API matched it to one of its
     own companies, and why there is no name. With `required` no name is used unless it was
-    matched, because a short or common name can count other companies' people."""
+    matched, because a short or common name can count other companies' people. With `auto`, the
+    name as typed is used only while the Company API is switched off."""
+    api_off = False
     try:
         ref, _ = await resolve_company(client, company, website)
     except SignalHireCompanyApiOff:
-        ref, why = None, "the Company API is off, so the name couldn't be checked."
+        ref, api_off = None, True
+        why = "the Company API is off, so the name couldn't be checked."
     else:
         why = "no company on Signal Hire matched this name."
     if ref is not None:
         return ref.name, True, ""
-    if rule == "optional":
+    if rule == "optional" or (rule == "auto" and api_off):
         return company, False, ""
     return None, False, why
 

@@ -116,7 +116,7 @@ def test_signal_hire_is_on_with_our_guesses_for_its_numbers() -> None:
     assert size.headcount_tool_multiplier == 2  # a guess, TBC until the test of 5 companies
     # Signal Hire's Company API is off for our account, so a name can't be checked yet: the name as
     # typed is used, and the lead card says so. Back to "required" once the Company API is on.
-    assert size.headcount_tool_name_check == "optional"
+    assert size.headcount_tool_name_check == "auto"
     keys = {note.key for note in criteria.tbc}
     assert {"size.headcount_tool_multiplier", "size.headcount_tool_name_check"} <= keys
 
@@ -139,7 +139,7 @@ def test_the_name_check_is_required_or_optional_and_nothing_else(tmp_path: Path)
     rules_dir = copy_rules(tmp_path)
     edit(
         rules_dir / "criteria.yaml",
-        "headcount_tool_name_check: optional",
+        "headcount_tool_name_check: auto",
         "headcount_tool_name_check: required",
     )
     assert read_rules(rules_dir).criteria.size.headcount_tool_name_check == "required"

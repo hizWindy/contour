@@ -3071,7 +3071,7 @@ export interface components {
              * Headcount Tool Name Check
              * @enum {string}
              */
-            headcount_tool_name_check: "required" | "optional";
+            headcount_tool_name_check: "required" | "optional" | "auto";
             /** Linkedin Staff Multiplier */
             linkedin_staff_multiplier: number;
             /** M2 Per Staff */

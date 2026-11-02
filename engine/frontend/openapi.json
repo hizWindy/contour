@@ -5688,7 +5688,8 @@
           "headcount_tool_name_check": {
             "enum": [
               "required",
-              "optional"
+              "optional",
+              "auto"
             ],
             "title": "Headcount Tool Name Check",
             "type": "string"

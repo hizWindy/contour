@@ -388,3 +388,25 @@ async def test_a_retail_count_is_only_a_hint_and_gives_no_office_size() -> None:
     ]
     verdict = judge(result.facts, HubSpotMatch(status="new"), RULES, TODAY)
     assert verdict.office_m2 is None and verdict.fitout_aud is None
+
+
+# --- The name check follows the Company API (PLAN-V4 C3) ------------------------------------------
+
+
+async def test_auto_uses_the_typed_name_only_while_the_company_api_is_off() -> None:
+    auto = rules_with_signalhire(load_rules(), headcount_tool_name_check="auto")
+
+    off = await fill(
+        FakeSignalHire([ACME_SOFTWARE], people=40, failures={"find": COMPANY_API_OFF}), rules=auto
+    )
+    assert off.facts.staff_in_city.value == 80  # the name as typed, said so in the note
+    assert "was not checked" in off.notes[0]
+
+    on_unknown = await fill(FakeSignalHire([], people=40), rules=auto)
+    assert (
+        on_unknown.facts.staff_in_city.value is None
+    )  # the Company API answered: no match, no count
+
+    on_known = await fill(FakeSignalHire([ACME_SOFTWARE], people=40), rules=auto)
+    assert on_known.facts.staff_in_city.value == 80
+    assert "was not checked" not in on_known.notes[0]
