@@ -190,9 +190,8 @@ async def _read(
     resolved = await resolve(client, company, website)
     lookup = CompanyLookup(resolved)
     ref = resolved.ref
-    if (
-        ref is None
-    ):  # not on Signal Hire, the Company API is off, or a failure the next step reports
+    if ref is None:
+        # Not on Signal Hire, the Company API is off, or a failure the next step reports.
         return lookup
     if not credits.take(1):
         lookup.problems.append(

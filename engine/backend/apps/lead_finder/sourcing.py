@@ -73,9 +73,8 @@ class StaffCandidate:
 
     kind: StaffSource
     fact: Fact[int]  # what `staff_in_city` becomes if this one is used
-    from_linkedin: (
-        bool  # what `staff_from_linkedin` becomes: the size rule doubles a LinkedIn count
-    )
+    # What `staff_from_linkedin` becomes. The size rule doubles a LinkedIn count.
+    from_linkedin: bool
     staff: int  # the staff it means, after any doubling: what the numbers are compared by
     text: str  # for a person, like "about 570 (285 people on file x 2)"
     note: str | None = None  # the card's "From ..." note, shown only when this one is used
