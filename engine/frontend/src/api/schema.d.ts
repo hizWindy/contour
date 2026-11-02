@@ -1354,6 +1354,11 @@ export interface components {
              * @description Numbers taken from HubSpot, because the web research found none
              */
             from_hubspot: string[];
+            /**
+             * From Signalhire
+             * @description Numbers taken from Signal Hire, because neither the web research nor HubSpot found a staff number. Empty unless Signal Hire is switched on.
+             */
+            from_signalhire: string[];
             hubspot: components["schemas"]["HubSpotOut"];
             /**
              * Id
@@ -1450,6 +1455,11 @@ export interface components {
              * @description Numbers taken from HubSpot, because the web research found none
              */
             from_hubspot: string[];
+            /**
+             * From Signalhire
+             * @description Numbers taken from Signal Hire, because neither the web research nor HubSpot found a staff number. Empty unless Signal Hire is switched on.
+             */
+            from_signalhire: string[];
             hubspot: components["schemas"]["HubSpotOut"];
             /**
              * Id

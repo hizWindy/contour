@@ -94,10 +94,10 @@ backend/
       options.py       what the Start page offers (cities, areas, signs, limits)
       lead_store.py    lead filters, sorting, facets, the map and the CSV
       similar.py       look-alikes; watchlist.py the HubSpot watchlist; testing.py the test set report
-      headcount.py     reads Signal Hire's numbers for one company (the A3 test; not in the size rule yet)
+      headcount.py     Signal Hire's numbers: the `headcount` command, and the research's step that fills a staff gap (off until `headcount_tool` is in `size.staff_sources`)
       rules.py         checks the rules files
       rules/           criteria.yaml, queries.yaml, hubspot_map.yaml
-      research.py      researches one company: memory, search, form, gap check, save
+      research.py      researches one company: memory, search, form, gap check, HubSpot and Signal Hire fill staff gaps, save
       fields.py        the answer forms Claude fills in
       sources.py       the source check (pure code)
       scoring.py       the rules and the score (pure code)
@@ -186,6 +186,7 @@ The core doesn't change.
 - Secrets live only in `engine/.env`. Never in code, logs, tests or git.
 - No contact emails or phones are stored or sent to Claude. The HubSpot import skips any Contacts sheet.
 - Signal Hire: company counts only. `core/signalhire/client.py` has no call for a person, an employee list or contact details, so no name, email or phone can come back. The key is `SIGNALHIRE_API_KEY` in `engine/.env`, and tests blank it. Its Company API is off until Signal Hire's support switches it on (a 403 on a company call means it is off, `SignalHireCompanyApiOff`). While it is off, `lead-finder headcount` still counts people by the name as typed and prints "name not checked", because the search doesn't need the Company API. A refused key (401) still stops it. Using names or contact details from it is **TBC** with Levi.
+- Signal Hire in the research ([PLAN-V3](../plan/PLAN-V3.md)): it only fills a staff number that the research and HubSpot both missed. It never overwrites a number, never stops a lead or a run (an error is one line in the card's problems), and holds no database connection while it answers. It is **off** until `headcount_tool` is listed in `size.staff_sources` in `criteria.yaml` (B1 decides), and it needs the key. To turn it off, take `headcount_tool` out of that list or empty the key. A company that came from HubSpot (the watchlist) is not sent to it unless `HUBSPOT_NAMES_TO_SIGNALHIRE_OK=true`, a switch of its own beside the one for Claude. Only a count and a note are kept.
 - Decision makers: the research may note up to 3 leaders (CEO, COO, CFO, head of property or workplace) by name and job title, only from public pages it read (the company's site, annual report, ASX, news), each with its link. Never LinkedIn or any page behind a login, never an email or phone number (`fields.py` and `sources.py` remove them). Whether Contour keeps names is **TBC** with Levi (question 17 in `LEVI.md`).
 - Read, don't scrape. Property Daily stays off until its terms allow a program to read it.
 - Nothing is written to HubSpot unless a person clicks "Send to HubSpot".

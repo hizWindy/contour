@@ -2,6 +2,7 @@
 what goes on screen. A fake Signal Hire gives saved answers, so no test costs a credit."""
 
 import argparse
+import uuid
 
 import pytest
 
@@ -14,6 +15,7 @@ from apps.lead_finder.headcount import (
     resolve_company,
     slug_candidates,
 )
+from apps.lead_finder.research import LeadCard
 from core.signalhire.client import (
     CompanyRef,
     SignalHireCompanyApiOff,
@@ -21,6 +23,7 @@ from core.signalhire.client import (
     SignalHireOutOfQuota,
     SignalHireUnavailable,
 )
+from tests.lead_finder.factories import make_card
 from tests.lead_finder.samples import CULTURE_AMP, CULTURE_AMP_INFO, FakeSignalHire
 
 COMPANY_API_OFF = SignalHireCompanyApiOff(
@@ -312,6 +315,16 @@ def test_the_command_stops_with_a_plain_line_when_the_key_is_refused(
     err = capsys.readouterr().err
     assert err.startswith("Signal Hire refused the key.")
     assert fake.calls == ["find:culture-amp"]
+
+
+def test_the_research_command_shows_what_signal_hire_filled_in() -> None:
+    """`lead-finder research` prints the card, so a person can read the number and its note."""
+    card = LeadCard.model_validate(make_card(uuid.uuid4(), "Acme Software"))
+    assert "From Signal Hire" not in cli.describe(card)
+
+    note = "Staff in Melbourne: about 210, from Signal Hire (105 people on file x 2, TBC)."
+    shown = cli.describe(card.model_copy(update={"from_signalhire": [note]}))
+    assert f"  From Signal Hire: {note}" in shown.splitlines()
 
 
 def test_the_company_api_error_is_a_kind_of_unavailable_so_old_handlers_still_catch_it() -> None:

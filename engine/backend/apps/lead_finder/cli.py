@@ -55,6 +55,7 @@ def describe(card: LeadCard) -> str:
     ]
     lines.append(f"  Opening line: {card.opening_line or '-'}")
     lines.append(f"  Unknown: {', '.join(unknown_facts(card)) or 'nothing'}")
+    lines += [f"  From Signal Hire: {note}" for note in card.from_signalhire]
     lines += [f"  Removed: {item}" for item in card.dropped]
     lines += [f"  Problem: {item}" for item in card.problems]
     cost = card.research

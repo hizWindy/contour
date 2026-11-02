@@ -1800,6 +1800,14 @@
             "title": "From Hubspot",
             "type": "array"
           },
+          "from_signalhire": {
+            "description": "Numbers taken from Signal Hire, because neither the web research nor HubSpot found a staff number. Empty unless Signal Hire is switched on.",
+            "items": {
+              "type": "string"
+            },
+            "title": "From Signalhire",
+            "type": "array"
+          },
           "hubspot": {
             "$ref": "#/components/schemas/HubSpotOut"
           },
@@ -1946,6 +1954,7 @@
           "hubspot",
           "notes",
           "from_hubspot",
+          "from_signalhire",
           "dropped",
           "problems",
           "research",
@@ -2032,6 +2041,14 @@
               "type": "string"
             },
             "title": "From Hubspot",
+            "type": "array"
+          },
+          "from_signalhire": {
+            "description": "Numbers taken from Signal Hire, because neither the web research nor HubSpot found a staff number. Empty unless Signal Hire is switched on.",
+            "items": {
+              "type": "string"
+            },
+            "title": "From Signalhire",
             "type": "array"
           },
           "hubspot": {
@@ -2261,6 +2278,7 @@
           "hubspot",
           "notes",
           "from_hubspot",
+          "from_signalhire",
           "dropped",
           "problems",
           "research",

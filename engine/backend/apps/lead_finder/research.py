@@ -5,7 +5,8 @@ The steps, in order:
 2. Search: one Claude request per angle (property, people, money) that memory didn't cover.
 3. Fill the answer form from the notes, then check every fact's source.
 4. Gap check: if the city, size or a trigger is missing, one more targeted search. Then stop.
-5. Match HubSpot, apply the rules and the score, and save the card, the log and the memory.
+5. Match HubSpot. HubSpot, and then Signal Hire when it is switched on, fill a staff number the
+   research didn't find. Apply the rules and the score, and save the card, the log and the memory.
 
 A run calls this for many companies at once and passes a `ResearchContext`: the run id, where
 the company came from, the HubSpot id the watchlist already knows, the run's company cap and
@@ -20,6 +21,9 @@ What a run relies on:
 - Every reply is logged with the run id, and the notes found so far are saved to memory, even
   when the research stops part way (an error or a cancel). A second try reuses them.
 - No database connection is held while Claude works: the memory read ends its transaction first.
+  The same goes for Signal Hire: the transaction ends before it is asked.
+- Signal Hire only fills a gap, and a failure there is a line in the problems. It never stops a
+  lead or a run (apps/lead_finder/headcount.py).
 """
 
 import asyncio
@@ -38,6 +42,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.lead_finder.context import ResearchContext
 from apps.lead_finder.fields import AngleNotes, CompanyFacts, Fact
+from apps.lead_finder.headcount import fill_staff_gap, wants_signalhire
 from apps.lead_finder.office_numbers import fill_gaps, office_numbers
 from apps.lead_finder.params import (
     NAME_MESSAGE,
@@ -81,6 +86,7 @@ from core.memory.models import MemoryItem
 from core.memory.service import Note as MemoryNote
 from core.memory.service import recent, remember_many
 from core.searches.service import log_reply
+from core.signalhire.client import SignalHire, get_signalhire
 
 APP = "lead_finder"
 SearchAngle = Literal["property", "people", "money"]
@@ -207,6 +213,11 @@ class LeadCard(BaseModel):
         default_factory=list,
         description="Numbers taken from HubSpot, because the web research found none",
     )
+    from_signalhire: list[str] = Field(
+        default_factory=list,
+        description="Numbers taken from Signal Hire, because neither the web research nor "
+        "HubSpot found a staff number. Empty unless Signal Hire is switched on.",
+    )
     dropped: list[str] = Field(description="Facts the source check removed, and why")
     problems: list[str] = Field(description="Searches that failed, or caps that were reached")
     research: ResearchCost
@@ -268,7 +279,10 @@ async def research_company(
     request: ResearchRequest,
     today: date | None = None,
     context: ResearchContext | None = None,
+    signalhire: SignalHire | None = None,
 ) -> LeadCard:
+    """Researches one company. `signalhire` is for tests: a fake that answers from saved samples.
+    Without it, the client is made from the settings when there is a key (none when there isn't)."""
     context = context or ResearchContext()
     now = datetime.now(UTC)
     key = company_key(request.company)
@@ -345,6 +359,11 @@ async def research_company(
     # HubSpot may hold a number the research didn't find. It fills the gap and never overwrites.
     numbers = await office_numbers(session, hubspot.hubspot_id, metro)
     facts, from_hubspot = fill_gaps(facts, numbers, rules, job.today)
+    # Then Signal Hire may know the staff number neither of them found. Same rule: a gap only.
+    website = facts.website.value or request.website
+    facts, from_signalhire = await _signalhire_staff(
+        session, job, facts, metro, website, signalhire
+    )
     verdict = judge(facts, hubspot, rules, job.today)
     card = LeadCard(
         id=job.id,
@@ -377,6 +396,7 @@ async def research_company(
             for note in job.notes
         ],
         from_hubspot=from_hubspot,
+        from_signalhire=from_signalhire,
         dropped=dropped,
         problems=job.problems,
         research=ResearchCost(
@@ -454,6 +474,36 @@ async def _search(job: Job, claude: Claude, prompts: list[tuple[str, str]]) -> N
                 job.notes.append(FoundNote(claim, note.url, note.published, angle, False))
     if unavailable is not None:
         raise unavailable
+
+
+async def _signalhire_staff(
+    session: AsyncSession,
+    job: Job,
+    facts: CompanyFacts,
+    city: str | None,
+    website: str | None,
+    given: SignalHire | None,
+) -> tuple[CompanyFacts, list[str]]:
+    """The facts with Signal Hire's count in the staff gap, and the note for it. Does nothing
+    unless `wants_signalhire` says so and there is a key (or a fake was given). Whatever goes
+    wrong is a line in the card's problems: the lead is still saved and the run goes on."""
+    wanted = wants_signalhire(facts, job.rules, job.settings, origin=job.context.origin, city=city)
+    if city is None or not wanted:
+        return facts, []
+    owned = None if given is not None else get_signalhire(job.settings)  # closed below
+    client: SignalHire | None = given if given is not None else owned
+    if client is None:  # no key: Signal Hire is off
+        return facts, []
+    await session.rollback()  # no connection waits on Signal Hire (an answer can be slow)
+    try:
+        fill = await fill_staff_gap(
+            facts, client, company=job.company, website=website, city=city, rules=job.rules
+        )
+    finally:
+        if owned is not None:
+            await owned.aclose()
+    job.problems.extend(fill.problems)
+    return fill.facts, fill.notes
 
 
 async def _fill_form(job: Job, claude: Claude, prompt: Prompt) -> tuple[CompanyFacts, list[str]]:
