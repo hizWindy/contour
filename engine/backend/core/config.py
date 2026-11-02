@@ -2,8 +2,8 @@
 
 Two kinds of setting:
 - **Env-only:** the HubSpot approval switch, the hard ceilings, the daily cap, the database
-  pool, the allowed web origins and the API address. They change only in engine/.env, then a
-  restart. The website can't change them.
+  pool, the allowed web origins, the API address and the Signal Hire key. They change only in
+  engine/.env, then a restart. The website can't change them.
 - **Editable:** caps, concurrency, models and thresholds (the keys in EDITABLE_KEYS). The
   `core.prefs` package stores overrides in the database, checks each against its min and max
   here, and then clamps the result to the ceilings with `clamp_to_ceilings`.
@@ -166,6 +166,10 @@ class Settings(BaseSettings):
     model_discover: ClaudeModel | None = None
     model_search: ClaudeModel | None = None
     model_extract: ClaudeModel | None = None
+
+    # --- Signal Hire: company headcount, counts only (core/signalhire). None turns it off. ---
+    signalhire_api_key: SecretStr | None = None
+    signalhire_timeout_seconds: float = Field(30, gt=0, le=120)
 
     # --- Caps for researching one company. Code checks them before every request. ------
     company_cap_usd: Decimal = Field(Decimal("2.50"), ge=Decimal("0.10"), le=Decimal("5"))

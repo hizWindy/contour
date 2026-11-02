@@ -214,7 +214,7 @@ Every company is checked against HubSpot before it shows as a lead.
   - A new company is created. An existing one gets a note, and only its empty fields are filled. We never overwrite what a person typed.
   - The company joins an "AI suggested" list.
   - Every send is logged, and clicking twice never makes a duplicate.
-- **Needed from the HubSpot admin (TBC):** a few new company fields (AI suggested, trigger, trigger date, source link, score, result, research date) and a token. HubSpot now calls private apps "legacy apps", and only a super admin can make one. It should belong to a permanent Contour admin, because the token stops working if its creator is removed.
+- **Needed from the HubSpot admin (TBC):** a few new company fields (AI suggested, trigger, trigger date, source link, score, result, research date) and a **service key** (Development → Keys → Service Keys). HubSpot no longer lets anyone create legacy private apps (seen on screen 2 Nov 2026), and a personal access key is the wrong one: it belongs to one user and, in our case, has read scopes only. The scopes are **TBC** until Phase 5 is built. Service keys were still called a beta in HubSpot's docs. The key should belong to a permanent Contour admin, because it stops working if its creator is removed.
 - **Office details:** the export has lease expiry and staff per office. Where these live in HubSpot is **TBC**.
 
 ## Website pages

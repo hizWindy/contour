@@ -86,10 +86,11 @@ Nothing changes in the engine yet.
   - New 1: a fresh HubSpot export with office size, lease expiry, last moved and manual headcount per city. Ours has a lease expiry for 1 of 185 offices, no last-moved dates, and no office size or manual headcount ([EXPORT.md](../projects/leads/research/EXPORT.md)).
   - New 2: the Signal Hire account. New 3: his OK to send the Gold customers' company names to Claude.
   - **Done when:** it is sent. Write his answers in Criteria_v2.md as they come. Work goes on with our recommended numbers meanwhile.
-- [ ] **A3. Test Signal Hire by hand.**
+- [ ] **A3. Test Signal Hire by hand.** Now steps A2 to A4 of [PLAN-V3.md](PLAN-V3.md), which also builds Signal Hire into the research. Tick this when PLAN-V3 step A4 is done.
   - Compare its headcount with LinkedIn × 2 for 5 companies from `testset.yaml`. Write the result in Criteria_v2.md section 2.
   - Building a connector is Levi's call (**TBC**). Until then Signal Hire, Lusha and Apollo stay on the blocked list.
-  - **Blocked:** until Levi sends the account.
+  - **Done so far (2 Nov):** the account came. A client that only counts (`core/signalhire/`) and `uv run lead-finder headcount "Culture Amp" --city Melbourne --yes` read the company's staff, the people Signal Hire has on file in the city, and how many are senior. No names, emails or phones. It is not in the size rule yet.
+  - **Left:** put the key in `engine/.env` as `SIGNALHIRE_API_KEY`. Ask support@signalhire.com to switch the Company API on (**TBC** whether it is). Run the command for the 5 companies and compare with LinkedIn × 2. The city count may be a LinkedIn-style count that needs doubling (**TBC**).
   - **Done when:** the result is written.
 
 ## Part B: Change the rules, one at a time
@@ -206,6 +207,7 @@ Start after Part B, because the website reads the API. Follow [DESIGN.md](../eng
 
 Newest first. One line for each tick, pause or surprise.
 
+- 2026-11-02: A3 started, not done. Signal Hire client and the `headcount` command built, with tests (uncommitted, on branch `decision-makers`). Backend lint, types and the fast tests pass (1,909 passed, 28 skipped). Not run against the real Signal Hire yet: no key in `engine/.env`, and the Company API may still be off (**TBC**). Also learned: HubSpot's "Create legacy app" is closed, so Phase 5 needs a service key (PLAN-V1 updated). Plan to use Signal Hire for more than headcount: people in the city, senior people, and (after Levi says yes) decision-maker names. Contact details stay out until Levi agrees.
 - 2026-10-30: D1 done (6143765). `uv run lead-finder rejudge` ran on the 16 dev leads. 14 keep their result. Budget Direct (Drop to Director review) and JOEST Australia (Drop to Watch) change, because staff is now a hint. 10 leads are in the "investigate" band and 6 in "nurture". Watch leads can reach "investigate", so Levi should look at how the bands scale. Stopped here, with 12 of 20 steps done. What is left needs Levi (E1, E2, and the answers behind D2), Al-khair (send the email in A2, run D2) or Levi's Signal Hire account (A3). Next session: read this plan, run `brain context`, and start with whatever Al-khair says first. The branch is `engine-criteria-v2`, nothing is pushed or merged.
 - 2026-10-30: C2 and C3 done after a look in the browser (the fake backend on port 8010 and the website on 5173, both stopped again; the real backend container on 8000 was not touched). Found and fixed one thing, a repeated label in the Timing part (59ffcbe). Not checked: the Start page, and Results and Rules at a phone width.
 - 2026-10-30: C1 done (40e525a). Part B gate: the whole backend suite passes (2,313 passed, 28 skipped; the baseline was 2,227). C1 to C3 went in one commit because the website and the API change together. Website checks pass: lint 0 warnings, typecheck, 672 tests, build. Choices: the stage follows the result, so the Result filter is the stage filter (no new filter). The lead card reads the consultant window from the Rules endpoint. Usage when this was written: 5-hour limit 51%, weekly 62%, the session 76% full, so progress was saved to the AI Brain.

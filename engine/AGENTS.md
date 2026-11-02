@@ -26,6 +26,7 @@ From `engine/backend/`:
 | Load a HubSpot export | `uv run engine import-hubspot ../../projects/leads/research/COMPANIES.xlsx` |
 | Research one company (costs money) | `uv run lead-finder research "Culture Amp" --city Melbourne` |
 | Run the test set of 10 companies (costs money) | `uv run lead-finder testset --yes` |
+| Read Signal Hire's headcount for one company (1 company credit, no database) | `uv run lead-finder headcount "Culture Amp" --city Melbourne --yes` |
 | Judge the saved leads again with the current rules (free, read only, no migration) | `uv run lead-finder rejudge` |
 | Fast tests (no database) | `uv run pytest -m "not integration"` |
 | All tests (needs the database) | `uv run pytest` |
@@ -81,6 +82,7 @@ backend/
     searches/          the search log: every Claude request and its cost
     memory/            pgvector memory and FastEmbed
     hubspot/           the HubSpot import, matching (matching.py) and company profiles (profiles.py)
+    signalhire/        Signal Hire, company counts only (client.py): staff, people in a city, senior people
     runs/              the run engine: start, stop, resume, live events, caps (manager.py, events.py, budget.py)
     prefs/             the settings a person can change on the Settings page
   apps/
@@ -92,6 +94,7 @@ backend/
       options.py       what the Start page offers (cities, areas, signs, limits)
       lead_store.py    lead filters, sorting, facets, the map and the CSV
       similar.py       look-alikes; watchlist.py the HubSpot watchlist; testing.py the test set report
+      headcount.py     reads Signal Hire's numbers for one company (the A3 test; not in the size rule yet)
       rules.py         checks the rules files
       rules/           criteria.yaml, queries.yaml, hubspot_map.yaml
       research.py      researches one company: memory, search, form, gap check, save
@@ -182,6 +185,7 @@ The core doesn't change.
 
 - Secrets live only in `engine/.env`. Never in code, logs, tests or git.
 - No contact emails or phones are stored or sent to Claude. The HubSpot import skips any Contacts sheet.
+- Signal Hire: company counts only. `core/signalhire/client.py` has no call for a person, an employee list or contact details, so no name, email or phone can come back. The key is `SIGNALHIRE_API_KEY` in `engine/.env`, and tests blank it. Its Company API is off until Signal Hire's support switches it on (a 403 means it is off). Using names or contact details from it is **TBC** with Levi.
 - Decision makers: the research may note up to 3 leaders (CEO, COO, CFO, head of property or workplace) by name and job title, only from public pages it read (the company's site, annual report, ASX, news), each with its link. Never LinkedIn or any page behind a login, never an email or phone number (`fields.py` and `sources.py` remove them). Whether Contour keeps names is **TBC** with Levi (question 17 in `LEVI.md`).
 - Read, don't scrape. Property Daily stays off until its terms allow a program to read it.
 - Nothing is written to HubSpot unless a person clicks "Send to HubSpot".

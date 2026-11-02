@@ -65,14 +65,15 @@ def _written_forms(secret: str) -> list[str]:
 
 
 def _configured_secrets() -> tuple[str, ...]:
-    """The database password and the API key from settings, in each form they are written in."""
+    """The database password and the API keys from settings, in each form they are written in."""
     try:
         settings = get_settings()
     except Exception:
         return ()  # settings that don't load must not stop a log line
     configured = [settings.postgres_password.get_secret_value()]
-    if settings.anthropic_api_key is not None:
-        configured.append(settings.anthropic_api_key.get_secret_value())
+    for key in (settings.anthropic_api_key, settings.signalhire_api_key):
+        if key is not None:
+            configured.append(key.get_secret_value())
     forms = [form for secret in configured if secret for form in _written_forms(secret)]
     return tuple(dict.fromkeys(form for form in forms if len(form) >= MIN_SECRET_CHARS))
 

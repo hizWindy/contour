@@ -4,8 +4,11 @@ Run it from engine/backend:
     uv run lead-finder research "Culture Amp" --city Melbourne
     uv run lead-finder testset --yes
     uv run lead-finder rejudge
+    uv run lead-finder headcount "Culture Amp" --city Melbourne --yes
 The first two spend money on Claude. Every request is in the search log. `rejudge` is free: it
 judges the saved leads again with the current rules, from their cards, and saves nothing.
+`headcount` reads Signal Hire's numbers for one company (1 company credit, plus 2 searches from
+the daily quota). It needs SIGNALHIRE_API_KEY in engine/.env, and uses no database.
 """
 
 import argparse
@@ -18,6 +21,7 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy.exc import OperationalError
 
+from apps.lead_finder.headcount import HeadcountReading, describe_reading, read_headcount
 from apps.lead_finder.rejudge import Rejudged, rejudge, table
 from apps.lead_finder.research import LeadCard, ResearchRequest, research_company
 from apps.lead_finder.rules import load_rules
@@ -28,6 +32,7 @@ from core.cli import DATABASE_DOWN, migrate
 from core.config import get_settings
 from core.logs import setup_logging
 from core.runtime import loop_factory
+from core.signalhire.client import HttpSignalHire, SignalHireError, get_signalhire
 
 
 def unknown_facts(card: LeadCard) -> list[str]:
@@ -105,6 +110,34 @@ async def _rejudge() -> list[Rejudged]:
         await get_engine().dispose()
 
 
+async def _read_headcount(client: HttpSignalHire, args: argparse.Namespace) -> HeadcountReading:
+    async with client:
+        return await read_headcount(
+            client,
+            company=args.company,
+            website=args.website,
+            city=args.city,
+            location=args.location,
+        )
+
+
+def _headcount(args: argparse.Namespace) -> int:
+    """Signal Hire's numbers for one company. Uses no database, so it never migrates."""
+    if not args.yes:
+        print(
+            "This uses 1 Signal Hire company credit and 2 searches from the daily quota. "
+            "Add --yes to go ahead."
+        )
+        return 1
+    client = get_signalhire()
+    if client is None:
+        print("SIGNALHIRE_API_KEY is not set in engine/.env.", file=sys.stderr)
+        return 1
+    reading = asyncio.run(_read_headcount(client, args), loop_factory=loop_factory())
+    print(describe_reading(reading))
+    return 0
+
+
 def _table(cards: list[LeadCard], label: str) -> None:
     print(f"{label}\n{'Company':<20} {'Result':<16} {'Score':>5} {'Unknown':>7} {'Cost US$':>9}")
     for card in cards:
@@ -134,12 +167,26 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="Judge the saved leads again with the current rules, from their cards. "
         "No searches, no cost, and nothing is saved.",
     )
+    head = commands.add_parser(
+        "headcount",
+        help="Read Signal Hire's headcount for one company (1 company credit, and 2 searches "
+        "from the daily quota). Counts only, no names or contact details.",
+    )
+    head.add_argument("company")
+    head.add_argument("--city", help="Counts the people on file in this city, in Australia.")
+    head.add_argument("--website", help="Helps find the company, like cultureamp.com.")
+    head.add_argument(
+        "--location", help="Signal Hire's own place text, instead of CITY, Australia."
+    )
+    head.add_argument("--yes", action="store_true", help="Confirm the credit.")
     args = parser.parse_args(argv)
 
     try:
         if args.command == "rejudge":  # read only, so it never migrates the database
             print(table(asyncio.run(_rejudge(), loop_factory=loop_factory())))
             return 0
+        if args.command == "headcount":  # no database either
+            return _headcount(args)
         migrate()
         if args.command == "research":
             request = ResearchRequest(
@@ -170,7 +217,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     except OperationalError:
         print(DATABASE_DOWN, file=sys.stderr)
         return 1
-    except ClaudeError as error:
+    except (ClaudeError, SignalHireError) as error:
         print(f"{error.title}. {error.detail}", file=sys.stderr)
         return 1
     return 0

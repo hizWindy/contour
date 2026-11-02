@@ -59,6 +59,7 @@ if not re.fullmatch(r"[A-Za-z0-9_]{0,32}", TEST_DB_SUFFIX):
     raise RuntimeError("LEADFINDER_TEST_DB_SUFFIX may only hold letters, digits and underscores")
 os.environ["POSTGRES_DB"] = f"leadfinder_test{TEST_DB_SUFFIX}"
 os.environ.setdefault("EMBEDDING_THREADS", "2")
+os.environ["SIGNALHIRE_API_KEY"] = ""  # whatever engine/.env holds, no test reaches Signal Hire
 get_settings.cache_clear()
 
 TEST_TABLES = (

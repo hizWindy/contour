@@ -23,8 +23,10 @@ size:
   linkedin_staff_multiplier: 2 # real staff is about LinkedIn staff x 2
   grow_into_range_months: 24 # a small company that will need an office in range within this long still fits
   # Where to look for staff numbers, in this order (Criteria_v2.md section 2). Only hubspot and
-  # web_research are built. headcount_tool (Signal Hire) waits on Levi's account. linkedin is the
-  # LinkedIn count, doubled. HubSpot fills a gap the research left. It never overwrites a figure.
+  # web_research feed the size rule. headcount_tool (Signal Hire) has a client (core/signalhire)
+  # and `lead-finder headcount` reads its numbers, but they don't feed the rule until the A3 test
+  # (PLAN-V2) shows which of its counts to trust. linkedin is the LinkedIn count, doubled.
+  # HubSpot fills a gap the research left. It never overwrites a figure.
   staff_sources: [hubspot, headcount_tool, linkedin, web_research]
 
 fitout:
