@@ -5,10 +5,13 @@ Run it from engine/backend:
     uv run lead-finder testset --yes
     uv run lead-finder rejudge
     uv run lead-finder headcount "Culture Amp" --city Melbourne --yes
+    uv run lead-finder forms
 The first two spend money on Claude. Every request is in the search log. `rejudge` is free: it
 judges the saved leads again with the current rules, from their cards, and saves nothing.
 `headcount` reads Signal Hire's numbers for one company (1 company credit, plus 2 searches from
 the daily quota). It needs SIGNALHIRE_API_KEY in engine/.env, and uses no database.
+`forms` checks that every answer form Claude gets is under Anthropic's limits for strict forms
+(free). With `--live --yes` it also sends each form to Claude once, at low effort (a few cents).
 """
 
 import argparse
@@ -17,17 +20,21 @@ import sys
 from collections.abc import Sequence
 from datetime import datetime
 from decimal import Decimal
+from typing import Literal
 from zoneinfo import ZoneInfo
 
+from pydantic import BaseModel
 from sqlalchemy.exc import OperationalError
 
+from apps.lead_finder.fields import AngleNotes, Candidates, CompanyFacts
 from apps.lead_finder.headcount import HeadcountReading, describe_reading, read_headcount
 from apps.lead_finder.rejudge import Rejudged, rejudge, table
 from apps.lead_finder.research import LeadCard, ResearchRequest, research_company
 from apps.lead_finder.rules import load_rules
 from apps.lead_finder.sources import FACT_FIELDS
 from apps.lead_finder.testing import load_testset
-from core.claude.client import ClaudeError, get_claude
+from core.claude.client import ClaudeError, close_claude, configure_claude, get_claude
+from core.claude.forms import OPTIONAL_FIELDS_LIMIT, UNION_FIELDS_LIMIT, form_size
 from core.cli import DATABASE_DOWN, migrate
 from core.config import get_settings
 from core.logs import setup_logging
@@ -139,6 +146,62 @@ def _headcount(args: argparse.Namespace) -> int:
     return 0
 
 
+# The answer forms Claude gets, with the kind of step that sends each one.
+FORMS: dict[str, tuple[Literal["search", "extract", "discover"], type[BaseModel]]] = {
+    "search notes": ("search", AngleNotes),
+    "company facts": ("extract", CompanyFacts),
+    "discovery": ("discover", Candidates),
+}
+FORM_CHECK_SYSTEM = (
+    "This request only checks that an answer form is accepted. Fill in the form for a made-up "
+    "company, Example Pty Ltd, with as little as the form allows: empty lists, null or empty text."
+)
+
+
+def _forms(args: argparse.Namespace) -> int:
+    """Each form's size against Anthropic's limits. Free. `--live --yes` also sends each once."""
+    ok = True
+    for name, (_, form) in FORMS.items():
+        size = form_size(form)
+        ok = ok and size.within_limits
+        print(
+            f"{name}: {size.union_fields} of {UNION_FIELDS_LIMIT} null-or-value fields, "
+            f"{size.optional_fields} of {OPTIONAL_FIELDS_LIMIT} optional fields, "
+            f"{size.characters:,} characters: {'ok' if size.within_limits else 'TOO COMPLEX'}"
+        )
+    if not args.live:
+        return 0 if ok else 1
+    if not args.yes:
+        print("This sends each form to Claude once, at low effort (a few cents). Add --yes.")
+        return 1
+    return asyncio.run(_forms_live(), loop_factory=loop_factory())
+
+
+async def _forms_live() -> int:
+    settings = get_settings()
+    configure_claude(settings)
+    claude = get_claude()
+    refused = 0
+    try:
+        for name, (step, form) in FORMS.items():
+            try:
+                reply = await claude.ask(
+                    system=FORM_CHECK_SYSTEM,
+                    prompt="Fill in the form.",
+                    form=form,
+                    model=settings.model_for(step),
+                    effort="low",
+                )
+            except ClaudeError as error:
+                refused += 1
+                print(f"{name}: REFUSED. {error.title}. {error.detail}")
+                continue
+            print(f"{name}: accepted by {reply.model} (US${reply.cost_usd:.4f})")
+    finally:
+        await close_claude()
+    return 1 if refused else 0
+
+
 def _table(cards: list[LeadCard], label: str) -> None:
     print(f"{label}\n{'Company':<20} {'Result':<16} {'Score':>5} {'Unknown':>7} {'Cost US$':>9}")
     for card in cards:
@@ -180,6 +243,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--location", help="Signal Hire's own place text, instead of CITY, Australia."
     )
     head.add_argument("--yes", action="store_true", help="Confirm the credit.")
+    forms = commands.add_parser(
+        "forms",
+        help="Check that every answer form is under Anthropic's limits for strict forms (free).",
+    )
+    forms.add_argument(
+        "--live", action="store_true", help="Also send each form to Claude once (a few cents)."
+    )
+    forms.add_argument("--yes", action="store_true", help="Confirm the spend for --live.")
     args = parser.parse_args(argv)
 
     try:
@@ -188,6 +259,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0
         if args.command == "headcount":  # no database either
             return _headcount(args)
+        if args.command == "forms":  # no database either
+            return _forms(args)
         migrate()
         if args.command == "research":
             request = ResearchRequest(

@@ -401,7 +401,7 @@
                 "type": "null"
               }
             ],
-            "description": "The role to contact first, like Head of Property, COO or CFO. No names.",
+            "description": "The role to contact first, like Head of Property, COO or CFO. No names. Empty if no note points to one.",
             "title": "Contact Role"
           },
           "decision_makers": {
@@ -448,7 +448,7 @@
                 "type": "null"
               }
             ],
-            "description": "If the industry belongs to one of the industry groups in the instructions, that group's name exactly as written. Else null.",
+            "description": "If the industry belongs to one of the industry groups in the instructions, that group's name exactly as written. Else empty.",
             "title": "Industry Group"
           },
           "last_fitout": {
@@ -484,7 +484,7 @@
                 "type": "null"
               }
             ],
-            "description": "A friendly first line for a sales email",
+            "description": "A friendly first line for a sales email. Empty if there is nothing to say.",
             "title": "Opening Line"
           },
           "owner": {
@@ -526,7 +526,7 @@
                 "type": "null"
               }
             ],
-            "description": "If the industry belongs to one of the tier groups in the instructions, that group's name exactly as written. Else null.",
+            "description": "If the industry belongs to one of the tier groups in the instructions, that group's name exactly as written. Else empty.",
             "title": "Tier Group"
           },
           "triggers": {
@@ -1035,7 +1035,7 @@
                 "type": "null"
               }
             ],
-            "description": "The page's date: YYYY-MM-DD, or null",
+            "description": "The page's date: YYYY-MM-DD. Empty when it isn't known.",
             "title": "Source Date"
           },
           "source_url": {
@@ -1110,7 +1110,7 @@
                 "type": "null"
               }
             ],
-            "description": "confirmed: a source says it. estimated: worked out from sources. guessed: a reasonable guess.",
+            "description": "confirmed: a source says it. estimated: worked out from sources. guessed: a reasonable guess. Empty when the value is null.",
             "title": "Label"
           },
           "source_date": {
@@ -1122,7 +1122,7 @@
                 "type": "null"
               }
             ],
-            "description": "The page's date: YYYY-MM-DD, or null",
+            "description": "The page's date: YYYY-MM-DD. Empty when it isn't known.",
             "title": "Source Date"
           },
           "source_url": {
@@ -1134,7 +1134,7 @@
                 "type": "null"
               }
             ],
-            "description": "The page it comes from, from the notes",
+            "description": "The page it comes from, from the notes. Empty when the value is null.",
             "title": "Source Url"
           },
           "value": {
@@ -1175,7 +1175,7 @@
                 "type": "null"
               }
             ],
-            "description": "confirmed: a source says it. estimated: worked out from sources. guessed: a reasonable guess.",
+            "description": "confirmed: a source says it. estimated: worked out from sources. guessed: a reasonable guess. Empty when the value is null.",
             "title": "Label"
           },
           "source_date": {
@@ -1187,7 +1187,7 @@
                 "type": "null"
               }
             ],
-            "description": "The page's date: YYYY-MM-DD, or null",
+            "description": "The page's date: YYYY-MM-DD. Empty when it isn't known.",
             "title": "Source Date"
           },
           "source_url": {
@@ -1199,7 +1199,7 @@
                 "type": "null"
               }
             ],
-            "description": "The page it comes from, from the notes",
+            "description": "The page it comes from, from the notes. Empty when the value is null.",
             "title": "Source Url"
           },
           "value": {
@@ -1240,7 +1240,7 @@
                 "type": "null"
               }
             ],
-            "description": "confirmed: a source says it. estimated: worked out from sources. guessed: a reasonable guess.",
+            "description": "confirmed: a source says it. estimated: worked out from sources. guessed: a reasonable guess. Empty when the value is null.",
             "title": "Label"
           },
           "source_date": {
@@ -1252,7 +1252,7 @@
                 "type": "null"
               }
             ],
-            "description": "The page's date: YYYY-MM-DD, or null",
+            "description": "The page's date: YYYY-MM-DD. Empty when it isn't known.",
             "title": "Source Date"
           },
           "source_url": {
@@ -1264,7 +1264,7 @@
                 "type": "null"
               }
             ],
-            "description": "The page it comes from, from the notes",
+            "description": "The page it comes from, from the notes. Empty when the value is null.",
             "title": "Source Url"
           },
           "value": {
@@ -6275,7 +6275,7 @@
                 "type": "null"
               }
             ],
-            "description": "When it happened, as YYYY-MM-DD or YYYY-MM. For lease_ending: when the lease ends.",
+            "description": "When it happened, as YYYY-MM-DD or YYYY-MM. For lease_ending: when the lease ends. Empty when it isn't known.",
             "title": "Date"
           },
           "id": {

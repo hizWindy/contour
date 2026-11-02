@@ -15,10 +15,10 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Protocol
 
 import anthropic
-from anthropic import transform_schema
 from anthropic.types.beta import BetaMessage
 from pydantic import BaseModel, ValidationError
 
+from core.claude.forms import form_schema
 from core.claude.limiter import ClaudeGate
 from core.claude.pricing import Usage, cost_usd
 from core.config import Settings, get_settings
@@ -214,7 +214,7 @@ class AnthropicClaude:
                 "effort": effort or self._effort,
                 "format": {
                     "type": "json_schema",
-                    "schema": transform_schema(form.model_json_schema()),
+                    "schema": form_schema(form),
                 },
             },
             "betas": [FALLBACK_BETA],

@@ -4,12 +4,46 @@ PARAMETERS.md section 2 lists what we record for each company. Every fact has a 
 link, a date and a label. A fact with no source is unknown.
 """
 
-from typing import Any, Literal
+from typing import Annotated, Any, Literal, get_args
 
-from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    Field,
+    ValidationInfo,
+    WithJsonSchema,
+    field_validator,
+    model_validator,
+)
 
 Label = Literal["confirmed", "estimated", "guessed"]
 Angle = Literal["property", "people", "money", "gaps"]
+
+
+def _empty_is_unknown(value: Any) -> Any:
+    """Claude writes empty text for "not known" in the fields below. Python keeps None."""
+    if isinstance(value, str) and not value.strip():
+        return None
+    return value
+
+
+# Why some fields are plain text in Claude's answer form. A strict form (structured outputs) may
+# have at most 16 fields that can be "null or a value" in one request: Anthropic's limit on union
+# types. From 30 Oct our form had 18, and Claude refused every request with "The compiled grammar
+# is too large" (PLAN-V4). So a text that may be unknown is a plain string in the form, empty when
+# unknown. In Python, in saved cards and in the API the website reads, it stays None when unknown
+# (`mode="validation"` changes only the schema Claude gets). Only a fact's value stays "null or a
+# value". tests/lead_finder/test_forms.py fails if a form gets close to the limit again.
+MaybeText = Annotated[
+    str | None,
+    BeforeValidator(_empty_is_unknown),
+    WithJsonSchema({"type": "string"}, mode="validation"),
+]
+MaybeLabel = Annotated[
+    Label | None,
+    BeforeValidator(_empty_is_unknown),
+    WithJsonSchema({"type": "string", "enum": [*get_args(Label), ""]}, mode="validation"),
+]
 
 # Facts added with company criteria version 2. A lead card saved earlier, and a test form that
 # leaves them out, don't have them: they are unknown. Claude's answer always has every fact,
@@ -58,20 +92,24 @@ class AngleNotes(BaseModel):
 
 class Fact[V: (str, int, bool)](BaseModel):
     value: V | None = Field(description="null when it isn't known")
-    source_url: str | None = Field(description="The page it comes from, from the notes")
-    source_date: str | None = Field(description="The page's date: YYYY-MM-DD, or null")
-    label: Label | None = Field(
+    source_url: MaybeText = Field(
+        description="The page it comes from, from the notes. Empty when the value is null."
+    )
+    source_date: MaybeText = Field(
+        description="The page's date: YYYY-MM-DD. Empty when it isn't known."
+    )
+    label: MaybeLabel = Field(
         description="confirmed: a source says it. estimated: worked out from sources. "
-        "guessed: a reasonable guess."
+        "guessed: a reasonable guess. Empty when the value is null."
     )
 
 
 class TriggerFound(BaseModel):
     id: str = Field(description="One of the trigger ids in the instructions")
     what_happened: str = Field(description="One plain sentence")
-    date: str | None = Field(
+    date: MaybeText = Field(
         description="When it happened, as YYYY-MM-DD or YYYY-MM. For lease_ending: when the "
-        "lease ends."
+        "lease ends. Empty when it isn't known."
     )
     source_url: str
     label: Label
@@ -89,7 +127,9 @@ class DecisionMaker(BaseModel):
     name: str = Field(description="The person's full name, exactly as the note writes it")
     role: str = Field(description="Their job title, like Chief Financial Officer")
     source_url: str = Field(description="The note link that names them in this role")
-    source_date: str | None = Field(description="The page's date: YYYY-MM-DD, or null")
+    source_date: MaybeText = Field(
+        description="The page's date: YYYY-MM-DD. Empty when it isn't known."
+    )
 
 
 class CompanyFacts(BaseModel):
@@ -97,13 +137,13 @@ class CompanyFacts(BaseModel):
     website: Fact[str] = Field(description="The company's own website, like seek.com.au")
     city: Fact[str] = Field(description="The city of the office this lead is about")
     industry: Fact[str]
-    industry_group: str | None = Field(
+    industry_group: MaybeText = Field(
         description="If the industry belongs to one of the industry groups in the "
-        "instructions, that group's name exactly as written. Else null."
+        "instructions, that group's name exactly as written. Else empty."
     )
-    tier_group: str | None = Field(
+    tier_group: MaybeText = Field(
         description="If the industry belongs to one of the tier groups in the instructions, "
-        "that group's name exactly as written. Else null."
+        "that group's name exactly as written. Else empty."
     )
     owner: Fact[str] = Field(description="Like 'ASX-listed, Australian' or 'Private, UK-owned'")
     staff_in_city: Fact[int] = Field(description="Staff at the office in that city")
@@ -152,8 +192,9 @@ class CompanyFacts(BaseModel):
         "office, like 'Lease ends March 2028'. Plain facts, no hype. No people's names, emails "
         "or phone numbers. Can be empty."
     )
-    contact_role: str | None = Field(
-        description="The role to contact first, like Head of Property, COO or CFO. No names."
+    contact_role: MaybeText = Field(
+        description="The role to contact first, like Head of Property, COO or CFO. No names. "
+        "Empty if no note points to one."
     )
     decision_makers: list[DecisionMaker] = Field(
         description="Up to 3 people a note names as the company's current leaders, best first: "
@@ -161,7 +202,9 @@ class CompanyFacts(BaseModel):
         "job title only, never an email or phone number. Can be empty."
     )
     summary: str = Field(description="What happened, in one or two plain sentences")
-    opening_line: str | None = Field(description="A friendly first line for a sales email")
+    opening_line: MaybeText = Field(
+        description="A friendly first line for a sales email. Empty if there is nothing to say."
+    )
 
     @field_validator("talking_points", "fitout_contractors", mode="after")
     @classmethod

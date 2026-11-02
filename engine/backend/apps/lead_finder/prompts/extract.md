@@ -4,7 +4,7 @@ Rules for every fact:
 - Each fact has a value, the link it comes from, the page's date and a label.
 - The link must be one of the note links, exactly as written.
 - Labels: "confirmed" when a note says it, "estimated" when you work it out from notes, "guessed" for a reasonable guess. Use "guessed" rarely.
-- If no note supports a fact, set its value, link, date and label to null. Unknown is better than wrong.
+- If no note supports a fact, set its value to null, and its link, date and label to empty text. Unknown is better than wrong.
 
 What each fact means:
 - city: the city of the office this lead is about. Pick the office in Melbourne, Adelaide or Perth if there is one.
@@ -28,10 +28,10 @@ For a trigger's date, give when it happened. For lease_ending, give when the lea
 Boosters make a lead stronger. Use these ids only:
 $boosters
 
-Industry groups. If the company's industry belongs to one, put that group's name in industry_group, exactly as written. Otherwise null.
+Industry groups. If the company's industry belongs to one, put that group's name in industry_group, exactly as written. Otherwise empty text.
 $industry_groups
 
-Tier groups. If the company's industry belongs to one of these, put that group's name in tier_group, exactly as written. Otherwise null.
+Tier groups. If the company's industry belongs to one of these, put that group's name in tier_group, exactly as written. Otherwise empty text.
 $tier_groups
 
 Then write:

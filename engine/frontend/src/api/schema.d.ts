@@ -812,7 +812,7 @@ export interface components {
             city: components["schemas"]["Fact_str_"];
             /**
              * Contact Role
-             * @description The role to contact first, like Head of Property, COO or CFO. No names.
+             * @description The role to contact first, like Head of Property, COO or CFO. No names. Empty if no note points to one.
              */
             contact_role: string | null;
             /**
@@ -836,7 +836,7 @@ export interface components {
             industry: components["schemas"]["Fact_str_"];
             /**
              * Industry Group
-             * @description If the industry belongs to one of the industry groups in the instructions, that group's name exactly as written. Else null.
+             * @description If the industry belongs to one of the industry groups in the instructions, that group's name exactly as written. Else empty.
              */
             industry_group: string | null;
             /** @description When that office last had a move, fitout or refit: YYYY-MM or YYYY. The move-in counts too. Null if no note says. */
@@ -853,7 +853,7 @@ export interface components {
             office_since: components["schemas"]["Fact_str_"];
             /**
              * Opening Line
-             * @description A friendly first line for a sales email
+             * @description A friendly first line for a sales email. Empty if there is nothing to say.
              */
             opening_line: string | null;
             /** @description Like 'ASX-listed, Australian' or 'Private, UK-owned' */
@@ -879,7 +879,7 @@ export interface components {
             talking_points: string[];
             /**
              * Tier Group
-             * @description If the industry belongs to one of the tier groups in the instructions, that group's name exactly as written. Else null.
+             * @description If the industry belongs to one of the tier groups in the instructions, that group's name exactly as written. Else empty.
              */
             tier_group: string | null;
             /**
@@ -1076,7 +1076,7 @@ export interface components {
             role: string;
             /**
              * Source Date
-             * @description The page's date: YYYY-MM-DD, or null
+             * @description The page's date: YYYY-MM-DD. Empty when it isn't known.
              */
             source_date: string | null;
             /**
@@ -1109,17 +1109,17 @@ export interface components {
         Fact_bool_: {
             /**
              * Label
-             * @description confirmed: a source says it. estimated: worked out from sources. guessed: a reasonable guess.
+             * @description confirmed: a source says it. estimated: worked out from sources. guessed: a reasonable guess. Empty when the value is null.
              */
             label: ("confirmed" | "estimated" | "guessed") | null;
             /**
              * Source Date
-             * @description The page's date: YYYY-MM-DD, or null
+             * @description The page's date: YYYY-MM-DD. Empty when it isn't known.
              */
             source_date: string | null;
             /**
              * Source Url
-             * @description The page it comes from, from the notes
+             * @description The page it comes from, from the notes. Empty when the value is null.
              */
             source_url: string | null;
             /**
@@ -1132,17 +1132,17 @@ export interface components {
         Fact_int_: {
             /**
              * Label
-             * @description confirmed: a source says it. estimated: worked out from sources. guessed: a reasonable guess.
+             * @description confirmed: a source says it. estimated: worked out from sources. guessed: a reasonable guess. Empty when the value is null.
              */
             label: ("confirmed" | "estimated" | "guessed") | null;
             /**
              * Source Date
-             * @description The page's date: YYYY-MM-DD, or null
+             * @description The page's date: YYYY-MM-DD. Empty when it isn't known.
              */
             source_date: string | null;
             /**
              * Source Url
-             * @description The page it comes from, from the notes
+             * @description The page it comes from, from the notes. Empty when the value is null.
              */
             source_url: string | null;
             /**
@@ -1155,17 +1155,17 @@ export interface components {
         Fact_str_: {
             /**
              * Label
-             * @description confirmed: a source says it. estimated: worked out from sources. guessed: a reasonable guess.
+             * @description confirmed: a source says it. estimated: worked out from sources. guessed: a reasonable guess. Empty when the value is null.
              */
             label: ("confirmed" | "estimated" | "guessed") | null;
             /**
              * Source Date
-             * @description The page's date: YYYY-MM-DD, or null
+             * @description The page's date: YYYY-MM-DD. Empty when it isn't known.
              */
             source_date: string | null;
             /**
              * Source Url
-             * @description The page it comes from, from the notes
+             * @description The page it comes from, from the notes. Empty when the value is null.
              */
             source_url: string | null;
             /**
@@ -3285,7 +3285,7 @@ export interface components {
         TriggerFound: {
             /**
              * Date
-             * @description When it happened, as YYYY-MM-DD or YYYY-MM. For lease_ending: when the lease ends.
+             * @description When it happened, as YYYY-MM-DD or YYYY-MM. For lease_ending: when the lease ends. Empty when it isn't known.
              */
             date: string | null;
             /**
