@@ -4,13 +4,13 @@ This plan builds Signal Hire into the Lead Finder's research. When the research 
 
 - **Built by:** Al-khair Pama. **Signed off by:** Levi Young.
 - **Last updated:** 2026-11-02. **TBC** means not confirmed yet.
-- **Progress:** 6 of 11 steps done (A1, A3, C1, C2, C3, C4). The code in "Already built" and Part C (A3, C1 to C4) is committed and merged into `master` (Part C on 2 Nov, by fast-forward, at Al-khair's say). Nothing is pushed. Signal Hire is off, so nothing feeds a lead yet.
+- **Progress:** 6 of 11 steps done (A1, A3, C1, C2, C3, C4). The code in "Already built" and Part C (A3, C1 to C4) is committed and merged into `master` (Part C on 2 Nov, by fast-forward, at Al-khair's say). Nothing is pushed. Signal Hire is **on** since 2 Nov (Al-khair's say, before A4 and B1): a run asks it for a staff number nobody else found.
 - **Runs beside:** [PLAN-V2.md](PLAN-V2.md). Its step A3 (test Signal Hire by hand) is steps A2 to A4 here. Sending leads to HubSpot is Phase 5 in [PLAN-V1.md](PLAN-V1.md), and it waits on the HubSpot service key.
 
 ## In short
 
 - **What changes:** a lead with no staff number gets one from Signal Hire, marked as an estimate, with a note that says where it came from.
-- **Non-disruptive:** Signal Hire only fills a gap. It never overwrites a number, never stops a lead or a run, and it stays off until the test numbers (A4) say it is worth turning on (see "Rules that keep it safe").
+- **Non-disruptive:** Signal Hire only fills a gap. It never overwrites a number, never stops a lead or a run, and it was built off. Al-khair switched it on on 2 Nov, before the test numbers (A4), so A4 and B1 now check and tune it instead of deciding whether to turn it on (see "Rules that keep it safe").
 - **Order:** make it safe to build on and test the numbers (A), decide how far to trust them (B), build it into the research and the website (C), check on real companies and merge (D).
 - **Cost:** Signal Hire's daily search quota (1 search per company), 1 company credit per `headcount` check, and about US$1 of Claude for D1. The 16 real leads so far cost US$5.48 in total, about US$0.34 each.
 - **Not in this plan:** decision-maker names, emails and phones. They wait on Levi (Part E).
@@ -33,7 +33,7 @@ Steps A3 and C1 to C4, all on 2 Nov. They were built on branch `signal-hire` and
 
 1. **It fills a gap only.** It runs only when the research and HubSpot found no staff number for the office. It never overwrites one.
 2. **It never breaks anything.** Any Signal Hire error becomes one line in the card's problems. The lead is still saved and the run goes on.
-3. **It stays off until it is proven.** `headcount_tool` is taken out of `staff_sources` in `criteria.yaml` when Part C is built, and B1 puts it back only if the A4 numbers hold up. So building Part C changes no lead. After that, one edit turns it off again, with no code change: take `headcount_tool` out, or empty the key in `engine/.env`.
+3. **It was built off, and is on since 2 Nov.** `headcount_tool` was out of `staff_sources` in `criteria.yaml` while Part C was built, so building it changed no lead. Al-khair put it in on 2 Nov, before A4 and B1, so a run now uses it. Its multiplier (2) and its name check (`optional`, because the Company API is off for our account) are guesses until A4 and B1. One edit turns it off again, with no code change: take `headcount_tool` out of `staff_sources`, or empty the key in `engine/.env`.
 4. **HubSpot names stay home.** A watchlist company (its name came from HubSpot) is not sent to Signal Hire unless a new switch in `engine/.env` says so. It works like the existing `HUBSPOT_NAMES_TO_CLAUDE_OK`, and it starts off.
 5. **No database change.** The card gets one new list, empty by default, inside its saved JSON. Old cards still load, and `lead-finder rejudge` works as before.
 6. **Counts only.** Only a number and a note are kept. No names, emails or phones.
@@ -82,9 +82,9 @@ No lead changes in this part.
 
 - [ ] **B1. Pick the multiplier, the name rule, and whether to turn it on.**
   - **The multiplier.** Take the 5 ratios from A4. Our recommendation (**TBC** with Levi): the multiplier is the middle ratio, rounded to the nearest 0.5. Put it in `criteria.yaml` as `headcount_tool_multiplier`.
-  - **Turn it on only if the ratios agree.** If the biggest ratio is more than twice the smallest, one multiplier is a poor guess. Then leave `headcount_tool` out of `staff_sources`, write why in the log, and stop. Part C stays built and off.
-  - **The name rule.** A short or common name can count other companies' people. Example: "Apex" in Perth may count staff at Apex Plumbing too. Our recommendation: use a count only when the Company API has checked the name. Use the typed name only if A4 shows it gives the same counts.
-  - **Done when:** the choices are in `criteria.yaml`, `headcount_tool` is back in `staff_sources` or the log says why not. Levi confirms later (see "Waiting on Levi").
+  - **Keep it on only if the ratios agree.** (It was switched on on 2 Nov, before this step.) If the biggest ratio is more than twice the smallest, one multiplier is a poor guess. Then take `headcount_tool` out of `staff_sources` again, write why in the log, and stop. Part C stays built and off.
+  - **The name rule.** A short or common name can count other companies' people. Example: "Apex" in Perth may count staff at Apex Plumbing too. Our recommendation: use a count only when the Company API has checked the name. Use the typed name only if A4 shows it gives the same counts. Since 2 Nov the Company API is off for our account (a 403), so `optional` is in use, and the lead card says the name was not checked. When support switches the Company API on, set it back to `required`, unless A4 shows the two give the same counts.
+  - **Done when:** the choices are in `criteria.yaml`, and `headcount_tool` stays in `staff_sources` or the log says why it was taken out. Levi confirms later (see "Waiting on Levi").
 
 ## Part C: Build it into the research
 
@@ -136,7 +136,7 @@ Each step has its own tests. While `headcount_tool` is out of `staff_sources` (r
 ## Part D: Check on real companies, then merge
 
 - [ ] **D1. Research 3 real companies.**
-  - Needs A2, A4 and B1 done, with `headcount_tool` back in `staff_sources`. Restart the backend first, so it loads the key and the new code.
+  - Needs A4 and B1 done. `headcount_tool` is in `staff_sources` already (since 2 Nov). Restart the backend first, so it loads the key and the new rules.
   - **Costs money:** about US$1 of Claude and 3 searches.
   - Pick 3 companies whose staff number is hard to find in the news. Read each card. Check the number, the note and the problems list.
   - **Done when:** the 3 cards look right, or the log says what is wrong.
@@ -172,7 +172,7 @@ Each is one small step on top of this plan. Names, emails and phones need Levi's
 
 ## Risks
 
-- **The count may be wrong.** Signal Hire's city count may be far from the real staff. A4 and B1 show how far before any lead uses it.
+- **The count may be wrong.** Signal Hire's city count may be far from the real staff. A4 and B1 show how far. Leads already use it (since 2 Nov), so each number is marked "estimated" with its note, and a low or high staff number only raises a flag or a Director review, never a Drop.
 - **Common names.** A short name can count other companies' people. B1's name rule reduces this.
 - **The daily quota.** The Signal Hire website shares it. If a run uses it up, the remaining cards say so in their problems, and the run goes on.
 - **Too many searches at once.** Up to 4 companies are researched at the same time, but Signal Hire allows 3 searches at once. A busy answer (429) is retried twice, then it becomes a problem line.

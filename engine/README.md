@@ -29,16 +29,18 @@ Then start the website. In `engine/frontend/`, install once with `npm ci`, then 
 
 The HubSpot watchlist stays switched off until Levi approves sending HubSpot company names to Claude. Then set `HUBSPOT_NAMES_TO_CLAUDE_OK=true` in `engine/.env` and restart the backend.
 
-## Signal Hire (staff numbers, off for now)
+## Signal Hire (staff numbers)
 
-Signal Hire can fill a staff number that the research and HubSpot both missed. It counts the people it has on file at the company in one city, and the number saved is that count times 2 (**TBC**, `size.headcount_tool_multiplier` in `criteria.yaml`). It never changes a number that is already there, and an error is only a line in the lead's problems. The lead card shows "From Signal Hire" when it filled one in.
+Signal Hire fills a staff number that the research and HubSpot both missed. It counts the people it has on file at the company in one city, and the number saved is that count times 2 (**TBC**, `size.headcount_tool_multiplier` in `criteria.yaml`). It never changes a number that is already there, and an error is only a line in the lead's problems. The lead card shows "From Signal Hire" when it filled one in.
 
-It is **off**. It switches on only when both of these are true:
+It is **on** (since 2 Nov, before the test of 5 companies in [PLAN-V3](../plan/PLAN-V3.md), so the multiplier is a guess). A run uses 1 search from Signal Hire's daily quota for each company with no staff number, and no credits. It needs both of these:
 
-1. `SIGNALHIRE_API_KEY` is set in `engine/.env`. Signal Hire's support must switch the Company API on for the account first.
-2. `headcount_tool` is listed in `size.staff_sources` in `backend/apps/lead_finder/rules/criteria.yaml`. It is left out until the test of 5 companies ([PLAN-V3](../plan/PLAN-V3.md) steps A4 and B1) shows its counts can be trusted.
+1. `SIGNALHIRE_API_KEY` is set in `engine/.env`.
+2. `headcount_tool` is listed in `size.staff_sources` in `backend/apps/lead_finder/rules/criteria.yaml`.
 
-To switch it off again, take `headcount_tool` out of that list, or empty the key, and restart the backend. Companies from the HubSpot watchlist are not sent to it unless `HUBSPOT_NAMES_TO_SIGNALHIRE_OK=true` is set in `engine/.env`, because their names would go to another company.
+Signal Hire's Company API is off for our account, so it can't check the company name. `size.headcount_tool_name_check` is `optional`: it counts under the name as typed. A short or common name can count other companies' people, so the lead card says the name was not checked. Ask support@signalhire.com to switch the Company API on, then set it to `required`.
+
+To switch it off, take `headcount_tool` out of that list, or empty the key, and restart the backend. Companies from the HubSpot watchlist are not sent to it unless `HUBSPOT_NAMES_TO_SIGNALHIRE_OK=true` is set in `engine/.env`, because their names would go to another company.
 
 To read its numbers for one company by hand (1 company credit), from `engine/backend/`: `uv run --no-sync lead-finder headcount "Culture Amp" --city Melbourne --yes`.
 

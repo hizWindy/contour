@@ -29,6 +29,7 @@ from core.searches.models import SearchLog
 from core.signalhire.client import (
     CompanyRef,
     SignalHire,
+    SignalHireCompanyApiOff,
     SignalHireError,
     SignalHireOutOfQuota,
 )
@@ -41,6 +42,7 @@ from tests.lead_finder.samples import (
     fact,
     make_facts,
     rules_with_signalhire,
+    rules_without_signalhire,
 )
 
 pytestmark = pytest.mark.integration
@@ -160,7 +162,7 @@ async def test_hubspot_staff_fills_a_gap_the_research_left(session: AsyncSession
 # --- Signal Hire fills a staff number nobody else found (PLAN-V3 C3) ---------------------------
 
 NO_STAFF = make_facts(office_m2=fact(None), staff_in_city=fact(None))
-SIGNALHIRE_RULES = rules_with_signalhire(load_rules())  # the real rules leave it off until B1
+SIGNALHIRE_RULES = rules_with_signalhire(load_rules())  # Signal Hire on, the name check required
 SIGNALHIRE_NOTE = "Staff in Melbourne: about 210, from Signal Hire (105 people on file x 2, TBC)."
 
 
@@ -193,10 +195,31 @@ async def test_signalhire_stays_off_while_headcount_tool_is_not_listed(
     session: AsyncSession,
 ) -> None:
     fake = acme_on_signalhire()
-    card = await research(session, FakeClaude(facts=NO_STAFF), signalhire=fake)  # the real rules
+    rules = rules_without_signalhire(load_rules())
+    card = await research(session, FakeClaude(facts=NO_STAFF), rules=rules, signalhire=fake)
 
     assert fake.calls == []
     assert card.from_signalhire == [] and card.facts.staff_in_city.value is None
+
+
+async def test_with_the_rules_as_shipped_and_the_company_api_off_the_typed_name_is_counted(
+    session: AsyncSession,
+) -> None:
+    """What a Run does today: criteria.yaml lists headcount_tool and uses the name as typed, because
+    Signal Hire's Company API is off for our account. The card says the name was not checked."""
+    off = SignalHireCompanyApiOff("Signal Hire said no", "The Company API is off.")
+    fake = FakeSignalHire([ACME_SOFTWARE], people=105, failures={"find": off})
+
+    card = await research(session, FakeClaude(facts=NO_STAFF), signalhire=fake)  # the real rules
+
+    assert card.facts.staff_in_city.value == 210
+    assert card.from_signalhire == [
+        "Staff in Melbourne: about 210, from Signal Hire (105 people on file x 2, TBC). "
+        "The company name was not checked, so the count may include other companies "
+        "with a like name."
+    ]
+    assert card.problems == []
+    assert fake.calls[-1] == "people:Acme Software|Melbourne, Australia|"
 
 
 async def test_signalhire_is_not_asked_for_a_number_the_research_found(

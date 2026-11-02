@@ -475,10 +475,22 @@ ACME_SOFTWARE = CompanyRef(id=7, slug="acme-software", name="Acme Software")
 
 
 def rules_with_signalhire(rules: LeadFinderRules, **size_changes: Any) -> LeadFinderRules:
-    """The rules with `headcount_tool` listed in `size.staff_sources` (the real rules leave it out
-    until PLAN-V3 B1 turns it on), and any other change to `size`, like the name check."""
+    """The rules with `headcount_tool` listed in `size.staff_sources`, the name check `required`
+    (so a test doesn't depend on what criteria.yaml uses today), and any other change to `size`."""
     sources = ["hubspot", "headcount_tool", "linkedin", "web_research"]
-    size = rules.criteria.size.model_copy(update={"staff_sources": sources, **size_changes})
+    changes: dict[str, Any] = {
+        "staff_sources": sources,
+        "headcount_tool_name_check": "required",
+        **size_changes,
+    }
+    size = rules.criteria.size.model_copy(update=changes)
+    return rules.model_copy(update={"criteria": rules.criteria.model_copy(update={"size": size})})
+
+
+def rules_without_signalhire(rules: LeadFinderRules) -> LeadFinderRules:
+    """The rules with `headcount_tool` left out of `size.staff_sources`: Signal Hire is off."""
+    sources = [source for source in rules.criteria.size.staff_sources if source != "headcount_tool"]
+    size = rules.criteria.size.model_copy(update={"staff_sources": sources})
     return rules.model_copy(update={"criteria": rules.criteria.model_copy(update={"size": size})})
 
 

@@ -13,7 +13,7 @@ from apps.lead_finder.fields import CompanyFacts
 from apps.lead_finder.headcount import StaffFill, fill_staff_gap, wants_signalhire
 from apps.lead_finder.rules import LeadFinderRules, load_rules
 from apps.lead_finder.scoring import judge
-from core.config import Settings
+from core.config import Settings, get_settings
 from core.hubspot.matching import HubSpotMatch
 from core.signalhire.client import (
     CompanyRef,
@@ -21,6 +21,7 @@ from core.signalhire.client import (
     SignalHireError,
     SignalHireOutOfQuota,
     SignalHireUnavailable,
+    get_signalhire,
 )
 from tests.lead_finder.samples import (
     ACME_SOFTWARE,
@@ -28,10 +29,11 @@ from tests.lead_finder.samples import (
     fact,
     make_facts,
     rules_with_signalhire,
+    rules_without_signalhire,
 )
 
 TODAY = date(2026, 10, 26)
-RULES = rules_with_signalhire(load_rules())  # the real rules leave headcount_tool off (B1)
+RULES = rules_with_signalhire(load_rules())  # Signal Hire on, the name check required
 NO_STAFF = make_facts(staff_in_city=fact(None), office_m2=fact(None))
 SETTINGS = Settings(_env_file=None)
 COMPANY_API_OFF = SignalHireCompanyApiOff("Signal Hire said no", "The Company API is off.")
@@ -153,7 +155,8 @@ def test_it_runs_only_when_every_condition_holds() -> None:
     assert wants()
     assert not wants(facts=make_facts())  # a staff number is already there
     assert not wants(city=None)  # the count is for one city
-    assert not wants(rules=load_rules())  # headcount_tool isn't in staff_sources: off until B1
+    assert not wants(rules=rules_without_signalhire(load_rules()))  # headcount_tool isn't listed
+    assert wants(rules=load_rules())  # criteria.yaml lists it: Signal Hire is on since 2 Nov
 
 
 @pytest.mark.parametrize("origin", ["typed", "web"])
@@ -287,6 +290,12 @@ async def test_a_slow_signal_hire_cannot_hold_the_research(monkeypatch: pytest.M
     result = await fill(Slow([ACME_SOFTWARE]))
     assert result.facts == NO_STAFF
     assert result.problems == ["Signal Hire staff count: Signal Hire took too long."]
+
+
+def test_no_test_can_reach_signal_hire() -> None:
+    """Signal Hire is on in criteria.yaml, so a research a test starts would use the daily quota
+    if it could make a client. tests/conftest.py blanks the key, so it can't."""
+    assert get_signalhire(get_settings()) is None
 
 
 class Cancelled(FakeSignalHire):

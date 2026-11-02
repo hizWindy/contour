@@ -107,15 +107,16 @@ def test_a_staff_hint_above_the_minimum_stops_start_up(tmp_path: Path) -> None:
         read_rules(rules_dir)
 
 
-def test_signal_hire_is_built_but_off_until_the_test_says_so() -> None:
-    """PLAN-V3 rule 3: building the Signal Hire step must change no lead, so `headcount_tool` is
-    left out of `staff_sources`. Step B1 puts it back only if the test numbers hold up."""
+def test_signal_hire_is_on_with_our_guesses_for_its_numbers() -> None:
+    """Switched on 2 Nov at Al-khair's say, before the test of 5 companies (PLAN-V3 A4, B1), so a
+    run asks Signal Hire for a staff number nobody else found. Its two numbers are guesses."""
     criteria = load_rules().criteria
     size = criteria.size
-    assert "headcount_tool" not in size.staff_sources
-    assert size.staff_sources[0] == "hubspot"  # HubSpot is still first (Criteria_v2 section 2)
+    assert size.staff_sources == ["hubspot", "headcount_tool", "linkedin", "web_research"]
     assert size.headcount_tool_multiplier == 2  # a guess, TBC until the test of 5 companies
-    assert size.headcount_tool_name_check == "required"
+    # Signal Hire's Company API is off for our account, so a name can't be checked yet: the name as
+    # typed is used, and the lead card says so. Back to "required" once the Company API is on.
+    assert size.headcount_tool_name_check == "optional"
     keys = {note.key for note in criteria.tbc}
     assert {"size.headcount_tool_multiplier", "size.headcount_tool_name_check"} <= keys
 
@@ -138,27 +139,27 @@ def test_the_name_check_is_required_or_optional_and_nothing_else(tmp_path: Path)
     rules_dir = copy_rules(tmp_path)
     edit(
         rules_dir / "criteria.yaml",
-        "headcount_tool_name_check: required",
         "headcount_tool_name_check: optional",
+        "headcount_tool_name_check: required",
     )
-    assert read_rules(rules_dir).criteria.size.headcount_tool_name_check == "optional"
+    assert read_rules(rules_dir).criteria.size.headcount_tool_name_check == "required"
     edit(
         rules_dir / "criteria.yaml",
-        "headcount_tool_name_check: optional",
+        "headcount_tool_name_check: required",
         "headcount_tool_name_check: sometimes",
     )
     with pytest.raises(ValidationError, match="headcount_tool_name_check"):
         read_rules(rules_dir)
 
 
-def test_signal_hire_can_be_turned_on_by_listing_it(tmp_path: Path) -> None:
+def test_signal_hire_can_be_turned_off_by_taking_it_out_of_the_list(tmp_path: Path) -> None:
     rules_dir = copy_rules(tmp_path)
     edit(
         rules_dir / "criteria.yaml",
-        "staff_sources: [hubspot, linkedin, web_research]",
         "staff_sources: [hubspot, headcount_tool, linkedin, web_research]",
+        "staff_sources: [hubspot, linkedin, web_research]",
     )
-    assert "headcount_tool" in read_rules(rules_dir).criteria.size.staff_sources
+    assert "headcount_tool" not in read_rules(rules_dir).criteria.size.staff_sources
 
 
 def test_the_industry_tiers_come_from_the_profile() -> None:
