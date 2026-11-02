@@ -4,7 +4,7 @@ This plan builds Signal Hire into the Lead Finder's research. When the research 
 
 - **Built by:** Al-khair Pama. **Signed off by:** Levi Young.
 - **Last updated:** 2026-11-02. **TBC** means not confirmed yet.
-- **Progress:** 4 of 11 steps done (A1, A3, C1, C2). The code in "Already built" is committed and merged into `master`. A3 and the steps after it are on branch `signal-hire`, not merged. Nothing feeds a lead yet.
+- **Progress:** 5 of 11 steps done (A1, A3, C1, C2, C3). The code in "Already built" is committed and merged into `master`. A3 and the steps after it are on branch `signal-hire`, not merged. Nothing feeds a lead yet.
 - **Runs beside:** [PLAN-V2.md](PLAN-V2.md). Its step A3 (test Signal Hire by hand) is steps A2 to A4 here. Sending leads to HubSpot is Phase 5 in [PLAN-V1.md](PLAN-V1.md), and it waits on the HubSpot service key.
 
 ## In short
@@ -110,12 +110,15 @@ Each step has its own tests. While `headcount_tool` is out of `staff_sources` (r
     - `staff_from_linkedin` is set to false (not just left alone), because the research can set that flag with no number, and the size rule would then double ours.
     - It never raises. A slow Signal Hire is cut off after 90 seconds (`STEP_SECONDS`), and a bug becomes the line "it couldn't be read", with no detail on the card.
 
-- [ ] **C3. Call it from the research.**
+- [x] **C3. Call it from the research.** Done 2026-11-02, 6d4bd92.
   - In `research.py`, step 5, after HubSpot fills its gaps and before the rules run. Make a real client from the settings for each company (it is closed after). Tests pass in a fake one.
   - **No database connection is held while Signal Hire answers.** End the open transaction first, as the research already does before it calls Claude. A slow answer can take up to 30 seconds, with 2 retries.
   - A run researches at most `run_max_companies` companies (20 by default), with 1 search each, so a run uses at most 20 searches.
   - Add an integration test with a fake Signal Hire.
   - **Done when:** the fast and integration tests pass. For the integration tests, start the database first (`docker compose up -d` in `engine/`), then `uv run --no-sync pytest`.
+  - Built: `_signalhire_staff` in `research.py`. It asks `wants_signalhire`, makes the client from the settings (`get_signalhire`) or takes the fake from the new `signalhire=` argument of `research_company`, ends the transaction, calls `fill_staff_gap`, closes a client it made (even after an error), and adds the problem lines to the card. With no key, or while `headcount_tool` is out of `staff_sources`, nothing happens and no connection is touched.
+  - Moved here from C4: the card list `from_signalhire`, the API contract and the website types, because the research needs a place to put the note. `lead-finder research` prints the notes too. C4 keeps the website view and the fake backend.
+  - Tests: 11 new integration tests in `test_research.py` (it fills a gap; it stays off while `headcount_tool` is not listed; it is not asked when the research or HubSpot had a number; an error is one line and the lead is saved; the watchlist switch; the transaction is over before each call; a client it made is closed, also after an error; no key; an old card still loads). The whole backend suite: 2,424 passed, 28 skipped.
 
 - [ ] **C4. Show it on the lead card.**
   - Add `from_signalhire` to the card: a list of notes, empty by default, like `from_hubspot`.
@@ -171,6 +174,8 @@ Each is one small step on top of this plan. Names, emails and phones need Levi's
 ## Log
 
 Newest first. One line for each tick, pause or surprise.
+
+- 2026-11-02: C3 done (6d4bd92). The research calls Signal Hire for a staff gap, and the card has `from_signalhire`. It is still off (`headcount_tool` is out of `staff_sources`), so no lead changes. The card field and the contract moved here from C4. Next: C4 (the website view and the fake backend).
 
 - 2026-11-02: C2 done (d301734). `fill_staff_gap` and `wants_signalhire` are built and tested with a fake Signal Hire. The research doesn't call them yet (C3). Next: C3.
 
