@@ -17,6 +17,7 @@ from core.signalhire.client import (
     CompanyRef,
     HttpSignalHire,
     Office,
+    SignalHireCompanyApiOff,
     SignalHireError,
     SignalHireOutOfQuota,
     SignalHireUnavailable,
@@ -174,7 +175,7 @@ async def test_a_company_name_is_searched_as_one_phrase_never_as_operators() -> 
     [
         (401, SignalHireUnavailable, "SIGNALHIRE_API_KEY"),
         (402, SignalHireOutOfQuota, "quota"),
-        (403, SignalHireUnavailable, "Company API"),
+        (403, SignalHireCompanyApiOff, "Company API"),
         (422, SignalHireError, "refused"),
         (500, SignalHireError, "error 500"),
     ],
@@ -191,6 +192,27 @@ async def test_each_failure_says_what_to_do_and_never_repeats_the_key(
     assert KEY not in str(caught.value)
     if kind is SignalHireError:
         assert not isinstance(caught.value, SignalHireUnavailable)
+
+
+async def test_a_403_on_any_company_call_means_the_company_api_is_off() -> None:
+    client = make(lambda request: answer(403, {"echo": KEY}))
+
+    for call in (client.find_company("acme"), client.company_info(1), client.profile_count(1)):
+        with pytest.raises(SignalHireCompanyApiOff, match="said no") as caught:
+            await call
+        assert isinstance(caught.value, SignalHireUnavailable)  # old handlers still catch it
+        assert KEY not in str(caught.value)
+
+
+async def test_a_403_on_the_search_is_not_the_company_api_being_off() -> None:
+    """The search doesn't need the Company API, so a refused search is another problem: no
+    caller may go on as if only the company calls were missing."""
+    client = make(lambda request: answer(403))
+
+    with pytest.raises(SignalHireUnavailable, match="refused the search") as caught:
+        await client.count_people(company="Acme")
+
+    assert not isinstance(caught.value, SignalHireCompanyApiOff)
 
 
 async def test_a_busy_answer_is_tried_again_after_the_wait_signal_hire_asks_for() -> None:

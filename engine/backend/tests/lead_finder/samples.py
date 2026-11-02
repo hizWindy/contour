@@ -1,4 +1,6 @@
-"""Saved sample answers, so tests never call Claude and cost nothing.
+"""Saved sample answers, so tests never call Claude or Signal Hire and cost nothing.
+
+`FakeSignalHire` (at the end) answers like Signal Hire, with counts only.
 
 `FakeClaude` answers like Claude from these samples and records every request. It handles the
 three kinds of request the Lead Finder makes:
@@ -25,6 +27,7 @@ make requests dear (a cap test) without a new class.
 import asyncio
 import json
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any
@@ -42,6 +45,13 @@ from apps.lead_finder.fields import (
 )
 from core.claude.client import ClaudeError, ClaudeUnavailable, Reply, Source, WebTools
 from core.claude.pricing import Usage
+from core.signalhire.client import (
+    CompanyInfo,
+    CompanyRef,
+    Office,
+    ProfileStatus,
+    SignalHireError,
+)
 
 NEWS = "https://www.afr.com/property/acme-moves-2026"
 ASX = "https://www.asx.com.au/announcements/acme-contract"
@@ -443,3 +453,72 @@ class FakeClaude:
             usage,
             cost,
         )
+
+
+# --- Signal Hire ---------------------------------------------------------------------------
+
+CULTURE_AMP = CompanyRef(id=5, slug="culture-amp", name="Culture Amp")
+CULTURE_AMP_INFO = CompanyInfo(
+    name="Culture Amp",
+    website="cultureamp.com",
+    industry="Software",
+    staff_count=700,
+    staffing_company=False,
+    linkedin_id="98765",
+    offices=(
+        Office("Melbourne", "Victoria", "Australia", True),
+        Office("Sydney", None, None, False),
+    ),
+)
+ACME_SOFTWARE = CompanyRef(id=7, slug="acme-software", name="Acme Software")
+
+
+class FakeSignalHire:
+    """Answers like Signal Hire, with counts only. Records every call in `calls`.
+
+    - `known`: the companies `find_company` knows, by slug. Culture Amp by default.
+    - `people` and `senior`: what `count_people` answers (all people, and the senior ones).
+    - `failures`: a step to raise an error at: `"find"`, `"info"`, `"people"` or `"senior"`.
+    Nothing here costs a credit or reaches the network.
+    """
+
+    def __init__(
+        self,
+        known: Sequence[CompanyRef] = (CULTURE_AMP,),
+        *,
+        info: CompanyInfo | None = CULTURE_AMP_INFO,
+        failures: dict[str, SignalHireError] | None = None,
+        people: int = 210,
+        senior: int = 14,
+    ) -> None:
+        self.known = {ref.slug: ref for ref in known}
+        self.info = info
+        self.failures = failures or {}
+        self.people = people
+        self.senior = senior
+        self.calls: list[str] = []
+
+    def _fail(self, step: str) -> None:
+        if step in self.failures:
+            raise self.failures[step]
+
+    async def find_company(self, id_or_slug: str) -> CompanyRef | None:
+        self.calls.append(f"find:{id_or_slug}")
+        self._fail("find")
+        return self.known.get(id_or_slug)
+
+    async def company_info(self, company_id: int) -> CompanyInfo | None:
+        self.calls.append(f"info:{company_id}")
+        self._fail("info")
+        return self.info
+
+    async def profile_count(self, company_id: int, status: ProfileStatus = "current") -> int:
+        self.calls.append(f"profiles:{status}")
+        return {"current": 650, "past": 900, "both": 1550}[status]
+
+    async def count_people(
+        self, *, company: str, location: str | None = None, seniority: Sequence[str] = ()
+    ) -> int:
+        self.calls.append(f"people:{company}|{location}|{','.join(seniority)}")
+        self._fail("senior" if seniority else "people")
+        return self.senior if seniority else self.people

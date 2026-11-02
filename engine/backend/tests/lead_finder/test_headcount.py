@@ -2,7 +2,6 @@
 what goes on screen. A fake Signal Hire gives saved answers, so no test costs a credit."""
 
 import argparse
-from collections.abc import Sequence
 
 import pytest
 
@@ -16,68 +15,18 @@ from apps.lead_finder.headcount import (
     slug_candidates,
 )
 from core.signalhire.client import (
-    CompanyInfo,
     CompanyRef,
-    Office,
-    ProfileStatus,
+    SignalHireCompanyApiOff,
     SignalHireError,
     SignalHireOutOfQuota,
     SignalHireUnavailable,
 )
+from tests.lead_finder.samples import CULTURE_AMP, CULTURE_AMP_INFO, FakeSignalHire
 
-AMP = CompanyRef(id=5, slug="culture-amp", name="Culture Amp")
-INFO = CompanyInfo(
-    name="Culture Amp",
-    website="cultureamp.com",
-    industry="Software",
-    staff_count=700,
-    staffing_company=False,
-    linkedin_id="98765",
-    offices=(
-        Office("Melbourne", "Victoria", "Australia", True),
-        Office("Sydney", None, None, False),
-    ),
+COMPANY_API_OFF = SignalHireCompanyApiOff(
+    "Signal Hire said no", "The Company API isn't switched on for this account."
 )
-
-
-class FakeSignalHire:
-    """Saved answers, the way the tests fake Claude. `calls` lists every call it got."""
-
-    def __init__(
-        self,
-        known: Sequence[CompanyRef] = (AMP,),
-        *,
-        info: CompanyInfo | None = INFO,
-        failures: dict[str, SignalHireError] | None = None,
-    ) -> None:
-        self.known = {ref.slug: ref for ref in known}
-        self.info = info
-        self.failures = failures or {}
-        self.calls: list[str] = []
-
-    def _fail(self, step: str) -> None:
-        if step in self.failures:
-            raise self.failures[step]
-
-    async def find_company(self, id_or_slug: str) -> CompanyRef | None:
-        self.calls.append(f"find:{id_or_slug}")
-        return self.known.get(id_or_slug)
-
-    async def company_info(self, company_id: int) -> CompanyInfo | None:
-        self.calls.append(f"info:{company_id}")
-        self._fail("info")
-        return self.info
-
-    async def profile_count(self, company_id: int, status: ProfileStatus = "current") -> int:
-        self.calls.append(f"profiles:{status}")
-        return {"current": 650, "past": 900, "both": 1550}[status]
-
-    async def count_people(
-        self, *, company: str, location: str | None = None, seniority: Sequence[str] = ()
-    ) -> int:
-        self.calls.append(f"people:{company}|{location}|{','.join(seniority)}")
-        self._fail("senior" if seniority else "people")
-        return 14 if seniority else 210
+KEY_REFUSED = SignalHireUnavailable("Signal Hire refused the key", "Check SIGNALHIRE_API_KEY.")
 
 
 # --- Finding the company -------------------------------------------------------------------------
@@ -104,7 +53,7 @@ def test_an_ampersand_is_read_as_and_and_a_name_with_no_words_gives_nothing() ->
 async def test_the_first_slug_that_names_the_same_company_wins() -> None:
     fake = FakeSignalHire()
     ref, tried = await resolve_company(fake, "Culture Amp Pty Ltd", "cultureamp.com")
-    assert (ref, tried) == (AMP, ["culture-amp"])
+    assert (ref, tried) == (CULTURE_AMP, ["culture-amp"])
     assert fake.calls == ["find:culture-amp"]  # it stopped at the first
 
 
@@ -123,8 +72,9 @@ async def test_the_numbers_are_read_and_one_credit_is_counted() -> None:
     fake = FakeSignalHire()
     reading = await read_headcount(fake, company="Culture Amp", city="Melbourne")
 
-    assert reading.company == AMP
-    assert reading.info == INFO
+    assert reading.company == CULTURE_AMP
+    assert reading.info == CULTURE_AMP_INFO
+    assert reading.name_checked
     assert (reading.people_now, reading.people_before) == (650, 900)
     assert (reading.where, reading.people_in_city, reading.senior_in_city) == (
         "Melbourne, Australia",
@@ -179,10 +129,21 @@ async def test_no_credit_is_counted_when_the_details_did_not_come() -> None:
     assert (reading.info, reading.credits_used) == (None, 0)
 
 
-async def test_when_signal_hire_is_unavailable_everything_stops() -> None:
-    off = SignalHireUnavailable("Signal Hire said no", "The Company API isn't switched on.")
-    with pytest.raises(SignalHireUnavailable):
-        await read_headcount(FakeSignalHire(failures={"info": off}), company="Culture Amp")
+async def test_a_refused_key_stops_everything() -> None:
+    """Not the Company API being off: no number can be trusted, so nothing is read."""
+    for step in ("find", "info"):
+        fake = FakeSignalHire(failures={step: KEY_REFUSED})
+        with pytest.raises(SignalHireUnavailable, match="refused the key"):
+            await read_headcount(fake, company="Culture Amp", city="Melbourne")
+        assert not any(call.startswith("people:") for call in fake.calls)
+
+
+async def test_a_refused_search_stops_everything_too() -> None:
+    refused = SignalHireUnavailable("Signal Hire refused the search", "Ask support.")
+    with pytest.raises(SignalHireUnavailable, match="refused the search"):
+        await read_headcount(
+            FakeSignalHire(failures={"people": refused}), company="Culture Amp", city="Melbourne"
+        )
 
 
 async def test_an_unknown_company_costs_nothing() -> None:
@@ -190,9 +151,68 @@ async def test_an_unknown_company_costs_nothing() -> None:
     reading = await read_headcount(fake, company="Nobody Pty Ltd", city="Melbourne")
 
     assert reading.company is None
+    assert not reading.name_checked and not reading.company_api_off
     assert reading.credits_used == 0
     assert "No company on Signal Hire" in reading.problems[0]
     assert all(call.startswith("find:") for call in fake.calls)
+
+
+# --- The Company API is off (PLAN-V3 A3) ---------------------------------------------------------
+
+
+async def test_with_the_company_api_off_the_people_are_counted_by_the_name_typed() -> None:
+    fake = FakeSignalHire(failures={"find": COMPANY_API_OFF})
+    reading = await read_headcount(fake, company="Culture Amp", city="Melbourne")
+
+    assert reading.company_api_off
+    assert not reading.name_checked and reading.company is None
+    assert (reading.info, reading.people_now, reading.people_before) == (None, None, None)
+    assert (reading.people_in_city, reading.senior_in_city) == (210, 14)
+    assert reading.counted_as == "Culture Amp"  # the name as typed
+    assert reading.credits_used == 0
+    assert fake.calls == [  # one try to find the company, then only the searches
+        "find:culture-amp",
+        "people:Culture Amp|Melbourne, Australia|",
+        f"people:Culture Amp|Melbourne, Australia|{','.join(SENIOR_LEVELS)}",
+    ]
+    (problem,) = reading.problems
+    assert problem.startswith("Name not checked: Signal Hire said no.")
+    assert "may include other companies" in problem
+
+
+async def test_the_screen_says_the_name_was_not_checked() -> None:
+    fake = FakeSignalHire(failures={"find": COMPANY_API_OFF})
+    text = describe_reading(await read_headcount(fake, company="Culture Amp", city="Melbourne"))
+
+    assert text.splitlines()[0] == "Culture Amp: name not checked (the Company API is off)"
+    assert "People on file in Melbourne, Australia, by the name as typed (Culture Amp): 210" in text
+    assert "Senior people there (C-Level, VP, Directors, Head): 14" in text
+    assert "Credits used: 0 company credits" in text
+    assert "Problem: Name not checked" in text
+    assert "whole company" not in text  # the company's own numbers were not read
+
+
+async def test_the_company_api_going_off_after_the_name_was_found_keeps_the_name_check() -> None:
+    fake = FakeSignalHire(failures={"info": COMPANY_API_OFF})
+    reading = await read_headcount(fake, company="Culture Amp", city="Melbourne")
+
+    assert reading.name_checked and reading.company_api_off
+    assert reading.info is None and reading.credits_used == 0
+    assert not any(call.startswith("profiles:") for call in fake.calls)  # not asked after the 403
+    assert reading.counted_as == "Culture Amp"  # Signal Hire's own name for it
+    assert (reading.people_in_city, reading.senior_in_city) == (210, 14)
+    (problem,) = reading.problems  # noted once, not once for each company call
+    assert problem.startswith("Company details: Signal Hire said no.")
+    assert "by the name as typed" not in describe_reading(reading)
+
+
+async def test_with_the_company_api_off_and_no_city_there_is_nothing_to_count() -> None:
+    fake = FakeSignalHire(failures={"find": COMPANY_API_OFF})
+    reading = await read_headcount(fake, company="Culture Amp")
+
+    assert reading.company_api_off and reading.people_in_city is None
+    assert fake.calls == ["find:culture-amp"]
+    assert any("No city" in problem for problem in reading.problems)
 
 
 # --- What is shown -------------------------------------------------------------------------------
@@ -255,3 +275,45 @@ def test_the_command_says_when_there_is_no_key(
     monkeypatch.setattr(cli, "get_signalhire", lambda: None)
     assert cli._headcount(args(yes=True)) == 1
     assert "SIGNALHIRE_API_KEY" in capsys.readouterr().err
+
+
+class _Client(FakeSignalHire):
+    """What `cli._headcount` needs from a client: the fake, used as `async with`."""
+
+    async def __aenter__(self) -> "_Client":
+        return self
+
+    async def __aexit__(self, *exc: object) -> None:
+        return None
+
+
+def test_the_command_still_counts_when_the_company_api_is_off(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake = _Client(failures={"find": COMPANY_API_OFF})
+    monkeypatch.setattr(cli, "get_signalhire", lambda: fake)
+
+    assert cli._headcount(args(company="Culture Amp", city="Melbourne", yes=True)) == 0
+
+    out = capsys.readouterr().out
+    assert "name not checked" in out
+    assert "People on file in Melbourne, Australia, by the name as typed (Culture Amp): 210" in out
+
+
+def test_the_command_stops_with_a_plain_line_when_the_key_is_refused(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake = _Client(failures={"find": KEY_REFUSED})
+    monkeypatch.setattr(cli, "get_signalhire", lambda: fake)
+    monkeypatch.setattr(cli, "setup_logging", lambda: None)  # leave the log handlers alone
+
+    assert cli.main(["headcount", "Culture Amp", "--city", "Melbourne", "--yes"]) == 1
+
+    err = capsys.readouterr().err
+    assert err.startswith("Signal Hire refused the key.")
+    assert fake.calls == ["find:culture-amp"]
+
+
+def test_the_company_api_error_is_a_kind_of_unavailable_so_old_handlers_still_catch_it() -> None:
+    assert issubclass(SignalHireCompanyApiOff, SignalHireUnavailable)
+    assert issubclass(SignalHireUnavailable, SignalHireError)

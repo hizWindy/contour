@@ -11,7 +11,9 @@ against the real account):
 - `count_people`: the daily search quota, which the Signal Hire website shares. Never credits.
 - `company_info`: 1 company credit for each answer.
 
-The Company API is off until Signal Hire's support switches it on. A 403 means it is still off.
+The Company API is off until Signal Hire's support switches it on. A 403 on a company call means
+it is still off (`SignalHireCompanyApiOff`). The search doesn't need it, so counting people still
+works then, but the company name can't be checked.
 The key goes in an `apikey` header and is never logged (core.logs removes it from any line).
 A slow answer is never asked again, so a paid call can't be paid for twice.
 """
@@ -30,6 +32,7 @@ from core.config import Settings, get_settings
 log = logging.getLogger(__name__)
 
 BASE_URL = "https://www.signalhire.com/api/v1"
+COMPANY_PATH = "/company/"  # the Company API: what the paths under it have in common
 MAX_SEARCHES_AT_ONCE = 3  # Signal Hire answers 429 above this
 MAX_TRIES = 3  # a 429 or a server error is tried again, at most twice
 MAX_WAIT_SECONDS = 10.0
@@ -51,6 +54,12 @@ class SignalHireError(Exception):
 class SignalHireUnavailable(SignalHireError):
     """No connection, a refused key, or the Company API is off. Trying again won't help until
     someone fixes it."""
+
+
+class SignalHireCompanyApiOff(SignalHireUnavailable):
+    """A company call was refused (HTTP 403): the Company API isn't switched on for this account.
+    Counting people by search still works, so a caller may go on without the company calls. A
+    refused key (401) is not this: it stops everything."""
 
 
 class SignalHireOutOfQuota(SignalHireError):
@@ -206,8 +215,9 @@ def _parse[M: _Reply](model: type[M], data: dict[str, Any]) -> M:
         ) from error
 
 
-def _problem(status: int) -> SignalHireError:
-    """What a failed answer means, in plain words. The body is never repeated: it isn't ours."""
+def _problem(status: int, path: str) -> SignalHireError:
+    """What a failed answer means, in plain words. The body is never repeated: it isn't ours.
+    `path` tells a 403 on a company call (the Company API is off) from a 403 on the search."""
     if status == 401:
         return SignalHireUnavailable(
             "Signal Hire refused the key", "Check SIGNALHIRE_API_KEY in engine/.env."
@@ -218,11 +228,16 @@ def _problem(status: int) -> SignalHireError:
             "A search uses the daily search quota, which resets each day. A company lookup "
             "uses company credits, bought through support@signalhire.com.",
         )
-    if status == 403:
-        return SignalHireUnavailable(
+    if status == 403 and path.startswith(COMPANY_PATH):
+        return SignalHireCompanyApiOff(
             "Signal Hire said no",
             "The Company API isn't switched on for this account, or the account is disabled. "
             "Ask support@signalhire.com to switch it on.",
+        )
+    if status == 403:
+        return SignalHireUnavailable(
+            "Signal Hire refused the search",
+            "This account can't use the search, or it is disabled. Ask support@signalhire.com.",
         )
     if status == 422:
         return SignalHireError(
@@ -338,7 +353,7 @@ class HttpSignalHire:
         if response.status_code == 404 and not must_find:
             return None
         if response.status_code != 200:
-            raise _problem(response.status_code)
+            raise _problem(response.status_code, path)
         try:
             data = response.json()
         except ValueError as error:
