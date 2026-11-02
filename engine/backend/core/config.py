@@ -149,6 +149,10 @@ class Settings(BaseSettings):
     # The Levi data OK: may company names from HubSpot go to Claude? Off until Levi says yes.
     # Only the exact text true or false counts, so a stray "1" or "yes" can't turn it on.
     hubspot_names_to_claude_ok: StrictBool = False
+    # The same question for Signal Hire: may the name of a company that came from HubSpot (a
+    # watchlist company) be sent to Signal Hire, to count its people? Off until Levi says yes. It is
+    # a switch of its own because the data goes to another company. Same exact-text rule.
+    hubspot_names_to_signalhire_ok: StrictBool = False
     # A ceiling can't sit below the lowest value its editable settings allow (a test checks this
     # against CEILINGS), or a valid setting would be clamped to something its own minimum refuses.
     hard_run_cap_usd: Decimal = Field(Decimal("50"), ge=Decimal("1"), le=1000)
@@ -201,7 +205,7 @@ class Settings(BaseSettings):
 
     # --- Validators --------------------------------------------------------------------
 
-    @field_validator("hubspot_names_to_claude_ok", mode="before")
+    @field_validator("hubspot_names_to_claude_ok", "hubspot_names_to_signalhire_ok", mode="before")
     @classmethod
     def _exact_bool(cls, value: Any) -> Any:
         """The env gives text. Only 'true' and 'false' become a bool. StrictBool checks the rest."""

@@ -22,12 +22,20 @@ size:
   director_band_m2: [800, 1000] # a KNOWN office just under the minimum goes to a Director, not Drop
   linkedin_staff_multiplier: 2 # real staff is about LinkedIn staff x 2
   grow_into_range_months: 24 # a small company that will need an office in range within this long still fits
-  # Where to look for staff numbers, in this order (Criteria_v2.md section 2). Only hubspot and
-  # web_research feed the size rule. headcount_tool (Signal Hire) has a client (core/signalhire)
-  # and `lead-finder headcount` reads its numbers, but they don't feed the rule until the A3 test
-  # (PLAN-V2) shows which of its counts to trust. linkedin is the LinkedIn count, doubled.
-  # HubSpot fills a gap the research left. It never overwrites a figure.
-  staff_sources: [hubspot, headcount_tool, linkedin, web_research]
+  # Where to look for staff numbers, in this order (Criteria_v2.md section 2). hubspot, and
+  # headcount_tool when it is listed, each fill a gap the research left. They never overwrite a
+  # figure. headcount_tool (Signal Hire) is built (core/signalhire, apps/lead_finder/headcount.py)
+  # but left OFF until the PLAN-V3 test (steps A4 and B1) shows its counts can be trusted. To turn
+  # it on, list it after hubspot. To turn it off again, take it out of this list, or empty
+  # SIGNALHIRE_API_KEY in engine/.env. linkedin is the LinkedIn count, doubled.
+  staff_sources: [hubspot, linkedin, web_research]
+  # Signal Hire counts the people it has on file in the city, and the real staff is about that
+  # times this. Our guess until the PLAN-V3 test (A4, B1) gives the real ratio.
+  headcount_tool_multiplier: 2
+  # required: use a Signal Hire count only when its Company API has matched the company name to one
+  # of its own company pages. optional: also use the name as typed when it can't be checked. A
+  # short or common name can match other companies' people, so we start with required.
+  headcount_tool_name_check: required
 
 fitout:
   rate_per_m2_aud: 1500 # the minimum rate in the deal criteria
@@ -205,7 +213,11 @@ tbc:
   - key: size.staff_hint_min
     note: Levi's brief says 100+ in one office. The Profile says 75+. We start at 75, because a flag costs less than a missed lead. Levi picks, and then staff_min should match.
   - key: size.staff_sources
-    note: The order from the 27 Oct meeting. HubSpot first, then a headcount tool (Signal Hire, to be tested), then LinkedIn doubled, then the AI's web research. Our export has a LinkedIn staff count for most offices, but no office size, no manual headcount, and almost no lease expiry or last-moved dates.
+    note: The order from the 27 Oct meeting. HubSpot first, then a headcount tool (Signal Hire), then LinkedIn doubled, then the AI's web research. Signal Hire is built but left out of this list until its test (PLAN-V3 A4, B1) shows its counts can be trusted. Our export has a LinkedIn staff count for most offices, but no office size, no manual headcount, and almost no lease expiry or last-moved dates.
+  - key: size.headcount_tool_multiplier
+    note: Signal Hire counts only the people it has on file, which is fewer than the real staff. 2 is our guess, like LinkedIn. The test of 5 companies (PLAN-V3 A4) gives the real ratio, and B1 sets the number. Levi confirms.
+  - key: size.headcount_tool_name_check
+    note: A short or common name can match other companies' people. We start with required, which uses a Signal Hire count only when its Company API has matched the company name. optional also uses the name as typed. Levi confirms, after the test shows whether the two give the same counts.
   - key: size.grow_into_range_months
     note: Levi's 29 Oct email says a small company that will soon grow into the range counts (Southern Launch, 30 to 40 staff, funding for 150). He didn't say how soon. 24 months is our guess.
   - key: size.director_band_m2

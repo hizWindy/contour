@@ -3011,6 +3011,13 @@ export interface components {
             ];
             /** Grow Into Range Months */
             grow_into_range_months: number;
+            /** Headcount Tool Multiplier */
+            headcount_tool_multiplier: number;
+            /**
+             * Headcount Tool Name Check
+             * @enum {string}
+             */
+            headcount_tool_name_check: "required" | "optional";
             /** Linkedin Staff Multiplier */
             linkedin_staff_multiplier: number;
             /** M2 Per Staff */

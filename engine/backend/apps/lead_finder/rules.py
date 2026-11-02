@@ -52,6 +52,10 @@ class Size(Strict):
     linkedin_staff_multiplier: float = Field(gt=0)
     grow_into_range_months: int = Field(gt=0)
     staff_sources: list[StaffSource] = Field(min_length=1)
+    # Signal Hire's count of the people on file in the city, times this, is the staff estimate. The
+    # upper bound only stops a typo (200 for 2) from making every company look big.
+    headcount_tool_multiplier: float = Field(gt=0, le=20)
+    headcount_tool_name_check: Literal["required", "optional"]
 
     @model_validator(mode="after")
     def check_ranges(self) -> Self:

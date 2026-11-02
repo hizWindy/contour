@@ -23,6 +23,7 @@ from core.memory.embedder import Embedder, get_embedder
 
 ENV_ONLY = [
     "hubspot_names_to_claude_ok",
+    "hubspot_names_to_signalhire_ok",
     "hard_run_cap_usd",
     "hard_company_cap_usd",
     "hard_concurrency",
@@ -72,6 +73,7 @@ def test_defaults_are_the_ones_in_the_design() -> None:
     assert s.langgraph_schema == "langgraph"
     assert s.embedding_threads is None
     assert s.hubspot_names_to_claude_ok is False
+    assert s.hubspot_names_to_signalhire_ok is False
     assert s.cors_origins == ["http://localhost:5173", "http://127.0.0.1:5173"]
     assert s.api_host == "127.0.0.1"
 
@@ -326,27 +328,49 @@ def test_each_step_uses_its_own_model_or_the_main_one() -> None:
     assert s.model_for("extract") == "claude-sonnet-5-5"
 
 
-# --- The HubSpot approval switch: env-only and strict ----------------------------------
+# --- The HubSpot approval switches: env-only and strict --------------------------------
+# One for Claude and one for Signal Hire: each sends the names to another company.
+
+HUBSPOT_SWITCHES = ["hubspot_names_to_claude_ok", "hubspot_names_to_signalhire_ok"]
 
 
+@pytest.mark.parametrize("switch", HUBSPOT_SWITCHES)
 def test_the_hubspot_switch_turns_on_only_with_the_exact_text_true(
-    monkeypatch: pytest.MonkeyPatch,
+    switch: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("HUBSPOT_NAMES_TO_CLAUDE_OK", "true")
-    assert Settings(_env_file=None).hubspot_names_to_claude_ok is True
-    monkeypatch.setenv("HUBSPOT_NAMES_TO_CLAUDE_OK", "FALSE")
-    assert Settings(_env_file=None).hubspot_names_to_claude_ok is False
+    monkeypatch.setenv(switch.upper(), "true")
+    assert getattr(Settings(_env_file=None), switch) is True
+    monkeypatch.setenv(switch.upper(), "FALSE")
+    assert getattr(Settings(_env_file=None), switch) is False
     for stray in ("1", "yes", "on", "t", "y", "2"):
-        monkeypatch.setenv("HUBSPOT_NAMES_TO_CLAUDE_OK", stray)
+        monkeypatch.setenv(switch.upper(), stray)
         with pytest.raises(ValidationError):
             Settings(_env_file=None)
 
 
+@pytest.mark.parametrize("switch", HUBSPOT_SWITCHES)
 @pytest.mark.parametrize("value", [1, 0, "yes", "on", None, "1"])
-def test_the_hubspot_switch_refuses_anything_but_a_real_bool(value: object) -> None:
+def test_the_hubspot_switch_refuses_anything_but_a_real_bool(switch: str, value: object) -> None:
     with pytest.raises(ValidationError):
-        make(hubspot_names_to_claude_ok=value)
-    assert make(hubspot_names_to_claude_ok=True).hubspot_names_to_claude_ok is True
+        make(**{switch: value})
+    assert getattr(make(**{switch: True}), switch) is True
+
+
+def test_each_hubspot_switch_turns_on_by_itself(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The OK to send the names to Claude is not an OK to send them to Signal Hire."""
+    monkeypatch.setenv("HUBSPOT_NAMES_TO_CLAUDE_OK", "true")
+    settings = Settings(_env_file=None)
+    assert (settings.hubspot_names_to_claude_ok, settings.hubspot_names_to_signalhire_ok) == (
+        True,
+        False,
+    )
+    monkeypatch.delenv("HUBSPOT_NAMES_TO_CLAUDE_OK")
+    monkeypatch.setenv("HUBSPOT_NAMES_TO_SIGNALHIRE_OK", "true")
+    settings = Settings(_env_file=None)
+    assert (settings.hubspot_names_to_claude_ok, settings.hubspot_names_to_signalhire_ok) == (
+        False,
+        True,
+    )
 
 
 # --- Loopback only -----------------------------------------------------------------------

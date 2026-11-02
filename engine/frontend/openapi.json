@@ -5591,6 +5591,20 @@
             "title": "Grow Into Range Months",
             "type": "integer"
           },
+          "headcount_tool_multiplier": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 20.0,
+            "title": "Headcount Tool Multiplier",
+            "type": "number"
+          },
+          "headcount_tool_name_check": {
+            "enum": [
+              "required",
+              "optional"
+            ],
+            "title": "Headcount Tool Name Check",
+            "type": "string"
+          },
           "linkedin_staff_multiplier": {
             "exclusiveMinimum": 0.0,
             "title": "Linkedin Staff Multiplier",
@@ -5660,7 +5674,9 @@
           "director_band_m2",
           "linkedin_staff_multiplier",
           "grow_into_range_months",
-          "staff_sources"
+          "staff_sources",
+          "headcount_tool_multiplier",
+          "headcount_tool_name_check"
         ],
         "title": "Size",
         "type": "object"
