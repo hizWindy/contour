@@ -4,7 +4,7 @@ This plan builds Signal Hire into the Lead Finder's research. When the research 
 
 - **Built by:** Al-khair Pama. **Signed off by:** Levi Young.
 - **Last updated:** 2026-11-02. **TBC** means not confirmed yet.
-- **Progress:** 6 of 11 steps done (A1, A3, C1, C2, C3, C4). The code in "Already built" is committed and merged into `master`. A3 and the steps after it are on branch `signal-hire`, not merged. Nothing feeds a lead yet.
+- **Progress:** 6 of 11 steps done (A1, A3, C1, C2, C3, C4). The code in "Already built" and Part C (A3, C1 to C4) is committed and merged into `master` (Part C on 2 Nov, by fast-forward, at Al-khair's say). Nothing is pushed. Signal Hire is off, so nothing feeds a lead yet.
 - **Runs beside:** [PLAN-V2.md](PLAN-V2.md). Its step A3 (test Signal Hire by hand) is steps A2 to A4 here. Sending leads to HubSpot is Phase 5 in [PLAN-V1.md](PLAN-V1.md), and it waits on the HubSpot service key.
 
 ## In short
@@ -25,9 +25,9 @@ Written on 2 Nov and committed on `decision-makers` (3b1a093). Step A1 merged it
 - **Tests:** 39 new tests. The whole fast suite passes: 1,909 passed, 28 skipped.
 - **Not built then:** nothing fed a lead. The research didn't call Signal Hire, and the lead card didn't show it.
 
-## Built since, on branch `signal-hire` (not merged)
+## Built since, merged into `master` on 2 Nov
 
-Steps A3 and C1 to C4, all on 2 Nov. The Signal Hire step is in the research and the lead card shows what it fills in, but it is **off**: `headcount_tool` is not in `size.staff_sources`, so no lead changes. See each step below for what was built and what changed from the plan. To turn it on or off, see `engine/README.md` ("Signal Hire").
+Steps A3 and C1 to C4, all on 2 Nov. They were built on branch `signal-hire` and merged into `master` by fast-forward at Al-khair's say, before A2 to D1 (as with A1). Nothing is pushed. The Signal Hire step is in the research and the lead card shows what it fills in, but it is **off**: `headcount_tool` is not in `size.staff_sources`, so no lead changes. See each step below for what was built and what changed from the plan. To turn it on or off, see `engine/README.md` ("Signal Hire").
 
 ## Rules that keep it safe
 
@@ -146,6 +146,8 @@ Each step has its own tests. While `headcount_tool` is out of `staff_sources` (r
   - Update [AGENTS.md](../engine/AGENTS.md), the engine README (how to turn it off), and Criteria_v2 section 2.
   - Merge the work into `master`. This is Al-khair's call. The code from before Part B is already there (A1).
   - **Done when:** it is merged and the log says so.
+  - Done so far: Part C is merged into `master` (2 Nov, at Al-khair's say, before D1). `engine/AGENTS.md` and `engine/README.md` already say how to turn it on and off. The full check was run on Part C (see the log).
+  - Left: repeat the full check after B1 and D1, put the A4 table and the result in Criteria_v2 section 2, and merge what B1 and D1 change.
 
 ## Part E: Later, not in this plan
 
@@ -180,6 +182,8 @@ Each is one small step on top of this plan. Names, emails and phones need Levi's
 ## Log
 
 Newest first. One line for each tick, pause or surprise.
+
+- 2026-11-02: Part C merged into `master` by fast-forward (00d78ff), at Al-khair's say, before A2 to D1 (as with A1). Signal Hire is off (`headcount_tool` is not in `size.staff_sources`), so a run doesn't use it and no lead changes. Nothing is pushed: `origin/master` is still a806899. D2 stays open for the repeat check and the later merge.
 
 - 2026-11-02: Part C checked on the final code. Backend: 2,429 passed, 25 skipped with `RUN_GATES=1` (3 min 23 s), ruff and mypy clean. Website: lint (0 warnings), types, formatting, 690 tests and the build pass, and the lead card looks right in the browser on the fake backend. D2 repeats this after B1 and D1. Saved to the AI Brain.
 
