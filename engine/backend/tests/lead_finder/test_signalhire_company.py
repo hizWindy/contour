@@ -98,6 +98,14 @@ def test_the_details_are_cut_and_cleaned_because_the_text_is_not_ours() -> None:
     assert details.signalhire_id == 7 and details.slug == "acme-software"
 
 
+def test_the_name_is_the_one_the_lookup_matched_so_a_saved_copy_counts_under_it() -> None:
+    """The staff and people steps count under the lookup's name. A saved copy must give back the
+    same name a live lookup would, or the same company could be counted under two names."""
+    info = CompanyInfo("Acme Software Pty Ltd", None, None, None, None, None, ())
+    details = build_details(ACME_SOFTWARE, info, DETAILS_DAY)
+    assert details.name == "Acme Software"  # find's name, not the details' own
+
+
 @pytest.mark.parametrize("linkedin_id", ["acme-software", "12 34", "<script>", "", None])
 def test_only_a_plain_linkedin_number_makes_a_link(linkedin_id: str | None) -> None:
     info = CompanyInfo("Acme", None, None, None, None, linkedin_id, ())

@@ -78,7 +78,9 @@ def build_details(ref: CompanyRef, info: CompanyInfo, now: datetime) -> SignalHi
     return SignalHireCompany(
         signalhire_id=ref.id,
         slug=one_line(ref.slug, 100),
-        name=one_line(info.name or ref.name, MAX_TEXT_CHARS),
+        # The name the lookup matched, not the details' own: a saved copy gives the staff and
+        # people steps the same name to count under as a live lookup does.
+        name=one_line(ref.name or info.name, MAX_TEXT_CHARS),
         website=clean_domain(info.website),
         industry=one_line(info.industry, MAX_TEXT_CHARS) or None,
         linkedin_url=(

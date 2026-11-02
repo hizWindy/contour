@@ -177,7 +177,7 @@ def apply_company_details(
     name, entry = _compare(
         "name",
         facts.name,
-        details.name,
+        details.name or None,
         signalhire_first=first,
         same=_same_name,
         flag=_name_flag,

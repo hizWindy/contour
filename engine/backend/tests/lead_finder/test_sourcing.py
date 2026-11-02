@@ -222,6 +222,13 @@ def test_a_different_company_name_is_used_and_flagged() -> None:
     assert name.conflict is not None and "Check it is the same company" in name.conflict
 
 
+def test_an_empty_name_from_signal_hire_changes_nothing() -> None:
+    facts = make_facts()
+    new, entries = apply_company_details(facts, make_details(name=""), RULES)
+    assert new.name == "Acme Software"
+    assert [entry for entry in entries if entry.fact == "name"] == []
+
+
 def test_signal_hire_fills_a_gap_wherever_it_is_listed() -> None:
     bare = make_facts(website=fact(None), industry=fact(None))
     for rules in (RULES, with_data_sources(company_details=["web_research", "headcount_tool"])):
