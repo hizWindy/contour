@@ -3,8 +3,8 @@
 This plan fixes the bug that empties every lead's facts, then makes Signal Hire the main source for the data it is best at.
 
 - **Built by:** Al-khair Pama. **Signed off by:** Levi Young.
-- **Last updated:** 2026-11-02. **TBC** means not confirmed yet.
-- **Progress:** 7 of 16 steps done (A2, B1 to B4, C4, C5). B5 is built and waits for Al-khair's OK to spend about US$5.75. Work is on branch `plan-v4`.
+- **Last updated:** 2026-11-03. **TBC** means not confirmed yet.
+- **Progress:** 11 of 16 steps done (A2, B1 to B4, C1 to C6). All the code in this plan is built. B5 is built and waits for Al-khair's OK to spend about US$5.75. A1 is Al-khair's email. D1 to D3 are the checks on real companies, and the merge. Work is on branch `plan-v4`.
 - **Replaces:** the open steps of [PLAN-V3.md](PLAN-V3.md) (A2, A4, B1, D1, D2). They are steps A1, C3 and D2 here. PLAN-V3's built work (the Signal Hire client and the staff step) stays as it is.
 
 ## In short
@@ -43,7 +43,7 @@ Each kind of data comes from the source that is best at it. The backup fills in 
 | Decision makers: names, job titles, seniority | Signal Hire (search) | Claude (public pages) |
 | Triggers, owner, lease end, office size, healthy business, office history | Claude | none |
 
-The staff order is the one in [Criteria_v2.md](../projects/leads/criteria/Criteria_v2.md) section 2. Today the code asks Signal Hire only after Claude, which is the wrong way round. Step C3 fixes it.
+The staff order is the one in [Criteria_v2.md](../projects/leads/criteria/Criteria_v2.md) section 2. Before C3 the code asked Signal Hire only after Claude, which was the wrong way round. Step C3 fixed it (fcdd2e5).
 
 **When two sources disagree (TBC with Levi):** the main source wins. Both values show on the lead card. A big gap raises a flag for a person to check, like staff counts more than 2 times apart, or two different cities.
 
@@ -110,7 +110,7 @@ Follow "How to work this plan" in [PLAN-V2.md](PLAN-V2.md#how-to-work-this-plan)
   - Today a failed form looks like a normal "Watch" lead with "Nothing useful was found".
   - Change: the card shows a clear message, like "Facts missing: the answer form failed. Re-check this lead." The run page counts these leads, and Results can filter them.
   - **Done when:** the website tests pass, and the message shows in the browser on the fake backend.
-  - Built: the card's `form_failed` flag and a summary that says the facts are missing; a "Facts missing" note on the lead card; the flag on each Results row; a Results filter, "Only leads with facts missing", under More filters (`facts_missing=true`); migration 0007 marks the cards that failed from 30 Oct to 2 Nov. Changed on the day: no separate count on the run page. Results with the run's filter and "facts missing" shows the same leads. Left: the browser check, done with C6's.
+  - Built: the card's `form_failed` flag and a summary that says the facts are missing; a "Facts missing" note on the lead card; the flag on each Results row; a Results filter, "Only leads with facts missing", under More filters (`facts_missing=true`); migration 0007 marks the cards that failed from 30 Oct to 2 Nov. Changed on the day: no separate count on the run page. Results with the run's filter and "facts missing" shows the same leads. Browser check done 2026-11-03 on the fake backend: the "Facts missing" note on the card, and the Results filter with `facts_missing=true`.
 
 - [ ] **B5. Repair the 23 broken leads.** **Costs money:** about US$0.25 per lead, about US$5.75 in total (**TBC**; was US$2.30 before B1 measured a fill).
   - Their notes are saved in memory, so they don't need new searches. Add a command, `lead-finder refill`, that fills the form again from the saved notes and judges the lead again.
@@ -121,25 +121,31 @@ Follow "How to work this plan" in [PLAN-V2.md](PLAN-V2.md#how-to-work-this-plan)
 
 ## Part C: Signal Hire as a main source
 
-- [ ] **C1. Company details first.** Needs A1 (the Company API on). **Costs:** 1 company credit per company.
+- [x] **C1. Company details first.** Built 2026-11-03, fcdd2e5. Needs A1 (the Company API on) for a live check. **Costs:** 1 company credit per company.
   - Before Claude searches, look the company up: find it (free), then read its details (1 credit). We get the checked name, website, industry, office cities and head office, LinkedIn page and Signal Hire's whole-company staff estimate.
   - Pass them to Claude as hints, so its searches go to what only Claude can find: triggers, lease, office size.
   - Save the details for 30 days, so the same company is paid for once a month, not once per run.
   - A new setting caps the credits per run: `signalhire_max_credits_per_run`, 20 to start (**TBC** with Al-khair).
   - **Done when:** tests with a fake Signal Hire show the details fill the facts, a second run uses the saved details, and the cap stops at its limit.
+  - Built: `apps/lead_finder/signalhire_company.py` (`look_up_company`), the saved record in `lead_finder.signalhire_details` (migration 0008), and `core/signalhire/details.py`. The lookup runs after the memory read and before the search. A saved copy is found by the slug and needs no Signal Hire call at all, not even the free one. The cap is `SIGNALHIRE_MAX_CREDITS_PER_RUN` (20) and the days are `SIGNALHIRE_DETAILS_FRESH_DAYS` (30). Both are set in `engine/.env`, not on the Settings page. A run has one meter for all its companies. A refused call (a 403) is not charged, and with the Company API off nothing is read and no line goes in the problems. A re-fill (`lead-finder refill`) uses saved copies only, so B5 still costs no Signal Hire credits.
+  - Not run live: the Company API is off (a 403), so it reads nothing today. The first live read waits for A1.
 
-- [ ] **C2. The main source for each fact, and conflicts.**
+- [x] **C2. The main source for each fact, and conflicts.** Built 2026-11-03, fcdd2e5.
   - Put the table from "Which source is main for which data" in `criteria.yaml`, so it can change with no code change.
   - When two sources disagree, the main source wins, and both values are kept on the card. A big gap raises a flag.
   - **Done when:** tests cover a fact from each source, a backup filling a gap, and a conflict flag.
+  - Built: `data_sources` (company details, office cities, decision makers) and `conflicts.staff_gap_ratio` in `criteria.yaml`, checked at start-up, and the plain code in `sourcing.py`. Staff keeps its own list, `size.staff_sources`, because it is also the one switch for Signal Hire. A source that isn't listed isn't asked, so taking `headcount_tool` out of one row turns it off for that data. The checked name, website and industry from Signal Hire are used when it is first in the list (industry groups stay as Claude set them). The lead card has `fact_sources`: the source used, what the others said, and a flag. A flag is raised for staff numbers more than 2 times apart, two websites or two names that are not the same company, and no office in the lead's city on Signal Hire's list. Industry text never raises a flag.
+  - Changed on the day: the plan's "main" and "backup" are one ordered list for each kind of data. The first source with a value wins, and the later ones fill a gap. Both kinds take part in a conflict, so two columns would add nothing.
+  - **Behaviour change to know:** HubSpot's LinkedIn count and Signal Hire's count now beat a number the web research found. Before, they only filled a gap. The research's number stays on the card with its page. To change it, move the sources in `size.staff_sources`. The values are **TBC** with Levi (the conflict rule) and with the D2 test (the ratio of 2).
 
-- [ ] **C3. Staff in the right order, and the multiplier.** Was PLAN-V3 A4 and B1.
+- [x] **C3. Staff in the right order, and the multiplier.** Was PLAN-V3 A4 and B1. Done 2026-11-03 (the name check on 2 Nov, cede2cb; the order, fcdd2e5).
   - Order: HubSpot, then Signal Hire, then LinkedIn × 2, then Claude. Today Signal Hire only fills after Claude.
   - Set `headcount_tool_name_check` back to `required` once the Company API is on.
   - The multiplier (2 today) gets its real value from the test of 5 companies in D2.
   - **Done when:** tests show the new order, and the name check follows the Company API.
   - Done so far: the name check follows the Company API (cede2cb). `headcount_tool_name_check: auto` is `required` while the Company API answers and the name as typed while it is off, so nobody has to edit it when support switches it on.
-  - Left: the new staff order (Signal Hire before Claude's number, with both kept and a flag on a big gap). It goes with C2.
+  - Done with C2: HubSpot, then Signal Hire, then LinkedIn doubled, then Claude's own number (`sourcing.choose_staff`). Signal Hire is asked for every company, not only when nobody found a number, so the numbers can be compared: 1 search from the daily quota. Both numbers are kept on the card, and a big gap raises a flag. The retail guard (C4) still applies: for those industries Signal Hire gives a note and no number.
+  - Left, for D2: the multiplier (2) gets its real value from the test of 5 companies. The name check turns strict by itself when the Company API is on (`auto`), so nobody has to edit it.
 
 - [x] **C4. The guard for retail and site-heavy companies.** Done 2026-11-02, 56ca45b.
   - If the company's industry is in `industries.check_office_size` in `criteria.yaml` (retail, mining and similar), a staff number from Signal Hire is only a hint. It raises "check the office size" and gives no fitout value.
@@ -154,10 +160,11 @@ Follow "How to work this plan" in [PLAN-V2.md](PLAN-V2.md#how-to-work-this-plan)
   - **Done when:** tests with a fake Signal Hire show the names on the card, and no email or phone is kept.
   - Changed on the day: a real search showed Signal Hire ignores its `seniority` field (285 people at Culture Amp in Melbourne with it and without it). A current job title filters (38 of 285), so the search uses job titles like CEO, CFO, COO, Director, Head, property, facilities and workplace. This also fixed the senior count in `lead-finder headcount`. A search answer has the name and the job titles, but no seniority, so no seniority is kept. It runs when Signal Hire is on, the same switch as the staff step, whether or not a staff number was found. The card shows them under "Who to talk to", as "From Signal Hire". Levi's yes is in LEVI.md, question 17.
 
-- [ ] **C6. Show where each fact came from.**
+- [x] **C6. Show where each fact came from.** Done 2026-11-03, 58024ee.
   - On the lead card, each fact shows its source: Claude, HubSpot or Signal Hire. A conflict shows both values and the flag.
   - The fake backend gets one sample lead with Signal Hire company details, decision makers and one conflict.
   - **Done when:** the website lint, types, tests and build pass, and the card looks right in the browser, on a desktop, a phone and in dark colours.
+  - Built: each row of the Facts table names its source (Claude, HubSpot or Signal Hire) and shows what the others said. A flag above the table says where sources disagree. A new "Signal Hire's record" part shows the checked name, website, industry, LinkedIn page, staff in all and the offices with the head office. Who to talk to lists the first source in `data_sources.decision_makers` first. The Rules page shows the table. The fake backend's "Sample Headcount" lead has the details, two senior people, a public-page leader and a staff number (570) far from the research's own (250). All of it was looked at in the browser on the fake backend: a desktop, dark colours and a phone width. The website has 700 tests, and lint, types and the build pass.
 
 ## Part D: Check on real companies, then merge
 
@@ -182,7 +189,7 @@ Follow "How to work this plan" in [PLAN-V2.md](PLAN-V2.md#how-to-work-this-plan)
 
 ## Waiting on
 
-- **Signal Hire support:** the Company API, credits and quota, and how the Person API replies (A1). C1, C3 and C5 need the Company API.
+- **Signal Hire support:** the Company API, credits and quota, and how the Person API replies (A1). The first live read of company details (C1) needs the Company API. The staff count and the senior people work without it.
 - **Levi:** the conflict rule (C2), the credit cap (C1), and emails and phones (Part E).
 - **Al-khair:** the email to support and the new key (A1), and the go-ahead for each paid step.
 
@@ -193,7 +200,7 @@ Follow "How to work this plan" in [PLAN-V2.md](PLAN-V2.md#how-to-work-this-plan)
 | B1 | US$0.25 (done) | none |
 | B5 | about US$5.75 | none |
 | D2 | about US$3.70 (6 companies, about US$0.60 each) | up to 6 credits, about 12 searches |
-| Each run, after this plan | no more than today (B2 needed no second request) | up to 1 credit and 2 searches per company, capped (C1, C5) |
+| Each run, after this plan | no more than today (B2 needed no second request) | up to 1 credit (C1, capped at 20 a run, saved for a month) and 2 searches (the staff count and the senior people) per company. With the Company API off: 2 searches and no credit |
 
 All amounts are **TBC** until measured.
 
@@ -208,6 +215,8 @@ All amounts are **TBC** until measured.
 ## Log
 
 Newest first. One line for each tick, pause or surprise.
+
+- 2026-11-03: C1, C2, C3 and C6 done (fcdd2e5, 58024ee; f11fc6a is a small fix after them). All the code in PLAN-V4 is built. Backend 2,515 passed and 25 skipped with `RUN_GATES=1` (the last full run; 2 tests added after it pass on their own), website 700 tests, lint, types and build pass. Surprise: the 0006 migration test had been failing since 0007 was added (it checked the model at an old revision), so nobody had run the whole suite after B4. It checks at the newest revision now, so it checks 0008 too. Looked at in the browser on the fake backend (desktop, dark, phone), including B4's "Facts missing" note. Not run live: C1 (the Company API is off), B5 (waits for the OK to spend) and D2. Next: A1 (Al-khair), the B5 run, then D1 to D3.
 
 - 2026-11-02: C3 half done (cede2cb: the `auto` name check). The real backend was restarted on branch `plan-v4`: migration 0007 marked the 23 leads with missing facts, and a new Run uses the fixed form. Paused at about 88% of the 5-hour limit. Next: the rest of C3 with C2, then C1, C6, B5 (after the OK), D1 to D3.
 
