@@ -4,7 +4,7 @@ This plan builds Signal Hire into the Lead Finder's research. When the research 
 
 - **Built by:** Al-khair Pama. **Signed off by:** Levi Young.
 - **Last updated:** 2026-11-02. **TBC** means not confirmed yet.
-- **Progress:** 2 of 11 steps done (A1, A3). The code in "Already built" is committed and merged into `master`. A3 and the steps after it are on branch `signal-hire`, not merged. Nothing feeds a lead yet.
+- **Progress:** 3 of 11 steps done (A1, A3, C1). The code in "Already built" is committed and merged into `master`. A3 and the steps after it are on branch `signal-hire`, not merged. Nothing feeds a lead yet.
 - **Runs beside:** [PLAN-V2.md](PLAN-V2.md). Its step A3 (test Signal Hire by hand) is steps A2 to A4 here. Sending leads to HubSpot is Phase 5 in [PLAN-V1.md](PLAN-V1.md), and it waits on the HubSpot service key.
 
 ## In short
@@ -86,10 +86,11 @@ No lead changes in this part.
 
 Each step has its own tests. While `headcount_tool` is out of `staff_sources` (rule 3), nothing here changes a lead.
 
-- [ ] **C1. The settings.**
+- [x] **C1. The settings.** Done 2026-11-02, 08047e6.
   - In `criteria.yaml`: add `headcount_tool_multiplier` (2 for now, **TBC**) and the name rule from B1. Take `headcount_tool` out of `staff_sources`. Add their checks to `rules.py`, so a wrong value stops the backend at start-up.
   - In `core/config.py`: add a switch for HubSpot names going to Signal Hire (env-only, off by default, only the exact text `true` turns it on, like `hubspot_names_to_claude_ok`).
   - **Done when:** the rules tests and the settings tests pass.
+  - Built: `size.headcount_tool_multiplier: 2` (more than 0 and at most 20, so a typo stops the backend), `size.headcount_tool_name_check: required` (the other value is `optional`, which also uses the name as typed), both listed as TBC, and `headcount_tool` out of `staff_sources`. The switch is `HUBSPOT_NAMES_TO_SIGNALHIRE_OK` in `engine/.env` (see `.env.example`). The API contract and the website types were rewritten, because the Rules endpoint now returns the two new fields.
 
 - [ ] **C2. The fill-in step.**
   - In `apps/lead_finder/headcount.py`, add a step like HubSpot's `fill_gaps` in `office_numbers.py`. It runs only when all of these hold:
@@ -164,6 +165,8 @@ Each is one small step on top of this plan. Names, emails and phones need Levi's
 ## Log
 
 Newest first. One line for each tick, pause or surprise.
+
+- 2026-11-02: C1 done (08047e6). The multiplier (2) and the name check (`required`) are in `criteria.yaml` as TBC, `headcount_tool` is out of `staff_sources`, and `HUBSPOT_NAMES_TO_SIGNALHIRE_OK` exists and is off. Next: C2.
 
 - 2026-11-02: A3 done (4e561b4, branch `signal-hire`). With the Company API off, `lead-finder headcount` counts people by the name typed and says "name not checked". Next: C1 to C4 (they need no key), then A2 and A4 by hand.
 
