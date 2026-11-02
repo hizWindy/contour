@@ -169,6 +169,7 @@ describe('the lead page', () => {
           ...base.facts,
           staff_in_city: { value: 210, label: 'estimated', source_url: null, source_date: null },
         },
+        fact_sources: [{ fact: 'staff_in_city', used: 'signalhire', others: [], conflict: null }],
       }),
     )
     const { container } = renderLead()
@@ -183,6 +184,7 @@ describe('the lead page', () => {
     const row = within(facts).getByRole('row', { name: /Staff in the city/ })
     expect(within(row).getByText('210 staff')).toBeInTheDocument()
     expect(within(row).getByText('Estimated')).toBeInTheDocument()
+    expect(within(row).getByText('Signal Hire')).toBeInTheDocument() // where it came from
     expect(within(row).queryByRole('link')).toBeNull() // its page address isn't known yet
   })
 
@@ -218,6 +220,185 @@ describe('the lead page', () => {
     expect(within(list).getByText('Pat Example, Chief Financial Officer')).toBeInTheDocument()
     expect(within(list).getByText(HOSTILE)).toBeInTheDocument() // as text, never as a tag
     expect(container.querySelector('img')).toBeNull()
+  })
+
+  it('says where each fact came from, and what the other sources said', async () => {
+    const base = makeLead()
+    mockApi(
+      makeLead({
+        facts: {
+          ...base.facts,
+          staff_in_city: { value: 570, label: 'estimated', source_url: null, source_date: null },
+          office_since: {
+            value: '2016-03-01',
+            label: 'estimated',
+            source_url: 'https://app.hubspot.com/contacts/1/company/102',
+            source_date: null,
+          },
+        },
+        fact_sources: [
+          {
+            fact: 'staff_in_city',
+            used: 'signalhire',
+            others: [
+              { source: 'claude', value: '250', url: 'https://www.afr.com/property/acme-moves' },
+            ],
+            conflict: null,
+          },
+          { fact: 'office_since', used: 'hubspot', others: [], conflict: null },
+        ],
+      }),
+    )
+    renderLead()
+
+    const facts = await screen.findByRole('table', { name: /Facts about Acme Software/ })
+    const staff = within(facts).getByRole('row', { name: /Staff in the city/ })
+    expect(within(staff).getByText('Signal Hire')).toBeInTheDocument()
+    expect(within(staff).getByText('Claude says 250')).toBeInTheDocument()
+    const page = within(staff).getByRole('link', { name: /afr\.com/ }) // the other source's page
+    expect(page.getAttribute('href')).toBe('https://www.afr.com/property/acme-moves')
+    const since = within(facts).getByRole('row', { name: /At this address since/ })
+    expect(within(since).getByText('HubSpot')).toBeInTheDocument()
+    // A fact with no entry came from Claude's web research, and shows the page it read.
+    const city = within(facts).getByRole('row', { name: /^City/ })
+    expect(within(city).getByText('Claude')).toBeInTheDocument()
+    expect(within(city).getByRole('link', { name: /afr\.com/ })).toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: 'Sources that disagree' })).toBeNull()
+  })
+
+  it('flags sources that disagree, as text, above the facts', async () => {
+    const flag =
+      'The staff numbers are more than 2 times apart: Signal Hire about 570, Claude about 250. Check which is right.'
+    mockApi(
+      makeLead({
+        fact_sources: [
+          {
+            fact: 'staff_in_city',
+            used: 'signalhire',
+            others: [{ source: 'claude', value: '250', url: null }],
+            conflict: flag,
+          },
+          {
+            fact: 'website',
+            used: 'claude',
+            others: [{ source: 'signalhire', value: HOSTILE, url: null }],
+            conflict: `The websites differ: ${HOSTILE}`,
+          },
+        ],
+      }),
+    )
+    const { container } = renderLead()
+
+    const flags = await screen.findByRole('list', { name: 'Sources that disagree' })
+    expect(within(flags).getByText(flag)).toBeInTheDocument()
+    expect(within(flags).getByText(`The websites differ: ${HOSTILE}`)).toBeInTheDocument()
+    expect(within(flags).getAllByText('Check.')).toHaveLength(2)
+    expect(container.querySelector('img')).toBeNull() // as text, never as a tag
+  })
+
+  it("shows Signal Hire's record of the company as text, with the head office marked", async () => {
+    mockApi(
+      makeLead({
+        signalhire_company: {
+          signalhire_id: 7,
+          slug: 'acme-software',
+          name: HOSTILE,
+          website: 'acme.com.au',
+          industry: 'Software Development',
+          linkedin_url: 'https://www.linkedin.com/company/55555',
+          staff_count: 420,
+          staffing_company: true,
+          offices: [
+            { city: 'Melbourne', area: 'Victoria', country: 'Australia', head_office: true },
+            { city: 'Sydney', area: null, country: null, head_office: false },
+          ],
+          fetched_at: '2026-11-02T09:00:00Z',
+        },
+      }),
+    )
+    const { container } = renderLead()
+
+    const title = await screen.findByText("Signal Hire's record")
+    const record = within(title.closest('[data-slot="card"]') as HTMLElement)
+    expect(record.getByText(HOSTILE)).toBeInTheDocument() // as text, never as a tag
+    expect(record.getByText('Software Development')).toBeInTheDocument()
+    expect(record.getByRole('link', { name: /Company page/ }).getAttribute('href')).toBe(
+      'https://www.linkedin.com/company/55555',
+    )
+    expect(record.getByText(/About 420/)).toBeInTheDocument()
+    expect(record.getByText(/not the one in this city/)).toBeInTheDocument()
+    expect(record.getByText('Melbourne, Victoria, Australia (head office)')).toBeInTheDocument()
+    expect(record.getByText('Sydney')).toBeInTheDocument()
+    expect(record.getByText(/staffing company/)).toBeInTheDocument()
+    expect(record.getByText(/Read from Signal Hire on 2 Nov 2026/)).toBeInTheDocument()
+    expect(container.querySelector('img')).toBeNull()
+  })
+
+  it('shows no Signal Hire record when it knows nothing of the company', async () => {
+    mockApi(makeLead())
+    renderLead()
+
+    expect(await screen.findByRole('table', { name: /Facts about Acme Software/ })).toBeVisible()
+    expect(screen.queryByText("Signal Hire's record")).toBeNull()
+  })
+
+  it('never makes a link of an address that is not a plain web address', async () => {
+    mockApi(
+      makeLead({
+        signalhire_company: {
+          signalhire_id: 7,
+          slug: 'acme-software',
+          name: 'Acme Software',
+          website: null,
+          industry: null,
+          linkedin_url: 'javascript:alert(1)',
+          staff_count: null,
+          staffing_company: null,
+          offices: [],
+          fetched_at: '2026-11-02T09:00:00Z',
+        },
+      }),
+    )
+    renderLead()
+
+    const title = await screen.findByText("Signal Hire's record")
+    const record = within(title.closest('[data-slot="card"]') as HTMLElement)
+    expect(record.queryByRole('link')).toBeNull()
+    expect(record.getByText('Company page')).toBeInTheDocument() // shown as text
+  })
+
+  it('puts the people from the first source in the rules first', async () => {
+    const base = makeLead()
+    const people = {
+      signalhire_people: [{ name: 'Pat Example', title: 'CFO', signalhire_id: 'sh-1' }],
+      facts: {
+        ...base.facts,
+        decision_makers: [
+          {
+            name: 'Jane Citizen',
+            role: 'Chief Operating Officer',
+            source_url: 'https://acme.com.au/about',
+            source_date: null,
+          },
+        ],
+      },
+    }
+    const order = async (used: 'signalhire' | 'claude') => {
+      mockApi(
+        makeLead({
+          ...people,
+          fact_sources: [{ fact: 'decision_makers', used, others: [], conflict: null }],
+        }),
+      )
+      const view = renderLead()
+      const title = await screen.findByText('Who to talk to')
+      const text = (title.closest('[data-slot="card"]') as HTMLElement).textContent ?? ''
+      view.unmount()
+      return text.indexOf('From Signal Hire') < text.indexOf('Decision makers')
+    }
+
+    expect(await order('signalhire')).toBe(true)
+    expect(await order('claude')).toBe(false)
   })
 
   it('shows no heading for a source that filled in nothing', async () => {

@@ -13,8 +13,9 @@ It is for clicking through the website (and for browser checks) without the real
   finds companies all named "Sample ...", spread over the three cities and the main signs, with
   every result (pass, director review, watch, drop) among them. No request leaves this computer:
   the Anthropic and Signal Hire keys are blanked before anything reads the settings.
-- One lead, "Sample Headcount", is added at start. Its staff number comes from a fake Signal Hire,
-  so the lead card's "From Signal Hire" part can be seen without a key.
+- One lead, "Sample Headcount", is added at start. A fake Signal Hire gives it company details,
+  senior people and a staff number that is far from the research's own (a conflict), so the lead
+  card's Signal Hire parts, its source labels and its flag can be seen without a key.
 - It serves on the usual address (127.0.0.1:8000), so the website's dev server proxies to it.
 """
 
@@ -38,6 +39,7 @@ DELAY_SECONDS = 0.6
 # Everything a run or a person made. HubSpot tables stay: they are reloaded from the export.
 WIPED_TABLES = (
     "lead_finder.leads",
+    "lead_finder.signalhire_details",
     "core.searches",
     "core.memory",
     "core.run_events",
@@ -211,13 +213,15 @@ SIGNALHIRE_SAMPLE = "Sample Headcount"
 
 
 async def research_signalhire_sample(session: Any, embedder: Any, today: date) -> Any:
-    """Researches one made-up company whose staff number neither the research nor HubSpot has, so
-    it comes from a fake Signal Hire. Signal Hire is switched on for this one research only: the
-    real rules leave it off until PLAN-V3 B1. Returns the lead card."""
+    """Researches one made-up company that a fake Signal Hire knows. Signal Hire gives it company
+    details, two senior people and 285 people on file in Melbourne, about 570 staff, while the
+    research found 250 on a web page: the two are far apart, so the card shows a flag. Signal Hire
+    is on for this one research only, whatever the real rules say. Returns the lead card."""
+    from apps.lead_finder.fields import DecisionMaker
     from apps.lead_finder.research import ResearchRequest, research_company
     from apps.lead_finder.rules import load_rules
     from core.config import get_settings
-    from core.signalhire.client import CompanyRef
+    from core.signalhire.client import CompanyInfo, CompanyRef, Office
     from tests.lead_finder.samples import (
         FakeClaude,
         FakeSignalHire,
@@ -232,16 +236,32 @@ async def research_signalhire_sample(session: Any, embedder: Any, today: date) -
         name=SIGNALHIRE_SAMPLE,
         website=fact(website, about),
         city=fact("Melbourne"),
-        staff_in_city=fact(None),
+        staff_in_city=fact(250, about),
         office_m2=fact(None),
         local_team_runs_project=fact(True, about),
-        summary=f"{SIGNALHIRE_SAMPLE} is a sample company. Its staff number comes from a fake "
-        "Signal Hire.",
+        decision_makers=[
+            DecisionMaker(
+                name="Jo Public", role="Chief Operating Officer", source_url=about, source_date=None
+            )
+        ],
+        summary=f"{SIGNALHIRE_SAMPLE} is a sample company. A fake Signal Hire gives it company "
+        "details, senior people and a staff number far from the research's own.",
     )
     claude = FakeClaude(company_facts={SIGNALHIRE_SAMPLE.casefold(): facts})
-    signalhire = FakeSignalHire(
-        [CompanyRef(id=9, slug="sample-headcount", name=SIGNALHIRE_SAMPLE)], people=105
+    ref = CompanyRef(id=9, slug="sample-headcount", name=SIGNALHIRE_SAMPLE)
+    info = CompanyInfo(
+        name=SIGNALHIRE_SAMPLE,
+        website=website,
+        industry="Software Development",
+        staff_count=1200,
+        staffing_company=False,
+        linkedin_id="123456",
+        offices=(
+            Office("Melbourne", "Victoria", "Australia", True),
+            Office("Sydney", "New South Wales", "Australia", False),
+        ),
     )
+    signalhire = FakeSignalHire([ref], info=info, people=285)
     request = ResearchRequest(company=SIGNALHIRE_SAMPLE, city="Melbourne", website=website)
     return await research_company(
         session,
@@ -265,7 +285,7 @@ async def seed_signalhire_sample(today: date) -> str:
             card = await research_signalhire_sample(session, get_embedder(), today)
     finally:
         await get_engine().dispose()
-    return f"Added {card.company}, whose staff number comes from a fake Signal Hire."
+    return f"Added {card.company}: Signal Hire details, people and a staff conflict (all fake)."
 
 
 async def serve(app: "FastAPI") -> None:

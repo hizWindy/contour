@@ -77,6 +77,9 @@ type RuleCheck = Schemas['RuleCheck']
 type Fact = Schemas['Fact_str_'] | Schemas['Fact_int_'] | Schemas['Fact_bool_']
 type ScorePartOut = Schemas['ScorePart']
 type DecisionMaker = Schemas['DecisionMaker']
+type FactSource = Schemas['FactSource']
+type SourceName = FactSource['used']
+type SignalHireCompany = Schemas['SignalHireCompany']
 
 const BAND_WORDS: Record<string, string> = {
   research_first: 'Research first',
@@ -96,6 +99,13 @@ const LABEL_WORDS: Record<string, string> = {
   confirmed: 'Confirmed',
   estimated: 'Estimated',
   guessed: 'Guessed',
+}
+
+/** Who gave a value. A fact with no entry in `fact_sources` came from Claude's web research. */
+const SOURCE_WORDS: Record<SourceName, string> = {
+  claude: 'Claude',
+  hubspot: 'HubSpot',
+  signalhire: 'Signal Hire',
 }
 
 const REASON_WORDS: Record<string, string> = {
@@ -162,19 +172,55 @@ function DecisionMakers({ people }: { people: DecisionMaker[] }) {
   )
 }
 
-function FactRow({ label, value, fact }: { label: string; value: string; fact: Fact }) {
+/**
+ * One fact: its value, how sure it is, and where it came from. `entry` is what the backend says
+ * about the source when it isn't plainly Claude's web research: the source that was used, what
+ * the other sources said, and nothing more (the flag is shown above the table).
+ */
+function FactRow({
+  label,
+  value,
+  fact,
+  entry,
+}: {
+  label: string
+  value: ReactNode
+  fact: Fact
+  entry?: FactSource
+}) {
+  const known = fact.value !== null
   return (
     <tr className="border-b last:border-0">
       <th scope="row" className="py-2 pr-4 text-left font-semibold sm:whitespace-nowrap">
         {label}
       </th>
-      <td className="py-2 pr-4">{value}</td>
       <td className="py-2 pr-4">
-        {fact.value !== null && fact.label ? (
+        <div className="flex flex-col gap-0.5">
+          <span>{value}</span>
+          {entry?.others.map((other) => (
+            <span
+              key={`${other.source}-${other.value}`}
+              className="flex flex-wrap items-center gap-x-2 text-caption text-muted-foreground"
+            >
+              <span>{`${SOURCE_WORDS[other.source]} says ${other.value}`}</span>
+              {other.url ? <SourceLink href={other.url} /> : null}
+            </span>
+          ))}
+        </div>
+      </td>
+      <td className="py-2 pr-4">
+        {known && fact.label ? (
           <Badge variant="outline">{LABEL_WORDS[fact.label] ?? fact.label}</Badge>
         ) : null}
       </td>
-      <td className="py-2">{fact.source_url ? <SourceLink href={fact.source_url} /> : null}</td>
+      <td className="py-2">
+        {known ? (
+          <span className="flex flex-wrap items-center gap-x-2">
+            <span className="text-muted-foreground">{SOURCE_WORDS[entry?.used ?? 'claude']}</span>
+            {fact.source_url ? <SourceLink href={fact.source_url} /> : null}
+          </span>
+        ) : null}
+      </td>
     </tr>
   )
 }
@@ -196,8 +242,40 @@ function FromSource({ title, notes }: { title: string; notes: string[] }) {
   )
 }
 
+/** What the backend says about where one fact came from, if it says anything. */
+function sourceOf(lead: LeadDetail, fact: FactSource['fact']): FactSource | undefined {
+  return lead.fact_sources.find((entry) => entry.fact === fact)
+}
+
+/**
+ * The places where two sources disagree: a flag for a person to check, never a decision. The
+ * values themselves are in the table, next to the one the rules used.
+ */
+function SourceFlags({ lead }: { lead: LeadDetail }) {
+  const flags = lead.fact_sources.flatMap((entry) => (entry.conflict ? [entry.conflict] : []))
+  if (flags.length === 0) {
+    return null
+  }
+  return (
+    <ul aria-label="Sources that disagree" className="flex flex-col gap-2">
+      {flags.map((flag) => (
+        <li
+          key={flag}
+          className="flex items-start gap-2 rounded-md border border-review bg-review-soft px-3 py-2 text-review-ink"
+        >
+          <Flag aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+          <span>
+            <span className="font-semibold">Check.</span> {flag}
+          </span>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 function Facts({ lead }: { lead: LeadDetail }) {
   const facts = lead.facts
+  const nameEntry = sourceOf(lead, 'name')
   const staff = typeof facts.staff_in_city.value === 'number' ? facts.staff_in_city.value : null
   const m2 = typeof facts.office_m2.value === 'number' ? facts.office_m2.value : null
   const needed = typeof facts.size_needed_m2.value === 'number' ? facts.size_needed_m2.value : null
@@ -205,28 +283,47 @@ function Facts({ lead }: { lead: LeadDetail }) {
     typeof fact.value === 'string' && fact.value !== '' ? fact.value : 'Not known'
   return (
     <Section title="Facts">
+      <SourceFlags lead={lead} />
       {/* On a narrow screen the table scrolls inside the card instead of widening the page. */}
       <div className="-mx-1 overflow-x-auto px-1">
         <table className="w-full text-ui">
           <caption className="sr-only">Facts about {lead.company}, with their sources</caption>
           <tbody>
-            <tr className="border-b">
-              <th scope="row" className="py-2 pr-4 text-left font-semibold">
-                Website
-              </th>
-              <td className="py-2 pr-4" colSpan={3}>
-                {websiteHref(facts.website.value) ? (
+            {nameEntry ? (
+              <FactRow
+                label="Company name"
+                value={facts.name}
+                fact={{ value: facts.name, label: null, source_url: null, source_date: null }}
+                entry={nameEntry}
+              />
+            ) : null}
+            <FactRow
+              label="Website"
+              value={
+                websiteHref(facts.website.value) ? (
                   <SourceLink
                     href={websiteHref(facts.website.value)}
                     label={String(facts.website.value)}
                   />
                 ) : (
                   'Not known'
-                )}
-              </td>
-            </tr>
-            <FactRow label="City" value={text(facts.city)} fact={facts.city} />
-            <FactRow label="Industry" value={text(facts.industry)} fact={facts.industry} />
+                )
+              }
+              fact={facts.website}
+              entry={sourceOf(lead, 'website')}
+            />
+            <FactRow
+              label="City"
+              value={text(facts.city)}
+              fact={facts.city}
+              entry={sourceOf(lead, 'city')}
+            />
+            <FactRow
+              label="Industry"
+              value={text(facts.industry)}
+              fact={facts.industry}
+              entry={sourceOf(lead, 'industry')}
+            />
             <FactRow label="Owner" value={text(facts.owner)} fact={facts.owner} />
             <FactRow
               label="Staff in the city"
@@ -236,6 +333,7 @@ function Facts({ lead }: { lead: LeadDetail }) {
                   : `${formatStaff(staff)}${facts.staff_from_linkedin ? ' on LinkedIn' : ''}`
               }
               fact={facts.staff_in_city}
+              entry={sourceOf(lead, 'staff_in_city')}
             />
             <FactRow
               label="Office size"
@@ -266,6 +364,7 @@ function Facts({ lead }: { lead: LeadDetail }) {
               label="At this address since"
               value={text(facts.office_since)}
               fact={facts.office_since}
+              entry={sourceOf(lead, 'office_since')}
             />
             <FactRow
               label="Last move or fitout"
@@ -295,6 +394,97 @@ function Facts({ lead }: { lead: LeadDetail }) {
         </p>
       ) : null}
     </Section>
+  )
+}
+
+/** A place as Signal Hire writes it, like `Melbourne, Victoria, Australia`. */
+function placeOf(office: SignalHireCompany['offices'][number]): string {
+  return [office.city, office.area, office.country].filter(Boolean).join(', ') || 'Place not given'
+}
+
+/**
+ * What Signal Hire says about the company: its checked name, website, industry, LinkedIn page, the
+ * staff in all, and the offices with the head office marked. Every text came from Signal Hire, so
+ * all of it is plain text, and the two links go through `SourceLink`.
+ */
+function SignalHireRecord({ company }: { company: SignalHireCompany }) {
+  return (
+    <Section title="Signal Hire's record">
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
+        <dt className="font-semibold">Name</dt>
+        <dd>{company.name}</dd>
+        {company.website ? (
+          <>
+            <dt className="font-semibold">Website</dt>
+            <dd>
+              <SourceLink href={websiteHref(company.website)} label={company.website} />
+            </dd>
+          </>
+        ) : null}
+        {company.industry ? (
+          <>
+            <dt className="font-semibold">Industry</dt>
+            <dd>{company.industry}</dd>
+          </>
+        ) : null}
+        {company.linkedin_url ? (
+          <>
+            <dt className="font-semibold">LinkedIn</dt>
+            <dd>
+              <SourceLink href={company.linkedin_url} label="Company page" />
+            </dd>
+          </>
+        ) : null}
+        {company.staff_count !== null ? (
+          <>
+            <dt className="font-semibold">Staff in all</dt>
+            <dd>
+              About {formatNumber(company.staff_count)}, an estimate for every office, not the one
+              in this city
+            </dd>
+          </>
+        ) : null}
+      </dl>
+      {company.staffing_company ? (
+        <p className="text-muted-foreground">Signal Hire marks it as a staffing company.</p>
+      ) : null}
+      {company.offices.length > 0 ? (
+        <div className="flex flex-col gap-1">
+          <p className="font-semibold">Offices</p>
+          <ul className="list-disc pl-5" aria-label="Offices on Signal Hire">
+            {company.offices.map((office, index) => (
+              <li key={`${placeOf(office)}-${index}`}>
+                {placeOf(office)}
+                {office.head_office ? ' (head office)' : ''}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      <p className="text-caption text-muted-foreground">
+        Read from Signal Hire on {formatDate(company.fetched_at)}. A saved copy is used for a month,
+        so each company is paid for once a month.
+      </p>
+    </Section>
+  )
+}
+
+/** The senior people Signal Hire has on file: a name and a job title, never contact details. */
+function SignalHirePeople({ people }: { people: LeadDetail['signalhire_people'] }) {
+  if (people.length === 0) {
+    return null
+  }
+  return (
+    <div className="flex flex-col gap-1">
+      <p className="font-semibold">From Signal Hire</p>
+      <ul className="list-disc pl-5" aria-label="Senior people from Signal Hire">
+        {people.map((person) => (
+          <li key={person.signalhire_id}>
+            {person.title ? `${person.name}, ${person.title}` : person.name}
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
 
@@ -785,23 +975,23 @@ export function LeadCardView({ lead, compact = false }: LeadCardViewProps) {
         <Rules lead={lead} />
         <ScoreSection lead={lead} />
         <Facts lead={lead} />
+        {lead.signalhire_company ? <SignalHireRecord company={lead.signalhire_company} /> : null}
         <Triggers lead={lead} />
         <HubSpot lead={lead} />
         <Section title="Who to talk to">
           <p>{lead.contact_role ?? 'Not known yet.'}</p>
-          <DecisionMakers people={lead.facts.decision_makers} />
-          {lead.signalhire_people.length > 0 ? (
-            <div className="flex flex-col gap-1">
-              <p className="font-semibold">From Signal Hire</p>
-              <ul className="list-disc pl-5" aria-label="Senior people from Signal Hire">
-                {lead.signalhire_people.map((person) => (
-                  <li key={person.signalhire_id}>
-                    {person.title ? `${person.name}, ${person.title}` : person.name}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
+          {/* The first source in the rules' list for decision makers comes first. */}
+          {sourceOf(lead, 'decision_makers')?.used === 'claude' ? (
+            <>
+              <DecisionMakers people={lead.facts.decision_makers} />
+              <SignalHirePeople people={lead.signalhire_people} />
+            </>
+          ) : (
+            <>
+              <SignalHirePeople people={lead.signalhire_people} />
+              <DecisionMakers people={lead.facts.decision_makers} />
+            </>
+          )}
           {lead.opening_line ? (
             <p className="font-serif">&ldquo;{lead.opening_line}&rdquo;</p>
           ) : null}

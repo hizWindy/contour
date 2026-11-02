@@ -254,7 +254,14 @@ const RULES_V2 = {
       office_m2_max: 6000,
       director_band_m2: [800, 1000],
       grow_into_range_months: 24,
+      staff_sources: ['hubspot', 'headcount_tool', 'linkedin', 'web_research'],
     },
+    data_sources: {
+      company_details: ['headcount_tool', 'web_research'],
+      office_cities: ['headcount_tool', 'web_research'],
+      decision_makers: ['headcount_tool', 'web_research'],
+    },
+    conflicts: { staff_gap_ratio: 2 },
     score: {
       parts: {
         trigger: { label: 'Business or property trigger', points: 25 },
@@ -302,7 +309,14 @@ describe('Admin, Rules', () => {
             office_m2_max: 6000,
             director_band_m2: [800, 1000],
             grow_into_range_months: 24,
+            staff_sources: ['hubspot', 'headcount_tool', 'linkedin', 'web_research'],
           },
+          data_sources: {
+            company_details: ['headcount_tool', 'web_research'],
+            office_cities: ['headcount_tool', 'web_research'],
+            decision_makers: ['headcount_tool', 'web_research'],
+          },
+          conflicts: { staff_gap_ratio: 2 },
           score: {
             parts: {
               trigger: { label: 'Business or property trigger', points: 25 },
@@ -356,6 +370,26 @@ describe('Admin, Rules', () => {
     expect(screen.getByText('Pass: Active prospect')).toBeInTheDocument()
     expect(screen.getByText('Watch: Target account')).toBeInTheDocument()
     expect(screen.getByText(/More than 5 years at the same address is due/)).toBeInTheDocument()
+  })
+
+  it('shows which source is main for which data', async () => {
+    mockApi({
+      '/api/v1/lead-finder/rules': RULES_V2,
+    })
+    renderWithProviders(<AdminRulesTab />)
+    expect(await screen.findByText('Where the data comes from')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Staff in the city: HubSpot, then Signal Hire, then LinkedIn (doubled), then the web research',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('Company name, website and industry: Signal Hire, then the web research'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('Decision makers: Signal Hire, then the web research'),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/more than 2 times apart raise a flag/)).toBeInTheDocument()
   })
 })
 

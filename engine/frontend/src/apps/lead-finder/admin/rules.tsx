@@ -10,6 +10,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { formatNumber } from '@/lib/format'
 import { resultLabel } from '@/lib/labels'
 
+const SOURCE_WORDS: Record<string, string> = {
+  hubspot: 'HubSpot',
+  headcount_tool: 'Signal Hire',
+  linkedin: 'LinkedIn (doubled)',
+  web_research: 'the web research',
+}
+
+/** A list of sources in the order the rules look at them: 'HubSpot, then Signal Hire, then ...'. */
+function sources(order: readonly string[]): string {
+  return order.map((source) => SOURCE_WORDS[source] ?? source).join(', then ')
+}
+
 function Block({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <Card>
@@ -63,6 +75,25 @@ export default function AdminRulesTab() {
             {criteria.size.grow_into_range_months} months still fits.
           </p>
           <p>LinkedIn staff counts are multiplied by {criteria.size.linkedin_staff_multiplier}.</p>
+        </Block>
+        <Block title="Where the data comes from">
+          <p>
+            The first source with a value is the one the rules use. The other values stay on the
+            lead card, and a big gap between them raises a flag for a person to check.
+          </p>
+          <ul className="list-disc pl-5">
+            <li>Staff in the city: {sources(criteria.size.staff_sources)}</li>
+            <li>
+              Company name, website and industry: {sources(criteria.data_sources.company_details)}
+            </li>
+            <li>Cities with an office: {sources(criteria.data_sources.office_cities)}</li>
+            <li>Decision makers: {sources(criteria.data_sources.decision_makers)}</li>
+          </ul>
+          <p>
+            Staff numbers more than {criteria.conflicts.staff_gap_ratio} times apart raise a flag.
+            Everything else (signs of an office change, owner, lease end, office size) comes from
+            the web research alone.
+          </p>
         </Block>
         <Block title="Score">
           <ul className="list-disc pl-5">

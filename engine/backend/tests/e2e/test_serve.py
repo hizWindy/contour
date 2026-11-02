@@ -72,14 +72,20 @@ def test_no_key_for_a_real_service_survives_into_the_fake_backend() -> None:
 
 
 @pytest.mark.integration
-async def test_the_signalhire_sample_gets_its_staff_number_from_signal_hire(
+async def test_the_signalhire_sample_shows_details_people_and_a_staff_conflict(
     session: AsyncSession,
 ) -> None:
     card = await research_signalhire_sample(session, get_embedder(), TODAY)
 
     assert card.company == SIGNALHIRE_SAMPLE
-    assert card.facts.staff_in_city.value == 210  # 105 people on file x 2
+    assert card.facts.staff_in_city.value == 570  # 285 people on file x 2: the main source wins
     assert card.from_signalhire == [
-        "Staff in Melbourne: about 210, from Signal Hire (105 people on file x 2, TBC)."
+        "Staff in Melbourne: about 570, from Signal Hire (285 people on file x 2, TBC)."
     ]
+    staff = next(entry for entry in card.fact_sources if entry.fact == "staff_in_city")
+    assert [(other.source, other.value) for other in staff.others] == [("claude", "250")]
+    assert staff.conflict is not None  # 570 against 250: more than 2 times apart
+    assert card.signalhire_company is not None
+    assert card.signalhire_company.offices[0].head_office is True
+    assert len(card.signalhire_people) == 2 and len(card.facts.decision_makers) == 1
     assert card.result == "pass" and card.problems == [] and card.dropped == []
