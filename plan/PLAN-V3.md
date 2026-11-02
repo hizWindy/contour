@@ -10,7 +10,7 @@ This plan builds Signal Hire into the Lead Finder's research. When the research 
 ## In short
 
 - **What changes:** a lead with no staff number gets one from Signal Hire, marked as an estimate, with a note that says where it came from.
-- **Non-disruptive:** Signal Hire only fills a gap. It never overwrites a number, never stops a lead or a run, and one edit turns it off (see "Rules that keep it safe").
+- **Non-disruptive:** Signal Hire only fills a gap. It never overwrites a number, never stops a lead or a run, and it stays off until the test numbers (A4) say it is worth turning on (see "Rules that keep it safe").
 - **Order:** make it safe to build on and test the numbers (A), decide how far to trust them (B), build it into the research and the website (C), check on real companies and merge (D).
 - **Cost:** Signal Hire's daily search quota (1 search per company), 1 company credit per `headcount` check, and about US$1 of Claude for D1. The 16 real leads so far cost US$5.48 in total, about US$0.34 each.
 - **Not in this plan:** decision-maker names, emails and phones. They wait on Levi (Part E).
@@ -21,7 +21,7 @@ Written on 2 Nov and committed on `decision-makers` (3b1a093). Step A1 merged it
 
 - **The client:** [client.py](../engine/backend/core/signalhire/client.py). It finds a company (free), reads its details (1 company credit), counts its profiles (free) and counts people by company, city and seniority (the daily search quota). It has no call for a person, an employee list or contact details. So no name, email or phone can come back.
 - **The command:** `uv run --no-sync lead-finder headcount "Culture Amp" --city Melbourne --yes` prints a company's numbers. It uses no database. Without `--yes` it spends nothing.
-- **Safety:** the key is `SIGNALHIRE_API_KEY` in `engine/.env`. The logs remove it. The tests blank it, so no test reaches Signal Hire. A slow paid call is never sent twice.
+- **Safety:** the key is `SIGNALHIRE_API_KEY` in `engine/.env`. The logs remove it. The tests blank it, so no test reaches Signal Hire. A slow paid call is never sent twice, and a busy answer (429) or server error is tried again twice.
 - **Tests:** 39 new tests. The whole fast suite passes: 1,909 passed, 28 skipped.
 - **Not built:** nothing feeds a lead yet. The research doesn't call Signal Hire, and the lead card doesn't show it.
 
@@ -29,15 +29,17 @@ Written on 2 Nov and committed on `decision-makers` (3b1a093). Step A1 merged it
 
 1. **It fills a gap only.** It runs only when the research and HubSpot found no staff number for the office. It never overwrites one.
 2. **It never breaks anything.** Any Signal Hire error becomes one line in the card's problems. The lead is still saved and the run goes on.
-3. **One edit turns it off,** with no code change: empty the key in `engine/.env`, or take `headcount_tool` out of `staff_sources` in `criteria.yaml`.
-4. **No database change.** The card gets one new list, empty by default, inside its saved JSON. Old cards still load, and `lead-finder rejudge` works as before.
-5. **Counts only.** Only a number and a note are kept. No names, emails or phones.
+3. **It stays off until it is proven.** `headcount_tool` is taken out of `staff_sources` in `criteria.yaml` when Part C is built, and B1 puts it back only if the A4 numbers hold up. So building Part C changes no lead. After that, one edit turns it off again, with no code change: take `headcount_tool` out, or empty the key in `engine/.env`.
+4. **HubSpot names stay home.** A watchlist company (its name came from HubSpot) is not sent to Signal Hire unless a new switch in `engine/.env` says so. It works like the existing `HUBSPOT_NAMES_TO_CLAUDE_OK`, and it starts off.
+5. **No database change.** The card gets one new list, empty by default, inside its saved JSON. Old cards still load, and `lead-finder rejudge` works as before.
+6. **Counts only.** Only a number and a note are kept. No names, emails or phones.
 
 ## How to work this plan
 
 Follow "How to work this plan" in [PLAN-V2.md](PLAN-V2.md#how-to-work-this-plan). In short:
 
-- Do one step at a time, in order. A step is done when its "Done when" is true. Tick it in the same turn, with the date and the commit, then add a line to the log.
+- Do one step at a time. A step is done when its "Done when" is true. Tick it in the same turn, with the date and the commit, then add a line to the log.
+- **While you wait for Signal Hire's support** (A2), A3 and C1 to C3 don't need the key, because the tests use a fake Signal Hire. They can be built first. C2 uses a multiplier of 2 until B1 sets the real one. D1 needs A2, A4 and B1 done.
 - Check Claude's usage at the start of each step. At 80% on either limit, save to the AI Brain. At 95%, start no new step. To save in one line: `brain inbox "contour PLAN-V3 paused: done A1 to A3, next A4, branch master, last commit abc1234"`.
 - **Costs money** marks a paid step. Run it only when Al-khair says so.
 - Commits and pushes happen when Al-khair asks.
@@ -59,65 +61,72 @@ No lead changes in this part.
 
 - [ ] **A3. Let the command work while the Company API is off.**
   - Today the command stops if Signal Hire refuses the company lookup (a 403). The city count uses the search, which doesn't need the Company API.
-  - Change: on a 403 from the lookup, skip the company details, count people by the name typed, and print "name not checked". A refused key (401) still stops it. So the client needs its own error for a 403.
+  - Change: the client gets its own error for a 403 (a kind of "unavailable"). On that error the command skips the company details, counts people by the name typed, and prints "name not checked". A refused key (401) still stops it. C2 reuses this error.
   - Tests for both cases.
   - **Done when:** the fast tests pass.
 
 - [ ] **A4. Test 5 companies.** This was PLAN-V2 step A3.
   - **Costs money:** up to 5 company credits and 10 searches.
   - Use 5 companies from `testset.yaml`: Culture Amp and Seek (Melbourne), Elders and Maptek (Adelaide), and Mineral Resources (Perth).
-  - For each one, write down 4 numbers: Signal Hire's people in the city, Signal Hire's staff for the whole company, the LinkedIn staff count × 2, and a public figure if one exists (an annual report or the company's own site).
+  - For each one, write down: Signal Hire's people on file now, in the city, and its staff estimate for the whole company. Add the LinkedIn staff count × 2, and the public staff number for the whole company (the latest annual report or the company's own site).
+  - Public numbers for one city are rare, so the table compares whole companies. The ratio "public staff ÷ Signal Hire people on file now" shows how much Signal Hire undercounts.
   - Put the table in [Criteria_v2.md](../projects/leads/criteria/Criteria_v2.md) section 2, with what it shows.
   - **Done when:** the table is written.
 
 ## Part B: Decide how far to trust it
 
-- [ ] **B1. Pick the multiplier and the name rule.**
-  - **The multiplier.** A LinkedIn count is about half the real staff, so the engine doubles it. Signal Hire's city count may need the same, or a different number. Use the A4 table to pick 1, 2 or another number, and put it in `criteria.yaml` as `headcount_tool_multiplier` (**TBC** with Levi). If the counts are far off for most companies, stop here and write why in the log.
+- [ ] **B1. Pick the multiplier, the name rule, and whether to turn it on.**
+  - **The multiplier.** Take the 5 ratios from A4. Our recommendation (**TBC** with Levi): the multiplier is the middle ratio, rounded to the nearest 0.5. Put it in `criteria.yaml` as `headcount_tool_multiplier`.
+  - **Turn it on only if the ratios agree.** If the biggest ratio is more than twice the smallest, one multiplier is a poor guess. Then leave `headcount_tool` out of `staff_sources`, write why in the log, and stop. Part C stays built and off.
   - **The name rule.** A short or common name can count other companies' people. Example: "Apex" in Perth may count staff at Apex Plumbing too. Our recommendation: use a count only when the Company API has checked the name. Use the typed name only if A4 shows it gives the same counts.
-  - **Done when:** both choices are in `criteria.yaml`, and the log says why. Levi confirms later (see "Waiting on Levi").
+  - **Done when:** the choices are in `criteria.yaml`, `headcount_tool` is back in `staff_sources` or the log says why not. Levi confirms later (see "Waiting on Levi").
 
 ## Part C: Build it into the research
 
-This is where leads start to change. Each step has its own tests.
+Each step has its own tests. While `headcount_tool` is out of `staff_sources` (rule 3), nothing here changes a lead.
 
-- [ ] **C1. The rule settings.**
-  - Add `headcount_tool_multiplier`, and the name rule from B1, to `criteria.yaml`. Add their checks to `rules.py`, so a wrong value stops the backend at start-up.
-  - **Done when:** the rules tests pass.
+- [ ] **C1. The settings.**
+  - In `criteria.yaml`: add `headcount_tool_multiplier` (2 for now, **TBC**) and the name rule from B1. Take `headcount_tool` out of `staff_sources`. Add their checks to `rules.py`, so a wrong value stops the backend at start-up.
+  - In `core/config.py`: add a switch for HubSpot names going to Signal Hire (env-only, off by default, only the exact text `true` turns it on, like `hubspot_names_to_claude_ok`).
+  - **Done when:** the rules tests and the settings tests pass.
 
 - [ ] **C2. The fill-in step.**
   - In `apps/lead_finder/headcount.py`, add a step like HubSpot's `fill_gaps` in `office_numbers.py`. It runs only when all of these hold:
     - The staff number is still unknown after the research and HubSpot.
     - `headcount_tool` is in `staff_sources`, a key is set, and the office's city is known.
-    - The company didn't come from the HubSpot watchlist. Levi's OK covers sending HubSpot names to Claude. Whether it covers Signal Hire is **TBC**.
+    - The company's origin is not `hubspot`, unless the new switch is on. (A watchlist run already needs Levi's OK for Claude. Whether it also covers Signal Hire is **TBC**.)
   - It makes one search: people whose current company is this one, in "<city>, Australia".
-  - It writes the staff number as the count × the multiplier, labelled "estimated", with a link to the company's Signal Hire page when its slug is known (link format **TBC**). It adds a note. Example: "Staff in Melbourne: about 210, from Signal Hire (105 people on file × 2, TBC)."
+  - It writes the staff number as the count × the multiplier, labelled "estimated", and adds a note. Example: "Staff in Melbourne: about 210, from Signal Hire (105 people on file × 2, TBC)."
+  - **The multiplier is applied once.** The saved number is the multiplied one, and `staff_from_linkedin` stays false. If it were true, the size rule would multiply it again by its own LinkedIn number.
+  - No link on the fact until Signal Hire's page link format is known (**TBC**). The HubSpot step already allows a fact with no link.
   - Any Signal Hire error becomes one line in the card's problems.
-  - **Done when:** tests show it never overwrites a number, needs a city, skips watchlist companies, applies the multiplier, and the size rule uses the number.
+  - **Done when:** tests show it never overwrites a number, needs a city, skips watchlist companies, multiplies once, and the size rule reads the number as it is.
 
 - [ ] **C3. Call it from the research.**
-  - In `research.py`, step 5, after HubSpot fills its gaps and before the rules run. A real client is made from the settings for each company. Tests pass in a fake one.
+  - In `research.py`, step 5, after HubSpot fills its gaps and before the rules run. Make a real client from the settings for each company (it is closed after). Tests pass in a fake one.
+  - **No database connection is held while Signal Hire answers.** End the open transaction first, as the research already does before it calls Claude. A slow answer can take up to 30 seconds, with 2 retries.
   - A run researches at most `run_max_companies` companies (20 by default), with 1 search each, so a run uses at most 20 searches.
   - Add an integration test with a fake Signal Hire.
-  - **Done when:** the fast and integration tests pass (`uv run --no-sync pytest`, with the database running).
+  - **Done when:** the fast and integration tests pass. For the integration tests, start the database first (`docker compose up -d` in `engine/`), then `uv run --no-sync pytest`.
 
 - [ ] **C4. Show it on the lead card.**
   - Add `from_signalhire` to the card: a list of notes, empty by default, like `from_hubspot`.
   - Write the API contract (`uv run engine openapi`) and the website types (`npm run types`).
-  - On the lead card, show "From Signal Hire" under "From HubSpot".
+  - On the lead card, show "From Signal Hire" under "From HubSpot". Add the field to the website's test card (`test-lead.ts`) and a test in `index.test.tsx`.
   - Give the fake backend one sample company with a Signal Hire note, so the page can be checked without a key.
   - **Done when:** the website lint, types, tests and build pass, and the card looks right in the browser on the fake backend.
 
 ## Part D: Check on real companies, then merge
 
 - [ ] **D1. Research 3 real companies.**
+  - Needs A2, A4 and B1 done, with `headcount_tool` back in `staff_sources`. Restart the backend first, so it loads the key and the new code.
   - **Costs money:** about US$1 of Claude and 3 searches.
-  - Pick 3 companies whose staff number is hard to find in the news. Read each card. Check the number, the note and the link.
+  - Pick 3 companies whose staff number is hard to find in the news. Read each card. Check the number, the note and the problems list.
   - **Done when:** the 3 cards look right, or the log says what is wrong.
 
 - [ ] **D2. The full check, then merge.**
   - Run the whole backend suite, the website checks one at a time, and the contract gate (`RUN_GATES=1`).
-  - Update [AGENTS.md](../engine/AGENTS.md), the engine README (how to turn it off), Criteria_v2 section 2, and tick PLAN-V2 step A3.
+  - Update [AGENTS.md](../engine/AGENTS.md), the engine README (how to turn it off), and Criteria_v2 section 2.
   - Merge the work into `master`. This is Al-khair's call. The code from before Part B is already there (A1).
   - **Done when:** it is merged and the log says so.
 
@@ -125,14 +134,15 @@ This is where leads start to change. Each step has its own tests.
 
 Each needs Levi's OK first. Each is one small step on top of this plan.
 
-- **Decision makers.** Names and job titles from a Signal Hire search for senior roles. This waits on question 17 in [LEVI.md](../projects/leads/questions/LEVI.md): whether Contour may keep names.
+- **Decision makers.** Names and job titles from a Signal Hire search for senior roles. They would join the decision-makers list the research already fills from public pages. This waits on question 17 in [LEVI.md](../projects/leads/questions/LEVI.md): whether Contour may keep names.
 - **Emails and phones.** Only on a click, for one named person, sent straight to HubSpot as a contact and not kept in our database. This needs Levi's OK, a check that the Spam Act allows the outreach, and the HubSpot scope `crm.objects.contacts.write`.
 - **More signals.** A leadership change (a senior person who started in the last year), the local team (senior people in Australia against overseas), a growth hint (people now against before) and a recruiter flag.
+- **A status line in Admin.** Whether Signal Hire is on, and the credits left (Signal Hire sends them in the `X-Credits-Left` header).
 
 ## Waiting on Levi
 
 - **The multiplier and the name rule** (B1). We build our recommendation, marked **TBC**.
-- **HubSpot names to Signal Hire.** Watchlist companies are skipped until he says yes.
+- **HubSpot names to Signal Hire.** Watchlist companies are skipped until he says yes and the new switch is turned on.
 - **Names, emails and phones** (Part E).
 
 ## Waiting on Signal Hire
@@ -141,9 +151,10 @@ Each needs Levi's OK first. Each is one small step on top of this plan.
 
 ## Risks
 
-- **The count may be wrong.** Signal Hire's city count may be far from the real staff. A4 shows how far before any lead uses it.
+- **The count may be wrong.** Signal Hire's city count may be far from the real staff. A4 and B1 show how far before any lead uses it.
 - **Common names.** A short name can count other companies' people. B1's name rule reduces this.
-- **The daily quota.** The Signal Hire website shares it. If a run uses it up, the remaining cards say "Signal Hire skipped" and the run goes on.
+- **The daily quota.** The Signal Hire website shares it. If a run uses it up, the remaining cards say so in their problems, and the run goes on.
+- **Too many searches at once.** Up to 4 companies are researched at the same time, but Signal Hire allows 3 searches at once. A busy answer (429) is retried twice, then it becomes a problem line.
 - **Signal Hire changes its API.** Errors become card problems. Nothing else breaks.
 - **Signal Hire's terms** on keeping its numbers are **TBC**. We keep only a count and a note.
 
@@ -151,5 +162,6 @@ Each needs Levi's OK first. Each is one small step on top of this plan.
 
 Newest first. One line for each tick, pause or surprise.
 
+- 2026-11-02: Plan reviewed against the code. Changes: Signal Hire stays off until A4 and B1 say so (rule 3); the multiplier is applied once and `staff_from_linkedin` stays false (C2); watchlist companies need a new switch (C1, C2); no database connection is held during the call (C3); the A4 table now compares whole companies, and B1 has a test for turning it on; Part C can be built while waiting for support.
 - 2026-11-02: A1 done (3b1a093). The work was committed on `decision-makers` and merged into `master` with it, because Al-khair was near the weekly Claude limit and wanted it saved. Next: A2 (new key, Company API), then A3. Nothing is pushed.
-- 2026-11-02: Plan written. The client, the `headcount` command and 39 tests were already written, uncommitted, on `decision-makers`. Al-khair says the key is in `engine/.env`. It hasn't been checked with a real call. No steps started.
+- 2026-11-02: Plan written. The client, the `headcount` command and 39 tests were written first, on `decision-makers`. Al-khair says the key is in `engine/.env`. It hasn't been checked with a real call. No steps started.
