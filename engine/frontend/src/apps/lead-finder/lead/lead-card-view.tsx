@@ -179,6 +179,23 @@ function FactRow({ label, value, fact }: { label: string; value: string; fact: F
   )
 }
 
+/** The numbers another source filled in where the web research found none: one plain note each. */
+function FromSource({ title, notes }: { title: string; notes: string[] }) {
+  if (notes.length === 0) {
+    return null
+  }
+  return (
+    <div className="flex flex-col gap-1 text-muted-foreground">
+      <p className="font-semibold text-foreground">{title}</p>
+      <ul className="list-disc pl-5">
+        {notes.map((note) => (
+          <li key={note}>{note}</li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 function Facts({ lead }: { lead: LeadDetail }) {
   const facts = lead.facts
   const staff = typeof facts.staff_in_city.value === 'number' ? facts.staff_in_city.value : null
@@ -269,16 +286,8 @@ function Facts({ lead }: { lead: LeadDetail }) {
           </tbody>
         </table>
       </div>
-      {lead.from_hubspot.length > 0 ? (
-        <div className="flex flex-col gap-1 text-muted-foreground">
-          <p className="font-semibold text-foreground">From HubSpot</p>
-          <ul className="list-disc pl-5">
-            {lead.from_hubspot.map((note) => (
-              <li key={note}>{note}</li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
+      <FromSource title="From HubSpot" notes={lead.from_hubspot} />
+      <FromSource title="From Signal Hire" notes={lead.from_signalhire} />
       {lead.fitout_aud ? (
         <p className="text-muted-foreground">
           Fitout worth about <Money value={lead.fitout_aud} currency="AUD" decimals={0} />, at the

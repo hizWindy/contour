@@ -50,7 +50,7 @@ The fake backend is the real engine with saved sample answers instead of Claude.
 uv run python -m tests.e2e.serve
 ```
 
-It uses its own database (`leadfinder_e2e`), which it wipes on every start, and loads the HubSpot export. A run finds made-up companies named "Sample ...", slowly enough to watch. Add `--hubspot-ok` to try the watchlist too. Then start the website as above.
+It uses its own database (`leadfinder_e2e`), which it wipes on every start, and loads the HubSpot export. A run finds made-up companies named "Sample ...", slowly enough to watch. One lead, "Sample Headcount", is there from the start: its staff number comes from a fake Signal Hire, so you can see the lead card's "From Signal Hire" part. No key is used, and the Claude and Signal Hire keys are blanked. Add `--hubspot-ok` to try the watchlist too. Then start the website as above.
 
 ## Load the HubSpot export
 

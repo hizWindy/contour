@@ -12,7 +12,9 @@ It is for clicking through the website (and for browser checks) without the real
 - Claude is a slow FakeClaude: every request waits a moment, so a run can be watched live. Discovery
   finds companies all named "Sample ...", spread over the three cities and the main signs, with
   every result (pass, director review, watch, drop) among them. No request leaves this computer:
-  the Anthropic key is blanked before anything reads the settings.
+  the Anthropic and Signal Hire keys are blanked before anything reads the settings.
+- One lead, "Sample Headcount", is added at start. Its staff number comes from a fake Signal Hire,
+  so the lead card's "From Signal Hire" part can be seen without a key.
 - It serves on the usual address (127.0.0.1:8000), so the website's dev server proxies to it.
 """
 
@@ -45,10 +47,11 @@ WIPED_TABLES = (
 
 
 def use_e2e_database(hubspot_ok: bool = False) -> None:
-    """Points the settings at the e2e database and blanks the Claude key. Call before anything
-    reads the settings."""
+    """Points the settings at the e2e database and blanks the Claude and Signal Hire keys, so no
+    run can reach either, whatever engine/.env holds. Call before anything reads the settings."""
     os.environ["POSTGRES_DB"] = DATABASE
     os.environ["ANTHROPIC_API_KEY"] = ""
+    os.environ["SIGNALHIRE_API_KEY"] = ""
     os.environ["HUBSPOT_NAMES_TO_CLAUDE_OK"] = "true" if hubspot_ok else "false"
     from core.config import get_settings
 
@@ -204,6 +207,67 @@ async def load_hubspot() -> str:
     return f"Loaded {result.companies} HubSpot companies and {profiles} profiles."
 
 
+SIGNALHIRE_SAMPLE = "Sample Headcount"
+
+
+async def research_signalhire_sample(session: Any, embedder: Any, today: date) -> Any:
+    """Researches one made-up company whose staff number neither the research nor HubSpot has, so
+    it comes from a fake Signal Hire. Signal Hire is switched on for this one research only: the
+    real rules leave it off until PLAN-V3 B1. Returns the lead card."""
+    from apps.lead_finder.research import ResearchRequest, research_company
+    from apps.lead_finder.rules import load_rules
+    from core.config import get_settings
+    from core.signalhire.client import CompanyRef
+    from tests.lead_finder.samples import (
+        FakeClaude,
+        FakeSignalHire,
+        fact,
+        make_facts,
+        rules_with_signalhire,
+    )
+
+    website = "sampleheadcount.com.au"
+    about = f"https://{website}/about"  # FakeClaude's notes cite the company's own site here
+    facts = make_facts(
+        name=SIGNALHIRE_SAMPLE,
+        website=fact(website, about),
+        city=fact("Melbourne"),
+        staff_in_city=fact(None),
+        office_m2=fact(None),
+        local_team_runs_project=fact(True, about),
+        summary=f"{SIGNALHIRE_SAMPLE} is a sample company. Its staff number comes from a fake "
+        "Signal Hire.",
+    )
+    claude = FakeClaude(company_facts={SIGNALHIRE_SAMPLE.casefold(): facts})
+    signalhire = FakeSignalHire(
+        [CompanyRef(id=9, slug="sample-headcount", name=SIGNALHIRE_SAMPLE)], people=105
+    )
+    request = ResearchRequest(company=SIGNALHIRE_SAMPLE, city="Melbourne", website=website)
+    return await research_company(
+        session,
+        embedder,
+        claude,
+        rules_with_signalhire(load_rules()),
+        get_settings(),
+        request,
+        today,
+        signalhire=signalhire,
+    )
+
+
+async def seed_signalhire_sample(today: date) -> str:
+    """Adds the Signal Hire sample lead to the e2e database."""
+    from core.db.engine import get_engine, get_sessionmaker
+    from core.memory.embedder import get_embedder
+
+    try:
+        async with get_sessionmaker()() as session:
+            card = await research_signalhire_sample(session, get_embedder(), today)
+    finally:
+        await get_engine().dispose()
+    return f"Added {card.company}, whose staff number comes from a fake Signal Hire."
+
+
 async def serve(app: "FastAPI") -> None:
     import uvicorn
 
@@ -230,6 +294,8 @@ def main(argv: list[str] | None = None) -> int:
 
     prepare_database()
     print(asyncio.run(load_hubspot(), loop_factory=loop_factory()), file=sys.stderr)
+    seeded = asyncio.run(seed_signalhire_sample(date.today()), loop_factory=loop_factory())
+    print(seeded, file=sys.stderr)
     app = build_app(fake_claude(date.today()))
     print(f"Fake backend on http://127.0.0.1:8000 (database {DATABASE}).", file=sys.stderr)
     asyncio.run(serve(app), loop_factory=loop_factory())

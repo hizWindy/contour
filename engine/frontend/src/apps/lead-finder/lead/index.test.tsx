@@ -159,6 +159,42 @@ describe('the lead page', () => {
     expect(within(facts).getByText('Will need about 1,500 m² by 2027-06')).toBeInTheDocument()
   })
 
+  it('shows the staff number Signal Hire filled in, with its note as text and no link', async () => {
+    const base = makeLead()
+    const note = 'Staff in Melbourne: about 210, from Signal Hire (105 people on file x 2, TBC).'
+    mockApi(
+      makeLead({
+        from_signalhire: [note, HOSTILE],
+        facts: {
+          ...base.facts,
+          staff_in_city: { value: 210, label: 'estimated', source_url: null, source_date: null },
+        },
+      }),
+    )
+    const { container } = renderLead()
+
+    const heading = await screen.findByText('From Signal Hire')
+    const notes = within(heading.parentElement as HTMLElement)
+    expect(notes.getByText(note)).toBeInTheDocument()
+    expect(notes.getByText(HOSTILE)).toBeInTheDocument() // as text, never as a tag
+    expect(container.querySelector('img')).toBeNull()
+    expect(screen.queryByText('From HubSpot')).toBeNull() // each source has its own heading
+    const facts = screen.getByRole('table', { name: /Facts about Acme Software/ })
+    const row = within(facts).getByRole('row', { name: /Staff in the city/ })
+    expect(within(row).getByText('210 staff')).toBeInTheDocument()
+    expect(within(row).getByText('Estimated')).toBeInTheDocument()
+    expect(within(row).queryByRole('link')).toBeNull() // its page address isn't known yet
+  })
+
+  it('shows no heading for a source that filled in nothing', async () => {
+    mockApi(makeLead())
+    renderLead()
+
+    expect(await screen.findByRole('table', { name: /Facts about Acme Software/ })).toBeVisible()
+    expect(screen.queryByText('From Signal Hire')).toBeNull()
+    expect(screen.queryByText('From HubSpot')).toBeNull()
+  })
+
   it('names the decision makers a public page gives, each with its page, as text', async () => {
     const base = makeLead()
     mockApi(
