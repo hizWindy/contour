@@ -8,7 +8,8 @@ import pytest
 
 from apps.lead_finder import cli
 from apps.lead_finder.headcount import (
-    SENIOR_LEVELS,
+    SENIOR_TITLES,
+    SENIOR_WORDS,
     HeadcountReading,
     describe_reading,
     read_headcount,
@@ -92,7 +93,7 @@ async def test_the_numbers_are_read_and_one_credit_is_counted() -> None:
         "profiles:current",
         "profiles:past",
         "people:Culture Amp|Melbourne, Australia|",
-        f"people:Culture Amp|Melbourne, Australia|{','.join(SENIOR_LEVELS)}",
+        f"people:Culture Amp|Melbourne, Australia|{SENIOR_TITLES}",
     ]
 
 
@@ -176,7 +177,7 @@ async def test_with_the_company_api_off_the_people_are_counted_by_the_name_typed
     assert fake.calls == [  # one try to find the company, then only the searches
         "find:culture-amp",
         "people:Culture Amp|Melbourne, Australia|",
-        f"people:Culture Amp|Melbourne, Australia|{','.join(SENIOR_LEVELS)}",
+        f"people:Culture Amp|Melbourne, Australia|{SENIOR_TITLES}",
     ]
     (problem,) = reading.problems
     assert problem.startswith("Name not checked: Signal Hire said no.")
@@ -189,7 +190,7 @@ async def test_the_screen_says_the_name_was_not_checked() -> None:
 
     assert text.splitlines()[0] == "Culture Amp: name not checked (the Company API is off)"
     assert "People on file in Melbourne, Australia, by the name as typed (Culture Amp): 210" in text
-    assert "Senior people there (C-Level, VP, Directors, Head): 14" in text
+    assert f"Senior people there ({SENIOR_WORDS}): 14" in text
     assert "Credits used: 0 company credits" in text
     assert "Problem: Name not checked" in text
     assert "whole company" not in text  # the company's own numbers were not read
@@ -229,7 +230,7 @@ async def test_the_reading_is_shown_in_plain_lines() -> None:
     assert "whole company (Signal Hire's estimate): 700" in text
     assert "People on file, now / before: 650 / 900" in text
     assert "People on file in Melbourne, Australia: 210" in text
-    assert "Senior people there (C-Level, VP, Directors, Head): 14" in text
+    assert f"Senior people there ({SENIOR_WORDS}): 14" in text
     assert "Office: Melbourne, Victoria, Australia (head office)" in text
     assert "Credits used: 1 company credit" in text
     assert "@" not in text  # no email, ever

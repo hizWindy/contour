@@ -1,14 +1,16 @@
-"""Signal Hire, for company numbers only: how many people a company has, in all and in a city.
+"""Signal Hire: how many people a company has, in all and in a city, and its senior people.
 
-There is no method here for a person: not the Person API, not the employee lists, not contact
-details. So no name, email or phone can come back through this file. Whether Contour may keep
-names or contact details is TBC with Levi (Criteria_v2 sections 2 and 9).
+Names and current job titles of a company's senior people come back from a search
+(`senior_people`), because Levi said yes to decision makers (2 Nov 2026, PLAN-V4 C5). There is no
+method here for contact details: not the Person API, not an employee list. So no email or phone
+can come back through this file. Contact details are TBC with Levi (PLAN-V4 Part E).
 
 Projects depend on the `SignalHire` protocol, not on this class, so tests swap in a fake that
 returns saved answers and costs nothing. What a call costs (Signal Hire's API pricing, TBC
 against the real account):
 - `find_company` and `profile_count`: nothing.
-- `count_people`: the daily search quota, which the Signal Hire website shares. Never credits.
+- `count_people` and `senior_people`: the daily search quota, which the Signal Hire website
+  shares. Never credits.
 - `company_info`: 1 company credit for each answer.
 
 The Company API is off until Signal Hire's support switches it on. A 403 on a company call means
@@ -20,7 +22,7 @@ A slow answer is never asked again, so a paid call can't be paid for twice.
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any, Literal, Protocol, Self
 
@@ -38,6 +40,7 @@ MAX_TRIES = 3  # a 429 or a server error is tried again, at most twice
 MAX_WAIT_SECONDS = 10.0
 RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
 MAX_OFFICES = 20
+MAX_PEOPLE = 10  # the most profiles one people search asks for
 
 ProfileStatus = Literal["current", "past", "both"]
 
@@ -82,6 +85,15 @@ class Office:
 
 
 @dataclass(frozen=True)
+class PersonOnFile:
+    """A person Signal Hire has on file at a company now: the name and current job title only."""
+
+    signalhire_id: str  # Signal Hire's own id, to ask for a contact later (Part E)
+    name: str
+    title: str | None
+
+
+@dataclass(frozen=True)
 class CompanyInfo:
     name: str | None
     website: str | None
@@ -106,10 +118,18 @@ class SignalHire(Protocol):
         ...
 
     async def count_people(
-        self, *, company: str, location: str | None = None, seniority: Sequence[str] = ()
+        self, *, company: str, location: str | None = None, titles: str | None = None
     ) -> int:
         """How many people Signal Hire has whose current company is `company`, optionally in a
-        place and at these seniority levels. Only the count is read. Uses the search quota."""
+        place and with a current job title that matches `titles` (Signal Hire's search words,
+        like 'CEO OR "General Manager"'). Only the count is read. Uses the search quota."""
+        ...
+
+    async def senior_people(
+        self, *, company: str, location: str, titles: str, size: int
+    ) -> list[PersonOnFile]:
+        """Up to `size` people whose current company is `company`, in `location`, with a current
+        job title that matches `titles`. Name and job title only. Uses the search quota."""
         ...
 
 
@@ -205,6 +225,26 @@ class _Total(_Reply):
     total: int
 
 
+class _Job(_Reply):
+    title: str | None = None
+
+    @field_validator("title", mode="before")
+    @classmethod
+    def _plain(cls, value: Any) -> str | None:
+        return _text(value)
+
+
+class _Person(_Reply):
+    uid: str
+    full_name: str = Field(alias="fullName")
+    experience: list[_Job] = Field(default_factory=list)
+
+    @field_validator("experience", mode="before")
+    @classmethod
+    def _list(cls, value: Any) -> list[Any]:
+        return [item for item in value if isinstance(item, dict)] if isinstance(value, list) else []
+
+
 def _parse[M: _Reply](model: type[M], data: dict[str, Any]) -> M:
     try:
         return model.model_validate(data)
@@ -242,7 +282,7 @@ def _problem(status: int, path: str) -> SignalHireError:
     if status == 422:
         return SignalHireError(
             "Signal Hire didn't accept the request",
-            "A value was refused (422). For a search, check the location and seniority names.",
+            "A value was refused (422). For a search, check the location and the job titles.",
         )
     if status == 429:
         return SignalHireError(
@@ -315,21 +355,29 @@ class HttpSignalHire:
         return _parse(_Profiles, data).total_profiles
 
     async def count_people(
-        self, *, company: str, location: str | None = None, seniority: Sequence[str] = ()
+        self, *, company: str, location: str | None = None, titles: str | None = None
     ) -> int:
-        name = company.replace('"', " ").strip()
-        if not name:
-            raise ValueError("count_people needs a company name")
-        # In quotes, so a name like "AT&T" or "Bell AND Howell" is read as one phrase, not as a
-        # search with operators (Signal Hire reads AND, OR and NOT in this field).
-        body: dict[str, Any] = {"currentCompany": f'"{name}"', "size": 1}
-        if location:
-            body["location"] = location
-        if seniority:
-            body["seniority"] = list(seniority)
+        body = _search_body(company, location, titles, size=1)
         async with self._searches:
             data = await self._call("POST", "/candidate/searchByQuery", body=body, must_find=True)
         return _parse(_Total, data).total
+
+    async def senior_people(
+        self, *, company: str, location: str, titles: str, size: int
+    ) -> list[PersonOnFile]:
+        body = _search_body(company, location, titles, size=max(1, min(size, MAX_PEOPLE)))
+        async with self._searches:
+            data = await self._call("POST", "/candidate/searchByQuery", body=body, must_find=True)
+        found = data.get("profiles")
+        people: list[PersonOnFile] = []
+        for item in found if isinstance(found, list) else []:
+            try:
+                person = _Person.model_validate(item)
+            except ValidationError:
+                continue  # one odd profile is skipped, not an error
+            current = person.experience[0].title if person.experience else None
+            people.append(PersonOnFile(person.uid, person.full_name, current))
+        return people
 
     # --- One request -----------------------------------------------------------------------
 
@@ -400,6 +448,24 @@ class HttpSignalHire:
         if asked.isdigit():
             return min(float(asked), MAX_WAIT_SECONDS)
         return min(0.5 * (1 << attempt), MAX_WAIT_SECONDS)
+
+
+def _search_body(
+    company: str, location: str | None, titles: str | None, *, size: int
+) -> dict[str, Any]:
+    """A search for the people whose current company is `company`. The name goes in quotes, so a
+    name like "AT&T" or "Bell AND Howell" is read as one phrase, not as a search with operators
+    (Signal Hire reads AND, OR and NOT in this field). The job titles are Signal Hire's search
+    words, as given. (A `seniority` field is not read by Signal Hire: checked on 2 Nov 2026.)"""
+    name = company.replace('"', " ").strip()
+    if not name:
+        raise ValueError("a search needs a company name")
+    body: dict[str, Any] = {"currentCompany": f'"{name}"', "size": size}
+    if location:
+        body["location"] = location
+    if titles:
+        body["currentTitle"] = titles
+    return body
 
 
 def get_signalhire(settings: Settings | None = None) -> HttpSignalHire | None:

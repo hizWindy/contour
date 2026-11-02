@@ -50,6 +50,7 @@ from core.signalhire.client import (
     CompanyInfo,
     CompanyRef,
     Office,
+    PersonOnFile,
     ProfileStatus,
     SignalHireError,
 )
@@ -476,6 +477,11 @@ CULTURE_AMP_INFO = CompanyInfo(
     ),
 )
 ACME_SOFTWARE = CompanyRef(id=7, slug="acme-software", name="Acme Software")
+# Made-up people for the fake Signal Hire: never real names.
+SAMPLE_LEADERS = (
+    PersonOnFile("sh-1", "Pat Example", "Chief Financial Officer"),
+    PersonOnFile("sh-2", "Sam Sample", "Head of Workplace"),
+)
 
 
 def rules_with_signalhire(rules: LeadFinderRules, **size_changes: Any) -> LeadFinderRules:
@@ -503,7 +509,9 @@ class FakeSignalHire:
 
     - `known`: the companies `find_company` knows, by slug. Culture Amp by default.
     - `people` and `senior`: what `count_people` answers (all people, and the senior ones).
-    - `failures`: a step to raise an error at: `"find"`, `"info"`, `"people"` or `"senior"`.
+    - `leaders`: what `senior_people` answers (made-up names and job titles).
+    - `failures`: a step to raise an error at: `"find"`, `"info"`, `"people"`, `"senior"` or
+      `"leaders"`.
     Nothing here costs a credit or reaches the network.
     """
 
@@ -515,12 +523,14 @@ class FakeSignalHire:
         failures: dict[str, SignalHireError] | None = None,
         people: int = 210,
         senior: int = 14,
+        leaders: Sequence[PersonOnFile] = SAMPLE_LEADERS,
     ) -> None:
         self.known = {ref.slug: ref for ref in known}
         self.info = info
         self.failures = failures or {}
         self.people = people
         self.senior = senior
+        self.leaders = list(leaders)
         self.calls: list[str] = []
 
     def _fail(self, step: str) -> None:
@@ -542,8 +552,15 @@ class FakeSignalHire:
         return {"current": 650, "past": 900, "both": 1550}[status]
 
     async def count_people(
-        self, *, company: str, location: str | None = None, seniority: Sequence[str] = ()
+        self, *, company: str, location: str | None = None, titles: str | None = None
     ) -> int:
-        self.calls.append(f"people:{company}|{location}|{','.join(seniority)}")
-        self._fail("senior" if seniority else "people")
-        return self.senior if seniority else self.people
+        self.calls.append(f"people:{company}|{location}|{titles or ''}")
+        self._fail("senior" if titles else "people")
+        return self.senior if titles else self.people
+
+    async def senior_people(
+        self, *, company: str, location: str, titles: str, size: int
+    ) -> list[PersonOnFile]:
+        self.calls.append(f"leaders:{company}|{location}|{size}")
+        self._fail("leaders")
+        return list(self.leaders[:size])

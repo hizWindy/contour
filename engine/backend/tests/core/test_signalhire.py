@@ -17,6 +17,7 @@ from core.signalhire.client import (
     CompanyRef,
     HttpSignalHire,
     Office,
+    PersonOnFile,
     SignalHireCompanyApiOff,
     SignalHireError,
     SignalHireOutOfQuota,
@@ -138,7 +139,7 @@ async def test_count_people_asks_for_one_profile_and_reads_only_the_total() -> N
         )
 
     total = await make(handler).count_people(
-        company="Culture Amp", location="Melbourne, Australia", seniority=["C-Level"]
+        company="Culture Amp", location="Melbourne, Australia", titles='CEO OR "Head of"'
     )
 
     assert total == 214
@@ -149,7 +150,7 @@ async def test_count_people_asks_for_one_profile_and_reads_only_the_total() -> N
         "currentCompany": '"Culture Amp"',
         "size": 1,
         "location": "Melbourne, Australia",
-        "seniority": ["C-Level"],
+        "currentTitle": 'CEO OR "Head of"',
     }
 
 
@@ -165,7 +166,7 @@ async def test_a_company_name_is_searched_as_one_phrase_never_as_operators() -> 
 
     phrase = sent[0]["currentCompany"]
     assert phrase.startswith('"') and phrase.endswith('"') and phrase.count('"') == 2
-    assert "location" not in sent[0] and "seniority" not in sent[0]
+    assert "location" not in sent[0] and "currentTitle" not in sent[0]
     with pytest.raises(ValueError, match="company name"):
         await client.count_people(company=' "" ')
 
@@ -330,7 +331,55 @@ async def test_only_the_company_numbers_are_ever_asked_for() -> None:
         "company_info",
         "profile_count",
         "count_people",
+        "senior_people",
         "aclose",
+    }
+
+
+async def test_senior_people_keeps_only_the_id_name_and_current_job_title() -> None:
+    """Levi said yes to decision makers' names (2 Nov 2026). A search never brings contact
+    details, and nothing else in a profile is kept."""
+    seen: list[httpx2.Request] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        seen.append(request)
+        return answer(
+            200,
+            {
+                "total": 38,
+                "profiles": [
+                    {
+                        "uid": "u1",
+                        "fullName": "Pat Example",
+                        "photo": "https://example.com/p.jpg",
+                        "location": "Melbourne",
+                        "experience": [
+                            {"company": "Acme", "title": "Chief Financial Officer"},
+                            {"company": "Old Co", "title": "Analyst"},
+                        ],
+                        "skills": ["finance"],
+                        "openToWork": False,
+                    },
+                    {"uid": "u2", "fullName": "Sam Sample", "experience": "odd"},
+                    {"fullName": "No Id"},
+                ],
+            },
+        )
+
+    people = await make(handler).senior_people(
+        company="Acme", location="Melbourne, Australia", titles="CEO OR CFO", size=50
+    )
+
+    assert people == [
+        PersonOnFile("u1", "Pat Example", "Chief Financial Officer"),
+        PersonOnFile("u2", "Sam Sample", None),  # no job list: name only
+    ]  # the profile with no id is skipped
+    sent = json.loads(seen[0].content)
+    assert sent == {
+        "currentCompany": '"Acme"',
+        "location": "Melbourne, Australia",
+        "currentTitle": "CEO OR CFO",
+        "size": 10,  # at most MAX_PEOPLE, whatever is asked
     }
 
 

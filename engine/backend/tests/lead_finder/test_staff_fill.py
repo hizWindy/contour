@@ -2,7 +2,6 @@
 Hire gives saved answers, so no test costs a credit or a search."""
 
 import asyncio
-from collections.abc import Sequence
 from datetime import date
 
 import pytest
@@ -264,7 +263,7 @@ async def test_any_signal_hire_error_becomes_one_line_and_the_facts_stay(
 
 class Broken(FakeSignalHire):
     async def count_people(
-        self, *, company: str, location: str | None = None, seniority: Sequence[str] = ()
+        self, *, company: str, location: str | None = None, titles: str | None = None
     ) -> int:
         raise RuntimeError("secret detail that is not for a card")
 
@@ -279,7 +278,7 @@ async def test_a_bug_in_the_step_never_loses_the_lead() -> None:
 
 class Slow(FakeSignalHire):
     async def count_people(
-        self, *, company: str, location: str | None = None, seniority: Sequence[str] = ()
+        self, *, company: str, location: str | None = None, titles: str | None = None
     ) -> int:
         await asyncio.sleep(5)
         return 5
@@ -300,7 +299,7 @@ def test_no_test_can_reach_signal_hire() -> None:
 
 class Cancelled(FakeSignalHire):
     async def count_people(
-        self, *, company: str, location: str | None = None, seniority: Sequence[str] = ()
+        self, *, company: str, location: str | None = None, titles: str | None = None
     ) -> int:
         raise asyncio.CancelledError
 

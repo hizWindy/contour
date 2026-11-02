@@ -31,8 +31,14 @@ from core.signalhire.client import (
     SignalHireUnavailable,
 )
 
-# Signal Hire's own names for seniority. TBC on the first run: a wrong name is a 422.
-SENIOR_LEVELS = ("C-Level", "VP", "Directors", "Head")
+# The job titles of the people who decide on an office, in Signal Hire's search words. Its
+# `seniority` field is ignored (2 Nov 2026: 285 people at Culture Amp in Melbourne with it and
+# without it), but a current job title filters: 38 of the 285.
+SENIOR_TITLES = (
+    'CEO OR CFO OR COO OR Chief OR Director OR Head OR "General Manager" OR Property OR '
+    "Facilities OR Workplace"
+)
+SENIOR_WORDS = "job titles like CEO, CFO, COO, Director, Head, property, facilities, workplace"
 COUNTRY = "Australia"
 MAX_SLUGS = 4
 MAX_OFFICES_SHOWN = 8
@@ -185,7 +191,7 @@ async def _count_in_city(
     reading.senior_in_city = await _attempt(
         reading,
         "Senior people in the city",
-        client.count_people(company=name, location=reading.where, seniority=SENIOR_LEVELS),
+        client.count_people(company=name, location=reading.where, titles=SENIOR_TITLES),
     )
 
 
@@ -350,9 +356,7 @@ def describe_reading(reading: HeadcountReading) -> str:
         place = one_line(reading.where, 80)
         by = "" if reading.name_checked else f", by the name as typed ({asked})"
         lines.append(f"  People on file in {place}{by}: {_number(reading.people_in_city)}")
-        lines.append(
-            f"  Senior people there ({', '.join(SENIOR_LEVELS)}): {_number(reading.senior_in_city)}"
-        )
+        lines.append(f"  Senior people there ({SENIOR_WORDS}): {_number(reading.senior_in_city)}")
     if info is not None:
         lines += _about(info)
     credits = reading.credits_used

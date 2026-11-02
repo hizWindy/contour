@@ -4,7 +4,7 @@ Integration tests: they need the database.
 """
 
 import uuid
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator
 from datetime import date
 from decimal import Decimal
 
@@ -317,12 +317,10 @@ async def test_no_database_connection_is_held_while_signalhire_answers(
             return await super().find_company(id_or_slug)
 
         async def count_people(
-            self, *, company: str, location: str | None = None, seniority: Sequence[str] = ()
+            self, *, company: str, location: str | None = None, titles: str | None = None
         ) -> int:
             seen.append(session.in_transaction())
-            return await super().count_people(
-                company=company, location=location, seniority=seniority
-            )
+            return await super().count_people(company=company, location=location, titles=titles)
 
     card = await research(
         session,
