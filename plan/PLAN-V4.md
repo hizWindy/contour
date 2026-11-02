@@ -4,7 +4,7 @@ This plan fixes the bug that empties every lead's facts, then makes Signal Hire 
 
 - **Built by:** Al-khair Pama. **Signed off by:** Levi Young.
 - **Last updated:** 2026-11-02. **TBC** means not confirmed yet.
-- **Progress:** 5 of 16 steps done (A2, B1 to B4). Work is on branch `plan-v4`.
+- **Progress:** 7 of 16 steps done (A2, B1 to B4, C4, C5). B5 is built and waits for Al-khair's OK to spend about US$5.75. Work is on branch `plan-v4`.
 - **Replaces:** the open steps of [PLAN-V3.md](PLAN-V3.md) (A2, A4, B1, D1, D2). They are steps A1, C3 and D2 here. PLAN-V3's built work (the Signal Hire client and the staff step) stays as it is.
 
 ## In short
@@ -116,6 +116,8 @@ Follow "How to work this plan" in [PLAN-V2.md](PLAN-V2.md#how-to-work-this-plan)
   - Their notes are saved in memory, so they don't need new searches. Add a command, `lead-finder refill`, that fills the form again from the saved notes and judges the lead again.
   - Memory keeps notes fresh for 30 days, so notes from 30 Oct can be used until 29 Nov.
   - **Done when:** the 23 leads have their facts, and the log lists how many changed result.
+  - Done so far: `uv run --no-sync lead-finder refill` lists the leads whose form failed and the cost; `--yes` refills them (8baa95f). It keeps each lead's id, run, origin, status and note, and replaces its card, its columns and its company profile in memory. Tested with the fake Claude.
+  - Left: run it, about US$0.25 a lead (US$5.75 for 23), when Al-khair says so. Restart the backend first, so migration 0007 marks the 23 leads.
 
 ## Part C: Signal Hire as a main source
 
@@ -137,16 +139,18 @@ Follow "How to work this plan" in [PLAN-V2.md](PLAN-V2.md#how-to-work-this-plan)
   - The multiplier (2 today) gets its real value from the test of 5 companies in D2.
   - **Done when:** tests show the new order, and the name check follows the Company API.
 
-- [ ] **C4. The guard for retail and site-heavy companies.**
+- [x] **C4. The guard for retail and site-heavy companies.** Done 2026-11-02, 56ca45b.
   - If the company's industry is in `industries.check_office_size` in `criteria.yaml` (retail, mining and similar), a staff number from Signal Hire is only a hint. It raises "check the office size" and gives no fitout value.
   - **Done when:** a test like Myer (retail, 5,736 staff) gets a flag and no fitout value.
+  - Built: for those industries the staff step writes no staff number. It adds a note instead: how many people are on file, why the count isn't used, and "Check the office size". So no office size or fitout value comes from it. The size rule then says the size isn't known, and the lead stays Watch.
 
-- [ ] **C5. Decision makers from Signal Hire.** **Costs:** 1 more search per company, from the daily quota.
+- [x] **C5. Decision makers from Signal Hire.** **Costs:** 1 more search per company, from the daily quota. Done 2026-11-02, 05f5216 and 220822e.
   - Levi said yes to decision makers (2 Nov, to Al-khair). Write this in [LEVI.md](../projects/leads/questions/LEVI.md) as the answer to question 17: names and job titles yes. Emails and phones are still open.
   - Search the company's senior people in the city (C-Level, VP, Directors, Head). Keep the top 5: name, job title, seniority and Signal Hire id. The id lets Part E get a contact later.
   - Add them to "Who to talk to" beside the leaders Claude finds on public pages, with the source of each.
   - First check one real search answer has job titles (**TBC**). Today we ask for 1 profile and read only the count.
   - **Done when:** tests with a fake Signal Hire show the names on the card, and no email or phone is kept.
+  - Changed on the day: a real search showed Signal Hire ignores its `seniority` field (285 people at Culture Amp in Melbourne with it and without it). A current job title filters (38 of 285), so the search uses job titles like CEO, CFO, COO, Director, Head, property, facilities and workplace. This also fixed the senior count in `lead-finder headcount`. A search answer has the name and the job titles, but no seniority, so no seniority is kept. It runs when Signal Hire is on, the same switch as the staff step, whether or not a staff number was found. The card shows them under "Who to talk to", as "From Signal Hire". Levi's yes is in LEVI.md, question 17.
 
 - [ ] **C6. Show where each fact came from.**
   - On the lead card, each fact shows its source: Claude, HubSpot or Signal Hire. A conflict shows both values and the flag.
@@ -202,6 +206,8 @@ All amounts are **TBC** until measured.
 ## Log
 
 Newest first. One line for each tick, pause or surprise.
+
+- 2026-11-02: C5 and C4 done (05f5216, 220822e, 56ca45b). B5 built (8baa95f), waiting for the OK to spend. Paused at 84% of the 5-hour Claude limit. Next: C3 (staff order and the name check), C2, C1 (they need the Company API for a live check), C6, then D1 to D3.
 
 - 2026-11-02: B4 done (7c4703f). A failed form now shows as "Facts missing" on the card and can be filtered in Results. Next: B5.
 

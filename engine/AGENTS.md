@@ -28,6 +28,8 @@ From `engine/backend/`:
 | Run the test set of 10 companies (costs money) | `uv run lead-finder testset --yes` |
 | Read Signal Hire's headcount for one company (1 company credit, no database) | `uv run lead-finder headcount "Culture Amp" --city Melbourne --yes` |
 | Judge the saved leads again with the current rules (free, read only, no migration) | `uv run lead-finder rejudge` |
+| Check every answer form is under Anthropic's limits for strict forms (free; add `--live --yes` to send each to Claude once, a few cents) | `uv run lead-finder forms` |
+| Fill the answer form again for the leads whose form failed, from saved notes (about US$0.25 a lead, no web search; without `--yes` it only lists them) | `uv run lead-finder refill --yes` |
 | Fast tests (no database) | `uv run pytest -m "not integration"` |
 | All tests (needs the database) | `uv run pytest` |
 | Lint and format | `uv run ruff check .` and `uv run ruff format .` |

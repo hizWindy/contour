@@ -70,6 +70,7 @@ Section 1 of QUESTIONS.docx.
 15. What other paid tools does Contour use? For example LinkedIn Sales Navigator or ZoomInfo.
 16. What does the team know that isn't written down? A simple spreadsheet is enough.
 17. Contacts: name and role only, or email and phone too? What does compliance say?
+   - **Answer (2 Nov 2026, Levi to Al-khair):** yes to decision makers: the names and job titles of a company's senior people. Emails and phones are still open (PLAN-V4 Part E).
 18. Is scraping allowed? Who signs it off?
 19. What would success look like after 3 months?
 
