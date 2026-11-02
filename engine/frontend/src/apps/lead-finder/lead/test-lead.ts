@@ -163,6 +163,7 @@ export function makeLead(changes: Partial<LeadDetail> = {}): LeadDetail {
     from_hubspot: [],
     from_signalhire: [],
     form_failed: false,
+    signalhire_people: [],
     dropped: [],
     problems: [],
     research: {

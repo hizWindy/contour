@@ -3,6 +3,7 @@ Hire gives saved answers, so no test costs a credit or a search."""
 
 import asyncio
 from datetime import date
+from typing import Any
 
 import pytest
 
@@ -16,6 +17,7 @@ from core.config import Settings, get_settings
 from core.hubspot.matching import HubSpotMatch
 from core.signalhire.client import (
     CompanyRef,
+    PersonOnFile,
     SignalHireCompanyApiOff,
     SignalHireError,
     SignalHireOutOfQuota,
@@ -307,3 +309,65 @@ class Cancelled(FakeSignalHire):
 async def test_a_cancel_is_not_swallowed() -> None:
     with pytest.raises(asyncio.CancelledError):
         await fill(Cancelled([ACME_SOFTWARE]))
+
+
+# --- Senior people to talk to (PLAN-V4 C5) --------------------------------------------------------
+
+
+async def leaders(fake: FakeSignalHire, rules: LeadFinderRules = RULES) -> tuple[Any, ...]:
+    return await headcount.find_leaders(
+        fake, company="Acme Software", website=None, city="Melbourne", rules=rules
+    )
+
+
+async def test_senior_people_are_kept_by_name_and_job_title_only() -> None:
+    fake = FakeSignalHire(
+        [ACME_SOFTWARE],
+        leaders=[
+            PersonOnFile("sh-1", " Pat  Example ", "Chief Financial Officer"),
+            PersonOnFile("sh-2", "pat example", "CFO"),  # the same person twice
+            PersonOnFile("sh-3", "Call 0400 000 000", "Head of Property"),  # digits: not a name
+            PersonOnFile("sh-4", "Sam Sample", "mail me at sam@example.com"),  # an email
+            PersonOnFile("sh-5", "Lee Person", None),
+        ],
+    )
+    people, notes, problems = await leaders(fake)
+
+    assert [(p.name, p.title, p.signalhire_id) for p in people] == [
+        ("Pat Example", "Chief Financial Officer", "sh-1"),
+        ("Lee Person", None, "sh-5"),
+    ]
+    assert notes == [] and problems == []  # the name was checked
+    assert fake.calls[-1] == "leaders:Acme Software|Melbourne, Australia|5"
+
+
+async def test_senior_people_under_a_name_that_was_not_checked_say_so() -> None:
+    optional = rules_with_signalhire(load_rules(), headcount_tool_name_check="optional")
+    people, notes, _ = await leaders(FakeSignalHire([]), optional)
+    assert len(people) == 2
+    assert notes == [
+        "Senior people: the company name was not checked, so some may work for another "
+        "company with a like name."
+    ]
+
+
+async def test_senior_people_follow_the_name_rule_and_never_raise() -> None:
+    people, _, problems = await leaders(FakeSignalHire([]))  # required, and no match
+    assert people == []
+    assert problems == [
+        "Signal Hire senior people: no company on Signal Hire matched this name. No one was noted."
+    ]
+    quota = SignalHireOutOfQuota("Signal Hire has no credits or quota left", "Resets daily.")
+    people, _, problems = await leaders(acme({"leaders": quota}))
+    assert people == []
+    assert problems == [
+        "Signal Hire senior people: Signal Hire has no credits or quota left. Resets daily."
+    ]
+
+
+def test_senior_people_are_asked_for_whether_or_not_staff_was_found() -> None:
+    assert headcount.wants_people(RULES, SETTINGS, origin="typed", city="Melbourne")
+    assert not headcount.wants_people(RULES, SETTINGS, origin="typed", city=None)
+    assert not headcount.wants_people(RULES, SETTINGS, origin="hubspot", city="Melbourne")
+    off = rules_without_signalhire(load_rules())
+    assert not headcount.wants_people(off, SETTINGS, origin="typed", city="Melbourne")

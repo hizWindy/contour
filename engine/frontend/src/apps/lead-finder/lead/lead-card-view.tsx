@@ -790,6 +790,18 @@ export function LeadCardView({ lead, compact = false }: LeadCardViewProps) {
         <Section title="Who to talk to">
           <p>{lead.contact_role ?? 'Not known yet.'}</p>
           <DecisionMakers people={lead.facts.decision_makers} />
+          {lead.signalhire_people.length > 0 ? (
+            <div className="flex flex-col gap-1">
+              <p className="font-semibold">From Signal Hire</p>
+              <ul className="list-disc pl-5" aria-label="Senior people from Signal Hire">
+                {lead.signalhire_people.map((person) => (
+                  <li key={person.signalhire_id}>
+                    {person.title ? `${person.name}, ${person.title}` : person.name}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           {lead.opening_line ? (
             <p className="font-serif">&ldquo;{lead.opening_line}&rdquo;</p>
           ) : null}

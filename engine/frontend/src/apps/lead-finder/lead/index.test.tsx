@@ -203,6 +203,23 @@ describe('the lead page', () => {
     expect(screen.queryByText('Facts missing.')).toBeNull()
   })
 
+  it('lists the senior people from Signal Hire under who to talk to, as text', async () => {
+    mockApi(
+      makeLead({
+        signalhire_people: [
+          { name: 'Pat Example', title: 'Chief Financial Officer', signalhire_id: 'sh-1' },
+          { name: HOSTILE, title: null, signalhire_id: 'sh-2' },
+        ],
+      }),
+    )
+    const { container } = renderLead()
+
+    const list = await screen.findByRole('list', { name: 'Senior people from Signal Hire' })
+    expect(within(list).getByText('Pat Example, Chief Financial Officer')).toBeInTheDocument()
+    expect(within(list).getByText(HOSTILE)).toBeInTheDocument() // as text, never as a tag
+    expect(container.querySelector('img')).toBeNull()
+  })
+
   it('shows no heading for a source that filled in nothing', async () => {
     mockApi(makeLead())
     renderLead()

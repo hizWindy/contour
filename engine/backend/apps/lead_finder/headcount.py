@@ -16,6 +16,8 @@ import re
 from collections.abc import Awaitable
 from dataclasses import dataclass, field
 
+from pydantic import BaseModel, Field
+
 from apps.lead_finder.context import Origin
 from apps.lead_finder.fields import CompanyFacts, Fact
 from apps.lead_finder.rules import LeadFinderRules
@@ -25,6 +27,7 @@ from core.hubspot.matching import LEGAL_WORDS, names_are_close
 from core.signalhire.client import (
     CompanyInfo,
     CompanyRef,
+    PersonOnFile,
     SignalHire,
     SignalHireCompanyApiOff,
     SignalHireError,
@@ -45,6 +48,7 @@ MAX_OFFICES_SHOWN = 8
 STEP_SECONDS = 90.0  # the whole staff step, so a slow Signal Hire can't hold a research for long
 STAFF_PROBLEM = "Signal Hire staff count"  # starts each line the step adds to a card's problems
 MULTIPLIER_KEY = "size.headcount_tool_multiplier"  # its TBC note in criteria.yaml
+MAX_PERSON_CHARS = 120  # a person's name or job title: one line, cut after reading
 _SLUG = re.compile(r"[a-z0-9][a-z0-9-]{1,98}")
 log = logging.getLogger(__name__)
 
@@ -323,6 +327,98 @@ async def _name_to_count(
     if rule == "optional":
         return company, False, ""
     return None, False, why
+
+
+# --- The research's step: senior people to talk to (PLAN-V4 C5) ----------------------------------
+
+MAX_LEADERS = 5  # senior people kept from Signal Hire for "Who to talk to"
+PEOPLE_PROBLEM = "Signal Hire senior people"  # starts each line this step adds to the problems
+
+
+class SignalHirePerson(BaseModel):
+    """A senior person Signal Hire has on file at the company now: the name and job title only.
+    No contact details. Levi said yes to decision makers' names (2 Nov 2026)."""
+
+    name: str
+    title: str | None
+    signalhire_id: str = Field(description="Signal Hire's id, to ask for a contact later")
+
+
+def wants_people(
+    rules: LeadFinderRules, settings: Settings, *, origin: Origin, city: str | None
+) -> bool:
+    """Whether the research should ask Signal Hire for the company's senior people: Signal Hire
+    is on (`headcount_tool` in `size.staff_sources`), the city is known, and the name didn't
+    come from HubSpot unless HUBSPOT_NAMES_TO_SIGNALHIRE_OK is true. Unlike the staff step, it
+    runs whether or not a staff number was found."""
+    return (
+        "headcount_tool" in rules.criteria.size.staff_sources
+        and city is not None
+        and (origin != "hubspot" or settings.hubspot_names_to_signalhire_ok)
+    )
+
+
+async def find_leaders(
+    client: SignalHire,
+    *,
+    company: str,
+    website: str | None,
+    city: str,
+    rules: LeadFinderRules,
+) -> tuple[list[SignalHirePerson], list[str], list[str]]:
+    """Up to MAX_LEADERS senior people at the company in the city (one search from the daily
+    quota): the people, the notes and the problems. Like the staff step it never raises, and the
+    name check is the same: with `required`, nobody is noted unless the Company API matched the
+    name."""
+    try:
+        async with asyncio.timeout(STEP_SECONDS):
+            name, checked, why_not = await _name_to_count(
+                client, company, website, rules.criteria.size.headcount_tool_name_check
+            )
+            if name is None:
+                return [], [], [f"{PEOPLE_PROBLEM}: {why_not} No one was noted."]
+            found = await client.senior_people(
+                company=name,
+                location=f"{city}, {COUNTRY}",
+                titles=SENIOR_TITLES,
+                size=MAX_LEADERS,
+            )
+    except SignalHireError as error:
+        return [], [], [f"{PEOPLE_PROBLEM}: {error.title}. {error.detail}"]
+    except TimeoutError:
+        return [], [], [f"{PEOPLE_PROBLEM}: Signal Hire took too long."]
+    except Exception as error:  # a bug here must not lose a lead the research already paid for
+        log.warning("signalhire_people_failed", extra={"reason": type(error).__name__})
+        return [], [], [f"{PEOPLE_PROBLEM}: they couldn't be read."]
+    people = _clean_people(found)
+    notes = []
+    if people and not checked:
+        notes.append(
+            "Senior people: the company name was not checked, so some may work for another "
+            "company with a like name."
+        )
+    return people, notes, []
+
+
+def _clean_people(found: list[PersonOnFile]) -> list[SignalHirePerson]:
+    """One line each, no contact details, each person once, at most MAX_LEADERS. The text is
+    Signal Hire's, not ours, so it goes through `one_line`."""
+    kept: list[SignalHirePerson] = []
+    names: set[str] = set()
+    for person in found:
+        name = one_line(person.name, MAX_PERSON_CHARS)
+        title = one_line(person.title, MAX_PERSON_CHARS) or None
+        if (
+            not name
+            or any(char.isdigit() for char in name)
+            or "@" in name
+            or (title is not None and "@" in title)
+            or name.casefold() in names
+        ):
+            continue
+        names.add(name.casefold())
+        kept.append(SignalHirePerson(name=name, title=title, signalhire_id=person.signalhire_id))
+    return kept[:MAX_LEADERS]
 
 
 def _number(value: int | None) -> str:

@@ -42,7 +42,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.lead_finder.context import Origin, ResearchContext
 from apps.lead_finder.fields import AngleNotes, CompanyFacts, Fact
-from apps.lead_finder.headcount import fill_staff_gap, wants_signalhire
+from apps.lead_finder.headcount import (
+    SignalHirePerson,
+    fill_staff_gap,
+    find_leaders,
+    wants_people,
+    wants_signalhire,
+)
 from apps.lead_finder.office_numbers import fill_gaps, office_numbers
 from apps.lead_finder.params import (
     NAME_MESSAGE,
@@ -220,6 +226,11 @@ class LeadCard(BaseModel):
         default_factory=list,
         description="Numbers taken from Signal Hire, because neither the web research nor "
         "HubSpot found a staff number. Empty unless Signal Hire is switched on.",
+    )
+    signalhire_people: list[SignalHirePerson] = Field(
+        default_factory=list,
+        description="Senior people Signal Hire has on file at the company in the city: name and "
+        "job title only, never contact details. Empty unless Signal Hire is on.",
     )
     dropped: list[str] = Field(description="Facts the source check removed, and why")
     problems: list[str] = Field(description="Searches that failed, or caps that were reached")
@@ -503,7 +514,7 @@ async def _judge_and_card(
     facts, from_hubspot = fill_gaps(facts, numbers, rules, job.today)
     # Then Signal Hire may know the staff number neither of them found. Same rule: a gap only.
     website = facts.website.value or request.website
-    facts, from_signalhire = await _signalhire_staff(
+    facts, from_signalhire, signalhire_people = await _signalhire_step(
         session, job, facts, metro, website, signalhire
     )
     verdict = judge(facts, hubspot, rules, job.today)
@@ -539,6 +550,7 @@ async def _judge_and_card(
         ],
         from_hubspot=from_hubspot,
         from_signalhire=from_signalhire,
+        signalhire_people=signalhire_people,
         dropped=dropped,
         problems=job.problems,
         form_failed=job.form_failed,
@@ -618,34 +630,48 @@ async def _search(job: Job, claude: Claude, prompts: list[tuple[str, str]]) -> N
         raise unavailable
 
 
-async def _signalhire_staff(
+async def _signalhire_step(
     session: AsyncSession,
     job: Job,
     facts: CompanyFacts,
     city: str | None,
     website: str | None,
     given: SignalHire | None,
-) -> tuple[CompanyFacts, list[str]]:
-    """The facts with Signal Hire's count in the staff gap, and the note for it. Does nothing
-    unless `wants_signalhire` says so and there is a key (or a fake was given). Whatever goes
-    wrong is a line in the card's problems: the lead is still saved and the run goes on."""
-    wanted = wants_signalhire(facts, job.rules, job.settings, origin=job.context.origin, city=city)
-    if city is None or not wanted:
-        return facts, []
+) -> tuple[CompanyFacts, list[str], list[SignalHirePerson]]:
+    """What Signal Hire adds: its count in the staff gap (`wants_signalhire`), the company's
+    senior people (`wants_people`), and the notes for them. Nothing without a key (or a fake).
+    Whatever goes wrong is a line in the card's problems: the lead is still saved and the run
+    goes on."""
+    origin = job.context.origin
+    staff = wants_signalhire(facts, job.rules, job.settings, origin=origin, city=city)
+    leaders = wants_people(job.rules, job.settings, origin=origin, city=city)
+    if city is None or not (staff or leaders):
+        return facts, [], []
     owned = None if given is not None else get_signalhire(job.settings)  # closed below
     client: SignalHire | None = given if given is not None else owned
     if client is None:  # no key: Signal Hire is off
-        return facts, []
+        return facts, [], []
     await session.rollback()  # no connection waits on Signal Hire (an answer can be slow)
+    notes: list[str] = []
+    people: list[SignalHirePerson] = []
     try:
-        fill = await fill_staff_gap(
-            facts, client, company=job.company, website=website, city=city, rules=job.rules
-        )
+        if staff:
+            fill = await fill_staff_gap(
+                facts, client, company=job.company, website=website, city=city, rules=job.rules
+            )
+            facts = fill.facts
+            notes += fill.notes
+            job.problems.extend(fill.problems)
+        if leaders:
+            people, more, problems = await find_leaders(
+                client, company=job.company, website=website, city=city, rules=job.rules
+            )
+            notes += more
+            job.problems.extend(problems)
     finally:
         if owned is not None:
             await owned.aclose()
-    job.problems.extend(fill.problems)
-    return fill.facts, fill.notes
+    return facts, notes, people
 
 
 async def _fill_form(job: Job, claude: Claude, prompt: Prompt) -> tuple[CompanyFacts, list[str]]:

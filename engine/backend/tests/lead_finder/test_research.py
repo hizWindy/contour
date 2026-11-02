@@ -186,7 +186,16 @@ async def test_signalhire_fills_a_staff_gap_nobody_else_filled(session: AsyncSes
     assert card.from_hubspot == [] and card.problems == []
     assert card.office_m2 == 2100  # 210 staff at 10 m² each: the size rule reads it as it is
     assert card.result == "pass"
-    assert fake.calls == ["find:acme-software", "people:Acme Software|Melbourne, Australia|"]
+    assert fake.calls == [  # the staff count, then the senior people: no company credit
+        "find:acme-software",
+        "people:Acme Software|Melbourne, Australia|",
+        "find:acme-software",
+        "leaders:Acme Software|Melbourne, Australia|5",
+    ]
+    assert [(p.name, p.title) for p in card.signalhire_people] == [
+        ("Pat Example", "Chief Financial Officer"),
+        ("Sam Sample", "Head of Workplace"),
+    ]
     # The saved lead keeps the number and the note, so the website and the list can show them.
     lead = await session.scalar(select(Lead))
     assert lead is not None and lead.staff_in_city == 210
@@ -218,10 +227,13 @@ async def test_with_the_rules_as_shipped_and_the_company_api_off_the_typed_name_
     assert card.from_signalhire == [
         "Staff in Melbourne: about 210, from Signal Hire (105 people on file x 2, TBC). "
         "The company name was not checked, so the count may include other companies "
-        "with a like name."
+        "with a like name.",
+        "Senior people: the company name was not checked, so some may work for another "
+        "company with a like name.",
     ]
     assert card.problems == []
-    assert fake.calls[-1] == "people:Acme Software|Melbourne, Australia|"
+    assert "people:Acme Software|Melbourne, Australia|" in fake.calls
+    assert len(card.signalhire_people) == 2
 
 
 async def test_signalhire_is_not_asked_for_a_number_the_research_found(
@@ -231,7 +243,9 @@ async def test_signalhire_is_not_asked_for_a_number_the_research_found(
     card = await research(session, FakeClaude(), rules=SIGNALHIRE_RULES, signalhire=fake)
 
     assert card.facts.staff_in_city.value == 250  # make_facts has 250 staff
-    assert card.from_signalhire == [] and fake.calls == []
+    assert card.from_signalhire == []
+    assert not any(call.startswith("people:") for call in fake.calls)  # no staff count asked
+    assert len(card.signalhire_people) == 2  # the senior people are asked for all the same
 
 
 async def test_signalhire_is_not_asked_when_hubspot_filled_the_gap(session: AsyncSession) -> None:
@@ -247,7 +261,7 @@ async def test_signalhire_is_not_asked_when_hubspot_filled_the_gap(session: Asyn
 
     assert card.facts.staff_in_city.value == 60
     assert card.from_hubspot and card.from_signalhire == []
-    assert fake.calls == []
+    assert not any(call.startswith("people:") for call in fake.calls)  # no staff count asked
 
 
 async def test_a_signalhire_error_is_a_line_in_the_problems_and_the_lead_is_saved(
@@ -330,7 +344,7 @@ async def test_no_database_connection_is_held_while_signalhire_answers(
     )
 
     assert card.from_signalhire == [SIGNALHIRE_NOTE]
-    assert seen == [False, False]  # the transaction had ended before each call
+    assert seen and not any(seen)  # the transaction had ended before each call
 
 
 class Owned(FakeSignalHire):

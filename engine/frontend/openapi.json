@@ -1910,6 +1910,14 @@
             "title": "Score Parts",
             "type": "array"
           },
+          "signalhire_people": {
+            "description": "Senior people Signal Hire has on file at the company in the city: name and job title only, never contact details. Empty unless Signal Hire is on.",
+            "items": {
+              "$ref": "#/components/schemas/SignalHirePerson"
+            },
+            "title": "Signalhire People",
+            "type": "array"
+          },
           "stage": {
             "anyOf": [
               {
@@ -1961,6 +1969,7 @@
           "notes",
           "from_hubspot",
           "from_signalhire",
+          "signalhire_people",
           "dropped",
           "problems",
           "form_failed",
@@ -2215,6 +2224,14 @@
             "title": "Score Parts",
             "type": "array"
           },
+          "signalhire_people": {
+            "description": "Senior people Signal Hire has on file at the company in the city: name and job title only, never contact details. Empty unless Signal Hire is on.",
+            "items": {
+              "$ref": "#/components/schemas/SignalHirePerson"
+            },
+            "title": "Signalhire People",
+            "type": "array"
+          },
           "stage": {
             "anyOf": [
               {
@@ -2292,6 +2309,7 @@
           "notes",
           "from_hubspot",
           "from_signalhire",
+          "signalhire_people",
           "dropped",
           "problems",
           "form_failed",
@@ -5538,6 +5556,38 @@
           "values"
         ],
         "title": "SettingsPatch",
+        "type": "object"
+      },
+      "SignalHirePerson": {
+        "description": "A senior person Signal Hire has on file at the company now: the name and job title only.\nNo contact details. Levi said yes to decision makers' names (2 Nov 2026).",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "signalhire_id": {
+            "description": "Signal Hire's id, to ask for a contact later",
+            "title": "Signalhire Id",
+            "type": "string"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "required": [
+          "name",
+          "title",
+          "signalhire_id"
+        ],
+        "title": "SignalHirePerson",
         "type": "object"
       },
       "SimilarOut": {

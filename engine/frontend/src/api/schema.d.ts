@@ -1413,6 +1413,11 @@ export interface components {
              */
             score_parts: components["schemas"]["ScorePart"][];
             /**
+             * Signalhire People
+             * @description Senior people Signal Hire has on file at the company in the city: name and job title only, never contact details. Empty unless Signal Hire is on.
+             */
+            signalhire_people: components["schemas"]["SignalHirePerson"][];
+            /**
              * Stage
              * @description The Profile's stage for the result. Empty for a card made under version 1.
              */
@@ -1537,6 +1542,11 @@ export interface components {
              * @description The six parts and their checks. Empty for a Drop, and for a card made under version 1.
              */
             score_parts: components["schemas"]["ScorePart"][];
+            /**
+             * Signalhire People
+             * @description Senior people Signal Hire has on file at the company in the city: name and job title only, never contact details. Empty unless Signal Hire is on.
+             */
+            signalhire_people: components["schemas"]["SignalHirePerson"][];
             /**
              * Stage
              * @description The Profile's stage for the result. Empty for a card made under version 1.
@@ -3007,6 +3017,22 @@ export interface components {
             values: {
                 [key: string]: components["schemas"]["SettingValue"];
             };
+        };
+        /**
+         * SignalHirePerson
+         * @description A senior person Signal Hire has on file at the company now: the name and job title only.
+         *     No contact details. Levi said yes to decision makers' names (2 Nov 2026).
+         */
+        SignalHirePerson: {
+            /** Name */
+            name: string;
+            /**
+             * Signalhire Id
+             * @description Signal Hire's id, to ask for a contact later
+             */
+            signalhire_id: string;
+            /** Title */
+            title: string | null;
         };
         /** SimilarOut */
         SimilarOut: {
