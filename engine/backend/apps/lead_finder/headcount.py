@@ -295,6 +295,19 @@ async def _fill(
         )
 
     staff = round(people * size.headcount_tool_multiplier)
+    group = facts.industry_group
+    if group in rules.criteria.industries.check_office_size:
+        # Signal Hire counts everyone at the company in the city: shop, site and plant staff too.
+        # For these industries that says little about the office, so the number is only a hint:
+        # it is not used, so no office size or fitout value is worked out from it (PLAN-V4 C4).
+        return StaffFill(
+            facts,
+            notes=[
+                f"Signal Hire has {people:,} people on file in {city}. In {group} that counts "
+                "shop, site and plant staff too, so it isn't used as the office's staff. Check "
+                "the office size."
+            ],
+        )
     tbc = ", TBC" if any(note.key == MULTIPLIER_KEY for note in rules.criteria.tbc) else ""
     note = (
         f"Staff in {city}: about {staff:,}, from Signal Hire "

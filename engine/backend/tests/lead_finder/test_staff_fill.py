@@ -371,3 +371,20 @@ def test_senior_people_are_asked_for_whether_or_not_staff_was_found() -> None:
     assert not headcount.wants_people(RULES, SETTINGS, origin="hubspot", city="Melbourne")
     off = rules_without_signalhire(load_rules())
     assert not headcount.wants_people(off, SETTINGS, origin="typed", city="Melbourne")
+
+
+# --- Retail and site-heavy companies (PLAN-V4 C4) -------------------------------------------------
+
+
+async def test_a_retail_count_is_only_a_hint_and_gives_no_office_size() -> None:
+    """Like Myer: 2,868 people on file in Melbourne would be 5,736 staff and an A$86M fitout."""
+    retail = NO_STAFF.model_copy(update={"industry_group": "Retail"})
+    result = await fill(FakeSignalHire([ACME_SOFTWARE], people=2868), retail)
+
+    assert result.facts == retail  # no staff number written
+    assert result.notes == [
+        "Signal Hire has 2,868 people on file in Melbourne. In Retail that counts shop, site and "
+        "plant staff too, so it isn't used as the office's staff. Check the office size."
+    ]
+    verdict = judge(result.facts, HubSpotMatch(status="new"), RULES, TODAY)
+    assert verdict.office_m2 is None and verdict.fitout_aud is None
