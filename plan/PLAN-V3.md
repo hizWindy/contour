@@ -5,6 +5,7 @@ This plan builds Signal Hire into the Lead Finder's research. When the research 
 - **Built by:** Al-khair Pama. **Signed off by:** Levi Young.
 - **Last updated:** 2026-11-02. **TBC** means not confirmed yet.
 - **Progress:** 6 of 11 steps done (A1, A3, C1, C2, C3, C4). The code in "Already built" and Part C (A3, C1 to C4) is committed and merged into `master` (Part C on 2 Nov, by fast-forward, at Al-khair's say). Nothing is pushed. Signal Hire is **on** since 2 Nov (Al-khair's say, before A4 and B1): a run asks it for a staff number nobody else found.
+- **Replaced by:** [PLAN-V4.md](PLAN-V4.md) for the open steps (A2, A4, B1, D1, D2), from 2 Nov. Work them there.
 - **Runs beside:** [PLAN-V2.md](PLAN-V2.md). Its step A3 (test Signal Hire by hand) is steps A2 to A4 here. Sending leads to HubSpot is Phase 5 in [PLAN-V1.md](PLAN-V1.md), and it waits on the HubSpot service key.
 
 ## In short
@@ -182,6 +183,8 @@ Each is one small step on top of this plan. Names, emails and phones need Levi's
 ## Log
 
 Newest first. One line for each tick, pause or surprise.
+
+- 2026-11-02: The open steps moved to [PLAN-V4.md](PLAN-V4.md): A2 is V4 A1, A4 and B1 are V4 C3 and D2, D1 and D2 are V4 D2 and D3. V4 also fixes the answer-form bug found the same day.
 
 - 2026-11-02: **Switched on** (ddc7825, merged into `master`), before A4 and B1, because Al-khair wants every run to use it. `headcount_tool` is in `size.staff_sources`. The name check is `optional`: a free `find_company` call answered 403, so the Company API is off for our account and `required` would count nothing. The search works with our key. A live check with a fake Claude and the real Signal Hire: Culture Amp in Melbourne, 285 people on file x 2 = 570 staff (estimated), result pass, 1 search from the daily quota, no problems. Backend: 2,431 passed, 25 skipped with `RUN_GATES=1`. A4 and B1 now check and tune the multiplier and the name check. Restart the backend to load the new rules. Nothing is pushed.
 
