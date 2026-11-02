@@ -32,15 +32,15 @@ import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 from pydantic_core import PydanticCustomError
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.lead_finder.context import ResearchContext
+from apps.lead_finder.context import Origin, ResearchContext
 from apps.lead_finder.fields import AngleNotes, CompanyFacts, Fact
 from apps.lead_finder.headcount import fill_staff_gap, wants_signalhire
 from apps.lead_finder.office_numbers import fill_gaps, office_numbers
@@ -311,19 +311,7 @@ async def research_company(
     )
 
     # 1. Memory first. The read ends its transaction, so no connection waits on Claude.
-    covered: set[str] = set()
-    if request.use_memory:
-        since = now - timedelta(days=settings.memory_fresh_days)
-        for item in await recent(
-            session, app=APP, kind="source_note", subject=job.company, since=since
-        ):
-            if not item.url or not safe_http_url(item.url):
-                continue
-            angle = str(item.meta.get("angle", ""))
-            published = item.source_date.isoformat() if item.source_date else None
-            claim = one_line(item.content, NOTE_MAX_CHARS)
-            job.notes.append(FoundNote(claim, item.url, published, angle, True, saved=True))
-            covered.add(angle)
+    covered = await _notes_from_memory(session, job, now) if request.use_memory else set()
     await session.rollback()
 
     # 2. Search the angles memory didn't cover
@@ -350,6 +338,151 @@ async def research_company(
         await session.commit()
 
     # 5. HubSpot, rules, score, save
+    card, hubspot, place, metro, profile_text = await _judge_and_card(
+        session, embedder, job, facts, dropped, covered, now, signalhire
+    )
+    await _save(session, embedder, job, card, hubspot, key, place, metro, profile_text)
+    return card
+
+
+async def refill_lead(
+    session: AsyncSession,
+    embedder: Embedder,
+    claude: Claude,
+    rules: LeadFinderRules,
+    settings: Settings,
+    lead_id: uuid.UUID,
+    today: date | None = None,
+) -> LeadCard | None:
+    """Fills the answer form again for a saved lead, from the notes memory keeps, and judges it
+    again (PLAN-V4 B5: the leads whose form failed from 30 Oct to 2 Nov).
+
+    No web search: one Claude request, the form, about US$0.25. The lead keeps its id, run,
+    origin, status and note; its card and the columns copied from it are replaced, and its
+    company profile in memory too. The request is logged without a run, so a finished run's
+    cost doesn't change. None when there is no such lead, its name can't be used, or memory has
+    no fresh notes about it (`memory_fresh_days`).
+    """
+    lead = await session.get(Lead, lead_id)
+    if lead is None:
+        return None
+    old = LeadCard.model_validate(lead.card)
+    origin, is_test, key = cast(Origin, lead.origin), lead.is_test, lead.company_key
+    company, city, domain = lead.company, lead.city, lead.domain
+    try:
+        request = ResearchRequest(company=company, city=city, website=domain)
+    except ValidationError:
+        await session.rollback()
+        return None
+    context = ResearchContext(
+        origin=origin,
+        hubspot_id=old.hubspot.hubspot_id if origin == "hubspot" else None,
+        is_test=is_test,
+    )
+    now = datetime.now(UTC)
+    job = Job(
+        id=lead_id,
+        request=request,
+        rules=rules,
+        settings=settings,
+        context=context,
+        budget=Budget(
+            settings.company_cap_usd,
+            settings.company_max_searches,
+            request_reserve_usd=settings.request_reserve_usd,
+        ),
+        today=today or now.date(),
+    )
+    covered = await _notes_from_memory(session, job, now)
+    await session.rollback()  # no connection waits on Claude
+    if not job.notes:
+        return None
+    try:
+        facts, dropped = await _fill_form(job, claude, extract_prompt(rules))
+    finally:
+        _log_replies(session, job)
+        await session.commit()
+
+    card, hubspot, place, metro, profile_text = await _judge_and_card(
+        session, embedder, job, facts, dropped, covered, now, None
+    )
+    card = card.model_copy(
+        update={
+            "created_at": old.created_at,
+            "research": ResearchCost(
+                cost_usd=old.research.cost_usd + job.budget.spent_usd,
+                cap_usd=old.research.cap_usd,
+                web_searches=old.research.web_searches,
+                claude_requests=old.research.claude_requests + len(job.replies),
+                angles_from_memory=sorted(covered),
+            ),
+        }
+    )
+    values = _lead_values(job, card, hubspot, key, place, metro)
+    for kept in ("id", "run_id", "origin", "is_test", "company_key"):
+        del values[kept]
+    await session.execute(update(Lead).where(Lead.id == lead_id).values(**values))
+    await session.execute(
+        delete(MemoryItem).where(
+            MemoryItem.app == APP,
+            MemoryItem.kind == "company_profile",
+            MemoryItem.meta["lead_id"].as_string() == str(lead_id),
+        )
+    )
+    await remember_many(
+        session,
+        embedder,
+        [
+            MemoryNote(
+                content=profile_text,
+                subject=job.company,
+                url=card.facts.website.value,
+                meta={
+                    "lead_id": str(lead_id),
+                    "result": card.result,
+                    "score": card.score,
+                    "is_test": is_test,
+                },
+            )
+        ],
+        app=APP,
+        kind="company_profile",
+    )
+    await session.commit()
+    log.info("lead_refilled", extra={"lead_id": str(lead_id), "result": card.result})
+    return card
+
+
+async def _notes_from_memory(session: AsyncSession, job: Job, now: datetime) -> set[str]:
+    """Adds the fresh notes memory has about the company to the job. Returns their angles."""
+    covered: set[str] = set()
+    since = now - timedelta(days=job.settings.memory_fresh_days)
+    for item in await recent(
+        session, app=APP, kind="source_note", subject=job.company, since=since
+    ):
+        if not item.url or not safe_http_url(item.url):
+            continue
+        angle = str(item.meta.get("angle", ""))
+        published = item.source_date.isoformat() if item.source_date else None
+        claim = one_line(item.content, NOTE_MAX_CHARS)
+        job.notes.append(FoundNote(claim, item.url, published, angle, True, saved=True))
+        covered.add(angle)
+    return covered
+
+
+async def _judge_and_card(
+    session: AsyncSession,
+    embedder: Embedder,
+    job: Job,
+    facts: CompanyFacts,
+    dropped: list[str],
+    covered: set[str],
+    now: datetime,
+    signalhire: SignalHire | None,
+) -> tuple[LeadCard, HubSpotMatch, str | None, str | None, str]:
+    """Step 5 before the save: HubSpot, the gap fillers, the rules and the score, and the card.
+    Returns the card, the HubSpot match, the place, the metro city and the profile text."""
+    request, rules, settings, context = job.request, job.rules, job.settings, job.context
     place = facts.city.value if isinstance(facts.city.value, str) else request.city
     metro = city_of(place, rules) if place else None
     profile_text = build_profile_text_from_facts(facts, city=metro)
@@ -420,8 +553,7 @@ async def research_company(
         prompt_version=versions(rules),
         created_at=now,
     )
-    await _save(session, embedder, job, card, hubspot, key, place, metro, profile_text)
-    return card
+    return card, hubspot, place, metro, profile_text
 
 
 # --- Steps ---------------------------------------------------------------------------------

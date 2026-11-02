@@ -3,20 +3,21 @@
 Integration tests: they need the database.
 """
 
+import uuid
 from collections.abc import AsyncIterator, Sequence
 from datetime import date
 from decimal import Decimal
 
 import httpx
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.lead_finder import research as research_module
 from apps.lead_finder.api import claude_dependency
 from apps.lead_finder.context import ResearchContext
 from apps.lead_finder.fields import DecisionMaker
-from apps.lead_finder.research import LeadCard, ResearchRequest, research_company
+from apps.lead_finder.research import LeadCard, ResearchRequest, refill_lead, research_company
 from apps.lead_finder.rules import LeadFinderRules, load_rules
 from apps.lead_finder.tables import Lead
 from core.api.app import create_app
@@ -491,3 +492,43 @@ async def test_a_failed_form_marks_the_card_and_says_the_facts_are_missing(
 async def test_a_filled_form_is_not_marked(session: AsyncSession) -> None:
     card = await research(session, FakeClaude())
     assert not card.form_failed
+
+
+# --- Refilling a lead whose form failed (PLAN-V4 B5) ---------------------------------------------
+
+
+async def test_a_failed_lead_is_filled_again_from_its_saved_notes(session: AsyncSession) -> None:
+    refused = ClaudeError("Claude returned an error (400)", "The compiled grammar is too large.")
+    failed = await research(session, FakeClaude(extract_error=refused))
+    assert failed.form_failed
+
+    claude = FakeClaude()
+    card = await refill_lead(
+        session, get_embedder(), claude, load_rules(), get_settings(), failed.id, TODAY
+    )
+
+    assert card is not None and not card.form_failed
+    assert claude.calls == ["extract"]  # the saved notes, and no new web search
+    assert card.id == failed.id
+    assert (card.facts.city.value, card.result) == ("Melbourne", "pass")
+    assert card.problems == []  # the old "form couldn't be filled" line is gone
+    assert card.created_at == failed.created_at
+    assert card.research.claude_requests == failed.research.claude_requests + 1
+    assert card.research.web_searches == failed.research.web_searches
+    lead = await session.scalar(select(Lead))
+    assert lead is not None and (lead.result, lead.card["form_failed"]) == ("pass", False)
+    assert await count(session, Lead) == 1
+    assert await count(session, MemoryItem, kind="company_profile") == 1  # replaced, not added
+
+
+async def test_refilling_needs_fresh_notes_and_a_lead(session: AsyncSession) -> None:
+    refused = ClaudeError("Claude returned an error (400)", "The compiled grammar is too large.")
+    failed = await research(session, FakeClaude(extract_error=refused))
+    await session.execute(delete(MemoryItem).where(MemoryItem.kind == "source_note"))
+    await session.commit()
+
+    claude = FakeClaude()
+    rules, settings = load_rules(), get_settings()
+    assert await refill_lead(session, get_embedder(), claude, rules, settings, failed.id) is None
+    assert await refill_lead(session, get_embedder(), claude, rules, settings, uuid.uuid4()) is None
+    assert claude.calls == []  # nothing was paid for

@@ -6,17 +6,21 @@ Run it from engine/backend:
     uv run lead-finder rejudge
     uv run lead-finder headcount "Culture Amp" --city Melbourne --yes
     uv run lead-finder forms
+    uv run lead-finder refill --yes
 The first two spend money on Claude. Every request is in the search log. `rejudge` is free: it
 judges the saved leads again with the current rules, from their cards, and saves nothing.
 `headcount` reads Signal Hire's numbers for one company (1 company credit, plus 2 searches from
 the daily quota). It needs SIGNALHIRE_API_KEY in engine/.env, and uses no database.
 `forms` checks that every answer form Claude gets is under Anthropic's limits for strict forms
 (free). With `--live --yes` it also sends each form to Claude once, at low effort (a few cents).
+`refill` fills the answer form again for the leads whose form failed, from the notes memory
+keeps: no web search, about US$0.25 a lead (PLAN-V4 B5).
 """
 
 import argparse
 import asyncio
 import sys
+import uuid
 from collections.abc import Sequence
 from datetime import datetime
 from decimal import Decimal
@@ -29,7 +33,12 @@ from sqlalchemy.exc import OperationalError
 from apps.lead_finder.fields import AngleNotes, Candidates, CompanyFacts
 from apps.lead_finder.headcount import HeadcountReading, describe_reading, read_headcount
 from apps.lead_finder.rejudge import Rejudged, rejudge, table
-from apps.lead_finder.research import LeadCard, ResearchRequest, research_company
+from apps.lead_finder.research import (
+    LeadCard,
+    ResearchRequest,
+    refill_lead,
+    research_company,
+)
 from apps.lead_finder.rules import load_rules
 from apps.lead_finder.sources import FACT_FIELDS
 from apps.lead_finder.testing import load_testset
@@ -202,6 +211,75 @@ async def _forms_live() -> int:
     return 1 if refused else 0
 
 
+REFILL_COST_USD = Decimal("0.25")  # one form fill, measured on 2 Nov 2026 (PLAN-V4 B1)
+
+
+async def _failed_leads() -> list[tuple[uuid.UUID, str]]:
+    """The leads whose answer form failed, oldest first: their id and company."""
+    from sqlalchemy import select
+
+    from apps.lead_finder.tables import Lead
+    from core.db.engine import get_engine, get_sessionmaker
+
+    try:
+        async with get_sessionmaker()() as session:
+            rows = await session.execute(
+                select(Lead.id, Lead.company)
+                .where(Lead.card["form_failed"].as_boolean().is_(True))
+                .order_by(Lead.created_at)
+            )
+            return [(lead_id, company) for lead_id, company in rows.all()]
+    finally:
+        await get_engine().dispose()
+
+
+async def _refill(leads: list[tuple[uuid.UUID, str]]) -> Decimal:
+    """Fills each lead's form again, one at a time. Prints a line each, returns the cost."""
+    from core.db.engine import get_engine, get_sessionmaker
+    from core.memory.embedder import get_embedder
+
+    settings, rules, claude = get_settings(), load_rules(), get_claude()
+    spent = Decimal(0)
+    try:
+        for lead_id, company in leads:
+            async with get_sessionmaker()() as session:
+                card = await refill_lead(session, get_embedder(), claude, rules, settings, lead_id)
+            if card is None:
+                print(f"{company}: skipped, memory has no fresh notes about it", flush=True)
+                continue
+            if card.form_failed:
+                print(f"{company}: the form failed again. {'; '.join(card.problems)}", flush=True)
+                continue
+            known = len(FACT_FIELDS) - len(unknown_facts(card))
+            print(
+                f"{company}: {card.result.replace('_', ' ')}, score {card.score}, "
+                f"{known} of {len(FACT_FIELDS)} facts found",
+                flush=True,
+            )
+            spent += card.research.cost_usd
+    finally:
+        await get_engine().dispose()
+    return spent
+
+
+def _refill_command(args: argparse.Namespace) -> int:
+    """Lists the leads whose form failed and what refilling them costs; `--yes` refills them."""
+    leads = asyncio.run(_failed_leads(), loop_factory=loop_factory())
+    if not leads:
+        print("No lead has missing facts. Nothing to refill.")
+        return 0
+    names = ", ".join(company for _, company in leads)
+    if not args.yes:
+        print(
+            f"{len(leads)} leads have missing facts: {names}. Filling their forms again from the "
+            f"notes memory keeps costs about US${REFILL_COST_USD} each, about "
+            f"US${REFILL_COST_USD * len(leads):.2f} in all, and no web searches. Add --yes."
+        )
+        return 1
+    asyncio.run(_refill(leads), loop_factory=loop_factory())
+    return 0
+
+
 def _table(cards: list[LeadCard], label: str) -> None:
     print(f"{label}\n{'Company':<20} {'Result':<16} {'Score':>5} {'Unknown':>7} {'Cost US$':>9}")
     for card in cards:
@@ -251,6 +329,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--live", action="store_true", help="Also send each form to Claude once (a few cents)."
     )
     forms.add_argument("--yes", action="store_true", help="Confirm the spend for --live.")
+    refill = commands.add_parser(
+        "refill",
+        help="Fill the answer form again for the leads whose form failed, from saved notes "
+        "(about US$0.25 a lead, no web search).",
+    )
+    refill.add_argument("--yes", action="store_true", help="Confirm the spend.")
     args = parser.parse_args(argv)
 
     try:
@@ -262,6 +346,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.command == "forms":  # no database either
             return _forms(args)
         migrate()
+        if args.command == "refill":
+            return _refill_command(args)
         if args.command == "research":
             request = ResearchRequest(
                 company=args.company,

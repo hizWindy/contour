@@ -6,6 +6,7 @@ tests fail first next time. They are free: nothing is sent.
 """
 
 import argparse
+import uuid
 from typing import Any
 
 import pytest
@@ -100,3 +101,34 @@ def test_the_live_check_asks_for_yes_before_it_spends(
     monkeypatch.setattr(cli, "configure_claude", never)
     assert cli._forms(forms_args(live=True)) == 1
     assert "--yes" in capsys.readouterr().out
+
+
+# --- The command: `lead-finder refill` (PLAN-V4 B5) -----------------------------------------------
+
+
+def test_the_refill_command_says_what_it_costs_before_it_spends(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def two_failed() -> list[tuple[uuid.UUID, str]]:
+        return [(uuid.uuid4(), "Myer"), (uuid.uuid4(), "KBR")]
+
+    async def never(leads: object) -> None:
+        raise AssertionError("a lead was refilled before the person said yes")
+
+    monkeypatch.setattr(cli, "_failed_leads", two_failed)
+    monkeypatch.setattr(cli, "_refill", never)
+    assert cli._refill_command(argparse.Namespace(yes=False)) == 1
+    out = capsys.readouterr().out
+    assert "2 leads have missing facts: Myer, KBR." in out
+    assert "about US$0.50 in all" in out and "--yes" in out
+
+
+def test_the_refill_command_has_nothing_to_do_without_failed_leads(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def none_failed() -> list[tuple[uuid.UUID, str]]:
+        return []
+
+    monkeypatch.setattr(cli, "_failed_leads", none_failed)
+    assert cli._refill_command(argparse.Namespace(yes=True)) == 0
+    assert "Nothing to refill" in capsys.readouterr().out
