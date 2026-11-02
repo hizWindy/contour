@@ -4,7 +4,7 @@ This plan fixes the bug that empties every lead's facts, then makes Signal Hire 
 
 - **Built by:** Al-khair Pama. **Signed off by:** Levi Young.
 - **Last updated:** 2026-11-02. **TBC** means not confirmed yet.
-- **Progress:** 0 of 16 steps done.
+- **Progress:** 4 of 16 steps done (A2, B1, B2, B3). Work is on branch `plan-v4`.
 - **Replaces:** the open steps of [PLAN-V3.md](PLAN-V3.md) (A2, A4, B1, D1, D2). They are steps A1, C3 and D2 here. PLAN-V3's built work (the Signal Hire client and the staff step) stays as it is.
 
 ## In short
@@ -12,7 +12,7 @@ This plan fixes the bug that empties every lead's facts, then makes Signal Hire 
 - **Goal 1, fix the bug:** since 30 Oct, Claude refuses to fill in our answer form, so every lead's facts are "Not known". Part B fixes the form, checks it can't happen again, and repairs the 23 broken leads.
 - **Goal 2, Signal Hire as a main source:** Signal Hire becomes the first source for the data it is best at: company details, staff per city and decision makers. Claude stays the main source for triggers, owner, lease and office size (Part C).
 - **Order:** get ready (A), fix the form (B), Signal Hire (C), check on real companies and merge (D).
-- **Cost:** about US$5 of Claude in total, plus Signal Hire credits and searches (see "Costs").
+- **Cost:** about US$10 of Claude in total, plus Signal Hire credits and searches (see "Costs"). One form fill costs about US$0.25 (measured in B1), not the US$0.04 first guessed.
 
 ## The bug, in plain words
 
@@ -77,37 +77,41 @@ Follow "How to work this plan" in [PLAN-V2.md](PLAN-V2.md#how-to-work-this-plan)
   - Make a new key and put it in `engine/.env` as `SIGNALHIRE_API_KEY=`. The current one was shown in screenshots.
   - **Done when:** the email is sent and the new key is in. Part B doesn't wait for the answer.
 
-- [ ] **A2. Make the branch and take a baseline.**
+- [x] **A2. Make the branch and take a baseline.** Done 2026-11-02, 1f12544.
   - Make `plan-v4` from `master`. Run the backend suite with `RUN_GATES=1`, then the website checks, one at a time. On 2 Nov: backend 2,431 passed and 25 skipped, website 690 tests.
   - **Done when:** the numbers are in the log.
+  - The baseline is the 2 Nov run on the same code (ddc7825): backend 2,431 passed and 25 skipped with `RUN_GATES=1`, website 690 tests. `plan-v4` only added the plan.
 
 ## Part B: Fix the answer form
 
-- [ ] **B1. Find the limit.** **Costs money:** a few cents of Claude.
+- [x] **B1. Find the limit.** Done 2026-11-02, b900246. **Costs money:** a few cents of Claude.
   - Send today's form to Claude once, with a short sample of notes, and see the same 400 error.
   - Then try smaller forms to find what fits: today's form split in two, and the 27 Oct form.
   - Write in the log what fits and what fails, with sizes.
   - **Done when:** we know a form size that works, with room to spare.
+  - Found: Anthropic allows at most 16 fields that can be "null or a value" in one strict request (its limit on union types). Today's form had 18, the 27 Oct form 16. The real Claude refused today's form with the same 400. The fixed form (3 such fields) was accepted and filled correctly: website, city, 250 staff, the contact role and 1 decision maker. One fill cost US$0.25.
 
-- [ ] **B2. Split the form in two.** Our recommendation, unless B1 shows a cheaper fix.
+- [x] **B2. Split the form in two.** Our recommendation, unless B1 shows a cheaper fix. Done 2026-11-02, b900246.
   - Form 1, the facts the rules need: website, city, industry, owner, staff, office size, local team, healthy, the office matters, triggers, boosters, expected move, growth.
   - Form 2, the rest: office history, past fitout firms, talking points, decision makers, contact role, summary, opening line.
   - Both use the same notes. Form 2 runs only if Form 1 worked. If Form 2 fails, the lead still gets Form 1's facts, and the card says what is missing.
   - The fact names stay the same, so the rules, the score, the website and old cards don't change.
   - **Cost:** about one more Claude request per company, about US$0.04 (**TBC**: measure in D2).
   - **Done when:** the fast and integration tests pass, and one real request per form works (a few cents).
+  - Changed on the day: no split. B1 showed a cheaper fix. A text that may be unknown (a fact's link, date and label, a trigger's date, a decision maker's date, the industry and tier groups, the contact role, the opening line) is plain text in the form Claude gets, and empty text means unknown. Python, saved cards and the website still get null. Only a fact's value can be null, so 3 such fields are left. One Claude request per company, as before, so no extra cost.
 
-- [ ] **B3. Make sure it can't happen again.**
+- [x] **B3. Make sure it can't happen again.** Done 2026-11-02, b900246.
   - A free test that fails when any form is bigger than the size B1 found, minus a margin. It runs in the commit hook.
   - A `live` test that sends each form to the real Claude once. It is off by default and run by hand before a merge (a few cents).
   - **Done when:** both tests exist, and the free one fails on today's big form.
+  - Changed on the day: the live check is a command, `uv run --no-sync lead-finder forms --live --yes`, not a pytest test, because the tests blank the Claude key. Without `--live`, `lead-finder forms` prints each form's size for free. The free test is `tests/lead_finder/test_forms.py`.
 
 - [ ] **B4. Show a failed form clearly.**
   - Today a failed form looks like a normal "Watch" lead with "Nothing useful was found".
   - Change: the card shows a clear message, like "Facts missing: the answer form failed. Re-check this lead." The run page counts these leads, and Results can filter them.
   - **Done when:** the website tests pass, and the message shows in the browser on the fake backend.
 
-- [ ] **B5. Repair the 23 broken leads.** **Costs money:** about US$0.10 per lead, about US$2.30 in total (**TBC**).
+- [ ] **B5. Repair the 23 broken leads.** **Costs money:** about US$0.25 per lead, about US$5.75 in total (**TBC**; was US$2.30 before B1 measured a fill).
   - Their notes are saved in memory, so they don't need new searches. Add a command, `lead-finder refill`, that fills the form again from the saved notes and judges the lead again.
   - Memory keeps notes fresh for 30 days, so notes from 30 Oct can be used until 29 Nov.
   - **Done when:** the 23 leads have their facts, and the log lists how many changed result.
@@ -154,7 +158,7 @@ Follow "How to work this plan" in [PLAN-V2.md](PLAN-V2.md#how-to-work-this-plan)
   - The backend suite with `RUN_GATES=1`, the `live` tests from B3, then the website checks, one at a time.
   - **Done when:** everything passes, and the numbers are in the log.
 
-- [ ] **D2. Research 5 real companies.** **Costs money:** about US$2 of Claude, 5 company credits and about 10 searches (**TBC**).
+- [ ] **D2. Research 5 real companies.** **Costs money:** about US$3.70 of Claude, up to 6 company credits and about 12 searches (**TBC**).
   - Use Culture Amp and Seek (Melbourne), Elders and Maptek (Adelaide) and Mineral Resources (Perth), plus Myer as the retail case.
   - For each, write down: the facts and their sources, the decision makers, any conflicts, and the cost. Compare Signal Hire's staff with the public staff number, and set the multiplier (was PLAN-V3 A4 and B1). Put the table in Criteria_v2 section 2.
   - **Done when:** the cards look right, or the log says what is wrong.
@@ -179,10 +183,10 @@ Follow "How to work this plan" in [PLAN-V2.md](PLAN-V2.md#how-to-work-this-plan)
 
 | Step | Claude | Signal Hire |
 |---|---|---|
-| B1 | a few cents | none |
-| B5 | about US$2.30 | none |
-| D2 | about US$2 | 5 credits, about 10 searches |
-| Each run, after this plan | about US$0.04 more per company (B2) | up to 1 credit and 2 searches per company, capped (C1, C5) |
+| B1 | US$0.25 (done) | none |
+| B5 | about US$5.75 | none |
+| D2 | about US$3.70 (6 companies, about US$0.60 each) | up to 6 credits, about 12 searches |
+| Each run, after this plan | no more than today (B2 needed no second request) | up to 1 credit and 2 searches per company, capped (C1, C5) |
 
 All amounts are **TBC** until measured.
 
@@ -197,5 +201,7 @@ All amounts are **TBC** until measured.
 ## Log
 
 Newest first. One line for each tick, pause or surprise.
+
+- 2026-11-02: A2, B1, B2 and B3 done (b900246). The form bug is fixed: Claude refused today's form (18 "null or a value" fields, limit 16) and accepted the fixed one (3). One fill costs US$0.25, so B5 and D2 cost more than planned (see "Costs"). Next: B4.
 
 - 2026-11-02: Plan written. Facts found the same day: the form fails on every lead since 30 Oct (23 leads); today's form has 27 facts and 7,785 characters, against 17 facts and 5,453 characters on 27 Oct; Signal Hire's search works with our key, and its Company API is off (403). No step started.
