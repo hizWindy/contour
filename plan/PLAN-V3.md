@@ -4,7 +4,7 @@ This plan builds Signal Hire into the Lead Finder's research. When the research 
 
 - **Built by:** Al-khair Pama. **Signed off by:** Levi Young.
 - **Last updated:** 2026-11-02. **TBC** means not confirmed yet.
-- **Progress:** 3 of 11 steps done (A1, A3, C1). The code in "Already built" is committed and merged into `master`. A3 and the steps after it are on branch `signal-hire`, not merged. Nothing feeds a lead yet.
+- **Progress:** 4 of 11 steps done (A1, A3, C1, C2). The code in "Already built" is committed and merged into `master`. A3 and the steps after it are on branch `signal-hire`, not merged. Nothing feeds a lead yet.
 - **Runs beside:** [PLAN-V2.md](PLAN-V2.md). Its step A3 (test Signal Hire by hand) is steps A2 to A4 here. Sending leads to HubSpot is Phase 5 in [PLAN-V1.md](PLAN-V1.md), and it waits on the HubSpot service key.
 
 ## In short
@@ -92,7 +92,7 @@ Each step has its own tests. While `headcount_tool` is out of `staff_sources` (r
   - **Done when:** the rules tests and the settings tests pass.
   - Built: `size.headcount_tool_multiplier: 2` (more than 0 and at most 20, so a typo stops the backend), `size.headcount_tool_name_check: required` (the other value is `optional`, which also uses the name as typed), both listed as TBC, and `headcount_tool` out of `staff_sources`. The switch is `HUBSPOT_NAMES_TO_SIGNALHIRE_OK` in `engine/.env` (see `.env.example`). The API contract and the website types were rewritten, because the Rules endpoint now returns the two new fields.
 
-- [ ] **C2. The fill-in step.**
+- [x] **C2. The fill-in step.** Done 2026-11-02, d301734.
   - In `apps/lead_finder/headcount.py`, add a step like HubSpot's `fill_gaps` in `office_numbers.py`. It runs only when all of these hold:
     - The staff number is still unknown after the research and HubSpot.
     - `headcount_tool` is in `staff_sources`, a key is set, and the office's city is known.
@@ -103,6 +103,12 @@ Each step has its own tests. While `headcount_tool` is out of `staff_sources` (r
   - No link on the fact until Signal Hire's page link format is known (**TBC**). The HubSpot step already allows a fact with no link.
   - Any Signal Hire error becomes one line in the card's problems.
   - **Done when:** tests show it never overwrites a number, needs a city, skips watchlist companies, multiplies once, and the size rule reads the number as it is.
+  - Built: `wants_signalhire` (the conditions above, in plain code) and `fill_staff_gap` in `apps/lead_finder/headcount.py`, with 22 tests in `tests/lead_finder/test_staff_fill.py`. Choices made on the day:
+    - The note says "x", not "×" (the code checker refuses the sign): "Staff in Melbourne: about 210, from Signal Hire (105 people on file x 2, TBC)." The ", TBC" shows only while `size.headcount_tool_multiplier` is listed under `tbc` in `criteria.yaml`, so it goes away when Levi confirms.
+    - With the name rule `required`, it looks the company up first (free) and counts under Signal Hire's own name for it. No match, or the Company API off, means no count and one line in the problems. With `optional` it counts under the name as typed, and the note says the name wasn't checked.
+    - Nobody on file is not a staff number of 0, so no number is written. The problems say why.
+    - `staff_from_linkedin` is set to false (not just left alone), because the research can set that flag with no number, and the size rule would then double ours.
+    - It never raises. A slow Signal Hire is cut off after 90 seconds (`STEP_SECONDS`), and a bug becomes the line "it couldn't be read", with no detail on the card.
 
 - [ ] **C3. Call it from the research.**
   - In `research.py`, step 5, after HubSpot fills its gaps and before the rules run. Make a real client from the settings for each company (it is closed after). Tests pass in a fake one.
@@ -165,6 +171,8 @@ Each is one small step on top of this plan. Names, emails and phones need Levi's
 ## Log
 
 Newest first. One line for each tick, pause or surprise.
+
+- 2026-11-02: C2 done (d301734). `fill_staff_gap` and `wants_signalhire` are built and tested with a fake Signal Hire. The research doesn't call them yet (C3). Next: C3.
 
 - 2026-11-02: C1 done (08047e6). The multiplier (2) and the name check (`required`) are in `criteria.yaml` as TBC, `headcount_tool` is out of `staff_sources`, and `HUBSPOT_NAMES_TO_SIGNALHIRE_OK` exists and is off. Next: C2.
 
