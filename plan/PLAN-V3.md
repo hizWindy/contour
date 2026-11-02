@@ -181,6 +181,8 @@ Each is one small step on top of this plan. Names, emails and phones need Levi's
 
 Newest first. One line for each tick, pause or surprise.
 
+- 2026-11-02: Part C checked on the final code. Backend: 2,429 passed, 25 skipped with `RUN_GATES=1` (3 min 23 s), ruff and mypy clean. Website: lint (0 warnings), types, formatting, 690 tests and the build pass, and the lead card looks right in the browser on the fake backend. D2 repeats this after B1 and D1. Saved to the AI Brain.
+
 - 2026-11-02: C4 done (6cb9fb1). All of Part C is built, tested and on branch `signal-hire`, and Signal Hire is still off. Left: A2 (Al-khair, by hand: a new key and the Company API), A4 (**costs money**: 5 companies), B1, D1 (**costs money**) and D2 (the merge, Al-khair's call).
 
 - 2026-11-02: C3 done (6d4bd92). The research calls Signal Hire for a staff gap, and the card has `from_signalhire`. It is still off (`headcount_tool` is out of `staff_sources`), so no lead changes. The card field and the contract moved here from C4. Next: C4 (the website view and the fake backend).
