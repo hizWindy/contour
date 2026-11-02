@@ -37,6 +37,7 @@ db = pytest.mark.integration
 BASE = "/api/v1/lead-finder/leads"
 ROW_FIELDS = {
     "id",
+    "form_failed",
     "company",
     "city",
     "suburb",

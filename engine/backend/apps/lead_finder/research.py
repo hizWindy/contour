@@ -102,6 +102,9 @@ ANGLE_FOCUS = {
     "raised and any plan to hire or grow (with the office size it says it will need), profit, "
     "and any administration",
 }
+FORM_FAILED_SUMMARY = (
+    "The facts are missing: Claude couldn't fill in the answer form. Re-check this lead."
+)
 NOTE_MAX_CHARS = 400  # a note's claim: one line, cut after parsing (a long answer is paid for)
 log = logging.getLogger(__name__)
 
@@ -220,6 +223,11 @@ class LeadCard(BaseModel):
     )
     dropped: list[str] = Field(description="Facts the source check removed, and why")
     problems: list[str] = Field(description="Searches that failed, or caps that were reached")
+    form_failed: bool = Field(
+        default=False,
+        description="True when Claude couldn't fill in the answer form, so every fact is "
+        "unknown although the search found notes. Re-check the lead.",
+    )
     research: ResearchCost
     rules_version: str
     prompt_version: str
@@ -250,6 +258,7 @@ class Job:
     notes: list[FoundNote] = field(default_factory=list)
     replies: list[tuple[str, Reply[Any]]] = field(default_factory=list)
     problems: list[str] = field(default_factory=list)
+    form_failed: bool = False  # the last form fill failed, so every fact is unknown
 
     @property
     def company(self) -> str:
@@ -399,6 +408,7 @@ async def research_company(
         from_signalhire=from_signalhire,
         dropped=dropped,
         problems=job.problems,
+        form_failed=job.form_failed,
         research=ResearchCost(
             cost_usd=job.budget.spent_usd,
             cap_usd=job.budget.cap_usd,
@@ -538,7 +548,9 @@ async def _fill_form(job: Job, claude: Claude, prompt: Prompt) -> tuple[CompanyF
             break
     if facts is None:
         job.problems.append("The form couldn't be filled. Every fact is unknown.")
-        return empty_facts(job.company), []
+        job.form_failed = True
+        return empty_facts(job.company, FORM_FAILED_SUMMARY), []
+    job.form_failed = False
     checked = check_sources(facts, [note.url for note in job.notes], job.rules.criteria)
     return checked.facts, checked.dropped
 
@@ -605,7 +617,7 @@ def _notes_prompt(job: Job) -> str:
 # --- Results ---------------------------------------------------------------------------------
 
 
-def empty_facts(company: str) -> CompanyFacts:
+def empty_facts(company: str, summary: str = "Nothing useful was found.") -> CompanyFacts:
     def unknown() -> Fact[Any]:
         return Fact(value=None, source_url=None, source_date=None, label=None)
 
@@ -635,7 +647,7 @@ def empty_facts(company: str) -> CompanyFacts:
         talking_points=[],
         contact_role=None,
         decision_makers=[],
-        summary="Nothing useful was found.",
+        summary=summary,
         opening_line=None,
     )
 

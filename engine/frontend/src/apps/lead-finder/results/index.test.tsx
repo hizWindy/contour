@@ -23,6 +23,7 @@ function makeRow(changes: Partial<LeadRow> = {}): LeadRow {
     contact_role: 'Head of Property',
     cost_usd: '0.400000',
     created_at: '2026-10-26T04:00:00Z',
+    form_failed: false,
     updated_at: '2026-10-26T04:00:00Z',
     hubspot_status: 'new',
     industry: 'Software',

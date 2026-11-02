@@ -523,6 +523,7 @@ def test_a_lead_row_has_exactly_the_fields_in_the_design() -> None:
         "industry_group",
         "contact_role",
         "reason",
+        "form_failed",
         "run_id",
         "origin",
         "is_test",

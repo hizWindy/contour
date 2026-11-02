@@ -300,7 +300,8 @@ function MoreFilters({
   const count =
     (filters.min_score !== null ? 1 : 0) +
     (filters.office_m2_min !== null || filters.office_m2_max !== null ? 1 : 0) +
-    (filters.include_tests ? 1 : 0)
+    (filters.include_tests ? 1 : 0) +
+    (filters.facts_missing ? 1 : 0)
   const sizes = facets?.office_m2
   const sizeRange =
     sizes && sizes.min !== null && sizes.max !== null
@@ -362,6 +363,18 @@ function MoreFilters({
             }}
           />
           <FieldLabel htmlFor="results-tests">Show test set leads too</FieldLabel>
+        </Field>
+        <Field orientation="horizontal">
+          <Checkbox
+            id="results-facts-missing"
+            checked={filters.facts_missing}
+            onCheckedChange={(checked) => {
+              onChange({ facts_missing: checked === true })
+            }}
+          />
+          <FieldLabel htmlFor="results-facts-missing">
+            Only leads with facts missing (re-check them)
+          </FieldLabel>
         </Field>
       </PopoverContent>
     </Popover>

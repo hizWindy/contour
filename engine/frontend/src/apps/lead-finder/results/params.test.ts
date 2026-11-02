@@ -31,7 +31,8 @@ describe('the results address', () => {
       `result=pass&result=watch&city=Melbourne&trigger=lease_ending&industry=Software` +
         `&industry_group=Tech&hubspot_status=new&status=watching&run_id=${RUN}&min_score=60` +
         `&office_m2_min=1000&office_m2_max=5000&created_since=2026-10-01&created_until=2026-10-26` +
-        `&trigger_since=2026-01-01&q=acme&include_tests=true&sort=company&order=asc&page=3` +
+        `&trigger_since=2026-01-01&q=acme&include_tests=true&facts_missing=true` +
+        `&sort=company&order=asc&page=3` +
         `&view=map&lead=${LEAD}`,
     )
     expect(state).toEqual({
@@ -57,6 +58,7 @@ describe('the results address', () => {
         trigger_since: '2026-01-01',
         q: 'acme',
         include_tests: true,
+        facts_missing: true,
       },
     })
     // Written back, it reads the same.

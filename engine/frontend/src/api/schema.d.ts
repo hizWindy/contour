@@ -1350,6 +1350,12 @@ export interface components {
             /** Fitout Aud */
             fitout_aud: string | null;
             /**
+             * Form Failed
+             * @description True when Claude couldn't fill in the answer form, so every fact is unknown although the search found notes. Re-check the lead.
+             * @default false
+             */
+            form_failed: boolean;
+            /**
              * From Hubspot
              * @description Numbers taken from HubSpot, because the web research found none
              */
@@ -1450,6 +1456,12 @@ export interface components {
             facts: components["schemas"]["CompanyFacts"];
             /** Fitout Aud */
             fitout_aud: string | null;
+            /**
+             * Form Failed
+             * @description True when Claude couldn't fill in the answer form, so every fact is unknown although the search found notes. Re-check the lead.
+             * @default false
+             */
+            form_failed: boolean;
             /**
              * From Hubspot
              * @description Numbers taken from HubSpot, because the web research found none
@@ -1723,6 +1735,12 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /**
+             * Form Failed
+             * @description True when Claude couldn't fill in the answer form, so the facts are missing
+             * @default false
+             */
+            form_failed: boolean;
             /**
              * Hubspot Status
              * @enum {string}
@@ -4068,6 +4086,8 @@ export interface operations {
                 include_tests?: boolean;
                 /** @description One row for each company: its newest research. Left out, it is on, except when `run_id` is given: then every lead of that run is shown, even when a later run researched the company again. It is worked out BEFORE the other filters, so `status=rejected` lists the companies whose newest research is rejected: a company that was researched again after it was rejected is not in it (use `latest=false` or `run_id` to see the old row). A test-set lead and a real lead of one company are counted apart, so `include_tests=true` shows both. */
                 latest?: boolean | null;
+                /** @description Only leads whose facts are missing, because Claude couldn't fill in the answer form. Re-check them. */
+                facts_missing?: boolean;
             };
             header?: never;
             path?: never;
@@ -4213,6 +4233,8 @@ export interface operations {
                 include_tests?: boolean;
                 /** @description One row for each company: its newest research. Left out, it is on, except when `run_id` is given: then every lead of that run is shown, even when a later run researched the company again. It is worked out BEFORE the other filters, so `status=rejected` lists the companies whose newest research is rejected: a company that was researched again after it was rejected is not in it (use `latest=false` or `run_id` to see the old row). A test-set lead and a real lead of one company are counted apart, so `include_tests=true` shows both. */
                 latest?: boolean | null;
+                /** @description Only leads whose facts are missing, because Claude couldn't fill in the answer form. Re-check them. */
+                facts_missing?: boolean;
             };
             header?: never;
             path?: never;
@@ -4357,6 +4379,8 @@ export interface operations {
                 include_tests?: boolean;
                 /** @description One row for each company: its newest research. Left out, it is on, except when `run_id` is given: then every lead of that run is shown, even when a later run researched the company again. It is worked out BEFORE the other filters, so `status=rejected` lists the companies whose newest research is rejected: a company that was researched again after it was rejected is not in it (use `latest=false` or `run_id` to see the old row). A test-set lead and a real lead of one company are counted apart, so `include_tests=true` shows both. */
                 latest?: boolean | null;
+                /** @description Only leads whose facts are missing, because Claude couldn't fill in the answer form. Re-check them. */
+                facts_missing?: boolean;
             };
             header?: never;
             path?: never;
@@ -4499,6 +4523,8 @@ export interface operations {
                 include_tests?: boolean;
                 /** @description One row for each company: its newest research. Left out, it is on, except when `run_id` is given: then every lead of that run is shown, even when a later run researched the company again. It is worked out BEFORE the other filters, so `status=rejected` lists the companies whose newest research is rejected: a company that was researched again after it was rejected is not in it (use `latest=false` or `run_id` to see the old row). A test-set lead and a real lead of one company are counted apart, so `include_tests=true` shows both. */
                 latest?: boolean | null;
+                /** @description Only leads whose facts are missing, because Claude couldn't fill in the answer form. Re-check them. */
+                facts_missing?: boolean;
             };
             header?: never;
             path?: never;

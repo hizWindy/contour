@@ -92,6 +92,13 @@ class LeadFilters(lead_store.LeadFilters):
     ] = None
     include_tests: Annotated[bool, Query(description="Include leads made by the test set")] = False
     latest: Annotated[bool | None, Query(description=LATEST_DESCRIPTION)] = None
+    facts_missing: Annotated[
+        bool,
+        Query(
+            description="Only leads whose facts are missing, because Claude couldn't fill in "
+            "the answer form. Re-check them."
+        ),
+    ] = False
 
 
 Filters = Annotated[LeadFilters, Depends()]

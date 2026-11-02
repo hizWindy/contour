@@ -769,6 +769,13 @@ export function LeadCardView({ lead, compact = false }: LeadCardViewProps) {
           {lead.is_test ? <Badge variant="outline">Test set</Badge> : null}
         </div>
         <p className="max-w-prose text-body">{lead.summary}</p>
+        {lead.form_failed ? (
+          <p role="status" className="max-w-prose rounded-md border border-destructive px-3 py-2">
+            <span className="font-semibold">Facts missing.</span> Claude couldn&apos;t fill in the
+            answer form, so every fact below is unknown, although the search found notes. Re-check
+            this lead.
+          </p>
+        ) : null}
         {lead.status === 'rejected' && lead.reject_reason ? (
           <p className="text-ui text-muted-foreground">Rejected: {lead.reject_reason}</p>
         ) : null}

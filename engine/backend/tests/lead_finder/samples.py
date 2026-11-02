@@ -274,6 +274,7 @@ class FakeClaude:
     - `off_form`: the answer doesn't fit the form (`parsed` is None);
     - `unavailable`: every request raises `ClaudeUnavailable` (no key);
     - `error`: every request raises this `ClaudeError`;
+    - `extract_error`: only the answer form raises this `ClaudeError` (the searches work);
     - `delay_seconds`: each request waits this long first (for cancel tests);
     - `hold(company)` / `hold_nth(n)`: a company's requests wait until the returned event is
       set. `reached(company)` is set when a request of that company arrives, so a test waits for
@@ -294,6 +295,7 @@ class FakeClaude:
     off_form: bool = False
     unavailable: bool = False
     error: ClaudeError | None = None
+    extract_error: ClaudeError | None = None  # only the answer form fails (PLAN-V4 B4)
     delay_seconds: float = 0
     crash_on: set[str] = field(default_factory=set)
     crash_after_extracts: int | None = None
@@ -359,6 +361,8 @@ class FakeClaude:
             raise ClaudeUnavailable("No Claude API key", "Add ANTHROPIC_API_KEY to engine/.env.")
         if self.error is not None:
             raise self.error
+        if self.extract_error is not None and step == "extract":
+            raise self.extract_error
         gate = self._holds.get(key) or self._holds_nth.get(index)
         if gate is not None:
             await gate.wait()

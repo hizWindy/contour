@@ -64,6 +64,8 @@ export interface LeadFilters {
   trigger_since: string | null
   q: string
   include_tests: boolean
+  /** Only leads whose facts are missing because Claude couldn't fill in the answer form. */
+  facts_missing: boolean
 }
 
 export interface ResultsState {
@@ -94,6 +96,7 @@ export const NO_FILTERS: LeadFilters = {
   trigger_since: null,
   q: '',
   include_tests: false,
+  facts_missing: false,
 }
 
 export const DEFAULT_STATE: ResultsState = {
@@ -180,6 +183,7 @@ export function readResults(params: URLSearchParams): ResultsState {
     run_id: uuid(params.get('run_id')),
     q: (params.get('q') ?? '').slice(0, MAX_TEXT),
     include_tests: params.get('include_tests') === 'true',
+    facts_missing: params.get('facts_missing') === 'true',
   }
   for (const key of NUMBER_KEYS) {
     filters[key] = wholeNumber(params.get(key))
@@ -234,6 +238,9 @@ export function writeResults(state: ResultsState): URLSearchParams {
   if (filters.include_tests) {
     params.set('include_tests', 'true')
   }
+  if (filters.facts_missing) {
+    params.set('facts_missing', 'true')
+  }
   if (state.sort !== DEFAULT_STATE.sort || state.order !== DEFAULT_STATE.order) {
     params.set('sort', state.sort)
     params.set('order', state.order)
@@ -269,6 +276,9 @@ export function activeFilterCount(filters: LeadFilters): number {
   if (filters.include_tests) {
     count += 1
   }
+  if (filters.facts_missing) {
+    count += 1
+  }
   return count
 }
 
@@ -302,6 +312,9 @@ export function filterQuery(filters: LeadFilters): NonNullable<QueryOf<'lead_fac
   }
   if (filters.include_tests) {
     query.include_tests = true
+  }
+  if (filters.facts_missing) {
+    query.facts_missing = true
   }
   return query
 }

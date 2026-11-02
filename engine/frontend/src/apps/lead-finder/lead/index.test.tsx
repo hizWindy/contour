@@ -186,6 +186,23 @@ describe('the lead page', () => {
     expect(within(row).queryByRole('link')).toBeNull() // its page address isn't known yet
   })
 
+  it('says plainly when the facts are missing because the answer form failed', async () => {
+    mockApi(makeLead({ form_failed: true }))
+    renderLead()
+
+    const note = await screen.findByRole('status')
+    expect(note).toHaveTextContent('Facts missing.')
+    expect(note).toHaveTextContent('Re-check this lead.')
+  })
+
+  it('shows no missing-facts note when the form was filled', async () => {
+    mockApi(makeLead())
+    renderLead()
+
+    expect(await screen.findByRole('table', { name: /Facts about Acme Software/ })).toBeVisible()
+    expect(screen.queryByText('Facts missing.')).toBeNull()
+  })
+
   it('shows no heading for a source that filled in nothing', async () => {
     mockApi(makeLead())
     renderLead()

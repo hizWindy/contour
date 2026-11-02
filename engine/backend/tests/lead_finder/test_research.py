@@ -20,6 +20,7 @@ from apps.lead_finder.research import LeadCard, ResearchRequest, research_compan
 from apps.lead_finder.rules import LeadFinderRules, load_rules
 from apps.lead_finder.tables import Lead
 from core.api.app import create_app
+from core.claude.client import ClaudeError
 from core.config import Settings, get_settings
 from core.db.engine import get_session
 from core.hubspot.models import HubSpotCompany, HubSpotDeal, HubSpotOffice
@@ -467,3 +468,26 @@ async def test_decision_makers_from_pages_read_reach_the_saved_card(session: Asy
     # The names stay on the card: the search costs and the search log don't change.
     assert card.research.cost_usd == Decimal("0.400000")
     assert await count(session, SearchLog, job_id=card.id) == 4
+
+
+# --- A failed answer form is shown, not hidden (PLAN-V4 B4) --------------------------------------
+
+
+async def test_a_failed_form_marks_the_card_and_says_the_facts_are_missing(
+    session: AsyncSession,
+) -> None:
+    refused = ClaudeError("Claude returned an error (400)", "The compiled grammar is too large.")
+    card = await research(session, FakeClaude(extract_error=refused))
+
+    assert card.form_failed
+    assert card.notes  # the search found notes: only the form failed
+    assert card.summary == research_module.FORM_FAILED_SUMMARY
+    assert card.facts.city.value is None
+    assert "The form couldn't be filled. Every fact is unknown." in card.problems
+    lead = await session.scalar(select(Lead))
+    assert lead is not None and lead.card["form_failed"] is True
+
+
+async def test_a_filled_form_is_not_marked(session: AsyncSession) -> None:
+    card = await research(session, FakeClaude())
+    assert not card.form_failed

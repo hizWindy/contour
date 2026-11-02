@@ -1260,3 +1260,21 @@ async def test_a_profile_memory_item_is_not_touched_by_feedback(session: AsyncSe
     await lead_store.patch_lead(session, FakeEmbedder(), lead.id, patch(status="new"))
     kinds = list((await session.scalars(select(MemoryItem.kind))).all())
     assert kinds == ["company_profile"]
+
+
+@db
+async def test_leads_whose_form_failed_can_be_listed_on_their_own(session: AsyncSession) -> None:
+    """PLAN-V4 B4: a lead with no facts because the form failed is marked, and can be filtered."""
+    failed, fine = make_lead("Myer"), make_lead("Acme Software")
+    failed.card = {**failed.card, "form_failed": True}
+    await add_all(session, failed, fine)
+
+    page = await list_leads(session, LeadFilters(facts_missing=True))
+    assert page.total == 1 and [row.company for row in page.items] == ["Myer"]
+    assert page.items[0].form_failed
+
+    every = await list_leads(session, LeadFilters())
+    assert {row.company: row.form_failed for row in every.items} == {
+        "Myer": True,
+        "Acme Software": False,
+    }

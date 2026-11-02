@@ -1792,6 +1792,12 @@
             ],
             "title": "Fitout Aud"
           },
+          "form_failed": {
+            "default": false,
+            "description": "True when Claude couldn't fill in the answer form, so every fact is unknown although the search found notes. Re-check the lead.",
+            "title": "Form Failed",
+            "type": "boolean"
+          },
           "from_hubspot": {
             "description": "Numbers taken from HubSpot, because the web research found none",
             "items": {
@@ -1957,6 +1963,7 @@
           "from_signalhire",
           "dropped",
           "problems",
+          "form_failed",
           "research",
           "rules_version",
           "prompt_version",
@@ -2034,6 +2041,12 @@
               }
             ],
             "title": "Fitout Aud"
+          },
+          "form_failed": {
+            "default": false,
+            "description": "True when Claude couldn't fill in the answer form, so every fact is unknown although the search found notes. Re-check the lead.",
+            "title": "Form Failed",
+            "type": "boolean"
           },
           "from_hubspot": {
             "description": "Numbers taken from HubSpot, because the web research found none",
@@ -2281,6 +2294,7 @@
           "from_signalhire",
           "dropped",
           "problems",
+          "form_failed",
           "research",
           "rules_version",
           "prompt_version",
@@ -2691,6 +2705,12 @@
             "format": "date-time",
             "title": "Created At",
             "type": "string"
+          },
+          "form_failed": {
+            "default": false,
+            "description": "True when Claude couldn't fill in the answer form, so the facts are missing",
+            "title": "Form Failed",
+            "type": "boolean"
           },
           "hubspot_status": {
             "enum": [
@@ -7792,6 +7812,18 @@
               "description": "One row for each company: its newest research. Left out, it is on, except when `run_id` is given: then every lead of that run is shown, even when a later run researched the company again. It is worked out BEFORE the other filters, so `status=rejected` lists the companies whose newest research is rejected: a company that was researched again after it was rejected is not in it (use `latest=false` or `run_id` to see the old row). A test-set lead and a real lead of one company are counted apart, so `include_tests=true` shows both.",
               "title": "Latest"
             }
+          },
+          {
+            "description": "Only leads whose facts are missing, because Claude couldn't fill in the answer form. Re-check them.",
+            "in": "query",
+            "name": "facts_missing",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Only leads whose facts are missing, because Claude couldn't fill in the answer form. Re-check them.",
+              "title": "Facts Missing",
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -8306,6 +8338,18 @@
               "description": "One row for each company: its newest research. Left out, it is on, except when `run_id` is given: then every lead of that run is shown, even when a later run researched the company again. It is worked out BEFORE the other filters, so `status=rejected` lists the companies whose newest research is rejected: a company that was researched again after it was rejected is not in it (use `latest=false` or `run_id` to see the old row). A test-set lead and a real lead of one company are counted apart, so `include_tests=true` shows both.",
               "title": "Latest"
             }
+          },
+          {
+            "description": "Only leads whose facts are missing, because Claude couldn't fill in the answer form. Re-check them.",
+            "in": "query",
+            "name": "facts_missing",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Only leads whose facts are missing, because Claude couldn't fill in the answer form. Re-check them.",
+              "title": "Facts Missing",
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -8789,6 +8833,18 @@
               "description": "One row for each company: its newest research. Left out, it is on, except when `run_id` is given: then every lead of that run is shown, even when a later run researched the company again. It is worked out BEFORE the other filters, so `status=rejected` lists the companies whose newest research is rejected: a company that was researched again after it was rejected is not in it (use `latest=false` or `run_id` to see the old row). A test-set lead and a real lead of one company are counted apart, so `include_tests=true` shows both.",
               "title": "Latest"
             }
+          },
+          {
+            "description": "Only leads whose facts are missing, because Claude couldn't fill in the answer form. Re-check them.",
+            "in": "query",
+            "name": "facts_missing",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Only leads whose facts are missing, because Claude couldn't fill in the answer form. Re-check them.",
+              "title": "Facts Missing",
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -9263,6 +9319,18 @@
               ],
               "description": "One row for each company: its newest research. Left out, it is on, except when `run_id` is given: then every lead of that run is shown, even when a later run researched the company again. It is worked out BEFORE the other filters, so `status=rejected` lists the companies whose newest research is rejected: a company that was researched again after it was rejected is not in it (use `latest=false` or `run_id` to see the old row). A test-set lead and a real lead of one company are counted apart, so `include_tests=true` shows both.",
               "title": "Latest"
+            }
+          },
+          {
+            "description": "Only leads whose facts are missing, because Claude couldn't fill in the answer form. Re-check them.",
+            "in": "query",
+            "name": "facts_missing",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Only leads whose facts are missing, because Claude couldn't fill in the answer form. Re-check them.",
+              "title": "Facts Missing",
+              "type": "boolean"
             }
           }
         ],

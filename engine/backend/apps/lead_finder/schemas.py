@@ -148,6 +148,10 @@ class LeadRow(BaseModel):
     industry_group: str | None
     contact_role: str | None
     reason: str = Field(description="One line: why this result")
+    form_failed: bool = Field(
+        default=False,
+        description="True when Claude couldn't fill in the answer form, so the facts are missing",
+    )
     run_id: UUID | None
     origin: Origin
     is_test: bool

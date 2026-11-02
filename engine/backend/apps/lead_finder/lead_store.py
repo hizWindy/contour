@@ -103,6 +103,7 @@ class LeadFilters:
     q: str | None = None
     include_tests: bool = False
     latest: bool | None = None
+    facts_missing: bool = False  # only leads whose answer form failed
 
 
 # The names a facet leaves out of its own count.
@@ -202,6 +203,8 @@ def lead_conditions(
         where.append(Lead.trigger_date >= filters.trigger_since)
     if filters.q:
         where.append(Lead.company.icontains(filters.q, autoescape=True))
+    if filters.facts_missing:
+        where.append(_CARD["form_failed"].as_boolean().is_(True))
     tests = [] if filters.include_tests else [Lead.is_test.is_(False)]
     where += tests
     if newest_only(filters):
@@ -322,6 +325,7 @@ def _row(data: Mapping[Any, Any], labels: Mapping[str, str]) -> LeadRow:
     values["trigger_ids"] = list(data["trigger_ids"] or [])
     values["trigger_label"] = labels.get(trigger_id, trigger_id) if trigger_id else None
     values["reason"] = reason_of(data["result"], data["checks"], data["why_it_fits"])
+    values["form_failed"] = bool(data["form_failed"])
     rules = load_rules()
     values["stage"] = rules.criteria.stages[data["result"]]
     checked = data["score_checked"]
@@ -335,6 +339,7 @@ def _row_query() -> Any:
         Lead.trigger_ids,
         _CARD["checks"].label("checks"),
         _CARD["why_it_fits"].as_string().label("why_it_fits"),
+        func.coalesce(_CARD["form_failed"].as_boolean(), False).label("form_failed"),
     )
 
 
