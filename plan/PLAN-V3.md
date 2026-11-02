@@ -4,7 +4,7 @@ This plan builds Signal Hire into the Lead Finder's research. When the research 
 
 - **Built by:** Al-khair Pama. **Signed off by:** Levi Young.
 - **Last updated:** 2026-11-02. **TBC** means not confirmed yet.
-- **Progress:** 0 of 11 steps done. Some of the code is already written (see "Already built").
+- **Progress:** 1 of 11 steps done (A1). The code in "Already built" is committed and merged into `master`. Nothing feeds a lead yet.
 - **Runs beside:** [PLAN-V2.md](PLAN-V2.md). Its step A3 (test Signal Hire by hand) is steps A2 to A4 here. Sending leads to HubSpot is Phase 5 in [PLAN-V1.md](PLAN-V1.md), and it waits on the HubSpot service key.
 
 ## In short
@@ -17,7 +17,7 @@ This plan builds Signal Hire into the Lead Finder's research. When the research 
 
 ## Already built
 
-Written on 2 Nov, uncommitted, on the branch `decision-makers`. Step A1 moves it to its own branch.
+Written on 2 Nov and committed on `decision-makers` (3b1a093). Step A1 merged it into `master`.
 
 - **The client:** [client.py](../engine/backend/core/signalhire/client.py). It finds a company (free), reads its details (1 company credit), counts its profiles (free) and counts people by company, city and seniority (the daily search quota). It has no call for a person, an employee list or contact details. So no name, email or phone can come back.
 - **The command:** `uv run --no-sync lead-finder headcount "Culture Amp" --city Melbourne --yes` prints a company's numbers. It uses no database. Without `--yes` it spends nothing.
@@ -38,7 +38,7 @@ Written on 2 Nov, uncommitted, on the branch `decision-makers`. Step A1 moves it
 Follow "How to work this plan" in [PLAN-V2.md](PLAN-V2.md#how-to-work-this-plan). In short:
 
 - Do one step at a time, in order. A step is done when its "Done when" is true. Tick it in the same turn, with the date and the commit, then add a line to the log.
-- Check Claude's usage at the start of each step. At 80% on either limit, save to the AI Brain. At 95%, start no new step. To save in one line: `brain inbox "contour PLAN-V3 paused: done A1 to A3, next A4, branch signal-hire, last commit abc1234"`.
+- Check Claude's usage at the start of each step. At 80% on either limit, save to the AI Brain. At 95%, start no new step. To save in one line: `brain inbox "contour PLAN-V3 paused: done A1 to A3, next A4, branch master, last commit abc1234"`.
 - **Costs money** marks a paid step. Run it only when Al-khair says so.
 - Commits and pushes happen when Al-khair asks.
 - While the backend runs, `uv run` can't rebuild the project, because `engine.exe` is in use. Use `uv run --no-sync`, or stop the backend first.
@@ -48,11 +48,8 @@ Follow "How to work this plan" in [PLAN-V2.md](PLAN-V2.md#how-to-work-this-plan)
 
 No lead changes in this part.
 
-- [ ] **A1. Move the work to its own branch.**
-  - Make `signal-hire` from `master`, and bring the uncommitted Signal Hire files over. Name the folders when you stash, so the meeting PDF stays out, and add `-u` so the new files come too: `git stash push -u -- engine plan`, then `git switch -c signal-hire master`, then `git stash pop`.
-  - `cli.py` may clash, because `decision-makers` changed it too. Keep both changes.
-  - Run the fast tests: `uv run --no-sync pytest -m "not integration"` from `engine/backend/`.
-  - **Done when:** the branch exists, the fast tests pass, and Al-khair has said whether to commit.
+- [x] **A1. Commit the work and merge it.** Done 2026-11-02, 3b1a093.
+  - Changed on the day: it was committed on `decision-makers`, not on a new `signal-hire` branch. Then `decision-makers`, with its earlier commit 4b27b41, was fast-forward merged into `master` on Al-khair's say, before A2 to D were done. The commit hook (Ruff, mypy, fast tests) passed. Nothing is pushed.
 
 - [ ] **A2. Replace the key and check the account.** Al-khair, by hand.
   - The current key was shown in screenshots, so delete it in Signal Hire and make a new one. Put it in `engine/.env` as `SIGNALHIRE_API_KEY=`.
@@ -121,7 +118,7 @@ This is where leads start to change. Each step has its own tests.
 - [ ] **D2. The full check, then merge.**
   - Run the whole backend suite, the website checks one at a time, and the contract gate (`RUN_GATES=1`).
   - Update [AGENTS.md](../engine/AGENTS.md), the engine README (how to turn it off), Criteria_v2 section 2, and tick PLAN-V2 step A3.
-  - Merge `signal-hire` into `master`. This is Al-khair's call.
+  - Merge the work into `master`. This is Al-khair's call. The code from before Part B is already there (A1).
   - **Done when:** it is merged and the log says so.
 
 ## Part E: Later, not in this plan
@@ -154,4 +151,5 @@ Each needs Levi's OK first. Each is one small step on top of this plan.
 
 Newest first. One line for each tick, pause or surprise.
 
+- 2026-11-02: A1 done (3b1a093). The work was committed on `decision-makers` and merged into `master` with it, because Al-khair was near the weekly Claude limit and wanted it saved. Next: A2 (new key, Company API), then A3. Nothing is pushed.
 - 2026-11-02: Plan written. The client, the `headcount` command and 39 tests were already written, uncommitted, on `decision-makers`. Al-khair says the key is in `engine/.env`. It hasn't been checked with a real call. No steps started.
