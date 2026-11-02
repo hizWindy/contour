@@ -4,7 +4,7 @@ This plan builds Signal Hire into the Lead Finder's research. When the research 
 
 - **Built by:** Al-khair Pama. **Signed off by:** Levi Young.
 - **Last updated:** 2026-11-02. **TBC** means not confirmed yet.
-- **Progress:** 1 of 11 steps done (A1). The code in "Already built" is committed and merged into `master`. Nothing feeds a lead yet.
+- **Progress:** 2 of 11 steps done (A1, A3). The code in "Already built" is committed and merged into `master`. A3 and the steps after it are on branch `signal-hire`, not merged. Nothing feeds a lead yet.
 - **Runs beside:** [PLAN-V2.md](PLAN-V2.md). Its step A3 (test Signal Hire by hand) is steps A2 to A4 here. Sending leads to HubSpot is Phase 5 in [PLAN-V1.md](PLAN-V1.md), and it waits on the HubSpot service key.
 
 ## In short
@@ -59,11 +59,12 @@ No lead changes in this part.
   - **Costs money:** 1 company credit. Check one company: `uv run --no-sync lead-finder headcount "Culture Amp" --city Melbourne --yes`. If it says "Signal Hire said no", the Company API is still off.
   - **Done when:** one company prints its numbers, or the log says what support answered.
 
-- [ ] **A3. Let the command work while the Company API is off.**
+- [x] **A3. Let the command work while the Company API is off.** Done 2026-11-02, 4e561b4 (on branch `signal-hire`).
   - Today the command stops if Signal Hire refuses the company lookup (a 403). The city count uses the search, which doesn't need the Company API.
   - Change: the client gets its own error for a 403 (a kind of "unavailable"). On that error the command skips the company details, counts people by the name typed, and prints "name not checked". A refused key (401) still stops it. C2 reuses this error.
   - Tests for both cases.
   - **Done when:** the fast tests pass.
+  - Changed on the day: the error is `SignalHireCompanyApiOff`, and only a 403 on a company call (find, details, profile counts) is that error. A 403 on the search is a plain "unavailable" ("Signal Hire refused the search") and still stops the command, because the search doesn't need the Company API, so a refused search is a different problem. If the Company API goes off after the name was found, the name stays checked, the other company calls are skipped, and it is noted once.
 
 - [ ] **A4. Test 5 companies.** This was PLAN-V2 step A3.
   - **Costs money:** up to 5 company credits and 10 searches.
@@ -163,6 +164,8 @@ Each is one small step on top of this plan. Names, emails and phones need Levi's
 ## Log
 
 Newest first. One line for each tick, pause or surprise.
+
+- 2026-11-02: A3 done (4e561b4, branch `signal-hire`). With the Company API off, `lead-finder headcount` counts people by the name typed and says "name not checked". Next: C1 to C4 (they need no key), then A2 and A4 by hand.
 
 - 2026-11-02: Checked the plan against Signal Hire's docs (overview, authentication, pricing, search, Company API pages). It uses the Search API (standard access) and the Company API (on request). The Person API, the only one with contact details, stays out. Added links and office addresses to Part E. Plan pushed to GitHub (b0f4d7e).
 - 2026-11-02: Plan reviewed against the code. Changes: Signal Hire stays off until A4 and B1 say so (rule 3); the multiplier is applied once and `staff_from_linkedin` stays false (C2); watchlist companies need a new switch (C1, C2); no database connection is held during the call (C3); the A4 table now compares whole companies, and B1 has a test for turning it on; Part C can be built while waiting for support.
