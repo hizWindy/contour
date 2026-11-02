@@ -4,7 +4,7 @@ This plan fixes the bug that empties every lead's facts, then makes Signal Hire 
 
 - **Built by:** Al-khair Pama. **Signed off by:** Levi Young.
 - **Last updated:** 2026-11-02. **TBC** means not confirmed yet.
-- **Progress:** 4 of 16 steps done (A2, B1, B2, B3). Work is on branch `plan-v4`.
+- **Progress:** 5 of 16 steps done (A2, B1 to B4). Work is on branch `plan-v4`.
 - **Replaces:** the open steps of [PLAN-V3.md](PLAN-V3.md) (A2, A4, B1, D1, D2). They are steps A1, C3 and D2 here. PLAN-V3's built work (the Signal Hire client and the staff step) stays as it is.
 
 ## In short
@@ -106,10 +106,11 @@ Follow "How to work this plan" in [PLAN-V2.md](PLAN-V2.md#how-to-work-this-plan)
   - **Done when:** both tests exist, and the free one fails on today's big form.
   - Changed on the day: the live check is a command, `uv run --no-sync lead-finder forms --live --yes`, not a pytest test, because the tests blank the Claude key. Without `--live`, `lead-finder forms` prints each form's size for free. The free test is `tests/lead_finder/test_forms.py`.
 
-- [ ] **B4. Show a failed form clearly.**
+- [x] **B4. Show a failed form clearly.** Done 2026-11-02, 7c4703f.
   - Today a failed form looks like a normal "Watch" lead with "Nothing useful was found".
   - Change: the card shows a clear message, like "Facts missing: the answer form failed. Re-check this lead." The run page counts these leads, and Results can filter them.
   - **Done when:** the website tests pass, and the message shows in the browser on the fake backend.
+  - Built: the card's `form_failed` flag and a summary that says the facts are missing; a "Facts missing" note on the lead card; the flag on each Results row; a Results filter, "Only leads with facts missing", under More filters (`facts_missing=true`); migration 0007 marks the cards that failed from 30 Oct to 2 Nov. Changed on the day: no separate count on the run page. Results with the run's filter and "facts missing" shows the same leads. Left: the browser check, done with C6's.
 
 - [ ] **B5. Repair the 23 broken leads.** **Costs money:** about US$0.25 per lead, about US$5.75 in total (**TBC**; was US$2.30 before B1 measured a fill).
   - Their notes are saved in memory, so they don't need new searches. Add a command, `lead-finder refill`, that fills the form again from the saved notes and judges the lead again.
@@ -201,6 +202,8 @@ All amounts are **TBC** until measured.
 ## Log
 
 Newest first. One line for each tick, pause or surprise.
+
+- 2026-11-02: B4 done (7c4703f). A failed form now shows as "Facts missing" on the card and can be filtered in Results. Next: B5.
 
 - 2026-11-02: A2, B1, B2 and B3 done (b900246). The form bug is fixed: Claude refused today's form (18 "null or a value" fields, limit 16) and accepted the fixed one (3). One fill costs US$0.25, so B5 and D2 cost more than planned (see "Costs"). Next: B4.
 
