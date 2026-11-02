@@ -4,7 +4,7 @@ This plan builds Signal Hire into the Lead Finder's research. When the research 
 
 - **Built by:** Al-khair Pama. **Signed off by:** Levi Young.
 - **Last updated:** 2026-11-02. **TBC** means not confirmed yet.
-- **Progress:** 5 of 11 steps done (A1, A3, C1, C2, C3). The code in "Already built" is committed and merged into `master`. A3 and the steps after it are on branch `signal-hire`, not merged. Nothing feeds a lead yet.
+- **Progress:** 6 of 11 steps done (A1, A3, C1, C2, C3, C4). The code in "Already built" is committed and merged into `master`. A3 and the steps after it are on branch `signal-hire`, not merged. Nothing feeds a lead yet.
 - **Runs beside:** [PLAN-V2.md](PLAN-V2.md). Its step A3 (test Signal Hire by hand) is steps A2 to A4 here. Sending leads to HubSpot is Phase 5 in [PLAN-V1.md](PLAN-V1.md), and it waits on the HubSpot service key.
 
 ## In short
@@ -23,7 +23,11 @@ Written on 2 Nov and committed on `decision-makers` (3b1a093). Step A1 merged it
 - **The command:** `uv run --no-sync lead-finder headcount "Culture Amp" --city Melbourne --yes` prints a company's numbers. It uses no database. Without `--yes` it spends nothing.
 - **Safety:** the key is `SIGNALHIRE_API_KEY` in `engine/.env`. The logs remove it. The tests blank it, so no test reaches Signal Hire. A slow paid call is never sent twice, and a busy answer (429) or server error is tried again twice.
 - **Tests:** 39 new tests. The whole fast suite passes: 1,909 passed, 28 skipped.
-- **Not built:** nothing feeds a lead yet. The research doesn't call Signal Hire, and the lead card doesn't show it.
+- **Not built then:** nothing fed a lead. The research didn't call Signal Hire, and the lead card didn't show it.
+
+## Built since, on branch `signal-hire` (not merged)
+
+Steps A3 and C1 to C4, all on 2 Nov. The Signal Hire step is in the research and the lead card shows what it fills in, but it is **off**: `headcount_tool` is not in `size.staff_sources`, so no lead changes. See each step below for what was built and what changed from the plan. To turn it on or off, see `engine/README.md` ("Signal Hire").
 
 ## Rules that keep it safe
 
@@ -120,12 +124,14 @@ Each step has its own tests. While `headcount_tool` is out of `staff_sources` (r
   - Moved here from C4: the card list `from_signalhire`, the API contract and the website types, because the research needs a place to put the note. `lead-finder research` prints the notes too. C4 keeps the website view and the fake backend.
   - Tests: 11 new integration tests in `test_research.py` (it fills a gap; it stays off while `headcount_tool` is not listed; it is not asked when the research or HubSpot had a number; an error is one line and the lead is saved; the watchlist switch; the transaction is over before each call; a client it made is closed, also after an error; no key; an old card still loads). The whole backend suite: 2,424 passed, 28 skipped.
 
-- [ ] **C4. Show it on the lead card.**
+- [x] **C4. Show it on the lead card.** Done 2026-11-02, 6cb9fb1.
   - Add `from_signalhire` to the card: a list of notes, empty by default, like `from_hubspot`.
   - Write the API contract (`uv run engine openapi`) and the website types (`npm run types`).
   - On the lead card, show "From Signal Hire" under "From HubSpot". Add the field to the website's test card (`test-lead.ts`) and a test in `index.test.tsx`.
   - Give the fake backend one sample company with a Signal Hire note, so the page can be checked without a key.
   - **Done when:** the website lint, types, tests and build pass, and the card looks right in the browser on the fake backend.
+  - Built: the card field, the contract, the website types and the test card were done in C3. Here: a small `FromSource` part in `lead-card-view.tsx` shows "From HubSpot" and "From Signal Hire" with the same markup (a heading appears only when that source filled something in), and 2 new website tests (the note and the "Estimated" staff row with no link, both as text; no heading when nothing was filled). The fake backend adds one lead at start, "Sample Headcount", made by a research with a fake Signal Hire, with 2 new tests. The fake backend also blanks `SIGNALHIRE_API_KEY` now, so no run on it can reach Signal Hire, whatever `engine/.env` holds.
+  - Checked: website lint (0 warnings), types, formatting, 690 tests and the build pass. In the browser on the fake backend, the staff row reads "210 staff", "Estimated", with no link, and "From Signal Hire" lists the note. It looked right on a desktop, on a phone and in dark colours, with no console errors.
 
 ## Part D: Check on real companies, then merge
 
@@ -174,6 +180,8 @@ Each is one small step on top of this plan. Names, emails and phones need Levi's
 ## Log
 
 Newest first. One line for each tick, pause or surprise.
+
+- 2026-11-02: C4 done (6cb9fb1). All of Part C is built, tested and on branch `signal-hire`, and Signal Hire is still off. Left: A2 (Al-khair, by hand: a new key and the Company API), A4 (**costs money**: 5 companies), B1, D1 (**costs money**) and D2 (the merge, Al-khair's call).
 
 - 2026-11-02: C3 done (6d4bd92). The research calls Signal Hire for a staff gap, and the card has `from_signalhire`. It is still off (`headcount_tool` is out of `staff_sources`), so no lead changes. The card field and the contract moved here from C4. Next: C4 (the website view and the fake backend).
 
