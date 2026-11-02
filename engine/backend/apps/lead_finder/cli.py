@@ -41,6 +41,7 @@ from apps.lead_finder.research import (
 )
 from apps.lead_finder.rules import load_rules
 from apps.lead_finder.sources import FACT_FIELDS
+from apps.lead_finder.sourcing import SOURCE_NAMES
 from apps.lead_finder.testing import load_testset
 from core.claude.client import ClaudeError, close_claude, configure_claude, get_claude
 from core.claude.forms import OPTIONAL_FIELDS_LIMIT, UNION_FIELDS_LIMIT, form_size
@@ -72,6 +73,11 @@ def describe(card: LeadCard) -> str:
     lines.append(f"  Opening line: {card.opening_line or '-'}")
     lines.append(f"  Unknown: {', '.join(unknown_facts(card)) or 'nothing'}")
     lines += [f"  From Signal Hire: {note}" for note in card.from_signalhire]
+    for entry in card.fact_sources:
+        said = "".join(f"; {SOURCE_NAMES[o.source]} says {o.value}" for o in entry.others)
+        lines.append(f"  {entry.fact}: used {SOURCE_NAMES[entry.used]}{said}")
+        if entry.conflict:
+            lines.append(f"  Check: {entry.conflict}")
     lines += [f"  Removed: {item}" for item in card.dropped]
     lines += [f"  Problem: {item}" for item in card.problems]
     cost = card.research

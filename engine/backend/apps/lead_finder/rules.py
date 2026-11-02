@@ -76,6 +76,32 @@ class Size(Strict):
         return self
 
 
+DataSource = Literal["headcount_tool", "web_research"]
+
+
+class DataSources(Strict):
+    """Which source is main for which data (PLAN-V4 C2). In each list the first source with a value
+    is the one the rules use, and the ones after it are the backup. Staff numbers have their own
+    list, `size.staff_sources`."""
+
+    company_details: list[DataSource] = Field(min_length=1)
+    office_cities: list[DataSource] = Field(min_length=1)
+    decision_makers: list[DataSource] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def check_lists(self) -> Self:
+        for name, sources in self.model_dump().items():
+            if len(set(sources)) != len(sources):
+                raise ValueError(f"data_sources.{name} lists a source twice")
+        return self
+
+
+class Conflicts(Strict):
+    # Staff numbers from two sources more than this many times apart raise a flag. The lower bound
+    # keeps a typo (0.5, or 1) from flagging every lead.
+    staff_gap_ratio: float = Field(gt=1, le=20)
+
+
 class Fitout(Strict):
     rate_per_m2_aud: Decimal = Field(gt=0)
 
@@ -282,6 +308,8 @@ class Criteria(Strict):
     label: str
     cities: Cities
     size: Size
+    data_sources: DataSources
+    conflicts: Conflicts
     fitout: Fitout
     industries: Industries
     fit: Fit

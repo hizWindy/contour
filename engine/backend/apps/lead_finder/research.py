@@ -1,12 +1,15 @@
 """Research one company: one company in, one lead card out.
 
 The steps, in order:
-1. Memory first: reuse fresh notes about this company, so we don't pay to find them again.
+1. Memory first: reuse fresh notes about this company, so we don't pay to find them again. Then
+   Signal Hire's details for the company, when it is switched on: Claude gets them as hints.
 2. Search: one Claude request per angle (property, people, money) that memory didn't cover.
 3. Fill the answer form from the notes, then check every fact's source.
 4. Gap check: if the city, size or a trigger is missing, one more targeted search. Then stop.
-5. Match HubSpot. HubSpot, and then Signal Hire when it is switched on, fill a staff number the
-   research didn't find. Apply the rules and the score, and save the card, the log and the memory.
+5. Match HubSpot. Signal Hire's checked name, website and industry are applied first. HubSpot,
+   Signal Hire and the research each give a staff number, and the first source in
+   `size.staff_sources` wins (the others stay on the card). Apply the rules and the score, and
+   save the card, the log and the memory.
 
 A run calls this for many companies at once and passes a `ResearchContext`: the run id, where
 the company came from, the HubSpot id the watchlist already knows, the run's company cap and
@@ -22,8 +25,8 @@ What a run relies on:
   when the research stops part way (an error or a cancel). A second try reuses them.
 - No database connection is held while Claude works: the memory read ends its transaction first.
   The same goes for Signal Hire: the transaction ends before it is asked.
-- Signal Hire only fills a gap, and a failure there is a line in the problems. It never stops a
-  lead or a run (apps/lead_finder/headcount.py).
+- A failure at Signal Hire is a line in the problems. It never stops a lead or a run
+  (apps/lead_finder/headcount.py, signalhire_company.py).
 """
 
 import asyncio
@@ -40,16 +43,19 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.lead_finder.context import Origin, ResearchContext
+from apps.lead_finder.context import CreditMeter, Origin, ResearchContext
 from apps.lead_finder.fields import AngleNotes, CompanyFacts, Fact
 from apps.lead_finder.headcount import (
+    Resolved,
     SignalHirePerson,
-    fill_staff_gap,
     find_leaders,
+    read_staff,
+    resolve,
+    wants_details,
     wants_people,
     wants_signalhire,
 )
-from apps.lead_finder.office_numbers import fill_gaps, office_numbers
+from apps.lead_finder.office_numbers import fill_gaps, hubspot_staff, office_numbers
 from apps.lead_finder.params import (
     NAME_MESSAGE,
     clean_typed_city,
@@ -74,7 +80,17 @@ from apps.lead_finder.scoring import (
     judge,
     parse_date,
 )
+from apps.lead_finder.signalhire_company import CompanyLookup, hint_lines, look_up_company
 from apps.lead_finder.sources import check_sources, missing_facts, url_key
+from apps.lead_finder.sourcing import (
+    FactSource,
+    StaffCandidate,
+    apply_company_details,
+    check_offices,
+    choose_staff,
+    hubspot_filled,
+    people_source,
+)
 from apps.lead_finder.tables import LIMITS, Lead, clip, company_key
 from core.claude.budget import Budget, BudgetSpent
 from core.claude.client import Claude, ClaudeError, ClaudeUnavailable, Reply, WebTools
@@ -93,6 +109,7 @@ from core.memory.service import Note as MemoryNote
 from core.memory.service import recent, remember_many
 from core.searches.service import log_reply
 from core.signalhire.client import SignalHire, get_signalhire
+from core.signalhire.details import SignalHireCompany
 
 APP = "lead_finder"
 SearchAngle = Literal["property", "people", "money"]
@@ -232,6 +249,17 @@ class LeadCard(BaseModel):
         description="Senior people Signal Hire has on file at the company in the city: name and "
         "job title only, never contact details. Empty unless Signal Hire is on.",
     )
+    signalhire_company: SignalHireCompany | None = Field(
+        default=None,
+        description="Signal Hire's details for the company: its checked name, website, industry, "
+        "offices and staff in all. Empty unless Signal Hire is on and knows the company.",
+    )
+    fact_sources: list[FactSource] = Field(
+        default_factory=list,
+        description="Where a fact came from when it isn't plainly the web research's, with what "
+        "the other sources said and a flag when they are far apart. A fact with no entry came from "
+        "the web research alone.",
+    )
     dropped: list[str] = Field(description="Facts the source check removed, and why")
     problems: list[str] = Field(description="Searches that failed, or caps that were reached")
     form_failed: bool = Field(
@@ -270,6 +298,8 @@ class Job:
     replies: list[tuple[str, Reply[Any]]] = field(default_factory=list)
     problems: list[str] = field(default_factory=list)
     form_failed: bool = False  # the last form fill failed, so every fact is unknown
+    lookup: CompanyLookup | None = None  # Signal Hire's details, read before the search
+    credits: CreditMeter = field(default_factory=lambda: CreditMeter(0))
 
     @property
     def company(self) -> str:
@@ -319,11 +349,17 @@ async def research_company(
             cap, settings.company_max_searches, request_reserve_usd=settings.request_reserve_usd
         ),
         today=today or now.date(),
+        credits=(
+            context.signalhire_credits
+            if context.signalhire_credits is not None
+            else CreditMeter(settings.signalhire_max_credits_per_run)
+        ),
     )
 
     # 1. Memory first. The read ends its transaction, so no connection waits on Claude.
     covered = await _notes_from_memory(session, job, now) if request.use_memory else set()
     await session.rollback()
+    await _company_details(session, job, signalhire, now)
 
     # 2. Search the angles memory didn't cover
     try:
@@ -408,6 +444,7 @@ async def refill_lead(
     await session.rollback()  # no connection waits on Claude
     if not job.notes:
         return None
+    await _company_details(session, job, None, now, may_pay=False)  # a saved copy only: no credit
     try:
         facts, dropped = await _fill_form(job, claude, extract_prompt(rules))
     finally:
@@ -491,11 +528,14 @@ async def _judge_and_card(
     now: datetime,
     signalhire: SignalHire | None,
 ) -> tuple[LeadCard, HubSpotMatch, str | None, str | None, str]:
-    """Step 5 before the save: HubSpot, the gap fillers, the rules and the score, and the card.
+    """Step 5 before the save: the other sources, the rules and the score, and the card.
     Returns the card, the HubSpot match, the place, the metro city and the profile text."""
     request, rules, settings, context = job.request, job.rules, job.settings, job.context
     place = facts.city.value if isinstance(facts.city.value, str) else request.city
     metro = city_of(place, rules) if place else None
+    # Signal Hire's checked name, website and industry come first, so the HubSpot match uses them.
+    details = job.lookup.details if job.lookup is not None else None
+    facts, sources = apply_company_details(facts, details, rules)
     profile_text = build_profile_text_from_facts(facts, city=metro)
     hubspot = await match_company(
         session,
@@ -509,14 +549,29 @@ async def _judge_and_card(
         fuzzy_min=settings.match_fuzzy_min,
         profile_min=settings.match_profile_min,
     )
-    # HubSpot may hold a number the research didn't find. It fills the gap and never overwrites.
+    # HubSpot's move-in year and lease end fill gaps the research left, and never overwrite.
     numbers = await office_numbers(session, hubspot.hubspot_id, metro)
+    before_hubspot = facts
     facts, from_hubspot = fill_gaps(facts, numbers, rules, job.today)
-    # Then Signal Hire may know the staff number neither of them found. Same rule: a gap only.
+    sources.extend(hubspot_filled(before_hubspot, facts))
     website = facts.website.value or request.website
-    facts, from_signalhire, signalhire_people = await _signalhire_step(
+    staff, from_signalhire, signalhire_people = await _signalhire_step(
         session, job, facts, metro, website, signalhire
     )
+    # The staff number: the first source in size.staff_sources that has one. The others stay on the
+    # card, with a flag when they are far apart (PLAN-V4 C3).
+    choice = choose_staff(facts, [hubspot_staff(numbers, rules), staff], rules)
+    facts = choice.facts
+    if choice.note is not None:
+        won, note = choice.note
+        (from_hubspot if won == "hubspot" else from_signalhire).insert(0, note)
+    for entry in (
+        choice.entry,
+        check_offices(details, place, rules),
+        people_source(facts, len(signalhire_people), rules),
+    ):
+        if entry is not None:
+            sources.append(entry)
     verdict = judge(facts, hubspot, rules, job.today)
     card = LeadCard(
         id=job.id,
@@ -551,6 +606,8 @@ async def _judge_and_card(
         from_hubspot=from_hubspot,
         from_signalhire=from_signalhire,
         signalhire_people=signalhire_people,
+        signalhire_company=details,
+        fact_sources=sources,
         dropped=dropped,
         problems=job.problems,
         form_failed=job.form_failed,
@@ -630,6 +687,41 @@ async def _search(job: Job, claude: Claude, prompts: list[tuple[str, str]]) -> N
         raise unavailable
 
 
+async def _company_details(
+    session: AsyncSession,
+    job: Job,
+    given: SignalHire | None,
+    now: datetime,
+    *,
+    may_pay: bool = True,
+) -> None:
+    """Step 1b: Signal Hire's details for the company, before Claude searches (PLAN-V4 C1). A
+    saved copy is free. A new one costs 1 company credit, taken from the run's credits first, and
+    is saved for next time. With `may_pay` false only a saved copy is used (a re-fill must not
+    spend credits). Nothing without a key (or a fake). Whatever goes wrong is a line in the
+    problems: the lead is still researched."""
+    if not wants_details(job.rules, job.settings, origin=job.context.origin):
+        return
+    owned = None if given is not None else get_signalhire(job.settings)  # closed below
+    client: SignalHire | None = given if given is not None else owned
+    if client is None:  # no key: Signal Hire is off
+        return
+    try:
+        job.lookup = await look_up_company(
+            client if may_pay else None,
+            session,
+            company=job.company,
+            website=job.request.website,
+            settings=job.settings,
+            credits=job.credits,
+            now=now,
+        )
+    finally:
+        if owned is not None:
+            await owned.aclose()
+    job.problems.extend(job.lookup.problems)
+
+
 async def _signalhire_step(
     session: AsyncSession,
     job: Job,
@@ -637,41 +729,69 @@ async def _signalhire_step(
     city: str | None,
     website: str | None,
     given: SignalHire | None,
-) -> tuple[CompanyFacts, list[str], list[SignalHirePerson]]:
-    """What Signal Hire adds: its count in the staff gap (`wants_signalhire`), the company's
-    senior people (`wants_people`), and the notes for them. Nothing without a key (or a fake).
-    Whatever goes wrong is a line in the card's problems: the lead is still saved and the run
-    goes on."""
+) -> tuple[StaffCandidate | None, list[str], list[SignalHirePerson]]:
+    """What Signal Hire adds: its staff count in the city as a candidate (`wants_signalhire`), the
+    company's senior people (`wants_people`), and the notes for them. Nothing without a key (or a
+    fake). `choose_staff` decides whether the count is used. Whatever goes wrong is a line in the
+    card's problems: the lead is still saved and the run goes on."""
     origin = job.context.origin
-    staff = wants_signalhire(facts, job.rules, job.settings, origin=origin, city=city)
+    staff = wants_signalhire(job.rules, job.settings, origin=origin, city=city)
     leaders = wants_people(job.rules, job.settings, origin=origin, city=city)
     if city is None or not (staff or leaders):
-        return facts, [], []
+        return None, [], []
     owned = None if given is not None else get_signalhire(job.settings)  # closed below
     client: SignalHire | None = given if given is not None else owned
     if client is None:  # no key: Signal Hire is off
-        return facts, [], []
+        return None, [], []
     await session.rollback()  # no connection waits on Signal Hire (an answer can be slow)
+    candidate: StaffCandidate | None = None
     notes: list[str] = []
     people: list[SignalHirePerson] = []
     try:
+        resolved = await _resolved(client, job, website)
         if staff:
-            fill = await fill_staff_gap(
-                facts, client, company=job.company, website=website, city=city, rules=job.rules
+            reading = await read_staff(
+                facts,
+                client,
+                company=job.company,
+                website=website,
+                city=city,
+                rules=job.rules,
+                resolved=resolved,
             )
-            facts = fill.facts
-            notes += fill.notes
-            job.problems.extend(fill.problems)
+            candidate = reading.candidate
+            notes += reading.notes
+            job.problems.extend(reading.problems)
         if leaders:
             people, more, problems = await find_leaders(
-                client, company=job.company, website=website, city=city, rules=job.rules
+                client,
+                company=job.company,
+                website=website,
+                city=city,
+                rules=job.rules,
+                resolved=resolved,
             )
             notes += more
             job.problems.extend(problems)
     finally:
         if owned is not None:
             await owned.aclose()
-    return facts, notes, people
+    return candidate, notes, people
+
+
+async def _resolved(client: SignalHire, job: Job, website: str | None) -> Resolved:
+    """Who Signal Hire says the company is, asked once for both steps. The answer from before the
+    search is used again, unless the company wasn't found and the website is known now, which gives
+    the lookup one more slug to try. A refused Company API or a failure is not tried again."""
+    known = job.lookup.resolved if job.lookup is not None else None
+    if known is not None and (
+        known.ref is not None
+        or known.api_off
+        or known.error is not None
+        or known.website == website
+    ):
+        return known
+    return await resolve(client, job.company, website)
 
 
 async def _fill_form(job: Job, claude: Claude, prompt: Prompt) -> tuple[CompanyFacts, list[str]]:
@@ -726,6 +846,8 @@ def _hints(job: Job) -> str:
     if request.website:
         lines.append(f"Website: {json_text(request.website)}")
     lines.append(f"Today: {job.today.isoformat()}")
+    if job.lookup is not None and job.lookup.details is not None:
+        lines += hint_lines(job.lookup.details)
     return "\n".join(lines)
 
 

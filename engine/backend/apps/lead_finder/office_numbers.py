@@ -1,9 +1,11 @@
-"""Office numbers HubSpot already holds, used when the web research found none.
+"""Office numbers HubSpot already holds.
 
 Criteria_v2 section 2 gives the order to look for staff numbers: HubSpot first, then a headcount
 tool, then LinkedIn (doubled), then the AI's web research. Our HubSpot export has a LinkedIn staff
-count for most offices, and almost no lease expiry or last-moved dates (EXPORT.md). So HubSpot
-fills a gap the research left, and never overwrites a figure the research found.
+count for most offices, and almost no lease expiry or last-moved dates (EXPORT.md). So HubSpot's
+staff count is one candidate for `sourcing.choose_staff` (`hubspot_staff`), which makes it win
+over a later source and keeps the others on the card. Its move-in year and lease end fill a gap the
+research left, and never overwrite a figure the research found (`fill_gaps`).
 """
 
 from dataclasses import dataclass
@@ -16,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from apps.lead_finder.fields import CompanyFacts, Fact, TriggerFound
 from apps.lead_finder.rules import LeadFinderRules
 from apps.lead_finder.sanitize import safe_http_url
+from apps.lead_finder.sourcing import StaffCandidate
 from core.hubspot.models import HubSpotCompany, HubSpotOffice
 from core.hubspot.profiles import metro_city
 
@@ -57,29 +60,47 @@ async def office_numbers(
     )
 
 
+def _link(numbers: OfficeNumbers) -> str | None:
+    return numbers.record_url if numbers.record_url and safe_http_url(numbers.record_url) else None
+
+
+def hubspot_staff(numbers: OfficeNumbers | None, rules: LeadFinderRules) -> StaffCandidate | None:
+    """HubSpot's staff count for the office as a candidate. It is a LinkedIn count, so the size rule
+    doubles it. None when HubSpot is off in `size.staff_sources`, or has no count for the office."""
+    if numbers is None or "hubspot" not in rules.criteria.size.staff_sources:
+        return None
+    if not numbers.linkedin_staff:
+        return None
+    count = numbers.linkedin_staff
+    multiplier = rules.criteria.size.linkedin_staff_multiplier
+    staff = round(count * multiplier)
+    fact = Fact[int](value=count, source_url=_link(numbers), source_date=None, label="estimated")
+    return StaffCandidate(
+        kind="hubspot",
+        fact=fact,
+        from_linkedin=True,  # the size rule doubles a LinkedIn count
+        staff=staff,
+        text=f"about {staff:,} ({count:,} on LinkedIn x {multiplier:g}, from HubSpot)",
+        note=f"Staff in {numbers.city}: {count} on LinkedIn, from HubSpot. "
+        "The real number is about double.",
+    )
+
+
 def fill_gaps(
     facts: CompanyFacts, numbers: OfficeNumbers | None, rules: LeadFinderRules, today: date
 ) -> tuple[CompanyFacts, list[str]]:
     """The facts with HubSpot's numbers in the gaps, and a plain note for each number used.
 
-    Pure code. Nothing is overwritten: staff, the move-in year and a lease trigger are added only
-    when the research found none. A fact from HubSpot links to the company's HubSpot record.
+    Pure code. Nothing is overwritten: the move-in year and a lease trigger are added only when
+    the research found none. A fact from HubSpot links to the company's HubSpot record. The staff
+    count is not here: it is chosen with the other sources' (`hubspot_staff`).
     """
     if numbers is None or "hubspot" not in rules.criteria.size.staff_sources:
         return facts, []
-    link = numbers.record_url if numbers.record_url and safe_http_url(numbers.record_url) else None
+    link = _link(numbers)
     update: dict[str, Any] = {}
     notes: list[str] = []
 
-    if facts.staff_in_city.value is None and numbers.linkedin_staff:
-        update["staff_in_city"] = Fact[int](
-            value=numbers.linkedin_staff, source_url=link, source_date=None, label="estimated"
-        )
-        update["staff_from_linkedin"] = True  # the size rule doubles a LinkedIn count
-        notes.append(
-            f"Staff in {numbers.city}: {numbers.linkedin_staff} on LinkedIn, from HubSpot. "
-            "The real number is about double."
-        )
     if facts.office_since.value is None and numbers.last_moved:
         update["office_since"] = Fact[str](
             value=numbers.last_moved.isoformat(),

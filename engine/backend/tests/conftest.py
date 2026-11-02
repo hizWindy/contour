@@ -64,6 +64,7 @@ get_settings.cache_clear()
 
 TEST_TABLES = (
     "lead_finder.leads",
+    "lead_finder.signalhire_details",
     "core.searches",
     "core.memory",
     "core.hubspot_deals",

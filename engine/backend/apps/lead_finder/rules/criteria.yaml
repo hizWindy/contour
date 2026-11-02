@@ -22,12 +22,15 @@ size:
   director_band_m2: [800, 1000] # a KNOWN office just under the minimum goes to a Director, not Drop
   linkedin_staff_multiplier: 2 # real staff is about LinkedIn staff x 2
   grow_into_range_months: 24 # a small company that will need an office in range within this long still fits
-  # Where to look for staff numbers, in this order (Criteria_v2.md section 2). hubspot and
-  # headcount_tool each fill a gap the research left. They never overwrite a figure.
+  # Where to look for staff numbers, in this order (Criteria_v2.md section 2). The first source
+  # with a number is the one the rules use. The other numbers stay on the lead card, and a big gap
+  # between them raises a flag (conflicts.staff_gap_ratio below). A source that isn't listed isn't
+  # asked. linkedin is the LinkedIn count the web research read, doubled. web_research is any
+  # other number it found.
   # headcount_tool (Signal Hire: core/signalhire, apps/lead_finder/headcount.py) is ON since 2 Nov,
   # at Al-khair's say, before the PLAN-V3 test of 5 companies (A4, B1). It also needs
-  # SIGNALHIRE_API_KEY in engine/.env. To turn it off, take it out of this list, or empty the key.
-  # linkedin is the LinkedIn count, doubled.
+  # SIGNALHIRE_API_KEY in engine/.env. To turn all of it off (the staff count, the company details
+  # and the senior people), take it out of this list, or empty the key.
   staff_sources: [hubspot, headcount_tool, linkedin, web_research]
   # Signal Hire counts the people it has on file in the city, and the real staff is about that
   # times this. Our guess until the PLAN-V3 test (A4, B1) gives the real ratio.
@@ -39,6 +42,21 @@ size:
   # uses the name as typed now, and turns strict by itself once support switches it on: a short
   # or common name can match other companies' people.
   headcount_tool_name_check: auto
+
+# Which source is main for which data (PLAN-V4 C2). In each list the first source with a value is
+# the one the rules use, and the sources after it are the backup: they fill in only when the ones
+# before have nothing. The other values stay on the lead card, and a big gap raises a flag for a
+# person to check. A source that isn't listed isn't asked, so taking headcount_tool out of one list
+# turns Signal Hire off for that data, with no code change. Staff numbers have their own list,
+# size.staff_sources. Everything else (triggers, owner, lease end, office size, healthy business,
+# office history) comes from the web research alone.
+data_sources:
+  company_details: [headcount_tool, web_research] # the checked name, website and industry. Reading them costs 1 Signal Hire company credit, once a month for each company
+  office_cities: [headcount_tool, web_research] # the cities with an office, and the head office
+  decision_makers: [headcount_tool, web_research] # the names and job titles of senior people
+
+conflicts:
+  staff_gap_ratio: 2 # staff numbers from two sources more than this many times apart raise a flag
 
 fitout:
   rate_per_m2_aud: 1500 # the minimum rate in the deal criteria
@@ -216,7 +234,11 @@ tbc:
   - key: size.staff_hint_min
     note: Levi's brief says 100+ in one office. The Profile says 75+. We start at 75, because a flag costs less than a missed lead. Levi picks, and then staff_min should match.
   - key: size.staff_sources
-    note: The order from the 27 Oct meeting. HubSpot first, then a headcount tool (Signal Hire), then LinkedIn doubled, then the AI's web research. Signal Hire is on since 2 Nov, before its test (PLAN-V3 A4, B1) shows how far its counts can be trusted. Our export has a LinkedIn staff count for most offices, but no office size, no manual headcount, and almost no lease expiry or last-moved dates.
+    note: The order from the 27 Oct meeting. HubSpot first, then a headcount tool (Signal Hire), then LinkedIn doubled, then the AI's web research. The first source with a number wins, and the others stay on the lead card (PLAN-V4 C3); before that, HubSpot and Signal Hire only filled a gap. Signal Hire is on since 2 Nov, before its test (PLAN-V3 A4, B1) shows how far its counts can be trusted. Our export has a LinkedIn staff count for most offices, but no office size, no manual headcount, and almost no lease expiry or last-moved dates.
+  - key: data_sources
+    note: Our proposal (PLAN-V4). Signal Hire is main for the checked company name, website and industry, for the cities with an office, and for senior people's names. The web research is the backup. When two sources disagree, the main source wins and both values stay on the lead card. Levi confirms.
+  - key: conflicts.staff_gap_ratio
+    note: Our guess. Both doublings (LinkedIn x 2, Signal Hire x 2) are guesses, so two numbers 1.5 times apart are normal. Over 2 times apart raises a flag. The test of 5 companies (PLAN-V4 D2) shows what is normal.
   - key: size.headcount_tool_multiplier
     note: Signal Hire counts only the people it has on file, which is fewer than the real staff. 2 is our guess, like LinkedIn. The test of 5 companies (PLAN-V3 A4) gives the real ratio, and B1 sets the number. Levi confirms.
   - key: size.headcount_tool_name_check

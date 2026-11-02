@@ -40,6 +40,7 @@ from langgraph.runtime import Runtime  # noqa: E402
 from langgraph.types import Send  # noqa: E402
 from sqlalchemy import func, select  # noqa: E402
 
+from apps.lead_finder.context import CreditMeter  # noqa: E402
 from apps.lead_finder.prompts import discover_prompt  # noqa: E402
 from apps.lead_finder.rules import LeadFinderRules, load_rules  # noqa: E402
 from apps.lead_finder.steps.choose import (  # noqa: E402
@@ -405,7 +406,11 @@ async def run_graph(
 ) -> RunOutcome:
     """Runs (or resumes) the graph for one run. `known` is the companies of a watchlist, company
     or testset run (empty for discovery). On a resume the saved state wins over `known`."""
-    run = RunCtx(run=ctx, rules=rules or load_rules())
+    run = RunCtx(
+        run=ctx,
+        rules=rules or load_rules(),
+        signalhire_credits=CreditMeter(ctx.settings.signalhire_max_credits_per_run),
+    )
     graph = build_graph().compile(checkpointer=ctx.checkpointer)
     config = cast(RunnableConfig, {"configurable": {"thread_id": str(ctx.run_id)}})
     started = False

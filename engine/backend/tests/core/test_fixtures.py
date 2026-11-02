@@ -3,6 +3,7 @@
 import os
 import uuid
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, TypedDict
 
@@ -23,7 +24,7 @@ from sqlalchemy.ext.asyncio import (
 )
 from sse_starlette.sse import AppStatus, EventSourceResponse
 
-from apps.lead_finder.tables import Lead
+from apps.lead_finder.tables import Lead, SignalHireDetails
 from core.config import get_settings
 from core.hubspot.models import HubSpotCompany, HubSpotDeal, HubSpotOffice
 from core.memory.models import EMBEDDING_DIM, MemoryItem
@@ -57,6 +58,9 @@ async def fill_every_table(factory: async_sessionmaker[AsyncSession]) -> None:
             [
                 run,
                 Setting(key="run_cap_usd", value="20.00"),
+                SignalHireDetails(
+                    signalhire_id=7, slug="acme", details={}, fetched_at=datetime.now(UTC)
+                ),
                 HubSpotCompany(hubspot_id="1", name="Acme", source="export"),
                 SearchLog(
                     app="lead_finder",

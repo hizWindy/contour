@@ -51,6 +51,8 @@ Fail any rule → **Drop**. The exceptions are the Director cases in section 5.
 3. **LinkedIn.** Its number is about half the real staff, so we double it.
 4. **The AI's web research.**
 
+The first source with a number is the one the tool uses. The other numbers stay on the lead card, and numbers more than 2 times apart raise a flag for a person to check (PLAN-V4, **TBC** with Levi). The same idea applies to a company's name, website and industry, its offices and its decision makers: Signal Hire first, then the web research.
+
 Scraping LinkedIn directly risks IP bans (27 Oct meeting).
 
 ## 3. Industry tiers

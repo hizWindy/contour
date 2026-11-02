@@ -3,6 +3,7 @@
 Integration tests: they need the database.
 """
 
+import dataclasses
 import uuid
 from collections.abc import AsyncIterator
 from datetime import date
@@ -15,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.lead_finder import research as research_module
 from apps.lead_finder.api import claude_dependency
-from apps.lead_finder.context import ResearchContext
+from apps.lead_finder.context import CreditMeter, ResearchContext
 from apps.lead_finder.fields import DecisionMaker
 from apps.lead_finder.research import LeadCard, ResearchRequest, refill_lead, research_company
 from apps.lead_finder.rules import LeadFinderRules, load_rules
@@ -29,7 +30,9 @@ from core.memory.embedder import get_embedder
 from core.memory.models import MemoryItem
 from core.searches.models import SearchLog
 from core.signalhire.client import (
+    CompanyInfo,
     CompanyRef,
+    Office,
     SignalHire,
     SignalHireCompanyApiOff,
     SignalHireError,
@@ -37,7 +40,9 @@ from core.signalhire.client import (
 )
 from tests.lead_finder.conftest import lf_settings
 from tests.lead_finder.samples import (
+    ACME_INFO,
     ACME_SOFTWARE,
+    CULTURE_AMP,
     SITE,
     FakeClaude,
     FakeSignalHire,
@@ -145,7 +150,14 @@ async def test_hubspot_staff_fills_a_gap_the_research_left(session: AsyncSession
         )
     )
     await session.flush()
-    session.add(HubSpotOffice(hubspot_company_id="102", label="Melbourne", linkedin_staff=60))
+    session.add(
+        HubSpotOffice(
+            hubspot_company_id="102",
+            label="Melbourne",
+            linkedin_staff=60,
+            last_moved=date(2016, 3, 1),
+        )
+    )
     await session.commit()  # research ends its transaction first, so uncommitted rows would go
 
     claude = FakeClaude(facts=make_facts(office_m2=fact(None), staff_in_city=fact(None)))
@@ -155,13 +167,19 @@ async def test_hubspot_staff_fills_a_gap_the_research_left(session: AsyncSession
     assert card.facts.staff_in_city.value == 60
     assert card.facts.staff_in_city.source_url == link
     assert card.from_hubspot == [
-        "Staff in Melbourne: 60 on LinkedIn, from HubSpot. The real number is about double."
+        "Staff in Melbourne: 60 on LinkedIn, from HubSpot. The real number is about double.",
+        "Moved in March 2016, from HubSpot.",
     ]
     assert card.office_m2 == 1200  # 60 on LinkedIn is about 120 staff, at 10 m² each
     assert card.result == "pass"
+    assert card.facts.office_since.value == "2016-03-01"
+    assert sorted((e.fact, e.used) for e in card.fact_sources) == [
+        ("office_since", "hubspot"),
+        ("staff_in_city", "hubspot"),
+    ]
 
 
-# --- Signal Hire fills a staff number nobody else found (PLAN-V3 C3) ---------------------------
+# --- Signal Hire next to the research and HubSpot (PLAN-V3 C3, PLAN-V4 C1 to C3) ---------------
 
 NO_STAFF = make_facts(office_m2=fact(None), staff_in_city=fact(None))
 SIGNALHIRE_RULES = rules_with_signalhire(load_rules())  # Signal Hire on, the name check required
@@ -170,10 +188,16 @@ SIGNALHIRE_NOTE = "Staff in Melbourne: about 210, from Signal Hire (105 people o
 
 def acme_on_signalhire(**failures: SignalHireError) -> FakeSignalHire:
     """A Signal Hire that knows Acme Software and has 105 people on file in Melbourne."""
-    return FakeSignalHire([ACME_SOFTWARE], people=105, failures=dict(failures))
+    return FakeSignalHire([ACME_SOFTWARE], info=ACME_INFO, people=105, failures=dict(failures))
 
 
-async def test_signalhire_fills_a_staff_gap_nobody_else_filled(session: AsyncSession) -> None:
+def sources_of(card: LeadCard) -> list[tuple[str, str]]:
+    return [(entry.fact, entry.used) for entry in card.fact_sources]
+
+
+async def test_signalhire_gives_the_staff_number_when_nobody_else_found_one(
+    session: AsyncSession,
+) -> None:
     fake = acme_on_signalhire()
     card = await research(
         session, FakeClaude(facts=NO_STAFF), rules=SIGNALHIRE_RULES, signalhire=fake
@@ -186,20 +210,105 @@ async def test_signalhire_fills_a_staff_gap_nobody_else_filled(session: AsyncSes
     assert card.from_hubspot == [] and card.problems == []
     assert card.office_m2 == 2100  # 210 staff at 10 m² each: the size rule reads it as it is
     assert card.result == "pass"
-    assert fake.calls == [  # the staff count, then the senior people: no company credit
-        "find:acme-software",
-        "people:Acme Software|Melbourne, Australia|",
-        "find:acme-software",
-        "leaders:Acme Software|Melbourne, Australia|5",
+    assert fake.calls == [
+        "find:acme-software",  # who the company is: asked once, for every step
+        "info:7",  # its details: 1 company credit
+        "people:Acme Software|Melbourne, Australia|",  # the staff count
+        "leaders:Acme Software|Melbourne, Australia|5",  # the senior people
     ]
     assert [(p.name, p.title) for p in card.signalhire_people] == [
         ("Pat Example", "Chief Financial Officer"),
         ("Sam Sample", "Head of Workplace"),
     ]
+    assert card.signalhire_company is not None and card.signalhire_company.name == "Acme Software"
+    assert card.facts.industry.value == "Software Development"  # Signal Hire is main for it
+    assert sources_of(card) == [
+        ("industry", "signalhire"),
+        ("staff_in_city", "signalhire"),
+        ("decision_makers", "signalhire"),
+    ]
     # The saved lead keeps the number and the note, so the website and the list can show them.
     lead = await session.scalar(select(Lead))
     assert lead is not None and lead.staff_in_city == 210
     assert lead.card["from_signalhire"] == [SIGNALHIRE_NOTE]
+    assert lead.industry == "Software Development"
+
+
+async def test_the_details_reach_claude_as_hints_and_not_as_instructions(
+    session: AsyncSession,
+) -> None:
+    claude = FakeClaude()
+    await research(session, claude, rules=SIGNALHIRE_RULES, signalhire=acme_on_signalhire())
+
+    prompts = [call.prompt for call in claude.requests]
+    assert len(prompts) == 4  # three angles and the form
+    for prompt in prompts:
+        assert "Signal Hire's record of this company (data from a database" in prompt
+        assert '- Checked name: "Acme Software"' in prompt
+        assert '- Offices: "Melbourne (head office), Sydney"' in prompt
+
+
+async def test_a_second_research_of_the_company_does_not_pay_for_the_details_again(
+    session: AsyncSession,
+) -> None:
+    first, second = acme_on_signalhire(), acme_on_signalhire()
+    await research(session, FakeClaude(), rules=SIGNALHIRE_RULES, signalhire=first)
+    card = await research(session, FakeClaude(), rules=SIGNALHIRE_RULES, signalhire=second)
+
+    assert "info:7" in first.calls
+    assert "info:7" not in second.calls and "find:acme-software" not in second.calls
+    assert card.signalhire_company is not None and card.signalhire_company.name == "Acme Software"
+
+
+async def test_the_credits_of_a_run_are_shared_by_its_companies(session: AsyncSession) -> None:
+    meter = CreditMeter(1)
+    context = ResearchContext(signalhire_credits=meter)
+    fake = FakeSignalHire([ACME_SOFTWARE, CULTURE_AMP], info=ACME_INFO, people=105)
+
+    one = await research(
+        session, FakeClaude(), rules=SIGNALHIRE_RULES, context=context, signalhire=fake
+    )
+    other = ACME.model_copy(update={"company": "Culture Amp"})
+    two = await research(
+        session, FakeClaude(), other, rules=SIGNALHIRE_RULES, context=context, signalhire=fake
+    )
+
+    assert one.signalhire_company is not None and two.signalhire_company is None
+    assert meter.used == 1
+    assert sum(call.startswith("info:") for call in fake.calls) == 1  # one credit, one paid call
+    assert two.problems[0] == (
+        "Signal Hire company details: this run has used its 1 company credits, "
+        "so these details were not read."
+    )
+    assert await count(session, Lead) == 2  # the second company is researched all the same
+
+
+async def test_a_staff_number_from_the_research_gives_way_to_signal_hire_and_is_kept(
+    session: AsyncSession,
+) -> None:
+    fake = acme_on_signalhire()
+    card = await research(session, FakeClaude(), rules=SIGNALHIRE_RULES, signalhire=fake)
+
+    assert card.facts.staff_in_city.value == 210  # the research found 250: the main source wins
+    entry = next(e for e in card.fact_sources if e.fact == "staff_in_city")
+    assert entry.used == "signalhire"
+    assert [(o.source, o.value) for o in entry.others] == [("claude", "250")]
+    assert entry.conflict is None  # 250 and 210 are not far apart
+    assert card.from_signalhire == [SIGNALHIRE_NOTE]
+    assert any(call.startswith("people:") for call in fake.calls)  # it was asked all the same
+
+
+async def test_numbers_far_apart_are_both_on_the_card_with_a_flag(session: AsyncSession) -> None:
+    fake = FakeSignalHire([ACME_SOFTWARE], info=ACME_INFO, people=285)  # about 570
+    card = await research(session, FakeClaude(), rules=SIGNALHIRE_RULES, signalhire=fake)
+
+    assert card.facts.staff_in_city.value == 570
+    entry = next(e for e in card.fact_sources if e.fact == "staff_in_city")
+    assert [(o.source, o.value) for o in entry.others] == [("claude", "250")]
+    assert entry.conflict == (
+        "The staff numbers are more than 2 times apart: Signal Hire about 570, Claude about 250. "
+        "Check which is right."
+    )
 
 
 async def test_signalhire_stays_off_while_headcount_tool_is_not_listed(
@@ -211,6 +320,7 @@ async def test_signalhire_stays_off_while_headcount_tool_is_not_listed(
 
     assert fake.calls == []
     assert card.from_signalhire == [] and card.facts.staff_in_city.value is None
+    assert card.signalhire_company is None and card.fact_sources == []
 
 
 async def test_with_the_rules_as_shipped_and_the_company_api_off_the_typed_name_is_counted(
@@ -231,24 +341,17 @@ async def test_with_the_rules_as_shipped_and_the_company_api_off_the_typed_name_
         "Senior people: the company name was not checked, so some may work for another "
         "company with a like name.",
     ]
-    assert card.problems == []
+    assert card.problems == []  # a standing condition, not a problem
     assert "people:Acme Software|Melbourne, Australia|" in fake.calls
+    assert fake.calls.count("find:acme-software") == 1  # looked up once, not once for each step
+    assert not any(call.startswith("info:") for call in fake.calls)  # no details, so no credit
+    assert card.signalhire_company is None
     assert len(card.signalhire_people) == 2
 
 
-async def test_signalhire_is_not_asked_for_a_number_the_research_found(
+async def test_hubspot_wins_the_staff_number_and_signal_hires_is_kept(
     session: AsyncSession,
 ) -> None:
-    fake = acme_on_signalhire()
-    card = await research(session, FakeClaude(), rules=SIGNALHIRE_RULES, signalhire=fake)
-
-    assert card.facts.staff_in_city.value == 250  # make_facts has 250 staff
-    assert card.from_signalhire == []
-    assert not any(call.startswith("people:") for call in fake.calls)  # no staff count asked
-    assert len(card.signalhire_people) == 2  # the senior people are asked for all the same
-
-
-async def test_signalhire_is_not_asked_when_hubspot_filled_the_gap(session: AsyncSession) -> None:
     session.add(HubSpotCompany(hubspot_id="102", name="Acme Software Pty Ltd", source="export"))
     await session.flush()
     session.add(HubSpotOffice(hubspot_company_id="102", label="Melbourne", linkedin_staff=60))
@@ -259,9 +362,32 @@ async def test_signalhire_is_not_asked_when_hubspot_filled_the_gap(session: Asyn
         session, FakeClaude(facts=NO_STAFF), rules=SIGNALHIRE_RULES, signalhire=fake
     )
 
-    assert card.facts.staff_in_city.value == 60
-    assert card.from_hubspot and card.from_signalhire == []
-    assert not any(call.startswith("people:") for call in fake.calls)  # no staff count asked
+    assert card.facts.staff_in_city.value == 60  # HubSpot comes first in size.staff_sources
+    assert (
+        card.from_hubspot and card.from_signalhire == []
+    )  # Signal Hire's note is for a number used
+    entry = next(e for e in card.fact_sources if e.fact == "staff_in_city")
+    assert entry.used == "hubspot"
+    assert [(o.source, o.value) for o in entry.others] == [
+        ("signalhire", "about 210 (105 people on file x 2)")
+    ]
+    assert any(call.startswith("people:") for call in fake.calls)  # it was asked, to compare
+
+
+async def test_an_office_list_with_no_office_in_the_leads_city_is_a_flag(
+    session: AsyncSession,
+) -> None:
+    sydney = (Office("Sydney", "New South Wales", "Australia", True),)
+    fake = FakeSignalHire(
+        [ACME_SOFTWARE], info=dataclasses.replace(ACME_INFO, offices=sydney), people=105
+    )
+    card = await research(session, FakeClaude(), rules=SIGNALHIRE_RULES, signalhire=fake)
+
+    entry = next(e for e in card.fact_sources if e.fact == "city")
+    assert entry.used == "claude"
+    assert entry.conflict == (
+        "Signal Hire lists no office in Melbourne. It lists Sydney (head office). Check the city."
+    )
 
 
 async def test_a_signalhire_error_is_a_line_in_the_problems_and_the_lead_is_saved(
@@ -295,7 +421,7 @@ async def test_a_watchlist_company_goes_to_signalhire_only_with_its_own_switch(
         context=from_hubspot,
         signalhire=fake,
     )
-    assert fake.calls == [] and off.from_signalhire == []
+    assert fake.calls == [] and off.from_signalhire == [] and off.signalhire_company is None
 
     claude_only = lf_settings(hubspot_names_to_claude_ok=True)
     still_off = await research(
@@ -330,6 +456,10 @@ async def test_no_database_connection_is_held_while_signalhire_answers(
             seen.append(session.in_transaction())
             return await super().find_company(id_or_slug)
 
+        async def company_info(self, company_id: int) -> CompanyInfo | None:
+            seen.append(session.in_transaction())
+            return await super().company_info(company_id)
+
         async def count_people(
             self, *, company: str, location: str | None = None, titles: str | None = None
         ) -> int:
@@ -340,45 +470,45 @@ async def test_no_database_connection_is_held_while_signalhire_answers(
         session,
         FakeClaude(facts=NO_STAFF),
         rules=SIGNALHIRE_RULES,
-        signalhire=Watching([ACME_SOFTWARE], people=105),
+        signalhire=Watching([ACME_SOFTWARE], info=ACME_INFO, people=105),
     )
 
     assert card.from_signalhire == [SIGNALHIRE_NOTE]
-    assert seen and not any(seen)  # the transaction had ended before each call
+    assert len(seen) == 3 and not any(seen)  # the transaction had ended before each call
 
 
 class Owned(FakeSignalHire):
     """A client the research made itself, so the research must close it."""
 
-    closed = False
+    closes = 0
 
     async def aclose(self) -> None:
-        self.closed = True
+        self.closes += 1
 
 
 async def test_a_client_made_from_the_settings_is_used_and_closed(
     session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    owned = Owned([ACME_SOFTWARE], people=105)
+    owned = Owned([ACME_SOFTWARE], info=ACME_INFO, people=105)
     monkeypatch.setattr(research_module, "get_signalhire", lambda settings: owned)
 
     card = await research(session, FakeClaude(facts=NO_STAFF), rules=SIGNALHIRE_RULES)
 
     assert card.from_signalhire == [SIGNALHIRE_NOTE]
-    assert owned.closed
+    assert owned.closes == 2  # one client for the details, and one for the staff and the people
 
 
 async def test_a_client_made_from_the_settings_is_closed_even_when_it_fails(
     session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     quota = SignalHireOutOfQuota("Signal Hire has no credits or quota left", "Resets daily.")
-    owned = Owned([ACME_SOFTWARE], people=105, failures={"people": quota})
+    owned = Owned([ACME_SOFTWARE], info=ACME_INFO, people=105, failures={"people": quota})
     monkeypatch.setattr(research_module, "get_signalhire", lambda settings: owned)
 
     card = await research(session, FakeClaude(facts=NO_STAFF), rules=SIGNALHIRE_RULES)
 
     assert card.problems and card.from_signalhire == []
-    assert owned.closed
+    assert owned.closes == 2
 
 
 async def test_without_a_key_there_is_no_client_and_nothing_happens(
@@ -390,14 +520,56 @@ async def test_without_a_key_there_is_no_client_and_nothing_happens(
 
     assert card.from_signalhire == [] and card.problems == []
     assert card.facts.staff_in_city.value is None
+    assert card.signalhire_company is None and card.fact_sources == []
+
+
+async def test_a_refill_uses_the_saved_details_and_never_pays_for_new_ones(
+    session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    refused = ClaudeError("Claude returned an error (400)", "The compiled grammar is too large.")
+    failed = await research(
+        session,
+        FakeClaude(extract_error=refused),
+        rules=SIGNALHIRE_RULES,
+        signalhire=acme_on_signalhire(),  # the details were read, and saved, by the first try
+    )
+    assert failed.signalhire_company is not None
+
+    owned = Owned([ACME_SOFTWARE], info=ACME_INFO, people=105)
+    monkeypatch.setattr(research_module, "get_signalhire", lambda settings: owned)
+    card = await refill_lead(
+        session, get_embedder(), FakeClaude(), SIGNALHIRE_RULES, get_settings(), failed.id, TODAY
+    )
+
+    assert card is not None and card.signalhire_company is not None
+    assert not any(call.startswith(("info:", "find:")) for call in owned.calls)  # nothing paid
+    assert any(call.startswith("people:") for call in owned.calls)  # a search is still free
+
+
+async def test_a_refill_with_no_saved_details_does_not_read_new_ones(
+    session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    refused = ClaudeError("Claude returned an error (400)", "The compiled grammar is too large.")
+    failed = await research(session, FakeClaude(extract_error=refused))  # no Signal Hire then
+
+    owned = Owned([ACME_SOFTWARE], info=ACME_INFO, people=105)
+    monkeypatch.setattr(research_module, "get_signalhire", lambda settings: owned)
+    card = await refill_lead(
+        session, get_embedder(), FakeClaude(), SIGNALHIRE_RULES, get_settings(), failed.id, TODAY
+    )
+
+    assert card is not None and card.signalhire_company is None
+    assert not any(call.startswith("info:") for call in owned.calls)  # no credit was spent
 
 
 async def test_an_old_card_without_the_signalhire_list_still_loads(session: AsyncSession) -> None:
     card = await research(session, FakeClaude())
     saved = card.model_dump(mode="json")
-    del saved["from_signalhire"]  # a card saved before this list existed
+    for name in ("from_signalhire", "signalhire_company", "fact_sources"):
+        del saved[name]  # a card saved before these existed
 
-    assert LeadCard.model_validate(saved).from_signalhire == []
+    old = LeadCard.model_validate(saved)
+    assert (old.from_signalhire, old.signalhire_company, old.fact_sources) == ([], None, [])
 
 
 async def test_an_open_deal_in_hubspot_is_dropped(session: AsyncSession) -> None:

@@ -174,6 +174,12 @@ class Settings(BaseSettings):
     # --- Signal Hire: company headcount, counts only (core/signalhire). None turns it off. ---
     signalhire_api_key: SecretStr | None = None
     signalhire_timeout_seconds: float = Field(30, gt=0, le=120)
+    # Reading a company's details costs 1 company credit (PLAN-V4 C1). A run reads at most this
+    # many (a saved copy is free, so 0 means saved copies only), and a saved copy is used for this
+    # many days. The first number is our guess, TBC with Al-khair until support says what the
+    # account has.
+    signalhire_max_credits_per_run: int = Field(20, ge=0, le=1000)
+    signalhire_details_fresh_days: int = Field(30, ge=1, le=365)
 
     # --- Caps for researching one company. Code checks them before every request. ------
     company_cap_usd: Decimal = Field(Decimal("2.50"), ge=Decimal("0.10"), le=Decimal("5"))

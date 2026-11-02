@@ -6,6 +6,7 @@ from decimal import Decimal
 from typing import Any, Final, overload
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     Date,
@@ -208,3 +209,20 @@ class Lead(Base):
 
 # Newest first: the results page and the "latest" view read leads in this order.
 Index("ix_leads_created_at", Lead.created_at.desc())
+
+
+class SignalHireDetails(Base):
+    """Signal Hire's details for one company, kept for a while (PLAN-V4 C1).
+
+    Reading them costs 1 company credit, so a saved copy is used until it is older than
+    `signalhire_details_fresh_days`, and the same company is paid for once a month, not once for
+    each run. `details` is the `SignalHireCompany` of apps/lead_finder/signalhire_company.py.
+    """
+
+    __tablename__ = "signalhire_details"
+    __table_args__ = (Index("ix_signalhire_details_slug", "slug"), {"schema": SCHEMA})
+
+    signalhire_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    slug: Mapped[str] = mapped_column(String(100))  # Signal Hire's address for it, to find it again
+    details: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

@@ -1,5 +1,5 @@
-"""The Signal Hire staff step: it fills a gap and changes nothing else (PLAN-V3 C2). A fake Signal
-Hire gives saved answers, so no test costs a credit or a search."""
+"""The Signal Hire staff step: it gives its count as a candidate and changes nothing else (PLAN-V3
+C2, PLAN-V4 C3). A fake Signal Hire gives saved answers, so no test costs a credit or a search."""
 
 import asyncio
 from datetime import date
@@ -10,9 +10,10 @@ import pytest
 from apps.lead_finder import headcount
 from apps.lead_finder.context import Origin
 from apps.lead_finder.fields import CompanyFacts
-from apps.lead_finder.headcount import StaffFill, fill_staff_gap, wants_signalhire
+from apps.lead_finder.headcount import StaffReading, read_staff, wants_signalhire
 from apps.lead_finder.rules import LeadFinderRules, load_rules
 from apps.lead_finder.scoring import judge
+from apps.lead_finder.sourcing import choose_staff
 from core.config import Settings, get_settings
 from core.hubspot.matching import HubSpotMatch
 from core.signalhire.client import (
@@ -45,8 +46,8 @@ async def fill(
     facts: CompanyFacts = NO_STAFF,
     rules: LeadFinderRules = RULES,
     city: str = "Melbourne",
-) -> StaffFill:
-    return await fill_staff_gap(
+) -> StaffReading:
+    return await read_staff(
         facts, client, company="Acme Software", website=None, city=city, rules=rules
     )
 
@@ -59,25 +60,28 @@ def acme(failures: dict[str, SignalHireError] | None = None) -> FakeSignalHire:
 # --- What it writes ------------------------------------------------------------------------------
 
 
-async def test_the_count_fills_the_staff_gap_and_is_multiplied_once() -> None:
+async def test_the_count_is_a_candidate_and_is_multiplied_once() -> None:
     fake = acme()
     result = await fill(fake)
 
-    staff = result.facts.staff_in_city
+    candidate = result.candidate
+    assert candidate is not None
+    staff = candidate.fact
     assert (staff.value, staff.label) == (210, "estimated")  # 105 people on file x 2
     assert (staff.source_url, staff.source_date) == (
         None,
         None,
     )  # no link until its format is known
-    assert result.facts.staff_from_linkedin is False  # so the size rule doesn't multiply again
-    assert result.notes == [
+    assert candidate.kind == "headcount_tool" and candidate.staff == 210
+    assert candidate.from_linkedin is False  # so the size rule doesn't multiply again
+    assert candidate.text == "about 210 (105 people on file x 2)"
+    # The card's note shows only if the number is used, so it is the candidate's, not a step note.
+    assert candidate.note == (
         "Staff in Melbourne: about 210, from Signal Hire (105 people on file x 2, TBC)."
-    ]
-    assert result.problems == []
+    )
+    assert result.notes == [] and result.problems == []
     # The name was checked for free, then one search. No "info:" call: that costs a credit.
     assert fake.calls == ["find:acme-software", "people:Acme Software|Melbourne, Australia|"]
-    # Nothing but the staff number changed.
-    assert result.facts == NO_STAFF.model_copy(update={"staff_in_city": staff})
 
 
 async def test_it_counts_under_signal_hires_own_name_for_the_company() -> None:
@@ -89,10 +93,10 @@ async def test_it_counts_under_signal_hires_own_name_for_the_company() -> None:
 async def test_the_multiplier_comes_from_the_rules() -> None:
     rules = rules_with_signalhire(load_rules(), headcount_tool_multiplier=1.5)
     result = await fill(FakeSignalHire([ACME_SOFTWARE], people=100), rules=rules)
-    assert result.facts.staff_in_city.value == 150
-    assert result.notes == [
+    assert result.candidate is not None and result.candidate.fact.value == 150
+    assert result.candidate.note == (
         "Staff in Melbourne: about 150, from Signal Hire (100 people on file x 1.5, TBC)."
-    ]
+    )
 
 
 async def test_the_note_says_tbc_only_while_the_multiplier_is_unconfirmed() -> None:
@@ -101,60 +105,62 @@ async def test_the_note_says_tbc_only_while_the_multiplier_is_unconfirmed() -> N
         update={"criteria": RULES.criteria.model_copy(update={"tbc": kept})}
     )
     result = await fill(acme(), rules=confirmed)
-    assert result.notes == [
+    assert result.candidate is not None
+    assert result.candidate.note == (
         "Staff in Melbourne: about 210, from Signal Hire (105 people on file x 2)."
-    ]
+    )
 
 
 # --- What it never does --------------------------------------------------------------------------
 
 
-async def test_it_never_overwrites_a_staff_number() -> None:
+async def test_it_reads_a_count_even_when_another_source_found_a_number() -> None:
     found = make_facts()  # 250 staff, from the research or from HubSpot
     fake = acme()
     result = await fill(fake, found)
-    assert result == StaffFill(found)
-    assert fake.calls == []  # and nothing was asked, so nothing was spent
+    assert result.candidate is not None and result.candidate.staff == 210
+    assert fake.calls  # it was asked, so the numbers can be compared (PLAN-V4 C3)
+    assert found.staff_in_city.value == 250  # and what it read changes no fact by itself
 
 
 async def test_a_leftover_linkedin_flag_cannot_make_the_size_rule_double_the_number() -> None:
-    """The research may set `staff_from_linkedin` with no number. The step clears it, because the
-    size rule doubles a LinkedIn count, and the saved number is already multiplied."""
+    """The research may set `staff_from_linkedin` with no number. When Signal Hire's count is used,
+    the flag is cleared, because the size rule doubles a LinkedIn count and the saved number is
+    already multiplied."""
     flagged = NO_STAFF.model_copy(update={"staff_from_linkedin": True})
     result = await fill(acme(), flagged)
+    facts = choose_staff(flagged, [result.candidate], RULES).facts
 
-    assert result.facts.staff_from_linkedin is False
-    verdict = judge(result.facts, HubSpotMatch(status="new"), RULES, TODAY)
+    assert facts.staff_in_city.value == 210
+    assert facts.staff_from_linkedin is False
+    verdict = judge(facts, HubSpotMatch(status="new"), RULES, TODAY)
     assert verdict.office_m2 == 2100  # 210 staff x 10 m². Not 4,200
     assert verdict.result == "pass"
-    doubled = result.facts.model_copy(update={"staff_from_linkedin": True})
+    doubled = facts.model_copy(update={"staff_from_linkedin": True})
     assert judge(doubled, HubSpotMatch(status="new"), RULES, TODAY).office_m2 == 4200
 
 
 async def test_nobody_on_file_is_not_a_staff_number_of_zero() -> None:
     result = await fill(FakeSignalHire([ACME_SOFTWARE], people=0))
-    assert result.facts == NO_STAFF and result.notes == []
-    assert result.problems == [
-        "Signal Hire staff count: no people on file in Melbourne. No count was used."
-    ]
+    assert result == StaffReading(
+        problems=["Signal Hire staff count: no people on file in Melbourne. No count was used."]
+    )
 
 
 # --- When it runs --------------------------------------------------------------------------------
 
 
 def wants(
-    facts: CompanyFacts = NO_STAFF,
     rules: LeadFinderRules = RULES,
     settings: Settings = SETTINGS,
     origin: Origin = "typed",
     city: str | None = "Melbourne",
 ) -> bool:
-    return wants_signalhire(facts, rules, settings, origin=origin, city=city)
+    return wants_signalhire(rules, settings, origin=origin, city=city)
 
 
 def test_it_runs_only_when_every_condition_holds() -> None:
-    assert wants()
-    assert not wants(facts=make_facts())  # a staff number is already there
+    assert wants()  # it does not matter whether another source found a staff number
     assert not wants(city=None)  # the count is for one city
     assert not wants(rules=rules_without_signalhire(load_rules()))  # headcount_tool isn't listed
     assert wants(rules=load_rules())  # criteria.yaml lists it: Signal Hire is on since 2 Nov
@@ -184,7 +190,7 @@ async def test_with_the_name_rule_required_a_name_signal_hire_does_not_know_is_n
     fake = FakeSignalHire([])
     result = await fill(fake)
 
-    assert result.facts == NO_STAFF and result.notes == []
+    assert result.candidate is None and result.notes == []
     assert result.problems == [
         "Signal Hire staff count: no company on Signal Hire matched this name. No count was used."
     ]
@@ -195,7 +201,7 @@ async def test_with_the_name_rule_required_and_the_company_api_off_nothing_is_co
     fake = acme({"find": COMPANY_API_OFF})
     result = await fill(fake)
 
-    assert result.facts == NO_STAFF and result.notes == []
+    assert result.candidate is None and result.notes == []
     assert result.problems == [
         "Signal Hire staff count: the Company API is off, so the name couldn't be checked. "
         "No count was used."
@@ -217,10 +223,10 @@ async def test_with_the_name_rule_optional_the_name_as_typed_is_counted_and_said
     rules = rules_with_signalhire(load_rules(), headcount_tool_name_check="optional")
     result = await fill(fake, rules=rules)
 
-    assert result.facts.staff_in_city.value == 80
+    assert result.candidate is not None and result.candidate.staff == 80
     assert fake.calls[-1] == "people:Acme Software|Melbourne, Australia|"
-    (note,) = result.notes
-    assert note == (
+    assert result.candidate.text == "about 80 (40 people on file x 2, name not checked)"
+    assert result.candidate.note == (
         "Staff in Melbourne: about 80, from Signal Hire (40 people on file x 2, TBC). "
         "The company name was not checked, so the count may include other companies "
         "with a like name."
@@ -259,7 +265,7 @@ async def test_any_signal_hire_error_becomes_one_line_and_the_facts_stay(
     step: str, error: SignalHireError, line: str
 ) -> None:
     result = await fill(acme({step: error}))
-    assert result.facts == NO_STAFF and result.notes == []
+    assert result.candidate is None and result.notes == []
     assert result.problems == [line]
 
 
@@ -272,7 +278,7 @@ class Broken(FakeSignalHire):
 
 async def test_a_bug_in_the_step_never_loses_the_lead() -> None:
     result = await fill(Broken([ACME_SOFTWARE]))
-    assert result.facts == NO_STAFF
+    assert result.candidate is None
     assert result.problems == [
         "Signal Hire staff count: it couldn't be read."
     ]  # no detail on the card
@@ -289,7 +295,7 @@ class Slow(FakeSignalHire):
 async def test_a_slow_signal_hire_cannot_hold_the_research(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(headcount, "STEP_SECONDS", 0.05)
     result = await fill(Slow([ACME_SOFTWARE]))
-    assert result.facts == NO_STAFF
+    assert result.candidate is None
     assert result.problems == ["Signal Hire staff count: Signal Hire took too long."]
 
 
@@ -373,6 +379,17 @@ def test_senior_people_are_asked_for_whether_or_not_staff_was_found() -> None:
     assert not headcount.wants_people(off, SETTINGS, origin="typed", city="Melbourne")
 
 
+def test_senior_people_follow_the_data_sources_table() -> None:
+    """Taking headcount_tool out of data_sources.decision_makers turns the people off and leaves
+    the staff count on, with no code change (PLAN-V4 C2)."""
+    sources = RULES.criteria.data_sources.model_copy(update={"decision_makers": ["web_research"]})
+    rules = RULES.model_copy(
+        update={"criteria": RULES.criteria.model_copy(update={"data_sources": sources})}
+    )
+    assert wants(rules=rules)
+    assert not headcount.wants_people(rules, SETTINGS, origin="typed", city="Melbourne")
+
+
 # --- Retail and site-heavy companies (PLAN-V4 C4) -------------------------------------------------
 
 
@@ -381,12 +398,12 @@ async def test_a_retail_count_is_only_a_hint_and_gives_no_office_size() -> None:
     retail = NO_STAFF.model_copy(update={"industry_group": "Retail"})
     result = await fill(FakeSignalHire([ACME_SOFTWARE], people=2868), retail)
 
-    assert result.facts == retail  # no staff number written
+    assert result.candidate is None  # no staff number offered
     assert result.notes == [
         "Signal Hire has 2,868 people on file in Melbourne. In Retail that counts shop, site and "
         "plant staff too, so it isn't used as the office's staff. Check the office size."
     ]
-    verdict = judge(result.facts, HubSpotMatch(status="new"), RULES, TODAY)
+    verdict = judge(retail, HubSpotMatch(status="new"), RULES, TODAY)
     assert verdict.office_m2 is None and verdict.fitout_aud is None
 
 
@@ -399,14 +416,12 @@ async def test_auto_uses_the_typed_name_only_while_the_company_api_is_off() -> N
     off = await fill(
         FakeSignalHire([ACME_SOFTWARE], people=40, failures={"find": COMPANY_API_OFF}), rules=auto
     )
-    assert off.facts.staff_in_city.value == 80  # the name as typed, said so in the note
-    assert "was not checked" in off.notes[0]
+    assert off.candidate is not None and off.candidate.staff == 80  # the name as typed
+    assert "was not checked" in (off.candidate.note or "")  # and the note says so
 
     on_unknown = await fill(FakeSignalHire([], people=40), rules=auto)
-    assert (
-        on_unknown.facts.staff_in_city.value is None
-    )  # the Company API answered: no match, no count
+    assert on_unknown.candidate is None  # the Company API answered: no match, no count
 
     on_known = await fill(FakeSignalHire([ACME_SOFTWARE], people=40), rules=auto)
-    assert on_known.facts.staff_in_city.value == 80
-    assert "was not checked" not in on_known.notes[0]
+    assert on_known.candidate is not None and on_known.candidate.staff == 80
+    assert "was not checked" not in (on_known.candidate.note or "")

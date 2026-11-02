@@ -999,11 +999,18 @@ export interface components {
             /** No Rival In Place */
             no_rival_in_place: number;
         };
+        /** Conflicts */
+        Conflicts: {
+            /** Staff Gap Ratio */
+            staff_gap_ratio: number;
+        };
         /** Criteria */
         Criteria: {
             /** Boosters */
             boosters: components["schemas"]["Item"][];
             cities: components["schemas"]["Cities"];
+            conflicts: components["schemas"]["Conflicts"];
+            data_sources: components["schemas"]["DataSources"];
             fit: components["schemas"]["Fit"];
             fitout: components["schemas"]["Fitout"];
             industries: components["schemas"]["Industries"];
@@ -1025,6 +1032,20 @@ export interface components {
             /** Tbc */
             tbc: components["schemas"]["TbcNote"][];
             triggers: components["schemas"]["Triggers"];
+        };
+        /**
+         * DataSources
+         * @description Which source is main for which data (PLAN-V4 C2). In each list the first source with a value
+         *     is the one the rules use, and the ones after it are the backup. Staff numbers have their own
+         *     list, `size.staff_sources`.
+         */
+        DataSources: {
+            /** Company Details */
+            company_details: ("headcount_tool" | "web_research")[];
+            /** Decision Makers */
+            decision_makers: ("headcount_tool" | "web_research")[];
+            /** Office Cities */
+            office_cities: ("headcount_tool" | "web_research")[];
         };
         /**
          * DateRange
@@ -1104,6 +1125,34 @@ export interface components {
             count: number;
             /** Value */
             value: string;
+        };
+        /**
+         * FactSource
+         * @description Where one fact on the card came from, when it isn't plainly the web research's or another
+         *     source said something else. A fact with no entry came from the web research alone.
+         */
+        FactSource: {
+            /**
+             * Conflict
+             * @description A plain sentence when the sources are far apart: a flag for a person to check. Empty when they agree.
+             */
+            conflict: string | null;
+            /**
+             * Fact
+             * @enum {string}
+             */
+            fact: "name" | "website" | "industry" | "city" | "staff_in_city" | "office_since" | "decision_makers";
+            /**
+             * Others
+             * @description What the other sources said, kept so a person can compare
+             */
+            others: components["schemas"]["OtherValue"][];
+            /**
+             * Used
+             * @description The source of the value the rules use
+             * @enum {string}
+             */
+            used: "claude" | "hubspot" | "signalhire";
         };
         /** Fact[bool] */
         Fact_bool_: {
@@ -1346,6 +1395,11 @@ export interface components {
              * @description Facts the source check removed, and why
              */
             dropped: string[];
+            /**
+             * Fact Sources
+             * @description Where a fact came from when it isn't plainly the web research's, with what the other sources said and a flag when they are far apart. A fact with no entry came from the web research alone.
+             */
+            fact_sources: components["schemas"]["FactSource"][];
             facts: components["schemas"]["CompanyFacts"];
             /** Fitout Aud */
             fitout_aud: string | null;
@@ -1412,6 +1466,8 @@ export interface components {
              * @description The six parts and their checks. Empty for a Drop, and for a card made under version 1.
              */
             score_parts: components["schemas"]["ScorePart"][];
+            /** @description Signal Hire's details for the company: its checked name, website, industry, offices and staff in all. Empty unless Signal Hire is on and knows the company. */
+            signalhire_company: components["schemas"]["SignalHireCompany"] | null;
             /**
              * Signalhire People
              * @description Senior people Signal Hire has on file at the company in the city: name and job title only, never contact details. Empty unless Signal Hire is on.
@@ -1458,6 +1514,11 @@ export interface components {
              * @description Facts the source check removed, and why
              */
             dropped: string[];
+            /**
+             * Fact Sources
+             * @description Where a fact came from when it isn't plainly the web research's, with what the other sources said and a flag when they are far apart. A fact with no entry came from the web research alone.
+             */
+            fact_sources: components["schemas"]["FactSource"][];
             facts: components["schemas"]["CompanyFacts"];
             /** Fitout Aud */
             fitout_aud: string | null;
@@ -1542,6 +1603,8 @@ export interface components {
              * @description The six parts and their checks. Empty for a Drop, and for a card made under version 1.
              */
             score_parts: components["schemas"]["ScorePart"][];
+            /** @description Signal Hire's details for the company: its checked name, website, industry, offices and staff in all. Empty unless Signal Hire is on and knows the company. */
+            signalhire_company: components["schemas"]["SignalHireCompany"] | null;
             /**
              * Signalhire People
              * @description Senior people Signal Hire has on file at the company in the city: name and job title only, never contact details. Empty unless Signal Hire is on.
@@ -2092,6 +2155,24 @@ export interface components {
             max_companies: number;
             /** Run Cap Usd */
             run_cap_usd: string;
+        };
+        /** OtherValue */
+        OtherValue: {
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "claude" | "hubspot" | "signalhire";
+            /**
+             * Url
+             * @description The page it comes from, when it has one
+             */
+            url: string | null;
+            /**
+             * Value
+             * @description What that source said, in plain words, like 'about 250'
+             */
+            value: string;
         };
         /** PartRule */
         PartRule: {
@@ -3017,6 +3098,59 @@ export interface components {
             values: {
                 [key: string]: components["schemas"]["SettingValue"];
             };
+        };
+        /** SignalHireCompany */
+        SignalHireCompany: {
+            /**
+             * Fetched At
+             * Format: date-time
+             * @description When Signal Hire was asked. A saved copy keeps it.
+             */
+            fetched_at: string;
+            /** Industry */
+            industry: string | null;
+            /**
+             * Linkedin Url
+             * @description The company's LinkedIn page, from its id
+             */
+            linkedin_url: string | null;
+            /**
+             * Name
+             * @description The company's name as Signal Hire has it: the checked name
+             */
+            name: string;
+            /** Offices */
+            offices: components["schemas"]["SignalHireOffice"][];
+            /** Signalhire Id */
+            signalhire_id: number;
+            /**
+             * Slug
+             * @description Signal Hire's address for the company, like culture-amp
+             */
+            slug: string;
+            /**
+             * Staff Count
+             * @description Signal Hire's estimate for the whole company, not for one office
+             */
+            staff_count: number | null;
+            /** Staffing Company */
+            staffing_company: boolean | null;
+            /**
+             * Website
+             * @description A bare domain, like cultureamp.com
+             */
+            website: string | null;
+        };
+        /** SignalHireOffice */
+        SignalHireOffice: {
+            /** Area */
+            area: string | null;
+            /** City */
+            city: string | null;
+            /** Country */
+            country: string | null;
+            /** Head Office */
+            head_office: boolean;
         };
         /**
          * SignalHirePerson

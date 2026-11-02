@@ -475,7 +475,10 @@ def test_0006_adds_and_removes_the_checked_points_of_the_score(scratch: Scratch)
 
     command.upgrade(config, "0006_score_checked")
     assert lead_columns(scratch)["score_checked"] == "integer"
-    command.check(config)  # the model declares the same column, so nothing is missing or extra
+    # Alembic's check needs the newest revision. The models declare the same columns as the
+    # migrations, so nothing is missing or extra.
+    command.upgrade(config, "head")
+    command.check(config)
 
     command.downgrade(config, "0005_searches_created_at")
     assert "score_checked" not in lead_columns(scratch)

@@ -32,6 +32,26 @@ class Signal:
     published: str | None = None  # when the page was published
 
 
+class CreditMeter:
+    """The Signal Hire company credits a run may still spend (PLAN-V4 C1). A credit is taken before
+    the paid call, and every company of a run shares one meter, so the run can't spend more than
+    `signalhire_max_credits_per_run`. One event loop runs a run, so nothing needs a lock here."""
+
+    def __init__(self, limit: int) -> None:
+        self.limit = limit
+        self.used = 0
+
+    def take(self, credits: int = 1) -> bool:
+        """Takes `credits` if that many are left. If not, takes nothing and says so."""
+        if self.used + credits > self.limit:
+            return False
+        self.used += credits
+        return True
+
+    def give_back(self, credits: int = 1) -> None:
+        self.used = max(0, self.used - credits)
+
+
 @dataclass(frozen=True)
 class StepModels:
     """The model for each kind of step. None means the default Claude model."""
@@ -52,3 +72,6 @@ class ResearchContext:
     models: StepModels = StepModels()
     blocked_domains: tuple[str, ...] = ()  # sites the web tools never read. Empty: the rules' list
     company_cap_usd: Decimal | None = None  # the run's company cap. None: the settings' cap
+    # The run's Signal Hire credits, shared by its companies. None: a research on its own gets
+    # a meter of its own, set by the settings.
+    signalhire_credits: CreditMeter | None = None

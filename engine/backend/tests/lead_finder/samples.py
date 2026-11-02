@@ -29,6 +29,7 @@ import json
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -44,6 +45,7 @@ from apps.lead_finder.fields import (
     TriggerFound,
 )
 from apps.lead_finder.rules import LeadFinderRules
+from apps.lead_finder.signalhire_company import build_details
 from core.claude.client import ClaudeError, ClaudeUnavailable, Reply, Source, WebTools
 from core.claude.pricing import Usage
 from core.signalhire.client import (
@@ -54,6 +56,7 @@ from core.signalhire.client import (
     ProfileStatus,
     SignalHireError,
 )
+from core.signalhire.details import SignalHireCompany
 
 NEWS = "https://www.afr.com/property/acme-moves-2026"
 ASX = "https://www.asx.com.au/announcements/acme-contract"
@@ -477,6 +480,27 @@ CULTURE_AMP_INFO = CompanyInfo(
     ),
 )
 ACME_SOFTWARE = CompanyRef(id=7, slug="acme-software", name="Acme Software")
+# What Signal Hire says about Acme Software, in the same words as `make_facts` where they agree.
+ACME_INFO = CompanyInfo(
+    name="Acme Software",
+    website="https://www.acme.com.au/",
+    industry="Software Development",
+    staff_count=420,
+    staffing_company=False,
+    linkedin_id="55555",
+    offices=(
+        Office("Melbourne", "Victoria", "Australia", True),
+        Office("Sydney", "New South Wales", "Australia", False),
+    ),
+)
+DETAILS_DAY = datetime(2026, 11, 2, 9, 0, tzinfo=UTC)  # when the sample details were read
+
+
+def make_details(**changes: Any) -> SignalHireCompany:
+    """Signal Hire's details for Acme Software, as the lookup keeps them."""
+    return build_details(ACME_SOFTWARE, ACME_INFO, DETAILS_DAY).model_copy(update=changes)
+
+
 # Made-up people for the fake Signal Hire: never real names.
 SAMPLE_LEADERS = (
     PersonOnFile("sh-1", "Pat Example", "Chief Financial Officer"),

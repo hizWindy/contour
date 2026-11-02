@@ -800,6 +800,22 @@
         "title": "CompetitionPoints",
         "type": "object"
       },
+      "Conflicts": {
+        "additionalProperties": false,
+        "properties": {
+          "staff_gap_ratio": {
+            "exclusiveMinimum": 1.0,
+            "maximum": 20.0,
+            "title": "Staff Gap Ratio",
+            "type": "number"
+          }
+        },
+        "required": [
+          "staff_gap_ratio"
+        ],
+        "title": "Conflicts",
+        "type": "object"
+      },
       "Criteria": {
         "additionalProperties": false,
         "properties": {
@@ -812,6 +828,12 @@
           },
           "cities": {
             "$ref": "#/components/schemas/Cities"
+          },
+          "conflicts": {
+            "$ref": "#/components/schemas/Conflicts"
+          },
+          "data_sources": {
+            "$ref": "#/components/schemas/DataSources"
           },
           "fit": {
             "$ref": "#/components/schemas/Fit"
@@ -892,6 +914,8 @@
           "label",
           "cities",
           "size",
+          "data_sources",
+          "conflicts",
           "fitout",
           "industries",
           "fit",
@@ -907,6 +931,55 @@
           "tbc"
         ],
         "title": "Criteria",
+        "type": "object"
+      },
+      "DataSources": {
+        "additionalProperties": false,
+        "description": "Which source is main for which data (PLAN-V4 C2). In each list the first source with a value\nis the one the rules use, and the ones after it are the backup. Staff numbers have their own\nlist, `size.staff_sources`.",
+        "properties": {
+          "company_details": {
+            "items": {
+              "enum": [
+                "headcount_tool",
+                "web_research"
+              ],
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Company Details",
+            "type": "array"
+          },
+          "decision_makers": {
+            "items": {
+              "enum": [
+                "headcount_tool",
+                "web_research"
+              ],
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Decision Makers",
+            "type": "array"
+          },
+          "office_cities": {
+            "items": {
+              "enum": [
+                "headcount_tool",
+                "web_research"
+              ],
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Office Cities",
+            "type": "array"
+          }
+        },
+        "required": [
+          "company_details",
+          "office_cities",
+          "decision_makers"
+        ],
+        "title": "DataSources",
         "type": "object"
       },
       "DateRange": {
@@ -1092,6 +1165,62 @@
           "count"
         ],
         "title": "FacetValue",
+        "type": "object"
+      },
+      "FactSource": {
+        "description": "Where one fact on the card came from, when it isn't plainly the web research's or another\nsource said something else. A fact with no entry came from the web research alone.",
+        "properties": {
+          "conflict": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A plain sentence when the sources are far apart: a flag for a person to check. Empty when they agree.",
+            "title": "Conflict"
+          },
+          "fact": {
+            "enum": [
+              "name",
+              "website",
+              "industry",
+              "city",
+              "staff_in_city",
+              "office_since",
+              "decision_makers"
+            ],
+            "title": "Fact",
+            "type": "string"
+          },
+          "others": {
+            "description": "What the other sources said, kept so a person can compare",
+            "items": {
+              "$ref": "#/components/schemas/OtherValue"
+            },
+            "title": "Others",
+            "type": "array"
+          },
+          "used": {
+            "description": "The source of the value the rules use",
+            "enum": [
+              "claude",
+              "hubspot",
+              "signalhire"
+            ],
+            "title": "Used",
+            "type": "string"
+          }
+        },
+        "required": [
+          "fact",
+          "used",
+          "others",
+          "conflict"
+        ],
+        "title": "FactSource",
         "type": "object"
       },
       "Fact_bool_": {
@@ -1778,6 +1907,14 @@
             "title": "Dropped",
             "type": "array"
           },
+          "fact_sources": {
+            "description": "Where a fact came from when it isn't plainly the web research's, with what the other sources said and a flag when they are far apart. A fact with no entry came from the web research alone.",
+            "items": {
+              "$ref": "#/components/schemas/FactSource"
+            },
+            "title": "Fact Sources",
+            "type": "array"
+          },
           "facts": {
             "$ref": "#/components/schemas/CompanyFacts"
           },
@@ -1910,6 +2047,17 @@
             "title": "Score Parts",
             "type": "array"
           },
+          "signalhire_company": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SignalHireCompany"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Signal Hire's details for the company: its checked name, website, industry, offices and staff in all. Empty unless Signal Hire is on and knows the company."
+          },
           "signalhire_people": {
             "description": "Senior people Signal Hire has on file at the company in the city: name and job title only, never contact details. Empty unless Signal Hire is on.",
             "items": {
@@ -1970,6 +2118,8 @@
           "from_hubspot",
           "from_signalhire",
           "signalhire_people",
+          "signalhire_company",
+          "fact_sources",
           "dropped",
           "problems",
           "form_failed",
@@ -2035,6 +2185,14 @@
               "type": "string"
             },
             "title": "Dropped",
+            "type": "array"
+          },
+          "fact_sources": {
+            "description": "Where a fact came from when it isn't plainly the web research's, with what the other sources said and a flag when they are far apart. A fact with no entry came from the web research alone.",
+            "items": {
+              "$ref": "#/components/schemas/FactSource"
+            },
+            "title": "Fact Sources",
             "type": "array"
           },
           "facts": {
@@ -2224,6 +2382,17 @@
             "title": "Score Parts",
             "type": "array"
           },
+          "signalhire_company": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SignalHireCompany"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Signal Hire's details for the company: its checked name, website, industry, offices and staff in all. Empty unless Signal Hire is on and knows the company."
+          },
           "signalhire_people": {
             "description": "Senior people Signal Hire has on file at the company in the city: name and job title only, never contact details. Empty unless Signal Hire is on.",
             "items": {
@@ -2310,6 +2479,8 @@
           "from_hubspot",
           "from_signalhire",
           "signalhire_people",
+          "signalhire_company",
+          "fact_sources",
           "dropped",
           "problems",
           "form_failed",
@@ -3600,6 +3771,43 @@
           "daily_left_usd"
         ],
         "title": "OptionCaps",
+        "type": "object"
+      },
+      "OtherValue": {
+        "properties": {
+          "source": {
+            "enum": [
+              "claude",
+              "hubspot",
+              "signalhire"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The page it comes from, when it has one",
+            "title": "Url"
+          },
+          "value": {
+            "description": "What that source said, in plain words, like 'about 250'",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "value",
+          "url"
+        ],
+        "title": "OtherValue",
         "type": "object"
       },
       "PartRule": {
@@ -5556,6 +5764,158 @@
           "values"
         ],
         "title": "SettingsPatch",
+        "type": "object"
+      },
+      "SignalHireCompany": {
+        "properties": {
+          "fetched_at": {
+            "description": "When Signal Hire was asked. A saved copy keeps it.",
+            "format": "date-time",
+            "title": "Fetched At",
+            "type": "string"
+          },
+          "industry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Industry"
+          },
+          "linkedin_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The company's LinkedIn page, from its id",
+            "title": "Linkedin Url"
+          },
+          "name": {
+            "description": "The company's name as Signal Hire has it: the checked name",
+            "title": "Name",
+            "type": "string"
+          },
+          "offices": {
+            "items": {
+              "$ref": "#/components/schemas/SignalHireOffice"
+            },
+            "title": "Offices",
+            "type": "array"
+          },
+          "signalhire_id": {
+            "title": "Signalhire Id",
+            "type": "integer"
+          },
+          "slug": {
+            "description": "Signal Hire's address for the company, like culture-amp",
+            "title": "Slug",
+            "type": "string"
+          },
+          "staff_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Signal Hire's estimate for the whole company, not for one office",
+            "title": "Staff Count"
+          },
+          "staffing_company": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Staffing Company"
+          },
+          "website": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A bare domain, like cultureamp.com",
+            "title": "Website"
+          }
+        },
+        "required": [
+          "signalhire_id",
+          "slug",
+          "name",
+          "website",
+          "industry",
+          "linkedin_url",
+          "staff_count",
+          "staffing_company",
+          "offices",
+          "fetched_at"
+        ],
+        "title": "SignalHireCompany",
+        "type": "object"
+      },
+      "SignalHireOffice": {
+        "properties": {
+          "area": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Area"
+          },
+          "city": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "City"
+          },
+          "country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country"
+          },
+          "head_office": {
+            "title": "Head Office",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "city",
+          "area",
+          "country",
+          "head_office"
+        ],
+        "title": "SignalHireOffice",
         "type": "object"
       },
       "SignalHirePerson": {

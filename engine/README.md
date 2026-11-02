@@ -29,18 +29,24 @@ Then start the website. In `engine/frontend/`, install once with `npm ci`, then 
 
 The HubSpot watchlist stays switched off until Levi approves sending HubSpot company names to Claude. Then set `HUBSPOT_NAMES_TO_CLAUDE_OK=true` in `engine/.env` and restart the backend.
 
-## Signal Hire (staff numbers)
+## Signal Hire (company details, staff numbers and senior people)
 
-Signal Hire fills a staff number that the research and HubSpot both missed. It counts the people it has on file at the company in one city, and the number saved is that count times 2 (**TBC**, `size.headcount_tool_multiplier` in `criteria.yaml`). It never changes a number that is already there, and an error is only a line in the lead's problems. The lead card shows "From Signal Hire" when it filled one in.
+Signal Hire is a main source for the data it is best at. For each company it knows, it gives:
 
-It is **on** (since 2 Nov, before the test of 5 companies in [PLAN-V3](../plan/PLAN-V3.md), so the multiplier is a guess). A run uses 1 search from Signal Hire's daily quota for each company with no staff number, and no credits. It needs both of these:
+- **Company details** (1 company credit): the checked name, website, industry, LinkedIn page, offices with the head office, and the staff in all. Claude gets them as hints. A copy is saved for a month, so a company is paid for once a month. A run reads at most 20 new ones (`SIGNALHIRE_MAX_CREDITS_PER_RUN`, **TBC**).
+- **A staff number** for the office's city: the people it has on file there, times 2 (**TBC**, `size.headcount_tool_multiplier` in `criteria.yaml`). It costs 1 search from the daily quota.
+- **Senior people:** names and job titles only, never an email or a phone. It costs 1 search.
+
+**The first source in the rules' list wins, and the others stay on the lead card.** For staff the order is HubSpot, Signal Hire, LinkedIn (doubled), then the web research (`size.staff_sources`). For the other data it is `data_sources` in `criteria.yaml`. The lead card names the source of each fact and shows what the other sources said. It raises a flag when staff numbers are more than 2 times apart (**TBC**, `conflicts.staff_gap_ratio`), when two websites or names differ, or when Signal Hire lists no office in the lead's city. An error is only a line in the lead's problems.
+
+It is **on** (since 2 Nov, before the test of 5 companies in [PLAN-V4](../plan/PLAN-V4.md), so the multiplier is a guess). It needs both of these:
 
 1. `SIGNALHIRE_API_KEY` is set in `engine/.env`.
 2. `headcount_tool` is listed in `size.staff_sources` in `backend/apps/lead_finder/rules/criteria.yaml`.
 
-Signal Hire's Company API is off for our account, so it can't check the company name. `size.headcount_tool_name_check` is `optional`: it counts under the name as typed. A short or common name can count other companies' people, so the lead card says the name was not checked. Ask support@signalhire.com to switch the Company API on, then set it to `required`.
+Signal Hire's Company API is off for our account. While it is off, no company details are read and no credit is spent, and the company name can't be checked. `size.headcount_tool_name_check` is `auto`: it counts under the name as typed while the Company API is off, and turns strict by itself once support switches it on. A short or common name can count other companies' people, so the lead card says when the name was not checked. Ask support@signalhire.com to switch the Company API on.
 
-To switch it off, take `headcount_tool` out of that list, or empty the key, and restart the backend. Companies from the HubSpot watchlist are not sent to it unless `HUBSPOT_NAMES_TO_SIGNALHIRE_OK=true` is set in `engine/.env`, because their names would go to another company.
+To switch all of it off, take `headcount_tool` out of that list, or empty the key, and restart the backend. To switch off one kind of data, take `headcount_tool` out of that row of `data_sources`. Companies from the HubSpot watchlist are not sent to it unless `HUBSPOT_NAMES_TO_SIGNALHIRE_OK=true` is set in `engine/.env`, because their names would go to another company.
 
 To read its numbers for one company by hand (1 company credit), from `engine/backend/`: `uv run --no-sync lead-finder headcount "Culture Amp" --city Melbourne --yes`.
 
@@ -52,7 +58,7 @@ The fake backend is the real engine with saved sample answers instead of Claude.
 uv run python -m tests.e2e.serve
 ```
 
-It uses its own database (`leadfinder_e2e`), which it wipes on every start, and loads the HubSpot export. A run finds made-up companies named "Sample ...", slowly enough to watch. One lead, "Sample Headcount", is there from the start: its staff number comes from a fake Signal Hire, so you can see the lead card's "From Signal Hire" part. No key is used, and the Claude and Signal Hire keys are blanked. Add `--hubspot-ok` to try the watchlist too. Then start the website as above.
+It uses its own database (`leadfinder_e2e`), which it wipes on every start, and loads the HubSpot export. A run finds made-up companies named "Sample ...", slowly enough to watch. One lead, "Sample Headcount", is there from the start: a fake Signal Hire gives it company details, senior people and a staff number far from the research's own, so you can see the lead card's source labels, its flag and Signal Hire's record. No key is used, and the Claude and Signal Hire keys are blanked. Add `--hubspot-ok` to try the watchlist too. Then start the website as above.
 
 ## Load the HubSpot export
 

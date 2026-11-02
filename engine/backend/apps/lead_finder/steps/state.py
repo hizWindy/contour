@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Annotated, Any, NotRequired, TypedDict
 
-from apps.lead_finder.context import Origin, Signal
+from apps.lead_finder.context import CreditMeter, Origin, Signal
 from apps.lead_finder.rules import LeadFinderRules
 from core.runs.schemas import CapKind, CapReachedData
 from core.runs.types import RunContext
@@ -66,6 +66,8 @@ class RunCtx:
 
     run: RunContext[Any]
     rules: LeadFinderRules
+    # The Signal Hire company credits the run may spend, shared by its companies (PLAN-V4 C1)
+    signalhire_credits: CreditMeter = field(default_factory=lambda: CreditMeter(0))
     stop_reason: str | None = None  # set when a cap stops the run; later work is skipped
     _caps_reported: set[str] = field(default_factory=set)
 
