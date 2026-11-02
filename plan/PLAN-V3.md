@@ -132,11 +132,13 @@ Each step has its own tests. While `headcount_tool` is out of `staff_sources` (r
 
 ## Part E: Later, not in this plan
 
-Each needs Levi's OK first. Each is one small step on top of this plan.
+Each is one small step on top of this plan. Names, emails and phones need Levi's OK first.
 
 - **Decision makers.** Names and job titles from a Signal Hire search for senior roles. They would join the decision-makers list the research already fills from public pages. This waits on question 17 in [LEVI.md](../projects/leads/questions/LEVI.md): whether Contour may keep names.
 - **Emails and phones.** Only on a click, for one named person, sent straight to HubSpot as a contact and not kept in our database. This needs Levi's OK, a check that the Spam Act allows the outreach, and the HubSpot scope `crm.objects.contacts.write`.
 - **More signals.** A leadership change (a senior person who started in the last year), the local team (senior people in Australia against overseas), a growth hint (people now against before) and a recruiter flag.
+- **Links.** The company's LinkedIn page (company details give its LinkedIn id) and its Signal Hire page, on the card for a person to open. We never read LinkedIn ourselves. This is company data, so it doesn't wait on Levi.
+- **Office addresses.** The company details list its offices, with city, state and a head-office flag. Match them against HubSpot's offices, and use them to confirm the lead's city. This is company data too.
 - **A status line in Admin.** Whether Signal Hire is on, and the credits left (Signal Hire sends them in the `X-Credits-Left` header).
 
 ## Waiting on Levi
@@ -162,6 +164,7 @@ Each needs Levi's OK first. Each is one small step on top of this plan.
 
 Newest first. One line for each tick, pause or surprise.
 
+- 2026-11-02: Checked the plan against Signal Hire's docs (overview, authentication, pricing, search, Company API pages). It uses the Search API (standard access) and the Company API (on request). The Person API, the only one with contact details, stays out. Added links and office addresses to Part E. Plan pushed to GitHub (b0f4d7e).
 - 2026-11-02: Plan reviewed against the code. Changes: Signal Hire stays off until A4 and B1 say so (rule 3); the multiplier is applied once and `staff_from_linkedin` stays false (C2); watchlist companies need a new switch (C1, C2); no database connection is held during the call (C3); the A4 table now compares whole companies, and B1 has a test for turning it on; Part C can be built while waiting for support.
 - 2026-11-02: A1 done (3b1a093). The work was committed on `decision-makers` and merged into `master` with it, because Al-khair was near the weekly Claude limit and wanted it saved. Next: A2 (new key, Company API), then A3. Nothing is pushed.
 - 2026-11-02: Plan written. The client, the `headcount` command and 39 tests were written first, on `decision-makers`. Al-khair says the key is in `engine/.env`. It hasn't been checked with a real call. No steps started.
