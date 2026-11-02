@@ -43,6 +43,7 @@ from apps.lead_finder.fields import (
     Note,
     TriggerFound,
 )
+from apps.lead_finder.rules import LeadFinderRules
 from core.claude.client import ClaudeError, ClaudeUnavailable, Reply, Source, WebTools
 from core.claude.pricing import Usage
 from core.signalhire.client import (
@@ -471,6 +472,14 @@ CULTURE_AMP_INFO = CompanyInfo(
     ),
 )
 ACME_SOFTWARE = CompanyRef(id=7, slug="acme-software", name="Acme Software")
+
+
+def rules_with_signalhire(rules: LeadFinderRules, **size_changes: Any) -> LeadFinderRules:
+    """The rules with `headcount_tool` listed in `size.staff_sources` (the real rules leave it out
+    until PLAN-V3 B1 turns it on), and any other change to `size`, like the name check."""
+    sources = ["hubspot", "headcount_tool", "linkedin", "web_research"]
+    size = rules.criteria.size.model_copy(update={"staff_sources": sources, **size_changes})
+    return rules.model_copy(update={"criteria": rules.criteria.model_copy(update={"size": size})})
 
 
 class FakeSignalHire:

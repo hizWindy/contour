@@ -10,11 +10,17 @@ Criteria_v2 section 2 puts "a headcount tool" second in the order for staff numb
 Counts only. No name, email or phone is asked for (see core/signalhire/client.py).
 """
 
+import asyncio
+import logging
 import re
 from collections.abc import Awaitable
 from dataclasses import dataclass, field
 
+from apps.lead_finder.context import Origin
+from apps.lead_finder.fields import CompanyFacts, Fact
+from apps.lead_finder.rules import LeadFinderRules
 from apps.lead_finder.sanitize import clean_domain, one_line
+from core.config import Settings
 from core.hubspot.matching import LEGAL_WORDS, names_are_close
 from core.signalhire.client import (
     CompanyInfo,
@@ -30,7 +36,11 @@ SENIOR_LEVELS = ("C-Level", "VP", "Directors", "Head")
 COUNTRY = "Australia"
 MAX_SLUGS = 4
 MAX_OFFICES_SHOWN = 8
+STEP_SECONDS = 90.0  # the whole staff step, so a slow Signal Hire can't hold a research for long
+STAFF_PROBLEM = "Signal Hire staff count"  # starts each line the step adds to a card's problems
+MULTIPLIER_KEY = "size.headcount_tool_multiplier"  # its TBC note in criteria.yaml
 _SLUG = re.compile(r"[a-z0-9][a-z0-9-]{1,98}")
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -177,6 +187,136 @@ async def _count_in_city(
         "Senior people in the city",
         client.count_people(company=name, location=reading.where, seniority=SENIOR_LEVELS),
     )
+
+
+# --- The research's step: a staff number nobody else found --------------------------------------
+
+
+@dataclass(frozen=True)
+class StaffFill:
+    """What the Signal Hire step made of one company: the facts (changed only in the staff
+    number), a plain note for a number it filled in, and a line for each thing that went wrong."""
+
+    facts: CompanyFacts
+    notes: list[str] = field(default_factory=list)
+    problems: list[str] = field(default_factory=list)
+
+
+def wants_signalhire(
+    facts: CompanyFacts,
+    rules: LeadFinderRules,
+    settings: Settings,
+    *,
+    origin: Origin,
+    city: str | None,
+) -> bool:
+    """Whether the research should ask Signal Hire for this company's staff number. All of these
+    must hold:
+    - no staff number was found, by the research or by HubSpot: Signal Hire fills a gap only;
+    - `headcount_tool` is listed in `size.staff_sources` (it stays off until PLAN-V3 B1 says so);
+    - the office's city is known, because the count is for one city;
+    - the company's name did not come from HubSpot, unless HUBSPOT_NAMES_TO_SIGNALHIRE_OK is true.
+    The key is not checked here: the caller makes a client only when this is true, and does
+    nothing when there is no key."""
+    return (
+        facts.staff_in_city.value is None
+        and "headcount_tool" in rules.criteria.size.staff_sources
+        and city is not None
+        and (origin != "hubspot" or settings.hubspot_names_to_signalhire_ok)
+    )
+
+
+async def fill_staff_gap(
+    facts: CompanyFacts,
+    client: SignalHire,
+    *,
+    company: str,
+    website: str | None,
+    city: str,
+    rules: LeadFinderRules,
+) -> StaffFill:
+    """The facts with Signal Hire's count in the staff gap, like HubSpot's `fill_gaps`.
+
+    It makes one search: the people on file whose current company is this one, in "<city>,
+    Australia". The staff number saved is that count times `size.headcount_tool_multiplier`,
+    labelled "estimated". It has no link, because Signal Hire's page address is not known yet
+    (TBC). A number already there is never overwritten, and nothing but the staff number changes.
+
+    The multiplier is applied once, here. `staff_from_linkedin` is set to false, because the size
+    rule doubles a LinkedIn count and would multiply this one again.
+
+    It never raises: any Signal Hire error becomes one line in `problems`, so the lead is still
+    saved and the run goes on. (A cancel still passes through.)
+    """
+    if facts.staff_in_city.value is not None:
+        return StaffFill(facts)
+    try:
+        async with asyncio.timeout(STEP_SECONDS):
+            return await _fill(facts, client, company, website, city, rules)
+    except SignalHireError as error:
+        return StaffFill(facts, problems=[f"{STAFF_PROBLEM}: {error.title}. {error.detail}"])
+    except TimeoutError:
+        return StaffFill(facts, problems=[f"{STAFF_PROBLEM}: Signal Hire took too long."])
+    except Exception as error:  # a bug here must not lose a lead the research already paid for
+        log.warning("signalhire_staff_failed", extra={"reason": type(error).__name__})
+        return StaffFill(facts, problems=[f"{STAFF_PROBLEM}: it couldn't be read."])
+
+
+async def _fill(
+    facts: CompanyFacts,
+    client: SignalHire,
+    company: str,
+    website: str | None,
+    city: str,
+    rules: LeadFinderRules,
+) -> StaffFill:
+    size = rules.criteria.size
+    name, checked, why_not = await _name_to_count(
+        client, company, website, size.headcount_tool_name_check
+    )
+    if name is None:
+        return StaffFill(facts, problems=[f"{STAFF_PROBLEM}: {why_not} No count was used."])
+    people = await client.count_people(company=name, location=f"{city}, {COUNTRY}")
+    if people <= 0:
+        # Nobody on file is not a staff number of 0: Signal Hire holds only some of the people.
+        return StaffFill(
+            facts,
+            problems=[f"{STAFF_PROBLEM}: no people on file in {city}. No count was used."],
+        )
+
+    staff = round(people * size.headcount_tool_multiplier)
+    tbc = ", TBC" if any(note.key == MULTIPLIER_KEY for note in rules.criteria.tbc) else ""
+    note = (
+        f"Staff in {city}: about {staff:,}, from Signal Hire "
+        f"({people:,} people on file x {size.headcount_tool_multiplier:g}{tbc})."
+    )
+    if not checked:
+        note += (
+            " The company name was not checked, so the count may include other companies "
+            "with a like name."
+        )
+    filled = Fact[int](value=staff, source_url=None, source_date=None, label="estimated")
+    changed = facts.model_copy(update={"staff_in_city": filled, "staff_from_linkedin": False})
+    return StaffFill(changed, notes=[note])
+
+
+async def _name_to_count(
+    client: SignalHire, company: str, website: str | None, rule: str
+) -> tuple[str | None, bool, str]:
+    """The name to count people under, whether Signal Hire's Company API matched it to one of its
+    own companies, and why there is no name. With `required` no name is used unless it was
+    matched, because a short or common name can count other companies' people."""
+    try:
+        ref, _ = await resolve_company(client, company, website)
+    except SignalHireCompanyApiOff:
+        ref, why = None, "the Company API is off, so the name couldn't be checked."
+    else:
+        why = "no company on Signal Hire matched this name."
+    if ref is not None:
+        return ref.name, True, ""
+    if rule == "optional":
+        return company, False, ""
+    return None, False, why
 
 
 def _number(value: int | None) -> str:
