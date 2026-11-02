@@ -138,6 +138,8 @@ Follow "How to work this plan" in [PLAN-V2.md](PLAN-V2.md#how-to-work-this-plan)
   - Set `headcount_tool_name_check` back to `required` once the Company API is on.
   - The multiplier (2 today) gets its real value from the test of 5 companies in D2.
   - **Done when:** tests show the new order, and the name check follows the Company API.
+  - Done so far: the name check follows the Company API (cede2cb). `headcount_tool_name_check: auto` is `required` while the Company API answers and the name as typed while it is off, so nobody has to edit it when support switches it on.
+  - Left: the new staff order (Signal Hire before Claude's number, with both kept and a flag on a big gap). It goes with C2.
 
 - [x] **C4. The guard for retail and site-heavy companies.** Done 2026-11-02, 56ca45b.
   - If the company's industry is in `industries.check_office_size` in `criteria.yaml` (retail, mining and similar), a staff number from Signal Hire is only a hint. It raises "check the office size" and gives no fitout value.
@@ -206,6 +208,8 @@ All amounts are **TBC** until measured.
 ## Log
 
 Newest first. One line for each tick, pause or surprise.
+
+- 2026-11-02: C3 half done (cede2cb: the `auto` name check). The real backend was restarted on branch `plan-v4`: migration 0007 marked the 23 leads with missing facts, and a new Run uses the fixed form. Paused at about 88% of the 5-hour limit. Next: the rest of C3 with C2, then C1, C6, B5 (after the OK), D1 to D3.
 
 - 2026-11-02: C5 and C4 done (05f5216, 220822e, 56ca45b). B5 built (8baa95f), waiting for the OK to spend. Paused at 84% of the 5-hour Claude limit. Next: C3 (staff order and the name check), C2, C1 (they need the Company API for a live check), C6, then D1 to D3.
 
