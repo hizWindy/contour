@@ -18,3 +18,6 @@ dist/
 
 # Output of the dev servers started in the background
 .dev-logs/
+
+# Answers saved by backend/scripts (they can hold client data)
+backend/scripts/out/

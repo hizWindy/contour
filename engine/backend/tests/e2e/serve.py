@@ -49,11 +49,13 @@ WIPED_TABLES = (
 
 
 def use_e2e_database(hubspot_ok: bool = False) -> None:
-    """Points the settings at the e2e database and blanks the Claude and Signal Hire keys, so no
-    run can reach either, whatever engine/.env holds. Call before anything reads the settings."""
+    """Points the settings at the e2e database and blanks the Claude, Signal Hire and HubSpot
+    keys, so no run can reach them, whatever engine/.env holds. Call before anything reads the
+    settings."""
     os.environ["POSTGRES_DB"] = DATABASE
     os.environ["ANTHROPIC_API_KEY"] = ""
     os.environ["SIGNALHIRE_API_KEY"] = ""
+    os.environ["HUBSPOT_SERVICE_KEY"] = ""
     os.environ["HUBSPOT_NAMES_TO_CLAUDE_OK"] = "true" if hubspot_ok else "false"
     from core.config import get_settings
 

@@ -71,7 +71,11 @@ def _configured_secrets() -> tuple[str, ...]:
     except Exception:
         return ()  # settings that don't load must not stop a log line
     configured = [settings.postgres_password.get_secret_value()]
-    for key in (settings.anthropic_api_key, settings.signalhire_api_key):
+    for key in (
+        settings.anthropic_api_key,
+        settings.signalhire_api_key,
+        settings.hubspot_service_key,
+    ):
         if key is not None:
             configured.append(key.get_secret_value())
     forms = [form for secret in configured if secret for form in _written_forms(secret)]

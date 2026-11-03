@@ -181,6 +181,9 @@ class Settings(BaseSettings):
     signalhire_max_credits_per_run: int = Field(20, ge=0, le=1000)
     signalhire_details_fresh_days: int = Field(30, ge=1, le=365)
 
+    # --- HubSpot: the service key (PLAN-V5). None means no call reaches HubSpot. ---------
+    hubspot_service_key: SecretStr | None = None
+
     # --- Caps for researching one company. Code checks them before every request. ------
     company_cap_usd: Decimal = Field(Decimal("2.50"), ge=Decimal("0.10"), le=Decimal("5"))
     company_max_searches: int = Field(12, ge=1, le=40)
