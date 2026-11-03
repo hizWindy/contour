@@ -181,6 +181,8 @@ Follow "How to work this plan" in [PLAN-V2.md](PLAN-V2.md#how-to-work-this-plan)
   - Update [AGENTS.md](../engine/AGENTS.md), the engine README, Criteria_v2 section 2 and the AI Brain.
   - Merge `plan-v4` into `master`. This is Al-khair's call. Nothing is pushed unless he asks.
   - **Done when:** it is merged and the log says so.
+  - Done so far: merged into `master` by fast-forward on 3 Nov, at Al-khair's say (87dfca8), before D1 and D2. Not pushed.
+  - Left: the docs.
 
 ## Part E: Later, not in this plan
 
@@ -215,6 +217,8 @@ All amounts are **TBC** until measured.
 ## Log
 
 Newest first. One line for each tick, pause or surprise.
+
+- 2026-11-03: `plan-v4` merged into `master` by fast-forward (87dfca8), at Al-khair's say, not pushed. The HubSpot work goes on in [PLAN-V5.md](PLAN-V5.md). A free Signal Hire check was blocked by Windows App Control (os error 4551), so the Company API state is still not known.
 
 - 2026-11-03: C1, C2, C3 and C6 done (fcdd2e5, 58024ee; f11fc6a is a small fix after them). All the code in PLAN-V4 is built. Backend 2,517 passed and 25 skipped with `RUN_GATES=1` (the last full run, at f11fc6a; the commit after it only tidies two comments), website 700 tests, lint, types and build pass. Surprise: the 0006 migration test had been failing since 0007 was added (it checked the model at an old revision), so nobody had run the whole suite after B4. It checks at the newest revision now, so it checks 0008 too. Looked at in the browser on the fake backend (desktop, dark, phone), including B4's "Facts missing" note. Not run live: C1 (the Company API is off), B5 (waits for the OK to spend) and D2. Next: A1 (Al-khair), the B5 run, then D1 to D3.
 
