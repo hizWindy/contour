@@ -61,7 +61,7 @@ Research and Company hub have no known HubSpot needs yet.
 
 ### Scopes
 
-- **Read (today; A2 writes down what the key has):** `crm.objects.companies.read`, `crm.objects.deals.read`, `crm.objects.owners.read`, `crm.lists.read` and `crm.schemas.companies.read`. If offices are a custom object in HubSpot (**TBC**), also `crm.objects.custom.read` and `crm.schemas.custom.read`.
+- **Read (today; A2 writes down what the key has):** `crm.objects.companies.read`, `crm.objects.deals.read`, `crm.objects.owners.read`, `crm.lists.read` and `crm.schemas.companies.read`. Offices are company fields, one group for each city (read on 3 Nov), so no custom-object scope is needed.
 - **Write (F1):** `crm.objects.companies.write` and `crm.lists.write`. Add a notes scope if HubSpot lists one. HubSpot's docs say a note needs `crm.objects.contacts.write`, so add that only if the first note fails (PLAN-V1).
 - **Not now:** contacts for other projects, import, export and CMS. `crm.schemas.companies.write` only if the backend creates the new fields itself. We recommend the admin creates them by hand (F1).
 
@@ -129,7 +129,7 @@ A session that stops in the middle of a step leaves the next one starting cold. 
 - [ ] **A2. Put the key in, and list its scopes.** Al-khair, by hand.
   - Put the key in `engine/.env` as `HUBSPOT_SERVICE_KEY=`. Add the empty line to `engine/.env.example`.
   - From the key's page in HubSpot, write the scope names in the Log. Names only, never the key.
-  - Ask the admin who created the key (it should be a permanent admin), which plan Contour has, and where offices live (a custom object or company fields).
+  - Ask the admin who created the key (it should be a permanent admin) and which plan Contour has. Where offices live is answered: company fields (Log, 3 Nov).
   - **Done when:** the key is in, and the scopes and answers are in the Log.
 
 - [ ] **A3. Save to the brain on its own.**
@@ -257,7 +257,7 @@ This starts when write access arrives, expected 4 Nov (**TBC**).
 
 ## Waiting on
 
-- **The HubSpot admin (through Levi):** the write scopes (expected 4 Nov), the 7 new fields and the list, Contour's HubSpot plan, where offices live, and a test account (**TBC**).
+- **The HubSpot admin (through Levi):** the write scopes (expected 4 Nov), the 7 new fields and the list, Contour's HubSpot plan, and a test account (**TBC**).
 - **Levi:** the OK to use HubSpot data (still **TBC**), and what the note should say.
 - **Al-khair:** the key in `engine/.env` (A2), and the go-ahead for F2.
 
@@ -272,6 +272,8 @@ This starts when write access arrives, expected 4 Nov (**TBC**).
 ## Log
 
 Newest first. One line for each tick, pause or surprise.
+
+- 2026-11-03: Contour's HubSpot field list read with the read key, free (`engine/backend/scripts/hubspot_schema.py`; the answer is in `scripts/out/`, git-ignored). 364 company fields (119 are Contour's own), 516 deal fields (227) and 3 deal pipelines (Sales, Leads, Whales). Offices are company fields in one group per city: Melbourne, Adelaide, Brisbane, Sydney, `other_office_1` (labelled Perth) and `other_office_2`. Each has city, street, level, last moved, lease expiry, staff on LinkedIn, office size and quality. Traps for B4 and D2: industry is stored as a code (`COMPUTER_SOFTWARE`, the export showed "Computer Software"); some stage ids reuse HubSpot's built-in names with other labels ('Dissolved' is `contractsent`, 'Ordered - Contract Signed' is `closedwon`, 'Qualified Deal' is `presentationscheduled`), so labels must come from the stage id; "Number of Staff" per office is text, not a number; Perth's LinkedIn field is `staff_on_linkedin__perth_`. The 7 `contour_ai_*` fields don't exist yet (F1). Reading custom objects got a 403 (no scope), and none is needed. The backend settings now have `hubspot_service_key` (secret, removed from logs, blanked in tests).
 
 - 2026-11-03: Plan written. Facts found the same day: the key reads, and write access is expected on 4 Nov. Service keys have no webhooks and no call that lists their scopes. API version 2026-09 is the newest. `hubspot_map.yaml` and the `sent` lead status already exist. No step started.
 
