@@ -1,0 +1,14 @@
+# What never goes into the backend image (PLAN-V6 G1). The keys are in the environment, never here.
+.env
+.env.*
+.venv/
+**/__pycache__/
+**/*.pyc
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.cache/
+scripts/out/
+tests/
+Dockerfile
+.dockerignore
