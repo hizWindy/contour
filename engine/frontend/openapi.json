@@ -816,6 +816,64 @@
         "title": "Conflicts",
         "type": "object"
       },
+      "ConnectionCheck": {
+        "properties": {
+          "checked_at": {
+            "format": "date-time",
+            "title": "Checked At",
+            "type": "string"
+          },
+          "connected": {
+            "description": "Whether HubSpot accepted the key and answered",
+            "title": "Connected",
+            "type": "boolean"
+          },
+          "key_set": {
+            "description": "Whether HUBSPOT_SERVICE_KEY is set. The key is never sent",
+            "title": "Key Set",
+            "type": "boolean"
+          },
+          "portal_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Contour's HubSpot account number",
+            "title": "Portal Id"
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the check couldn't connect, if it couldn't",
+            "title": "Problem"
+          },
+          "scopes": {
+            "items": {
+              "$ref": "#/components/schemas/ScopeOut"
+            },
+            "title": "Scopes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "key_set",
+          "connected",
+          "scopes",
+          "checked_at"
+        ],
+        "title": "ConnectionCheck",
+        "type": "object"
+      },
       "Criteria": {
         "additionalProperties": false,
         "properties": {
@@ -1418,6 +1476,60 @@
         "title": "Fact[str]",
         "type": "object"
       },
+      "FieldChange": {
+        "properties": {
+          "current": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What HubSpot has now",
+            "title": "Current"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "property": {
+            "title": "Property",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it is not written, in plain words",
+            "title": "Reason"
+          },
+          "value": {
+            "description": "What would be written, in HubSpot's own form",
+            "title": "Value",
+            "type": "string"
+          },
+          "write": {
+            "description": "False when it is kept as it is, or goes in the note",
+            "title": "Write",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "property",
+          "label",
+          "value",
+          "write"
+        ],
+        "title": "FieldChange",
+        "type": "object"
+      },
       "FieldError": {
         "properties": {
           "field": {
@@ -1680,11 +1792,94 @@
         "title": "HubSpotOut",
         "type": "object"
       },
+      "HubSpotStatus": {
+        "properties": {
+          "api_version": {
+            "description": "HubSpot's API version in use, like 2026-09",
+            "title": "Api Version",
+            "type": "string"
+          },
+          "check": {
+            "$ref": "#/components/schemas/ConnectionCheck"
+          },
+          "copy_counts": {
+            "$ref": "#/components/schemas/HubSpotSummary",
+            "description": "What our copy of HubSpot holds now"
+          },
+          "key_set": {
+            "description": "Whether HUBSPOT_SERVICE_KEY is set. The key is never sent",
+            "title": "Key Set",
+            "type": "boolean"
+          },
+          "last_good_sync": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SyncOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The newest sync that finished well"
+          },
+          "projects": {
+            "items": {
+              "$ref": "#/components/schemas/ProjectReadiness"
+            },
+            "title": "Projects",
+            "type": "array"
+          },
+          "recent_syncs": {
+            "description": "The newest syncs, newest first",
+            "items": {
+              "$ref": "#/components/schemas/SyncOut"
+            },
+            "title": "Recent Syncs",
+            "type": "array"
+          },
+          "running_sync": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SyncOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The sync running now, if one is"
+          },
+          "write_enabled": {
+            "description": "HUBSPOT_WRITE_ENABLED: whether writing is switched on",
+            "title": "Write Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "key_set",
+          "api_version",
+          "write_enabled",
+          "check",
+          "projects",
+          "running_sync",
+          "last_good_sync",
+          "recent_syncs",
+          "copy_counts"
+        ],
+        "title": "HubSpotStatus",
+        "type": "object"
+      },
       "HubSpotSummary": {
         "properties": {
           "companies": {
             "title": "Companies",
             "type": "integer"
+          },
+          "companies_by_source": {
+            "$ref": "#/components/schemas/SourceCounts",
+            "default": {
+              "api": 0,
+              "export": 0
+            }
           },
           "deals": {
             "title": "Deals",
@@ -1704,6 +1899,11 @@
           },
           "offices": {
             "title": "Offices",
+            "type": "integer"
+          },
+          "owners": {
+            "default": 0,
+            "title": "Owners",
             "type": "integer"
           }
         },
@@ -4074,6 +4274,69 @@
         "title": "ProgressEvent",
         "type": "object"
       },
+      "ProjectReadiness": {
+        "properties": {
+          "app": {
+            "description": "The project's folder name, like lead_finder",
+            "title": "App",
+            "type": "string"
+          },
+          "reading": {
+            "enum": [
+              "ready",
+              "waiting",
+              "unknown"
+            ],
+            "title": "Reading",
+            "type": "string"
+          },
+          "sending": {
+            "enum": [
+              "ready",
+              "waiting",
+              "off",
+              "unknown",
+              "not_needed"
+            ],
+            "title": "Sending",
+            "type": "string"
+          },
+          "summary": {
+            "description": "One line for a person, like 'reading ready'",
+            "title": "Summary",
+            "type": "string"
+          },
+          "title": {
+            "description": "The project's name, like Lead Finder",
+            "title": "Title",
+            "type": "string"
+          },
+          "uses": {
+            "description": "What the project uses HubSpot for",
+            "title": "Uses",
+            "type": "string"
+          },
+          "waiting_for": {
+            "description": "The scopes still missing, reads first",
+            "items": {
+              "type": "string"
+            },
+            "title": "Waiting For",
+            "type": "array"
+          }
+        },
+        "required": [
+          "app",
+          "title",
+          "uses",
+          "reading",
+          "sending",
+          "waiting_for",
+          "summary"
+        ],
+        "title": "ProjectReadiness",
+        "type": "object"
+      },
       "Queries": {
         "additionalProperties": false,
         "properties": {
@@ -5207,6 +5470,58 @@
         "title": "RunSummaryDay",
         "type": "object"
       },
+      "ScopeOut": {
+        "properties": {
+          "access": {
+            "enum": [
+              "read",
+              "write"
+            ],
+            "title": "Access",
+            "type": "string"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it is no or unknown, in plain words",
+            "title": "Detail"
+          },
+          "label": {
+            "description": "What it lets the platform do, in plain words",
+            "title": "Label",
+            "type": "string"
+          },
+          "scope": {
+            "description": "HubSpot's name for the permission",
+            "title": "Scope",
+            "type": "string"
+          },
+          "state": {
+            "description": "yes, no, or unknown when the check couldn't tell",
+            "enum": [
+              "yes",
+              "no",
+              "unknown"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "access",
+          "label",
+          "state"
+        ],
+        "title": "ScopeOut",
+        "type": "object"
+      },
       "Score": {
         "additionalProperties": false,
         "description": "The Target Customer Profile's 100 points in six parts (Criteria_v2.md section 6).",
@@ -5604,6 +5919,21 @@
           "items"
         ],
         "title": "SearchPage",
+        "type": "object"
+      },
+      "SendBody": {
+        "properties": {
+          "write_id": {
+            "description": "The id the preview gave. It is the write's key",
+            "format": "uuid",
+            "title": "Write Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "write_id"
+        ],
+        "title": "SendBody",
         "type": "object"
       },
       "SettingField": {
@@ -6330,6 +6660,22 @@
         "title": "SliceStartedEvent",
         "type": "object"
       },
+      "SourceCounts": {
+        "properties": {
+          "api": {
+            "default": 0,
+            "title": "Api",
+            "type": "integer"
+          },
+          "export": {
+            "default": 0,
+            "title": "Export",
+            "type": "integer"
+          }
+        },
+        "title": "SourceCounts",
+        "type": "object"
+      },
       "SourceDomains": {
         "additionalProperties": false,
         "properties": {
@@ -6408,6 +6754,206 @@
           "page_age"
         ],
         "title": "SourceOut",
+        "type": "object"
+      },
+      "StepResult": {
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "hubspot_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hubspot Id"
+          },
+          "status": {
+            "enum": [
+              "done",
+              "failed",
+              "uncertain",
+              "skipped"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "step": {
+            "enum": [
+              "company",
+              "note",
+              "list"
+            ],
+            "title": "Step",
+            "type": "string"
+          }
+        },
+        "required": [
+          "step",
+          "status"
+        ],
+        "title": "StepResult",
+        "type": "object"
+      },
+      "SyncOut": {
+        "description": "One sync, for the website and the command.",
+        "properties": {
+          "changed_since": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A changes sync read what changed since",
+            "title": "Changed Since"
+          },
+          "companies_read": {
+            "title": "Companies Read",
+            "type": "integer"
+          },
+          "companies_removed": {
+            "description": "Gone from HubSpot, found by a full sync",
+            "title": "Companies Removed",
+            "type": "integer"
+          },
+          "companies_saved": {
+            "title": "Companies Saved",
+            "type": "integer"
+          },
+          "deals_read": {
+            "title": "Deals Read",
+            "type": "integer"
+          },
+          "deals_removed": {
+            "title": "Deals Removed",
+            "type": "integer"
+          },
+          "deals_saved": {
+            "title": "Deals Saved",
+            "type": "integer"
+          },
+          "deals_skipped": {
+            "description": "Deals with no company, or one not in our copy",
+            "title": "Deals Skipped",
+            "type": "integer"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "mode": {
+            "enum": [
+              "full",
+              "changes"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "offices_saved": {
+            "title": "Offices Saved",
+            "type": "integer"
+          },
+          "owners_read": {
+            "title": "Owners Read",
+            "type": "integer"
+          },
+          "profiles_rebuilt": {
+            "title": "Profiles Rebuilt",
+            "type": "integer"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "running",
+              "done",
+              "failed",
+              "interrupted"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "trigger": {
+            "enum": [
+              "command",
+              "website",
+              "startup"
+            ],
+            "title": "Trigger",
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "mode",
+          "trigger",
+          "status",
+          "changed_since",
+          "companies_read",
+          "deals_read",
+          "owners_read",
+          "companies_saved",
+          "offices_saved",
+          "deals_saved",
+          "deals_skipped",
+          "companies_removed",
+          "deals_removed",
+          "profiles_rebuilt",
+          "error",
+          "warnings",
+          "started_at",
+          "finished_at"
+        ],
+        "title": "SyncOut",
         "type": "object"
       },
       "TbcNote": {
@@ -7300,6 +7846,250 @@
         ],
         "title": "WatchlistRules",
         "type": "object"
+      },
+      "WriteOut": {
+        "properties": {
+          "app": {
+            "title": "App",
+            "type": "string"
+          },
+          "applied_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applied At"
+          },
+          "can_write": {
+            "description": "Whether writing is switched on (HUBSPOT_WRITE_ENABLED)",
+            "title": "Can Write",
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "hubspot_company_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hubspot Company Id"
+          },
+          "hubspot_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hubspot Url"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "plan": {
+            "$ref": "#/components/schemas/WritePlan"
+          },
+          "status": {
+            "enum": [
+              "previewed",
+              "writing",
+              "done",
+              "partial",
+              "failed",
+              "uncertain"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/StepResult"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          },
+          "waiting_for": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why writing can't happen yet, if it can't",
+            "title": "Waiting For"
+          }
+        },
+        "required": [
+          "id",
+          "app",
+          "subject",
+          "status",
+          "plan",
+          "steps",
+          "hubspot_company_id",
+          "hubspot_url",
+          "error",
+          "created_at",
+          "applied_at",
+          "finished_at",
+          "can_write"
+        ],
+        "title": "WriteOut",
+        "type": "object"
+      },
+      "WritePlan": {
+        "properties": {
+          "action": {
+            "enum": [
+              "create",
+              "update"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "company_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Id"
+          },
+          "company_name": {
+            "title": "Company Name",
+            "type": "string"
+          },
+          "company_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Url"
+          },
+          "domain": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Domain"
+          },
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/FieldChange"
+            },
+            "title": "Fields",
+            "type": "array"
+          },
+          "list_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "List Id"
+          },
+          "list_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "List Name"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The note's text, as it would be added",
+            "title": "Note"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "action",
+          "company_id",
+          "company_name",
+          "company_url",
+          "domain",
+          "fields",
+          "list_name",
+          "list_id"
+        ],
+        "title": "WritePlan",
+        "type": "object"
       }
     }
   },
@@ -7685,6 +8475,142 @@
         ]
       }
     },
+    "/hubspot/status": {
+      "get": {
+        "description": "Never shows the key, only whether one is set. The permission check is free and changes nothing in HubSpot; its answer is kept for 10 minutes unless refresh=true.",
+        "operationId": "get_hubspot_status",
+        "parameters": [
+          {
+            "description": "Check HubSpot again now",
+            "in": "query",
+            "name": "refresh",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Check HubSpot again now",
+              "title": "Refresh",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubSpotStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "summary": "The HubSpot connection: the key, its permissions, each project, the syncs",
+        "tags": [
+          "hubspot"
+        ]
+      }
+    },
     "/hubspot/summary": {
       "get": {
         "operationId": "get_summary",
@@ -7801,6 +8727,560 @@
           }
         },
         "summary": "How much HubSpot data is loaded",
+        "tags": [
+          "hubspot"
+        ]
+      }
+    },
+    "/hubspot/sync": {
+      "post": {
+        "description": "Copies HubSpot's companies, offices, deals and owners into our copy. Reading is free. auto reads everything once a week and only what changed otherwise. Only one sync runs at a time. Follow it with GET /hubspot/syncs.",
+        "operationId": "start_hubspot_sync",
+        "parameters": [
+          {
+            "description": "What to read",
+            "in": "query",
+            "name": "mode",
+            "required": false,
+            "schema": {
+              "default": "auto",
+              "description": "What to read",
+              "enum": [
+                "auto",
+                "full",
+                "changes"
+              ],
+              "title": "Mode",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "summary": "Start a HubSpot sync in the background",
+        "tags": [
+          "hubspot"
+        ]
+      }
+    },
+    "/hubspot/syncs": {
+      "get": {
+        "operationId": "list_hubspot_syncs",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SyncOut"
+                  },
+                  "title": "Response List Hubspot Syncs",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "summary": "The newest HubSpot syncs",
+        "tags": [
+          "hubspot"
+        ]
+      }
+    },
+    "/hubspot/writes": {
+      "get": {
+        "description": "Every write a person confirmed, with what it changed. Previews are left out.",
+        "operationId": "list_hubspot_writes",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/WriteOut"
+                  },
+                  "title": "Response List Hubspot Writes",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "summary": "The log of writes to HubSpot, newest first",
+        "tags": [
+          "hubspot"
+        ]
+      }
+    },
+    "/hubspot/writes/{write_id}/apply": {
+      "post": {
+        "description": "Writes once only: applying a finished write returns its result. Needs the write scopes and HUBSPOT_WRITE_ENABLED=true; until then it answers 409 hubspot_write_off.",
+        "operationId": "apply_hubspot_write",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "write_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Write Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "summary": "Write a previewed change to HubSpot",
         "tags": [
           "hubspot"
         ]
@@ -10135,6 +11615,429 @@
           }
         },
         "summary": "Change a lead's status, note or feedback",
+        "tags": [
+          "Lead Finder",
+          "leads"
+        ]
+      }
+    },
+    "/lead-finder/leads/{lead_id}/hubspot": {
+      "get": {
+        "description": "The newest write for this lead: previewed, sent, or part sent. Null if none.",
+        "operationId": "get_lead_hubspot",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lead_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Lead Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/WriteOut"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Get Lead Hubspot"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "summary": "This lead's HubSpot send, if there is one",
+        "tags": [
+          "Lead Finder",
+          "leads"
+        ]
+      }
+    },
+    "/lead-finder/leads/{lead_id}/hubspot/preview": {
+      "post": {
+        "description": "Reads HubSpot (free) and says what would be written: a new company or an update of its empty fields, the note and the list. Writes nothing. A lead that was sent gets its send back. Works while writing is switched off.",
+        "operationId": "preview_lead_hubspot",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lead_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Lead Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "summary": "Preview sending this lead to HubSpot",
+        "tags": [
+          "Lead Finder",
+          "leads"
+        ]
+      }
+    },
+    "/lead-finder/leads/{lead_id}/hubspot/send": {
+      "post": {
+        "description": "Writes the preview with this write_id, once only: a second click returns the first result. When it is done the lead's status is sent. Needs the write scopes and HUBSPOT_WRITE_ENABLED=true; until then it answers 409 hubspot_write_off.",
+        "operationId": "send_lead_hubspot",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lead_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Lead Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "summary": "Send this lead to HubSpot, as previewed",
         "tags": [
           "Lead Finder",
           "leads"

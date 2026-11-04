@@ -47,9 +47,24 @@ PURPOSE = {
     "core.searches": "The search log: every Claude request, with its tokens, sources and cost.",
     "core.memory": "Saved notes with a vector, for finding similar companies (pgvector).",
     "core.settings": "The settings changed on the Settings page: a key and a JSON value.",
-    "core.hubspot_companies": "Companies loaded from HubSpot (the export now, the API later).",
-    "core.hubspot_offices": "One row per office of a HubSpot company.",
-    "core.hubspot_deals": "HubSpot deals, with stage, amount and close date.",
+    "core.hubspot_companies": (
+        "Our copy of HubSpot's companies, from the sync (source api) or an export upload "
+        "(source export)."
+    ),
+    "core.hubspot_offices": (
+        "One row per office of a HubSpot company. In HubSpot these are company fields, one "
+        "group per city, so an office is replaced with its company."
+    ),
+    "core.hubspot_deals": "HubSpot deals: the stage label, the pipeline, amount and close date.",
+    "core.hubspot_owners": "HubSpot users who own records: the id and name only, never an email.",
+    "core.hubspot_syncs": (
+        "One row per HubSpot sync: full or changes only, what it read and saved, and any error. "
+        "Only one can be running."
+    ),
+    "core.hubspot_writes": (
+        "Every write to HubSpot a person asked for: the plan they saw, each step's result. The "
+        "id is the write's key, so it is written once only."
+    ),
     "lead_finder.leads": (
         "One row per researched company. `card` holds the whole lead card. The other columns "
         "are copies, for filtering and sorting."
@@ -66,7 +81,9 @@ PURPOSE = {
 # Short notes on columns whose name doesn't say enough.
 COLUMN_NOTES = {
     "lead_finder.leads.card": "Everything on the lead card: facts, sources and rule checks.",
-    "core.hubspot_companies.source": '"export" now, "api" later.',
+    "core.hubspot_companies.source": '"api" from the sync, "export" from an upload.',
+    "core.hubspot_deals.stage": "The stage's label from its pipeline, never guessed from the id.",
+    "core.hubspot_writes.subject": 'What the write is about, like "lead:<id>".',
     "core.hubspot_companies.state_raw": "The state as typed in HubSpot.",
 }
 
@@ -79,6 +96,12 @@ SOFT_LINKS = (
         "by design: a HubSpot record can be merged or deleted in HubSpot",
     ),
     ("core.searches.run_id", "core.runs.id", ""),
+    (
+        "core.hubspot_companies.owner_id",
+        "core.hubspot_owners.owner_id",
+        "HubSpot's owner list may lack an id, and one bad row must not stop a sync",
+    ),
+    ("core.hubspot_deals.owner_id", "core.hubspot_owners.owner_id", "the same reason"),
 )
 
 INTERNAL = "('pg_catalog', 'information_schema', 'pg_toast', 'public')"

@@ -14,6 +14,9 @@ from sqlalchemy.orm import aliased
 from core.memory.embedder import Embedder
 from core.memory.models import MemoryItem
 
+DELETE_CHUNK = 5000  # ids in one delete
+EMBED_BATCH = 512  # notes embedded and saved together
+
 
 @dataclass(frozen=True)
 class MemoryHit:
@@ -175,28 +178,88 @@ async def delete_items(
     return cast("CursorResult[Any]", result).rowcount
 
 
+async def replace_items_where(
+    session: AsyncSession,
+    embedder: Embedder,
+    notes: list[Note],
+    *,
+    app: str,
+    kind: str,
+    meta_key: str,
+    values: Collection[str],
+) -> int:
+    """Swaps the items of one app and kind whose `meta[meta_key]` is one of `values` for
+    `notes`, and leaves every other item alone. Returns how many were saved.
+
+    Like `replace_items`, the caller commits. A value with no note is just deleted (a company
+    that is gone).
+    """
+    wanted = list(dict.fromkeys(values))
+    for start in range(0, len(wanted), DELETE_CHUNK):
+        await session.execute(
+            delete(MemoryItem).where(
+                MemoryItem.app == app,
+                MemoryItem.kind == kind,
+                MemoryItem.meta[meta_key].astext.in_(wanted[start : start + DELETE_CHUNK]),
+            )
+        )
+    await _embed_and_add(session, embedder, notes, app=app, kind=kind)
+    return len(notes)
+
+
+async def _embed_and_add(
+    session: AsyncSession,
+    embedder: Embedder,
+    notes: list[Note],
+    *,
+    app: str,
+    kind: str,
+) -> None:
+    """Embeds and adds the notes a batch at a time, so 14,000 company profiles never sit in
+    memory as numbers all at once."""
+    for start in range(0, len(notes), EMBED_BATCH):
+        batch = notes[start : start + EMBED_BATCH]
+        vectors = await embedder.embed_passages([note.content for note in batch])
+        added = _add_all(session, batch, vectors, app=app, kind=kind)
+        await session.flush()
+        for item in added:  # saved: the session needn't keep thousands of them in memory
+            session.expunge(item)
+
+
+def _add_all(
+    session: AsyncSession,
+    notes: list[Note],
+    vectors: list[list[float]],
+    *,
+    app: str,
+    kind: str,
+) -> list[MemoryItem]:
+    items = [
+        MemoryItem(
+            app=app,
+            kind=kind,
+            content=note.content,
+            subject=note.subject,
+            url=note.url,
+            source_date=note.source_date,
+            meta=note.meta or {},
+            embedding=vector,
+        )
+        for note, vector in zip(notes, vectors, strict=True)
+    ]
+    session.add_all(items)
+    return items
+
+
 async def replace_items(
     session: AsyncSession, embedder: Embedder, notes: list[Note], *, app: str, kind: str
 ) -> int:
     """Swaps every item of one app and kind for `notes`. Returns how many were saved.
 
-    The text is embedded first, so a failure there changes nothing. The delete and the new
-    items are in the caller's transaction: the caller commits, and nobody ever sees the old
-    items gone and the new ones missing.
+    The delete and the new items are in the caller's transaction: the caller commits, and
+    nobody ever sees the old items gone and the new ones missing. If embedding fails part way,
+    the error goes up and the caller's rollback keeps the old items.
     """
-    vectors = await embedder.embed_passages([note.content for note in notes]) if notes else []
     await delete_items(session, app=app, kind=kind)
-    for note, vector in zip(notes, vectors, strict=True):
-        session.add(
-            MemoryItem(
-                app=app,
-                kind=kind,
-                content=note.content,
-                subject=note.subject,
-                url=note.url,
-                source_date=note.source_date,
-                meta=note.meta or {},
-                embedding=vector,
-            )
-        )
+    await _embed_and_add(session, embedder, notes, app=app, kind=kind)
     return len(notes)

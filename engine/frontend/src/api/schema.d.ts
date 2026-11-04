@@ -61,6 +61,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/hubspot/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The HubSpot connection: the key, its permissions, each project, the syncs
+         * @description Never shows the key, only whether one is set. The permission check is free and changes nothing in HubSpot; its answer is kept for 10 minutes unless refresh=true.
+         */
+        get: operations["get_hubspot_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/hubspot/summary": {
         parameters: {
             query?: never;
@@ -72,6 +92,83 @@ export interface paths {
         get: operations["get_summary"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/hubspot/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a HubSpot sync in the background
+         * @description Copies HubSpot's companies, offices, deals and owners into our copy. Reading is free. auto reads everything once a week and only what changed otherwise. Only one sync runs at a time. Follow it with GET /hubspot/syncs.
+         */
+        post: operations["start_hubspot_sync"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/hubspot/syncs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The newest HubSpot syncs */
+        get: operations["list_hubspot_syncs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/hubspot/writes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The log of writes to HubSpot, newest first
+         * @description Every write a person confirmed, with what it changed. Previews are left out.
+         */
+        get: operations["list_hubspot_writes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/hubspot/writes/{write_id}/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Write a previewed change to HubSpot
+         * @description Writes once only: applying a finished write returns its result. Needs the write scopes and HUBSPOT_WRITE_ENABLED=true; until then it answers 409 hubspot_write_off.
+         */
+        post: operations["apply_hubspot_write"];
         delete?: never;
         options?: never;
         head?: never;
@@ -177,6 +274,66 @@ export interface paths {
          * @description A merge patch: a field you leave out stays as it is, and `null` clears it. `status` is new, watching or rejected, and rejecting needs `reject_reason`. Leaving rejected clears the reason. Setting the status to `new` removes the lead's outcome from memory; any other change replaces it. Returns the updated lead, so the Undo button can send back the exact values it had.
          */
         patch: operations["patch_lead"];
+        trace?: never;
+    };
+    "/lead-finder/leads/{lead_id}/hubspot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * This lead's HubSpot send, if there is one
+         * @description The newest write for this lead: previewed, sent, or part sent. Null if none.
+         */
+        get: operations["get_lead_hubspot"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/lead-finder/leads/{lead_id}/hubspot/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview sending this lead to HubSpot
+         * @description Reads HubSpot (free) and says what would be written: a new company or an update of its empty fields, the note and the list. Writes nothing. A lead that was sent gets its send back. Works while writing is switched off.
+         */
+        post: operations["preview_lead_hubspot"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/lead-finder/leads/{lead_id}/hubspot/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send this lead to HubSpot, as previewed
+         * @description Writes the preview with this write_id, once only: a second click returns the first result. When it is done the lead's status is sent. Needs the write scopes and HUBSPOT_WRITE_ENABLED=true; until then it answers 409 hubspot_write_off.
+         */
+        post: operations["send_lead_hubspot"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/lead-finder/leads/{lead_id}/recheck": {
@@ -1004,6 +1161,36 @@ export interface components {
             /** Staff Gap Ratio */
             staff_gap_ratio: number;
         };
+        /** ConnectionCheck */
+        ConnectionCheck: {
+            /**
+             * Checked At
+             * Format: date-time
+             */
+            checked_at: string;
+            /**
+             * Connected
+             * @description Whether HubSpot accepted the key and answered
+             */
+            connected: boolean;
+            /**
+             * Key Set
+             * @description Whether HUBSPOT_SERVICE_KEY is set. The key is never sent
+             */
+            key_set: boolean;
+            /**
+             * Portal Id
+             * @description Contour's HubSpot account number
+             */
+            portal_id?: number | null;
+            /**
+             * Problem
+             * @description Why the check couldn't connect, if it couldn't
+             */
+            problem?: string | null;
+            /** Scopes */
+            scopes: components["schemas"]["ScopeOut"][];
+        };
         /** Criteria */
         Criteria: {
             /** Boosters */
@@ -1223,6 +1410,33 @@ export interface components {
              */
             value: string | null;
         };
+        /** FieldChange */
+        FieldChange: {
+            /**
+             * Current
+             * @description What HubSpot has now
+             */
+            current?: string | null;
+            /** Label */
+            label: string;
+            /** Property */
+            property: string;
+            /**
+             * Reason
+             * @description Why it is not written, in plain words
+             */
+            reason?: string | null;
+            /**
+             * Value
+             * @description What would be written, in HubSpot's own form
+             */
+            value: string;
+            /**
+             * Write
+             * @description False when it is kept as it is, or goes in the note
+             */
+            write: boolean;
+        };
         /** FieldError */
         FieldError: {
             /**
@@ -1315,16 +1529,60 @@ export interface components {
              */
             status: "new" | "in_hubspot" | "open_deal" | "dissolved_deal" | "possible_match";
         };
+        /** HubSpotStatus */
+        HubSpotStatus: {
+            /**
+             * Api Version
+             * @description HubSpot's API version in use, like 2026-09
+             */
+            api_version: string;
+            check: components["schemas"]["ConnectionCheck"];
+            /** @description What our copy of HubSpot holds now */
+            copy_counts: components["schemas"]["HubSpotSummary"];
+            /**
+             * Key Set
+             * @description Whether HUBSPOT_SERVICE_KEY is set. The key is never sent
+             */
+            key_set: boolean;
+            /** @description The newest sync that finished well */
+            last_good_sync: components["schemas"]["SyncOut"] | null;
+            /** Projects */
+            projects: components["schemas"]["ProjectReadiness"][];
+            /**
+             * Recent Syncs
+             * @description The newest syncs, newest first
+             */
+            recent_syncs: components["schemas"]["SyncOut"][];
+            /** @description The sync running now, if one is */
+            running_sync: components["schemas"]["SyncOut"] | null;
+            /**
+             * Write Enabled
+             * @description HUBSPOT_WRITE_ENABLED: whether writing is switched on
+             */
+            write_enabled: boolean;
+        };
         /** HubSpotSummary */
         HubSpotSummary: {
             /** Companies */
             companies: number;
+            /**
+             * @default {
+             *       "api": 0,
+             *       "export": 0
+             *     }
+             */
+            companies_by_source: components["schemas"]["SourceCounts"];
             /** Deals */
             deals: number;
             /** Last Imported At */
             last_imported_at: string | null;
             /** Offices */
             offices: number;
+            /**
+             * Owners
+             * @default 0
+             */
+            owners: number;
         };
         /** ImportResult */
         ImportResult: {
@@ -2314,6 +2572,44 @@ export interface components {
              */
             type: "progress";
         };
+        /** ProjectReadiness */
+        ProjectReadiness: {
+            /**
+             * App
+             * @description The project's folder name, like lead_finder
+             */
+            app: string;
+            /**
+             * Reading
+             * @enum {string}
+             */
+            reading: "ready" | "waiting" | "unknown";
+            /**
+             * Sending
+             * @enum {string}
+             */
+            sending: "ready" | "waiting" | "off" | "unknown" | "not_needed";
+            /**
+             * Summary
+             * @description One line for a person, like 'reading ready'
+             */
+            summary: string;
+            /**
+             * Title
+             * @description The project's name, like Lead Finder
+             */
+            title: string;
+            /**
+             * Uses
+             * @description What the project uses HubSpot for
+             */
+            uses: string;
+            /**
+             * Waiting For
+             * @description The scopes still missing, reads first
+             */
+            waiting_for: string[];
+        };
         /** Queries */
         Queries: {
             /** Areas */
@@ -2871,6 +3167,35 @@ export interface components {
             /** Runs */
             runs: number;
         };
+        /** ScopeOut */
+        ScopeOut: {
+            /**
+             * Access
+             * @enum {string}
+             */
+            access: "read" | "write";
+            /**
+             * Detail
+             * @description Why it is no or unknown, in plain words
+             */
+            detail?: string | null;
+            /**
+             * Label
+             * @description What it lets the platform do, in plain words
+             */
+            label: string;
+            /**
+             * Scope
+             * @description HubSpot's name for the permission
+             */
+            scope: string;
+            /**
+             * State
+             * @description yes, no, or unknown when the check couldn't tell
+             * @enum {string}
+             */
+            state: "yes" | "no" | "unknown";
+        };
         /**
          * Score
          * @description The Target Customer Profile's 100 points in six parts (Criteria_v2.md section 6).
@@ -3020,6 +3345,15 @@ export interface components {
             items: components["schemas"]["SearchOut"][];
             /** Total */
             total: number;
+        };
+        /** SendBody */
+        SendBody: {
+            /**
+             * Write Id
+             * Format: uuid
+             * @description The id the preview gave. It is the write's key
+             */
+            write_id: string;
         };
         /**
          * SettingField
@@ -3325,6 +3659,19 @@ export interface components {
              */
             type: "slice_started";
         };
+        /** SourceCounts */
+        SourceCounts: {
+            /**
+             * Api
+             * @default 0
+             */
+            api: number;
+            /**
+             * Export
+             * @default 0
+             */
+            export: number;
+        };
         /** SourceDomains */
         SourceDomains: {
             /** Asx Or Official News */
@@ -3350,6 +3697,88 @@ export interface components {
             title: string | null;
             /** Url */
             url: string;
+        };
+        /** StepResult */
+        StepResult: {
+            /** Detail */
+            detail?: string | null;
+            /** Hubspot Id */
+            hubspot_id?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "done" | "failed" | "uncertain" | "skipped";
+            /**
+             * Step
+             * @enum {string}
+             */
+            step: "company" | "note" | "list";
+        };
+        /**
+         * SyncOut
+         * @description One sync, for the website and the command.
+         */
+        SyncOut: {
+            /**
+             * Changed Since
+             * @description A changes sync read what changed since
+             */
+            changed_since: string | null;
+            /** Companies Read */
+            companies_read: number;
+            /**
+             * Companies Removed
+             * @description Gone from HubSpot, found by a full sync
+             */
+            companies_removed: number;
+            /** Companies Saved */
+            companies_saved: number;
+            /** Deals Read */
+            deals_read: number;
+            /** Deals Removed */
+            deals_removed: number;
+            /** Deals Saved */
+            deals_saved: number;
+            /**
+             * Deals Skipped
+             * @description Deals with no company, or one not in our copy
+             */
+            deals_skipped: number;
+            /** Error */
+            error: string | null;
+            /** Finished At */
+            finished_at: string | null;
+            /** Id */
+            id: number;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "full" | "changes";
+            /** Offices Saved */
+            offices_saved: number;
+            /** Owners Read */
+            owners_read: number;
+            /** Profiles Rebuilt */
+            profiles_rebuilt: number;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "running" | "done" | "failed" | "interrupted";
+            /**
+             * Trigger
+             * @enum {string}
+             */
+            trigger: "command" | "website" | "startup";
+            /** Warnings */
+            warnings: string[];
         };
         /** TbcNote */
         TbcNote: {
@@ -3754,6 +4183,80 @@ export interface components {
             /** Tbc */
             tbc: components["schemas"]["TbcNote"][];
         };
+        /** WriteOut */
+        WriteOut: {
+            /** App */
+            app: string;
+            /** Applied At */
+            applied_at: string | null;
+            /**
+             * Can Write
+             * @description Whether writing is switched on (HUBSPOT_WRITE_ENABLED)
+             */
+            can_write: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Error */
+            error: string | null;
+            /** Finished At */
+            finished_at: string | null;
+            /** Hubspot Company Id */
+            hubspot_company_id: string | null;
+            /** Hubspot Url */
+            hubspot_url: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            plan: components["schemas"]["WritePlan"];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "previewed" | "writing" | "done" | "partial" | "failed" | "uncertain";
+            /** Steps */
+            steps: components["schemas"]["StepResult"][];
+            /** Subject */
+            subject: string;
+            /**
+             * Waiting For
+             * @description Why writing can't happen yet, if it can't
+             */
+            waiting_for?: string | null;
+        };
+        /** WritePlan */
+        WritePlan: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "create" | "update";
+            /** Company Id */
+            company_id: string | null;
+            /** Company Name */
+            company_name: string;
+            /** Company Url */
+            company_url: string | null;
+            /** Domain */
+            domain: string | null;
+            /** Fields */
+            fields: components["schemas"]["FieldChange"][];
+            /** List Id */
+            list_id: string | null;
+            /** List Name */
+            list_name: string | null;
+            /**
+             * Note
+             * @description The note's text, as it would be added
+             */
+            note?: string | null;
+            /** Warnings */
+            warnings?: string[];
+        };
     };
     responses: never;
     parameters: never;
@@ -4097,6 +4600,119 @@ export interface operations {
             };
         };
     };
+    get_hubspot_status: {
+        parameters: {
+            query?: {
+                /** @description Check HubSpot again now */
+                refresh?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HubSpotStatus"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     get_summary: {
         parameters: {
             query?: never;
@@ -4113,6 +4729,455 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HubSpotSummary"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    start_hubspot_sync: {
+        parameters: {
+            query?: {
+                /** @description What to read */
+                mode?: "auto" | "full" | "changes";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncOut"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_hubspot_syncs: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncOut"][];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_hubspot_writes: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WriteOut"][];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    apply_hubspot_write: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                write_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WriteOut"];
                 };
             };
             /** @description The request can't be understood */
@@ -4927,6 +5992,346 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LeadDetail"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_lead_hubspot: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                lead_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WriteOut"] | null;
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    preview_lead_hubspot: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                lead_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WriteOut"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    send_lead_hubspot: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                lead_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SendBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WriteOut"];
                 };
             };
             /** @description The request can't be understood */

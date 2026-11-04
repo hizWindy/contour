@@ -32,6 +32,8 @@ class ExportError(ValueError):
 
 
 class CompanyRow(BaseModel):
+    """One company, from the export or the API. The last fields come from the API only."""
+
     hubspot_id: str
     name: str
     website: str | None = None
@@ -55,6 +57,8 @@ class CompanyRow(BaseModel):
     description: str | None = None
     linkedin_url: str | None = None
     hubspot_url: str | None = None
+    owner_id: str | None = None
+    hubspot_updated_at: datetime | None = None
 
 
 class OfficeRow(BaseModel):
@@ -68,6 +72,10 @@ class OfficeRow(BaseModel):
     last_moved: date | None = None
     lease_expiry: date | None = None
     linkedin_staff: int | None = None
+    office_m2: Decimal | None = None
+    size_bracket: str | None = None
+    quality: str | None = None
+    staff_count_text: str | None = None
 
 
 class DealRow(BaseModel):
@@ -82,6 +90,10 @@ class DealRow(BaseModel):
     last_contacted: date | None = None
     next_step: str | None = None
     hubspot_url: str | None = None
+    stage_id: str | None = None
+    pipeline: str | None = None
+    owner_id: str | None = None
+    hubspot_updated_at: datetime | None = None
 
 
 class HubSpotExport(BaseModel):

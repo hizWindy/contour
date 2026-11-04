@@ -61,6 +61,8 @@ os.environ["POSTGRES_DB"] = f"leadfinder_test{TEST_DB_SUFFIX}"
 os.environ.setdefault("EMBEDDING_THREADS", "2")
 os.environ["SIGNALHIRE_API_KEY"] = ""  # whatever engine/.env holds, no test reaches Signal Hire
 os.environ["HUBSPOT_SERVICE_KEY"] = ""  # nor HubSpot
+os.environ["HUBSPOT_WRITE_ENABLED"] = "false"  # and nothing can write to it
+os.environ["HUBSPOT_SYNC_MAX_AGE_HOURS"] = "0"  # a test backend never syncs when it starts
 get_settings.cache_clear()
 
 TEST_TABLES = (
@@ -68,6 +70,9 @@ TEST_TABLES = (
     "lead_finder.signalhire_details",
     "core.searches",
     "core.memory",
+    "core.hubspot_writes",
+    "core.hubspot_syncs",
+    "core.hubspot_owners",
     "core.hubspot_deals",
     "core.hubspot_offices",
     "core.hubspot_companies",

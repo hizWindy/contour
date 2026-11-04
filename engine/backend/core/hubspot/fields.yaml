@@ -1,0 +1,133 @@
+# Which HubSpot field fills which column of our copy (core.hubspot_*), for the sync (sync.py).
+# Read from Contour's HubSpot on 3 Nov 2026 with scripts/hubspot_schema.py (field definitions only).
+# Left: our column. Right: HubSpot's internal field name (not its label).
+#
+# - A pick list (industry, lifecycle stage) is saved as its label, like "Computer Software", the
+#   way the export shows it. HubSpot stores a code (COMPUTER_SOFTWARE).
+# - The owner's name comes from HubSpot's owners, by `owner_id`.
+# - A deal's stage label comes from its pipeline's own list, never from the stage id: some ids
+#   reuse HubSpot's built-in names for other stages ('Dissolved' is contractsent).
+# - A field HubSpot doesn't have reads as empty, and the sync names it in its warnings.
+
+companies:
+  name: name
+  website: website
+  domain: domain
+  phone: phone
+  street: address
+  city: city
+  state_raw: state
+  postal_code: zip
+  country: country
+  industry: industry
+  employees: numberofemployees
+  linkedin_staff_au: total_staff_on_linkedin_in_aus_recorded
+  lifecycle_stage: lifecyclestage
+  owner_id: hubspot_owner_id
+  created_in_hubspot: createdate
+  last_contacted: notes_last_contacted
+  contacts_count: num_associated_contacts
+  description: description
+  linkedin_url: linkedin_company_page
+  hubspot_updated_at: hs_lastmodifieddate
+
+# Offices are company fields, one group for each city. An office is saved when at least one of
+# its fields has a value, as the export did. "Offices on Record" is the list of those labels.
+offices:
+  - label: Melbourne
+    fields:
+      city: city_melbourne_
+      street: street_address_melbourne_
+      level: level_melbourne_
+      postal_code: post_code_melbourne_
+      phone: phone_number_melbourne_
+      last_moved: last_moved_melbourne_
+      lease_expiry: lease_expiry_melbourne_
+      linkedin_staff: staff_on_linkedin_melbourne_
+      office_m2: office_space_size__melbourne_
+      size_bracket: approx_office_space_size_melbourne_
+      quality: quality_of_office_melbourne_
+      staff_count_text: number_of_staff_melbourne_office_
+  - label: Adelaide
+    fields:
+      city: city_adelaide_
+      street: street_address_adelaide_
+      level: level_adelaide_
+      postal_code: post_code_adelaide_
+      phone: phone_number_adelaide_
+      last_moved: last_moved_adelaide_
+      lease_expiry: lease_expiry_adelaide_
+      linkedin_staff: staff_on_linkedin_adelaide_
+      office_m2: office_space_size__adelaide_
+      size_bracket: approx_office_space_size_adelaide_
+      quality: quality_of_office_adelaide_
+      staff_count_text: number_of_staff_adelaide_office_
+  - label: Brisbane
+    fields:
+      city: city_brisbane_
+      street: street_address_brisbane_
+      level: level_brisbane_
+      postal_code: post_code_brisbane_
+      phone: phone_number_brisbane_
+      last_moved: last_moved_brisbane_
+      lease_expiry: lease_expiry_brisbane_
+      linkedin_staff: staff_on_linkedin_brisbane_
+      office_m2: office_space_size__brisbane_
+      size_bracket: approx_office_space_size_brisbane_
+      quality: quality_of_office_brisbane_
+      staff_count_text: number_of_staff_brisbane_office_
+  - label: Sydney
+    fields:
+      city: city_sydney_
+      street: street_address_sydney_
+      level: level_sydney_
+      postal_code: post_code_sydney_
+      phone: phone_number_sydney_
+      last_moved: last_moved_sydney_
+      lease_expiry: lease_expiry_sydney_
+      linkedin_staff: staff_on_linkedin_sydney_
+      office_m2: office_space_size__sydney_
+      size_bracket: approx_office_space_size_sydney_
+      quality: quality_of_office_sydney_
+      staff_count_text: number_of_staff_sydney_office_
+  # HubSpot's group is "other_office_1", but every field in it is labelled Perth.
+  - label: Perth
+    fields:
+      city: city_other_office_1_
+      street: street_address_other_office_1_
+      level: level_other_office_1_
+      postal_code: post_code_other_office_1_
+      phone: phone_number_other_office_1_
+      last_moved: last_moved_other_office_1_
+      lease_expiry: lease_expiry_other_office_1_
+      linkedin_staff: staff_on_linkedin__perth_
+      office_m2: office_space_size__other_office_1_
+      size_bracket: approx_office_space_size_other_office_1_
+      quality: quality_of_office_other_office_1_
+      staff_count_text: number_of_staff_other_office_1_
+  # It has no LinkedIn staff field in HubSpot.
+  - label: Other Office 2
+    fields:
+      city: city_other_office_2_
+      street: street_address_other_office_2_
+      level: level_other_office_2_
+      postal_code: post_code_other_office_2_
+      phone: phone_number_other_office_2_
+      last_moved: last_moved_other_office_2_
+      lease_expiry: lease_expiry_other_office_2_
+      office_m2: office_space_size__other_office_2_
+      size_bracket: approx_office_space_size_other_office_2_
+      quality: quality_of_office_other_office_2_
+      staff_count_text: number_of_staff_other_office_2_
+
+deals:
+  name: dealname
+  stage_id: dealstage
+  pipeline_id: pipeline
+  amount_aud: amount
+  close_date: closedate
+  owner_id: hubspot_owner_id
+  created_in_hubspot: createdate
+  last_contacted: notes_last_contacted
+  next_step: hs_next_step
+  hubspot_updated_at: hs_lastmodifieddate

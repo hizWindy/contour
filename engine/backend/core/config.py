@@ -1,8 +1,9 @@
 """The one settings object. It reads engine/.env. Nothing else reads environment variables.
 
 Two kinds of setting:
-- **Env-only:** the HubSpot approval switch, the hard ceilings, the daily cap, the database
-  pool, the allowed web origins, the API address and the Signal Hire key. They change only in
+- **Env-only:** the HubSpot approval switches, the hard ceilings, the daily cap, the database
+  pool, the allowed web origins, the API address, the Signal Hire key and every HubSpot setting
+  (the key, the version, the write switch, the pace and the sync times). They change only in
   engine/.env, then a restart. The website can't change them.
 - **Editable:** caps, concurrency, models and thresholds (the keys in EDITABLE_KEYS). The
   `core.prefs` package stores overrides in the database, checks each against its min and max
@@ -183,6 +184,23 @@ class Settings(BaseSettings):
 
     # --- HubSpot: the service key (PLAN-V5). None means no call reaches HubSpot. ---------
     hubspot_service_key: SecretStr | None = None
+    # HubSpot's dated API version, like 2026-09 (the newest on 3 Nov 2026), or v3 for its older
+    # paths, which still work until a date HubSpot hasn't published.
+    hubspot_api_version: str = "2026-09"
+    # Writing to HubSpot (PLAN-V5 rule 1). Off until the key has the write scopes and one live
+    # write has been checked (F2). Only the exact text true turns it on.
+    hubspot_write_enabled: StrictBool = False
+    hubspot_timeout_seconds: float = Field(30, gt=0, le=120)
+    # How fast we call HubSpot. Its limit headers allowed 19 requests and 5 searches a second on
+    # 4 Nov 2026 (TBC with the admin); we stay well under, so other tools keep room.
+    hubspot_requests_per_second: float = Field(8, gt=0, le=15)
+    hubspot_searches_per_second: float = Field(4, gt=0, le=5)
+    # The sync (core/hubspot/sync.py). When the backend starts and the last good sync is older
+    # than this many hours, a sync starts in the background. 0 = never at start. TBC.
+    hubspot_sync_max_age_hours: int = Field(24, ge=0, le=720)
+    # A sync reads everything (and so finds deleted records) when the last full one is older
+    # than this many days. Otherwise it reads only what changed. TBC.
+    hubspot_full_sync_days: int = Field(7, ge=1, le=90)
 
     # --- Caps for researching one company. Code checks them before every request. ------
     company_cap_usd: Decimal = Field(Decimal("2.50"), ge=Decimal("0.10"), le=Decimal("5"))
@@ -214,7 +232,12 @@ class Settings(BaseSettings):
 
     # --- Validators --------------------------------------------------------------------
 
-    @field_validator("hubspot_names_to_claude_ok", "hubspot_names_to_signalhire_ok", mode="before")
+    @field_validator(
+        "hubspot_names_to_claude_ok",
+        "hubspot_names_to_signalhire_ok",
+        "hubspot_write_enabled",
+        mode="before",
+    )
     @classmethod
     def _exact_bool(cls, value: Any) -> Any:
         """The env gives text. Only 'true' and 'false' become a bool. StrictBool checks the rest."""
@@ -223,6 +246,15 @@ class Settings(BaseSettings):
             if text in ("true", "false"):
                 return text == "true"
         return value
+
+    @field_validator("hubspot_api_version")
+    @classmethod
+    def _hubspot_version(cls, value: str) -> str:
+        # It goes into every request path, so it must be a date version or v3.
+        version = value.strip()
+        if version != "v3" and not re.fullmatch(r"20\d\d-(0[1-9]|1[0-2])", version):
+            raise ValueError("hubspot_api_version must be a date version like 2026-09, or v3")
+        return version
 
     @field_validator("cors_origins")
     @classmethod

@@ -26,7 +26,14 @@ from sse_starlette.sse import AppStatus, EventSourceResponse
 
 from apps.lead_finder.tables import Lead, SignalHireDetails
 from core.config import get_settings
-from core.hubspot.models import HubSpotCompany, HubSpotDeal, HubSpotOffice
+from core.hubspot.models import (
+    HubSpotCompany,
+    HubSpotDeal,
+    HubSpotOffice,
+    HubSpotOwner,
+    HubSpotSync,
+    HubSpotWrite,
+)
 from core.memory.models import EMBEDDING_DIM, MemoryItem
 from core.prefs.models import Setting
 from core.runs.models import Run, RunEvent
@@ -62,6 +69,9 @@ async def fill_every_table(factory: async_sessionmaker[AsyncSession]) -> None:
                     signalhire_id=7, slug="acme", details={}, fetched_at=datetime.now(UTC)
                 ),
                 HubSpotCompany(hubspot_id="1", name="Acme", source="export"),
+                HubSpotOwner(owner_id="11", name="Pat Lee"),
+                HubSpotSync(mode="full", trigger="command", status="running"),
+                HubSpotWrite(app="lead_finder", subject="lead:1", plan={}),
                 SearchLog(
                     app="lead_finder",
                     step="extract",

@@ -1,4 +1,5 @@
-"""The `engine` command: serve, migrate, import-hubspot, openapi, rebuild-profiles and purge.
+"""The `engine` command: serve, migrate, import-hubspot, hubspot-check, hubspot-sync, openapi,
+rebuild-profiles and purge.
 
 Run it with `uv run engine <command>` from engine/backend.
 """
@@ -160,6 +161,81 @@ async def _import_hubspot(path: Path) -> str:
     )
 
 
+# --- hubspot-check and hubspot-sync --------------------------------------------------------
+
+
+STATE_MARKS = {"yes": "yes", "no": "NO ", "unknown": "?  "}
+
+
+async def _hubspot_check() -> tuple[str, bool]:
+    """Which permissions the HubSpot key has, and what each project can do. Free, read only."""
+    from core.apps import load_apps
+    from core.hubspot.check import check_connection
+    from core.hubspot.client import get_hubspot
+    from core.hubspot.connection import project_readiness
+
+    settings = get_settings()
+    client = get_hubspot(settings)
+    try:
+        check = await check_connection(client)
+    finally:
+        if client is not None:
+            await client.aclose()
+    lines = [
+        f"Key: {'set' if check.key_set else 'missing'}. "
+        f"API version: {settings.hubspot_api_version}. "
+        f"Writing: {'on' if settings.hubspot_write_enabled else 'off'} (HUBSPOT_WRITE_ENABLED).",
+    ]
+    if check.problem:
+        lines.append(f"Not connected: {check.problem}")
+    else:
+        lines.append(f"Connected to HubSpot account {check.portal_id}.")
+    lines.append("Permissions:")
+    for scope in check.scopes:
+        detail = f"  ({scope.detail})" if scope.state != "yes" and scope.detail else ""
+        lines.append(f"  {STATE_MARKS[scope.state]} {scope.scope}: {scope.label}{detail}")
+    lines.append("Projects:")
+    for project in project_readiness(load_apps(settings.apps), check, settings):
+        lines.append(f"  {project.summary}")
+    return "\n".join(lines), check.connected
+
+
+async def _hubspot_sync(mode: str) -> tuple[str, bool]:
+    """One sync, here and now. Free: it only reads HubSpot."""
+    from core.db.engine import get_engine, get_sessionmaker
+    from core.hubspot.client import get_hubspot
+    from core.hubspot.sync import SyncAlreadyRunning, begin, run
+    from core.memory.embedder import get_embedder
+
+    settings = get_settings()
+    client = get_hubspot(settings)
+    if client is None:
+        return "HUBSPOT_SERVICE_KEY is not set in engine/.env.", False
+    try:
+        sessions = get_sessionmaker()
+        try:
+            plan = await begin(sessions, trigger="command", mode=mode, settings=settings)  # type: ignore[arg-type]
+        except SyncAlreadyRunning as error:
+            return f"Sync {error.sync_id} is already running. Wait for it to finish.", False
+        print(f"Sync {plan.id} started: a {plan.mode} sync. It reads HubSpot, then saves.")
+        out = await run(plan, sessions=sessions, hubspot=client, embedder=get_embedder())
+    finally:
+        await client.aclose()
+        await get_engine().dispose()
+    lines = [
+        f"Sync {out.id} {out.status} ({out.mode}).",
+        f"Read {out.companies_read} companies, {out.deals_read} deals, {out.owners_read} owners.",
+        f"Saved {out.companies_saved} companies, {out.offices_saved} offices, "
+        f"{out.deals_saved} deals ({out.deals_skipped} deals left out).",
+        f"Removed {out.companies_removed} companies and {out.deals_removed} deals HubSpot no "
+        f"longer has. Rebuilt {out.profiles_rebuilt} company profiles.",
+    ]
+    if out.error:
+        lines.append(f"Error: {out.error}")
+    lines += [f"Warning: {warning}" for warning in out.warnings]
+    return "\n".join(lines), out.status == "done"
+
+
 # --- rebuild-profiles ----------------------------------------------------------------------
 
 
@@ -239,6 +315,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     commands.add_parser("migrate", help="Apply database changes.")
     import_cmd = commands.add_parser("import-hubspot", help="Load a HubSpot export file (.xlsx).")
     import_cmd.add_argument("path", type=Path, help="Path to the .xlsx file")
+    commands.add_parser(
+        "hubspot-check",
+        help="Which permissions the HubSpot key has, and what each project can do (free).",
+    )
+    sync_cmd = commands.add_parser(
+        "hubspot-sync", help="Copy HubSpot's companies, offices, deals and owners (free)."
+    )
+    which = sync_cmd.add_mutually_exclusive_group()
+    which.add_argument("--full", action="store_true", help="Read everything (finds deletions).")
+    which.add_argument("--changes", action="store_true", help="Read only what changed.")
     openapi_cmd = commands.add_parser(
         "openapi",
         help=(
@@ -275,6 +361,15 @@ def main(argv: Sequence[str] | None = None) -> int:
                 print(f"File not found: {args.path}", file=sys.stderr)
                 return 1
             print(asyncio.run(_import_hubspot(args.path), loop_factory=loop_factory()))
+        elif args.command == "hubspot-check":
+            text, ok = asyncio.run(_hubspot_check(), loop_factory=loop_factory())
+            print(text)
+            return 0 if ok else 1
+        elif args.command == "hubspot-sync":
+            mode = "full" if args.full else "changes" if args.changes else "auto"
+            text, ok = asyncio.run(_hubspot_sync(mode), loop_factory=loop_factory())
+            print(text)
+            return 0 if ok else 1
         elif args.command == "openapi":
             print(f"Wrote {write_openapi(args.path)}")
         elif args.command == "rebuild-profiles":

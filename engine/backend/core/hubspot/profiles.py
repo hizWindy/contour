@@ -17,7 +17,7 @@ Pure code here, except `rebuild_profiles`, which reads the HubSpot tables and wr
 """
 
 import re
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from typing import Any, Protocol
 
 from sqlalchemy import func, select, text
@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.hubspot.models import HubSpotCompany, HubSpotDeal, HubSpotOffice
 from core.memory.embedder import Embedder
-from core.memory.service import Note, replace_items
+from core.memory.service import Note, replace_items, replace_items_where
 
 PROFILE_APP = "hubspot"
 PROFILE_KIND = "company_profile"
@@ -223,8 +223,13 @@ async def rebuild_profiles(
     embedder: Embedder,
     *,
     staff_multiplier: float = DEFAULT_STAFF_MULTIPLIER,
+    company_ids: Collection[str] | None = None,
 ) -> int:
-    """Replaces every HubSpot company profile in memory with new ones. Returns how many.
+    """Replaces HubSpot company profiles in memory with new ones. Returns how many were built.
+
+    With no `company_ids`, every profile is replaced. With them, only those companies' profiles
+    are (the sync passes the companies that changed): a company that is gone, or now has no name,
+    loses its profile, and every other profile is left alone.
 
     One profile for each company except the one with no name. Each memory item has
     `app="hubspot"`, `kind="company_profile"`, the company name as its subject, and meta
@@ -233,18 +238,25 @@ async def rebuild_profiles(
     """
     # The lock comes first, so a second rebuild waits and then reads the data the first left.
     await session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": REBUILD_LOCK})
-    companies = list(
-        await session.scalars(
-            select(HubSpotCompany)
-            .where(func.lower(func.btrim(HubSpotCompany.name)) != PLACEHOLDER_NAME)
-            .order_by(HubSpotCompany.hubspot_id)
-        )
+    ids = None if company_ids is None else sorted(set(company_ids))
+    if ids is not None and not ids:
+        await session.commit()
+        return 0
+    company_query = select(HubSpotCompany).where(
+        func.lower(func.btrim(HubSpotCompany.name)) != PLACEHOLDER_NAME
     )
+    office_query = select(HubSpotOffice)
+    deal_query = select(HubSpotDeal)
+    if ids is not None:
+        company_query = company_query.where(HubSpotCompany.hubspot_id.in_(ids))
+        office_query = office_query.where(HubSpotOffice.hubspot_company_id.in_(ids))
+        deal_query = deal_query.where(HubSpotDeal.hubspot_company_id.in_(ids))
+    companies = list(await session.scalars(company_query.order_by(HubSpotCompany.hubspot_id)))
     offices: dict[str, list[HubSpotOffice]] = {}
-    for office in await session.scalars(select(HubSpotOffice).order_by(HubSpotOffice.id)):
+    for office in await session.scalars(office_query.order_by(HubSpotOffice.id)):
         offices.setdefault(office.hubspot_company_id, []).append(office)
     deals: dict[str, list[HubSpotDeal]] = {}
-    for deal in await session.scalars(select(HubSpotDeal).order_by(HubSpotDeal.hubspot_deal_id)):
+    for deal in await session.scalars(deal_query.order_by(HubSpotDeal.hubspot_deal_id)):
         deals.setdefault(deal.hubspot_company_id, []).append(deal)
 
     notes: list[Note] = []
@@ -267,6 +279,17 @@ async def rebuild_profiles(
                 },
             )
         )
-    count = await replace_items(session, embedder, notes, app=PROFILE_APP, kind=PROFILE_KIND)
+    if ids is None:
+        count = await replace_items(session, embedder, notes, app=PROFILE_APP, kind=PROFILE_KIND)
+    else:
+        count = await replace_items_where(
+            session,
+            embedder,
+            notes,
+            app=PROFILE_APP,
+            kind=PROFILE_KIND,
+            meta_key="hubspot_id",
+            values=ids,
+        )
     await session.commit()
     return count

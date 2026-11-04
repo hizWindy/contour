@@ -4,11 +4,13 @@ The core finds projects by name only, so it never imports from `apps` directly.
 """
 
 import importlib
-from collections.abc import Callable, Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter
+
+from core.hubspot.needs import HubSpotNeeds
 
 if TYPE_CHECKING:
     # Only for the type. Importing it would load the Claude client into every migration.
@@ -27,6 +29,11 @@ class AppSpec:
     check_rules: Callable[[], object]  # loads and checks the rules files; raises if one is wrong
     tables_module: str | None = None  # the module that defines its tables, for migrations
     run_kinds: "tuple[RunKind[Any], ...]" = ()  # the kinds of run it offers, like discovery
+    # The HubSpot scopes it reads and writes with (PLAN-V5 B3). None: it doesn't use HubSpot.
+    hubspot_needs: HubSpotNeeds | None = None
+    # Called with (session, WriteOut) after one of its HubSpot writes is done (PLAN-V5 B5), like
+    # the Lead Finder marking the lead as sent. The core's writer calls it, whichever route wrote.
+    hubspot_written: Callable[[Any, Any], Awaitable[None]] | None = None
 
 
 def load_apps(names: Sequence[str]) -> list[AppSpec]:

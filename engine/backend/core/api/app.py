@@ -15,6 +15,7 @@ from core.api.security import ProblemCORSMiddleware, add_security_layers
 from core.apps import load_apps
 from core.config import get_settings
 from core.db.engine import get_engine
+from core.hubspot import connection as hubspot_connection
 from core.logs import setup_logging
 from core.runs import lifecycle
 from core.runtime import disable_tracing
@@ -30,9 +31,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """
     try:
         await lifecycle.startup(app)
+        await hubspot_connection.start_up(app)  # a background sync if the last is old; never fails
         yield
     finally:
         try:
+            await hubspot_connection.shut_down(app)
             await lifecycle.shutdown(app)
         finally:
             await get_engine().dispose()
