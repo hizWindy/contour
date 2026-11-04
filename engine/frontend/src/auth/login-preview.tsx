@@ -9,7 +9,7 @@
  */
 import { SlidersHorizontal, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Field, FieldLabel } from '@/components/ui/field'
@@ -36,12 +36,13 @@ const NOTICE_WORDS = {
   none: 'No notice',
   idle: 'Signed out after idle',
   expired: 'Signed out after 12 hours',
+  ended: 'Signed out elsewhere',
   signed_out: 'Signed out',
 } as const
 type NoticeKey = keyof typeof NOTICE_WORDS
 
 function statusOf(key: StateKey): LoginStatus {
-  return key === 'locked' ? { kind: 'locked', minutes: 12 } : { kind: key }
+  return key === 'locked' ? { kind: 'locked', seconds: 12 * 60 } : { kind: key }
 }
 
 function pick<T extends string>(value: string | null, known: Record<T, string>, fallback: T): T {
@@ -104,7 +105,13 @@ export default function LoginPreview() {
           <div className="flex items-start justify-between gap-2">
             <div className="flex flex-col">
               <p className="font-semibold">Mockup</p>
-              <p className="text-caption text-muted-foreground">Fake states. Nothing is sent.</p>
+              <p className="text-caption text-muted-foreground">
+                Fake states. Nothing is sent, so it can&apos;t sign you in. The real page is{' '}
+                <Link to="/login" className="underline underline-offset-4">
+                  /login
+                </Link>
+                .
+              </p>
             </div>
             <Button
               type="button"

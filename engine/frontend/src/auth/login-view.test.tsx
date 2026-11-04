@@ -163,12 +163,22 @@ describe('each state has an icon and words', () => {
     expect(identifier()).toHaveValue('sample.admin')
   })
 
-  it('locked: says how long to wait, in whole minutes', () => {
-    renderLogin({ status: { kind: 'locked', minutes: 11.2 } })
+  it('locked: says how long to wait, as the backend says it', () => {
+    renderLogin({ status: { kind: 'locked', seconds: 672 } })
 
     expect(screen.getByRole('alert')).toHaveTextContent('Too many tries. Try again in 12 minutes.')
-    expect(lockedText(1)).toBe('Too many tries. Try again in 1 minute.')
-    expect(lockedText(0)).toBe('Too many tries. Try again in 1 minute.')
+    expect(lockedText(60)).toBe('Too many tries. Try again in 1 minute.')
+    expect(lockedText(61)).toBe('Too many tries. Try again in 2 minutes.')
+    expect(lockedText(30)).toBe('Too many tries. Try again in 30 seconds.')
+    expect(lockedText(0.4)).toBe('Too many tries. Try again in 1 second.')
+  })
+
+  it('wrong, with a wait: says how long before the next try', () => {
+    renderLogin({ status: { kind: 'wrong', waitSeconds: 4 } })
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      `${WRONG_TEXT} Wait 4 seconds before you try again.`,
+    )
   })
 
   it('no answer: says nothing changed and when to try again', () => {
@@ -179,7 +189,8 @@ describe('each state has an icon and words', () => {
 
   it.each([
     ['idle', 'You were signed out after 2 hours idle.'],
-    ['expired', 'You were signed out after 12 hours. Sign in again.'],
+    ['expired', 'Your session ended after 12 hours. Sign in again.'],
+    ['ended', 'You were signed out. Sign in again.'],
     ['signed_out', 'You signed out.'],
   ] as const)('the %s notice shows above the form', (notice, text) => {
     renderLogin({ notice })
@@ -187,5 +198,32 @@ describe('each state has an icon and words', () => {
     const status = screen.getByRole('status')
     expect(status).toHaveTextContent(text)
     expect(status.querySelector('svg')).not.toBeNull()
+  })
+})
+
+describe('motion', () => {
+  it('the card rises and fades in', () => {
+    renderLogin()
+
+    const card = document.querySelector('[data-slot="login-card"]')
+    // `motion` starts the card see-through and 8px low, then animates it into place.
+    expect(card).toHaveStyle({ opacity: '0' })
+  })
+
+  it('stays still when the computer asks for reduced motion', () => {
+    const real = window.matchMedia.bind(window)
+    const asked = vi.spyOn(window, 'matchMedia').mockImplementation((query: string) => ({
+      ...real(query),
+      matches: query.includes('prefers-reduced-motion'),
+    }))
+    try {
+      renderLogin({ status: { kind: 'wrong' } })
+
+      const card = document.querySelector('[data-slot="login-card"]')
+      expect(card).not.toHaveStyle({ opacity: '0' })
+      expect(screen.getByRole('alert')).not.toHaveStyle({ opacity: '0' })
+    } finally {
+      asked.mockRestore()
+    }
   })
 })

@@ -54,6 +54,10 @@ export function createQueryClient(): QueryClient {
   every run query (lists, details, logs, summaries) and nothing else.
 */
 export const queryKeys = {
+  auth: {
+    all: ['auth'] as const,
+    me: () => ['auth', 'me'] as const,
+  },
   runs: {
     all: ['runs'] as const,
     lists: () => ['runs', 'list'] as const,

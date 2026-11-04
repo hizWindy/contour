@@ -23,6 +23,10 @@ export interface ApiProblemFields {
   status: number
   errors?: FieldError[]
   run_id?: string | null
+  /** Why a session ended, on a 401 `auth_required`: `idle`, `expired` or `ended`. */
+  reason?: string | null
+  /** How long to wait before the next sign-in try, on a 401 or a 429 from `POST /auth/login`. */
+  retry_after_seconds?: number | null
 }
 
 /**
@@ -30,6 +34,7 @@ export interface ApiProblemFields {
  * a stable word to switch on (`run_already_active`). `status` is the HTTP status, or 0 when the
  * backend could not be reached at all. `errors` lists the wrong fields of a 422. `run_id` is set
  * when the problem is about a run (a 409 `run_already_active` names the run that is going).
+ * `reason` and `retry_after_seconds` come with the sign-in's answers (PLAN-V6 B3, B4).
  */
 export class ApiProblem extends Error {
   readonly title: string
@@ -38,6 +43,8 @@ export class ApiProblem extends Error {
   readonly status: number
   readonly errors: FieldError[]
   readonly run_id: string | null
+  readonly reason: string | null
+  readonly retry_after_seconds: number | null
 
   constructor(fields: ApiProblemFields) {
     super(fields.detail ? `${fields.title}. ${fields.detail}` : fields.title)
@@ -48,7 +55,14 @@ export class ApiProblem extends Error {
     this.status = fields.status
     this.errors = fields.errors ?? []
     this.run_id = fields.run_id ?? null
+    this.reason = fields.reason ?? null
+    this.retry_after_seconds = fields.retry_after_seconds ?? null
   }
+}
+
+/** True for the 401 a route gives when no one is signed in (or the session ended). */
+export function isSignInNeeded(value: unknown): value is ApiProblem {
+  return value instanceof ApiProblem && value.status === 401 && value.code === 'auth_required'
 }
 
 export function isApiProblem(value: unknown): value is ApiProblem {
@@ -140,6 +154,7 @@ export function problemFromResponse(response: Response, body?: unknown): ApiProb
   const title = asText(record.title) ?? STATUS_TITLES[status] ?? 'The request failed'
   const detail = asText(record.detail) ?? STATUS_DETAILS[status] ?? null
   const errors = readFieldErrors(record.errors ?? record.detail)
+  const wait = record.retry_after_seconds
   return new ApiProblem({
     title,
     detail,
@@ -147,6 +162,9 @@ export function problemFromResponse(response: Response, body?: unknown): ApiProb
     status,
     errors,
     run_id: asText(record.run_id),
+    reason: asText(record.reason),
+    retry_after_seconds:
+      typeof wait === 'number' && Number.isFinite(wait) && wait >= 0 ? wait : null,
   })
 }
 

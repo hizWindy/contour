@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Outlet, ScrollRestoration } from 'react-router'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { AppSidebar } from './app-sidebar'
+import { RequireSignIn } from './require-sign-in'
 import { TopBar } from './top-bar'
 
 /** Where "Skip to the page" lands: the page content, after the menu and the top bar. */
@@ -21,7 +22,19 @@ export const MAIN_ID = 'page'
  */
 const WIDE_SCREEN = '(min-width: 1024px)'
 
+/**
+ * The frame shows only once the backend says the person may see it (`RequireSignIn`): with
+ * sign-in off, or signed in. Signed out, the login page shows instead.
+ */
 export function AppFrame() {
+  return (
+    <RequireSignIn>
+      <Frame />
+    </RequireSignIn>
+  )
+}
+
+function Frame() {
   const [openAtStart] = useState(() => window.matchMedia(WIDE_SCREEN).matches)
   return (
     <SidebarProvider defaultOpen={openAtStart}>
@@ -32,7 +45,8 @@ export function AppFrame() {
         Skip to the page
       </a>
       <AppSidebar />
-      <SidebarInset className="min-w-0">
+      {/* The page fades in once, when the frame first shows (after signing in, or on a reload). */}
+      <SidebarInset className="min-w-0 animate-in fade-in-0 duration-250">
         <TopBar />
         <div
           id={MAIN_ID}

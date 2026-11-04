@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { useSidebar } from '@/components/ui/sidebar'
 import { CommandMenu } from './command-menu'
 import { crumbsOf } from './crumbs'
+import { UserMenu } from './user-menu'
 
 const APP_NAME = 'Contour'
 
@@ -66,6 +67,7 @@ export function TopBar() {
         </BreadcrumbList>
       </Breadcrumb>
       <CommandMenu />
+      <UserMenu />
     </header>
   )
 }

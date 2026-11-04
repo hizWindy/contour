@@ -30,6 +30,12 @@ const DEV_ONLY: RouteObject[] = import.meta.env.DEV
 
 export const routes: RouteObject[] = [
   ...DEV_ONLY,
+  // The sign-in page sits outside the app frame: no menu, no top bar (PLAN-V6 C2).
+  {
+    path: '/login',
+    handle: { crumb: 'Sign in' } satisfies RouteHandle,
+    ...page(() => import('@/auth/login-page')),
+  },
   {
     path: '/',
     element: <AppFrame />,

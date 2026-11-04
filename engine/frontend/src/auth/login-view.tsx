@@ -26,6 +26,7 @@ import {
   ShieldCheck,
   type LucideIcon,
 } from 'lucide-react'
+import { domAnimation, LazyMotion, m } from 'motion/react'
 import { useEffect, useId, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { useForm } from 'react-hook-form'
 import { Button } from '@/components/ui/button'
@@ -37,7 +38,7 @@ import {
   InputGroupButton,
   InputGroupInput,
 } from '@/components/ui/input-group'
-import { useMediaQuery } from '@/lib/use-media-query'
+import { REDUCED_MOTION, useMediaQuery } from '@/lib/use-media-query'
 import { cn } from '@/lib/utils'
 import { BrandPanel } from './brand-panel'
 import {
@@ -46,7 +47,7 @@ import {
   lockedText,
   loginSchema,
   NOTICE_TEXT,
-  WRONG_TEXT,
+  wrongText,
   type LoginNotice,
   type LoginStatus,
   type LoginValues,
@@ -55,19 +56,28 @@ import {
 const NOTICE_ICONS: Record<LoginNotice, LucideIcon> = {
   idle: Clock,
   expired: Clock,
+  ended: LogOut,
   signed_out: LogOut,
 }
+
+/** The one curve (DESIGN.md "Motion"), for `motion`. */
+const EASE = [0.4, 0, 0.2, 1] as const
 
 export interface LoginViewProps {
   status: LoginStatus
   onSubmit: (values: LoginValues) => void
   /** Why the person is on this page (signed out after idle time, for example). */
   notice?: LoginNotice | null
+  /** The backend's own sentence for the notice, when it sent one. Wins over the default words. */
+  noticeText?: string | null
   /** The email or username used last time on this device, filled in for them. */
   rememberedIdentifier?: string
 }
 
-/** A line with an icon and words: the notice above the form, or an error above the button. */
+/**
+ * A line with an icon and words: the notice above the form, or an error above the button. It
+ * fades in (150 ms), unless the computer asks for reduced motion.
+ */
 function Message({
   icon: Icon,
   tone,
@@ -79,11 +89,15 @@ function Message({
   role: 'status' | 'alert'
   children: ReactNode
 }) {
+  const still = useMediaQuery(REDUCED_MOTION)
   return (
-    <p
+    <m.p
       role={role}
+      initial={still ? false : { opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.15, ease: EASE }}
       className={cn(
-        'flex items-start gap-2 rounded-md border px-3 py-2 text-ui animate-in fade-in-0 duration-150',
+        'flex items-start gap-2 rounded-md border px-3 py-2 text-ui',
         tone === 'error'
           ? 'border-destructive bg-destructive-soft text-destructive-ink'
           : 'bg-muted text-foreground',
@@ -91,7 +105,7 @@ function Message({
     >
       <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
       <span>{children}</span>
-    </p>
+    </m.p>
   )
 }
 
@@ -107,13 +121,13 @@ function StatusMessage({ status }: { status: LoginStatus }) {
     case 'wrong':
       return (
         <Message icon={CircleAlert} tone="error" role="alert">
-          {WRONG_TEXT}
+          {wrongText(status.waitSeconds)}
         </Message>
       )
     case 'locked':
       return (
         <Message icon={LockKeyhole} tone="error" role="alert">
-          {lockedText(status.minutes)}
+          {lockedText(status.seconds)}
         </Message>
       )
     case 'failed':
@@ -127,13 +141,24 @@ function StatusMessage({ status }: { status: LoginStatus }) {
   }
 }
 
-export function LoginView({
+export function LoginView(props: LoginViewProps) {
+  // `motion` loads only the animation features this page uses (`LazyMotion`).
+  return (
+    <LazyMotion features={domAnimation} strict>
+      <LoginLayout {...props} />
+    </LazyMotion>
+  )
+}
+
+function LoginLayout({
   status,
   onSubmit,
   notice = null,
+  noticeText = null,
   rememberedIdentifier = '',
 }: LoginViewProps) {
   const laptop = useMediaQuery(LAPTOP)
+  const still = useMediaQuery(REDUCED_MOTION)
   const ids = useId()
   const [showPassword, setShowPassword] = useState(false)
   const [capsLock, setCapsLock] = useState(false)
@@ -181,7 +206,14 @@ export function LoginView({
       <title>Sign in to Contour HQ</title>
       <BrandPanel layout={laptop ? 'side' : 'band'} />
       <main className="flex flex-col items-center justify-center px-4 pt-12 pb-12 sm:px-6 lg:px-16">
-        <div className="flex w-full max-w-md flex-col gap-6 animate-in fade-in-0 slide-in-from-bottom-2 duration-250">
+        {/* The card rises 8px and fades in (250 ms), unless the computer asks for reduced motion. */}
+        <m.div
+          data-slot="login-card"
+          initial={still ? false : { opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.25, ease: EASE }}
+          className="flex w-full max-w-md flex-col gap-6"
+        >
           <section
             aria-labelledby={`${ids}-title`}
             className="flex flex-col gap-6 rounded-lg border bg-card p-6 sm:p-8"
@@ -195,7 +227,7 @@ export function LoginView({
 
             {notice && NoticeIcon ? (
               <Message icon={NoticeIcon} tone="neutral" role="status">
-                {NOTICE_TEXT[notice]}
+                {noticeText ?? NOTICE_TEXT[notice]}
               </Message>
             ) : null}
 
@@ -351,7 +383,7 @@ export function LoginView({
             <ShieldCheck aria-hidden="true" className="size-4 shrink-0" />
             Private system. Sign-ins are logged.
           </p>
-        </div>
+        </m.div>
       </main>
     </div>
   )
