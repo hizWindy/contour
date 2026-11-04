@@ -81,6 +81,13 @@
   --chart-4: light-dark(#a8742a, #d9a25a);
   --chart-5: light-dark(#b4412d, #d98471);
 
+  /* ---- Brand panel: the sign-in page's Navy half, in both modes (PLAN-V6, "The login page") --
+     Navy here is the brand, not an action, so it stays Navy in dark mode too. Text on it is the
+     cream of Contour's wordmark (Stone), or a quieter blue-grey step for small print. */
+  --brand: light-dark(#233a56, #1f344e);
+  --brand-foreground: light-dark(#e5e8db, #e5e8db);
+  --brand-muted: light-dark(#b4c0cf, #b4c0cf);
+
   /* ---- Sidebar ----------------------------------------------------------------------------- */
   --sidebar: light-dark(#e5e8db, #1e1b15);
   --sidebar-foreground: var(--foreground);
