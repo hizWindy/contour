@@ -94,6 +94,15 @@ describe('the lead page', () => {
     expect(screen.getByText(/A summary of each page/)).toBeInTheDocument()
   })
 
+  it('marks where the company came from, apart from its HubSpot label', async () => {
+    mockApi(makeLead({ origin: 'hubspot' }))
+    renderLead()
+
+    const mark = await screen.findByText('From HubSpot')
+    expect(mark).toHaveAttribute('data-origin', 'hubspot')
+    expect(mark.querySelector('svg')).not.toBeNull()
+  })
+
   it('shows the stage, the band and the score in parts, with what is not known yet', async () => {
     mockApi(makeLead())
     const { user } = renderLead()

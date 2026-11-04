@@ -512,6 +512,7 @@ def test_a_lead_row_has_exactly_the_fields_in_the_design() -> None:
         "band",
         "status",
         "hubspot_status",
+        "hubspot_owner",
         "trigger_id",
         "trigger_ids",
         "trigger_label",

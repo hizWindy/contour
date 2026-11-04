@@ -9,6 +9,7 @@ import type { LeadRow } from '@/api/types'
 import { HubSpotBadge } from '@/components/hubspot-badge'
 import { Money } from '@/components/money'
 import { ResultBadge } from '@/components/result-badge'
+import { SourceMark } from '@/components/source-mark'
 import { StatusBadge } from '@/components/status-badge'
 import { Badge } from '@/components/ui/badge'
 import { formatDate, formatM2, formatScore, UNKNOWN } from '@/lib/format'
@@ -20,7 +21,7 @@ const company = help.accessor('company', {
   // The name stays in view while the other columns scroll sideways.
   meta: { sticky: true, className: 'max-w-64 sm:min-w-44' },
   cell: (info) => {
-    const { score, score_checked: checked, city, is_test: isTest } = info.row.original
+    const { score, score_checked: checked, city, is_test: isTest, origin } = info.row.original
     const points = formatScore(score, checked)
     return (
       <span className="flex min-w-0 flex-col">
@@ -33,9 +34,12 @@ const company = help.accessor('company', {
           </button>
           {isTest ? <Badge variant="outline">Test set</Badge> : null}
         </span>
-        {/* On a phone the score and city columns are hidden, so they sit under the name. */}
-        <span className="truncate text-caption text-muted-foreground sm:hidden">
-          {city ? `Score ${points}, ${city}` : `Score ${points}`}
+        <span className="flex min-w-0 items-center gap-x-2">
+          <SourceMark origin={origin} />
+          {/* On a phone the score and city columns are hidden, so they sit under the name. */}
+          <span className="truncate text-caption text-muted-foreground sm:hidden">
+            {city ? `Score ${points}, ${city}` : `Score ${points}`}
+          </span>
         </span>
       </span>
     )

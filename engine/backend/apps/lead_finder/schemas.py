@@ -137,6 +137,9 @@ class LeadRow(BaseModel):
     )
     status: LeadStatus
     hubspot_status: HubSpotStatus
+    hubspot_owner: str | None = Field(
+        default=None, description="The HubSpot owner's name, when HubSpot has the company"
+    )
     trigger_id: str | None = Field(description="The best trigger that counts")
     trigger_ids: list[str] = Field(description="Every trigger that counts")
     trigger_label: str | None
@@ -153,7 +156,10 @@ class LeadRow(BaseModel):
         description="True when Claude couldn't fill in the answer form, so the facts are missing",
     )
     run_id: UUID | None
-    origin: Origin
+    origin: Origin = Field(
+        description="Where the company came from: hubspot (the HubSpot watchlist), web (the "
+        "research found it on the web) or typed (a person typed the name)"
+    )
     is_test: bool
     useful: bool | None
     note: str | None
@@ -268,6 +274,9 @@ class LeadFacets(BaseModel):
     industry_group: list[FacetValue]
     hubspot_status: list[FacetValue]
     status: list[FacetValue]
+    origin: list[FacetValue] = Field(
+        description="Where the companies came from: hubspot, web or typed, in that order"
+    )
     score: IntRange
     office_m2: IntRange
     created: DateRange

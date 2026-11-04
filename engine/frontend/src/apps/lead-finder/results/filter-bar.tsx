@@ -40,6 +40,8 @@ import { formatDate, formatDateTime, formatNumber, humanise } from '@/lib/format
 import {
   HUBSPOT_STATUS_LABELS,
   LEAD_STATUS_LABELS,
+  ORIGIN_LABELS,
+  ORIGIN_ORDER,
   RESULT_LABELS,
   RESULT_ORDER,
   RUN_MODE_LABELS,
@@ -437,6 +439,14 @@ export function FilterBar({ filters, facets, onChange, onClear, trailing }: Filt
         picked={filters.city}
         onChange={(city) => {
           onChange({ city })
+        }}
+      />
+      <PickList
+        title="Source"
+        options={fixed(ORIGIN_LABELS, ORIGIN_ORDER, facets?.origin)}
+        picked={filters.origin}
+        onChange={(values) => {
+          onChange({ origin: oneOf(values, ORIGIN_LABELS) })
         }}
       />
       <PickList

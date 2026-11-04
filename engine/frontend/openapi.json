@@ -2739,6 +2739,14 @@
           "office_m2": {
             "$ref": "#/components/schemas/IntRange"
           },
+          "origin": {
+            "description": "Where the companies came from: hubspot, web or typed, in that order",
+            "items": {
+              "$ref": "#/components/schemas/FacetValue"
+            },
+            "title": "Origin",
+            "type": "array"
+          },
           "result": {
             "items": {
               "$ref": "#/components/schemas/FacetValue"
@@ -2779,6 +2787,7 @@
           "industry_group",
           "hubspot_status",
           "status",
+          "origin",
           "score",
           "office_m2",
           "created",
@@ -3101,6 +3110,18 @@
             "title": "Form Failed",
             "type": "boolean"
           },
+          "hubspot_owner": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The HubSpot owner's name, when HubSpot has the company",
+            "title": "Hubspot Owner"
+          },
           "hubspot_status": {
             "enum": [
               "new",
@@ -3170,6 +3191,7 @@
             "type": "boolean"
           },
           "origin": {
+            "description": "Where the company came from: hubspot (the HubSpot watchlist), web (the research found it on the web) or typed (a person typed the name)",
             "enum": [
               "typed",
               "web",
@@ -9579,6 +9601,32 @@
             }
           },
           {
+            "description": "Where the company came from: hubspot (the watchlist), web (found by the research) or typed (a person typed the name). Repeat the key to match several values",
+            "in": "query",
+            "name": "origin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "typed",
+                      "web",
+                      "hubspot"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Where the company came from: hubspot (the watchlist), web (found by the research) or typed (a person typed the name). Repeat the key to match several values",
+              "title": "Origin"
+            }
+          },
+          {
             "description": "Only leads from this run",
             "in": "query",
             "name": "run_id",
@@ -10105,6 +10153,32 @@
             }
           },
           {
+            "description": "Where the company came from: hubspot (the watchlist), web (found by the research) or typed (a person typed the name). Repeat the key to match several values",
+            "in": "query",
+            "name": "origin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "typed",
+                      "web",
+                      "hubspot"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Where the company came from: hubspot (the watchlist), web (found by the research) or typed (a person typed the name). Repeat the key to match several values",
+              "title": "Origin"
+            }
+          },
+          {
             "description": "Only leads from this run",
             "in": "query",
             "name": "run_id",
@@ -10600,6 +10674,32 @@
             }
           },
           {
+            "description": "Where the company came from: hubspot (the watchlist), web (found by the research) or typed (a person typed the name). Repeat the key to match several values",
+            "in": "query",
+            "name": "origin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "typed",
+                      "web",
+                      "hubspot"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Where the company came from: hubspot (the watchlist), web (found by the research) or typed (a person typed the name). Repeat the key to match several values",
+              "title": "Origin"
+            }
+          },
+          {
             "description": "Only leads from this run",
             "in": "query",
             "name": "run_id",
@@ -11084,6 +11184,32 @@
               ],
               "description": "Repeat the key to match several values",
               "title": "Status"
+            }
+          },
+          {
+            "description": "Where the company came from: hubspot (the watchlist), web (found by the research) or typed (a person typed the name). Repeat the key to match several values",
+            "in": "query",
+            "name": "origin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "typed",
+                      "web",
+                      "hubspot"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Where the company came from: hubspot (the watchlist), web (found by the research) or typed (a person typed the name). Repeat the key to match several values",
+              "title": "Origin"
             }
           },
           {

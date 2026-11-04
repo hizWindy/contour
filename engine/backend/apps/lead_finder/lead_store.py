@@ -27,6 +27,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import ColumnElement, Date, case, cast, delete, distinct, func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from apps.lead_finder.context import Origin
 from apps.lead_finder.geo import CITY_CENTRES, approximate_point
 from apps.lead_finder.research import APP
 from apps.lead_finder.rules import Result, load_rules
@@ -71,6 +72,8 @@ OUTCOME_KIND: Final = "lead_outcome"
 RESULT_ORDER: Final = ("pass", "director_review", "watch", "drop")
 HUBSPOT_ORDER: Final = ("new", "in_hubspot", "open_deal", "dissolved_deal", "possible_match")
 STATUS_ORDER: Final = ("new", "watching", "rejected", "sent")
+# Where the company came from: the HubSpot watchlist, found on the web, or typed by a person.
+ORIGIN_ORDER: Final = ("hubspot", "web", "typed")
 
 NOT_FOUND: Final = ("Lead not found", "Check the id. GET /lead-finder/leads lists them.")
 
@@ -96,6 +99,7 @@ class LeadFilters:
     office_m2_max: int | None = None
     hubspot_status: list[HubSpotStatus] | None = None
     status: list[LeadStatus] | None = None
+    origin: list[Origin] | None = None
     run_id: uuid.UUID | None = None
     created_since: date | None = None
     created_until: date | None = None
@@ -114,6 +118,7 @@ SKIP_INDUSTRY: Final = "industry"
 SKIP_GROUP: Final = "industry_group"
 SKIP_HUBSPOT: Final = "hubspot_status"
 SKIP_STATUS: Final = "status"
+SKIP_ORIGIN: Final = "origin"
 SKIP_SCORE: Final = "score"
 SKIP_M2: Final = "office_m2"
 SKIP_CREATED: Final = "created"
@@ -192,6 +197,8 @@ def lead_conditions(
         where.append(Lead.hubspot_status.in_(filters.hubspot_status))
     if filters.status and SKIP_STATUS not in skipped:
         where.append(Lead.status.in_(filters.status))
+    if filters.origin and SKIP_ORIGIN not in skipped:
+        where.append(Lead.origin.in_(filters.origin))
     if filters.run_id is not None and SKIP_RUN not in skipped:
         where.append(Lead.run_id == filters.run_id)
     if SKIP_CREATED not in skipped:
@@ -326,6 +333,7 @@ def _row(data: Mapping[Any, Any], labels: Mapping[str, str]) -> LeadRow:
     values["trigger_label"] = labels.get(trigger_id, trigger_id) if trigger_id else None
     values["reason"] = reason_of(data["result"], data["checks"], data["why_it_fits"])
     values["form_failed"] = bool(data["form_failed"])
+    values["hubspot_owner"] = data["hubspot_owner"]
     rules = load_rules()
     values["stage"] = rules.criteria.stages[data["result"]]
     checked = data["score_checked"]
@@ -340,6 +348,7 @@ def _row_query() -> Any:
         _CARD["checks"].label("checks"),
         _CARD["why_it_fits"].as_string().label("why_it_fits"),
         func.coalesce(_CARD["form_failed"].as_boolean(), False).label("form_failed"),
+        _CARD["hubspot"]["owner"].as_string().label("hubspot_owner"),
     )
 
 
@@ -452,6 +461,9 @@ async def lead_facets(session: AsyncSession, filters: LeadFilters) -> LeadFacets
         status=facet_values(
             await grouped(Lead.status, SKIP_STATUS), order=STATUS_ORDER, selected=filters.status
         ),
+        origin=facet_values(
+            await grouped(Lead.origin, SKIP_ORIGIN), order=ORIGIN_ORDER, selected=filters.origin
+        ),
         score=IntRange(min=low_score, max=high_score),
         office_m2=IntRange(min=low_m2, max=high_m2),
         created=DateRange(min=first_day, max=last_day),
@@ -522,6 +534,7 @@ async def map_points(session: AsyncSession, filters: LeadFilters) -> MapOut:
 
 EXPORT_COLUMNS: Final = (
     "company",
+    "source",  # where the company came from: hubspot, web or typed
     "result",
     "stage",
     "score",
@@ -550,6 +563,7 @@ def csv_safe(value: str) -> str:
 @dataclass(frozen=True)
 class ExportRow:
     company: str
+    source: str
     result: str
     stage: str
     score: int
@@ -592,6 +606,7 @@ def render_csv(rows: Sequence[ExportRow]) -> bytes:
             _cell(value)
             for value in (
                 row.company,
+                row.source,
                 row.result,
                 row.stage,
                 row.score,
@@ -637,6 +652,7 @@ async def export_rows(
     rows = await session.execute(
         select(
             Lead.company,
+            Lead.origin,
             Lead.result,
             Lead.score,
             Lead.score_checked,
@@ -658,6 +674,7 @@ async def export_rows(
     return [
         ExportRow(
             company=company,
+            source=origin,
             result=result,
             stage=stages[result],
             score=score,
@@ -675,6 +692,7 @@ async def export_rows(
         )
         for (
             company,
+            origin,
             result,
             score,
             checked,

@@ -65,6 +65,7 @@ const ROWS: LeadRow[] = [
     trigger_date: null,
     hubspot_status: 'in_hubspot',
     status: 'watching',
+    origin: 'hubspot',
   }),
 ]
 
@@ -87,6 +88,10 @@ const FACETS: LeadFacets = {
   status: [
     { value: 'new', count: 1 },
     { value: 'watching', count: 1 },
+  ],
+  origin: [
+    { value: 'hubspot', count: 1 },
+    { value: 'web', count: 1 },
   ],
   runs: [],
   score: { min: 41, max: 78 },
@@ -279,6 +284,30 @@ describe('the results page', () => {
     await user.click(screen.getByRole('button', { name: 'Clear filters' }))
     expect(address().toString()).toBe('')
     expect(screen.getByRole('textbox', { name: 'Search company names' })).toHaveValue('')
+  })
+
+  it('marks where each company came from, and filters by it', async () => {
+    const backend = mockApi()
+    const { user } = renderResults()
+    const table = await screen.findByRole('table', { name: 'Leads' })
+    await within(table).findByText('Basalt Mining')
+    const rows = within(table).getAllByRole('row').slice(1)
+    expect(within(rows[0]).getByText('Found')).toBeInTheDocument()
+    expect(within(rows[1]).getByText('From HubSpot')).toBeInTheDocument()
+
+    await user.hover(within(rows[1]).getByText('From HubSpot'))
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(
+      'From the HubSpot watchlist: a company already in HubSpot, checked again.',
+    )
+    await user.unhover(within(rows[1]).getByText('From HubSpot'))
+
+    await user.click(screen.getByRole('button', { name: 'Filter by Source' }))
+    await user.click(await screen.findByRole('option', { name: /^From HubSpot/ }))
+    expect(address().getAll('origin')).toEqual(['hubspot'])
+    await waitFor(() => {
+      expect(lastQuery(backend, '/leads').getAll('origin')).toEqual(['hubspot'])
+    })
+    expect(lastQuery(backend, '/leads/facets').getAll('origin')).toEqual(['hubspot'])
   })
 
   it('opens a lead in the side panel and closes it with Esc', async () => {

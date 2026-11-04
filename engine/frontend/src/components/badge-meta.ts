@@ -20,15 +20,18 @@ import {
   CircleSlash,
   CircleX,
   Clock,
+  Database,
   Eye,
+  Globe,
   Handshake,
   Inbox,
+  Keyboard,
   Send,
   TriangleAlert,
   UserCheck,
   type LucideIcon,
 } from 'lucide-react'
-import type { HubSpotStatus, LeadResult, LeadStatus, RunStatus } from '@/api/types'
+import type { HubSpotStatus, LeadOrigin, LeadResult, LeadStatus, RunStatus } from '@/api/types'
 
 export type BadgeVariant =
   'default' | 'outline' | 'pass' | 'review' | 'watch' | 'drop' | 'destructive'
@@ -70,6 +73,16 @@ export const HUBSPOT_STATUS_META: Record<HubSpotStatus, BadgeMeta> = {
   open_deal: { icon: Handshake, variant: 'outline' },
   dissolved_deal: { icon: CircleSlash, variant: 'outline' },
   possible_match: { icon: CircleQuestionMark, variant: 'outline' },
+}
+
+/**
+ * Where a company came from. A quiet mark, not a badge (no fill, no border), so it never competes
+ * with the result and the HubSpot label next to it.
+ */
+export const ORIGIN_ICONS: Record<LeadOrigin, LucideIcon> = {
+  hubspot: Database,
+  web: Globe,
+  typed: Keyboard,
 }
 
 /** For a value this build does not know: a plain outline badge with an empty circle. */

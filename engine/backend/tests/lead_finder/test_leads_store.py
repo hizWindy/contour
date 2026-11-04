@@ -82,6 +82,7 @@ def test_every_filter_becomes_a_condition() -> None:
         office_m2_max=900,
         hubspot_status=["new"],
         status=["watching"],
+        origin=["hubspot"],
         run_id=uuid.uuid4(),
         created_since=date(2026, 10, 1),
         created_until=date(2026, 10, 31),
@@ -102,6 +103,7 @@ def test_every_filter_becomes_a_condition() -> None:
         "leads.office_m2 <=",
         "leads.hubspot_status IN",
         "leads.status IN",
+        "leads.origin IN",
         "leads.run_id =",
         "timezone(",
         "leads.trigger_date >=",
@@ -898,6 +900,51 @@ async def test_facets_leave_out_test_leads_unless_asked(session: AsyncSession) -
     with_tests = await lead_store.lead_facets(session, LeadFilters(include_tests=True))
     assert values(with_tests.industry)["Test"] == 1
     assert with_tests.score.max == 95
+
+
+@db
+async def test_the_source_filter_and_facet_say_where_each_company_came_from(
+    session: AsyncSession,
+) -> None:
+    await add_all(
+        session,
+        make_lead("From HubSpot", origin="hubspot"),
+        make_lead("Found One", origin="web"),
+        make_lead("Found Two", origin="web"),
+        make_lead("Typed In"),  # the factory's own: typed
+    )
+    facets = await lead_store.lead_facets(session, LeadFilters())
+    assert [i.value for i in facets.origin] == ["hubspot", "web", "typed"]  # in reading order
+    assert values(facets.origin) == {"hubspot": 1, "web": 2, "typed": 1}
+
+    page = await list_leads(session, LeadFilters(origin=["web"]))
+    assert sorted(row.company for row in page.items) == ["Found One", "Found Two"]
+    assert {row.origin for row in page.items} == {"web"}
+
+    # The source facet leaves out its own filter, so it shows what each choice would give.
+    picked = await lead_store.lead_facets(session, LeadFilters(origin=["web"]))
+    assert values(picked.origin) == {"hubspot": 1, "web": 2, "typed": 1}
+    assert sum(values(picked.result).values()) == 2  # the other facets obey it
+
+    rows = await lead_store.export_rows(
+        session, LeadFilters(origin=["hubspot", "typed"]), "company", "asc"
+    )
+    assert [(row.company, row.source) for row in rows] == [
+        ("From HubSpot", "hubspot"),
+        ("Typed In", "typed"),
+    ]
+
+
+@db
+async def test_a_row_names_the_hubspot_owner_when_there_is_one(session: AsyncSession) -> None:
+    owned = make_lead("Owned", hubspot_status="in_hubspot")
+    owned.card["hubspot"]["owner"] = "Sample Owner"
+    await add_all(session, owned, make_lead("Unowned"))
+    page = await list_leads(session, LeadFilters(), sort="company", order="asc")
+    assert [(row.company, row.hubspot_owner) for row in page.items] == [
+        ("Owned", "Sample Owner"),
+        ("Unowned", None),
+    ]
 
 
 @db

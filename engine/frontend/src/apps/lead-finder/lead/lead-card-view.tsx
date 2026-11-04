@@ -35,6 +35,7 @@ import { InHubSpotBadge } from '@/components/hubspot'
 import { Money } from '@/components/money'
 import { ResultBadge } from '@/components/result-badge'
 import { SourceLink } from '@/components/source-link'
+import { SourceMark } from '@/components/source-mark'
 import { StatusBadge } from '@/components/status-badge'
 import {
   AlertDialog,
@@ -948,6 +949,7 @@ export function LeadCardView({ lead, compact = false }: LeadCardViewProps) {
         <div className="flex flex-wrap items-center gap-2">
           <ResultBadge result={lead.result} />
           {lead.stage ? <span className="text-ui text-muted-foreground">{lead.stage}</span> : null}
+          <SourceMark origin={lead.origin} className="text-ui" />
           <span className="text-ui tabular-nums">
             Score {formatScore(lead.score, lead.score_checked)}
             {lead.score_checked ? ' checked' : ''}
