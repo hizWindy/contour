@@ -76,17 +76,16 @@ These rules are for Al-khair and for Claude. At the start of every session: read
 
 | | Track 1: backend and server | Track 2: website |
 |---|---|---|
-| Who | Account 1, the desktop app | Account 2, the terminal app, started with `C:\Users\Asus\claude2.ps1` |
+| Who | Account 1, the desktop app on this laptop | Account 2, Claude Code on the web (Chrome), repo `hizWindy/contour` |
 | Steps | A, B, D, then G, H, I | C1, E, F, then C2 to C5 once B3 is merged |
-| Branch and folder | `plan-v6`, `contour` | `plan-v6-ui`, `contour-ui` (a git worktree beside it) |
-| Test database | `leadfinder_test` | `leadfinder_test_ui` (`LEADFINDER_TEST_DB_SUFFIX=_ui`) |
-| Ports | backend 8000, website 5173 | backend 8010, website 5174 |
+| Branch | `plan-v6` | `plan-v6-ui`, pushed to GitHub after each step |
+| Runs | everything, with the database and the keys | website tests, lint, types, build, and the backend's fast tests |
 
-1. **Only track 1 ticks steps, writes the Log and merges.** Track 2 says what it finished; track 1 merges `plan-v6-ui` into `plan-v6` after each step.
-2. **One heavy job at a time.** Start a full test run, a browser check or a Docker build through `bash engine/scripts/heavy.sh <command>`: it waits while the other track's heavy job runs. Writing code needs no turn.
+1. **Only track 1 ticks steps, writes the Log and merges.** Track 2 says what it finished; track 1 fetches `origin/plan-v6-ui` and merges it into `plan-v6` after each step.
+2. **Track 2 runs in the cloud,** so it has no database, no `engine/.env` keys, no AI Brain and no laptop. It never needs them: its work is the website (and E2's small filter). The integration tests, the browser checks (E3, F3) and the brain saves happen on track 1 after each merge.
 3. **Generated files:** after a merge, run `uv run --no-sync engine openapi` and `npm run types` again instead of fixing `openapi.json` or `schema.d.ts` conflicts by hand.
 4. **Migrations** are track 1's only (0010, 0011). E2 needs no migration: it filters on the existing `origin` column.
-5. **Track 2's first step:** `uv sync` in `engine/backend` and `npm ci` in `engine/frontend` of its worktree. If Windows App Control blocks it, stop and tell Al-khair.
+5. **On this laptop, one heavy job at a time:** `bash engine/scripts/heavy.sh <command>` waits while another full test run, browser check or Docker build runs.
 
 ## Part A: Get ready
 
