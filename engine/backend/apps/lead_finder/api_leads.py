@@ -15,6 +15,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, Response
 
 from apps.lead_finder import lead_store
+from apps.lead_finder.context import Origin
 from apps.lead_finder.lead_store import SORT_COLUMNS, lead_conditions, newest_only
 from apps.lead_finder.rules import Result
 from apps.lead_finder.schemas import (
@@ -76,6 +77,13 @@ class LeadFilters(lead_store.LeadFilters):
     office_m2_max: Annotated[int | None, Query(ge=0, le=INT32_MAX)] = None
     hubspot_status: Annotated[list[HubSpotStatus] | None, Query(description=REPEAT)] = None
     status: Annotated[list[LeadStatus] | None, Query(description=REPEAT)] = None
+    origin: Annotated[
+        list[Origin] | None,
+        Query(
+            description="Where the company came from: hubspot (the watchlist), web (found by "
+            "the research) or typed (a person typed the name). " + REPEAT
+        ),
+    ] = None
     run_id: Annotated[uuid.UUID | None, Query(description="Only leads from this run")] = None
     created_since: Annotated[
         date | None, Query(description="Researched on or after this date (Melbourne time)")

@@ -3,7 +3,7 @@
  * a status reads the same in a badge, a table, a filter and a feed line. Sentence case, no
  * abbreviations (DESIGN.md, "Words on screen").
  */
-import type { HubSpotStatus, LeadResult, LeadStatus, RunStatus } from '@/api/types'
+import type { HubSpotStatus, LeadOrigin, LeadResult, LeadStatus, RunStatus } from '@/api/types'
 import { humanise } from './format'
 
 /** Best first. The order of a legend and of the `result` sort. */
@@ -46,6 +46,25 @@ export const HUBSPOT_STATUS_LABELS: Record<HubSpotStatus, string> = {
   open_deal: 'Open deal',
   dissolved_deal: 'Dissolved deal',
   possible_match: 'Possible match',
+}
+
+/**
+ * Where a company came from (PLAN-V6, E2). Kept apart from the HubSpot label: "From HubSpot" says
+ * how the company got into the list; the HubSpot label says whether HubSpot has it now.
+ */
+export const ORIGIN_ORDER: readonly LeadOrigin[] = ['hubspot', 'web', 'typed']
+
+export const ORIGIN_LABELS: Record<LeadOrigin, string> = {
+  hubspot: 'From HubSpot',
+  web: 'Found',
+  typed: 'Typed',
+}
+
+/** One line each, for the tooltip on the mark. */
+export const ORIGIN_HINTS: Record<LeadOrigin, string> = {
+  hubspot: 'From the HubSpot watchlist: a company already in HubSpot, checked again.',
+  web: 'The research found this company on the web.',
+  typed: 'A person typed this company name on the Start page.',
 }
 
 export function isLeadResult(value: unknown): value is LeadResult {

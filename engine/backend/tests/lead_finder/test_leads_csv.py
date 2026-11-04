@@ -32,6 +32,7 @@ HOSTILE = [
 def make_row(**changes: object) -> ExportRow:
     values: dict[str, object] = {
         "company": "Acme Software",
+        "source": "web",
         "result": "pass",
         "stage": "Active prospect",
         "score": 78,
@@ -72,7 +73,7 @@ def test_the_file_starts_with_a_byte_order_mark_and_the_columns_of_the_design() 
     assert data[:3] == b"\xef\xbb\xbf"
     header = data.decode("utf-8-sig").split("\r\n")[0]
     assert header == (
-        "company,result,stage,score,points_checked,city,trigger,trigger_date,industry,"
+        "company,source,result,stage,score,points_checked,city,trigger,trigger_date,industry,"
         "office_m2,office_m2_estimated,hubspot_status,status,source_link,created_at"
     )
     assert header.split(",") == list(EXPORT_COLUMNS)
@@ -87,6 +88,7 @@ def test_a_row_is_written_in_plain_forms() -> None:
     [row] = parse(render_csv([make_row()]))
     assert row == {
         "company": "Acme Software",
+        "source": "web",
         "result": "pass",
         "stage": "Active prospect",
         "score": "78",
@@ -130,6 +132,7 @@ def test_a_missing_value_is_an_empty_cell() -> None:
 def test_every_text_column_is_guarded(value: str) -> None:
     row = make_row(
         company=value,
+        source=value,
         result=value,
         stage=value,
         city=value,
@@ -142,6 +145,7 @@ def test_every_text_column_is_guarded(value: str) -> None:
     [parsed] = parse(render_csv([row]))
     for column in (
         "company",
+        "source",
         "result",
         "stage",
         "city",

@@ -51,7 +51,8 @@ export function LeadPanel({ leadId, onClose, onOpenFullPage }: LeadPanelProps) {
     >
       <SheetContent
         side="right"
-        className="w-full gap-0 overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-2xl"
+        // Full screen on a phone; wider on a laptop, where the card's quick view needs the room.
+        className="w-full gap-0 overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-2xl data-[side=right]:xl:max-w-3xl"
       >
         <SheetHeader className="pr-12">
           <SheetTitle>{lead.data?.company ?? 'Lead'}</SheetTitle>

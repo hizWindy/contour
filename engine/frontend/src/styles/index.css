@@ -96,6 +96,10 @@
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
 
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-muted: var(--brand-muted);
+
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -256,6 +260,26 @@
       scroll-behavior: auto !important;
     }
   }
+}
+
+/*
+  The sign-in page's contour lines draw themselves once (auth/brand-panel.tsx). Each path has
+  pathLength="1", so one dash covers the whole line. At 1.6s this is longer than the 250ms that
+  panels use: an exception that waits for Al-khair's OK (PLAN-V6 A2, TBC). Reduced motion turns
+  it off with the base rule above, so the lines are simply there.
+*/
+@keyframes contour-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.contour-line {
+  stroke-dasharray: 1;
+  animation: contour-draw 1600ms var(--ease) 1 both;
 }
 
 /*

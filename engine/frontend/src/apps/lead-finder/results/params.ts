@@ -7,8 +7,13 @@
  * plus `view`, `sort`, `order`, `page` (from 1) and `lead`. A value that can't be read is ignored,
  * so a bad link still opens the page. Defaults are left out of the address.
  */
-import type { HubSpotStatus, LeadResult, LeadStatus, QueryOf } from '@/api/types'
-import { HUBSPOT_STATUS_LABELS, LEAD_STATUS_LABELS, RESULT_LABELS } from '@/lib/labels'
+import type { HubSpotStatus, LeadOrigin, LeadResult, LeadStatus, QueryOf } from '@/api/types'
+import {
+  HUBSPOT_STATUS_LABELS,
+  LEAD_STATUS_LABELS,
+  ORIGIN_LABELS,
+  RESULT_LABELS,
+} from '@/lib/labels'
 
 export type ResultsView = 'table' | 'map'
 export type SortKey = NonNullable<NonNullable<QueryOf<'list_leads'>>['sort']>
@@ -54,6 +59,8 @@ export interface LeadFilters {
   industry_group: string[]
   hubspot_status: HubSpotStatus[]
   status: LeadStatus[]
+  /** Where the company came from: the HubSpot watchlist, found on the web, or typed. */
+  origin: LeadOrigin[]
   run_id: string | null
   min_score: number | null
   office_m2_min: number | null
@@ -87,6 +94,7 @@ export const NO_FILTERS: LeadFilters = {
   industry_group: [],
   hubspot_status: [],
   status: [],
+  origin: [],
   run_id: null,
   min_score: null,
   office_m2_min: null,
@@ -116,6 +124,7 @@ const LIST_KEYS = [
   'industry_group',
   'hubspot_status',
   'status',
+  'origin',
 ] as const
 const NUMBER_KEYS = ['min_score', 'office_m2_min', 'office_m2_max'] as const
 const DATE_KEYS = ['created_since', 'created_until', 'trigger_since'] as const
@@ -176,6 +185,7 @@ export function readResults(params: URLSearchParams): ResultsState {
     result: oneOf(params.getAll('result'), RESULT_LABELS),
     hubspot_status: oneOf(params.getAll('hubspot_status'), HUBSPOT_STATUS_LABELS),
     status: oneOf(params.getAll('status'), LEAD_STATUS_LABELS),
+    origin: oneOf(params.getAll('origin'), ORIGIN_LABELS),
     city: texts(params.getAll('city')),
     trigger: texts(params.getAll('trigger')),
     industry: texts(params.getAll('industry')),
@@ -292,6 +302,7 @@ export function filterQuery(filters: LeadFilters): NonNullable<QueryOf<'lead_fac
   if (filters.industry_group.length > 0) query.industry_group = [...filters.industry_group]
   if (filters.hubspot_status.length > 0) query.hubspot_status = [...filters.hubspot_status]
   if (filters.status.length > 0) query.status = [...filters.status]
+  if (filters.origin.length > 0) query.origin = [...filters.origin]
   for (const key of NUMBER_KEYS) {
     const value = filters[key]
     if (value !== null) {

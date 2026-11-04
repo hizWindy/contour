@@ -20,7 +20,16 @@ function adminTab(segment: string, load: () => Promise<PageModule>): RouteObject
   return { path: segment, handle, ...page(load) }
 }
 
+/**
+ * Pages that only the dev server has: mockups with fake data, shown while their backend is being
+ * built (PLAN-V6). They sit outside the app frame, like the sign-in page will.
+ */
+const DEV_ONLY: RouteObject[] = import.meta.env.DEV
+  ? [{ path: '/preview/login', ...page(() => import('@/auth/login-preview')) }]
+  : []
+
 export const routes: RouteObject[] = [
+  ...DEV_ONLY,
   {
     path: '/',
     element: <AppFrame />,

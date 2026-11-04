@@ -232,6 +232,9 @@ describe('text contrast is at least 4.5:1 in light and dark mode', () => {
     ['muted-foreground', 'selected'],
     // Light text on Navy (primary button), and on Terracotta (destructive button)
     ['primary-foreground', 'primary'],
+    // The sign-in page's brand panel: the wordmark's cream, and the small print
+    ['brand-foreground', 'brand'],
+    ['brand-muted', 'brand'],
     ['destructive-foreground', 'destructive'],
     // Error text on the page and on cards
     ['destructive', 'background'],

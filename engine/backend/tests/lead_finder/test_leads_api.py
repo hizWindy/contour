@@ -48,6 +48,7 @@ ROW_FIELDS = {
     "band",
     "status",
     "hubspot_status",
+    "hubspot_owner",
     "trigger_id",
     "trigger_ids",
     "trigger_label",
@@ -239,6 +240,7 @@ async def test_sort_order_limit_and_offset(
         ({"q": "a\x00b"}, "query.q"),
         ({"city": "Per\x00th"}, "query.city"),
         ({"latest": "perhaps"}, "query.latest"),
+        ({"origin": "linkedin"}, "query.origin"),
     ],
 )
 async def test_a_bad_value_is_a_422_that_names_the_field(
@@ -281,11 +283,13 @@ async def test_facets_over_http(client: httpx.AsyncClient, session: AsyncSession
         "industry_group",
         "hubspot_status",
         "status",
+        "origin",
         "score",
         "office_m2",
         "created",
         "runs",
     }
+    assert body["origin"] == [{"value": "typed", "count": 3}]
     assert body["result"] == [
         {"value": "pass", "count": 1},
         {"value": "director_review", "count": 1},
@@ -313,6 +317,35 @@ async def test_facets_refuse_bad_filters_like_the_list(client: httpx.AsyncClient
     assert response.status_code == 422
 
 
+@db
+async def test_the_source_filter_works_through_the_query_string(
+    client: httpx.AsyncClient, session: AsyncSession
+) -> None:
+    await add_all(
+        session,
+        make_lead("From HubSpot", origin="hubspot"),
+        make_lead("Found", origin="web"),
+        make_lead("Typed In"),
+    )
+    found = await client.get(BASE, params=[("origin", "web"), ("origin", "hubspot")])
+    assert found.status_code == 200
+    assert sorted((row["company"], row["origin"]) for row in found.json()["items"]) == [
+        ("Found", "web"),
+        ("From HubSpot", "hubspot"),
+    ]
+    facets = (await client.get(f"{BASE}/facets", params={"origin": "web"})).json()
+    # The source facet leaves out its own filter, so each choice shows what it would give.
+    assert facets["origin"] == [
+        {"value": "hubspot", "count": 1},
+        {"value": "web", "count": 1},
+        {"value": "typed", "count": 1},
+    ]
+    assert facets["result"] == [{"value": "pass", "count": 1}]  # the other facets obey it
+    csv_rows = (await client.get(f"{BASE}/export", params={"origin": "typed"})).content
+    [row] = list(csv.DictReader(io.StringIO(csv_rows.decode("utf-8-sig"), newline="")))
+    assert (row["company"], row["source"]) == ("Typed In", "typed")
+
+
 # --- Export ------------------------------------------------------------------------------------
 
 HOSTILE_NAMES = ["=1+1", "+cmd|' /C calc'!A0", "@SUM(1)", "\t=1+1", "-2+3"]
@@ -333,6 +366,7 @@ async def test_the_export_is_a_utf8_csv_with_the_right_headers(
     rows = list(csv.DictReader(io.StringIO(response.content.decode("utf-8-sig"), newline="")))
     assert list(rows[0]) == [
         "company",
+        "source",
         "result",
         "stage",
         "score",
@@ -352,6 +386,7 @@ async def test_the_export_is_a_utf8_csv_with_the_right_headers(
     assert rows[0]["trigger"] == "Lease ending in 1 to 3 years, or a relocation"
     assert rows[0]["source_link"] == "https://www.afr.com/property/acme-moves-2026"
     assert rows[0]["office_m2_estimated"] == "false"
+    assert rows[0]["source"] == "typed"
 
 
 @db

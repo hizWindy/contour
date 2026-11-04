@@ -43,6 +43,7 @@ Olive and Terracotta come from Contour's site. Ochre is a muted step of Contour'
 - Text is Ink on Stone, or Stone on Ink. All text passes 4.5:1 contrast: Ink on the page is about 14:1, quieter text about 6.5:1, and light text on Navy about 11:1.
 - Form field borders use `#8F937F`, which passes 3:1, so fields are easy to see. Plain dividers can be lighter.
 - One accent, Navy. No gradients.
+- **The sign-in page** (PLAN-V6) has a Navy brand panel with Contour's cream wordmark and fine contour lines. There Navy is the brand, not an action, so the panel stays Navy in dark mode too (`--brand`). In the form, Navy is still only the "Sign in" button.
 - **Dark mode** is a choice. The site opens in light colours. The Ctrl+K menu switches to dark, or to follow your computer's setting, and the browser remembers it. In dark mode, Ink becomes the background and Stone the text. Navy steps up to `#8EA5C3`, so it stays visible.
 
 **Results and labels**
@@ -55,6 +56,8 @@ Olive and Terracotta come from Contour's site. Ochre is a muted step of Contour'
 | Drop | Grey outline | Circle with a minus |
 
 HubSpot labels (New, In HubSpot, Open deal, Dissolved deal, Possible match) use plain outline badges with an icon. Colour is saved for results.
+
+Where a company came from (From HubSpot, Found, Typed) is a quiet mark, not a badge: an icon and a word in muted text, with a tooltip that says what it means. It sits under the name in the table and next to the result on the lead card.
 
 ## Type
 
@@ -118,6 +121,7 @@ Sizes are in rem, so browser zoom works. Nothing is smaller than 13px. Sentence 
 - **Loading:** content fades in. No shimmer and no bouncing dots, so shadcn's Skeleton is used without its pulse.
 - **A live run** shows a filling progress bar and a static dot. Nothing pulses or loops.
 - **Reduced motion:** if your computer asks for it, motion turns off.
+- **One exception, waiting for an OK (TBC):** the sign-in page's contour lines draw once, over 1.6s, when the page opens. They never loop, and reduced motion turns them off.
 
 ## Icons
 
@@ -183,5 +187,7 @@ Phase 0 sets these as CSS variables (shadcn stores them in OKLCH). In shadcn, `-
 | `--destructive` | `#B4412D` | `#D98471` |
 | `--chart-1` to `--chart-5` | Navy, Olive, Sand, Ochre, Terracotta | Lighter steps of the same |
 | `--sidebar` | `#E5E8DB` | `#1E1B15` |
+| `--brand` (sign-in panel) | `#233A56` | `#1F344E` |
+| `--brand-foreground`, `--brand-muted` | `#E5E8DB`, `#B4C0CF` | Same |
 | `--radius` | `0.625rem` | Same |
 

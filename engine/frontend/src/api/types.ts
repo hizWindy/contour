@@ -39,6 +39,8 @@ export type MapOut = Schemas['MapOut']
 export type LeadResult = LeadRow['result']
 export type LeadStatus = LeadRow['status']
 export type HubSpotStatus = LeadRow['hubspot_status']
+/** Where the company came from: the HubSpot watchlist, found on the web, or typed by a person. */
+export type LeadOrigin = LeadRow['origin']
 
 // Lead Finder
 export type RunOptions = Schemas['RunOptions']

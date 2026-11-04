@@ -321,6 +321,7 @@ def test_the_lead_filters_sort_and_paging_are_declared_on_the_list(schema: dict[
         "office_m2_max",
         "hubspot_status",
         "status",
+        "origin",
         "run_id",
         "created_since",
         "created_until",

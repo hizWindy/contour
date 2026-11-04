@@ -29,7 +29,8 @@ describe('the results address', () => {
   it('reads every filter, the sort, the page, the view and the open lead', () => {
     const state = read(
       `result=pass&result=watch&city=Melbourne&trigger=lease_ending&industry=Software` +
-        `&industry_group=Tech&hubspot_status=new&status=watching&run_id=${RUN}&min_score=60` +
+        `&industry_group=Tech&hubspot_status=new&status=watching&origin=hubspot&origin=web` +
+        `&run_id=${RUN}&min_score=60` +
         `&office_m2_min=1000&office_m2_max=5000&created_since=2026-10-01&created_until=2026-10-26` +
         `&trigger_since=2026-01-01&q=acme&include_tests=true&facts_missing=true` +
         `&sort=company&order=asc&page=3` +
@@ -49,6 +50,7 @@ describe('the results address', () => {
         industry_group: ['Tech'],
         hubspot_status: ['new'],
         status: ['watching'],
+        origin: ['hubspot', 'web'],
         run_id: RUN,
         min_score: 60,
         office_m2_min: 1000,
@@ -68,12 +70,14 @@ describe('the results address', () => {
   it('ignores values it cannot read, so a bad link still opens the page', () => {
     const state = read(
       'result=best&result=pass&result=pass&hubspot_status=maybe&status=gone&run_id=12' +
+        '&origin=linkedin&origin=typed' +
         '&min_score=-4&office_m2_min=lots&created_since=2026-02-30&trigger_since=yesterday' +
         '&sort=salary&order=up&page=0&view=globe&lead=<img>',
     )
     expect(state.filters.result).toEqual(['pass'])
     expect(state.filters.hubspot_status).toEqual([])
     expect(state.filters.status).toEqual([])
+    expect(state.filters.origin).toEqual(['typed'])
     expect(state.filters.run_id).toBeNull()
     expect(state.filters.min_score).toBeNull()
     expect(state.filters.office_m2_min).toBeNull()
@@ -105,6 +109,7 @@ describe('the results address', () => {
       filters: { ...NO_FILTERS, city: ['Perth'], min_score: 0 },
     }
     expect(filterQuery(state.filters)).toEqual({ city: ['Perth'], min_score: 0 })
+    expect(filterQuery({ ...NO_FILTERS, origin: ['web'] })).toEqual({ origin: ['web'] })
     expect(listQuery(state)).toEqual({
       city: ['Perth'],
       min_score: 0,

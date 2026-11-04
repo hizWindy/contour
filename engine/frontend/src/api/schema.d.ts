@@ -2100,6 +2100,11 @@ export interface components {
             /** Industry Group */
             industry_group: components["schemas"]["FacetValue"][];
             office_m2: components["schemas"]["IntRange"];
+            /**
+             * Origin
+             * @description Where the companies came from: hubspot, web or typed, in that order
+             */
+            origin: components["schemas"]["FacetValue"][];
             /** Result */
             result: components["schemas"]["FacetValue"][];
             /** Runs */
@@ -2263,6 +2268,11 @@ export interface components {
              */
             form_failed: boolean;
             /**
+             * Hubspot Owner
+             * @description The HubSpot owner's name, when HubSpot has the company
+             */
+            hubspot_owner?: string | null;
+            /**
              * Hubspot Status
              * @enum {string}
              */
@@ -2286,6 +2296,7 @@ export interface components {
             office_m2_estimated: boolean;
             /**
              * Origin
+             * @description Where the company came from: hubspot (the HubSpot watchlist), web (the research found it on the web) or typed (a person typed the name)
              * @enum {string}
              */
             origin: "typed" | "web" | "hubspot";
@@ -6676,6 +6687,8 @@ export interface operations {
                 hubspot_status?: ("new" | "in_hubspot" | "open_deal" | "dissolved_deal" | "possible_match")[] | null;
                 /** @description Repeat the key to match several values */
                 status?: ("new" | "watching" | "rejected" | "sent")[] | null;
+                /** @description Where the company came from: hubspot (the watchlist), web (found by the research) or typed (a person typed the name). Repeat the key to match several values */
+                origin?: ("typed" | "web" | "hubspot")[] | null;
                 /** @description Only leads from this run */
                 run_id?: string | null;
                 /** @description Researched on or after this date (Melbourne time) */
@@ -6832,6 +6845,8 @@ export interface operations {
                 hubspot_status?: ("new" | "in_hubspot" | "open_deal" | "dissolved_deal" | "possible_match")[] | null;
                 /** @description Repeat the key to match several values */
                 status?: ("new" | "watching" | "rejected" | "sent")[] | null;
+                /** @description Where the company came from: hubspot (the watchlist), web (found by the research) or typed (a person typed the name). Repeat the key to match several values */
+                origin?: ("typed" | "web" | "hubspot")[] | null;
                 /** @description Only leads from this run */
                 run_id?: string | null;
                 /** @description Researched on or after this date (Melbourne time) */
@@ -6987,6 +7002,8 @@ export interface operations {
                 hubspot_status?: ("new" | "in_hubspot" | "open_deal" | "dissolved_deal" | "possible_match")[] | null;
                 /** @description Repeat the key to match several values */
                 status?: ("new" | "watching" | "rejected" | "sent")[] | null;
+                /** @description Where the company came from: hubspot (the watchlist), web (found by the research) or typed (a person typed the name). Repeat the key to match several values */
+                origin?: ("typed" | "web" | "hubspot")[] | null;
                 /** @description Only leads from this run */
                 run_id?: string | null;
                 /** @description Researched on or after this date (Melbourne time) */
@@ -7140,6 +7157,8 @@ export interface operations {
                 hubspot_status?: ("new" | "in_hubspot" | "open_deal" | "dissolved_deal" | "possible_match")[] | null;
                 /** @description Repeat the key to match several values */
                 status?: ("new" | "watching" | "rejected" | "sent")[] | null;
+                /** @description Where the company came from: hubspot (the watchlist), web (found by the research) or typed (a person typed the name). Repeat the key to match several values */
+                origin?: ("typed" | "web" | "hubspot")[] | null;
                 /** @description Only leads from this run */
                 run_id?: string | null;
                 /** @description Researched on or after this date (Melbourne time) */
