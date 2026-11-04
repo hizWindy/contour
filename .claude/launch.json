@@ -37,6 +37,20 @@
         "tests.e2e.serve"
       ],
       "port": 8000
+    },
+    {
+      "name": "backend-fake-hubspot",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": [
+        "run",
+        "--directory",
+        "engine/backend",
+        "python",
+        "-m",
+        "tests.e2e.serve",
+        "--hubspot-ok"
+      ],
+      "port": 8000
     }
   ]
 }
