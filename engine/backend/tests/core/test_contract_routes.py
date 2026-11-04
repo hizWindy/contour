@@ -1162,18 +1162,23 @@ def test_serve_gives_uvicorn_a_graceful_shutdown_time(monkeypatch: pytest.Monkey
         def __init__(self, config: uvicorn.Config) -> None:
             seen["timeout"] = config.timeout_graceful_shutdown
             seen["host"] = config.host
+            seen["proxy_headers"] = config.proxy_headers
 
         async def serve(self) -> None: ...
 
     class Local:
         api_host = "127.0.0.1"
+        listen_host = "127.0.0.1"
         api_port = 8765
         auto_migrate = False
+        server_mode = False
+        trusted_proxies = ()
 
     monkeypatch.setattr(cli, "get_settings", lambda: Local())
     monkeypatch.setattr(uvicorn, "Server", FakeServer)
     assert cli.serve() == 0
-    assert seen == {"timeout": 15, "host": "127.0.0.1"}
+    # On this computer: its own address, and no proxy's word is taken for a client's address.
+    assert seen == {"timeout": 15, "host": "127.0.0.1", "proxy_headers": False}
 
 
 def test_a_bad_setting_is_explained_without_showing_its_value(

@@ -11,18 +11,20 @@ Two kinds of setting:
   here, and then clamps the result to the ceilings with `clamp_to_ceilings`.
 """
 
+import ipaddress
+import json
 import re
 from decimal import ROUND_DOWN, Decimal
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Final, Literal, get_args
+from typing import Annotated, Any, Final, Literal, get_args
 from urllib.parse import quote, urlsplit
 
 from annotated_types import Ge, Le
 from psycopg.conninfo import make_conninfo
 from pydantic import Field, SecretStr, StrictBool, ValidationError, field_validator, model_validator
 from pydantic_core import InitErrorDetails, PydanticCustomError
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 ENGINE_DIR = BACKEND_DIR.parent
@@ -115,6 +117,54 @@ def _clean_origin(value: str) -> str:
     return f"{parts.scheme}://{netloc}"
 
 
+def _clean_public_origin(value: str) -> str | None:
+    """The one address the website has on the internet, like https://hq.contourinteriors.com.au.
+
+    Only HTTPS, and only a scheme, a host and maybe a port: the host check and the origin guard
+    compare against it, so anything more (a path, a login, a query) would never match a request.
+    """
+    text = value.strip()
+    if not text:
+        return None
+    parts = urlsplit(text)
+    if parts.scheme != "https":
+        raise ValueError(
+            "public_origin must start with https://. The engine on a server only runs behind HTTPS"
+        )
+    if parts.username or parts.password or parts.query or parts.fragment:
+        raise ValueError("public_origin is a scheme, a host and a port. Nothing else.")
+    if parts.path not in ("", "/"):
+        raise ValueError("public_origin can't have a path")
+    host = parts.hostname
+    if not host:
+        raise ValueError("public_origin needs a host name, like https://hq.contourinteriors.com.au")
+    try:
+        port = parts.port
+    except ValueError as error:
+        raise ValueError("public_origin has a bad port") from error
+    netloc = f"[{host}]" if ":" in host else host
+    return f"https://{netloc}" + (f":{port}" if port is not None else "")
+
+
+def _clean_proxy(value: str) -> str:
+    """One trusted proxy: an IP address or a network, never "everything"."""
+    text = value.strip()
+    if text == "*":
+        raise ValueError(
+            "trusted_proxies can't be *: that would trust every client's word about its address"
+        )
+    try:
+        network = ipaddress.ip_network(text, strict=False)
+    except ValueError as error:
+        raise ValueError(
+            f"trusted_proxies has {text!r}, which is not an IP address or a network like "
+            "172.18.0.0/16"
+        ) from error
+    if network.prefixlen == 0:
+        raise ValueError("trusted_proxies can't be every address (a /0 network)")
+    return str(network)
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=ENGINE_DIR / ".env",
@@ -166,6 +216,22 @@ class Settings(BaseSettings):
     login_lock_minutes: int = Field(15, ge=1, le=1440)
     login_ip_max_failures: int = Field(20, ge=5, le=1000)
     login_ip_window_minutes: int = Field(15, ge=1, le=1440)
+
+    # --- Server mode (PLAN-V6 B5, env-only) ----------------------------------------------
+    # On a server, behind Caddy and HTTPS. It makes the engine answer to one named domain instead of
+    # this computer only. Off on this laptop, where nothing changes. When it is on:
+    # - it needs `public_origin` (https only) and `trusted_proxies`, or it won't start;
+    # - the host check lets that host through, and the origin guard allows that origin only;
+    # - it listens on 0.0.0.0 (inside the container: only Caddy can reach it);
+    # - only a connection from a trusted proxy may say what the client's IP address is;
+    # - sign-in is required and the cookie is Secure (setting either off is refused);
+    # - it doesn't migrate at start (the migrate step runs first; AUTO_MIGRATE=true is refused);
+    # - the Swagger pages are not served.
+    server_mode: StrictBool = False
+    public_origin: str | None = None  # like https://hq.contourinteriors.com.au
+    # The proxy's address (or its network, like Docker's 172.18.0.0/16), as the engine sees it.
+    # A comma-separated list. Without it every visitor would look like the proxy.
+    trusted_proxies: Annotated[list[str], NoDecode] = []
 
     # --- Memory (FastEmbed runs on this computer) --------------------------------------
     embedding_model: str = "BAAI/bge-small-en-v1.5"
@@ -264,6 +330,7 @@ class Settings(BaseSettings):
         "hubspot_write_enabled",
         "auth_required",
         "session_cookie_secure",
+        "server_mode",
         mode="before",
     )
     @classmethod
@@ -283,6 +350,30 @@ class Settings(BaseSettings):
         if version != "v3" and not re.fullmatch(r"20\d\d-(0[1-9]|1[0-2])", version):
             raise ValueError("hubspot_api_version must be a date version like 2026-09, or v3")
         return version
+
+    @field_validator("public_origin")
+    @classmethod
+    def _public_origin(cls, value: str | None) -> str | None:
+        return None if value is None else _clean_public_origin(value)
+
+    @field_validator("trusted_proxies", mode="before")
+    @classmethod
+    def _split_proxies(cls, value: Any) -> Any:
+        """The env gives text: a comma-separated list (or a JSON list, as other list settings)."""
+        if isinstance(value, str):
+            text = value.strip()
+            if text.startswith("["):
+                try:
+                    return json.loads(text)
+                except json.JSONDecodeError as error:
+                    raise ValueError("trusted_proxies isn't a valid list") from error
+            return [part for part in re.split(r"[,\s]+", text) if part]
+        return value
+
+    @field_validator("trusted_proxies")
+    @classmethod
+    def _proxy_addresses(cls, value: list[str]) -> list[str]:
+        return list(dict.fromkeys(_clean_proxy(entry) for entry in value))
 
     @field_validator("cors_origins")
     @classmethod
@@ -314,6 +405,72 @@ class Settings(BaseSettings):
                 "lead_finder, information_schema, or a name that starts with pg_"
             )
         return name
+
+    @model_validator(mode="after")
+    def _server_mode_is_whole(self) -> "Settings":
+        """Server mode refuses to start with a missing or unsafe piece, and turns on what it needs.
+
+        What it needs must not be contradicted: AUTH_REQUIRED=false, SESSION_COOKIE_SECURE=false
+        or AUTO_MIGRATE=true in .env is refused rather than quietly overruled, so nobody believes
+        a setting they wrote is in force. (The origin is already known to be https if it is there.)
+        """
+        if not self.server_mode:
+            return self
+        asked = self.model_fields_set
+        problems: list[tuple[str, str]] = []
+        if self.public_origin is None:
+            problems.append(
+                (
+                    "public_origin",
+                    "SERVER_MODE needs PUBLIC_ORIGIN: the https address of the website, like "
+                    "https://hq.contourinteriors.com.au",
+                )
+            )
+        if not self.trusted_proxies:
+            problems.append(
+                (
+                    "trusted_proxies",
+                    "SERVER_MODE needs TRUSTED_PROXIES: the address of the proxy that passes on "
+                    "the client's IP address, like 172.18.0.0/16. Without it every visitor looks "
+                    "like the proxy, and the limit on tries from one IP address would lock "
+                    "everyone out together.",
+                )
+            )
+        if "auth_required" in asked and not self.auth_required:
+            problems.append(
+                ("auth_required", "SERVER_MODE always requires sign-in. Remove AUTH_REQUIRED=false")
+            )
+        if "session_cookie_secure" in asked and not self.session_cookie_secure:
+            problems.append(
+                (
+                    "session_cookie_secure",
+                    "SERVER_MODE always uses a Secure cookie. Remove SESSION_COOKIE_SECURE=false",
+                )
+            )
+        if "auto_migrate" in asked and self.auto_migrate:
+            problems.append(
+                (
+                    "auto_migrate",
+                    "SERVER_MODE doesn't change the database at start: the migrate step runs "
+                    "first. Remove AUTO_MIGRATE=true",
+                )
+            )
+        if problems:
+            raise ValidationError.from_exception_data(
+                "Settings",
+                [
+                    InitErrorDetails(
+                        type=PydanticCustomError("server_mode", "{message}", {"message": text}),
+                        loc=(field,),
+                        input=getattr(self, field),
+                    )
+                    for field, text in problems
+                ],
+            )
+        self.auth_required = True
+        self.session_cookie_secure = True
+        self.auto_migrate = False
+        return self
 
     @model_validator(mode="after")
     def _the_waits_come_before_the_lock(self) -> "Settings":
@@ -365,6 +522,17 @@ class Settings(BaseSettings):
         return self
 
     # --- Helpers -----------------------------------------------------------------------
+
+    @property
+    def listen_host(self) -> str:
+        """Where the backend listens: this computer only, unless it is a server (inside its
+        container, where only the proxy can reach it)."""
+        return "0.0.0.0" if self.server_mode else self.api_host
+
+    @property
+    def public_host(self) -> str | None:
+        """The host name of `public_origin`, in lower case, or None."""
+        return urlsplit(self.public_origin).hostname if self.public_origin else None
 
     def database_url(self, database: str | None = None) -> str:
         """The SQLAlchemy address for psycopg 3. Works for both sync and async engines."""

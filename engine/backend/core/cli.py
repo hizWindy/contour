@@ -58,7 +58,9 @@ def _is_loopback(host: str) -> bool:
 def serve(reload: bool = False) -> int:
     """Starts the backend on the selector event loop (see core/runtime.py).
 
-    Refuses an address that isn't this computer: the engine is not for a network.
+    Refuses an address that isn't this computer: the engine is not for a network, unless it is
+    a server (`SERVER_MODE=true`, see `core.config`): then it listens on 0.0.0.0 inside its
+    container and takes a client's address only from the trusted proxy.
     """
     import uvicorn
 
@@ -73,26 +75,35 @@ def serve(reload: bool = False) -> int:
     if settings.auto_migrate:
         migrate()
     target = "core.api.app:create_app"
+    # Whose word is taken for a client's IP address. On this computer: nobody's (uvicorn would
+    # otherwise trust a header from 127.0.0.1). On a server: only a connection from the proxy
+    # (Caddy), by its address. Settings refuse "*", so no other connection can set it.
+    proxy: dict[str, Any] = {
+        "proxy_headers": settings.server_mode,
+        "forwarded_allow_ips": ",".join(settings.trusted_proxies) if settings.server_mode else None,
+    }
     if reload:
         # uvicorn's reloader runs the app in a child process on the selector loop.
         uvicorn.run(
             target,
             factory=True,
-            host=settings.api_host,
+            host=settings.listen_host,
             port=settings.api_port,
             reload=True,
             reload_dirs=[str(BACKEND_DIR)],
             log_config=None,
             timeout_graceful_shutdown=GRACEFUL_SHUTDOWN_SECONDS,
+            **proxy,
         )
         return 0
     config = uvicorn.Config(
         target,
         factory=True,
-        host=settings.api_host,
+        host=settings.listen_host,
         port=settings.api_port,
         log_config=None,
         timeout_graceful_shutdown=GRACEFUL_SHUTDOWN_SECONDS,
+        **proxy,
     )
     asyncio.run(uvicorn.Server(config).serve(), loop_factory=loop_factory())
     return 0

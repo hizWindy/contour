@@ -96,12 +96,18 @@ def create_app() -> FastAPI:
     for spec in specs:
         spec.check_rules()  # the backend won't start if a rules file is wrong
 
+    # On a server the Swagger pages are not served: they would show the whole API to anyone who
+    # asks. `engine openapi` still writes the contract file for the website.
+    pages = not settings.server_mode
     app = EngineApp(
         title="Contour engine",
         version="0.1.0",
         summary="The research engine for the Lead Finder. All endpoints sit under /api/v1.",
         lifespan=lifespan,
         generate_unique_id_function=operation_id,
+        docs_url="/docs" if pages else None,
+        redoc_url="/redoc" if pages else None,
+        openapi_url="/openapi.json" if pages else None,
     )
     app.state.apps = specs
     # The guard is added first, so it is inside the CORS layer (a 401 still carries its headers)

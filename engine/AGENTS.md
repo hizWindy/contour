@@ -173,7 +173,7 @@ frontend/
 - Lists are paged and filterable. No endpoint returns an unlimited list.
 - Every error has the same shape (`application/problem+json`: a title, a status and a plain detail), so the website can show a clear message.
 - Every endpoint has a summary, examples and a response model, so Swagger is a complete guide.
-- Only the local website (`http://localhost:5173`) may call the API.
+- Only the local website (`http://localhost:5173`) may call the API. In server mode, only the public origin may.
 
 ### Testing and changes
 
@@ -221,6 +221,15 @@ Commands, from `backend/`: `uv run engine hubspot-check` (which scopes the key h
 - **Guessing is limited** (`core/auth/throttle.py`, the `LOGIN_*` settings). The first 2 wrong tries in a row are free, then each wait doubles (2 seconds up to a minute), and the 10th locks the login for 15 minutes. A try during a wait answers 429 `too_many_attempts` (with `Retry-After`), checks nothing, counts nothing and isn't logged. A login that matches no account is slowed and locked the same way, kept in memory by a hash, so the lock never says which accounts exist. One IP address may make 20 wrong tries in 15 minutes (counted from the sign-in log). The account's row is locked while a try is checked, so parallel tries can't beat the count.
 - **The sign-in log** (`core.audit_log`, `GET /auth/log` for an Admin) keeps every sign-in, failure, lock, sign-out and password change, with the time and the IP address. It never holds a password, a token or a login that was typed: `audit.add_entry` refuses a detail whose name sounds like a secret.
 - **In a route:** take `MaybeAuthDep` (the signed-in user, or none where sign-in is off) or `AdminDep` from `core/api/signin.py`. A 401 has the code `auth_required`, and for a session that ended it says why (`reason`: `idle`, `expired` or `ended`). Tests move time with `app.state.clock` and use a cheap hasher in `app.state.hasher` (see `tests/core/test_auth_api.py`).
+
+## Server mode
+
+[PLAN-V6](../plan/PLAN-V6.md) B5. The engine on a server, behind Caddy and HTTPS. Off on this laptop, where nothing changes: the engine answers to `localhost` and `127.0.0.1` and listens on `127.0.0.1`.
+
+- **On** with `SERVER_MODE=true`. It needs `PUBLIC_ORIGIN` (the website's `https://` address, no path) and `TRUSTED_PROXIES` (Caddy's address or network, never `*`), or the backend refuses to start and names what is missing.
+- **It sets up:** the host check lets the public host through (and `localhost` and `127.0.0.1`, for the container's own health check); the origin guard allows the public origin and no other; the backend listens on `0.0.0.0` inside its container; sign-in is required; the cookie is `Secure` and `__Host-` named; the backend doesn't migrate at start (a one-off `engine migrate` runs first); the Swagger pages aren't served (`engine openapi` still writes the contract).
+- **Whose word is taken for a client's IP address:** only a connection from `TRUSTED_PROXIES`, by uvicorn's `forwarded_allow_ips`. Caddy adds the real address at the end of `X-Forwarded-For`, and what a client writes before it is not believed. On this computer no header is believed at all.
+- **Nothing is quietly overruled:** `AUTH_REQUIRED=false`, `SESSION_COOKIE_SECURE=false` or `AUTO_MIGRATE=true` together with server mode is refused.
 
 ## Safety
 

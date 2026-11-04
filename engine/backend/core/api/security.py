@@ -1,10 +1,11 @@
 """Security of the HTTP layer. The engine is a local tool, so it protects itself from web pages.
 
 Three layers, added by `add_security_layers`:
-- **Host check:** only `localhost` and `127.0.0.1` are accepted as the host name. This stops
-  DNS rebinding (a web page that points its own name at this computer). It is the outermost
-  layer, so it answers first, even before the CORS layer answers a preflight, and its refusal
-  is the same `application/problem+json` as every other error (code `host_not_allowed`).
+- **Host check:** only `localhost` and `127.0.0.1` are accepted as the host name (in server mode
+  also the public host, `trusted_hosts`). This stops DNS rebinding (a web page that points its own
+  name at this computer). It is the outermost layer, so it answers first, even before the CORS
+  layer answers a preflight, and its refusal is the same `application/problem+json` as every
+  other error (code `host_not_allowed`).
 - **Origin guard:** a browser adds an `Origin` header to every cross-site POST, PUT, PATCH and
   DELETE. If it is there and it isn't one of ours (or it is `null`), the request is refused
   before its body is read. This stops a web page from using the engine through the person's
@@ -33,8 +34,10 @@ from core.api.errors import problem
 from core.config import API_HOSTS, Settings
 
 # The same two names `api_host` may be (one list, in core.config), so a host the settings accept
-# is a host the check accepts.
+# is a host the check accepts. In server mode `trusted_hosts` adds the public host to them.
 TRUSTED_HOSTS = list(API_HOSTS)
+LOCAL_HOST_DETAIL = "The engine only answers to localhost or 127.0.0.1."
+SERVER_HOST_DETAIL = "The engine doesn't answer to this host name."
 UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 SECURITY_HEADERS = {
     "Cache-Control": "no-store",
@@ -48,8 +51,27 @@ SECURITY_HEADERS = {
 _HOST_HEADER = re.compile(r"(?P<name>[a-z0-9.\-]+|\[[0-9a-f:.]+\])(?::\d{1,5})?")
 
 
+def trusted_hosts(settings: Settings) -> list[str]:
+    """The host names the engine answers to.
+
+    On this computer: localhost and 127.0.0.1. In server mode: the public host (Caddy passes the
+    visitor's Host header on) and the same two, which the container's own health check uses. The
+    engine is not reachable from outside its container except through Caddy.
+    """
+    if settings.server_mode and settings.public_host:
+        return [settings.public_host, *API_HOSTS]
+    return list(API_HOSTS)
+
+
 def allowed_origins(settings: Settings) -> frozenset[str]:
-    """The website's origins from settings, plus the API's own (Swagger runs there)."""
+    """The origins a POST, PUT, PATCH or DELETE may come from.
+
+    On this computer: the website's origins from settings, plus the API's own (Swagger runs
+    there). In server mode: the public origin and nothing else, because the website and the API
+    share it (Caddy serves both), so the local origins have no business here.
+    """
+    if settings.server_mode and settings.public_origin:
+        return frozenset({settings.public_origin.lower()})
     own = {f"http://127.0.0.1:{settings.api_port}", f"http://localhost:{settings.api_port}"}
     return frozenset({origin.lower() for origin in settings.cors_origins} | own)
 
@@ -121,6 +143,12 @@ class HostGuard(TrustedHostMiddleware):
     refused.
     """
 
+    def __init__(
+        self, app: ASGIApp, allowed_hosts: list[str], *, detail: str = LOCAL_HOST_DETAIL
+    ) -> None:
+        super().__init__(app, allowed_hosts=allowed_hosts)
+        self.detail = detail
+
     def _host_is_allowed(self, headers: Headers) -> bool:
         values = headers.getlist("host")
         if len(values) != 1:  # none, or two (a second one can hide behind the first)
@@ -146,7 +174,7 @@ class HostGuard(TrustedHostMiddleware):
             response = problem(
                 400,
                 "Request blocked",
-                "The engine only answers to localhost or 127.0.0.1.",
+                self.detail,
                 code="host_not_allowed",
             )
             await response(scope, receive, send)
@@ -187,7 +215,10 @@ def add_security_layers(app: FastAPI, settings: Settings) -> None:
     # middleware.
     build_stack = app.build_middleware_stack
 
+    hosts = trusted_hosts(settings)
+    detail = SERVER_HOST_DETAIL if settings.server_mode else LOCAL_HOST_DETAIL
+
     def build_with_layers() -> ASGIApp:
-        return SecurityHeaders(HostGuard(build_stack(), allowed_hosts=TRUSTED_HOSTS))
+        return SecurityHeaders(HostGuard(build_stack(), allowed_hosts=hosts, detail=detail))
 
     app.build_middleware_stack = build_with_layers  # type: ignore[method-assign]
