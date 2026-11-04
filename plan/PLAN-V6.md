@@ -1,10 +1,10 @@
 # Contour HQ plan, version 6: a secure sign-in, then DigitalOcean
 
-This plan puts the platform online as **Contour HQ**. It adds a sign-in for one Admin account, a login page built with care, the files to run it in containers, and a server on DigitalOcean in Sydney.
+This plan puts the platform online as **Contour HQ**. It adds a sign-in for one Admin account, a login page built with care, a scheduler for the regular runs, a better company list and lead card, the files to run it in containers, and a server on DigitalOcean in Sydney.
 
 - **Built by:** Al-khair Pama. **Signed off by:** Levi Young (the name and the cloud data OK).
 - **Last updated:** 2026-11-04. **TBC** means not confirmed yet.
-- **Progress:** 0 of 22 steps done. Work goes on branch `plan-v6`.
+- **Progress:** 0 of 31 steps done. Work goes on branch `plan-v6`.
 - **Comes after:** [PLAN-V5.md](PLAN-V5.md), merged into `master` and pushed on 4 Nov (6f676ae). Its open steps (A2 and Part F, HubSpot write access) stay there and don't block this plan.
 
 ## In short
@@ -12,8 +12,10 @@ This plan puts the platform online as **Contour HQ**. It adds a sign-in for one 
 - **Goal:** Contour HQ runs on a DigitalOcean server, behind HTTPS, and only a signed-in person can use it.
 - **One account for now:** Al-khair's, as Admin. The login is simple to use (email or username, and a password), but the page is designed with care and the security is strong.
 - **Why the engine can't go online today:** it is locked to this computer on purpose (`api_host` must be `127.0.0.1`, and `HostGuard` lets in only `localhost`), it has no sign-in, and it has no container files. This plan fixes all three.
-- **Order:** get ready (A), accounts and sessions in the backend (B), the login page (C), containers (D), DigitalOcean (E), check and go live (F). The mockup (C1) can come right after A, so the design is agreed before the build.
-- **Cost:** no Claude money to build. DigitalOcean is about US$24 a month for the server and US$15 to US$30 for the managed database (**TBC**: check the prices on the day).
+- **Runs on their own:** a scheduler starts the Lead Finder every 2 weeks by default (Levi, 30 Oct), and syncs HubSpot every day. A person can change when, or switch a schedule off.
+- **Easier to read:** the company list gets one tidy filter bar and a clear mark for where each company came from (HubSpot, found by the research, or typed in). The lead card opens with a short summary, and its details sit in tabs instead of one long page.
+- **Order:** get ready (A), accounts and sessions (B), the login page (C), the scheduler (D), the company list (E), the lead card (F), containers (G), DigitalOcean (H), check and go live (I). The mockups (C1, E1, F1) can come early, so the design is agreed before the build.
+- **Cost:** no Claude money to build. DigitalOcean is about US$24 a month for the server and US$15 to US$30 for the managed database (**TBC**: check the prices on the day). Each scheduled 4-city run costs about US$8 (30 Oct estimate), so about US$16 a month every 2 weeks (**TBC**).
 
 ## Words used here
 
@@ -32,6 +34,8 @@ This plan puts the platform online as **Contour HQ**. It adds a sign-in for one 
 - **Animation:** the `motion` package (formerly Framer Motion) for React. Our reading of "Framer components" (**TBC**: if Framer the website builder was meant, this changes).
 - **Hosting:** one droplet and a managed Postgres with pgvector, both in Sydney (`syd1`).
 - **Design references:** `engine/frontend/assets/login/` (Vanta, SaleSkip, bwell, a phone layout, and Contour's wordmark), with a README saying what we take from each and what we leave.
+- **Scheduler:** in the core, so every project can schedule its own jobs. "Every N weeks on a day at a time" in Melbourne time, because plain cron can't say "every 2 weeks". Defaults: the Lead Finder every 2 weeks on Monday at 7:00 am, and a HubSpot sync every day at 6:00 am. The Lead Finder schedule starts **off**, because each run costs money: Al-khair switches it on after go-live (our recommendation, **TBC**). The free HubSpot sync starts on.
+- **Where a company came from:** every lead already records it (`origin`: `hubspot`, `web` or `typed`). It becomes a mark and a filter, kept apart from the HubSpot label (New, In HubSpot, Open deal...), which says whether HubSpot has the company now.
 
 ## The login page
 
@@ -141,48 +145,102 @@ These rules are for Al-khair and for Claude. At the start of every session: read
   - "Contour HQ" in the sidebar, the browser tab, the Home page and the docs. The logo stays.
   - **Done when:** no screen says the old name, and the tests pass.
 
-## Part D: Containers
+## Part D: The scheduler
 
-- [ ] **D1. The backend container.** `engine/backend/Dockerfile`.
+- [ ] **D1. Schedules in the core.** Migration 0011.
+  - `core.schedules`: the project, the job (like `lead_finder.discovery` or `core.hubspot_sync`), its settings (JSON), every how many days or weeks, the day, the time, the time zone (`Australia/Melbourne`), on or off, the next run, the last run (with its run id or sync id) and its last error.
+  - A loop in the backend checks once a minute and starts what is due. A schedule never starts twice: one backend runs (the advisory lock), and the row is claimed before it starts. A job missed while the backend was off runs once when it is back, never once for each missed time. A job that is still running is skipped, with a note.
+  - Daylight saving is handled: 7:00 am Melbourne stays 7:00 am all year.
+  - Projects add jobs through their `AppSpec`; the core adds the HubSpot sync. The two defaults above are made at the first start.
+  - Then `scripts/schema_map.py`, and `engine/schema/SCHEMA-0011.md`.
+  - **Done when:** tests cover a due job, a missed job, a job still running, a schedule switched off, and the change to and from daylight saving.
+
+- [ ] **D2. The Lead Finder's scheduled run.**
+  - It uses saved Start-page choices: cities, signs, areas, and "look back" matching the schedule (14 days for every 2 weeks). The default is the 4 cities (**TBC** with Levi).
+  - Money: before it starts, the estimate is checked against the run cap and the daily cap. If it doesn't fit, it doesn't start, and the reason shows on the Schedules page. The run's own caps still apply while it runs.
+  - Runs started by a schedule say so on the Runs page ("Scheduled").
+  - **Done when:** tests cover a run that starts, one stopped by the daily cap, and the saved choices.
+
+- [ ] **D3. The Schedules page.** Admin.
+  - Each schedule: on or off, "Every [2] [weeks] on [Monday] at [7:00 am]", the next run, the last run with its link and result, the cost estimate for one run, and "Run now".
+  - Switching the Lead Finder schedule on asks for a confirm, showing the monthly cost estimate.
+  - **Done when:** website tests pass, and it looks right on a desktop, a phone and in dark colours.
+
+## Part E: The company list (Results)
+
+- [ ] **E1. The mockup.**
+  - One filter bar: the search box, then the 3 filters used most (Result, City, Source), then a "Filters" button that opens the rest in one panel (sign, industry, HubSpot label, status, run, dates). The filters in use show as small chips under the bar, each with an ×, and "Clear all". On a phone, all filters sit in the bottom sheet, as now.
+  - The table: company with its source mark, result, score ("x of y"), the best sign with its date, city, HubSpot label with owner, researched date. The rest stays in the card.
+  - **Done when:** Al-khair says yes to the look.
+
+- [ ] **E2. Where each company came from.**
+  - A mark with an icon and a word on every row and on the card: **From HubSpot** (the watchlist), **Found** (the research found it on the web) or **Typed** (a person typed the name). A tooltip explains each.
+  - A "Source" filter, sent to the backend as `origin`, and the source in the CSV.
+  - **Done when:** backend and website tests cover the filter, the mark and the CSV.
+
+- [ ] **E3. The new filter bar and table.**
+  - Built as in E1. The filters stay in the address, so a link shares the view.
+  - **Done when:** website tests pass, and it looks right on a desktop, a phone and in dark colours.
+
+## Part F: The lead card
+
+- [ ] **F1. The mockup.**
+  - **At the top, the quick view** (fits without scrolling on a laptop): the name, source mark and result with its stage; the score as a bar ("51 of 77 checked") and the band; one line on why it fits; the best sign with its date and source link; staff and office size, each with where it came from; the HubSpot label with owner and link; the first person to talk to; and the actions (Watch, Reject, Send to HubSpot, Re-check).
+  - **Under it, tabs:** Overview (the summary and the opening line), Facts (each fact with its source and what other sources said), Signs (every sign), Score and rules, HubSpot and look-alikes, Research (cost, notes, problems).
+  - Long lists show the first 3, with "Show all".
+  - The same card in the Results panel and on the lead's own page. The panel is wider on a laptop, and full screen on a phone.
+  - **Done when:** Al-khair says yes to the look.
+
+- [ ] **F2. The new card.**
+  - Built as in F1, from the parts of `lead-card-view.tsx`, which is split into smaller files (one for each tab).
+  - **Done when:** website tests cover each tab and the quick view, and keyboard use works (the tabs with the arrow keys).
+
+- [ ] **F3. Check it in the browser.**
+  - On the fake backend: a lead with every fact, one with few facts, one from HubSpot, and one sent to HubSpot.
+  - **Done when:** it looks right on a desktop, a phone and in dark colours, in the panel and on the page.
+
+## Part G: Containers
+
+- [ ] **G1. The backend container.** `engine/backend/Dockerfile`.
   - Python 3.12 and uv, installed exactly from `uv.lock`, run as a normal user, and the embedding model built in, so it doesn't download at each start. A health check on `/api/v1/health`. A `.dockerignore`, so `.env`, `.venv` and `scripts/out/` never go in.
   - **Done when:** it builds on this laptop, starts, and answers the health check.
 
-- [ ] **D2. The website container.** `engine/frontend/Dockerfile` and `engine/deploy/Caddyfile`.
+- [ ] **G2. The website container.** `engine/frontend/Dockerfile` and `engine/deploy/Caddyfile`.
   - The website built once, then served as plain files by Caddy. Caddy also sends `/api` to the backend, gets the HTTPS certificate by itself, and adds the security headers.
   - **Done when:** it builds, and the headers are right when checked with `curl -I`.
 
-- [ ] **D3. Everything together.** `engine/deploy/docker-compose.prod.yml` and `engine/deploy/README.md`.
+- [ ] **G3. Everything together.** `engine/deploy/docker-compose.prod.yml` and `engine/deploy/README.md`.
   - Caddy, the backend (one copy only: the engine allows one backend per database) and a one-off `migrate` step before it. A local Postgres for the trial on this laptop.
   - The README is the run book: first install, an update, a rollback, a restore, and making the Admin account.
   - **Done when:** the whole thing runs on this laptop at `https://localhost`, the sign-in works, and a lead card opens.
 
-## Part E: DigitalOcean
+## Part H: DigitalOcean
 
-- [ ] **E1. The server.** **Costs money.**
+- [ ] **H1. The server.** **Costs money.**
   - A droplet in `syd1` with about 4 GB of memory, Ubuntu LTS and Docker. Sign-in by SSH key only. A firewall with 443 and 80 open, and 22 open to Al-khair's IP address only. Automatic security updates.
   - **Done when:** the droplet runs, and the firewall is checked from outside.
 
-- [ ] **E2. The database.** **Costs money.**
+- [ ] **H2. The database.** **Costs money.**
   - Managed Postgres in `syd1`, with pgvector. Version 18 if DigitalOcean offers it, otherwise 17 (**TBC**: the engine runs on 18 today; check that 17 passes the tests first). Only the droplet may connect. Daily backups, and a restore to a point in time.
   - **Done when:** the droplet connects, and the migrations run.
 
-- [ ] **E3. The deploy.**
+- [ ] **H3. The deploy.**
   - The containers on the droplet. The keys in a root-only environment file on the server (mode 600), never in git. The DNS record for the domain, then HTTPS.
   - Data: a fresh database, then a HubSpot sync on the server (about 10 minutes). The 52 dev leads are moved only if Levi wants them (**TBC**).
   - **Done when:** the domain opens the login page over HTTPS.
 
-- [ ] **E4. Backups and watching.**
+- [ ] **H4. Backups and watching.**
   - One restore of the managed database to a new one, checked, then deleted. DigitalOcean's uptime check on `/api/v1/health`, emailing Al-khair.
   - **Done when:** the restore worked, and a test alert arrived.
 
-## Part F: Check and go live
+## Part I: Check and go live
 
-- [ ] **F1. The full check.**
+- [ ] **I1. The full check.**
   - The backend suite with `RUN_GATES=1` and the website checks, one at a time. A security review of the sign-in and server mode. The headers checked on the live domain.
   - **Done when:** everything passes, and the numbers and any fixes are in the Log.
 
-- [ ] **F2. Go live.**
-  - The Admin account made on the server (`engine create-admin`), the first sign-in, a HubSpot sync, and one small run with a low cap.
+- [ ] **I2. Go live.**
+  - The Admin account made on the server (`engine create-admin`), the first sign-in, a HubSpot sync, and one small run with a low cap. Then the Lead Finder schedule switched on, when Al-khair says so (**costs money** every 2 weeks).
   - Merge `plan-v6` into `master` (Al-khair's call).
   - **Done when:** Al-khair signs in on the domain, and the Log says so.
 
@@ -190,12 +248,13 @@ These rules are for Al-khair and for Claude. At the start of every session: read
 
 - A second step at sign-in: a code from an authenticator app, with recovery codes.
 - Microsoft sign-in, and more users with the `staff` and `viewer` roles.
-- A sync timer on the server, now that the platform runs all the time.
+- An email or a Home page note when a scheduled run finds new leads.
+- Saved views on the company list ("Melbourne, Pass, this month").
 - A test server beside the live one.
 
 ## Waiting on
 
-- **Levi:** the name, the OK to keep HubSpot data on a server in Sydney, and whether the 52 dev leads move.
+- **Levi:** the name, the OK to keep HubSpot data on a server in Sydney, whether the 52 dev leads move, and the scheduled run's cities and signs (every 2 weeks is his, 30 Oct).
 - **Al-khair:** the domain, the DigitalOcean account, the OK on the line drawing, and which "Framer" was meant.
 - **Contour's IT:** the DNS record for the domain.
 
@@ -203,12 +262,16 @@ These rules are for Al-khair and for Claude. At the start of every session: read
 
 - **A server on the internet gets attacked.** Every route needs a session; the guessing limits, a firewall, HTTPS, security updates and the sign-in log. A second sign-in step is the first thing in "Later".
 - **One account means one way in.** If Al-khair loses the password, the server command resets it.
-- **The database version.** If DigitalOcean doesn't offer Postgres 18, the engine must pass its tests on 17 first (E2).
+- **The database version.** If DigitalOcean doesn't offer Postgres 18, the engine must pass its tests on 17 first (H2).
+- **A schedule spends money by itself.** It starts off; switching it on asks for a confirm with the monthly estimate; each run checks the run cap and the daily cap before it starts.
+- **A long card gets longer again.** New facts go in a tab, not in the quick view, unless a person needs them to decide.
 - **Memory.** The embedding model and a full sync need about 2 GB, so the droplet needs 4 GB (**TBC**: watch it after the first sync).
 - **Data off the laptop.** HubSpot company data moves to a server in Sydney, which needs Levi's OK first (A2).
 
 ## Log
 
 Newest first. One line for each tick, pause or surprise.
+
+- 2026-11-04: Added three parts at Al-khair's ask: D the scheduler (every 2 weeks by default, changeable, a daily HubSpot sync), E the company list (one filter bar, a mark for where each company came from), F the lead card (a quick view on top, the details in tabs). Containers, DigitalOcean and go-live became G, H and I. 31 steps.
 
 - 2026-11-04: Plan written after the ideas session: Contour HQ, one Admin account with email or username and a password, a login page from the 6 references, containers, and DigitalOcean in Sydney. No step started.
