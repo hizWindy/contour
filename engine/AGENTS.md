@@ -112,6 +112,8 @@ backend/
   tests/               fast tests, and integration tests marked `integration`
                        tests/lead_finder/samples.py holds the fake Claude
                        tests/e2e/serve.py is the fake backend for the website
+  scripts/             checks run by hand: hubspot_schema.py (Contour's HubSpot fields) and schema_map.py (our database); see scripts/README.md
+schema/                our database schema, one file for each migration, like SCHEMA-0008.md, made by scripts/schema_map.py
 frontend/
   openapi.json         the API contract, written by `uv run engine openapi`
   src/api/             the typed API client and the data hooks
@@ -139,6 +141,7 @@ frontend/
 - Type hints everywhere, checked by mypy in strict mode.
 - Pydantic models at every edge: requests, responses, Claude's answer forms, HubSpot data and the rules files.
 - Every table change goes through an Alembic migration. Nobody edits tables by hand.
+- After each migration, run `uv run --no-sync python scripts/schema_map.py` from `backend/` and commit the new `schema/SCHEMA-<number>.md` with it. `--check` fails when the saved file is missing or no longer matches the database.
 - Times are stored in UTC with the time zone. Money is stored as exact decimals, never floats.
 - Async from top to bottom: FastAPI, SQLAlchemy and httpx. Slow work that blocks (like FastEmbed or reading a spreadsheet) runs in a thread.
 
