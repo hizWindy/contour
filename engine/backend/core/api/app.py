@@ -117,9 +117,11 @@ def create_app() -> FastAPI:
     # The guard is added first, so it is inside the CORS layer (a 401 still carries its headers)
     # and inside the origin guard and the host check, which refuse before it looks at a cookie.
     app.add_middleware(SessionGuard)
+    # On a server the website and the API share one origin (Caddy serves both), so no other origin
+    # needs CORS: none is listed, and a browser on another site can't read an answer.
     app.add_middleware(
         ProblemCORSMiddleware,
-        allow_origins=settings.cors_origins,
+        allow_origins=[] if settings.server_mode else settings.cors_origins,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
         allow_headers=["*"],
     )

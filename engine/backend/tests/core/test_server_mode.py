@@ -346,6 +346,41 @@ async def test_without_server_mode_the_laptops_origins_are_the_allowed_ones(
     assert theirs.status_code == 403
 
 
+async def test_on_a_server_no_other_origin_gets_cors_headers(
+    server_env: Callable[..., None],
+) -> None:
+    app = server_app(server_env)
+    async with client_for(app) as client:
+        for origin in ("http://localhost:5173", "http://127.0.0.1:5173", "https://evil.example"):
+            answer = await client.get("/api/v1/runs", headers={"Host": HOST, "Origin": origin})
+            assert answer.status_code == 401  # the guard's answer, with no CORS headers on it
+            assert "access-control-allow-origin" not in answer.headers, origin
+            preflight = await client.options(
+                "/api/v1/runs",
+                headers={
+                    "Host": HOST,
+                    "Origin": origin,
+                    "Access-Control-Request-Method": "POST",
+                },
+            )
+            assert "access-control-allow-origin" not in preflight.headers, origin
+
+
+async def test_on_this_computer_the_websites_own_origin_gets_cors_headers(
+    server_env: Callable[..., None],
+) -> None:
+    server_env()
+    async with client_for(create_app()) as client:
+        preflight = await client.options(
+            "/api/v1/runs",
+            headers={
+                "Origin": "http://localhost:5173",
+                "Access-Control-Request-Method": "POST",
+            },
+        )
+    assert preflight.headers["access-control-allow-origin"] == "http://localhost:5173"
+
+
 # --- Swagger, the contract and the sign-in on a server ----------------------------------------
 
 
