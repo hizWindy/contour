@@ -178,6 +178,13 @@ class Settings(BaseSettings):
     postgres_db: str = "leadfinder"
     postgres_host: str = "127.0.0.1"
     postgres_port: int = 5433
+    # TLS to the database. None keeps libpq's own default (`prefer`: TLS if the server offers it). A
+    # managed database (DigitalOcean) needs `require` at least, and `verify-full` with the
+    # provider's CA certificate file is the safest: it also checks who answered.
+    postgres_sslmode: (
+        Literal["disable", "allow", "prefer", "require", "verify-ca", "verify-full"] | None
+    ) = None
+    postgres_sslrootcert: Path | None = None
     db_pool_size: int = Field(10, ge=1, le=50)
     db_max_overflow: int = Field(10, ge=0, le=50)
     db_pool_timeout: float = Field(10, gt=0, le=120)  # seconds to wait for a free connection
@@ -473,6 +480,18 @@ class Settings(BaseSettings):
         return self
 
     @model_validator(mode="after")
+    def _a_verifying_sslmode_has_its_certificate(self) -> "Settings":
+        if (
+            self.postgres_sslmode in ("verify-ca", "verify-full")
+            and self.postgres_sslrootcert is None
+        ):
+            raise ValueError(
+                f"POSTGRES_SSLMODE={self.postgres_sslmode} needs POSTGRES_SSLROOTCERT: the path of "
+                "the database's CA certificate file"
+            )
+        return self
+
+    @model_validator(mode="after")
     def _the_waits_come_before_the_lock(self) -> "Settings":
         if self.login_free_tries >= self.login_lock_tries:
             raise ValueError(
@@ -538,10 +557,16 @@ class Settings(BaseSettings):
         """The SQLAlchemy address for psycopg 3. Works for both sync and async engines."""
         password = quote(self.postgres_password.get_secret_value(), safe="")
         name = database or self.postgres_db
-        return (
+        address = (
             f"postgresql+psycopg://{self.postgres_user}:{password}"
             f"@{self.postgres_host}:{self.postgres_port}/{name}"
         )
+        options: list[str] = []
+        if self.postgres_sslmode is not None:
+            options.append(f"sslmode={self.postgres_sslmode}")
+        if self.postgres_sslrootcert is not None:
+            options.append(f"sslrootcert={quote(str(self.postgres_sslrootcert), safe='/')}")
+        return f"{address}?{'&'.join(options)}" if options else address
 
     def psycopg_conninfo(self, database: str | None = None, **options: str | int | None) -> str:
         """A libpq connection string for psycopg (the checkpoint pool, the advisory lock).
@@ -556,6 +581,8 @@ class Settings(BaseSettings):
             "password": self.postgres_password.get_secret_value(),
             "dbname": database or self.postgres_db,
             "connect_timeout": CONNECT_TIMEOUT_SECONDS,
+            "sslmode": self.postgres_sslmode,
+            "sslrootcert": str(self.postgres_sslrootcert) if self.postgres_sslrootcert else None,
         }
         params.update(options)
         # mypy reads a possible "conninfo" key in params as the first argument.

@@ -626,6 +626,40 @@ def test_the_connection_string_takes_another_database_and_options() -> None:
     assert conninfo_to_dict(s.psycopg_conninfo(connect_timeout=2))["connect_timeout"] == "2"
 
 
+def test_the_database_address_and_connection_string_have_no_tls_options_by_default() -> None:
+    s = make()
+    assert "?" not in s.database_url()
+    info = conninfo_to_dict(s.psycopg_conninfo())
+    assert "sslmode" not in info and "sslrootcert" not in info
+
+
+def test_a_tls_mode_reaches_the_address_and_the_connection_string() -> None:
+    s = make(postgres_sslmode="require")
+    assert s.database_url().endswith("/leadfinder?sslmode=require")
+    assert conninfo_to_dict(s.psycopg_conninfo())["sslmode"] == "require"
+    assert s.database_url("other").endswith("/other?sslmode=require")
+
+
+def test_a_ca_certificate_reaches_the_address_and_the_connection_string() -> None:
+    s = make(postgres_sslmode="verify-full", postgres_sslrootcert="/run/secrets/ca cert.pem")
+    assert s.database_url().endswith(
+        "/leadfinder?sslmode=verify-full&sslrootcert=/run/secrets/ca%20cert.pem"
+    )
+    info = conninfo_to_dict(s.psycopg_conninfo())
+    assert (info["sslmode"], info["sslrootcert"]) == ("verify-full", "/run/secrets/ca cert.pem")
+
+
+@pytest.mark.parametrize("mode", ["verify-ca", "verify-full"])
+def test_a_verifying_tls_mode_needs_the_certificate(mode: str) -> None:
+    with pytest.raises(ValidationError, match="needs POSTGRES_SSLROOTCERT"):
+        make(postgres_sslmode=mode)
+
+
+def test_an_unknown_tls_mode_is_refused() -> None:
+    with pytest.raises(ValidationError):
+        make(postgres_sslmode="always")
+
+
 def test_the_password_is_not_in_the_settings_text() -> None:
     s = make(postgres_password="hunter2-secret", anthropic_api_key="sk-secret-key")
     text = f"{s!r} {s}"
