@@ -25,6 +25,7 @@ The files:
 - **A domain** whose DNS points at the server's IP address. Without it, Caddy can't get a certificate.
 - **A database:** Postgres with pgvector. The managed one on the server, or the trial one on a laptop. The engine runs on Postgres 18 today. **TBC:** whether 17 passes the tests.
 - **The keys:** Anthropic (needed), HubSpot (to copy HubSpot), Signal Hire (optional).
+- **The login page.** It is built in PLAN-V6 Part C (the other track). Without it the website has no way to sign in, and on a server nobody can get past the API's 401. Check that Part C is in the code before you build. **TBC:** whether it is merged yet.
 - **Memory:** about 4 GB on the server. **TBC:** how much the website build needs. A first guess is 1 GB.
 
 ## First install
@@ -73,7 +74,7 @@ docker compose ps
 docker compose run --rm -it backend engine create-admin --email you@example.com --name "Your Name"
 ```
 
-5. Open `https://` and the domain, and sign in. There is no sign-up page and no reset email: the commands below make accounts and reset passwords.
+5. Open `https://your-domain` and sign in. There is no sign-up page and no reset email: the commands below make accounts and reset passwords.
 
 6. Look at the Schedules tab (Admin). The HubSpot copy is **on**, every day at 6:00 am. Find new leads is **off**. Do one run by hand first (Start a run), so the Schedules tab shows real prices. Then switch it on.
 
