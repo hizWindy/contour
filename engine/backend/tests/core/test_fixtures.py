@@ -3,7 +3,7 @@
 import os
 import uuid
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, time
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, TypedDict
 
@@ -38,6 +38,7 @@ from core.hubspot.models import (
 from core.memory.models import EMBEDDING_DIM, MemoryItem
 from core.prefs.models import Setting
 from core.runs.models import Run, RunEvent
+from core.schedules.models import Schedule
 from core.searches.models import SearchLog
 from tests.conftest import CHECKPOINT_SETUP_LOCK, LANGGRAPH_SCHEMA, TEST_TABLES
 
@@ -68,6 +69,14 @@ async def fill_every_table(factory: async_sessionmaker[AsyncSession]) -> None:
                 run,
                 person,
                 Setting(key="run_cap_usd", value="20.00"),
+                Schedule(
+                    project="test",
+                    job="test.job",
+                    name="A job",
+                    every=1,
+                    unit="days",
+                    at_time=time(6, 0),
+                ),
                 SignalHireDetails(
                     signalhire_id=7, slug="acme", details={}, fetched_at=datetime.now(UTC)
                 ),

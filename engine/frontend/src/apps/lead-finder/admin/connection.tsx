@@ -43,6 +43,7 @@ const TRIGGER: Record<HubSpotSync['trigger'], string> = {
   command: 'Command',
   website: 'Website',
   startup: 'Backend start',
+  schedule: 'Schedule',
 }
 const WRITE_STATUS: Record<HubSpotWrite['status'], string> = {
   previewed: 'Previewed',

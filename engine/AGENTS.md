@@ -92,6 +92,7 @@ backend/
     signalhire/        Signal Hire (client.py): company details, staff and people counts, senior people's names and job titles; details.py is the saved company record
     runs/              the run engine: start, stop, resume, live events, caps (manager.py, events.py, budget.py)
     prefs/             the settings a person can change on the Settings page
+    schedules/         jobs that start on their own (PLAN-V6 Part D): calc.py (when a schedule runs next, daylight saving included), models.py (core.schedules), jobs.py (JobSpec: what a project offers), core_jobs.py (the HubSpot sync), service.py, runner.py (the loop), runtime.py (start and stop)
     auth/              who may sign in (PLAN-V6): models.py (users, sessions, the sign-in log), passwords.py (argon2id, the rules, common_passwords.txt), clean.py, audit.py, users.py, sessions.py, admin.py (what the server commands do)
   apps/
     lead_finder/       the first project
@@ -192,6 +193,7 @@ frontend/
 5. Add its pages in `frontend/src/apps/<name>/`, and its tests in `backend/tests/<name>/`.
 6. In `frontend/src/apps/<name>/module.tsx`, define its `AppModule`: name, icon, one-line description, menu pages and routes. Add it to `MODULES` in `frontend/src/modules.ts`, and take it out of `PLANNED` there (the list of projects still to be developed, each with one "to be developed" page). The sidebar group, its card on Home and the Ctrl+K entries then appear by themselves. Its own admin pages go in its menu; only what every project shares goes under Admin.
 7. If it uses HubSpot, see "How a project uses HubSpot" below.
+8. If it has work that should start on its own, list `JobSpec`s in `AppSpec.jobs` (see "Schedules" below).
 
 The core doesn't change.
 
@@ -207,6 +209,15 @@ One connection in `backend/core/hubspot/` serves every project ([PLAN-V5](../pla
 6. **Test it** with `FakeHubSpot` (`backend/tests/core/hubspot_fake.py`). No test reaches HubSpot: the tests blank the key.
 
 Commands, from `backend/`: `uv run engine hubspot-check` (which scopes the key has, free) and `uv run engine hubspot-sync` (copy HubSpot now, free; `--full` reads everything and finds deleted records).
+
+## Schedules
+
+[PLAN-V6](../plan/PLAN-V6.md) Part D. A schedule starts a job on its own: "every N days or weeks, on a weekday, at a time, in Melbourne time". Plain cron can't say "every 2 weeks".
+
+- **The time is the wall clock in the zone.** 7:00 am stays 7:00 am all year, though it is a different hour in UTC before and after daylight saving (`core/schedules/calc.py`). A time that doesn't exist runs at 3:30 instead of 2:30, and one that happens twice runs once.
+- **The loop** (`core/schedules/runner.py`) checks the `core.schedules` table once a minute and starts what is on and due. It runs only in the backend that holds the run engine's lock, so there is one of it for a database. A due schedule is **claimed first** (its next time moved on, saved) and started after, so it never starts twice. A schedule **missed** while the backend was off runs once when it is back, and keeps its own days. A job **still running** is skipped, with a note on the schedule. A job that fails never stops the loop, and its error text stays in the log: the table gets a fixed sentence.
+- **A project adds a job** with `JobSpec(key, project, title, start, running, default)` in `AppSpec.jobs`. `start(context)` begins the work and returns at once with the id of the run or sync it made (`JobResult(ref=...)`), or raises `JobSkipped("a reason in plain words")`. `running(context)` says whether the last start's work is still going. `default` is the schedule made at the first start, and never again: a person's edits and switch-offs stay. A schedule that is off has no next time (the table keeps the two together).
+- **The core's own job** is the HubSpot sync, on by default, every day at 6:00 am (`core/schedules/core_jobs.py`). A sync a schedule starts has the trigger `schedule`.
 
 ## Sign-in
 

@@ -68,6 +68,7 @@ os.environ["SESSION_COOKIE_SECURE"] = "false"
 get_settings.cache_clear()
 
 TEST_TABLES = (
+    "core.schedules",
     "core.audit_log",
     "core.sessions",
     "core.users",

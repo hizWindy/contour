@@ -522,6 +522,54 @@ def test_0010_adds_and_removes_the_sign_in_tables(scratch: Scratch) -> None:
         assert connection.execute("SELECT count(*) AS n FROM core.users").fetchone() == {"n": 0}
 
 
+def schedule_tables(scratch: Scratch) -> set[str]:
+    with scratch.connect() as connection:
+        rows = connection.execute(
+            "SELECT tablename FROM pg_tables WHERE schemaname = 'core' AND tablename = 'schedules'"
+        ).fetchall()
+    return {row["tablename"] for row in rows}
+
+
+def sync_trigger_rule(scratch: Scratch) -> str:
+    with scratch.connect() as connection:
+        row = connection.execute(
+            "SELECT pg_get_constraintdef(oid) AS rule FROM pg_constraint "
+            "WHERE conname = 'ck_hubspot_syncs_trigger'"
+        ).fetchone()
+    assert row is not None
+    return str(row["rule"])
+
+
+@pytest.mark.integration
+def test_0011_adds_the_schedules_and_lets_a_schedule_start_a_sync(scratch: Scratch) -> None:
+    config = alembic_config(scratch.url)
+    command.upgrade(config, "0010_auth_tables")
+    assert schedule_tables(scratch) == set()
+    assert "schedule" not in sync_trigger_rule(scratch)
+
+    command.upgrade(config, "0011_schedules")
+    command.upgrade(config, "head")
+    command.check(config)  # the model declares the same table, checks and index
+    assert schedule_tables(scratch) == {"schedules"}
+    assert "'schedule'" in sync_trigger_rule(scratch)
+
+    # A sync that a schedule started is kept on the way down, as a command, so the old rule holds.
+    with scratch.connect() as connection:
+        connection.execute(
+            "INSERT INTO core.hubspot_syncs (mode, trigger, status, finished_at) "
+            "VALUES ('changes', 'schedule', 'done', now())"
+        )
+    command.downgrade(config, "0010_auth_tables")
+    assert schedule_tables(scratch) == set()
+    assert "schedule" not in sync_trigger_rule(scratch)
+    with scratch.connect() as connection:
+        row = connection.execute("SELECT trigger FROM core.hubspot_syncs").fetchone()
+    assert row == {"trigger": "command"}
+
+    command.upgrade(config, "head")
+    assert schedule_tables(scratch) == {"schedules"}
+
+
 def fact(value: Any) -> dict[str, Any]:
     found = value is not None
     return {

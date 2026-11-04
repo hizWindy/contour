@@ -470,6 +470,7 @@ dependencies = [
     { name = "rapidfuzz" },
     { name = "sqlalchemy", extra = ["asyncio"] },
     { name = "sse-starlette" },
+    { name = "tzdata" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -509,6 +510,7 @@ requires-dist = [
     { name = "rapidfuzz", specifier = ">=3.14.6" },
     { name = "sqlalchemy", extras = ["asyncio"] },
     { name = "sse-starlette", specifier = ">=3.5.1" },
+    { name = "tzdata", specifier = ">=2026.5" },
     { name = "uvicorn", extras = ["standard"] },
 ]
 

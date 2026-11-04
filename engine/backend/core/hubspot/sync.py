@@ -81,7 +81,7 @@ PROFILES_FAILED = (
 
 ModeChoice = Literal["auto", "full", "changes"]
 Mode = Literal["full", "changes"]
-Trigger = Literal["command", "website", "startup"]
+Trigger = Literal["command", "website", "startup", "schedule"]
 HubSpotSource = Callable[[], HubSpot | None]
 
 

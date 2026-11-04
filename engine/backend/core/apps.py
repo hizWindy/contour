@@ -15,6 +15,7 @@ from core.hubspot.needs import HubSpotNeeds
 if TYPE_CHECKING:
     # Only for the type. Importing it would load the Claude client into every migration.
     from core.runs.types import RunKind
+    from core.schedules.jobs import JobSpec
 
 
 @dataclass(frozen=True)
@@ -34,6 +35,8 @@ class AppSpec:
     # Called with (session, WriteOut) after one of its HubSpot writes is done (PLAN-V5 B5), like
     # the Lead Finder marking the lead as sent. The core's writer calls it, whichever route wrote.
     hubspot_written: Callable[[Any, Any], Awaitable[None]] | None = None
+    # What it offers to start on a schedule (PLAN-V6 D1), like the Lead Finder's discovery run.
+    jobs: "tuple[JobSpec, ...]" = ()
 
 
 def load_apps(names: Sequence[str]) -> list[AppSpec]:

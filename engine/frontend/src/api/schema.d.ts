@@ -4060,7 +4060,7 @@ export interface components {
              * Trigger
              * @enum {string}
              */
-            trigger: "command" | "website" | "startup";
+            trigger: "command" | "website" | "startup" | "schedule";
             /** Warnings */
             warnings: string[];
         };

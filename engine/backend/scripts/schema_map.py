@@ -59,6 +59,10 @@ PURPOSE = {
         "The sign-in log: every sign-in, failure, lock, sign-out and password change, with the "
         "time and the IP address. Never a password or a token."
     ),
+    "core.schedules": (
+        "Jobs that start on their own: how often and when (in Melbourne time), whether each is "
+        "on, when it runs next, and how the last start went. One row for each job."
+    ),
     "core.hubspot_companies": (
         "Our copy of HubSpot's companies, from the sync (source api) or an export upload "
         "(source export)."
@@ -92,6 +96,12 @@ PURPOSE = {
 
 # Short notes on columns whose name doesn't say enough.
 COLUMN_NOTES = {
+    "core.schedules.job": "The job's name, like lead_finder.discovery. One schedule for each.",
+    "core.schedules.at_time": "The wall clock in `timezone`: 7:00 stays 7:00 all year.",
+    "core.schedules.weekday": "0 Monday to 6 Sunday. Set for a schedule in weeks, empty in days.",
+    "core.schedules.next_run_at": "Set while the schedule is on, empty while it is off.",
+    "core.schedules.last_ref": "The run id or sync id the last start made, as text.",
+    "core.schedules.last_error": "Why the last start didn't happen, in plain words.",
     "core.users.email": "Saved in lower case, so it is compared in lower case.",
     "core.users.username": "Lower case, no @, or empty. A second way to sign in.",
     "core.users.password_hash": "argon2id, with its own settings in the text. Never the password.",

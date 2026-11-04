@@ -21,6 +21,7 @@ from core.hubspot import connection as hubspot_connection
 from core.logs import setup_logging
 from core.runs import lifecycle
 from core.runtime import disable_tracing
+from core.schedules import runtime as schedules
 
 API_PREFIX = "/api/v1"
 
@@ -34,9 +35,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         await lifecycle.startup(app)
         await hubspot_connection.start_up(app)  # a background sync if the last is old; never fails
+        await schedules.start_up(app)  # only where this backend holds the run engine's lock
         yield
     finally:
         try:
+            await schedules.shut_down(app)
             await hubspot_connection.shut_down(app)
             await lifecycle.shutdown(app)
         finally:

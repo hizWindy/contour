@@ -5,6 +5,7 @@ from core.hubspot.models import HubSpotCompany, HubSpotDeal, HubSpotOffice
 from core.memory.models import MemoryItem
 from core.prefs.models import Setting
 from core.runs.models import Run, RunEvent
+from core.schedules.models import Schedule
 from core.searches.models import SearchLog
 
 __all__ = [
@@ -15,6 +16,7 @@ __all__ = [
     "MemoryItem",
     "Run",
     "RunEvent",
+    "Schedule",
     "SearchLog",
     "Setting",
     "User",

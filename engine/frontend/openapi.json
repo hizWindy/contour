@@ -7249,7 +7249,8 @@
             "enum": [
               "command",
               "website",
-              "startup"
+              "startup",
+              "schedule"
             ],
             "title": "Trigger",
             "type": "string"

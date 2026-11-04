@@ -38,7 +38,7 @@ from core.db.base import CORE_SCHEMA, Base
 
 SOURCES = ("export", "api")
 SYNC_MODES = ("full", "changes")
-SYNC_TRIGGERS = ("command", "website", "startup")
+SYNC_TRIGGERS = ("command", "website", "startup", "schedule")
 # running: reading or saving now. interrupted: the backend stopped while it ran.
 SYNC_STATUSES = ("running", "done", "failed", "interrupted")
 # previewed: shown to a person, nothing written. writing: being written now. done: every step
@@ -192,7 +192,7 @@ class HubSpotSync(Base):
 
     id: Mapped[int] = mapped_column(Integer, Identity(always=False), primary_key=True)
     mode: Mapped[str] = mapped_column(String(16))  # full or changes
-    trigger: Mapped[str] = mapped_column(String(16))  # command, website or startup
+    trigger: Mapped[str] = mapped_column(String(16))  # command, website, startup or schedule
     status: Mapped[str] = mapped_column(String(16), server_default="running")
     # For a changes sync: records changed in HubSpot at or after this time were read.
     changed_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
