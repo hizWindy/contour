@@ -1,0 +1,16 @@
+# What is left out of the website image's build (PLAN-V6 G2). The build context is engine/, so the
+# backend, the schema notes and every secret are named here and stay out.
+backend
+schema
+scripts
+docker-compose.yml
+.env
+**/.env
+.env.*
+**/.git
+**/node_modules
+**/dist
+**/coverage
+**/*.log
+frontend/Dockerfile
+frontend/Dockerfile.dockerignore

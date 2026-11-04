@@ -1,0 +1,80 @@
+# Caddy for Contour HQ (PLAN-V6 G2 and G3). It does four things:
+#   1. HTTPS for one domain. Caddy gets the certificate and renews it by itself. That needs ports 80
+#      and 443 open to the internet, and the domain's DNS pointing at this server.
+#   2. Serves the website as plain files (/srv), and sends every page address to index.html.
+#   3. Sends /api to the backend. The backend takes a visitor's IP address from this proxy only
+#      (TRUSTED_PROXIES), so Caddy is the one door to it.
+#   4. Adds the security headers, and keeps cookies out of its own log.
+#
+# Two settings come from the environment (engine/deploy/.env):
+#   SITE_ADDRESS  the domain, like hq.contourinteriors.com.au. On the laptop trial it is localhost,
+#                 and Caddy makes its own local certificate (a browser warns until it is trusted).
+#   HSTS          the Strict-Transport-Security value. Default max-age=31536000 (a year). The laptop
+#                 trial sets max-age=0 so a browser doesn't remember https for localhost.
+#
+# There is no rate limit here: the standard Caddy has none. The backend limits wrong sign-in tries
+# by itself, and the DigitalOcean cloud firewall can limit the rest (see README.md, "Open items").
+
+{
+	# Changes are made by recreating the container, so the admin API is off.
+	admin off
+}
+
+{$SITE_ADDRESS:localhost} {
+	# What the site tells the browser to refuse. The content policy is the one in index.html, plus
+	# the two directives a <meta> tag can't carry: frame-ancestors (no embedding in other sites) and
+	# form-action. A test in the website (src/test/csp.test.ts) keeps index.html in step.
+	header {
+		Strict-Transport-Security "{$HSTS:max-age=31536000}"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; connect-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+		Cross-Origin-Opener-Policy "same-origin"
+		-Server
+	}
+
+	# Cookies and keys are never written to the access log, whatever a header holds.
+	log {
+		output stdout
+		format filter {
+			wrap json
+			fields {
+				request>headers>Cookie delete
+				request>headers>Authorization delete
+				resp_headers>Set-Cookie delete
+			}
+		}
+	}
+
+	# The backend. `flush_interval -1` passes the live run feed on as it is written. A request body
+	# is cut off at 50 MB (the HubSpot export upload is the biggest thing sent). Caddy replaces any
+	# X-Forwarded-For a visitor sends with the visitor's real address.
+	handle /api/* {
+		request_body {
+			max_size 50MB
+		}
+		# An answer that is behind a sign-in is never kept by a cache. A route that sets its own
+		# Cache-Control (the live feed) keeps it.
+		header ?Cache-Control "no-store"
+		reverse_proxy backend:8000 {
+			flush_interval -1
+		}
+	}
+
+	# The website.
+	handle {
+		root * /srv
+		encode zstd gzip
+		# The files under /assets have a hash in their name, so they never change under one name.
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+		# A page address (/results, /runs/123) is the app's, not a file: it gets index.html, which
+		# is always checked again. A missing file under /assets is a 404, never index.html.
+		@pages not path /assets/*
+		header @pages Cache-Control "no-cache"
+		try_files @pages {path} /index.html
+		file_server
+	}
+}
