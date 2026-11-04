@@ -16,10 +16,11 @@ from fastapi import Depends, Request
 
 from core.api.deps import SessionDep
 from core.api.errors import Problem
-from core.auth import cookies, words
+from core.auth import cookies, sessions, words
 from core.auth.clock import utcnow
 from core.auth.passwords import Hasher, get_hasher
-from core.auth.sessions import AuthContext, Gone, Limits, resolve
+from core.auth.sessions import AuthContext, Gone, Limits
+from core.auth.throttle import UnknownLogins
 from core.config import Settings, get_settings
 
 
@@ -41,7 +42,17 @@ def auth_settings_dependency() -> Settings:
     return get_settings()
 
 
+def unknown_logins_dependency(request: Request) -> UnknownLogins:
+    """What the sign-in remembers about logins that match no account. One for the whole app."""
+    state = request.app.state
+    if getattr(state, "unknown_logins", None) is None:
+        state.unknown_logins = UnknownLogins()
+    found: UnknownLogins = state.unknown_logins
+    return found
+
+
 NowDep = Annotated[datetime, Depends(clock_dependency)]
+UnknownLoginsDep = Annotated[UnknownLogins, Depends(unknown_logins_dependency)]
 HasherDep = Annotated[Hasher, Depends(hasher_dependency)]
 AuthSettingsDep = Annotated[Settings, Depends(auth_settings_dependency)]
 
@@ -81,7 +92,7 @@ async def maybe_auth(
     token = cookies.read_token(request.headers.get("cookie"), secure=settings.session_cookie_secure)
     gone: Gone | None = None
     if token:
-        found = await resolve(db, token, now=now, limits=Limits.from_settings(settings))
+        found = await sessions.resolve(db, token, now=now, limits=Limits.from_settings(settings))
         await db.commit()  # keeps "last seen"
         if isinstance(found, AuthContext):
             return found

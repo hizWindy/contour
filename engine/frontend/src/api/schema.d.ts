@@ -41,6 +41,12 @@ export interface paths {
          *     The answer is the same, and takes as long, whether the login is unknown, the account is
          *     switched off or the password is wrong, so nobody can learn which accounts exist. A new token
          *     is made at every sign-in. This is the one route that needs no session.
+         *
+         *     **Guessing is limited.** The first 2 wrong tries in a row cost nothing. Each one after that
+         *     makes the next wait longer (2 seconds, doubling, up to a minute), and the 10th locks the login
+         *     for 15 minutes. A login that matches no account is slowed and locked the same way, so the lock
+         *     never says which accounts exist. One IP address may make 20 wrong tries in 15 minutes. A try
+         *     made during a wait is answered 429 and isn't checked. A right password ends the count.
          */
         post: operations["login"];
         delete?: never;
@@ -2729,7 +2735,7 @@ export interface components {
             reason?: string | null;
             /**
              * Retry After Seconds
-             * @description On a 429, how many seconds to wait before trying again
+             * @description How many seconds to wait before trying to sign in again. On a 429, and on a 401 `invalid_credentials` whose wrong try makes the next ones wait
              */
             retry_after_seconds?: number | null;
             /**
@@ -4315,7 +4321,7 @@ export interface components {
             reason?: string | null;
             /**
              * Retry After Seconds
-             * @description On a 429, how many seconds to wait before trying again
+             * @description How many seconds to wait before trying to sign in again. On a 429, and on a 401 `invalid_credentials` whose wrong try makes the next ones wait
              */
             retry_after_seconds?: number | null;
             /**
@@ -4735,7 +4741,7 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
-            /** @description The login or the password isn't right (code `invalid_credentials`) */
+            /** @description The login or the password isn't right (code `invalid_credentials`). When this wrong try makes the next ones wait, `retry_after_seconds` says how long. */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -4789,7 +4795,7 @@ export interface operations {
                     "application/json": components["schemas"]["ValidationProblem"];
                 };
             };
-            /** @description Too many requests */
+            /** @description Too many wrong tries, from this address or at this login (code `too_many_attempts`). Nothing was checked. `retry_after_seconds` and the `Retry-After` header say how long to wait. */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -5321,15 +5327,6 @@ export interface operations {
             };
             /** @description The request can't be understood */
             400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Not signed in (code `auth_required`) */
-            401: {
                 headers: {
                     [name: string]: unknown;
                 };

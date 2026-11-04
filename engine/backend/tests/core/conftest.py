@@ -16,7 +16,7 @@ These fixtures use the database, so a test that asks for them is marked `integra
 """
 
 from collections.abc import AsyncIterator, Callable
-from typing import Any, NoReturn, cast
+from typing import TYPE_CHECKING, Any, NoReturn, cast
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -27,6 +27,11 @@ from core.memory.embedder import Embedder
 from core.runs.manager import RunManager
 from core.runs.types import KindKey, RunKind
 from tests.core.runs_fakes import FakeState, fake_kinds, small_settings
+
+if TYPE_CHECKING:
+    import httpx
+
+    from tests.core.auth_world import World
 
 type MakeManager = Callable[..., RunManager]
 
@@ -113,3 +118,23 @@ async def make_manager(
 @pytest.fixture
 async def run_manager(make_manager: MakeManager) -> RunManager:
     return make_manager()
+
+
+# --- The sign-in tests (PLAN-V6 B3, B4) -----------------------------------------------------------
+# `world` is the real app on the test database with a clock a test can move, a cheap password
+# hasher and a fresh database session for every request. `browser` is an httpx client on it that
+# keeps cookies. See `tests/core/auth_world.py`. Both use the database, so a test that asks for
+# them is marked `integration`.
+
+
+@pytest.fixture
+def world(session_factory: async_sessionmaker[AsyncSession]) -> "World":
+    from tests.core.auth_world import build_world
+
+    return build_world(session_factory)
+
+
+@pytest.fixture
+async def browser(world: "World") -> AsyncIterator["httpx.AsyncClient"]:
+    async with world.browser() as client:
+        yield client

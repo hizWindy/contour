@@ -220,6 +220,30 @@ def test_the_key_shape_is_cleaned_when_no_key_is_configured_at_all(
     assert entry["message"] == f"Authorization {REDACTED}"
 
 
+def test_a_session_cookie_is_cleaned_wherever_it_appears(
+    secrets: Settings, output: io.StringIO
+) -> None:
+    """The engine logs no headers. If one ever lands in an error text, the token still goes."""
+    token = "Zr3k9Qw1Xc7Vb5Nm2Lp8Jh4Gf6Ds0Aa1Ss3Dd5Ff7"
+    for header in (
+        f"Cookie: contour_session={token}; theme=dark",
+        f"Cookie: __Host-contour_session={token}",
+        f"Set-Cookie: contour_session={token}; Path=/; HttpOnly; SameSite=Strict",
+        f'{{"cookie": "contour_session={token}"}}',
+    ):
+        assert token not in redact(header), header
+        assert REDACTED in redact(header)
+    log = logging.getLogger("test_cookie")
+    log.error(
+        "the request had Cookie: contour_session=%s",
+        token,
+        extra={"raw": f"contour_session={token}"},
+    )
+    assert token not in output.getvalue()
+    assert redact("theme=dark; other=1") == "theme=dark; other=1"  # other cookies are left alone
+    assert redact("Cookie: contour_session=; a=b") == f"Cookie: {REDACTED}; a=b"
+
+
 def test_text_with_nothing_to_hide_is_unchanged(secrets: Settings, output: io.StringIO) -> None:
     log.info("Researched Acme (Melbourne): score 80, cost $0.31", extra={"run_id": "abc"})
     (entry,) = lines(output)

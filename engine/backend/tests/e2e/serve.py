@@ -2,6 +2,7 @@
 
     uv run python -m tests.e2e.serve              # from engine/backend
     uv run python -m tests.e2e.serve --hubspot-ok # also allow the HubSpot watchlist runs
+    uv run python -m tests.e2e.serve --auth       # sign-in on, with a demo Admin (PLAN-V6)
 
 It is for clicking through the website (and for browser checks) without the real Claude:
 
@@ -16,6 +17,10 @@ It is for clicking through the website (and for browser checks) without the real
 - One lead, "Sample Headcount", is added at start. A fake Signal Hire gives it company details,
   senior people and a staff number that is far from the research's own (a conflict), so the lead
   card's Signal Hire parts, its source labels and its flag can be seen without a key.
+- Sign-in is OFF, whatever engine/.env says, so the website works as it always has. `--auth` turns
+  it on (`AUTH_REQUIRED=true`) and makes a demo Admin, `demo@example.test` (or `demo`), with a new
+  random password printed once when it starts. The sign-in tables are wiped on every start, so the
+  account and its sessions are new each time. This is how the login page is tried in a browser.
 - It serves on the usual address (127.0.0.1:8000), so the website's dev server proxies to it.
 """
 
@@ -38,6 +43,9 @@ EXPORT = ENGINE_DIR.parent / "projects" / "leads" / "research" / "COMPANIES.xlsx
 DELAY_SECONDS = 0.6
 # Everything a run or a person made. HubSpot tables stay: they are reloaded from the export.
 WIPED_TABLES = (
+    "core.audit_log",
+    "core.sessions",
+    "core.users",
     "lead_finder.leads",
     "lead_finder.signalhire_details",
     "core.searches",
@@ -59,14 +67,24 @@ E2E_ENV_NAMES = (
     "HUBSPOT_NAMES_TO_CLAUDE_OK",
     "HUBSPOT_WRITE_ENABLED",
     "HUBSPOT_SYNC_MAX_AGE_HOURS",
+    "AUTH_REQUIRED",
+    "SESSION_COOKIE_SECURE",
 )
+DEMO_EMAIL = "demo@example.test"
+DEMO_USERNAME = "demo"
+DEMO_WORDS = (
+    "maple", "river", "lantern", "copper", "orchard", "whisper", "meadow", "harvest",
+    "quiet", "thunder", "velvet", "granite", "willow", "ember", "harbour", "cobalt",
+)  # fmt: skip
 
 
-def use_e2e_database(hubspot_ok: bool = False) -> None:
+def use_e2e_database(hubspot_ok: bool = False, auth: bool = False) -> None:
     """Points the settings at the e2e database and blanks the Claude, Signal Hire and HubSpot
-    keys, so no run can reach them, whatever engine/.env holds. Call before anything reads the
-    settings."""
+    keys, so no run can reach them, whatever engine/.env holds. Sign-in is off unless `auth`, and
+    never Secure (the fake backend is plain http). Call before anything reads the settings."""
     os.environ["POSTGRES_DB"] = DATABASE
+    os.environ["AUTH_REQUIRED"] = "true" if auth else "false"
+    os.environ["SESSION_COOKIE_SECURE"] = "false"
     os.environ["ANTHROPIC_API_KEY"] = ""
     os.environ["SIGNALHIRE_API_KEY"] = ""
     os.environ["HUBSPOT_SERVICE_KEY"] = ""
@@ -283,6 +301,36 @@ async def load_hubspot() -> str:
     return f"Loaded {result.companies} HubSpot companies and {profiles} profiles."
 
 
+def demo_password() -> str:
+    """Four different random words with dashes: easy to type, and it passes the rules (a repeated
+    word would be refused as a repeated chunk). New every start."""
+    import secrets
+
+    return "-".join(secrets.SystemRandom().sample(DEMO_WORDS, 4))
+
+
+async def make_demo_admin(password: str) -> str:
+    """Makes the demo Admin in the e2e database (the tables were just wiped)."""
+    from datetime import UTC, datetime
+
+    from core.auth import admin
+    from core.db.engine import get_engine, get_sessionmaker
+
+    try:
+        async with get_sessionmaker()() as db:
+            user = await admin.create_admin(
+                db,
+                email=DEMO_EMAIL,
+                username=DEMO_USERNAME,
+                name="Demo Admin",
+                password=password,
+                now=datetime.now(UTC),
+            )
+    finally:
+        await get_engine().dispose()
+    return f"Made the demo Admin {user.email} (or the username {user.username})."
+
+
 SIGNALHIRE_SAMPLE = "Sample Headcount"
 
 
@@ -381,8 +429,13 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Allow HubSpot watchlist runs (the names only reach the FakeClaude).",
     )
+    parser.add_argument(
+        "--auth",
+        action="store_true",
+        help="Turn sign-in on and make a demo Admin. Its password is printed once.",
+    )
     args = parser.parse_args(argv)
-    use_e2e_database(hubspot_ok=args.hubspot_ok)
+    use_e2e_database(hubspot_ok=args.hubspot_ok, auth=args.auth)
 
     from core.runtime import loop_factory
 
@@ -390,6 +443,10 @@ def main(argv: list[str] | None = None) -> int:
     print(asyncio.run(load_hubspot(), loop_factory=loop_factory()), file=sys.stderr)
     seeded = asyncio.run(seed_signalhire_sample(date.today()), loop_factory=loop_factory())
     print(seeded, file=sys.stderr)
+    if args.auth:
+        password = demo_password()
+        print(asyncio.run(make_demo_admin(password), loop_factory=loop_factory()), file=sys.stderr)
+        print(f"Sign in with the password: {password}", file=sys.stderr)  # a throwaway one
     app = build_app(fake_claude(date.today()))
     print(f"Fake backend on http://127.0.0.1:8000 (database {DATABASE}).", file=sys.stderr)
     asyncio.run(serve(app), loop_factory=loop_factory())

@@ -155,6 +155,17 @@ class Settings(BaseSettings):
     # Over HTTPS the cookie is marked Secure and gets the __Host- prefix (the browser then keeps it
     # off every other site and every other path). Over plain http://localhost it can't be.
     session_cookie_secure: StrictBool = False
+    # Guessing (PLAN-V6, security rule 2). The first `login_free_tries` wrong tries in a row cost
+    # nothing. Each one after that makes the next wait longer (2 seconds, then double, up to a
+    # minute). The `login_lock_tries`-th wrong try in a row locks the account for
+    # `login_lock_minutes`. Tries from one IP address are limited too: after
+    # `login_ip_max_failures` wrong tries in `login_ip_window_minutes`, that address waits until
+    # the oldest one leaves the window.
+    login_free_tries: int = Field(2, ge=0, le=10)
+    login_lock_tries: int = Field(10, ge=3, le=100)
+    login_lock_minutes: int = Field(15, ge=1, le=1440)
+    login_ip_max_failures: int = Field(20, ge=5, le=1000)
+    login_ip_window_minutes: int = Field(15, ge=1, le=1440)
 
     # --- Memory (FastEmbed runs on this computer) --------------------------------------
     embedding_model: str = "BAAI/bge-small-en-v1.5"
@@ -303,6 +314,14 @@ class Settings(BaseSettings):
                 "lead_finder, information_schema, or a name that starts with pg_"
             )
         return name
+
+    @model_validator(mode="after")
+    def _the_waits_come_before_the_lock(self) -> "Settings":
+        if self.login_free_tries >= self.login_lock_tries:
+            raise ValueError(
+                "login_free_tries must be below login_lock_tries, or the waits would never start"
+            )
+        return self
 
     @model_validator(mode="after")
     def _reserves_fit_their_caps(self) -> "Settings":

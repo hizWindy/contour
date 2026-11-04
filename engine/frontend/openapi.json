@@ -4382,7 +4382,7 @@
                 "type": "null"
               }
             ],
-            "description": "On a 429, how many seconds to wait before trying again",
+            "description": "How many seconds to wait before trying to sign in again. On a 429, and on a 401 `invalid_credentials` whose wrong try makes the next ones wait",
             "title": "Retry After Seconds"
           },
           "run_id": {
@@ -7876,7 +7876,7 @@
                 "type": "null"
               }
             ],
-            "description": "On a 429, how many seconds to wait before trying again",
+            "description": "How many seconds to wait before trying to sign in again. On a 429, and on a 401 `invalid_credentials` whose wrong try makes the next ones wait",
             "title": "Retry After Seconds"
           },
           "run_id": {
@@ -8494,6 +8494,14 @@
         "title": "WritePlan",
         "type": "object"
       }
+    },
+    "securitySchemes": {
+      "sessionCookie": {
+        "description": "The session cookie that `POST /auth/login` sets. The browser sends it by itself. Over HTTPS its name is `__Host-contour_session`.",
+        "in": "cookie",
+        "name": "contour_session",
+        "type": "apiKey"
+      }
     }
   },
   "info": {
@@ -8655,6 +8663,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "The sign-in log, newest first",
         "tags": [
           "auth"
@@ -8663,7 +8676,7 @@
     },
     "/auth/login": {
       "post": {
-        "description": "Signs in with an email or a username and a password, and sets the session cookie.\n\nThe answer is the same, and takes as long, whether the login is unknown, the account is\nswitched off or the password is wrong, so nobody can learn which accounts exist. A new token\nis made at every sign-in. This is the one route that needs no session.",
+        "description": "Signs in with an email or a username and a password, and sets the session cookie.\n\nThe answer is the same, and takes as long, whether the login is unknown, the account is\nswitched off or the password is wrong, so nobody can learn which accounts exist. A new token\nis made at every sign-in. This is the one route that needs no session.\n\n**Guessing is limited.** The first 2 wrong tries in a row cost nothing. Each one after that\nmakes the next wait longer (2 seconds, doubling, up to a minute), and the 10th locks the login\nfor 15 minutes. A login that matches no account is slowed and locked the same way, so the lock\nnever says which accounts exist. One IP address may make 20 wrong tries in 15 minutes. A try\nmade during a wait is answered 429 and isn't checked. A right password ends the count.",
         "operationId": "login",
         "requestBody": {
           "content": {
@@ -8712,7 +8725,7 @@
                 }
               }
             },
-            "description": "The login or the password isn't right (code `invalid_credentials`)"
+            "description": "The login or the password isn't right (code `invalid_credentials`). When this wrong try makes the next ones wait, `retry_after_seconds` says how long."
           },
           "403": {
             "content": {
@@ -8772,7 +8785,7 @@
                 }
               }
             },
-            "description": "Too many requests"
+            "description": "Too many wrong tries, from this address or at this login (code `too_many_attempts`). Nothing was checked. `retry_after_seconds` and the `Retry-After` header say how long to wait."
           },
           "500": {
             "content": {
@@ -8930,6 +8943,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Sign out of this browser",
         "tags": [
           "auth"
@@ -9062,6 +9080,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Sign out of every browser",
         "tags": [
           "auth"
@@ -9194,6 +9217,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Who is signed in",
         "tags": [
           "auth"
@@ -9326,6 +9354,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Your signed-in browsers",
         "tags": [
           "auth"
@@ -9355,16 +9388,6 @@
               }
             },
             "description": "The request can't be understood"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Not signed in (code `auth_required`)"
           },
           "403": {
             "content": {
@@ -9599,6 +9622,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Load a HubSpot export file (.xlsx)",
         "tags": [
           "hubspot"
@@ -9731,6 +9759,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Rebuild the HubSpot company profiles in memory",
         "tags": [
           "hubspot"
@@ -9877,6 +9910,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "The HubSpot connection: the key, its permissions, each project, the syncs",
         "tags": [
           "hubspot"
@@ -10008,6 +10046,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "How much HubSpot data is loaded",
         "tags": [
           "hubspot"
@@ -10159,6 +10202,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Start a HubSpot sync in the background",
         "tags": [
           "hubspot"
@@ -10308,6 +10356,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "The newest HubSpot syncs",
         "tags": [
           "hubspot"
@@ -10458,6 +10511,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "The log of writes to HubSpot, newest first",
         "tags": [
           "hubspot"
@@ -10602,6 +10660,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Write a previewed change to HubSpot",
         "tags": [
           "hubspot"
@@ -11161,6 +11224,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "List leads",
         "tags": [
           "Lead Finder",
@@ -11705,6 +11773,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Download the filtered leads as a CSV file",
         "tags": [
           "Lead Finder",
@@ -12202,6 +12275,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "What the filters offer, with counts",
         "tags": [
           "Lead Finder",
@@ -12699,6 +12777,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Pins for the map",
         "tags": [
           "Lead Finder",
@@ -12843,6 +12926,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "One lead card",
         "tags": [
           "Lead Finder",
@@ -12996,6 +13084,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Change a lead's status, note or feedback",
         "tags": [
           "Lead Finder",
@@ -13149,6 +13242,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "This lead's HubSpot send, if there is one",
         "tags": [
           "Lead Finder",
@@ -13294,6 +13392,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Preview sending this lead to HubSpot",
         "tags": [
           "Lead Finder",
@@ -13449,6 +13552,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Send this lead to HubSpot, as previewed",
         "tags": [
           "Lead Finder",
@@ -13594,6 +13702,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Research this company again",
         "tags": [
           "Lead Finder"
@@ -13738,6 +13851,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Companies that look like this lead",
         "tags": [
           "Lead Finder",
@@ -13881,6 +13999,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Research one company now",
         "tags": [
           "Lead Finder"
@@ -14013,6 +14136,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "The rules in use, and their version",
         "tags": [
           "Lead Finder"
@@ -14145,6 +14273,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "What the Start page offers",
         "tags": [
           "Lead Finder"
@@ -14303,6 +14436,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Past test set runs, newest first",
         "tags": [
           "Lead Finder"
@@ -14435,6 +14573,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Run the test set",
         "tags": [
           "Lead Finder"
@@ -14579,6 +14722,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "The report of one test set run",
         "tags": [
           "Lead Finder"
@@ -14749,6 +14897,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Preview the HubSpot watchlist",
         "tags": [
           "Lead Finder"
@@ -14890,6 +15043,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Save a note to memory",
         "tags": [
           "memory"
@@ -15098,6 +15256,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Search memory by meaning",
         "tags": [
           "memory"
@@ -15365,6 +15528,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "List runs, newest first",
         "tags": [
           "runs"
@@ -15536,6 +15704,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Start a run",
         "tags": [
           "runs"
@@ -15678,6 +15851,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "What would this run cost?",
         "tags": [
           "runs"
@@ -15831,6 +16009,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Cost and runs by day",
         "tags": [
           "runs"
@@ -15974,6 +16157,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "One run",
         "tags": [
           "runs"
@@ -16118,6 +16306,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Stop a run",
         "tags": [
           "runs"
@@ -16297,6 +16490,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Watch a run live (server-sent events)",
         "tags": [
           "runs"
@@ -16467,6 +16665,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "The events of a run, oldest first",
         "tags": [
           "runs"
@@ -16611,6 +16814,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Continue an interrupted or failed run",
         "tags": [
           "runs"
@@ -16869,6 +17077,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "The search log, newest first",
         "tags": [
           "searches"
@@ -17000,6 +17213,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "All settings, with their limits and current values",
         "tags": [
           "settings"
@@ -17140,6 +17358,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Change some settings",
         "tags": [
           "settings"
@@ -17287,6 +17510,11 @@
             "description": "A part of the engine isn't available"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Put one setting back to its default",
         "tags": [
           "settings"

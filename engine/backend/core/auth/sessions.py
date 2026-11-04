@@ -150,11 +150,14 @@ async def resolve(
     return AuthContext(user, session)
 
 
-async def end(db: AsyncSession, session: UserSession, now: datetime) -> None:
-    """Signs one session out."""
-    if session.ended_at is None:
-        session.ended_at = now
-        await db.flush()
+async def end(db: AsyncSession, session_id: uuid.UUID, now: datetime) -> None:
+    """Signs one session out. It is an UPDATE by id, because the session object the route holds
+    was loaded by the guard's own database session: changing that object would save nothing."""
+    await db.execute(
+        update(UserSession)
+        .where(UserSession.id == session_id, UserSession.ended_at.is_(None))
+        .values(ended_at=now)
+    )
 
 
 async def end_for_user(db: AsyncSession, user_id: uuid.UUID, now: datetime) -> int:

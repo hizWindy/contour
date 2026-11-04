@@ -11,6 +11,7 @@ from core.api import auth as auth_routes
 from core.api import health, hubspot, memory, runs, runs_read, searches
 from core.api import settings as settings_routes
 from core.api.errors import PROBLEM_RESPONSES, add_error_handlers
+from core.api.guard import SessionGuard, document_sign_in
 from core.api.routes import api_routes
 from core.api.security import ProblemCORSMiddleware, add_security_layers
 from core.apps import load_apps
@@ -72,6 +73,7 @@ class EngineApp(FastAPI):
         schema = super().openapi()
         if not built_before:
             document_problems(schema)
+            document_sign_in(schema)
         return schema
 
 
@@ -102,6 +104,9 @@ def create_app() -> FastAPI:
         generate_unique_id_function=operation_id,
     )
     app.state.apps = specs
+    # The guard is added first, so it is inside the CORS layer (a 401 still carries its headers)
+    # and inside the origin guard and the host check, which refuse before it looks at a cookie.
+    app.add_middleware(SessionGuard)
     app.add_middleware(
         ProblemCORSMiddleware,
         allow_origins=settings.cors_origins,

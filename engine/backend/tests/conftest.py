@@ -63,6 +63,8 @@ os.environ["SIGNALHIRE_API_KEY"] = ""  # whatever engine/.env holds, no test rea
 os.environ["HUBSPOT_SERVICE_KEY"] = ""  # nor HubSpot
 os.environ["HUBSPOT_WRITE_ENABLED"] = "false"  # and nothing can write to it
 os.environ["HUBSPOT_SYNC_MAX_AGE_HOURS"] = "0"  # a test backend never syncs when it starts
+os.environ["AUTH_REQUIRED"] = "false"  # nor does engine/.env turn the sign-in on under a test
+os.environ["SESSION_COOKIE_SECURE"] = "false"
 get_settings.cache_clear()
 
 TEST_TABLES = (

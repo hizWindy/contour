@@ -9,8 +9,9 @@ Every route here needs a session except `POST /auth/login`. Where sign-in is off
 the routes that act on "my session" have nothing to do.
 """
 
+import math
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Annotated, Any, Literal, cast
 
 from fastapi import APIRouter, Query, Request, Response
@@ -25,11 +26,13 @@ from core.api.signin import (
     HasherDep,
     MaybeAuthDep,
     NowDep,
+    UnknownLoginsDep,
     client_ip,
 )
 from core.auth import audit, clean, cookies, service, sessions, words
 from core.auth.models import AuditEntry, User, UserSession
 from core.auth.sessions import Limits
+from core.auth.throttle import Rules
 from core.config import Settings
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -158,6 +161,11 @@ def session_out(session: UserSession, *, current: bool, limits: Limits) -> Sessi
     )
 
 
+def _seconds(wait: timedelta) -> int:
+    """A wait in whole seconds, rounded up: never tell someone to try again too early."""
+    return max(1, math.ceil(wait.total_seconds()))
+
+
 def _agent(request: Request) -> str | None:
     return request.headers.get("user-agent")
 
@@ -198,7 +206,19 @@ def _drop_cookie(response: Response, settings: Settings) -> None:
                 }
             },
         },
-        401: {"description": "The login or the password isn't right (code `invalid_credentials`)"},
+        401: {
+            "description": (
+                "The login or the password isn't right (code `invalid_credentials`). When this "
+                "wrong try makes the next ones wait, `retry_after_seconds` says how long."
+            )
+        },
+        429: {
+            "description": (
+                "Too many wrong tries, from this address or at this login (code "
+                "`too_many_attempts`). Nothing was checked. `retry_after_seconds` and the "
+                "`Retry-After` header say how long to wait."
+            )
+        },
     },
 )
 async def login(
@@ -208,6 +228,7 @@ async def login(
     db: SessionDep,
     settings: AuthSettingsDep,
     hasher: HasherDep,
+    unknown: UnknownLoginsDep,
     now: NowDep,
 ) -> LoginOut:
     """Signs in with an email or a username and a password, and sets the session cookie.
@@ -215,6 +236,12 @@ async def login(
     The answer is the same, and takes as long, whether the login is unknown, the account is
     switched off or the password is wrong, so nobody can learn which accounts exist. A new token
     is made at every sign-in. This is the one route that needs no session.
+
+    **Guessing is limited.** The first 2 wrong tries in a row cost nothing. Each one after that
+    makes the next wait longer (2 seconds, doubling, up to a minute), and the 10th locks the login
+    for 15 minutes. A login that matches no account is slowed and locked the same way, so the lock
+    never says which accounts exist. One IP address may make 20 wrong tries in 15 minutes. A try
+    made during a wait is answered 429 and isn't checked. A right password ends the count.
     """
     limits = Limits.from_settings(settings)
     try:
@@ -227,11 +254,28 @@ async def login(
             user_agent=_agent(request),
             now=now,
             limits=limits,
+            rules=Rules.from_settings(settings),
+            unknown=unknown,
             hasher=hasher,
         )
-    except service.InvalidLogin:
+    except service.TooManyTries as tries:
+        seconds = _seconds(tries.retry_after)
         raise Problem(
-            401, "Sign-in failed", words.INVALID_LOGIN, code="invalid_credentials"
+            429,
+            "Too many tries",
+            words.too_many_tries(seconds),
+            code="too_many_attempts",
+            headers={"Retry-After": str(seconds)},
+            retry_after_seconds=seconds,
+        ) from None
+    except service.InvalidLogin as wrong:
+        wait = None if wrong.retry_after is None else _seconds(wrong.retry_after)
+        raise Problem(
+            401,
+            "Sign-in failed",
+            words.INVALID_LOGIN,
+            code="invalid_credentials",
+            retry_after_seconds=wait,
         ) from None
     response.headers.append(
         "set-cookie",

@@ -16,9 +16,14 @@ from core.config import get_settings
 from core.memory.embedder import get_embedder
 from core.signalhire.client import get_signalhire
 from tests.e2e.serve import (
+    DEMO_EMAIL,
+    DEMO_USERNAME,
+    DEMO_WORDS,
     E2E_ENV_NAMES,
     SIGNALHIRE_SAMPLE,
+    WIPED_TABLES,
     build_app,
+    demo_password,
     fake_claude,
     research_signalhire_sample,
     sample_world,
@@ -85,3 +90,38 @@ async def test_the_signalhire_sample_shows_details_people_and_a_staff_conflict(
     assert card.signalhire_company.offices[0].head_office is True
     assert len(card.signalhire_people) == 2 and len(card.facts.decision_makers) == 1
     assert card.result == "pass" and card.problems == [] and card.dropped == []
+
+
+# --- Sign-in in the fake backend (PLAN-V6 B4) -------------------------------------------------
+
+
+@pytest.mark.usefixtures("settings_restored")
+def test_sign_in_is_off_in_the_fake_backend_whatever_the_environment_says(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("AUTH_REQUIRED", "true")  # as if engine/.env had it on
+    monkeypatch.setenv("SESSION_COOKIE_SECURE", "true")
+    use_e2e_database()
+    settings = get_settings()
+    assert (settings.auth_required, settings.session_cookie_secure) == (False, False)
+
+
+@pytest.mark.usefixtures("settings_restored")
+def test_the_auth_option_turns_sign_in_on_and_never_secure() -> None:
+    use_e2e_database(auth=True)
+    settings = get_settings()
+    assert (settings.auth_required, settings.session_cookie_secure) == (True, False)
+
+
+def test_the_sign_in_tables_are_wiped_on_every_start() -> None:
+    assert {"core.audit_log", "core.sessions", "core.users"} <= set(WIPED_TABLES)
+
+
+def test_the_demo_password_is_new_each_time_and_passes_the_rules() -> None:
+    from core.auth.passwords import check_rules
+
+    passwords = {demo_password() for _ in range(40)}
+    assert len(passwords) > 30  # random, not fixed
+    for password in passwords:
+        assert check_rules(password, email=DEMO_EMAIL, username=DEMO_USERNAME) == [], password
+        assert all(word in DEMO_WORDS for word in password.split("-"))

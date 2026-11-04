@@ -22,15 +22,18 @@ class LoginTaken(ValueError):
         super().__init__(f"That {field} is already used by an account.")
 
 
-async def find_by_login(db: AsyncSession, login: str) -> User | None:
+async def find_by_login(db: AsyncSession, login: str, *, lock: bool = False) -> User | None:
     """The user whose email or username is `login`, in any case. None if there is no one.
 
-    A username can't hold an @ and an email always does, so at most one user can match.
+    A username can't hold an @ and an email always does, so at most one user can match. With
+    `lock` the row is locked until the transaction ends, so two tries at one account are checked
+    one after the other, and a burst of parallel guesses can't all pass the count before it moves.
     """
     value = clean.login(login)
     if not value:
         return None
-    return await db.scalar(select(User).where(or_(User.email == value, User.username == value)))
+    query = select(User).where(or_(User.email == value, User.username == value))
+    return await db.scalar(query.with_for_update() if lock else query)
 
 
 async def find_by_id(db: AsyncSession, user_id: uuid.UUID) -> User | None:

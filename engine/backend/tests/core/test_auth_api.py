@@ -1,140 +1,42 @@
 """Signing in and out through the API (PLAN-V6 B3), on the test database.
 
-The app is the real one (`create_app()`), with a clock the test can move, a cheap password hasher
-and a fresh database session for every request, as in production. The browser is an httpx client:
-it keeps cookies the way a browser does, so a test signs in once and its next requests carry the
-cookie.
+The app is the real one, with a clock the test can move, a cheap password hasher and a fresh
+database session for every request (see `auth_world.py`). The browser is an httpx client: it keeps
+cookies the way a browser does, so a test signs in once and its next requests carry the cookie.
 
 Every password here is made up.
 """
 
 import hashlib
 import re
-from collections.abc import AsyncIterator
-from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 import httpx
 import pytest
-from fastapi import FastAPI
-from sqlalchemy import select, text
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy import text
 
 from core.api.app import create_app
-from core.api.signin import auth_settings_dependency
 from core.auth import admin
 from core.auth.models import AuditEntry, User, UserSession
 from core.auth.passwords import Hasher
-from core.config import Settings
-from core.db.engine import get_session
+from tests.core.auth_world import (
+    API,
+    CHROME,
+    FAST,
+    FIREFOX,
+    GOOD,
+    START,
+    World,
+    all_rows,
+    make_account,
+    me,
+    moment,
+    sign_in,
+    token_in,
+)
 
 pytestmark = pytest.mark.integration
-
-API = "/api/v1/auth"
-GOOD = "tulip harbour bicycle moonlight"
-FAST = Hasher(time_cost=1, memory_cost=8, parallelism=1)
-CHROME = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/130.0.0.0 Safari/537.36"
-)
-FIREFOX = "Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0"
-START = datetime(2026, 11, 4, 9, 0, tzinfo=UTC)
-Factory = async_sessionmaker[AsyncSession]
-
-
-class Clock:
-    """The time the app sees. `advance` moves it, as the days of a real session would."""
-
-    def __init__(self) -> None:
-        self.now = START
-
-    def __call__(self) -> datetime:
-        return self.now
-
-    def advance(self, **change: float) -> None:
-        self.now += timedelta(**change)
-
-
-@dataclass
-class World:
-    app: FastAPI
-    clock: Clock
-    factory: Factory
-
-    def settings(self, **values: Any) -> Settings:
-        """Replaces the sign-in settings the app sees. Sign-in is required unless said otherwise."""
-        chosen = Settings(_env_file=None, **{"auth_required": True, **values})
-        self.app.dependency_overrides[auth_settings_dependency] = lambda: chosen
-        return chosen
-
-    def browser(
-        self, agent: str = CHROME, *, base_url: str = "http://localhost"
-    ) -> httpx.AsyncClient:
-        transport = httpx.ASGITransport(app=self.app, raise_app_exceptions=False)
-        return httpx.AsyncClient(
-            transport=transport, base_url=base_url, headers={"User-Agent": agent}
-        )
-
-
-@pytest.fixture
-def world(session_factory: Factory) -> World:
-    app = create_app()
-    clock = Clock()
-    app.state.clock = clock
-    app.state.hasher = FAST
-
-    async def a_session_for_each_request() -> AsyncIterator[AsyncSession]:
-        async with session_factory() as db:
-            yield db
-
-    app.dependency_overrides[get_session] = a_session_for_each_request
-    made = World(app, clock, session_factory)
-    made.settings()
-    return made
-
-
-@pytest.fixture
-async def browser(world: World) -> AsyncIterator[httpx.AsyncClient]:
-    async with world.browser() as client:
-        yield client
-
-
-async def make_account(world: World, **changes: Any) -> User:
-    values: dict[str, Any] = {
-        "email": "al.khair@example.test",
-        "username": "alkhair",
-        "name": "Al Khair",
-        "password": GOOD,
-        "now": world.clock.now,
-        "hasher": FAST,
-    }
-    async with world.factory() as db:
-        return await admin.create_admin(db, **{**values, **changes})
-
-
-async def sign_in(client: httpx.AsyncClient, **changes: Any) -> httpx.Response:
-    body = {"login": "alkhair", "password": GOOD, **changes}
-    return await client.post(f"{API}/login", json=body)
-
-
-async def me(client: httpx.AsyncClient) -> httpx.Response:
-    return await client.get(f"{API}/me")
-
-
-def moment(text_value: str) -> datetime:
-    return datetime.fromisoformat(text_value)
-
-
-async def all_rows(world: World, model: type[Any]) -> list[Any]:
-    async with world.factory() as db:
-        return list(await db.scalars(select(model)))
-
-
-def token_in(response: httpx.Response) -> str:
-    found = re.match(r"(?:__Host-)?contour_session=([^;]+);", response.headers["set-cookie"])
-    assert found is not None
-    return found.group(1)
 
 
 # --- Signing in -------------------------------------------------------------------------------

@@ -74,7 +74,11 @@ class ProblemDetails(BaseModel):
         ),
     )
     retry_after_seconds: int | None = Field(
-        None, description="On a 429, how many seconds to wait before trying again"
+        None,
+        description=(
+            "How many seconds to wait before trying to sign in again. On a 429, and on a 401 "
+            "`invalid_credentials` whose wrong try makes the next ones wait"
+        ),
     )
 
 
