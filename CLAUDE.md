@@ -24,5 +24,5 @@ For files, emails and rewrites, use the `plain` skill (`/plain`).
 - Use one-word file names, like `CONTOUR.md`.
 - Update existing files instead of creating near-duplicates.
 - Each AI project gets a folder in `projects/`, and each topic gets a folder inside it, like `projects/leads/criteria/`.
-- Plans go in `plan/`, named `PLAN-V1.md`, `PLAN-V2.md` and so on. The current plan is [PLAN-V5.md](plan/PLAN-V5.md). [PLAN-V4.md](plan/PLAN-V4.md) still has open steps (A1, B5, D1, D2 and the docs in D3). Follow its "How to work this plan" section: tick each step when it is done, and save to the AI Brain when usage runs low.
+- Plans go in `plan/`, named `PLAN-V1.md`, `PLAN-V2.md` and so on. The current plan is [PLAN-V6.md](plan/PLAN-V6.md) (Contour HQ: sign-in, containers, DigitalOcean). [PLAN-V5.md](plan/PLAN-V5.md) still has open steps (A2 and Part F, HubSpot write access), and [PLAN-V4.md](plan/PLAN-V4.md) too (A1, B5, D1, D2 and the docs in D3). Follow its "How to work this plan" section: tick each step when it is done, and save to the AI Brain when usage runs low.
 - Don't write hard rules ("never", "always") for choices still open with Levi. Give a recommendation and what to check.
