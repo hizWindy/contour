@@ -4,7 +4,7 @@ This plan puts the platform online as **Contour HQ**. It adds a sign-in for one 
 
 - **Built by:** Al-khair Pama. **Signed off by:** Levi Young (the name and the cloud data OK).
 - **Last updated:** 2026-11-04. **TBC** means not confirmed yet.
-- **Progress:** 8 of 31 steps done (A1, A3, B1 to B5). Work goes on branch `plan-v6`.
+- **Progress:** 9 of 31 steps done (A1, A3, B1 to B5, D1). Work goes on branch `plan-v6`.
 - **Comes after:** [PLAN-V5.md](PLAN-V5.md), merged into `master` and pushed on 4 Nov (6f676ae). Its open steps (A2 and Part F, HubSpot write access) stay there and don't block this plan.
 
 ## In short
@@ -162,7 +162,7 @@ These rules are for Al-khair and for Claude. At the start of every session: read
 
 ## Part D: The scheduler
 
-- [ ] **D1. Schedules in the core.** Migration 0011.
+- [x] **D1. Schedules in the core.** Migration 0011. Done 2026-11-04, 2b95a24.
   - `core.schedules`: the project, the job (like `lead_finder.discovery` or `core.hubspot_sync`), its settings (JSON), every how many days or weeks, the day, the time, the time zone (`Australia/Melbourne`), on or off, the next run, the last run (with its run id or sync id) and its last error.
   - A loop in the backend checks once a minute and starts what is due. A schedule never starts twice: one backend runs (the advisory lock), and the row is claimed before it starts. A job missed while the backend was off runs once when it is back, never once for each missed time. A job that is still running is skipped, with a note.
   - Daylight saving is handled: 7:00 am Melbourne stays 7:00 am all year.
@@ -286,6 +286,8 @@ These rules are for Al-khair and for Claude. At the start of every session: read
 ## Log
 
 Newest first. One line for each tick, pause or surprise.
+
+- 2026-11-04: **D1 ticked** (2b95a24). `core.schedules` holds one row per job (`project`, `job`, `settings`, `every`, `unit` days or weeks, `weekday`, `at_time`, `timezone`, `enabled`, `next_run_at`, `last_run_at`, `last_status`, `last_ref` (the run id or sync id), `last_error`). A loop in the backend wakes once a minute, claims each due row (`FOR UPDATE SKIP LOCKED`), moves `next_run_at` on **before** it starts the job, so a schedule can't start twice; it runs only on the backend that holds the advisory lock. A job missed while the backend was off runs once, never once per missed time (the next time is counted from the scheduled time, so the missed ones are skipped). A job still running is skipped with a note in `last_status` and `last_error`. Times are wall-clock in the row's zone (`zoneinfo`): 7:00 am Melbourne stays 7:00 am all year; a time that doesn't exist on the spring day runs at 3:30, and one that happens twice runs the first time. `enabled` is true exactly when `next_run_at` is set (a table check). Projects add jobs through `AppSpec.jobs` (`JobSpec`: `key`, `start`, `running`, `default`; a job says it can't run now by raising `JobSkipped` with a plain reason). The core adds `core.hubspot_sync` (every day at 6:00 am, **on**); the HubSpot sync's `trigger` gained the value `schedule`. **For track 2:** that adds one value to the `trigger` enum in `openapi.json` (the Admin page's label list gained `schedule: 'Schedule'`, one line). **For G1:** `tzdata` is now a direct dependency (the slim container has no zone files). Full backend run with `RUN_GATES=1`: 2,916 passed, 25 skipped, 75 failed (the same 75 that need the memory model); fast suite 2,332 passed; website 708 tests, lint, types and prettier pass. Next: D2.
 
 - 2026-11-04: **Part B is done** (B4 7fa5af6, B5 c51a6e7). Full backend run with `RUN_GATES=1`: 2,848 passed, 25 skipped, 75 failed (the same 75 that need the memory model, none new); fast suite 2,301 passed; website 708 tests, lint, types. **B5:** `SERVER_MODE=true` needs `PUBLIC_ORIGIN` (https only) and `TRUSTED_PROXIES` (Caddy's address or network; `*` and `/0` are refused), or the backend won't start and names each missing piece. It also refuses `AUTH_REQUIRED=false`, `SESSION_COOKIE_SECURE=false` and `AUTO_MIGRATE=true` written next to it, so nothing you wrote is quietly ignored. On: the public host (and `localhost`, `127.0.0.1` for the container's health check) passes the host check, only the public origin may post, it listens on `0.0.0.0`, sign-in and the `__Host-` Secure cookie are on, it doesn't migrate at start, and Swagger isn't served. Only a connection from `TRUSTED_PROXIES` may say who a client is; a real uvicorn in the tests proves it (what a client writes before Caddy's entry is not believed). **For G2 and G3:** Caddy must pass the visitor's `Host` header on (it does by default) and the backend's address in `TRUSTED_PROXIES` is the Docker network's, like `172.18.0.0/16` (**TBC**: read it from `docker network inspect` on the server). The compose health check can call `http://127.0.0.1:8000/api/v1/health`. `engine migrate` must be its own step before the backend.
 
