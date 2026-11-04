@@ -50,6 +50,18 @@ WIPED_TABLES = (
 )
 
 
+# Every environment name `use_e2e_database` sets, so a test can put them all back.
+E2E_ENV_NAMES = (
+    "POSTGRES_DB",
+    "ANTHROPIC_API_KEY",
+    "SIGNALHIRE_API_KEY",
+    "HUBSPOT_SERVICE_KEY",
+    "HUBSPOT_NAMES_TO_CLAUDE_OK",
+    "HUBSPOT_WRITE_ENABLED",
+    "HUBSPOT_SYNC_MAX_AGE_HOURS",
+)
+
+
 def use_e2e_database(hubspot_ok: bool = False) -> None:
     """Points the settings at the e2e database and blanks the Claude, Signal Hire and HubSpot
     keys, so no run can reach them, whatever engine/.env holds. Call before anything reads the

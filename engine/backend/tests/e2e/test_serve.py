@@ -16,6 +16,7 @@ from core.config import get_settings
 from core.memory.embedder import get_embedder
 from core.signalhire.client import get_signalhire
 from tests.e2e.serve import (
+    E2E_ENV_NAMES,
     SIGNALHIRE_SAMPLE,
     build_app,
     fake_claude,
@@ -30,12 +31,7 @@ TODAY = date(2026, 10, 26)
 @pytest.fixture
 def settings_restored(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """`use_e2e_database` changes the environment. Put every name it touches back after the test."""
-    for name in (
-        "POSTGRES_DB",
-        "ANTHROPIC_API_KEY",
-        "SIGNALHIRE_API_KEY",
-        "HUBSPOT_NAMES_TO_CLAUDE_OK",
-    ):
+    for name in E2E_ENV_NAMES:
         monkeypatch.setenv(name, "set before the test")
     get_settings.cache_clear()
     yield

@@ -4,7 +4,7 @@ This plan connects the platform to HubSpot with the service key. It builds one s
 
 - **Built by:** Al-khair Pama. **Signed off by:** Levi Young.
 - **Last updated:** 2026-11-04. **TBC** means not confirmed yet.
-- **Progress:** 9 of 20 steps done. Work goes on branch `plan-v5`.
+- **Progress:** 15 of 20 steps done. Work goes on branch `plan-v5`.
 - **Comes after:** [PLAN-V4.md](PLAN-V4.md), merged into `master` on 3 Nov (87dfca8). Its open steps (A1, B5, D1, D2 and the docs in D3) stay in PLAN-V4 and don't block this plan. This plan builds PLAN-V1's Phase 5, "Send to HubSpot".
 
 ## In short
@@ -183,12 +183,11 @@ A session that stops in the middle of a step leaves the next one starting cold. 
 
 ## Part C: Shared website parts
 
-- [ ] **C1. The HubSpot connection page.** Admin, HubSpot tab.
+- [x] **C1. The HubSpot connection page.** Admin, HubSpot tab. Done 2026-11-04, 1be6df0 and da104e4.
   - It shows whether the key is set, each scope (yes, no or not known), each project's state, the last sync with its counts and errors, a "Sync now" button, whether writing is on, and the last 50 writes with links to HubSpot.
   - The export upload stays, folded under "Backup: upload an export".
   - **Done when:** the website tests pass, and the page looks right on the fake backend on a desktop, a phone and in dark colours.
-  - Done so far (1be6df0): `admin/connection.tsx` and the folded backup; its tests pass. The fake backend now has a `FakeHubSpot` made from the export, with writing on.
-  - Left: the browser check (desktop, phone, dark).
+  - Checked in the browser on the fake backend (it now has a `FakeHubSpot` made from the export, with writing on): desktop light, desktop dark and phone dark, no sideways scroll, no console errors. "Sync now" ran a sync from the fake and gave the export's numbers exactly (100 companies, 185 offices, 12 deals).
 
 - [x] **C2. Parts any project can use.** In `src/components/hubspot/`. Done 2026-11-04, 1be6df0.
   - `SendToHubSpotDialog` shows a preview (a new company or an update, each field, the note and the list) and a Confirm button. While writing is off it says "Waiting for write access" and still shows the preview.
@@ -198,11 +197,11 @@ A session that stops in the middle of a step leaves the next one starting cold. 
 
 ## Part D: The Lead Finder on live HubSpot
 
-- [ ] **D1. Watchlist and matching on synced data.**
+- [x] **D1. Watchlist and matching on synced data.** Done 2026-11-04, da104e4.
   - Both already read the `core.hubspot_*` tables. Check they give the same answers on synced rows. The API can give different values from the export, like a lifecycle stage id instead of its name.
   - **Done when:** the watchlist from a live sync is compared with [EXPORT.md](../projects/leads/research/EXPORT.md) (47 Watch on 25 Oct), and the Log explains the differences.
 
-- [ ] **D2. Labels from live deals.**
+- [x] **D2. Labels from live deals.** Done 2026-11-04, da104e4 (`lead-finder relabel`).
   - New, In HubSpot (with the owner), Open deal (never suggest), Dissolved deal (wait 12 months) and Possible match, from the synced deals and their stages. Stage ids become names through the pipelines HubSpot gives.
   - **Done when:** tests cover each label, and the dev leads show the right labels after a live sync.
 
@@ -213,20 +212,20 @@ A session that stops in the middle of a step leaves the next one starting cold. 
   - Until the 7 new fields exist (F1), their values go in the note.
   - **Done when:** tests show the changes for a sample lead, both new and already in HubSpot.
 
-- [ ] **D4. The "Send to HubSpot" button.**
+- [x] **D4. The "Send to HubSpot" button.** Done 2026-11-04, 1be6df0.
   - On the lead card and in the Results panel. The routes are the ones PLAN-V1 named: `POST /api/v1/lead-finder/leads/{id}/hubspot/preview` and `.../hubspot/send`.
   - After a send, the lead's status is `sent` (the status exists already and only this sets it), and the card links to the HubSpot record.
   - **Done when:** the website tests pass, and a send works on the fake backend in the browser, on a desktop, a phone and in dark colours.
   - Done so far: the routes, the `sent` status and their tests (a61b7c4). A third route, `GET .../hubspot`, gives the lead's newest write, so the card can show its link. The button (`lead/send-lead.tsx`, on the card and so in the Results panel) and its tests (1be6df0).
-  - Left: the browser check of a send on the fake backend (desktop, phone, dark).
+  - Checked in the browser on the fake backend: the preview showed each field and what happens to it, Confirm sent it (company, note and list all done), the lead showed "Sent", the card linked to the record, and the write log listed it.
 
 ## Part E: Check and merge
 
-- [ ] **E1. The full check.**
+- [x] **E1. The full check.** Done 2026-11-04.
   - The backend suite with `RUN_GATES=1`, then the website checks, one at a time.
   - **Done when:** everything passes, and the numbers are in the Log.
 
-- [ ] **E2. A live read check.** Free.
+- [x] **E2. A live read check.** Free. Done 2026-11-04.
   - Run `hubspot-check` and a sync on Contour's HubSpot. Look at the labels on 5 leads by hand.
   - **Done when:** the Log has the counts and anything that was wrong.
 
@@ -264,6 +263,8 @@ This starts when write access arrives, expected 4 Nov (**TBC**).
 
 ## Waiting on
 
+- **Levi (new, 4 Nov):** which deal stages count as an open deal. Today any deal that isn't Dissolved does, so of the 1,167 live companies marked "Open deal" only 480 have a deal still open: 310 have only Closed lost (and Dissolved) deals, and 377 have a won deal ("Ordered - Contract Signed") and nothing open. Our recommendation (**TBC**): Closed lost counts like Dissolved (wait 12 months unless a new trigger), and a won deal is a customer (never suggested as a new lead, but useful for the customer-connection job).
+
 - **The HubSpot admin (through Levi):** the write scopes (expected 4 Nov), the 7 new fields and the list, Contour's HubSpot plan, and a test account (**TBC**).
 - **Levi:** the OK to use HubSpot data (still **TBC**), and what the note should say.
 - **Al-khair:** the key in `engine/.env` (A2), and the go-ahead for F2.
@@ -279,6 +280,10 @@ This starts when write access arrives, expected 4 Nov (**TBC**).
 ## Log
 
 Newest first. One line for each tick, pause or surprise.
+
+- 2026-11-04: E1 ticked: backend 2,602 passed and 25 skipped (4 min 16 s; a first run had 2 failures because the fake backend's test left HUBSPOT_WRITE_ENABLED=true for later tests, fixed by restoring every name it sets) with `RUN_GATES=1`; website lint (0 warnings), types, 708 tests and the build. E2 ticked: `engine hubspot-check` (reads yes, writes no) and two live full syncs (Log below). 5 relabelled leads checked against live HubSpot (free reads): all 5 are in HubSpot; the open-deal one has deals at 'Contour Validated Deal' and 'Unqualified Information Deal', right; a second is "Open deal" only through a Closed lost deal (see Waiting on, Levi); leads with no website saved matched by name, and where both have a website they agree.
+- 2026-11-04: D1 and D2 ticked (da104e4). D1: HubSpot's API gives industry labels with punctuation ("Hospital & Health Care"), the export and watchlist.yaml without ("Hospital Health Care"), so 8 hospitals left the Director list and miners and food makers counted as office-based. The industry comparison now ignores punctuation, "&" and "and". On the live copy the same 100 companies then give the export's lists exactly (47 Watch, 11 likely, 15 Director, 7 open deals); one company moved from "no office" to "no staff number" because HubSpot changed since 25 Oct. Whole live copy: 1,480 Watch (993 likely office-based), 593 Director, 1,167 open deal, 7,388 too small or no staff number (2,627 with no number), 3,285 with no office in a city we cover. D2: `lead-finder relabel` matched the 52 dev leads again: 35 were in HubSpot already (15 open deal, 9 dissolved deal, 5 in HubSpot, 6 possible match), saved with `--yes`. Results and scores stay as researched.
+- 2026-11-04: C1 and D4 ticked: browser check on the fake backend (desktop light and dark, phone dark), and a send on the fake HubSpot.
 
 - 2026-11-04: Paused at 88% of the 5-hour limit (brain saved at 81%). Next, in order: the browser check of C1 and D4 on the fake backend; D1 and D2 (script ready: watchlist and lead labels on the synced copy, read only); E1 (full backend run with `RUN_GATES=1`, then the website checks, one at a time); E2; then the merge, Al-khair's call. The second full sync (row 2, with the fix) finished well in 9 min 9 s: 22,760 offices and 13,885 profiles.
 - 2026-11-04: B4 ticked, C2 ticked (1be6df0). First live full sync (row 1): 9 min 36 s; read 13,913 companies, 8,943 deals, 61 owners (26 active, 35 archived); saved 13,913 companies, 43,482 offices, 8,038 deals; 905 deals have no company and were left out; 13,885 profiles (28 companies have no name); 0 removed (the export's 100 companies are all still in HubSpot, so the export WAS capped at 100). Warnings: 25 texts cut to fit, 1 odd value. Surprise: 20,722 of the offices were only a "Staff on LinkedIn" of 0 in an otherwise empty city group, which would have given thousands of companies a fake office in Adelaide, Brisbane or Perth (watchlist and "same city" matching). The export never listed such groups, so a zero count alone is no longer an office (1be6df0). The second full sync (row 2) saved 22,760 offices, exactly 43,482 minus 20,722.
