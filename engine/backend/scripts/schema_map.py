@@ -47,6 +47,18 @@ PURPOSE = {
     "core.searches": "The search log: every Claude request, with its tokens, sources and cost.",
     "core.memory": "Saved notes with a vector, for finding similar companies (pgvector).",
     "core.settings": "The settings changed on the Settings page: a key and a JSON value.",
+    "core.users": (
+        "The people who may sign in: the login names, the password's argon2id hash, and the "
+        "count of wrong tries and the lock. One Admin today."
+    ),
+    "core.sessions": (
+        "One row for each signed-in browser. Only a hash of the cookie's token is kept, so a "
+        "copy of the database can't be used to sign in."
+    ),
+    "core.audit_log": (
+        "The sign-in log: every sign-in, failure, lock, sign-out and password change, with the "
+        "time and the IP address. Never a password or a token."
+    ),
     "core.hubspot_companies": (
         "Our copy of HubSpot's companies, from the sync (source api) or an export upload "
         "(source export)."
@@ -80,6 +92,15 @@ PURPOSE = {
 
 # Short notes on columns whose name doesn't say enough.
 COLUMN_NOTES = {
+    "core.users.email": "Saved in lower case, so it is compared in lower case.",
+    "core.users.username": "Lower case, no @, or empty. A second way to sign in.",
+    "core.users.password_hash": "argon2id, with its own settings in the text. Never the password.",
+    "core.users.failed_attempts": "Wrong tries in a row. A right password sets it back to 0.",
+    "core.users.locked_until": "No sign-in before this time: a growing wait, then 15 minutes.",
+    "core.sessions.token_hash": "SHA-256 (hex) of the random token in the cookie. Never the token.",
+    "core.sessions.expires_at": "The longest it lasts: 12 hours, or 14 days if kept signed in.",
+    "core.sessions.remember": "Keep me signed in. Such a session has no idle limit.",
+    "core.audit_log.details": "Facts about the entry. Never a password, a token or a typed login.",
     "lead_finder.leads.card": "Everything on the lead card: facts, sources and rule checks.",
     "core.hubspot_companies.source": '"api" from the sync, "export" from an upload.',
     "core.hubspot_deals.stage": "The stage's label from its pipeline, never guessed from the id.",

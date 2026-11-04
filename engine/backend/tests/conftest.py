@@ -66,6 +66,9 @@ os.environ["HUBSPOT_SYNC_MAX_AGE_HOURS"] = "0"  # a test backend never syncs whe
 get_settings.cache_clear()
 
 TEST_TABLES = (
+    "core.audit_log",
+    "core.sessions",
+    "core.users",
     "lead_finder.leads",
     "lead_finder.signalhire_details",
     "core.searches",

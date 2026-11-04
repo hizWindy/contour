@@ -486,6 +486,42 @@ def test_0006_adds_and_removes_the_checked_points_of_the_score(scratch: Scratch)
     assert "score_checked" in lead_columns(scratch)
 
 
+def auth_tables(scratch: Scratch) -> set[str]:
+    """Which of the sign-in tables exist in the core schema."""
+    with scratch.connect() as connection:
+        rows = connection.execute(
+            "SELECT tablename FROM pg_tables WHERE schemaname = 'core' "
+            "AND tablename IN ('users', 'sessions', 'audit_log')"
+        ).fetchall()
+    return {row["tablename"] for row in rows}
+
+
+@pytest.mark.integration
+def test_0010_adds_and_removes_the_sign_in_tables(scratch: Scratch) -> None:
+    config = alembic_config(scratch.url)
+    command.upgrade(config, "0009_hubspot_sync")
+    assert auth_tables(scratch) == set()
+
+    command.upgrade(config, "0010_auth_tables")
+    assert auth_tables(scratch) == {"users", "sessions", "audit_log"}
+    command.upgrade(config, "head")
+    command.check(config)  # the models declare the same tables, keys, checks and indexes
+
+    # Going down removes all three, and a second way up brings them back empty.
+    with scratch.connect() as connection:
+        connection.execute(
+            "INSERT INTO core.users (id, email, name, password_hash) "
+            "VALUES (%s, 'al@example.test', 'Al', 'x')",
+            (uuid.uuid4(),),
+        )
+    command.downgrade(config, "0009_hubspot_sync")
+    assert auth_tables(scratch) == set()
+    command.upgrade(config, "head")
+    assert auth_tables(scratch) == {"users", "sessions", "audit_log"}
+    with scratch.connect() as connection:
+        assert connection.execute("SELECT count(*) AS n FROM core.users").fetchone() == {"n": 0}
+
+
 def fact(value: Any) -> dict[str, Any]:
     found = value is not None
     return {
