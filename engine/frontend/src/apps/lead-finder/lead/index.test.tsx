@@ -1,4 +1,5 @@
 import { screen, waitFor, within } from '@testing-library/react'
+import type { UserEvent } from '@testing-library/user-event'
 import { Route, Routes } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
 import type { LeadDetail } from '@/api/types'
@@ -72,8 +73,14 @@ function renderLead() {
 
 const TAG = '<b onmouseover=alert(1)>hover</b>'
 
+/** Opens one tab of the card and returns its panel. */
+async function openTab(user: UserEvent, name: string): Promise<HTMLElement> {
+  await user.click(await screen.findByRole('tab', { name }))
+  return screen.getByRole('tabpanel', { name })
+}
+
 describe('the lead page', () => {
-  it('shows the result, the rules, the facts with sources and the notes', async () => {
+  it('shows the result, the rules, the facts with sources and the notes, a tab each', async () => {
     mockApi(makeLead())
     const { user } = renderLead()
 
@@ -81,17 +88,126 @@ describe('the lead page', () => {
       await screen.findByRole('heading', { level: 1, name: 'Acme Software' }),
     ).toBeInTheDocument()
     expect(screen.getByText('Score 51 of 77 checked')).toBeInTheDocument()
-    const rules = screen.getByRole('list', { name: 'Each rule' })
-    await user.click(within(rules).getByRole('button', { name: /City/ }))
-    expect(await screen.findByText('Melbourne is a city we work in')).toBeInTheDocument()
 
-    const facts = screen.getByRole('table', { name: /Facts about Acme Software/ })
+    const score = await openTab(user, 'Score and rules')
+    const rules = within(score).getByRole('list', { name: 'Each rule' })
+    await user.click(within(rules).getByRole('button', { name: /City/ }))
+    expect(await within(score).findByText('Melbourne is a city we work in')).toBeInTheDocument()
+
+    const factsTab = await openTab(user, 'Facts')
+    const facts = within(factsTab).getByRole('table', { name: /Facts about Acme Software/ })
     expect(within(facts).getByText('2,500 m²')).toBeInTheDocument()
     const website = within(facts).getByRole('link', { name: /acme\.com\.au/ })
     expect(website.getAttribute('href')).toMatch(/^https:\/\/acme\.com\.au\/?$/)
     expect(within(facts).getAllByText('Confirmed').length).toBeGreaterThan(0)
-    expect(await screen.findByText('This lead has no profile yet.')).toBeInTheDocument()
-    expect(screen.getByText(/A summary of each page/)).toBeInTheDocument()
+
+    const hubspot = await openTab(user, 'HubSpot and look-alikes')
+    expect(await within(hubspot).findByText('This lead has no profile yet.')).toBeInTheDocument()
+    const research = await openTab(user, 'Research')
+    expect(within(research).getByText(/A summary of each page/)).toBeInTheDocument()
+  })
+
+  it('opens on a quick view: the score bar, the best sign, staff, office, HubSpot and who to call', async () => {
+    const base = makeLead()
+    mockApi(
+      makeLead({
+        hubspot: { ...base.hubspot, status: 'in_hubspot', owner: 'Sample Owner' },
+        facts: {
+          ...base.facts,
+          decision_makers: [
+            {
+              name: 'Jane Citizen',
+              role: 'Chief Operating Officer',
+              source_url: 'https://acme.com.au/about',
+              source_date: null,
+            },
+          ],
+        },
+        fact_sources: [
+          { fact: 'staff_in_city', used: 'signalhire', others: [], conflict: null },
+          { fact: 'decision_makers', used: 'claude', others: [], conflict: null },
+        ],
+      }),
+    )
+    renderLead()
+
+    const quick = await screen.findByRole('region', { name: 'Quick view' })
+    const meter = within(quick).getByRole('meter', { name: 'Score' })
+    expect(meter).toHaveAttribute('aria-valuenow', '51')
+    expect(meter).toHaveAttribute('aria-valuemax', '77')
+    expect(meter).toHaveAttribute('aria-valuetext', '51 of 77 points checked')
+    expect(within(quick).getByText('Investigate')).toBeInTheDocument()
+    expect(within(quick).getByText('Active prospect')).toBeInTheDocument()
+    expect(within(quick).getByText('Typed')).toBeInTheDocument()
+    expect(within(quick).getByText(/^City: Melbourne\. Size/)).toBeInTheDocument()
+    expect(
+      within(quick).getByText("Acme's Collins Street lease ends in March 2028."),
+    ).toBeInTheDocument()
+    expect(within(quick).getByText('2028-03')).toBeInTheDocument()
+    expect(within(quick).getByText('250 staff')).toBeInTheDocument()
+    expect(within(quick).getByText('from Signal Hire')).toBeInTheDocument()
+    expect(within(quick).getByText('2,500 m²')).toBeInTheDocument()
+    expect(within(quick).getByText('Owner: Sample Owner')).toBeInTheDocument()
+    expect(within(quick).getByText('Jane Citizen, Chief Operating Officer')).toBeInTheDocument()
+    expect(within(quick).getByText('Role to ask for: Head of Property')).toBeInTheDocument()
+    for (const action of ['Watch', 'Reject', 'Send to HubSpot', 'Re-check']) {
+      expect(within(quick).getByRole('button', { name: action })).toBeInTheDocument()
+    }
+    // The details wait in the tabs: the facts table is not on the first screen.
+    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.queryByRole('table', { name: /Facts about/ })).toBeNull()
+  })
+
+  it('moves between the tabs with the arrow keys', async () => {
+    mockApi(makeLead())
+    const { user } = renderLead()
+
+    const overview = await screen.findByRole('tab', { name: 'Overview' })
+    expect(
+      within(screen.getByRole('tablist', { name: 'Lead details' }))
+        .getAllByRole('tab')
+        .map((tab) => tab.textContent),
+    ).toEqual([
+      'Overview',
+      'Facts',
+      'Signs',
+      'Score and rules',
+      'HubSpot and look-alikes',
+      'Research',
+    ])
+    overview.focus()
+    await user.keyboard('{ArrowRight}')
+    expect(screen.getByRole('tab', { name: 'Facts' })).toHaveFocus()
+    expect(screen.getByRole('tab', { name: 'Facts' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('table', { name: /Facts about Acme Software/ })).toBeInTheDocument()
+    await user.keyboard('{End}')
+    expect(screen.getByRole('tab', { name: 'Research' })).toHaveAttribute('aria-selected', 'true')
+    await user.keyboard('{Home}')
+    expect(overview).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('shows the first three of a long list, then all of them', async () => {
+    const notes = Array.from({ length: 5 }, (_, index) => ({
+      claim: `Note number ${String(index + 1)}`,
+      url: `https://www.afr.com/property/note-${String(index + 1)}`,
+      published: '2026-10-01',
+      angle: 'property',
+      from_memory: false,
+    }))
+    mockApi(makeLead({ notes }))
+    const { user } = renderLead()
+
+    const research = await openTab(user, 'Research')
+    const list = within(research).getByRole('list', { name: 'What each source said' })
+    expect(within(list).getAllByRole('listitem')).toHaveLength(3)
+    const more = within(research).getByRole('button', { name: 'Show all 5' })
+    expect(more).toHaveAttribute('aria-expanded', 'false')
+
+    await user.click(more)
+    expect(within(list).getAllByRole('listitem')).toHaveLength(5)
+    expect(within(list).getByText('Note number 5')).toBeInTheDocument()
+    await user.click(within(research).getByRole('button', { name: 'Show fewer' }))
+    expect(within(list).getAllByRole('listitem')).toHaveLength(3)
   })
 
   it('marks where the company came from, apart from its HubSpot label', async () => {
@@ -110,9 +226,10 @@ describe('the lead page', () => {
     expect(await screen.findByText('Score 51 of 77 checked')).toBeInTheDocument()
     expect(screen.getByText('Active prospect')).toBeInTheDocument()
     expect(screen.getByText('Investigate')).toBeInTheDocument()
-    expect(screen.getByText(/The tool could check 77 of the 100 points/)).toBeInTheDocument()
+    const score = await openTab(user, 'Score and rules')
+    expect(within(score).getByText(/The tool could check 77 of the 100 points/)).toBeInTheDocument()
 
-    const parts = screen.getByRole('list', { name: 'Each part of the score' })
+    const parts = within(score).getByRole('list', { name: 'Each part of the score' })
     expect(within(parts).getByText('20 of 25 checked')).toBeInTheDocument()
     await user.click(within(parts).getByRole('button', { name: /Decision-maker access/ }))
     expect(await within(parts).findByText('A contact already in HubSpot')).toBeInTheDocument()
@@ -124,6 +241,8 @@ describe('the lead page', () => {
     mockApi(makeLead({ score: 78, score_parts: [], score_checked: null, band: null, stage: null }))
     const first = renderLead()
     expect(await screen.findByText('Score 78')).toBeInTheDocument()
+    expect(screen.queryByRole('meter')).toBeNull() // no bar without the points checked
+    await openTab(first.user, 'Score and rules')
     expect(screen.getByText(/scored under version 1 of the rules/)).toBeInTheDocument()
     first.unmount()
 
@@ -137,9 +256,10 @@ describe('the lead page', () => {
         stage: 'Not a target',
       }),
     )
-    renderLead()
-    expect(await screen.findByText('A dropped company is not scored.')).toBeInTheDocument()
-    expect(screen.getByText('Not a target')).toBeInTheDocument()
+    const second = renderLead()
+    expect(await screen.findByText('Not a target')).toBeInTheDocument()
+    await openTab(second.user, 'Score and rules')
+    expect(screen.getByText('A dropped company is not scored.')).toBeInTheDocument()
   })
 
   it('shows the talking points, the past fitout firms and the numbers from HubSpot', async () => {
@@ -162,15 +282,19 @@ describe('the lead page', () => {
         },
       }),
     )
-    const { container } = renderLead()
+    const { container, user } = renderLead()
 
+    // The Overview tab is open first.
     expect(await screen.findByText('Talking points')).toBeInTheDocument()
     expect(screen.getByText('Lease ends March 2028')).toBeInTheDocument()
     expect(screen.getByText(TAG)).toBeInTheDocument() // as text, never as a tag
     expect(container.querySelector('b')).toBeNull()
     expect(screen.getByText('Past fitout firms: Hassell, Geyer')).toBeInTheDocument()
-    expect(screen.getByText(/Staff in Melbourne: 60 on LinkedIn, from HubSpot/)).toBeInTheDocument()
-    const facts = screen.getByRole('table', { name: /Facts about Acme Software/ })
+    const factsTab = await openTab(user, 'Facts')
+    expect(
+      within(factsTab).getByText(/Staff in Melbourne: 60 on LinkedIn, from HubSpot/),
+    ).toBeInTheDocument()
+    const facts = within(factsTab).getByRole('table', { name: /Facts about Acme Software/ })
     expect(within(facts).getByText('2016')).toBeInTheDocument()
     expect(within(facts).getByText('2024-05')).toBeInTheDocument()
     expect(within(facts).getByText('Will need about 1,500 m² by 2027-06')).toBeInTheDocument()
@@ -189,8 +313,9 @@ describe('the lead page', () => {
         fact_sources: [{ fact: 'staff_in_city', used: 'signalhire', others: [], conflict: null }],
       }),
     )
-    const { container } = renderLead()
+    const { container, user } = renderLead()
 
+    await openTab(user, 'Facts')
     const heading = await screen.findByText('From Signal Hire')
     const notes = within(heading.parentElement as HTMLElement)
     expect(notes.getByText(note)).toBeInTheDocument()
@@ -218,7 +343,7 @@ describe('the lead page', () => {
     mockApi(makeLead())
     renderLead()
 
-    expect(await screen.findByRole('table', { name: /Facts about Acme Software/ })).toBeVisible()
+    expect(await screen.findByRole('region', { name: 'Quick view' })).toBeVisible()
     expect(screen.queryByText('Facts missing.')).toBeNull()
   })
 
@@ -266,8 +391,9 @@ describe('the lead page', () => {
         ],
       }),
     )
-    renderLead()
+    const { user } = renderLead()
 
+    await openTab(user, 'Facts')
     const facts = await screen.findByRole('table', { name: /Facts about Acme Software/ })
     const staff = within(facts).getByRole('row', { name: /Staff in the city/ })
     expect(within(staff).getByText('Signal Hire')).toBeInTheDocument()
@@ -304,8 +430,9 @@ describe('the lead page', () => {
         ],
       }),
     )
-    const { container } = renderLead()
+    const { container, user } = renderLead()
 
+    await openTab(user, 'Facts')
     const flags = await screen.findByRole('list', { name: 'Sources that disagree' })
     expect(within(flags).getByText(flag)).toBeInTheDocument()
     expect(within(flags).getByText(`The websites differ: ${HOSTILE}`)).toBeInTheDocument()
@@ -333,8 +460,9 @@ describe('the lead page', () => {
         },
       }),
     )
-    const { container } = renderLead()
+    const { container, user } = renderLead()
 
+    await openTab(user, 'Facts')
     const title = await screen.findByText("Signal Hire's record")
     const record = within(title.closest('[data-slot="card"]') as HTMLElement)
     expect(record.getByText(HOSTILE)).toBeInTheDocument() // as text, never as a tag
@@ -353,8 +481,9 @@ describe('the lead page', () => {
 
   it('shows no Signal Hire record when it knows nothing of the company', async () => {
     mockApi(makeLead())
-    renderLead()
+    const { user } = renderLead()
 
+    await openTab(user, 'Facts')
     expect(await screen.findByRole('table', { name: /Facts about Acme Software/ })).toBeVisible()
     expect(screen.queryByText("Signal Hire's record")).toBeNull()
   })
@@ -376,8 +505,9 @@ describe('the lead page', () => {
         },
       }),
     )
-    renderLead()
+    const { user } = renderLead()
 
+    await openTab(user, 'Facts')
     const title = await screen.findByText("Signal Hire's record")
     const record = within(title.closest('[data-slot="card"]') as HTMLElement)
     expect(record.queryByRole('link')).toBeNull()
@@ -420,8 +550,9 @@ describe('the lead page', () => {
 
   it('shows no heading for a source that filled in nothing', async () => {
     mockApi(makeLead())
-    renderLead()
+    const { user } = renderLead()
 
+    await openTab(user, 'Facts')
     expect(await screen.findByRole('table', { name: /Facts about Acme Software/ })).toBeVisible()
     expect(screen.queryByText('From Signal Hire')).toBeNull()
     expect(screen.queryByText('From HubSpot')).toBeNull()
@@ -453,15 +584,16 @@ describe('the lead page', () => {
     const { container } = renderLead()
 
     expect(await screen.findByText('Decision makers')).toBeInTheDocument()
-    const jane = screen.getByText('Jane Citizen, Chief Financial Officer').closest('li')
+    const overview = screen.getByRole('tabpanel', { name: 'Overview' })
+    const jane = within(overview).getByText('Jane Citizen, Chief Financial Officer').closest('li')
     expect(jane).not.toBeNull()
     const person = within(jane as HTMLElement)
     expect(person.getByText('2026-09-01')).toBeInTheDocument()
     expect(person.getByRole('link')).toHaveAttribute('href', 'https://acme.com.au/leadership')
-    expect(screen.getByText(`${TAG}, Head of Property`)).toBeInTheDocument() // as text
+    expect(within(overview).getByText(`${TAG}, Head of Property`)).toBeInTheDocument() // as text
     expect(container.querySelector('b')).toBeNull()
     expect(container.querySelector('a[href^="javascript"]')).toBeNull()
-    expect(screen.getByText(/check before you call/)).toBeInTheDocument()
+    expect(within(overview).getByText(/check before you call/)).toBeInTheDocument()
   })
 
   it('says so when no public page names a decision maker', async () => {
@@ -474,8 +606,15 @@ describe('the lead page', () => {
 
   it('says when to talk: before a consultant is appointed', async () => {
     mockApi(makeLead())
-    renderLead()
-    expect(await screen.findByText(/usually within 18 months of the project/)).toBeInTheDocument()
+    const { user } = renderLead()
+    const signs = await openTab(user, 'Signs')
+    expect(
+      within(signs).getByText("Acme's Collins Street lease ends in March 2028."),
+    ).toBeInTheDocument()
+    expect(within(signs).getByText('26 points')).toBeInTheDocument()
+    expect(
+      await within(signs).findByText(/usually within 18 months of the project/),
+    ).toBeInTheDocument()
   })
 
   it('has a back button above the title', async () => {
@@ -489,7 +628,8 @@ describe('the lead page', () => {
 
   it('shows a hostile note as text and never links to javascript', async () => {
     mockApi(makeLead())
-    const { container } = renderLead()
+    const { container, user } = renderLead()
+    await openTab(user, 'Research')
     expect(await screen.findByText(HOSTILE)).toBeInTheDocument()
     expect(container.querySelector('img')).toBeNull()
     for (const link of container.querySelectorAll('a')) {
@@ -646,7 +786,8 @@ describe('the lead page', () => {
         },
       }),
     )
-    renderLead()
+    const { user } = renderLead()
+    await openTab(user, 'HubSpot and look-alikes')
     expect(
       await screen.findByText('Might be the same company. A person confirms.'),
     ).toBeInTheDocument()
