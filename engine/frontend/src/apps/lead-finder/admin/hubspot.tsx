@@ -1,9 +1,11 @@
 /**
- * Admin, HubSpot: what the local copy of HubSpot holds, uploading a new export, rebuilding the
- * company profiles, and the watchlist that export gives (nothing goes to Claude here).
+ * Admin, HubSpot: the connection page (the key, its permissions, each project, the syncs and the
+ * writes, in connection.tsx), the watchlist our copy gives, and, folded away, the backup: our
+ * copy's counts, uploading an export and rebuilding the company profiles (nothing goes to
+ * Claude here).
  */
 import { createColumnHelper } from '@tanstack/react-table'
-import { RefreshCw, Upload } from 'lucide-react'
+import { ChevronDown, RefreshCw, Upload } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { useHubspotSummary, useImportHubspot, useRebuildProfiles, useWatchlist } from '@/api/hooks'
@@ -12,10 +14,12 @@ import { DataTable } from '@/components/data-table'
 import { ErrorState } from '@/components/error-state'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { formatDateTime, formatNumber, formatStaff } from '@/lib/format'
 import { toastProblem } from '@/lib/problems'
+import { ConnectionCard, PermissionsCard, SyncCard, WritesCard } from './connection'
 
 type WatchItem = WatchlistOut['items'][number]
 const help = createColumnHelper<WatchItem>()
@@ -58,11 +62,11 @@ function Summary() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-section font-semibold">The local copy</CardTitle>
+        <CardTitle className="text-section font-semibold">Our copy of HubSpot</CardTitle>
         <CardDescription>
           {data?.last_imported_at
-            ? `Last uploaded ${formatDateTime(data.last_imported_at)}.`
-            : 'No export uploaded yet.'}
+            ? `Last saved ${formatDateTime(data.last_imported_at)}.`
+            : 'Nothing saved yet.'}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3 text-ui">
@@ -71,6 +75,9 @@ function Summary() {
           <p>
             {formatNumber(data.companies)} companies, {formatNumber(data.offices)} offices,{' '}
             {formatNumber(data.deals)} deals.
+            {data.companies_by_source && data.companies_by_source.export > 0
+              ? ` ${formatNumber(data.companies_by_source.export)} companies are from an export.`
+              : ''}
           </p>
         ) : null}
         <div>
@@ -176,14 +183,37 @@ function Watchlist() {
   )
 }
 
+function Backup() {
+  return (
+    <Collapsible>
+      <CollapsibleTrigger className="group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-section font-semibold hover:bg-muted touch:min-h-11">
+        Backup: upload an export
+        <ChevronDown
+          aria-hidden="true"
+          className="ml-auto size-4 transition-transform duration-(--duration-fast) ease-(--ease) group-data-[state=open]:rotate-180"
+        />
+      </CollapsibleTrigger>
+      <CollapsibleContent className="pt-4">
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Summary />
+          <UploadExport />
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  )
+}
+
 export default function AdminHubSpotTab() {
   return (
     <div className="flex flex-col gap-6">
       <div className="grid gap-6 lg:grid-cols-2">
-        <Summary />
-        <UploadExport />
+        <ConnectionCard />
+        <PermissionsCard />
       </div>
+      <SyncCard />
+      <WritesCard />
       <Watchlist />
+      <Backup />
     </div>
   )
 }

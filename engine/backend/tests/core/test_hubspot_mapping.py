@@ -114,6 +114,19 @@ def test_an_office_group_with_nothing_in_it_is_no_office() -> None:
     assert rows.offices == () and rows.company.offices_on_record is None
 
 
+def test_a_linkedin_count_of_zero_alone_is_no_office_but_a_count_above_is() -> None:
+    zero = company_rows(record(name="Acme", staff_on_linkedin_adelaide_="0"), FIELDS, convert())
+    assert zero.offices == ()
+    some = company_rows(record(name="Acme", staff_on_linkedin_adelaide_="12"), FIELDS, convert())
+    assert [(o.label, o.linkedin_staff) for o in some.offices] == [("Adelaide", 12)]
+    real = company_rows(
+        record(name="Acme", staff_on_linkedin_adelaide_="0", city_adelaide_="Adelaide"),
+        FIELDS,
+        convert(),
+    )
+    assert [(o.label, o.linkedin_staff) for o in real.offices] == [("Adelaide", 0)]  # kept
+
+
 def test_odd_values_are_left_empty_and_counted_never_fatal() -> None:
     c = convert()
     rows = company_rows(

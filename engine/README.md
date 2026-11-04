@@ -24,8 +24,8 @@ Then start the website. In `engine/frontend/`, install once with `npm ci`, then 
 - **Start a run:** pick the cities, areas, signs and how far back to look. The page shows the likely and the highest cost before you start. Three kinds of run: find new leads, the HubSpot watchlist, or companies you type in.
 - **Runs:** watch a run live, stop it, or resume one that was cut off.
 - **Results:** every lead in a table, or as a list beside a map. Filter, sort and download a CSV. Click a lead to open its card in a side panel.
-- **A lead card:** the result rule by rule, the facts with their sources, HubSpot matches and look-alikes. Watch, reject or re-check it from there. Sending to HubSpot comes in Phase 5.
-- **Admin:** costs by day, the search log, memory, the HubSpot upload, the rules, the test set and the settings.
+- **A lead card:** the result rule by rule, the facts with their sources, HubSpot matches and look-alikes. Watch, reject or re-check it from there, or send it to HubSpot after a preview (writing is off until the key has write access).
+- **Admin:** costs by day, the search log, memory, the HubSpot connection (permissions, syncs, writes, and the export upload as a backup), the rules, the test set and the settings.
 
 The HubSpot watchlist stays switched off until Levi approves sending HubSpot company names to Claude. Then set `HUBSPOT_NAMES_TO_CLAUDE_OK=true` in `engine/.env` and restart the backend.
 

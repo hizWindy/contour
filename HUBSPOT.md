@@ -349,23 +349,34 @@ HubSpot has an **API**, which is a door that lets code talk to it. With it, I ca
 - **Search** records by property.
 - **React to changes** with webhooks.
 
-**How access works:**
+**How access works (service keys, since 4 Nov 2026):**
 
-1. An admin creates a **Private App** in HubSpot (Settings → Integrations → Private Apps).
-2. The admin picks what the app may read or write. These are called **scopes**.
-3. HubSpot gives a secret **access token**. My code sends it with every request.
+1. An admin makes a **service key** in HubSpot (Settings → Integrations → Service keys). Private apps can't be made any more, so service keys replace them. HubSpot made them a public beta on 10 Feb 2026.
+2. The admin picks what the key may read or write. These are called **scopes**. A key can only get scopes its creator has, and scopes can be added later with Edit on the key's page.
+3. The key goes in `engine/.env` as `HUBSPOT_SERVICE_KEY`. The backend sends it with every request, and never logs it or shows it on a page.
 
-**Example request (get contacts):**
+**Example request (read companies):**
 
 ```
-GET https://api.hubapi.com/crm/v3/objects/contacts
-Authorization: Bearer <my-token>
+GET https://api.hubapi.com/crm/objects/2026-09/companies
+Authorization: Bearer <the service key>
 ```
+
+**What we have (4 Nov 2026):** the key reads companies, deals, owners, lists and company fields. It can't write yet: the admin must add `crm.objects.companies.write` and `crm.lists.write` (a note needs only the first). `uv run engine hubspot-check` shows this at any time, for free.
+
+**What we found:** Contour's HubSpot has 13,913 companies and 8,943 deals. HubSpot's limit headers allow 190 requests per 10 seconds and 625,000 a day, which is the Professional plan (**TBC** with the admin). Offices are company fields, one group for each city.
+
+**How the platform uses it** ([PLAN-V5](plan/PLAN-V5.md)):
+
+- One connection in `engine/backend/core/hubspot/` for every project. No project holds the key.
+- A **sync** copies companies, offices, deals and owners into our database. It reads only what changed, and everything once a week. Pages read our copy, so they work when HubSpot is down. There are no webhooks with a service key, so a change shows after the next sync.
+- A **write** is always previewed, then confirmed by a person, written once only, and logged. It fills empty fields only. It stays off until `HUBSPOT_WRITE_ENABLED=true`.
 
 **Rules for me:**
 
-- Never paste a token into chat or commit it to a file.
+- Never paste a key into chat or commit it to a file.
 - Ask for the smallest scopes needed. Saving notes needs **write** access, so read-only is not enough for the meeting brief.
+- A permanent Contour admin should own the key: it may stop working when its creator leaves (**TBC**).
 - Client data is confidential. The AI data-handling rules are still **TBC**.
 
 ## 14. Quick glossary

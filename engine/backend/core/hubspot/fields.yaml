@@ -32,7 +32,8 @@ companies:
   hubspot_updated_at: hs_lastmodifieddate
 
 # Offices are company fields, one group for each city. An office is saved when at least one of
-# its fields has a value, as the export did. "Offices on Record" is the list of those labels.
+# its fields has a value, as the export did. A LinkedIn staff count of 0 alone doesn't count:
+# HubSpot holds 0 there for about 20,000 empty groups. "Offices on Record" lists the offices.
 offices:
   - label: Melbourne
     fields:

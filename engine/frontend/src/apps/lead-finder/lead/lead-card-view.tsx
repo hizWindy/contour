@@ -8,7 +8,7 @@
  *
  * The actions: Watch, Reject (with a reason) and Useful change the lead, and each shows a toast with
  * Undo, which sends back the exact values from before. Re-check costs money, so it asks first and
- * has no Undo. Send to HubSpot comes in Phase 5.
+ * has no Undo. Send to HubSpot previews first and writes once only (send-lead.tsx).
  */
 import {
   Bookmark,
@@ -19,7 +19,6 @@ import {
   CircleX,
   Flag,
   RefreshCw,
-  Send,
   ThumbsDown,
   ThumbsUp,
   UserCheck,
@@ -29,10 +28,10 @@ import {
 import { useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { toast } from 'sonner'
-import { usePatchLead, useRecheckLead, useLeadSimilar, useRules } from '@/api/hooks'
+import { useLeadHubSpot, useLeadSimilar, usePatchLead, useRecheckLead, useRules } from '@/api/hooks'
 import type { LeadDetail, LeadPatch, Schemas } from '@/api/types'
 import { ErrorState } from '@/components/error-state'
-import { HubSpotBadge } from '@/components/hubspot-badge'
+import { InHubSpotBadge } from '@/components/hubspot'
 import { Money } from '@/components/money'
 import { ResultBadge } from '@/components/result-badge'
 import { SourceLink } from '@/components/source-link'
@@ -72,6 +71,7 @@ import {
 } from '@/lib/format'
 import { toastProblem } from '@/lib/problems'
 import { cn } from '@/lib/utils'
+import { SendLead } from './send-lead'
 
 type RuleCheck = Schemas['RuleCheck']
 type Fact = Schemas['Fact_str_'] | Schemas['Fact_int_'] | Schemas['Fact_bool_']
@@ -622,11 +622,15 @@ function Triggers({ lead }: { lead: LeadDetail }) {
 
 function HubSpot({ lead }: { lead: LeadDetail }) {
   const hubspot = lead.hubspot
+  const sent = useLeadHubSpot(lead.id).data
   return (
     <Section title="HubSpot">
       <div className="flex flex-wrap items-center gap-2">
-        <HubSpotBadge status={hubspot.status} />
-        {hubspot.name ? <span>{hubspot.name}</span> : null}
+        <InHubSpotBadge
+          status={hubspot.status}
+          name={hubspot.name}
+          href={sent?.hubspot_url ?? null}
+        />
         {hubspot.owner ? (
           <span className="text-muted-foreground">Owner: {hubspot.owner}</span>
         ) : null}
@@ -875,13 +879,7 @@ function Actions({ lead }: { lead: LeadDetail }) {
         </AlertDialogContent>
       </AlertDialog>
       <span className="inline-flex flex-col gap-2 max-sm:col-span-2 sm:flex-row sm:items-center">
-        <Button type="button" variant="outline" disabled aria-describedby={`send-${lead.id}`}>
-          <Send aria-hidden="true" />
-          Send to HubSpot
-        </Button>
-        <span id={`send-${lead.id}`} className="text-caption text-muted-foreground">
-          Sending to HubSpot comes in Phase 5.
-        </span>
+        <SendLead lead={lead} />
       </span>
 
       <Dialog open={rejecting} onOpenChange={setRejecting}>

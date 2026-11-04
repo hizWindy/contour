@@ -398,7 +398,12 @@ def company_rows(record: HubSpotObject, fields: FieldMap, convert: Converter) ->
 
 
 def office_row(record: HubSpotObject, office: OfficeMap, convert: Converter) -> OfficeRow | None:
-    """The office in one city group, or None when every field of the group is empty."""
+    """The office in one city group, or None when the group says nothing about an office.
+
+    A "Staff on LinkedIn" of 0 alone is not an office: HubSpot holds 0 in that field for about
+    20,000 city groups that are otherwise empty (seen in the first live sync, 4 Nov 2026), and
+    the export never listed such a group. On an office that has other details, the 0 is kept.
+    """
 
     def raw(column: OfficeColumn) -> str | None:
         name = office.fields.get(column)
@@ -423,8 +428,9 @@ def office_row(record: HubSpotObject, office: OfficeMap, convert: Converter) -> 
         quality=text("quality"),
         staff_count_text=text("staff_count_text"),
     )
-    details = row.model_dump(exclude={"hubspot_company_id", "label"})
-    return row if any(value is not None for value in details.values()) else None
+    details = row.model_dump(exclude={"hubspot_company_id", "label", "linkedin_staff"})
+    has_details = any(value is not None for value in details.values())
+    return row if has_details or (row.linkedin_staff or 0) > 0 else None
 
 
 def deal_row(

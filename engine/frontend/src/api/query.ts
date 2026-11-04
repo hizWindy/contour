@@ -100,5 +100,8 @@ export const queryKeys = {
   hubspot: {
     all: ['hubspot'] as const,
     summary: () => ['hubspot', 'summary'] as const,
+    status: () => ['hubspot', 'status'] as const,
+    writes: () => ['hubspot', 'writes'] as const,
+    lead: (leadId: string) => ['hubspot', 'lead', leadId] as const,
   },
 }

@@ -4,7 +4,15 @@ import { describe, expect, it, vi } from 'vitest'
 import type { LeadDetail } from '@/api/types'
 import { renderWithProviders } from '@/test/render'
 import LeadPage from './index'
+import { makeWrite } from '@/components/hubspot/test-write'
 import { fact, HOSTILE, LEAD_ID, makeLead } from './test-lead'
+
+type Wrapped = (request: Request) => Promise<Response | undefined> | Response | undefined
+
+/** Answers some paths first and passes the rest to the fetch mock already in place. */
+function wrapFetch(inner: typeof fetch, first: Wrapped): typeof fetch {
+  return (async (request: Request) => (await first(request)) ?? inner(request)) as typeof fetch
+}
 
 interface Seen {
   patches: Record<string, unknown>[]
@@ -540,11 +548,68 @@ describe('the lead page', () => {
     expect(seen.rechecks).toBe(1)
   })
 
-  it('shows Send to HubSpot as coming later', async () => {
+  it('previews Send to HubSpot, and waits for write access before it writes', async () => {
+    const previews: string[] = []
     mockApi(makeLead())
-    renderLead()
-    expect(await screen.findByRole('button', { name: 'Send to HubSpot' })).toBeDisabled()
-    expect(screen.getByText('Sending to HubSpot comes in Phase 5.')).toBeInTheDocument()
+    vi.stubGlobal(
+      'fetch',
+      wrapFetch(globalThis.fetch, (request) => {
+        const path = new URL(request.url).pathname
+        if (path === `/api/v1/lead-finder/leads/${LEAD_ID}/hubspot/preview`) {
+          previews.push(request.method)
+          return Response.json(makeWrite())
+        }
+        return undefined
+      }),
+    )
+    const { user } = renderLead()
+    await user.click(await screen.findByRole('button', { name: 'Send to HubSpot' }))
+    const dialog = await screen.findByRole('alertdialog')
+    expect(
+      await within(dialog).findByText(/This makes a new company in HubSpot/),
+    ).toBeInTheDocument()
+    expect(within(dialog).getByRole('status')).toHaveTextContent('Waiting for write access.')
+    expect(within(dialog).getByRole('button', { name: 'Send to HubSpot' })).toBeDisabled()
+    expect(previews).toEqual(['POST'])
+  })
+
+  it('sends once after a confirm, then shows the lead as sent', async () => {
+    const sends: unknown[] = []
+    mockApi(makeLead())
+    vi.stubGlobal(
+      'fetch',
+      wrapFetch(globalThis.fetch, async (request) => {
+        const path = new URL(request.url).pathname
+        if (path.endsWith('/hubspot/preview')) {
+          return Response.json(makeWrite({ can_write: true, waiting_for: null }))
+        }
+        if (path.endsWith('/hubspot/send')) {
+          sends.push(await request.json())
+          return Response.json(
+            makeWrite({
+              status: 'done',
+              can_write: true,
+              waiting_for: null,
+              hubspot_url: 'https://app.hubspot.com/contacts/1/record/0-2/7',
+              steps: [{ step: 'company', status: 'done', detail: null, hubspot_id: '7' }],
+            }),
+          )
+        }
+        return undefined
+      }),
+    )
+    const { user } = renderLead()
+    await user.click(await screen.findByRole('button', { name: 'Send to HubSpot' }))
+    const dialog = await screen.findByRole('alertdialog')
+    const send = await within(dialog).findByRole('button', { name: 'Send to HubSpot' })
+    await waitFor(() => {
+      expect(send).toBeEnabled()
+    })
+    await user.click(send)
+    expect(
+      await screen.findByRole('heading', { name: 'Acme Software is in HubSpot' }),
+    ).toBeInTheDocument()
+    expect(sends).toEqual([{ write_id: makeWrite().id }])
   })
 
   it('lists possible HubSpot matches for a person to confirm', async () => {

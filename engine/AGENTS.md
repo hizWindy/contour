@@ -24,6 +24,8 @@ From `engine/backend/`:
 | Start with auto-reload while coding | `uv run engine serve --reload` |
 | Apply database changes only | `uv run engine migrate` |
 | Load a HubSpot export | `uv run engine import-hubspot ../../projects/leads/research/COMPANIES.xlsx` |
+| Which permissions the HubSpot key has, and what each project can do (free, changes nothing) | `uv run engine hubspot-check` |
+| Copy HubSpot into our database now (free; `--full` reads everything and finds deleted records, about 10 minutes) | `uv run engine hubspot-sync` |
 | Research one company (costs money) | `uv run lead-finder research "Culture Amp" --city Melbourne` |
 | Run the test set of 10 companies (costs money) | `uv run lead-finder testset --yes` |
 | Read Signal Hire's headcount for one company (1 company credit, no database) | `uv run lead-finder headcount "Culture Amp" --city Melbourne --yes` |
@@ -83,7 +85,7 @@ backend/
     claude/            Claude with web search and fetch (client.py), prices (pricing.py), caps (budget.py)
     searches/          the search log: every Claude request and its cost
     memory/            pgvector memory and FastEmbed
-    hubspot/           the HubSpot import, matching (matching.py) and company profiles (profiles.py)
+    hubspot/           HubSpot for every project: client.py, check.py, needs.py, sync.py (+ fields.yaml, mapping.py), writer.py; the export import, matching.py, profiles.py
     signalhire/        Signal Hire (client.py): company details, staff and people counts, senior people's names and job titles; details.py is the saved company record
     runs/              the run engine: start, stop, resume, live events, caps (manager.py, events.py, budget.py)
     prefs/             the settings a person can change on the Settings page
@@ -185,8 +187,22 @@ frontend/
 4. Put its tables in its own schema, added with a migration.
 5. Add its pages in `frontend/src/apps/<name>/`, and its tests in `backend/tests/<name>/`.
 6. In `frontend/src/apps/<name>/module.tsx`, define its `AppModule`: name, icon, one-line description, menu pages and routes. Add it to `MODULES` in `frontend/src/modules.ts`, and take it out of `PLANNED` there (the list of projects still to be developed, each with one "to be developed" page). The sidebar group, its card on Home and the Ctrl+K entries then appear by themselves. Its own admin pages go in its menu; only what every project shares goes under Admin.
+7. If it uses HubSpot, see "How a project uses HubSpot" below.
 
 The core doesn't change.
+
+## How a project uses HubSpot
+
+One connection in `backend/core/hubspot/` serves every project ([PLAN-V5](../plan/PLAN-V5.md)). A project never calls HubSpot and never holds the key.
+
+1. **Say what it needs.** In its `AppSpec`, set `hubspot_needs=HubSpotNeeds(read=(...), write=(...), uses="...")` with the scopes. The Admin HubSpot page then shows it as ready, or waiting for a named scope.
+2. **Read our copy.** Use the `core.hubspot_*` tables (`HubSpotCompany`, `HubSpotOffice`, `HubSpotDeal`, `HubSpotOwner`). The sync fills them. Pick lists and deal stages are saved as their labels, like the export.
+3. **Write through the core.** Build a `WriteRequest` (the company, the fields, a note, a list), then call `preview_write` and, after a person confirms, `apply_write` (`core/hubspot/writer.py`). The core fills empty fields only, writes once only, and logs it in `core.hubspot_writes`. Example: `apps/lead_finder/hubspot_send.py`.
+4. **Act after a write.** Set `hubspot_written` in its `AppSpec`; the core calls it when one of its writes is done (the Lead Finder marks the lead as sent).
+5. **Show it.** Use `SendToHubSpotDialog`, `InHubSpotBadge` and `useHubSpotStatus` from `frontend/src/components/hubspot/`.
+6. **Test it** with `FakeHubSpot` (`backend/tests/core/hubspot_fake.py`). No test reaches HubSpot: the tests blank the key.
+
+Commands, from `backend/`: `uv run engine hubspot-check` (which scopes the key has, free) and `uv run engine hubspot-sync` (copy HubSpot now, free; `--full` reads everything and finds deleted records).
 
 ## Safety
 
@@ -200,7 +216,8 @@ The core doesn't change.
   - A company that came from HubSpot (the watchlist) is not sent to Signal Hire unless `HUBSPOT_NAMES_TO_SIGNALHIRE_OK=true`, a switch of its own beside the one for Claude. Its Company API is off for our account (a 403, checked 2 Nov), so the company name can't be checked, and `size.headcount_tool_name_check` is `auto`: it counts under the name as typed while the API is off, and turns strict by itself when support switches it on. The card says when the name was not checked.
 - Decision makers: the research may note up to 3 leaders (CEO, COO, CFO, head of property or workplace) by name and job title, only from public pages it read (the company's site, annual report, ASX, news), each with its link. Never LinkedIn or any page behind a login, never an email or phone number (`fields.py` and `sources.py` remove them). Whether Contour keeps names is **TBC** with Levi (question 17 in `LEVI.md`).
 - Read, don't scrape. Property Daily stays off until its terms allow a program to read it.
-- Nothing is written to HubSpot unless a person clicks "Send to HubSpot".
+- Nothing is written to HubSpot unless a person clicks "Send to HubSpot" and confirms the preview. Writing is off until `HUBSPOT_WRITE_ENABLED=true` in `engine/.env` and the key has the write scopes. A write fills empty fields only, and is written once only. The HubSpot key (`HUBSPOT_SERVICE_KEY`) is never logged or sent to the website, and the tests and the fake backend blank it.
+- The HubSpot sync stores no contacts and no owner emails. HubSpot company names reach Claude or Signal Hire only when `HUBSPOT_NAMES_TO_CLAUDE_OK` or `HUBSPOT_NAMES_TO_SIGNALHIRE_OK` is true (both off).
 - The database listens on `127.0.0.1` only.
 
 ## Windows note

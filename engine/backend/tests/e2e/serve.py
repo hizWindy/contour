@@ -45,6 +45,8 @@ WIPED_TABLES = (
     "core.run_events",
     "core.runs",
     "core.settings",
+    "core.hubspot_writes",
+    "core.hubspot_syncs",
 )
 
 
@@ -57,6 +59,10 @@ def use_e2e_database(hubspot_ok: bool = False) -> None:
     os.environ["SIGNALHIRE_API_KEY"] = ""
     os.environ["HUBSPOT_SERVICE_KEY"] = ""
     os.environ["HUBSPOT_NAMES_TO_CLAUDE_OK"] = "true" if hubspot_ok else "false"
+    # HubSpot is the fake one below (`fake_hubspot`): the real client is never made, so writing
+    # can be on and a send can be tried in the browser. Nothing at start syncs by itself.
+    os.environ["HUBSPOT_WRITE_ENABLED"] = "true"
+    os.environ["HUBSPOT_SYNC_MAX_AGE_HOURS"] = "0"
     from core.config import get_settings
 
     get_settings.cache_clear()
@@ -145,14 +151,68 @@ def fake_claude(today: date, delay_seconds: float = DELAY_SECONDS) -> "FakeClaud
     )
 
 
+def fake_hubspot() -> Any:
+    """A fake HubSpot holding the export's companies, offices and deals, with every permission,
+    so the connection page, "Sync now" and "Send to HubSpot" all work without touching the real
+    one. A sync from it gives the same copy as the export upload."""
+    from collections import defaultdict
+
+    from core.hubspot.client import Owner
+    from core.hubspot.importer import read_export
+    from core.hubspot.mapping import load_field_map
+    from tests.core.hubspot_fake import SALES, FakeHubSpot
+
+    fake = FakeHubSpot()
+    fake.grant_writes()
+    fake.owners_active = [Owner("1", "Sample Owner", False)]
+    if not EXPORT.is_file():
+        return fake
+    export = read_export(EXPORT)
+    groups = {office.label: office.fields for office in load_field_map().offices}
+    offices: dict[str, list[Any]] = defaultdict(list)
+    for office in export.offices:
+        offices[office.hubspot_company_id].append(office)
+    for company in export.companies:
+        properties: dict[str, str | None] = {
+            "name": company.name,
+            "domain": company.domain,
+            "website": company.website,
+            "city": company.city,
+            "state": company.state_raw,
+            "industry": company.industry,
+            "numberofemployees": str(company.employees) if company.employees else None,
+        }
+        for office in offices[company.hubspot_id]:
+            fields = groups.get(office.label, {})
+            for column in ("city", "street", "level", "postal_code", "phone"):
+                if column in fields:
+                    properties[fields[column]] = getattr(office, column)
+            if "linkedin_staff" in fields and office.linkedin_staff is not None:
+                properties[fields["linkedin_staff"]] = str(office.linkedin_staff)
+        fake.add_company(company.hubspot_id, **properties)
+    stages = {stage.label.casefold(): stage.id for stage in SALES.stages}
+    for deal in export.deals:
+        fake.add_deal(
+            deal.hubspot_deal_id,
+            deal.hubspot_company_id,
+            dealname=deal.name,
+            dealstage=stages.get((deal.stage or "").casefold()),
+            pipeline="default",
+        )
+    return fake
+
+
 def build_app(claude: "FakeClaude") -> "FastAPI":
-    """The real app, with FakeClaude for runs and for the one-company research route."""
+    """The real app, with FakeClaude for runs and for the one-company research route, and the
+    fake HubSpot for the connection page and sends."""
     from core.api.app import create_app
     from core.api.deps import claude_dependency
 
     app = create_app()
     app.state.claude_provider = lambda: claude
     app.dependency_overrides[claude_dependency] = lambda: claude
+    hubspot = fake_hubspot()
+    app.state.hubspot_provider = lambda: hubspot
     return app
 
 
