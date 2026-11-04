@@ -42,6 +42,7 @@ function run(status: RunStatus): Run {
     stop_reason: null,
     error: null,
     error_id: null,
+    schedule_id: null,
     cancel_requested_at: null,
     created_at: '2026-10-26T04:00:00Z',
     started_at: '2026-10-26T04:00:01Z',

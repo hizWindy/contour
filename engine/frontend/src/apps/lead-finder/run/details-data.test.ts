@@ -38,6 +38,7 @@ function run(changes: Partial<Run> = {}): Run {
     stop_reason: null,
     error: null,
     error_id: null,
+    schedule_id: null,
     cancel_requested_at: null,
     created_at: '2026-10-27T03:40:00Z',
     started_at: '2026-10-27T03:40:10Z',
@@ -126,6 +127,12 @@ describe('when a run ran', () => {
     expect(value(lines, 'Started')).toBe('27 Oct 2026, 2:40 pm')
     expect(value(lines, 'Finished')).toBe('27 Oct 2026, 2:53 pm')
     expect(value(lines, 'Took')).toBe('13 min 28 s')
+  })
+
+  it('says when a schedule started the run, and says nothing when a person did', () => {
+    const scheduled = timingLines(run({ schedule_id: '9a36e57c-67b7-4721-9dfc-7c02f1a0b111' }))
+    expect(value(scheduled, 'Started by')).toBe('A schedule')
+    expect(value(timingLines(run()), 'Started by')).toBeUndefined()
   })
 
   it('counts a running run up to now, and says how often it was resumed', () => {

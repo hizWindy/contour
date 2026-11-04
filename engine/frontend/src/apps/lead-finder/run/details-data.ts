@@ -117,6 +117,9 @@ export function timingLines(run: Run, now: Date = new Date()): DetailLine[] {
   const lines: DetailLine[] = []
   const started = run.started_at ?? run.created_at
   lines.push({ label: 'Started', value: formatDateTime(started) })
+  if (run.schedule_id) {
+    lines.push({ label: 'Started by', value: 'A schedule' })
+  }
   if (run.finished_at) {
     lines.push({ label: 'Finished', value: formatDateTime(run.finished_at) })
   }

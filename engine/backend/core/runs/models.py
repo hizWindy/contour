@@ -25,6 +25,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
+import core.schedules.models  # noqa: F401  (a run points at the schedule that started it)
 from core.db.base import CORE_SCHEMA, Base
 
 # queued: saved, not started. interrupted: the backend stopped while it was going.
@@ -76,6 +77,10 @@ class Run(Base):
     error: Mapped[str | None] = mapped_column(Text)  # plain words only, never a raw exception
     error_id: Mapped[str | None] = mapped_column(String(16))  # finds the traceback in the log
     idempotency_key: Mapped[str | None] = mapped_column(String(64))
+    # The schedule that started this run. None: a person started it (PLAN-V6 D2).
+    schedule_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey(f"{CORE_SCHEMA}.schedules.id", ondelete="SET NULL")
+    )
     cancel_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("now()")

@@ -1,6 +1,6 @@
 /**
- * The table of runs, newest first: when it started, what kind it was, its status, what it found and
- * what it cost. A row opens the run. The Runs page and the Admin "Runs and cost" tab both show it.
+ * The table of runs, newest first: when it started (with "Scheduled" under it when a schedule
+ * started it), what kind it was, its status, what it found and what it cost. A row opens the run. The Runs page and the Admin "Runs and cost" tab both show it.
  */
 import { createColumnHelper } from '@tanstack/react-table'
 import { ListChecks } from 'lucide-react'
@@ -12,6 +12,7 @@ import { DataTable } from '@/components/data-table'
 import { EmptyState } from '@/components/empty-state'
 import { ErrorState } from '@/components/error-state'
 import { Money } from '@/components/money'
+import { ScheduledMark } from '@/components/scheduled-mark'
 import { StatusBadge } from '@/components/status-badge'
 import { formatDateTime, formatNumber, shortId } from '@/lib/format'
 import { RUN_MODE_LABELS } from '@/lib/labels'
@@ -24,12 +25,15 @@ const columns = [
     header: 'Started',
     enableSorting: false,
     cell: (info) => (
-      <Link
-        to={`/runs/${info.row.original.id}`}
-        className="font-semibold underline-offset-4 hover:underline"
-      >
-        {formatDateTime(info.getValue())}
-      </Link>
+      <div className="flex flex-col items-start gap-1">
+        <Link
+          to={`/runs/${info.row.original.id}`}
+          className="font-semibold underline-offset-4 hover:underline"
+        >
+          {formatDateTime(info.getValue())}
+        </Link>
+        {info.row.original.schedule_id ? <ScheduledMark /> : null}
+      </div>
     ),
   }),
   help.accessor('id', {

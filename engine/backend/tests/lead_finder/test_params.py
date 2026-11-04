@@ -97,12 +97,13 @@ def test_triggers_must_exist_and_appear_once() -> None:
     )
 
 
-@pytest.mark.parametrize("days", [7, 30])
-def test_since_days_is_7_or_30(days: int) -> None:
+@pytest.mark.parametrize("days", [7, 14, 30])
+def test_since_days_is_7_14_or_30(days: int) -> None:
+    # 14 is for a schedule that runs every 2 weeks (PLAN-V6 D2). The Start page offers 7 and 30.
     assert DiscoveryParams(since_days=days).since_days == days
 
 
-@pytest.mark.parametrize("days", [0, 1, 14, 31, 90])
+@pytest.mark.parametrize("days", [0, 1, 10, 15, 31, 90])
 def test_since_days_refuses_other_numbers(days: int) -> None:
     assert first_error(DiscoveryParams, {"since_days": days})["loc"] == ("since_days",)
 

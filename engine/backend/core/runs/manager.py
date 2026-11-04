@@ -204,6 +204,7 @@ class _Job:
     versions: RunVersions
     counts: RunCounts
     saver: "BaseCheckpointSaver[Any]"
+    schedule_id: UUID | None = None  # the schedule that started this run, if one did
     resume: bool = False
     from_status: str = ""
 
@@ -386,12 +387,17 @@ class RunManager:
         mode: str,
         params: dict[str, Any],
         idempotency_key: str | None = None,
+        *,
+        schedule_id: UUID | None = None,
     ) -> RunOut:
         """Starts a run. Raises Problem: 404 unknown app or mode, 422 bad params (errors as
         body.params.<field>), 409 run_already_active (with run_id), 503 no checkpoint store.
 
         A repeated `idempotency_key` returns the run the first call made. The same key with a
         different body is a 409 `idempotency_key_reused`.
+
+        `schedule_id` is the schedule that is starting the run (PLAN-V6 D2). It is saved in the row
+        (`RunOut.schedule_id`), so the Runs page can say "Scheduled". A person's run has none.
 
         What it takes from the kind (`core.runs.types.RunKind`), so nothing is guessed from the
         params model:
@@ -443,6 +449,7 @@ class RunManager:
             versions=versions,
             counts=RunCounts(),
             saver=saver,
+            schedule_id=schedule_id,
         )
         # The save and the launch can't be left half done if this request is cancelled.
         launch = asyncio.ensure_future(self._create(entry, job, dumped, idempotency_key, key))
@@ -556,6 +563,7 @@ class RunManager:
             prompt_versions=clean_text(job.versions.prompts, PROMPT_VERSIONS_MAX),
             counts=job.counts.model_dump(mode="json"),
             idempotency_key=idempotency_key,
+            schedule_id=job.schedule_id,
         )
         duplicate = False
         try:

@@ -2877,9 +2877,10 @@
           },
           "since_days": {
             "default": 30,
-            "description": "Used by mode discovery only. Only events from the last 7 or 30 days",
+            "description": "Used by mode discovery only. Only events from the last 7, 14 or 30 days. The Start page offers 7 and 30; 14 is for a schedule that runs every 2 weeks.",
             "enum": [
               7,
+              14,
               30
             ],
             "title": "Since Days",
@@ -5388,6 +5389,19 @@
             "title": "Rules Version",
             "type": "string"
           },
+          "schedule_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The schedule that started this run. Empty when a person started it.",
+            "title": "Schedule Id"
+          },
           "started_at": {
             "anyOf": [
               {
@@ -5445,6 +5459,7 @@
           "stop_reason",
           "error",
           "error_id",
+          "schedule_id",
           "cancel_requested_at",
           "created_at",
           "started_at",

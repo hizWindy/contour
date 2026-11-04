@@ -44,6 +44,7 @@ function run(changes: Partial<Run> = {}): Run {
     stop_reason: null,
     error: null,
     error_id: null,
+    schedule_id: null,
     cancel_requested_at: null,
     created_at: '2026-10-26T04:00:00Z',
     started_at: '2026-10-26T04:00:01Z',
@@ -279,6 +280,25 @@ describe('the run list', () => {
     expect(within(table).getByText('Companies by name')).toBeInTheDocument()
     await user.click(within(table).getByText('0f3c9a2e'))
     expect(await screen.findByText('Opened')).toBeInTheDocument()
+  })
+
+  it('marks the runs a schedule started, and only those', async () => {
+    const byPerson = run({ id: '0f3c9a2e-0000-4000-8000-000000000001', status: 'done' })
+    const bySchedule = run({
+      id: '5d1b7c44-0000-4000-8000-000000000002',
+      status: 'done',
+      schedule_id: '9a36e57c-67b7-4721-9dfc-7c02f1a0b111',
+    })
+    mockApi(() => byPerson, [bySchedule, byPerson])
+    renderWithProviders(<RunsPage />)
+
+    const table = await screen.findByRole('table', { name: 'Runs' })
+    expect(await within(table).findByText('5d1b7c44')).toBeInTheDocument()
+    const marks = within(table).getAllByText('Scheduled')
+    expect(marks).toHaveLength(1)
+    const rows = within(table).getAllByRole('row')
+    expect(within(rows[1]).getByText('Scheduled')).toBeInTheDocument() // the scheduled run, first
+    expect(within(rows[2]).queryByText('Scheduled')).not.toBeInTheDocument()
   })
 
   it('says so when there is no run yet', async () => {

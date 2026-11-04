@@ -2106,11 +2106,11 @@ export interface components {
             recheck: boolean;
             /**
              * Since Days
-             * @description Used by mode discovery only. Only events from the last 7 or 30 days
+             * @description Used by mode discovery only. Only events from the last 7, 14 or 30 days. The Start page offers 7 and 30; 14 is for a schedule that runs every 2 weeks.
              * @default 30
              * @enum {integer}
              */
-            since_days: 7 | 30;
+            since_days: 7 | 14 | 30;
             /**
              * Triggers
              * @description Used by mode discovery only. Trigger ids to look for, each once. The default is the main triggers.
@@ -3248,6 +3248,11 @@ export interface components {
             prompt_versions: string;
             /** Rules Version */
             rules_version: string;
+            /**
+             * Schedule Id
+             * @description The schedule that started this run. Empty when a person started it.
+             */
+            schedule_id: string | null;
             /** Started At */
             started_at: string | null;
             /**

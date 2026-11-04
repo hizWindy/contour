@@ -570,6 +570,66 @@ def test_0011_adds_the_schedules_and_lets_a_schedule_start_a_sync(scratch: Scrat
     assert schedule_tables(scratch) == {"schedules"}
 
 
+def run_schedule_column(scratch: Scratch) -> dict[str, Any] | None:
+    with scratch.connect() as connection:
+        return connection.execute(
+            "SELECT data_type, is_nullable FROM information_schema.columns "
+            "WHERE table_schema = 'core' AND table_name = 'runs' AND column_name = 'schedule_id'"
+        ).fetchone()
+
+
+@pytest.mark.integration
+def test_0012_marks_the_runs_a_schedule_started(scratch: Scratch) -> None:
+    config = alembic_config(scratch.url)
+    command.upgrade(config, "0011_schedules")
+    assert run_schedule_column(scratch) is None
+    earlier, schedule, scheduled = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    with scratch.connect() as connection:
+        connection.execute(
+            "INSERT INTO core.runs (id, app, mode) VALUES (%s, 'lead_finder', 'discovery')",
+            (earlier,),
+        )
+
+    command.upgrade(config, "head")
+    command.check(config)  # the model declares the same column and key
+    assert run_schedule_column(scratch) == {"data_type": "uuid", "is_nullable": "YES"}
+    with scratch.connect() as connection:
+        # A run from before this was not started by a schedule, and says so.
+        row = connection.execute(
+            "SELECT schedule_id FROM core.runs WHERE id = %s", (earlier,)
+        ).fetchone()
+        assert row == {"schedule_id": None}
+        connection.execute(
+            "INSERT INTO core.schedules (id, project, job, name, every, unit, weekday, at_time) "
+            "VALUES (%s, 'lead_finder', 'lead_finder.discovery', 'Find new leads', 2, 'weeks', "
+            "0, '07:00')",
+            (schedule,),
+        )
+        connection.execute(
+            "INSERT INTO core.runs (id, app, mode, schedule_id) "
+            "VALUES (%s, 'lead_finder', 'discovery', %s)",
+            (scheduled, schedule),
+        )
+        # A run can't name a schedule that doesn't exist.
+        with pytest.raises(psycopg.errors.ForeignKeyViolation):
+            connection.execute(
+                "INSERT INTO core.runs (id, app, mode, schedule_id) "
+                "VALUES (%s, 'lead_finder', 'discovery', %s)",
+                (uuid.uuid4(), uuid.uuid4()),
+            )
+        # If the schedule is ever deleted, its runs stay and lose the mark.
+        connection.execute("DELETE FROM core.schedules WHERE id = %s", (schedule,))
+        row = connection.execute(
+            "SELECT schedule_id FROM core.runs WHERE id = %s", (scheduled,)
+        ).fetchone()
+        assert row == {"schedule_id": None}
+
+    command.downgrade(config, "0011_schedules")
+    assert run_schedule_column(scratch) is None
+    command.upgrade(config, "head")
+    assert run_schedule_column(scratch) is not None
+
+
 def fact(value: Any) -> dict[str, Any]:
     found = value is not None
     return {

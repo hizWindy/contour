@@ -99,6 +99,7 @@ backend/
       app.py           tells the core this project's name, endpoints and rules
       api.py           the /api/v1/lead-finder endpoints (also api_leads.py, api_runs.py, api_watchlist.py)
       runs.py          the four kinds of run: find new leads, watchlist, typed companies, test set
+      jobs.py          the scheduled run (`lead_finder.discovery`): its default schedule, and the check against the limits before it starts
       steps/           the run's steps: plan, discover, merge, choose, company (research one), graph (LangGraph)
       options.py       what the Start page offers (cities, areas, signs, limits)
       lead_store.py    lead filters, sorting, facets, the map and the CSV
@@ -218,6 +219,7 @@ Commands, from `backend/`: `uv run engine hubspot-check` (which scopes the key h
 - **The loop** (`core/schedules/runner.py`) checks the `core.schedules` table once a minute and starts what is on and due. It runs only in the backend that holds the run engine's lock, so there is one of it for a database. A due schedule is **claimed first** (its next time moved on, saved) and started after, so it never starts twice. A schedule **missed** while the backend was off runs once when it is back, and keeps its own days. A job **still running** is skipped, with a note on the schedule. A job that fails never stops the loop, and its error text stays in the log: the table gets a fixed sentence.
 - **A project adds a job** with `JobSpec(key, project, title, start, running, default)` in `AppSpec.jobs`. `start(context)` begins the work and returns at once with the id of the run or sync it made (`JobResult(ref=...)`), or raises `JobSkipped("a reason in plain words")`. `running(context)` says whether the last start's work is still going. `default` is the schedule made at the first start, and never again: a person's edits and switch-offs stay. A schedule that is off has no next time (the table keeps the two together).
 - **The core's own job** is the HubSpot sync, on by default, every day at 6:00 am (`core/schedules/core_jobs.py`). A sync a schedule starts has the trigger `schedule`.
+- **The Lead Finder's job** is `lead_finder.discovery` (`apps/lead_finder/jobs.py`): every 2 weeks, Monday at 7:00 am, **off** until a person switches it on (each run costs money). Its `settings` are the Start page's choices (`cities`, `triggers`, `area`, `since_days`, `caps`); a part left out gets the Start page's starting value. The default is the Start page's own default (Melbourne, Adelaide, Perth, the 4 main signs, 12 searches) looking back 14 days. The plan said 4 cities, but Sydney makes 16 searches and the default limits allow 13, so Sydney needs the run limit raised first. Before it starts, the run's estimate is checked: a typical run (never the worst case) must be within the run limit and within what is left of today's limit, or the schedule is skipped with the reason in `last_error`. A run a schedule starts has `schedule_id` (`RunOut.schedule_id`), and the Runs page says "Scheduled". The run's own limits still apply while it works.
 
 ## Sign-in
 

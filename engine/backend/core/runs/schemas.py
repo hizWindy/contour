@@ -88,6 +88,10 @@ class RunOut(OutModel):
     stop_reason: str | None = Field(description="Why the run ended, in plain words")
     error: str | None = Field(description="What went wrong, in plain words. Never a trace.")
     error_id: str | None = Field(description="Finds the full trace in the backend log")
+    schedule_id: UUID | None = Field(
+        None,
+        description="The schedule that started this run. Empty when a person started it.",
+    )
     cancel_requested_at: datetime | None
     created_at: datetime
     started_at: datetime | None

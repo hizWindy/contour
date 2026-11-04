@@ -96,6 +96,7 @@ PURPOSE = {
 
 # Short notes on columns whose name doesn't say enough.
 COLUMN_NOTES = {
+    "core.runs.schedule_id": "The schedule that started the run. Empty when a person started it.",
     "core.schedules.job": "The job's name, like lead_finder.discovery. One schedule for each.",
     "core.schedules.at_time": "The wall clock in `timezone`: 7:00 stays 7:00 all year.",
     "core.schedules.weekday": "0 Monday to 6 Sunday. Set for a schedule in weeks, empty in days.",

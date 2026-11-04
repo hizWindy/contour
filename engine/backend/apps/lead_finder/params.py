@@ -29,7 +29,9 @@ from core.api.models import OutModel
 from core.hubspot.matching import clean_name
 
 AreaId = Literal["cbd", "inner", "all"]  # the part of a city to look in; "all" is the whole city
-SinceDays = Literal[7, 30]
+# How far back a discovery run looks. The Start page offers 7 and 30 (`options.py`). 14 is for a
+# schedule that runs every 2 weeks: its look-back matches the time between runs (PLAN-V6 D2).
+SinceDays = Literal[7, 14, 30]
 COMPANIES_MIN = 1
 COMPANIES_MAX = 25
 WATCHLIST_LIMIT_MAX = 200
@@ -212,7 +214,11 @@ class _Discovery(Strict):
         ),
     )
     since_days: SinceDays = Field(
-        30, description="Used by mode discovery only. Only events from the last 7 or 30 days"
+        30,
+        description=(
+            "Used by mode discovery only. Only events from the last 7, 14 or 30 days. "
+            "The Start page offers 7 and 30; 14 is for a schedule that runs every 2 weeks."
+        ),
     )
 
     @field_validator("cities")
