@@ -4,7 +4,7 @@ This plan puts the platform online as **Contour HQ**. It adds a sign-in for one 
 
 - **Built by:** Al-khair Pama. **Signed off by:** Levi Young (the name and the cloud data OK).
 - **Last updated:** 2026-11-04. **TBC** means not confirmed yet.
-- **Progress:** 0 of 31 steps done. Work goes on branch `plan-v6`.
+- **Progress:** 2 of 31 steps done (A1, A3). Work goes on branch `plan-v6`.
 - **Comes after:** [PLAN-V5.md](PLAN-V5.md), merged into `master` and pushed on 4 Nov (6f676ae). Its open steps (A2 and Part F, HubSpot write access) stay there and don't block this plan.
 
 ## In short
@@ -89,7 +89,7 @@ These rules are for Al-khair and for Claude. At the start of every session: read
 
 ## Part A: Get ready
 
-- [ ] **A1. Branch and baseline.**
+- [x] **A1. Branch and baseline.** Done 2026-11-04, a3c0058 (the commit that was measured). The numbers are in the Log.
   - `plan-v6` from `master` (6f676ae). This plan and the login references are its first commit.
   - Run the backend suite with `RUN_GATES=1`, then the website checks, one at a time. The last numbers were backend 2,602 passed and 25 skipped, and website 708 tests.
   - **Done when:** the numbers are in the Log.
@@ -101,7 +101,7 @@ These rules are for Al-khair and for Claude. At the start of every session: read
   - The OK on the one-time line drawing (longer than 250 ms), and which "Framer" was meant.
   - **Done when:** the answers are in the Log.
 
-- [ ] **A3. The new packages.**
+- [x] **A3. The new packages.** Done 2026-11-04, ac004a4. `argon2-cffi` 25.1.0 (MIT), `motion` 14.5.0 (MIT, the newest release at least 14 days old). The common-password list is `core/auth/common_passwords.txt` (NCSC, 444 entries of 14+ characters); its licence is still **TBC**.
   - Backend: `argon2-cffi` for the password hash. Website: `motion`. Check each one's licence, size and latest version, then add it with the lock files.
   - A list of common passwords to refuse, from a source with an open licence (**TBC**).
   - **Done when:** both are installed, the lock files are committed, and the checks still pass.
@@ -286,6 +286,10 @@ These rules are for Al-khair and for Claude. At the start of every session: read
 ## Log
 
 Newest first. One line for each tick, pause or surprise.
+
+- 2026-11-04: A1 and A3 ticked (a3c0058 measured, ac004a4 built). **Backend 2,527 passed, 25 skipped, 75 failed** with `RUN_GATES=1` in 3 min 34 s. 2,527 + 75 is the laptop's 2,602. All 75 need the memory model, which can't download here (Hugging Face is blocked), except one (`test_guards.py::test_the_guard_works_in_a_real_pytest_run`) that fails only because the scratch plugin used to fail fast renames `Embedder._load`. Each of the 74 otherwise waits 40 s on FastEmbed's retries. **Website:** lint 0 warnings, types, 708 tests, build, all pass. A3: `argon2-cffi` 25.1.0 and `motion` 14.5.0 (14.9.1 is from today, so the newest one at least 14 days old is used). The lock files only gained entries (npm 10 here drops the laptop npm's `libc` markers, so they were put back by hand).
+
+- 2026-11-04: **Track 1 started from a cloud session** (Claude Code on the web), not the laptop, on `claude/dazzling-hypatia-hp3wbl`, which stands in for `plan-v6`. This box has Docker (Postgres 18.6 with pgvector from `pgvector/pgvector:pg18`, port 5433, test database as on the laptop) but no AI Brain, no `get_usage`, no keys, and no memory model. It runs Python 3.13.18: the system's 3.12.3 cannot import `core/runs/types.py` (a `Protocol` can't inherit `AsyncIterator` there), so the laptop's 3.12 must be a newer patch (**TBC**: check which, and use the same one in G1). Steps that start a paid service (H) and steps that need Al-khair's or Levi's answers (A2) stay open.
 
 - 2026-11-04: Added three parts at Al-khair's ask: D the scheduler (every 2 weeks by default, changeable, a daily HubSpot sync), E the company list (one filter bar, a mark for where each company came from), F the lead card (a quick view on top, the details in tabs). Containers, DigitalOcean and go-live became G, H and I. 31 steps.
 
