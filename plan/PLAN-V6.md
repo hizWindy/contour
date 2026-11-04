@@ -4,7 +4,7 @@ This plan puts the platform online as **Contour HQ**. It adds a sign-in for one 
 
 - **Built by:** Al-khair Pama. **Signed off by:** Levi Young (the name and the cloud data OK).
 - **Last updated:** 2026-11-04. **TBC** means not confirmed yet.
-- **Progress:** 2 of 31 steps done (A1, A3). Work goes on branch `plan-v6`.
+- **Progress:** 5 of 31 steps done (A1, A3, B1, B2, B3). Work goes on branch `plan-v6`.
 - **Comes after:** [PLAN-V5.md](PLAN-V5.md), merged into `master` and pushed on 4 Nov (6f676ae). Its open steps (A2 and Part F, HubSpot write access) stay there and don't block this plan.
 
 ## In short
@@ -108,7 +108,7 @@ These rules are for Al-khair and for Claude. At the start of every session: read
 
 ## Part B: Accounts and sessions (backend)
 
-- [ ] **B1. The tables.** Migration 0010.
+- [x] **B1. The tables.** Migration 0010. Done 2026-11-04, 3d1370b.
   - `core.users`: id, email (unique, compared in lower case), username (unique, may be empty), name, role (`admin` for now; `staff` and `viewer` are allowed for later), the password hash, when the password changed, active or not, the count of failed tries, locked until, created, last signed in.
   - `core.sessions`: id, a hash of the token (unique), the user (deleted with the user), created, last seen, expires, "keep me signed in", IP address, browser (cut to 300 characters), ended.
   - `core.audit_log`: id, when, the user (kept as empty if the user is deleted), the event (a fixed list), IP address, browser, details (JSON, never a password).
@@ -116,12 +116,12 @@ These rules are for Al-khair and for Claude. At the start of every session: read
   - Then `scripts/schema_map.py`, and `engine/schema/SCHEMA-0010.md` committed with it.
   - **Done when:** the migration tests pass at the newest version, and `schema_map.py --check` passes.
 
-- [ ] **B2. Passwords and the Admin account.**
+- [x] **B2. Passwords and the Admin account.** Done 2026-11-04, bbcf1e0.
   - `core/auth/passwords.py`: hash and check with argon2id, and check the rules (14 characters at least, not common, not the email or username). A hash made with older settings is redone at the next sign-in.
   - Commands: `uv run engine create-admin --email ... --username ...` (asks for the password twice, never shows it), `uv run engine reset-password --user ...`, and `uv run engine sign-out-everyone`.
   - **Done when:** tests cover a good password, each refused one, a wrong password, and a hash with old settings.
 
-- [ ] **B3. Signing in and out.**
+- [x] **B3. Signing in and out.** Done 2026-11-04, 3674001. Also built: `GET /api/v1/auth/log` (the sign-in log, Admin only), which C4 needs and no step listed.
   - Routes: `POST /api/v1/auth/login`, `POST /api/v1/auth/logout`, `POST /api/v1/auth/logout-everywhere`, `GET /api/v1/auth/me`, `GET /api/v1/auth/sessions`.
   - A new random token for each sign-in, saved as a hash. The cookie as in "Security", rule 3.
   - Idle and full time limits checked on every request; "last seen" updated at most once a minute.
@@ -286,6 +286,8 @@ These rules are for Al-khair and for Claude. At the start of every session: read
 ## Log
 
 Newest first. One line for each tick, pause or surprise.
+
+- 2026-11-04: B1, B2 and B3 ticked (3d1370b, bbcf1e0, 3674001). **For track 2, the contract is in `openapi.json` and `schema.d.ts` now.** `POST /auth/login` takes `{login, password, keep_signed_in}` and sets the cookie (a JSON body, no `credentials` setting needed: the site and `/api` share one origin). Wrong login or password: 401 `invalid_credentials`, "That email or password isn't right." A route with no session: 401 `auth_required`; if a session ended, `reason` is `idle`, `expired` or `ended` and `detail` is the sentence to show ("You were signed out after 2 hours idle."). `GET /auth/me` gives `{auth_required, user, session}`: `auth_required: false` means sign-in is off on this backend (the laptop default), so show no sign-in page and no "Sign out". `GET /auth/sessions` and `GET /auth/log` (Admin, `limit` 1 to 200, default 100) are for C4; `POST /auth/logout` gives 204 and `POST /auth/logout-everywhere` gives `{sessions_ended}`. **Decisions that were mine (TBC with Al-khair):** "Keep me signed in" has no idle limit and lasts 14 days (the plan didn't say; without this it would end at the first 2-hour break); the sign-in log endpoint was added. **Numbers:** full backend run with `RUN_GATES=1` 2,705 passed, 25 skipped, 75 failed (the same 75 that need the memory model); fast suite 2,184 passed; website 708 tests. New tests: 13 for the tables, 64 for the passwords, 25 for the admin commands, 31 through the app, 45 for the small parts. The commands were also run in a real terminal (a pseudo-terminal): nothing typed was echoed. **Not pushed:** the cloud session's `git push` is refused with 403 (the Claude GitHub App has no write access to `hizWindy/contour`), so the commits are only in this session until that is fixed. Next: B4, then B5.
 
 - 2026-11-04: A1 and A3 ticked (a3c0058 measured, ac004a4 built). **Backend 2,527 passed, 25 skipped, 75 failed** with `RUN_GATES=1` in 3 min 34 s. 2,527 + 75 is the laptop's 2,602. All 75 need the memory model, which can't download here (Hugging Face is blocked), except one (`test_guards.py::test_the_guard_works_in_a_real_pytest_run`) that fails only because the scratch plugin used to fail fast renames `Embedder._load`. Each of the 74 otherwise waits 40 s on FastEmbed's retries. **Website:** lint 0 warnings, types, 708 tests, build, all pass. A3: `argon2-cffi` 25.1.0 and `motion` 14.5.0 (14.9.1 is from today, so the newest one at least 14 days old is used). The lock files only gained entries (npm 10 here drops the laptop npm's `libc` markers, so they were put back by hand).
 
