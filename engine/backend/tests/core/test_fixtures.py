@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import (
 from sse_starlette.sse import AppStatus, EventSourceResponse
 
 from apps.lead_finder.tables import Lead, SignalHireDetails
+from core.auth.models import AuditEntry, User, UserSession
 from core.config import get_settings
 from core.hubspot.models import (
     HubSpotCompany,
@@ -60,10 +61,12 @@ CHECKPOINT_TABLES = ("checkpoints", "checkpoint_blobs", "checkpoint_writes")
 async def fill_every_table(factory: async_sessionmaker[AsyncSession]) -> None:
     """One row in each of the tables in TEST_TABLES, committed."""
     run = Run(app="lead_finder", mode="company")
+    person = User(email="al@example.test", name="Al", password_hash="$argon2id$not-a-real-hash")
     async with factory() as db_session:
         db_session.add_all(
             [
                 run,
+                person,
                 Setting(key="run_cap_usd", value="20.00"),
                 SignalHireDetails(
                     signalhire_id=7, slug="acme", details={}, fetched_at=datetime.now(UTC)
@@ -90,6 +93,12 @@ async def fill_every_table(factory: async_sessionmaker[AsyncSession]) -> None:
         await db_session.flush()
         db_session.add_all(
             [
+                UserSession(
+                    token_hash="0" * 64,
+                    user_id=person.id,
+                    expires_at=datetime.now(UTC),
+                ),
+                AuditEntry(event="sign_in", user_id=person.id),
                 HubSpotOffice(hubspot_company_id="1", label="Melbourne"),
                 HubSpotDeal(hubspot_deal_id="9", hubspot_company_id="1", name="Acme fit-out"),
                 RunEvent(run_id=run.id, seq=1, type="run_started", data={}),

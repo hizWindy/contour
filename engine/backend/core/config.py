@@ -2,9 +2,10 @@
 
 Two kinds of setting:
 - **Env-only:** the HubSpot approval switches, the hard ceilings, the daily cap, the database
-  pool, the allowed web origins, the API address, the Signal Hire key and every HubSpot setting
-  (the key, the version, the write switch, the pace and the sync times). They change only in
-  engine/.env, then a restart. The website can't change them.
+  pool, the allowed web origins, the API address, the sign-in settings (on or off, the session
+  times), the Signal Hire key and every HubSpot setting (the key, the version, the write switch,
+  the pace and the sync times). They change only in engine/.env, then a restart. The website
+  can't change them.
 - **Editable:** caps, concurrency, models and thresholds (the keys in EDITABLE_KEYS). The
   `core.prefs` package stores overrides in the database, checks each against its min and max
   here, and then clamps the result to the ceilings with `clamp_to_ceilings`.
@@ -141,6 +142,20 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
     auto_migrate: bool = True
 
+    # --- Sign-in (PLAN-V6, env-only) ---------------------------------------------------
+    # Off on this computer unless asked, so local work and the fake backend work as they did. When
+    # it is on, every route except the health check and the sign-in itself needs a session.
+    auth_required: StrictBool = False
+    # How long a session lasts. Idle: signed out after this long without a request. Longest:
+    # signed out after this long, whatever. "Keep me signed in" has no idle limit and lasts this
+    # many days at most.
+    session_idle_minutes: int = Field(120, ge=5, le=1440)
+    session_max_hours: int = Field(12, ge=1, le=168)
+    session_remember_days: int = Field(14, ge=1, le=90)
+    # Over HTTPS the cookie is marked Secure and gets the __Host- prefix (the browser then keeps it
+    # off every other site and every other path). Over plain http://localhost it can't be.
+    session_cookie_secure: StrictBool = False
+
     # --- Memory (FastEmbed runs on this computer) --------------------------------------
     embedding_model: str = "BAAI/bge-small-en-v1.5"
     embedding_cache_dir: Path = BACKEND_DIR / ".cache" / "fastembed"
@@ -236,6 +251,8 @@ class Settings(BaseSettings):
         "hubspot_names_to_claude_ok",
         "hubspot_names_to_signalhire_ok",
         "hubspot_write_enabled",
+        "auth_required",
+        "session_cookie_secure",
         mode="before",
     )
     @classmethod

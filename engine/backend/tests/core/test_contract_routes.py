@@ -50,6 +50,12 @@ RUN_BODY = {"app": "lead_finder", "mode": "discovery"}
 # Every route in section 5 of the design, with the names this code uses for the ids.
 ROUTES = [
     ("GET", f"{API}/health"),
+    ("POST", f"{API}/auth/login"),
+    ("POST", f"{API}/auth/logout"),
+    ("POST", f"{API}/auth/logout-everywhere"),
+    ("GET", f"{API}/auth/me"),
+    ("GET", f"{API}/auth/sessions"),
+    ("GET", f"{API}/auth/log"),
     ("POST", f"{API}/runs"),
     ("POST", f"{API}/runs/estimate"),
     ("GET", f"{API}/runs"),

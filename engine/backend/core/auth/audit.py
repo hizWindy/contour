@@ -33,8 +33,13 @@ def add_entry(
     ip: str | None = None,
     user_agent: str | None = None,
     details: dict[str, Any] | None = None,
+    at: datetime | None = None,
 ) -> AuditEntry:
-    """Adds one entry to the transaction. `ip` and `user_agent` are cleaned here."""
+    """Adds one entry to the transaction. `ip` and `user_agent` are cleaned here.
+
+    `at` is the caller's clock (`now`), so the log, the sessions and the limits all measure time
+    from the same moment. Without it the database's clock is used.
+    """
     if event not in AUDIT_EVENTS:
         raise ValueError(f"{event!r} is not a kind of log entry")
     facts = details or {}
@@ -48,12 +53,14 @@ def add_entry(
         user_agent=clean.user_agent(user_agent),
         details=facts,
     )
+    if at is not None:
+        entry.created_at = at
     db.add(entry)
     return entry
 
 
 async def newest(
-    db: AsyncSession, *, limit: int = DEFAULT_LIMIT
+    db: AsyncSession, *, limit: int = DEFAULT_LIMIT, offset: int = 0
 ) -> list[tuple[AuditEntry, User | None]]:
     """The newest entries first, each with its user (None when it has none, or the user is gone)."""
     rows = await db.execute(
@@ -61,8 +68,9 @@ async def newest(
         .outerjoin(User, User.id == AuditEntry.user_id)
         .order_by(AuditEntry.created_at.desc(), AuditEntry.id.desc())
         .limit(max(1, min(limit, MAX_LIMIT)))
+        .offset(max(0, offset))
     )
-    return [(entry, user) for entry, user in rows.tuples()]
+    return [(entry, user) for entry, user in rows]
 
 
 async def failures_from(db: AsyncSession, ip: str | None, since: datetime) -> list[datetime]:

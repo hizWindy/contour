@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import APIRouter, FastAPI
 from fastapi.routing import APIRoute
 
+from core.api import auth as auth_routes
 from core.api import health, hubspot, memory, runs, runs_read, searches
 from core.api import settings as settings_routes
 from core.api.errors import PROBLEM_RESPONSES, add_error_handlers
@@ -112,6 +113,7 @@ def create_app() -> FastAPI:
 
     api = APIRouter(prefix=API_PREFIX, responses=PROBLEM_RESPONSES)
     api.include_router(health.router)
+    api.include_router(auth_routes.router)
     api.include_router(memory.router)
     api.include_router(hubspot.router)
     api.include_router(searches.router)

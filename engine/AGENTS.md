@@ -208,6 +208,19 @@ One connection in `backend/core/hubspot/` serves every project ([PLAN-V5](../pla
 
 Commands, from `backend/`: `uv run engine hubspot-check` (which scopes the key has, free) and `uv run engine hubspot-sync` (copy HubSpot now, free; `--full` reads everything and finds deleted records).
 
+## Sign-in
+
+[PLAN-V6](../plan/PLAN-V6.md). One Admin account, signed in with an email or a username and a password.
+
+- **Off on this computer** (`AUTH_REQUIRED=false`, the default), so local work and the fake backend need no password. Where it is on, the routes need a session.
+- **The account is made on the server:** `uv run engine create-admin`. There is no sign-up page and no reset by email. `reset-password` and `sign-out-everyone` are commands too.
+- **Passwords** are saved only as an argon2id hash (RFC 9106's low-memory settings). A new one has 14 to 256 characters, isn't common (`core/auth/common_passwords.txt`), doesn't hold the email, the username or "contour", and isn't a repeat or a simple run. A hash made with older settings is saved again at the next sign-in.
+- **Sessions:** the cookie holds a random 256-bit token and the database only its SHA-256. Signed out after 2 hours idle and after 12 hours at most. "Keep me signed in" has no idle limit and lasts 14 days. The numbers are `SESSION_IDLE_MINUTES`, `SESSION_MAX_HOURS` and `SESSION_REMEMBER_DAYS`. "Last seen" is written at most once a minute.
+- **The cookie** is `HttpOnly` and `SameSite=Strict`. Over HTTPS (`SESSION_COOKIE_SECURE=true`) it is `Secure` and named `__Host-contour_session`.
+- **A wrong sign-in** answers 401 `invalid_credentials` with one sentence ("That email or password isn't right."), and takes as long whether the login is unknown, the account is switched off or the password is wrong.
+- **The sign-in log** (`core.audit_log`, `GET /auth/log` for an Admin) keeps every sign-in, failure, lock, sign-out and password change, with the time and the IP address. It never holds a password, a token or a login that was typed: `audit.add_entry` refuses a detail whose name sounds like a secret.
+- **In a route:** take `MaybeAuthDep` (the signed-in user, or none where sign-in is off) or `AdminDep` from `core/api/signin.py`. A 401 has the code `auth_required`, and for a session that ended it says why (`reason`: `idle`, `expired` or `ended`). Tests move time with `app.state.clock` and use a cheap hasher in `app.state.hasher` (see `tests/core/test_auth_api.py`).
+
 ## Safety
 
 - Secrets live only in `engine/.env`. Never in code, logs, tests or git.

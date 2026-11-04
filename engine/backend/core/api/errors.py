@@ -6,6 +6,7 @@ Every error has a title, a status and, where it helps, a plain detail saying wha
 """
 
 import logging
+from collections.abc import Mapping
 from http import HTTPStatus
 from typing import Any
 
@@ -24,7 +25,8 @@ class Problem(Exception):
     """Raise this from an endpoint or service to return a clear error.
 
     `code` is a short stable word for the website (for example `run_already_active`).
-    Any extra keyword (for example `run_id=...`) is added to the body.
+    `headers` are added to the response (`Retry-After`, or a cookie to clear). Any other extra
+    keyword (for example `run_id=...`) is added to the body.
     """
 
     def __init__(
@@ -33,6 +35,7 @@ class Problem(Exception):
         title: str,
         detail: str | None = None,
         code: str | None = None,
+        headers: Mapping[str, str] | None = None,
         **extra: Any,
     ) -> None:
         super().__init__(title)
@@ -40,6 +43,7 @@ class Problem(Exception):
         self.title = title
         self.detail = detail
         self.code = code
+        self.headers = headers
         self.extra = extra
 
 
@@ -62,6 +66,16 @@ class ProblemDetails(BaseModel):
     code: str | None = Field(None, description="A stable word to switch on, like run_not_active")
     errors: list[FieldError] | None = Field(None, description="The fields that are wrong")
     run_id: str | None = Field(None, description="The run this is about, if any")
+    reason: str | None = Field(
+        None,
+        description=(
+            "On a 401 `auth_required`, why the sign-in ended: `idle`, `expired` or `ended`. "
+            "Missing when there was no session at all."
+        ),
+    )
+    retry_after_seconds: int | None = Field(
+        None, description="On a 429, how many seconds to wait before trying again"
+    )
 
 
 class ValidationProblem(ProblemDetails):
@@ -73,6 +87,7 @@ class ValidationProblem(ProblemDetails):
 # What a router passes as `responses=` so Swagger and the website's types list every error.
 PROBLEM_RESPONSES: dict[int | str, dict[str, Any]] = {
     400: {"model": ProblemDetails, "description": "The request can't be understood"},
+    401: {"model": ProblemDetails, "description": "Not signed in (code `auth_required`)"},
     403: {"model": ProblemDetails, "description": "Blocked, or this isn't allowed"},
     404: {"model": ProblemDetails, "description": "Not found"},
     409: {"model": ProblemDetails, "description": "Not possible in the current state"},
@@ -85,18 +100,33 @@ PROBLEM_RESPONSES: dict[int | str, dict[str, Any]] = {
 }
 
 
-def problem(status: int, title: str, detail: str | None = None, **extra: Any) -> JSONResponse:
-    """The error response. Extra fields are added, except None. Decimals become text."""
+def problem(
+    status: int,
+    title: str,
+    detail: str | None = None,
+    *,
+    headers: Mapping[str, str] | None = None,
+    **extra: Any,
+) -> JSONResponse:
+    """The error response. Extra fields are added, except None. Decimals become text. `headers`
+    are added to the response, not the body."""
     body: dict[str, Any] = {"type": "about:blank", "title": title, "status": status}
     if detail:
         body["detail"] = detail
     body.update({key: value for key, value in extra.items() if value is not None})
-    return JSONResponse(to_jsonable_python(body), status_code=status, media_type=PROBLEM_JSON)
+    return JSONResponse(
+        to_jsonable_python(body),
+        status_code=status,
+        media_type=PROBLEM_JSON,
+        headers=dict(headers) if headers else None,
+    )
 
 
 async def _problem(request: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, Problem)
-    return problem(exc.status, exc.title, exc.detail, code=exc.code, **exc.extra)
+    return problem(
+        exc.status, exc.title, exc.detail, code=exc.code, headers=exc.headers, **exc.extra
+    )
 
 
 async def _http_error(request: Request, exc: Exception) -> JSONResponse:

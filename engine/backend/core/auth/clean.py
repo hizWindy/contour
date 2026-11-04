@@ -67,3 +67,34 @@ def user_agent(text: str | None) -> str | None:
     if not text:
         return None
     return text.replace("\x00", "").strip()[:USER_AGENT_MAX] or None
+
+
+# The browser, then the system. The order matters: an Edge name also says Chrome and Safari, a
+# Chrome name also says Safari, an Android name also says Linux, and an iPhone's says Mac OS X.
+_BROWSERS = (
+    ("Edge", re.compile(r"Edg(e|A|iOS)?/")),
+    ("Opera", re.compile(r"OPR/|Opera")),
+    ("Firefox", re.compile(r"Firefox/|FxiOS/")),
+    ("Chrome", re.compile(r"Chrome/|CriOS/")),
+    ("Safari", re.compile(r"Safari/")),
+    ("curl", re.compile(r"^curl/")),
+)
+_SYSTEMS = (
+    ("iOS", re.compile(r"iPhone|iPad|iPod")),
+    ("Android", re.compile(r"Android")),
+    ("Windows", re.compile(r"Windows")),
+    ("macOS", re.compile(r"Macintosh|Mac OS X")),
+    ("Linux", re.compile(r"Linux|X11")),
+)
+
+
+def device(agent: str | None) -> str:
+    """A short name for a browser, for the list of sessions: "Chrome on Windows". The full text
+    is kept too. What can't be told is left out, and no guess is made."""
+    if not agent:
+        return "Unknown device"
+    browser = next((name for name, pattern in _BROWSERS if pattern.search(agent)), None)
+    system = next((name for name, pattern in _SYSTEMS if pattern.search(agent)), None)
+    if browser and system:
+        return f"{browser} on {system}"
+    return browser or system or "Unknown device"

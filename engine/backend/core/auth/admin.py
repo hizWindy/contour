@@ -53,7 +53,11 @@ async def create_admin(
         now=now,
     )
     audit.add_entry(
-        db, "account_created", user_id=user.id, details={"by": BY_COMMAND, "role": user.role}
+        db,
+        "account_created",
+        user_id=user.id,
+        details={"by": BY_COMMAND, "role": user.role},
+        at=now,
     )
     await db.commit()
     return user
@@ -75,7 +79,11 @@ async def reset_password(
     users.set_password(user, password_hash, now)
     ended = await sessions.end_for_user(db, user.id, now)
     audit.add_entry(
-        db, "password_changed", user_id=user.id, details={"by": BY_COMMAND, "sessions_ended": ended}
+        db,
+        "password_changed",
+        user_id=user.id,
+        details={"by": BY_COMMAND, "sessions_ended": ended},
+        at=now,
     )
     await db.commit()
     return ended
@@ -90,6 +98,7 @@ async def sign_out_everyone(db: AsyncSession, *, now: datetime) -> tuple[int, in
             "sign_out_everywhere",
             user_id=user_id,
             details={"by": BY_COMMAND, "sessions_ended": count},
+            at=now,
         )
     await db.commit()
     return sum(ended.values()), sum(1 for count in ended.values() if count)
