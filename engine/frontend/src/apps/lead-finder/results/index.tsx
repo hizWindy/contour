@@ -3,6 +3,8 @@
  *
  * - The filters, sort, page, view and the open lead live in the address (`params.ts`), so a link
  *   or Back shows the same list. A filter change goes back to page 1.
+ * - One filter bar (`filter-bar.tsx`): the search and the three filters used most, a Filters panel
+ *   for the rest, and the filters in use as chips under it.
  * - Table (F3a): sort by any column header, compact rows, CSV download of what matches.
  * - Map (F3b): the list and the map side by side, with a divider to drag (on a phone, the map
  *   above the list). Pins are coloured by result and sit at an approximate place.
@@ -258,6 +260,7 @@ export default function ResultsPage() {
         facets={facets.data}
         onChange={changeFilters}
         onClear={clearFilters}
+        total={page?.total}
         trailing={
           mapView ? null : (
             <DensityToggle

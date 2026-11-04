@@ -64,6 +64,7 @@ const ROWS: LeadRow[] = [
     trigger_label: null,
     trigger_date: null,
     hubspot_status: 'in_hubspot',
+    hubspot_owner: 'Sample Owner',
     status: 'watching',
     origin: 'hubspot',
   }),
@@ -190,28 +191,32 @@ afterEach(() => {
 })
 
 describe('the results page', () => {
-  it('lists the leads with their result, place, sign and office, best first', async () => {
+  it('lists the leads with their result, score, best sign, place and HubSpot, best first', async () => {
     const backend = mockApi()
     renderResults()
 
     const table = await screen.findByRole('table', { name: 'Leads' })
     await within(table).findByText('Basalt Mining')
+    // Only what tells leads apart: the rest is on the lead card.
+    expect(
+      within(table)
+        .getAllByRole('columnheader')
+        .map((header) => header.textContent),
+    ).toEqual(['Company', 'Result', 'Score', 'Best sign', 'City', 'HubSpot', 'Researched'])
     const rows = within(table).getAllByRole('row').slice(1)
     expect(rows).toHaveLength(2)
     expect(within(rows[0]).getByText('Acme Software')).toBeInTheDocument()
     expect(within(rows[0]).getByText('Richmond, Melbourne')).toBeInTheDocument()
-    expect(
-      within(rows[0]).getByText('Lease ending in 1 to 3 years, 1 Mar 2028'),
-    ).toBeInTheDocument()
-    expect(within(rows[0]).getByText('2,500 m²')).toBeInTheDocument()
+    expect(within(rows[0]).getByText('Lease ending in 1 to 3 years')).toBeInTheDocument()
+    expect(within(rows[0]).getByText('1 Mar 2028')).toBeInTheDocument()
     // The score is the points earned out of the points the tool could check. A lead scored
     // under version 1 has no "checked", so it shows the points alone.
     expect(within(rows[0]).getByText('51 of 77')).toBeInTheDocument()
-    expect(within(rows[0]).getByText('Active prospect')).toBeInTheDocument()
+    expect(within(rows[0]).getByText('New')).toBeInTheDocument()
     expect(within(rows[1]).getByText('41')).toBeInTheDocument()
-    expect(within(rows[1]).getByText('Target account')).toBeInTheDocument()
-    expect(within(rows[1]).getByText('about 800 m²')).toBeInTheDocument()
     expect(within(rows[1]).getByText('None found')).toBeInTheDocument()
+    expect(within(rows[1]).getByText('In HubSpot')).toBeInTheDocument()
+    expect(within(rows[1]).getByText('Owner: Sample Owner')).toBeInTheDocument()
 
     const query = lastQuery(backend, '/leads')
     expect(query.get('sort')).toBe('score')
@@ -281,9 +286,81 @@ describe('the results page', () => {
     )
     expect(address().get('q')).toBe('acme')
 
-    await user.click(screen.getByRole('button', { name: 'Clear filters' }))
+    await user.click(screen.getByRole('button', { name: 'Clear all' }))
     expect(address().toString()).toBe('')
     expect(screen.getByRole('textbox', { name: 'Search company names' })).toHaveValue('')
+  })
+
+  it('shows the filters in use as chips, and an x takes one away', async () => {
+    const backend = mockApi()
+    const { user } = renderResults('?q=acme&city=Melbourne&city=Perth&min_score=60')
+    await screen.findByRole('button', { name: 'Acme Software' })
+
+    const chips = screen.getByRole('list', { name: 'Filters in use' })
+    expect(
+      within(chips)
+        .getAllByRole('listitem')
+        .map((chip) => chip.textContent),
+    ).toEqual(['Name: acme', 'City: Melbourne', 'City: Perth', 'Score: 60 or more'])
+
+    await user.click(within(chips).getByRole('button', { name: 'Remove City: Perth' }))
+    expect(address().getAll('city')).toEqual(['Melbourne'])
+    await waitFor(() => {
+      expect(lastQuery(backend, '/leads').getAll('city')).toEqual(['Melbourne'])
+    })
+
+    await user.click(within(chips).getByRole('button', { name: 'Remove Name: acme' }))
+    expect(address().has('q')).toBe(false)
+    expect(screen.getByRole('textbox', { name: 'Search company names' })).toHaveValue('')
+
+    await user.click(screen.getByRole('button', { name: 'Clear all' }))
+    expect(address().toString()).toBe('')
+    expect(screen.queryByRole('list', { name: 'Filters in use' })).not.toBeInTheDocument()
+  })
+
+  it('keeps the bar short: the other filters open in one panel', async () => {
+    const backend = mockApi()
+    const { user } = renderResults()
+    await screen.findByRole('button', { name: 'Acme Software' })
+
+    // The bar: the search, Result, City and Source, then one Filters button.
+    const bar = screen.getByRole('search', { name: 'Filter the leads' })
+    expect(within(bar).getByRole('button', { name: 'Filter by Result' })).toBeInTheDocument()
+    expect(within(bar).getByRole('button', { name: 'Filter by City' })).toBeInTheDocument()
+    expect(within(bar).getByRole('button', { name: 'Filter by Source' })).toBeInTheDocument()
+    expect(within(bar).queryByRole('button', { name: 'Filter by Status' })).toBeNull()
+
+    await user.click(within(bar).getByRole('button', { name: 'Filters' }))
+    const panel = await screen.findByRole('dialog', { name: 'Filters' })
+    for (const group of [
+      'The company',
+      'HubSpot and status',
+      'Run and dates',
+      'Score and size',
+      'Other',
+    ]) {
+      expect(within(panel).getByRole('region', { name: group })).toBeInTheDocument()
+    }
+    await user.click(within(panel).getByRole('button', { name: 'Filter by Status' }))
+    await user.click(await screen.findByRole('option', { name: /^Watching/ }))
+    expect(address().getAll('status')).toEqual(['watching'])
+    await waitFor(() => {
+      expect(lastQuery(backend, '/leads').getAll('status')).toEqual(['watching'])
+    })
+    await user.keyboard('{Escape}')
+
+    await user.click(within(panel).getByRole('checkbox', { name: 'Show test set leads too' }))
+    expect(address().get('include_tests')).toBe('true')
+    await user.click(within(panel).getByRole('button', { name: 'Show 2 leads' }))
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Filters' })).not.toBeInTheDocument()
+    })
+
+    // The button counts the filters in the panel, and the chips name them.
+    expect(within(bar).getByRole('button', { name: 'Filters, 2 in use' })).toBeInTheDocument()
+    const chips = screen.getByRole('list', { name: 'Filters in use' })
+    expect(within(chips).getByText('Status: Watching')).toBeInTheDocument()
+    expect(within(chips).getByText('Test set leads shown')).toBeInTheDocument()
   })
 
   it('marks where each company came from, and filters by it', async () => {
@@ -380,14 +457,16 @@ describe('the results page', () => {
     const { user } = renderResults('?city=Melbourne')
     await screen.findByRole('button', { name: 'Acme Software' })
 
-    // The bar is the name search and one button; the ten filters are not on the page yet.
+    // The bar is the name search and one button; the filters are not on the page yet.
     expect(screen.getByRole('textbox', { name: 'Search company names' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Filter by Result' })).not.toBeInTheDocument()
-    const open = screen.getByRole('button', { name: /^Filters/ })
-    expect(within(open).getByText('1')).toBeInTheDocument()
+    const open = screen.getByRole('button', { name: 'Filters, 1 in use' })
 
     await user.click(open)
     const sheet = await screen.findByRole('dialog', { name: 'Filters' })
+    expect(
+      within(sheet).getByRole('region', { name: 'Result, city and source' }),
+    ).toBeInTheDocument()
     await user.click(within(sheet).getByRole('button', { name: 'Filter by Result' }))
     await user.click(await screen.findByRole('option', { name: /^Watch/ }))
     expect(address().getAll('result')).toEqual(['watch'])
@@ -396,7 +475,7 @@ describe('the results page', () => {
     })
 
     await user.keyboard('{Escape}')
-    await user.click(within(sheet).getByRole('button', { name: 'Show the leads' }))
+    await user.click(within(sheet).getByRole('button', { name: 'Show 2 leads' }))
     await waitFor(() => {
       expect(screen.queryByRole('dialog', { name: 'Filters' })).not.toBeInTheDocument()
     })

@@ -2,17 +2,19 @@
  * The columns of the results table, and the shorter list beside the map. A sortable column's id is
  * the API's sort key, so the table's sort state and the address use the same word.
  *
+ * The table shows what tells leads apart at a glance (PLAN-V6, E1): the company and where it came
+ * from, the result, the score, the best sign and its date, the city, the HubSpot label with its
+ * owner, and when it was researched. Everything else is one click away, on the lead card.
+ *
  * The company name is a button: a click or Enter opens the lead card, through the row's own click.
  */
 import { createColumnHelper } from '@tanstack/react-table'
 import type { LeadRow } from '@/api/types'
 import { HubSpotBadge } from '@/components/hubspot-badge'
-import { Money } from '@/components/money'
 import { ResultBadge } from '@/components/result-badge'
 import { SourceMark } from '@/components/source-mark'
-import { StatusBadge } from '@/components/status-badge'
 import { Badge } from '@/components/ui/badge'
-import { formatDate, formatM2, formatScore, UNKNOWN } from '@/lib/format'
+import { formatDate, formatScore, UNKNOWN } from '@/lib/format'
 
 const help = createColumnHelper<LeadRow>()
 
@@ -51,16 +53,32 @@ const result = help.accessor('result', {
   cell: (info) => <ResultBadge result={info.getValue()} />,
 })
 
-const stage = help.accessor('stage', {
-  header: 'Stage',
-  enableSorting: false,
-  meta: { hideBelow: 'md' },
-})
-
 const score = help.accessor('score', {
   header: 'Score',
-  meta: { align: 'right', className: 'tabular-nums', hideBelow: 'sm' },
+  meta: { align: 'right', className: 'tabular-nums whitespace-nowrap', hideBelow: 'sm' },
   cell: (info) => formatScore(info.getValue(), info.row.original.score_checked),
+})
+
+const sign = help.accessor('trigger_date', {
+  header: 'Best sign',
+  meta: { hideBelow: 'md', className: 'max-w-60' },
+  cell: (info) => {
+    const { trigger_label: label } = info.row.original
+    const date = info.getValue()
+    if (!label) {
+      return <span className="text-muted-foreground">None found</span>
+    }
+    return (
+      <span className="flex min-w-0 flex-col">
+        <span className="truncate" title={label}>
+          {label}
+        </span>
+        <span className="text-caption text-muted-foreground">
+          {date ? formatDate(date) : 'Date not known'}
+        </span>
+      </span>
+    )
+  },
 })
 
 const city = help.accessor('city', {
@@ -76,71 +94,28 @@ const city = help.accessor('city', {
   },
 })
 
-const sign = help.accessor('trigger_date', {
-  header: 'Sign',
-  meta: { hideBelow: 'md' },
-  cell: (info) => {
-    const { trigger_label: label } = info.row.original
-    const date = info.getValue()
-    if (!label) {
-      return <span className="text-muted-foreground">None found</span>
-    }
-    return date ? `${label}, ${formatDate(date)}` : label
-  },
-})
-
-const industry = help.accessor('industry', {
-  header: 'Industry',
-  enableSorting: false,
-  meta: { hideBelow: 'md' },
-  cell: (info) => info.getValue() ?? UNKNOWN,
-})
-
-const office = help.accessor('office_m2', {
-  header: 'Office',
-  meta: { align: 'right', className: 'tabular-nums', hideBelow: 'md' },
-  cell: (info) => formatM2(info.getValue(), info.row.original.office_m2_estimated),
-})
-
 const hubspot = help.accessor('hubspot_status', {
   header: 'HubSpot',
   meta: { hideBelow: 'md' },
-  cell: (info) => <HubSpotBadge status={info.getValue()} />,
-})
-
-const status = help.accessor('status', {
-  header: 'Status',
-  meta: { hideBelow: 'md' },
-  cell: (info) => <StatusBadge status={info.getValue()} />,
+  cell: (info) => {
+    const owner = info.row.original.hubspot_owner
+    return (
+      <span className="flex flex-col items-start gap-0.5">
+        <HubSpotBadge status={info.getValue()} />
+        {owner ? <span className="text-caption text-muted-foreground">Owner: {owner}</span> : null}
+      </span>
+    )
+  },
 })
 
 const researched = help.accessor('created_at', {
   header: 'Researched',
-  meta: { hideBelow: 'md' },
+  meta: { hideBelow: 'md', className: 'whitespace-nowrap' },
   cell: (info) => formatDate(info.getValue()),
 })
 
-const cost = help.accessor('cost_usd', {
-  header: 'Cost',
-  meta: { align: 'right', hideBelow: 'md' },
-  cell: (info) => <Money value={info.getValue()} />,
-})
-
 /** The full table. */
-export const TABLE_COLUMNS = [
-  company,
-  result,
-  stage,
-  score,
-  city,
-  sign,
-  industry,
-  office,
-  hubspot,
-  status,
-  researched,
-  cost,
-]
+export const TABLE_COLUMNS = [company, result, score, sign, city, hubspot, researched]
 
 /** The list beside the map: enough to tell the leads apart. */
 export const LIST_COLUMNS = [company, result, score, city]
