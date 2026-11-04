@@ -2,7 +2,9 @@
 
 from collections.abc import Iterator
 from decimal import Decimal
+from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 import pytest
 from psycopg.conninfo import conninfo_to_dict
@@ -641,12 +643,16 @@ def test_a_tls_mode_reaches_the_address_and_the_connection_string() -> None:
 
 
 def test_a_ca_certificate_reaches_the_address_and_the_connection_string() -> None:
+    # The setting is a path on the backend's own machine, so it is written in that machine's
+    # form: `/run/secrets/ca cert.pem` on the Linux server, with backslashes on a Windows laptop.
+    path = str(Path("/run/secrets/ca cert.pem"))
     s = make(postgres_sslmode="verify-full", postgres_sslrootcert="/run/secrets/ca cert.pem")
     assert s.database_url().endswith(
-        "/leadfinder?sslmode=verify-full&sslrootcert=/run/secrets/ca%20cert.pem"
+        f"/leadfinder?sslmode=verify-full&sslrootcert={quote(path, safe='/')}"
     )
+    assert s.database_url().endswith("ca%20cert.pem")  # the space is escaped in the address
     info = conninfo_to_dict(s.psycopg_conninfo())
-    assert (info["sslmode"], info["sslrootcert"]) == ("verify-full", "/run/secrets/ca cert.pem")
+    assert (info["sslmode"], info["sslrootcert"]) == ("verify-full", path)
 
 
 @pytest.mark.parametrize("mode", ["verify-ca", "verify-full"])
