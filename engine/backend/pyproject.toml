@@ -7,6 +7,7 @@ dependencies = [
     "alembic",
     "annotated-types>=0.8.0",
     "anthropic>=2.3.0",
+    "argon2-cffi>=25.1.0",
     "defusedxml>=0.7.1",
     "fastapi",
     "fastembed",
