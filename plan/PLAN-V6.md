@@ -3,8 +3,8 @@
 This plan puts the platform online as **Contour HQ**. It adds a sign-in for one Admin account, a login page built with care, a scheduler for the regular runs, a better company list and lead card, the files to run it in containers, and a server on DigitalOcean in Sydney.
 
 - **Built by:** Al-khair Pama. **Signed off by:** Levi Young (the name and the cloud data OK).
-- **Last updated:** 2026-11-04. **TBC** means not confirmed yet.
-- **Progress:** 12 of 31 steps done (A1, A3, B1 to B5, D1 to D3, G2). G1 and G3 are done except one check on the laptop. Work goes on branch `plan-v6`.
+- **Last updated:** 2026-11-05. **TBC** means not confirmed yet.
+- **Progress:** 16 of 31 steps done (A1, A3, B1 to B5, D1 to D3, E2, E3, F2, F3, G2). C1, E1 and F1 wait only for Al-khair's yes. G1 and G3 are done except one check on the laptop. I1 waits for the live domain. Work goes on branch `plan-v6` (both tracks merged on 5 Nov).
 - **Comes after:** [PLAN-V5.md](PLAN-V5.md), merged into `master` and pushed on 4 Nov (6f676ae). Its open steps (A2 and Part F, HubSpot write access) stay there and don't block this plan.
 
 ## In short
@@ -74,11 +74,13 @@ These rules are for Al-khair and for Claude. At the start of every session: read
 
 ### Two accounts, one session each
 
+**What happened (4 and 5 Nov):** the two tracks swapped places. Track 1 ran in a cloud session (Claude Code on the web) on `claude/dazzling-hypatia-hp3wbl`; its `git push` was refused (no write access for the Claude GitHub App), so it came to the laptop as a git bundle. Track 2 ran on this laptop in a worktree (`.claude/worktrees/plan-v6-ui`). Both were merged into `plan-v6` here on 5 Nov (c1b8971). **From now on, every merge happens on this laptop**, because only it has the database, the keys, the memory model and the AI Brain. A cloud session hands its work over as a bundle (`git bundle create`), or by a push once the GitHub App can write.
+
 | | Track 1: backend and server | Track 2: website |
 |---|---|---|
-| Who | Account 1, the desktop app on this laptop | Account 2, Claude Code on the web (Chrome), repo `hizWindy/contour` |
+| Who | Planned: account 1 on this laptop. Ran: a cloud session | Planned: account 2 in the cloud. Ran: this laptop, in a worktree |
 | Steps | A, B, D, then G, H, I | C1, E, F, then C2 to C5 once B3 is merged |
-| Branch | `plan-v6` | `plan-v6-ui`, pushed to GitHub after each step |
+| Branch | `plan-v6` | `plan-v6-ui` |
 | Runs | everything, with the database and the keys | website tests, lint, types, build, and the backend's fast tests |
 
 1. **Only track 1 ticks steps, writes the Log and merges.** Track 2 says what it finished; track 1 fetches `origin/plan-v6-ui` and merges it into `plan-v6` after each step.
@@ -144,6 +146,7 @@ These rules are for Al-khair and for Claude. At the start of every session: read
 - [ ] **C1. The mockup.**
   - The page as described in "The login page", built in the browser with fake data: desktop, phone, light and dark, and each state.
   - **Done when:** Al-khair says yes to the look.
+  - **Done so far (5 Nov, c9c2d60):** built as the real page part (`src/auth/login-view.tsx`), shown with fake states at `/preview/login` on the dev server only (`?state=locked&notice=idle&remembered=1&controls=0` sets a state; it is not in the build). Checked on a desktop, a phone, light and dark, every state. 15 tests. **Left:** Al-khair's yes.
 
 - [ ] **C2. The login page.**
   - `/login`, outside the app frame. React Hook Form and Zod, our tokens and fonts, and `motion` through `LazyMotion`.
@@ -188,13 +191,14 @@ These rules are for Al-khair and for Claude. At the start of every session: read
   - One filter bar: the search box, then the 3 filters used most (Result, City, Source), then a "Filters" button that opens the rest in one panel (sign, industry, HubSpot label, status, run, dates). The filters in use show as small chips under the bar, each with an ×, and "Clear all". On a phone, all filters sit in the bottom sheet, as now.
   - The table: company with its source mark, result, score ("x of y"), the best sign with its date, city, HubSpot label with owner, researched date. The rest stays in the card.
   - **Done when:** Al-khair says yes to the look.
+  - **Done so far (5 Nov):** shown as the built page (E3) on the fake backend, desktop, phone and dark, rather than as a separate drawing. **Left:** Al-khair's yes.
 
-- [ ] **E2. Where each company came from.**
+- [x] **E2. Where each company came from.** Done 2026-11-05, 8b5315b.
   - A mark with an icon and a word on every row and on the card: **From HubSpot** (the watchlist), **Found** (the research found it on the web) or **Typed** (a person typed the name). A tooltip explains each.
   - A "Source" filter, sent to the backend as `origin`, and the source in the CSV.
   - **Done when:** backend and website tests cover the filter, the mark and the CSV.
 
-- [ ] **E3. The new filter bar and table.**
+- [x] **E3. The new filter bar and table.** Done 2026-11-05, 82715d7.
   - Built as in E1. The filters stay in the address, so a link shares the view.
   - **Done when:** website tests pass, and it looks right on a desktop, a phone and in dark colours.
 
@@ -206,12 +210,13 @@ These rules are for Al-khair and for Claude. At the start of every session: read
   - Long lists show the first 3, with "Show all".
   - The same card in the Results panel and on the lead's own page. The panel is wider on a laptop, and full screen on a phone.
   - **Done when:** Al-khair says yes to the look.
+  - **Done so far (5 Nov):** shown as the built card (F2) on the fake backend, in the panel and on the page. **Left:** Al-khair's yes.
 
-- [ ] **F2. The new card.**
+- [x] **F2. The new card.** Done 2026-11-05, f753966.
   - Built as in F1, from the parts of `lead-card-view.tsx`, which is split into smaller files (one for each tab).
   - **Done when:** website tests cover each tab and the quick view, and keyboard use works (the tabs with the arrow keys).
 
-- [ ] **F3. Check it in the browser.**
+- [x] **F3. Check it in the browser.** Done 2026-11-05, on the merged code (c1b8971, 9bcde55): Sample Headcount (every fact), Sample Analytics (few facts, no sign), Synechron Australia (from a watchlist run, then sent to the fake HubSpot).
   - On the fake backend: a lead with every fact, one with few facts, one from HubSpot, and one sent to HubSpot.
   - **Done when:** it looks right on a desktop, a phone and in dark colours, in the panel and on the page.
 
@@ -263,7 +268,8 @@ These rules are for Al-khair and for Claude. At the start of every session: read
   - The backend suite with `RUN_GATES=1` and the website checks, one at a time. A security review of the sign-in and server mode. The headers checked on the live domain.
   - **Done when:** everything passes, and the numbers and any fixes are in the Log.
   - **Done so far (4 Nov, in the cloud session):** the backend suite with `RUN_GATES=1` (3,011 passed, 25 skipped, 75 failed: the same 75 as at A1, which need the memory model), the website checks (735 tests, lint, types, prettier on `src`, build), a check of the packages for known holes (none), and a review of the sign-in and server mode. The numbers and the findings are in the Log.
-  - **Left:** the same suite on the laptop (the 75 should pass there: 3,086 passed in all), and the headers checked on the live domain (needs H3).
+  - **Done so far (5 Nov, on the laptop, both tracks merged, 9bcde55):** the backend suite with `RUN_GATES=1`: **3,090 passed, 25 skipped, 0 failed** in 5 min 10 s (the 75 pass here; one test written on Linux failed on Windows and was fixed, see the Log); `SCHEMA-0012.md` matches the migrated database (`schema_map.py --check`); the website: 767 tests, lint, types, prettier on the whole folder, build.
+  - **Left:** the headers checked on the live domain (needs H3).
 
 - [ ] **I2. Go live.**
   - **Blocked (4 Nov):** it needs H3, the login page (Part C, the other track) and Al-khair.
@@ -298,6 +304,8 @@ These rules are for Al-khair and for Claude. At the start of every session: read
 ## Log
 
 Newest first. One line for each tick, pause or surprise.
+
+- 2026-11-05: **Both tracks merged into `plan-v6` on the laptop; E2, E3, F2 and F3 ticked.** Track 1 came from the cloud session as a git bundle (its push is refused), 25 commits ending 5e96642, and `plan-v6` was fast-forwarded to it. Track 2 (built on the laptop in the `plan-v6-ui` worktree: C1 c9c2d60, E2 8b5315b, E3 82715d7, F2 f753966) was merged on top (c1b8971). **No conflict:** both started from a3c0058, and git joined the five files both changed (`openapi.json`, `schema.d.ts`, `types.ts`, `router.tsx`, `test_contract_routes.py`); `engine openapi` and `npm run types` gave the same files again. **Packages:** `uv sync` added `argon2-cffi` (Windows App Control did not block its compiled part) and `npm ci` added `motion`. **Checks on the laptop:** backend `RUN_GATES=1` 3,090 passed, 25 skipped (the cloud's 75 memory-model failures pass here); one test failed only on Windows (`test_a_ca_certificate_reaches_the_address_and_the_connection_string` expected `/run/...`, and a Windows `Path` writes backslashes; the code is right on both, the test now expects the machine's own form, 9bcde55); `SCHEMA-0012.md` matches the database; website 767 tests, lint, types, prettier, build. **Browser (fake backend, sign-in off):** a discovery run and a 3-company watchlist run; the Source filter and chips, the owner column, the HubSpot lead's card, a send to the fake HubSpot (status Sent, Watch and Reject off, the link), a lead with few facts, the Schedules tab; desktop, phone and dark. **C1, E1, F1:** the built pages are the mockups; they wait for Al-khair's yes. **Next:** C2 to C5 (B3 is merged now: the contract is in the B1 to B3 Log line, and the fake backend has `--auth`), G1 and G3's laptop check (a Docker build, heavy), A2 and H (people and money).
 
 - 2026-11-04: **I1 half done: the numbers and the security review** (54cdb3c). **Backend, `RUN_GATES=1`:** 3,011 passed, 25 skipped, 75 failed in 6 min 13 s. The 75 are the same ones as at A1 (they need the memory model, which can't download here; none is new). At A1 it was 2,527 passed, so this track added 484 tests. **Website:** 735 tests (708 at A1), lint with no warnings, types, prettier on `src`, and the build all pass. **Packages:** `npm audit --omit=dev` found 0, and `pip-audit` on the 91 pinned backend packages found none. **The review of the sign-in and server mode** read: the password hash (argon2id, 14 characters or more, common passwords refused, equal time for an unknown account), the session token (256 random bits, only its SHA-256 kept, the `__Host-` cookie Secure and HttpOnly and SameSite=Strict, seen live through Caddy), the guard (deny by default, 401 from the headers alone, an unknown path the same), the origin and host checks, the guessing limits, the Admin-only routes, Swagger off, both logs after a real sign-in (no cookie or password), the images (no `.env`, no tests, a normal user), and the containers (read-only, no capabilities, only Caddy has ports). **One fix:** the API still listed the laptop's own origins for CORS on a server. A server now lists none (the site and the API share one origin), with tests both ways. **Accepted or open (TBC):** the public `/health` also shows the pgvector version and the project names (low value; trim it if you prefer); a live-events stream that is open when its session ends keeps going until it closes; there is no rate limit in front of the backend; `style-src` keeps `'unsafe-inline'` because the UI libraries write inline styles (scripts are `'self'` only); **the visitor's real IP address has to be checked on the live server** (if the sign-in log shows Docker's gateway `172.28.0.1` for everyone, the per-IP limit would lock everyone out together: make an A record only, or turn off Docker's user-land proxy; it is in the run book). **Before go-live (I2):** the login page (Part C, the other track) has to be merged, because the website has no sign-in form without it. Left in I1: the suite on the laptop, and the headers on the live domain.
 
