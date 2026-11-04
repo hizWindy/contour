@@ -13,15 +13,13 @@ default run US$7.80 (12 searches and 20 companies): the plan's "about US$8".
 
 import asyncio
 import uuid
-from dataclasses import dataclass, field, replace
-from datetime import UTC, datetime, time, timedelta
+from datetime import datetime, time, timedelta
 from decimal import Decimal
 from typing import Any
 
 import pytest
 from fastapi import FastAPI
-from sqlalchemy import delete, select, update
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy import delete
 
 from apps.lead_finder.jobs import (
     APP,
@@ -34,11 +32,8 @@ from apps.lead_finder.jobs import (
     start_discovery,
 )
 from apps.lead_finder.params import DiscoveryParams, default_triggers
-from apps.lead_finder.runs import RUN_KINDS
 from core.runs.manager import RunManager
-from core.runs.models import Run
-from core.runs.types import KindKey, RunContext, RunKind, RunOutcome
-from core.schedules import runner, service
+from core.schedules import runner
 from core.schedules.jobs import JobContext, JobSkipped
 from core.schedules.models import Schedule
 from core.schedules.runner import Scheduler
@@ -46,39 +41,25 @@ from core.searches.models import SearchLog
 from tests.core.auth_world import Clock
 from tests.core.runs_fakes import wait_until_idle
 from tests.lead_finder.conftest import MakeLeadFinderManager
+from tests.lead_finder.jobs_world import (
+    FIRST_MONDAY,
+    NOW,
+    SMALL,
+    Factory,
+    Gate,
+    add_past_prices,
+    all_runs,
+    get_schedule,
+    spend_today,
+    switch_on,
+    the_schedule,
+    waiting_kinds,
+)
 from tests.lead_finder.samples import FakeClaude
 
 pytestmark = pytest.mark.integration
 
 D = Decimal
-Factory = async_sessionmaker[AsyncSession]
-NOW = datetime(2026, 11, 4, 9, 0, tzinfo=UTC)  # Wednesday 4 Nov, 8:00 pm in Melbourne
-FIRST_MONDAY = datetime(2026, 11, 8, 20, 0, tzinfo=UTC)  # Monday 9 Nov, 7:00 am in Melbourne
-SMALL = {
-    "cities": ["Perth"],
-    "triggers": ["fast_growth"],
-    "since_days": 14,
-    "caps": {"max_companies": 3},
-}
-# At the placeholder prices: 1 slice (US$0.40) and 3 companies (US$3.00) are US$3.40 a typical run.
-
-
-@dataclass
-class Gate:
-    """The stand-in for a run's work: it waits here until the test lets it go."""
-
-    entered: asyncio.Event = field(default_factory=asyncio.Event)
-    release: asyncio.Event = field(default_factory=asyncio.Event)
-
-
-def waiting_kinds(gate: Gate) -> dict[KindKey, RunKind[Any]]:
-    async def wait_here(ctx: RunContext[DiscoveryParams]) -> RunOutcome:
-        gate.entered.set()
-        await gate.release.wait()
-        return RunOutcome()
-
-    discovery = next(kind for kind in RUN_KINDS if kind.mode == MODE)
-    return {(APP, MODE): replace(discovery, handler=wait_here)}
 
 
 @pytest.fixture
@@ -89,70 +70,6 @@ def gate() -> Gate:
 @pytest.fixture
 def manager(make_lf_manager: MakeLeadFinderManager, gate: Gate) -> RunManager:
     return make_lf_manager(FakeClaude(), kinds=waiting_kinds(gate))
-
-
-def log_row(step: str, cost: str, *, job: bool = True, when: datetime | None = None) -> SearchLog:
-    return SearchLog(
-        app=APP,
-        job_id=uuid.uuid4() if job else None,
-        step=step,
-        model="claude-test",
-        cost_usd=D(cost),
-        answer_ok=True,
-        **({"created_at": when} if when else {}),
-    )
-
-
-async def add_past_prices(factory: Factory) -> None:
-    """6 finished companies at US$0.30 and 6 slices at US$0.15, 3 days ago (so none of it counts
-    toward today's limit)."""
-    then = datetime.now(UTC) - timedelta(days=3)
-    async with factory() as db:
-        for _ in range(6):
-            db.add(log_row("extract", "0.30", when=then))
-            db.add(log_row("discover", "0.15", when=then))
-        await db.commit()
-
-
-async def spend_today(factory: Factory, dollars: str) -> None:
-    async with factory() as db:
-        db.add(log_row("search:property", dollars, job=False))
-        await db.commit()
-
-
-async def the_schedule(factory: Factory, choices: dict[str, Any] | None = None) -> Schedule:
-    """The job's default schedule, made the way the first start makes it. `choices` replaces the
-    saved choices."""
-    async with factory() as db:
-        await service.ensure_defaults(db, JOBS, NOW)
-        row = await db.scalar(select(Schedule).where(Schedule.job == DISCOVERY))
-        assert row is not None
-        if choices is not None:
-            row.settings = choices
-            await db.commit()
-    return row
-
-
-async def get_schedule(factory: Factory, schedule_id: uuid.UUID) -> Schedule:
-    async with factory() as db:
-        row = await db.get(Schedule, schedule_id, populate_existing=True)
-        assert row is not None
-        return row
-
-
-async def switch_on(factory: Factory, schedule: Schedule, first: datetime = FIRST_MONDAY) -> None:
-    async with factory() as db:
-        await db.execute(
-            update(Schedule)
-            .where(Schedule.id == schedule.id)
-            .values(enabled=True, next_run_at=first)
-        )
-        await db.commit()
-
-
-async def all_runs(factory: Factory) -> list[Run]:
-    async with factory() as db:
-        return list(await db.scalars(select(Run).order_by(Run.created_at)))
 
 
 def context_for(manager: RunManager, schedule: Schedule) -> JobContext:

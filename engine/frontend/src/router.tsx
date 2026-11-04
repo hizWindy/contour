@@ -46,6 +46,7 @@ export const routes: RouteObject[] = [
         children: [
           { index: true, element: <Navigate to="runs" replace /> },
           adminTab('runs', () => import('@/apps/lead-finder/admin/runs')),
+          adminTab('schedules', () => import('@/apps/lead-finder/admin/schedules')),
           adminTab('searches', () => import('@/apps/lead-finder/admin/searches')),
           adminTab('memory', () => import('@/apps/lead-finder/admin/memory')),
           adminTab('hubspot', () => import('@/apps/lead-finder/admin/hubspot')),

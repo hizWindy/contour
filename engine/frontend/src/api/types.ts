@@ -66,5 +66,11 @@ export type WatchlistOut = Schemas['WatchlistOut']
 export type TestPage = Schemas['TestPage']
 export type TestReport = Schemas['TestReport']
 
+// Schedules
+export type Schedule = Schemas['ScheduleOut']
+export type ScheduleEstimate = Schemas['ScheduleEstimate']
+export type ScheduleEdit = Schemas['ScheduleEdit']
+export type RunNow = Schemas['RunNow']
+
 /** The query string of an operation, by its operationId. */
 export type QueryOf<Name extends keyof operations> = operations[Name]['parameters']['query']

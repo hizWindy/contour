@@ -15,9 +15,11 @@ sees a fixed sentence, and the details are in the backend log.
 import asyncio
 import contextlib
 import logging
+import uuid
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Literal
 
 from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -34,13 +36,16 @@ NOT_INSTALLED = "This job isn't part of the engine any more."
 COULD_NOT_START = "It could not start. The details are in the backend log."
 
 
+type FiredStatus = Literal["started", "skipped", "failed"]
+
+
 @dataclass(frozen=True)
 class Fired:
     """What one due schedule came to, for the tests and the log."""
 
     schedule_id: object
     job: str
-    status: str  # started, skipped or failed
+    status: FiredStatus
     ref: str | None = None
     reason: str | None = None
 
@@ -101,6 +106,17 @@ class Scheduler:
             claimed = await service.claim_due(db, now)
         return [await self._fire(claim, now) for claim in claimed]
 
+    async def run_now(self, schedule_id: uuid.UUID) -> Fired:
+        """Starts one schedule's job now, by hand ("Run now"). The same checks and the same
+        record as a start on time, and its next time stays where it is. Raises `LookupError` for
+        a schedule that doesn't exist. It works for a schedule that is off, too."""
+        now = self._clock()
+        async with self._sessions() as db:
+            claim = await service.begin_now(db, schedule_id, now)
+        if claim is None:
+            raise LookupError(str(schedule_id))
+        return await self._fire(claim, now)
+
     async def _fire(self, claim: service.Claimed, now: datetime) -> Fired:
         spec = self._jobs.get(claim.job)
         if spec is None:
@@ -120,7 +136,7 @@ class Scheduler:
     async def _finish(
         self,
         claim: service.Claimed,
-        status: str,
+        status: FiredStatus,
         *,
         ref: str | None = None,
         reason: str | None = None,

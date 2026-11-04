@@ -28,7 +28,7 @@ export default function AdminPage() {
     <>
       <PageHeader
         title="Admin"
-        description="What every project shares: runs and cost, the search log, memory, HubSpot and the settings."
+        description="What every project shares: runs and cost, schedules, the search log, memory, HubSpot and the settings."
       />
       <nav
         ref={tabs}

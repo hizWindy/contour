@@ -31,14 +31,24 @@ from decimal import ROUND_UP, Decimal
 from typing import Any
 
 from fastapi import FastAPI
+from pydantic import ValidationError
 from sqlalchemy import exists, select
 
+from apps.lead_finder.params import DiscoveryParams, default_triggers
 from core.api.errors import Problem
 from core.runs.manager import RunManager
 from core.runs.models import TERMINAL_RUN_STATUSES, Run
 from core.runs.schemas import RunCreate, RunEstimate
 from core.schedules.calc import Cadence
-from core.schedules.jobs import DefaultSchedule, JobContext, JobResult, JobSkipped, JobSpec
+from core.schedules.jobs import (
+    DefaultSchedule,
+    JobContext,
+    JobEstimate,
+    JobResult,
+    JobSettingsError,
+    JobSkipped,
+    JobSpec,
+)
 
 APP = "lead_finder"
 MODE = "discovery"
@@ -125,11 +135,16 @@ def _refusal(problem: Problem) -> str:
     return problem.detail or problem.title
 
 
+async def _estimate(context: JobContext) -> RunEstimate:
+    """The run's estimate for the saved choices: the one the Start page shows."""
+    manager = _manager(context.app)
+    return await manager.estimate(RunCreate(app=APP, mode=MODE, params=context.settings))
+
+
 async def start_discovery(context: JobContext) -> JobResult:
     """Starts a discovery run from the schedule's saved choices, if it fits the limits."""
     manager = _manager(context.app)
-    estimate = await manager.estimate(RunCreate(app=APP, mode=MODE, params=context.settings))
-    reason = doesnt_fit(estimate)
+    reason = doesnt_fit(await _estimate(context))
     if reason is not None:
         raise JobSkipped(reason)
     try:
@@ -139,6 +154,56 @@ async def start_discovery(context: JobContext) -> JobResult:
             raise JobSkipped(_refusal(problem)) from None
         raise
     return JobResult(ref=str(run.id))
+
+
+async def estimate_discovery_job(context: JobContext) -> JobEstimate:
+    """What a run costs, for the Schedules page: typical, and the most it can (its limit)."""
+    estimate = await _estimate(context)
+    cap = estimate.cap_usd
+    return JobEstimate(
+        valid=estimate.valid,
+        problem=doesnt_fit(estimate),
+        typical_usd=estimate.cost_usd_low,
+        worst_usd=min(estimate.cost_usd_high, cap) if cap > 0 else estimate.cost_usd_high,
+        cap_usd=cap,
+        daily_left_usd=estimate.daily_left_usd,
+        basis=estimate.basis,
+    )
+
+
+def _and_list(words: list[str]) -> str:
+    """ "Melbourne, Adelaide and Perth"."""
+    if len(words) <= 1:
+        return "".join(words)
+    return f"{', '.join(words[:-1])} and {words[-1]}"
+
+
+def describe_discovery(settings: dict[str, Any]) -> str:
+    """The saved choices in a sentence, for the Schedules page."""
+    try:
+        params = DiscoveryParams.model_validate(settings)
+    except ValidationError:
+        return "The saved choices can't be read."
+    if params.triggers == default_triggers():
+        signs = f"the {len(params.triggers)} main signs"
+    else:
+        signs = f"{len(params.triggers)} {'sign' if len(params.triggers) == 1 else 'signs'}"
+    return (
+        f"Searches {_and_list(params.cities)} for {signs}, looking back {params.since_days} days."
+    )
+
+
+def check_discovery_settings(settings: dict[str, Any]) -> dict[str, Any]:
+    """The choices a person saved, cleaned (like the spelling of a city), or a plain message."""
+    try:
+        params = DiscoveryParams.model_validate(settings)
+    except ValidationError as error:
+        found = "; ".join(
+            f"{'.'.join(str(part) for part in problem['loc'])}: {problem['msg']}"
+            for problem in error.errors()[:3]
+        )
+        raise JobSettingsError(found) from None
+    return params.model_dump(mode="json", exclude_unset=True)
 
 
 async def discovery_running(context: JobContext) -> bool:
@@ -164,6 +229,9 @@ JOBS = (
         title="Find new leads",
         start=start_discovery,
         running=discovery_running,
+        estimate=estimate_discovery_job,
+        describe=describe_discovery,
+        check_settings=check_discovery_settings,
         default=DefaultSchedule(cadence=DEFAULT_CADENCE, enabled=False, settings=DEFAULT_SETTINGS),
     ),
 )

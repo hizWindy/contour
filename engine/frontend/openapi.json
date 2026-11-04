@@ -5235,6 +5235,51 @@
         "title": "RunFinishedEvent",
         "type": "object"
       },
+      "RunNow": {
+        "description": "How a start by hand went. A reason is plain words a person can read.",
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it didn't start, when it didn't",
+            "title": "Reason"
+          },
+          "ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The id of the run or sync it made, when it started",
+            "title": "Ref"
+          },
+          "status": {
+            "enum": [
+              "started",
+              "skipped",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "ref",
+          "reason"
+        ],
+        "title": "RunNow",
+        "type": "object"
+      },
       "RunOptions": {
         "description": "Everything the Start page needs to draw itself.",
         "properties": {
@@ -5688,6 +5733,395 @@
           "runs"
         ],
         "title": "RunSummaryDay",
+        "type": "object"
+      },
+      "ScheduleEdit": {
+        "additionalProperties": false,
+        "description": "Any of these. What isn't sent stays as it is.",
+        "properties": {
+          "at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The time of day, 24-hour, like 07:00",
+            "examples": [
+              "07:00"
+            ],
+            "title": "At"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Switch it on or off",
+            "title": "Enabled"
+          },
+          "every": {
+            "anyOf": [
+              {
+                "maximum": 365.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Every how many days or weeks",
+            "title": "Every"
+          },
+          "settings": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The job's choices. They replace the saved ones as a whole",
+            "title": "Settings"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "enum": [
+                  "days",
+                  "weeks"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "weekday": {
+            "anyOf": [
+              {
+                "maximum": 6.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "0 Monday to 6 Sunday, for weeks",
+            "title": "Weekday"
+          }
+        },
+        "title": "ScheduleEdit",
+        "type": "object"
+      },
+      "ScheduleEstimate": {
+        "description": "What one start of the job costs. `valid` is false when the saved choices can't be used, and\n`problem` says in plain words why it wouldn't start now (too dear for the limits, say).",
+        "properties": {
+          "basis": {
+            "description": "Where the prices come from, in plain words",
+            "title": "Basis",
+            "type": "string"
+          },
+          "cap_usd": {
+            "description": "The limit for one start",
+            "title": "Cap Usd",
+            "type": "string"
+          },
+          "daily_left_usd": {
+            "description": "What is left of today's limit",
+            "title": "Daily Left Usd",
+            "type": "string"
+          },
+          "per_month_usd": {
+            "description": "Typical starts in a month at this schedule",
+            "title": "Per Month Usd",
+            "type": "string"
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Problem"
+          },
+          "typical_usd": {
+            "description": "A typical start. 0 for a job that is free",
+            "title": "Typical Usd",
+            "type": "string"
+          },
+          "valid": {
+            "title": "Valid",
+            "type": "boolean"
+          },
+          "worst_usd": {
+            "description": "The most a start can cost: its own limit stops it",
+            "title": "Worst Usd",
+            "type": "string"
+          }
+        },
+        "required": [
+          "valid",
+          "problem",
+          "typical_usd",
+          "worst_usd",
+          "per_month_usd",
+          "cap_usd",
+          "daily_left_usd",
+          "basis"
+        ],
+        "title": "ScheduleEstimate",
+        "type": "object"
+      },
+      "ScheduleList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ScheduleOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ScheduleList",
+        "type": "object"
+      },
+      "ScheduleOut": {
+        "properties": {
+          "at": {
+            "description": "The time of day, 24-hour, like 07:00",
+            "examples": [
+              "07:00"
+            ],
+            "title": "At",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "estimate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScheduleEstimate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "every": {
+            "title": "Every",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "installed": {
+            "description": "False when the engine no longer has this job",
+            "title": "Installed",
+            "type": "boolean"
+          },
+          "job": {
+            "examples": [
+              "lead_finder.discovery"
+            ],
+            "title": "Job",
+            "type": "string"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the last start didn't happen, in plain words",
+            "title": "Last Error"
+          },
+          "last_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The id of that run or sync",
+            "title": "Last Id"
+          },
+          "last_kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "run",
+                  "sync"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the last start made: a run or a HubSpot sync",
+            "title": "Last Kind"
+          },
+          "last_run_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Run At"
+          },
+          "last_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "starting",
+                  "started",
+                  "skipped",
+                  "failed"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Status"
+          },
+          "name": {
+            "examples": [
+              "Find new leads"
+            ],
+            "title": "Name",
+            "type": "string"
+          },
+          "next_run_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When it runs next. Empty while it is off",
+            "title": "Next Run At"
+          },
+          "project": {
+            "examples": [
+              "lead_finder"
+            ],
+            "title": "Project",
+            "type": "string"
+          },
+          "running": {
+            "description": "True while the work the last start began is still going",
+            "title": "Running",
+            "type": "boolean"
+          },
+          "settings": {
+            "additionalProperties": true,
+            "description": "The job's saved choices",
+            "title": "Settings",
+            "type": "object"
+          },
+          "summary": {
+            "description": "The saved choices in a sentence. Empty if the job has none",
+            "title": "Summary",
+            "type": "string"
+          },
+          "timezone": {
+            "examples": [
+              "Australia/Melbourne"
+            ],
+            "title": "Timezone",
+            "type": "string"
+          },
+          "unit": {
+            "enum": [
+              "days",
+              "weeks"
+            ],
+            "title": "Unit",
+            "type": "string"
+          },
+          "weekday": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "0 Monday to 6 Sunday. Set for a schedule in weeks",
+            "title": "Weekday"
+          },
+          "when": {
+            "description": "The cadence in words",
+            "examples": [
+              "Every 2 weeks on Monday at 7:00 am"
+            ],
+            "title": "When",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "project",
+          "job",
+          "name",
+          "enabled",
+          "every",
+          "unit",
+          "weekday",
+          "at",
+          "timezone",
+          "when",
+          "settings",
+          "summary",
+          "next_run_at",
+          "last_run_at",
+          "last_status",
+          "last_kind",
+          "last_id",
+          "last_error",
+          "running",
+          "installed",
+          "estimate"
+        ],
+        "title": "ScheduleOut",
         "type": "object"
       },
       "ScopeOut": {
@@ -16838,6 +17272,450 @@
         "summary": "Continue an interrupted or failed run",
         "tags": [
           "runs"
+        ]
+      }
+    },
+    "/schedules": {
+      "get": {
+        "operationId": "list_schedules",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Every schedule, with its next run, its last run and what one start costs",
+        "tags": [
+          "schedules"
+        ]
+      }
+    },
+    "/schedules/{schedule_id}": {
+      "patch": {
+        "description": "Only what is sent changes. Off has no next run; on has one, kept as it is unless the schedule was off or `every`, `unit`, `weekday` or `at` changed, when it is the first time from now on. `weekday` is for `weeks` only (0 Monday to 6 Sunday). `at` is a 24-hour time in Melbourne time, like `07:00`. `settings` replaces the saved choices as a whole and is checked by the job. A change that can't be made is a 422 whose error field is `body.<name>`.",
+        "operationId": "edit_schedule",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "schedule_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Schedule Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleEdit"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Switch a schedule on or off, change when it runs, or change what it looks for",
+        "tags": [
+          "schedules"
+        ]
+      }
+    },
+    "/schedules/{schedule_id}/run": {
+      "post": {
+        "description": "The same start as on time, with the same checks: a Lead Finder run that doesn't fit the limits, or a job that is still going, answers `skipped` with the reason. The next run doesn't move. It works for a schedule that is switched off. Spending money is the Admin's call, so it needs the Admin role.",
+        "operationId": "run_schedule_now",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "schedule_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Schedule Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunNow"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Start the job now, once",
+        "tags": [
+          "schedules"
         ]
       }
     },

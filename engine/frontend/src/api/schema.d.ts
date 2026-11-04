@@ -847,6 +847,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schedules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every schedule, with its next run, its last run and what one start costs */
+        get: operations["list_schedules"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schedules/{schedule_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Switch a schedule on or off, change when it runs, or change what it looks for
+         * @description Only what is sent changes. Off has no next run; on has one, kept as it is unless the schedule was off or `every`, `unit`, `weekday` or `at` changed, when it is the first time from now on. `weekday` is for `weeks` only (0 Monday to 6 Sunday). `at` is a 24-hour time in Melbourne time, like `07:00`. `settings` replaces the saved choices as a whole and is checked by the job. A change that can't be made is a 422 whose error field is `body.<name>`.
+         */
+        patch: operations["edit_schedule"];
+        trace?: never;
+    };
+    "/schedules/{schedule_id}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start the job now, once
+         * @description The same start as on time, with the same checks: a Lead Finder run that doesn't fit the limits, or a job that is still going, answers `skipped` with the reason. The next run doesn't move. It works for a schedule that is switched off. Spending money is the Admin's call, so it needs the Admin role.
+         */
+        post: operations["run_schedule_now"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/searches": {
         parameters: {
             query?: never;
@@ -3173,6 +3230,27 @@ export interface components {
             type: "run_finished";
         };
         /**
+         * RunNow
+         * @description How a start by hand went. A reason is plain words a person can read.
+         */
+        RunNow: {
+            /**
+             * Reason
+             * @description Why it didn't start, when it didn't
+             */
+            reason: string | null;
+            /**
+             * Ref
+             * @description The id of the run or sync it made, when it started
+             */
+            ref: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "started" | "skipped" | "failed";
+        };
+        /**
          * RunOptions
          * @description Everything the Start page needs to draw itself.
          */
@@ -3388,6 +3466,189 @@ export interface components {
             date: string;
             /** Runs */
             runs: number;
+        };
+        /**
+         * ScheduleEdit
+         * @description Any of these. What isn't sent stays as it is.
+         */
+        ScheduleEdit: {
+            /**
+             * At
+             * @description The time of day, 24-hour, like 07:00
+             * @example 07:00
+             */
+            at?: string | null;
+            /**
+             * Enabled
+             * @description Switch it on or off
+             */
+            enabled?: boolean | null;
+            /**
+             * Every
+             * @description Every how many days or weeks
+             */
+            every?: number | null;
+            /**
+             * Settings
+             * @description The job's choices. They replace the saved ones as a whole
+             */
+            settings?: {
+                [key: string]: unknown;
+            } | null;
+            /** Unit */
+            unit?: ("days" | "weeks") | null;
+            /**
+             * Weekday
+             * @description 0 Monday to 6 Sunday, for weeks
+             */
+            weekday?: number | null;
+        };
+        /**
+         * ScheduleEstimate
+         * @description What one start of the job costs. `valid` is false when the saved choices can't be used, and
+         *     `problem` says in plain words why it wouldn't start now (too dear for the limits, say).
+         */
+        ScheduleEstimate: {
+            /**
+             * Basis
+             * @description Where the prices come from, in plain words
+             */
+            basis: string;
+            /**
+             * Cap Usd
+             * @description The limit for one start
+             */
+            cap_usd: string;
+            /**
+             * Daily Left Usd
+             * @description What is left of today's limit
+             */
+            daily_left_usd: string;
+            /**
+             * Per Month Usd
+             * @description Typical starts in a month at this schedule
+             */
+            per_month_usd: string;
+            /** Problem */
+            problem: string | null;
+            /**
+             * Typical Usd
+             * @description A typical start. 0 for a job that is free
+             */
+            typical_usd: string;
+            /** Valid */
+            valid: boolean;
+            /**
+             * Worst Usd
+             * @description The most a start can cost: its own limit stops it
+             */
+            worst_usd: string;
+        };
+        /** ScheduleList */
+        ScheduleList: {
+            /** Items */
+            items: components["schemas"]["ScheduleOut"][];
+        };
+        /** ScheduleOut */
+        ScheduleOut: {
+            /**
+             * At
+             * @description The time of day, 24-hour, like 07:00
+             * @example 07:00
+             */
+            at: string;
+            /** Enabled */
+            enabled: boolean;
+            estimate: components["schemas"]["ScheduleEstimate"] | null;
+            /** Every */
+            every: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Installed
+             * @description False when the engine no longer has this job
+             */
+            installed: boolean;
+            /**
+             * Job
+             * @example lead_finder.discovery
+             */
+            job: string;
+            /**
+             * Last Error
+             * @description Why the last start didn't happen, in plain words
+             */
+            last_error: string | null;
+            /**
+             * Last Id
+             * @description The id of that run or sync
+             */
+            last_id: string | null;
+            /**
+             * Last Kind
+             * @description What the last start made: a run or a HubSpot sync
+             */
+            last_kind: ("run" | "sync") | null;
+            /** Last Run At */
+            last_run_at: string | null;
+            /** Last Status */
+            last_status: ("starting" | "started" | "skipped" | "failed") | null;
+            /**
+             * Name
+             * @example Find new leads
+             */
+            name: string;
+            /**
+             * Next Run At
+             * @description When it runs next. Empty while it is off
+             */
+            next_run_at: string | null;
+            /**
+             * Project
+             * @example lead_finder
+             */
+            project: string;
+            /**
+             * Running
+             * @description True while the work the last start began is still going
+             */
+            running: boolean;
+            /**
+             * Settings
+             * @description The job's saved choices
+             */
+            settings: {
+                [key: string]: unknown;
+            };
+            /**
+             * Summary
+             * @description The saved choices in a sentence. Empty if the job has none
+             */
+            summary: string;
+            /**
+             * Timezone
+             * @example Australia/Melbourne
+             */
+            timezone: string;
+            /**
+             * Unit
+             * @enum {string}
+             */
+            unit: "days" | "weeks";
+            /**
+             * Weekday
+             * @description 0 Monday to 6 Sunday. Set for a schedule in weeks
+             */
+            weekday: number | null;
+            /**
+             * When
+             * @description The cadence in words
+             * @example Every 2 weeks on Monday at 7:00 am
+             */
+            when: string;
         };
         /** ScopeOut */
         ScopeOut: {
@@ -9984,6 +10245,371 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_schedules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleList"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    edit_schedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schedule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduleEdit"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleOut"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    run_schedule_now: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schedule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunNow"];
                 };
             };
             /** @description The request can't be understood */

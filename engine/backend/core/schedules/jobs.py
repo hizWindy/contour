@@ -7,12 +7,20 @@ the id of the run or sync it made, or raises `JobSkipped` with a reason a person
 
 `default` is the schedule made for the job at the first start (it is never made again, and never
 changed by the next start, so a person's edits and switch-offs stay).
+
+Three more hooks serve the Schedules page (PLAN-V6 D3). All are optional:
+- `estimate`: what one start costs and whether it would start now (`JobEstimate`). A job that costs
+  nothing answers with zeros, so the page can say "Free"; a job with no hook shows no estimate.
+- `describe`: the saved choices in one plain sentence.
+- `check_settings`: checks the choices a person saved and returns them cleaned, or raises
+  `JobSettingsError` with a message a person can read.
 """
 
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 
 from fastapi import FastAPI
@@ -44,6 +52,23 @@ class JobSkipped(Exception):
         super().__init__(reason)
 
 
+class JobSettingsError(ValueError):
+    """The choices saved for a job can't be used. The message is for a person to read."""
+
+
+@dataclass(frozen=True)
+class JobEstimate:
+    """What one start of a job costs, and whether it would start now. Money is US dollars."""
+
+    valid: bool  # False when the saved choices can't be used
+    problem: str | None  # why it wouldn't start now, in plain words. None when it would
+    typical_usd: Decimal  # a typical start. 0 for a job that costs nothing
+    worst_usd: Decimal  # the most a start can cost: its own limits stop it there
+    cap_usd: Decimal  # the limit for one start
+    daily_left_usd: Decimal  # what is left of today's limit
+    basis: str = ""  # where the prices come from, in plain words
+
+
 @dataclass(frozen=True)
 class DefaultSchedule:
     cadence: Cadence
@@ -53,6 +78,9 @@ class DefaultSchedule:
 
 JobStart = Callable[[JobContext], Awaitable[JobResult]]
 JobRunning = Callable[[JobContext], Awaitable[bool]]
+JobEstimateFn = Callable[[JobContext], Awaitable[JobEstimate]]
+JobDescribe = Callable[[dict[str, Any]], str]
+JobCheckSettings = Callable[[dict[str, Any]], dict[str, Any]]
 
 
 @dataclass(frozen=True)
@@ -65,3 +93,6 @@ class JobSpec:
     # skipped, with a note, and waits for its next time.
     running: JobRunning | None = None
     default: DefaultSchedule | None = None
+    estimate: JobEstimateFn | None = None
+    describe: JobDescribe | None = None
+    check_settings: JobCheckSettings | None = None

@@ -9,6 +9,7 @@ from fastapi.routing import APIRoute
 
 from core.api import auth as auth_routes
 from core.api import health, hubspot, memory, runs, runs_read, searches
+from core.api import schedules as schedule_routes
 from core.api import settings as settings_routes
 from core.api.errors import PROBLEM_RESPONSES, add_error_handlers
 from core.api.guard import SessionGuard, document_sign_in
@@ -134,6 +135,7 @@ def create_app() -> FastAPI:
     api.include_router(runs_read.router)  # before runs: the estimate and summary paths come first
     api.include_router(runs.router)
     api.include_router(settings_routes.router)
+    api.include_router(schedule_routes.router)
     for spec in specs:
         api.include_router(spec.router, prefix=spec.route_prefix, tags=[spec.title])
     app.include_router(api)

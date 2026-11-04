@@ -6,6 +6,7 @@
  * and the Admin tabs are shared: they belong to no one project.
  */
 import {
+  CalendarClock,
   Database,
   FileSearch,
   House,
@@ -85,6 +86,14 @@ export const ADMIN_TABS: readonly NavItem[] = [
     keywords: ['spend', 'chart'],
     purpose:
       'See how much each run cost and what you have spent day by day. Open a run to see what it found.',
+  },
+  {
+    to: '/admin/schedules',
+    label: 'Schedules',
+    icon: CalendarClock,
+    keywords: ['automatic', 'every', 'fortnight', 'daily'],
+    purpose:
+      'The jobs that start on their own: the Lead Finder and the daily HubSpot copy. Switch one on or off, change when it runs, or start it now.',
   },
   {
     to: '/admin/searches',
