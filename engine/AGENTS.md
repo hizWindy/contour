@@ -122,6 +122,7 @@ backend/
                        tests/e2e/serve.py is the fake backend for the website
   scripts/             checks run by hand: hubspot_schema.py (Contour's HubSpot fields) and schema_map.py (our database); see scripts/README.md
 schema/                our database schema, one file for each migration, like SCHEMA-0008.md, made by scripts/schema_map.py
+deploy/                the server files: docker-compose.prod.yml, Caddyfile, .env.example and README.md (the run book)
 frontend/
   openapi.json         the API contract, written by `uv run engine openapi`
   src/api/             the typed API client and the data hooks
@@ -244,6 +245,16 @@ Commands, from `backend/`: `uv run engine hubspot-check` (which scopes the key h
 - **It sets up:** the host check lets the public host through (and `localhost` and `127.0.0.1`, for the container's own health check); the origin guard allows the public origin and no other; the backend listens on `0.0.0.0` inside its container; sign-in is required; the cookie is `Secure` and `__Host-` named; the backend doesn't migrate at start (a one-off `engine migrate` runs first); the Swagger pages aren't served (`engine openapi` still writes the contract).
 - **Whose word is taken for a client's IP address:** only a connection from `TRUSTED_PROXIES`, by uvicorn's `forwarded_allow_ips`. Caddy adds the real address at the end of `X-Forwarded-For`, and what a client writes before it is not believed. On this computer no header is believed at all.
 - **Nothing is quietly overruled:** `AUTH_REQUIRED=false`, `SESSION_COOKIE_SECURE=false` or `AUTO_MIGRATE=true` together with server mode is refused.
+
+## Containers
+
+[PLAN-V6](../plan/PLAN-V6.md) Part G. Three images and one compose file. The run book is [deploy/README.md](deploy/README.md).
+
+- **Backend** (`backend/Dockerfile`, built from `backend/`): the newest Python 3.12, uv installing exactly `uv.lock`, a normal user (`contour`, uid 10001), the memory model baked in (`BAKE_MODEL=1`, the default; `0` skips it, only for a build that can't reach Hugging Face), and a health check on `/api/v1/health`. `backend/.dockerignore` keeps `.env`, `.venv`, `scripts/out/` and `tests/` out. The migrations are a step of their own: `engine migrate`.
+- **Website** (`frontend/Dockerfile`, built from `engine/`, because the Caddyfile is in `deploy/`): the site built once, then served as plain files by Caddy, which also sends `/api` to the backend, gets the HTTPS certificate and adds the security headers (`deploy/Caddyfile`). `frontend/Dockerfile.dockerignore` says what is left out.
+- **Compose** (`deploy/docker-compose.prod.yml`): `web` (Caddy, the only part with open ports), `backend` (one copy only), `migrate` (before the backend) and `db` (a Postgres of its own, for a laptop trial only: `COMPOSE_PROFILES=trial`). The keys are in `deploy/.env`, never in git. `COMPOSE_FILE` in that file makes `docker compose` use the production file; without it compose climbs to `engine/docker-compose.yml`, the development database.
+- **Caddy's address is fixed** (`172.28.0.2`), and `TRUSTED_PROXIES` is that one address. The other parts get addresses from the upper half of the network, so none of them can take it first.
+- **Database TLS:** `POSTGRES_SSLMODE` and `POSTGRES_SSLROOTCERT` (a managed database needs `require` at least; `verify-full` also needs the certificate file).
 
 ## Safety
 
