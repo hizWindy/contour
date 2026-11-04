@@ -4,7 +4,7 @@ This plan puts the platform online as **Contour HQ**. It adds a sign-in for one 
 
 - **Built by:** Al-khair Pama. **Signed off by:** Levi Young (the name and the cloud data OK).
 - **Last updated:** 2026-11-05. **TBC** means not confirmed yet.
-- **Progress:** 16 of 31 steps done (A1, A3, B1 to B5, D1 to D3, E2, E3, F2, F3, G2). C1, E1 and F1 wait only for Al-khair's yes. G1 and G3 are done except one check on the laptop. I1 waits for the live domain. Work goes on branch `plan-v6` (both tracks merged on 5 Nov).
+- **Progress:** 18 of 31 steps done (A1, A3, B1 to B5, C2, C3, D1 to D3, E2, E3, F2, F3, G2). C1, E1 and F1 wait only for Al-khair's yes. G1 and G3 are done except one check on the laptop. I1 waits for the live domain. Work goes on branch `plan-v6` (both tracks merged on 5 Nov).
 - **Comes after:** [PLAN-V5.md](PLAN-V5.md), merged into `master` and pushed on 4 Nov (6f676ae). Its open steps (A2 and Part F, HubSpot write access) stay there and don't block this plan.
 
 ## In short
@@ -148,11 +148,11 @@ These rules are for Al-khair and for Claude. At the start of every session: read
   - **Done when:** Al-khair says yes to the look.
   - **Done so far (5 Nov, c9c2d60):** built as the real page part (`src/auth/login-view.tsx`), shown with fake states at `/preview/login` on the dev server only (`?state=locked&notice=idle&remembered=1&controls=0` sets a state; it is not in the build). Checked on a desktop, a phone, light and dark, every state. 15 tests. **Left:** Al-khair's yes.
 
-- [ ] **C2. The login page.**
+- [x] **C2. The login page.** Done 2026-11-05, d69b690. Tried on the real backend with sign-in on.
   - `/login`, outside the app frame. React Hook Form and Zod, our tokens and fonts, and `motion` through `LazyMotion`.
   - **Done when:** website tests cover each state, keyboard use and reduced motion, and the design and contrast tests pass.
 
-- [ ] **C3. The app knows who is signed in.**
+- [x] **C3. The app knows who is signed in.** Done 2026-11-05, d69b690.
   - A 401 `auth_required` from any route goes to `/login`, then back to where you were. The top bar has your name and "Sign out". "You were signed out" shows after an expiry.
   - **Done when:** website tests cover the redirect, the return, and signing out.
 
@@ -304,6 +304,8 @@ These rules are for Al-khair and for Claude. At the start of every session: read
 ## Log
 
 Newest first. One line for each tick, pause or surprise.
+
+- 2026-11-05: **C2 and C3 ticked** (d69b690). `/login` is the C1 page wired to `POST /auth/login`: the backend's own words for a wrong login (and the wait before the next try), too many tries and no answer; back to `?next=` (only this site's own pages, checked by `safeNext`); the login remembered on the device, never the password; `motion` through `LazyMotion` for the card and the messages, still under reduced motion (read with the site's own `useMediaQuery`, because `motion`'s check is read once per page load). Around the frame, `RequireSignIn`: signed out goes to `/login?next=...&reason=...` and back; any 401 `auth_required` while a page is open (a query or a change) does the same with the backend's sentence; the top bar shows the name and "Sign out" when sign-in is on. **A bug caught by a test:** with the backend down, the failed "who is signed in" was asked again each time a part mounted, which hid the page and looped; `retryOnMount` is off for it. Tests: 40 for the page and its parts, 5 for the guard; website 797 tests, lint, types, prettier, build. **Tried on the real backend** (`AUTH_REQUIRED=true` for that start only, the dev database migrated to 0012 with its 52 leads, the Admin account made with `create_admin`): the redirect, signing in, the real leads, the name, "Sign out" (then 401), a wrong password. **The laptop Admin account** is `alkhair` (or its email); change its password with `engine reset-password` before any server. **Still on the laptop only:** sign-in is off unless `AUTH_REQUIRED=true` is in `engine/.env` or the start. Next in Part C: C4 (the Account tab: sessions, "sign out everywhere", the log) and C5 (the name).
 
 - 2026-11-05: **`plan-v6` merged into `master` by fast-forward, at Al-khair's say** (this commit; not pushed, so `origin/master` is still a3c0058). The checkout had been on a branch `merge-both` during the merge; `plan-v6` was fast-forwarded to it first, so both tracks are on `plan-v6` as the Log says. The temporary branches (`merge-both`, `plan-v6-track1`, `plan-v6-ui`) and the `plan-v6-ui` worktree were removed; every commit is kept on `plan-v6` and `master`. **When the real backend next starts on this code:** it migrates the dev database to 0012 (new tables only), the HubSpot copy runs every day at 6:00 am (free, read only), the Lead Finder schedule stays off, and sign-in stays off on the laptop. I2's own merge (at go-live) is then only the steps after this one.
 
