@@ -26,6 +26,7 @@ Then start the website. In `engine/frontend/`, install once with `npm ci`, then 
 - **Results:** every lead in a table, or as a list beside a map. Filter, sort and download a CSV. Click a lead to open its card in a side panel.
 - **A lead card:** the result rule by rule, the facts with their sources, HubSpot matches and look-alikes. Watch, reject or re-check it from there, or send it to HubSpot after a preview (writing is off until the key has write access).
 - **Admin:** costs by day, the search log, memory, the HubSpot connection (permissions, syncs, writes, and the export upload as a backup), the rules, the test set and the settings.
+- **Schedules (in Admin):** the Lead Finder every 2 weeks (off until you switch it on, because each run costs money) and the daily HubSpot copy. Switch one on or off, change when it runs, or start it now.
 
 The HubSpot watchlist stays switched off until Levi approves sending HubSpot company names to Claude. Then set `HUBSPOT_NAMES_TO_CLAUDE_OK=true` in `engine/.env` and restart the backend.
 
@@ -93,6 +94,10 @@ From `engine/backend/`:
 From `engine/frontend/`: `npm run lint`, `npm run typecheck`, `npm test` and `npm run build`.
 
 Tests use saved sample answers instead of Claude, so they're free. They can't show what a real run costs or finds: that needs the first live runs (**TBC**).
+
+## Put it on a server
+
+Contour HQ can run on a server in Docker, behind HTTPS and a sign-in. The files and the run book are in [deploy/](deploy/README.md). It is not for this computer: the steps above stay as they are.
 
 ## Stop it
 

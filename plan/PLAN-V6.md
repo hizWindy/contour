@@ -95,6 +95,7 @@ These rules are for Al-khair and for Claude. At the start of every session: read
   - **Done when:** the numbers are in the Log.
 
 - [ ] **A2. The decisions.** Al-khair, with Levi for the first two.
+  - **Blocked (4 Nov):** these are answers from Levi and Al-khair. Nothing built in this plan can decide them. The code works without them, and each one has a recommendation in the Log.
   - Levi's OK on the name "Contour HQ", and on keeping HubSpot data on a server in Sydney.
   - The domain, like `hq.contourinteriors.com.au` (**TBC**), and who can add its DNS record.
   - A DigitalOcean account owned by Contour, not by a person, with a card on it.
@@ -236,19 +237,23 @@ These rules are for Al-khair and for Claude. At the start of every session: read
 ## Part H: DigitalOcean
 
 - [ ] **H1. The server.** **Costs money.**
+  - **Blocked (4 Nov):** it costs money, so it starts only when Al-khair says so, and it needs his DigitalOcean account (A2).
   - A droplet in `syd1` with about 4 GB of memory, Ubuntu LTS and Docker. Sign-in by SSH key only. A firewall with 443 and 80 open, and 22 open to Al-khair's IP address only. Automatic security updates.
   - **Done when:** the droplet runs, and the firewall is checked from outside.
 
 - [ ] **H2. The database.** **Costs money.**
+  - **Blocked (4 Nov):** it costs money, so it starts only when Al-khair says so, and it needs the same account (A2).
   - Managed Postgres in `syd1`, with pgvector. Version 18 if DigitalOcean offers it, otherwise 17 (**TBC**: the engine runs on 18 today; check that 17 passes the tests first). Only the droplet may connect. Daily backups, and a restore to a point in time.
   - **Done when:** the droplet connects, and the migrations run.
 
 - [ ] **H3. The deploy.**
+  - **Blocked (4 Nov):** it needs H1, H2 and the domain (A2). The files are ready: `engine/deploy/README.md` is the run book.
   - The containers on the droplet. The keys in a root-only environment file on the server (mode 600), never in git. The DNS record for the domain, then HTTPS.
   - Data: a fresh database, then a HubSpot sync on the server (about 10 minutes). The 52 dev leads are moved only if Levi wants them (**TBC**).
   - **Done when:** the domain opens the login page over HTTPS.
 
 - [ ] **H4. Backups and watching.**
+  - **Blocked (4 Nov):** it needs H2 and H3.
   - One restore of the managed database to a new one, checked, then deleted. DigitalOcean's uptime check on `/api/v1/health`, emailing Al-khair.
   - **Done when:** the restore worked, and a test alert arrived.
 
@@ -257,8 +262,11 @@ These rules are for Al-khair and for Claude. At the start of every session: read
 - [ ] **I1. The full check.**
   - The backend suite with `RUN_GATES=1` and the website checks, one at a time. A security review of the sign-in and server mode. The headers checked on the live domain.
   - **Done when:** everything passes, and the numbers and any fixes are in the Log.
+  - **Done so far (4 Nov, in the cloud session):** the backend suite with `RUN_GATES=1` (3,011 passed, 25 skipped, 75 failed: the same 75 as at A1, which need the memory model), the website checks (735 tests, lint, types, prettier on `src`, build), a check of the packages for known holes (none), and a review of the sign-in and server mode. The numbers and the findings are in the Log.
+  - **Left:** the same suite on the laptop (the 75 should pass there: 3,086 passed in all), and the headers checked on the live domain (needs H3).
 
 - [ ] **I2. Go live.**
+  - **Blocked (4 Nov):** it needs H3, the login page (Part C, the other track) and Al-khair.
   - The Admin account made on the server (`engine create-admin`), the first sign-in, a HubSpot sync, and one small run with a low cap. Then the Lead Finder schedule switched on, when Al-khair says so (**costs money** every 2 weeks).
   - Merge `plan-v6` into `master` (Al-khair's call).
   - **Done when:** Al-khair signs in on the domain, and the Log says so.
@@ -290,6 +298,8 @@ These rules are for Al-khair and for Claude. At the start of every session: read
 ## Log
 
 Newest first. One line for each tick, pause or surprise.
+
+- 2026-11-04: **I1 half done: the numbers and the security review** (54cdb3c). **Backend, `RUN_GATES=1`:** 3,011 passed, 25 skipped, 75 failed in 6 min 13 s. The 75 are the same ones as at A1 (they need the memory model, which can't download here; none is new). At A1 it was 2,527 passed, so this track added 484 tests. **Website:** 735 tests (708 at A1), lint with no warnings, types, prettier on `src`, and the build all pass. **Packages:** `npm audit --omit=dev` found 0, and `pip-audit` on the 91 pinned backend packages found none. **The review of the sign-in and server mode** read: the password hash (argon2id, 14 characters or more, common passwords refused, equal time for an unknown account), the session token (256 random bits, only its SHA-256 kept, the `__Host-` cookie Secure and HttpOnly and SameSite=Strict, seen live through Caddy), the guard (deny by default, 401 from the headers alone, an unknown path the same), the origin and host checks, the guessing limits, the Admin-only routes, Swagger off, both logs after a real sign-in (no cookie or password), the images (no `.env`, no tests, a normal user), and the containers (read-only, no capabilities, only Caddy has ports). **One fix:** the API still listed the laptop's own origins for CORS on a server. A server now lists none (the site and the API share one origin), with tests both ways. **Accepted or open (TBC):** the public `/health` also shows the pgvector version and the project names (low value; trim it if you prefer); a live-events stream that is open when its session ends keeps going until it closes; there is no rate limit in front of the backend; `style-src` keeps `'unsafe-inline'` because the UI libraries write inline styles (scripts are `'self'` only); **the visitor's real IP address has to be checked on the live server** (if the sign-in log shows Docker's gateway `172.28.0.1` for everyone, the per-IP limit would lock everyone out together: make an A record only, or turn off Docker's user-land proxy; it is in the run book). **Before go-live (I2):** the login page (Part C, the other track) has to be merged, because the website has no sign-in form without it. Left in I1: the suite on the laptop, and the headers on the live domain.
 
 - 2026-11-04: **G1 to G3 built and run in the cloud session** (d165a90, de43395, e4bfd32, e29f1e9). **G2 is ticked; G1 and G3 are open for one check on the laptop** (the memory model downloads from Hugging Face, which this box can't reach; see each step). **What runs:** `deploy/docker-compose.prod.yml` has `web` (Caddy, the only part with open ports: 80, 443 and 443/udp), `backend` (one copy; non-root, read-only file system, no capabilities), `migrate` (before the backend) and `db` (a Postgres with pgvector, only with `COMPOSE_PROFILES=trial`). The run book is `deploy/README.md`. **Checked on this machine** (built from copies of the folders, with one extra line for this session's proxy certificate; `BAKE_MODEL=0`): all four parts up; `curl -I https://localhost` shows `Content-Security-Policy` (with `frame-ancestors 'none'` and `form-action 'self'`), `Strict-Transport-Security`, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy` and `Cross-Origin-Opener-Policy`, and no `Server` header; `http://` answers 308 to `https://`; a page gets `no-cache` and a hashed file under `/assets` gets `immutable`; `/api` without a session is 401; sign-in through Caddy gave the `__Host-contour_session` cookie (Secure, HttpOnly, `Path=/`) and the session saw the visitor's address from `X-Forwarded-For`; the Schedules were made at the first start (HubSpot copy on, Find new leads off); a lead card and the Schedules tab opened in a real browser with no failed request; an update (`TAG`) and a rollback recreated the parts and the backend came back healthy; neither Caddy's log nor the backend's held a cookie or a password. **Three faults the real run found, now fixed:** (1) `docker compose` from `engine/deploy` climbed to `engine/docker-compose.yml` (the development database) because the production file isn't named `compose.yaml`: `COMPOSE_FILE` in `deploy/.env` fixes it (an empty network and volume it made were removed); (2) the engine's default `POSTGRES_PORT` is 5433, the laptop mapping, but the database inside Docker is on 5432: the compose file sets it; (3) Caddy's fixed address `172.28.0.2` was taken first by another part: the other parts now get addresses from `172.28.0.128/25`. **Also built:** `POSTGRES_SSLMODE` and `POSTGRES_SSLROOTCERT` (a managed database needs TLS; `verify-full` needs the certificate file; refused at start if the file is missing), with 5 tests. **Open (TBC, also in the run book):** no rate limit in front (the standard Caddy has none; the DigitalOcean cloud firewall or a Caddy build with a module would cover it); pin the exact Python 3.12 patch the laptop uses (`--build-arg PYTHON_IMAGE=python:3.12.N-slim`); the image build needs the internet for the memory model; the database certificate file has to be mounted by hand for `verify-full`; how much memory the website build needs on the 4 GB droplet. Next: I1 (the full check), and the rest waits for people and money (A2, H1 to H4).
 
