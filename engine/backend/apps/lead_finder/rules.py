@@ -7,6 +7,7 @@ results stay explainable after the rules change.
 """
 
 import hashlib
+import re
 import string
 from decimal import Decimal
 from functools import lru_cache
@@ -386,9 +387,18 @@ class HubSpotMap(Strict):
 # --- watchlist.yaml ---------------------------------------------------------------------
 
 
+_NOT_A_LETTER = re.compile(r"[^0-9a-z]+")
+
+
 def industry_name_key(name: str) -> str:
-    """How industry names are compared: ignoring case and extra spaces."""
-    return " ".join(name.split()).casefold()
+    """How industry names are compared: ignoring case, punctuation, "&" and the word "and".
+
+    HubSpot's own labels ("Hospital & Health Care", "Electrical/Electronic Manufacturing") and
+    the 25 Oct export's form of them ("Hospital Health Care", "Electrical Electronic
+    Manufacturing") then give the same key, so the rules match either (PLAN-V5 D1).
+    """
+    words = _NOT_A_LETTER.sub(" ", name.casefold()).split()
+    return " ".join(word for word in words if word != "and")
 
 
 class WatchStaff(Strict):

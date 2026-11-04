@@ -11,7 +11,8 @@ staff:
   staff_max_applies_to_director: false # Director companies over size.staff_max stay on the list
 
 # HubSpot industry names that go to a Director, grouped as in criteria.yaml
-# (industries.director_review). A name is matched exactly, ignoring case and extra spaces.
+# (industries.director_review). A name is matched ignoring case, punctuation, "&" and "and",
+# so HubSpot's label "Hospital & Health Care" matches "Hospital Health Care" here.
 director_industries:
   Hospitals and healthcare: [Hospital Health Care]
   Law firms: [Law Practice]

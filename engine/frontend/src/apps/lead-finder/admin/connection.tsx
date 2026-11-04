@@ -25,7 +25,7 @@ import { ErrorState } from '@/components/error-state'
 import { SourceLink } from '@/components/source-link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { formatDateTime, formatNumber } from '@/lib/format'
+import { formatDateTime, pluralise } from '@/lib/format'
 import { toastProblem } from '@/lib/problems'
 
 const STATE: Record<HubSpotScope['state'], { icon: LucideIcon; word: string }> = {
@@ -54,10 +54,12 @@ const WRITE_STATUS: Record<HubSpotWrite['status'], string> = {
 }
 
 function syncCounts(sync: HubSpotSync): string {
-  return (
-    `${formatNumber(sync.companies_saved)} companies, ${formatNumber(sync.offices_saved)} ` +
-    `offices, ${formatNumber(sync.deals_saved)} deals, ${formatNumber(sync.owners_read)} owners`
-  )
+  return [
+    pluralise(sync.companies_saved, 'company', 'companies'),
+    pluralise(sync.offices_saved, 'office'),
+    pluralise(sync.deals_saved, 'deal'),
+    pluralise(sync.owners_read, 'owner'),
+  ].join(', ')
 }
 
 const syncHelp = createColumnHelper<HubSpotSync>()

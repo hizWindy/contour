@@ -108,7 +108,7 @@ export const ADMIN_TABS: readonly NavItem[] = [
     icon: Upload,
     keywords: ['import', 'watchlist'],
     purpose:
-      'Load your HubSpot export and see which companies the watchlist would look at again. Nothing is sent back to HubSpot.',
+      'The HubSpot connection for every project: its permissions, the syncs, the writes and the watchlist. Nothing is written without a preview and a confirm.',
   },
   {
     to: '/admin/settings',

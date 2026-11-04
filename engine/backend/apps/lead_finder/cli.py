@@ -112,6 +112,18 @@ async def _research(requests: list[ResearchRequest]) -> list[LeadCard]:
     return cards
 
 
+async def _relabel(*, write: bool) -> str:
+    from apps.lead_finder.relabel import describe, relabel
+    from core.db.engine import get_engine, get_sessionmaker
+
+    try:
+        async with get_sessionmaker()() as session:
+            result = await relabel(session, write=write)
+    finally:
+        await get_engine().dispose()
+    return describe(result, written=write)
+
+
 async def _rejudge() -> list[Rejudged]:
     """The saved leads, judged again with the current rules. Reads only: no migration, no save.
     It selects the card, not the whole row, so it also works on a database not yet migrated."""
@@ -341,6 +353,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         "(about US$0.25 a lead, no web search).",
     )
     refill.add_argument("--yes", action="store_true", help="Confirm the spend.")
+    relabel_cmd = commands.add_parser(
+        "relabel",
+        help="Match the saved leads against the HubSpot copy again, after a sync (free). Without "
+        "--yes it only shows what would change.",
+    )
+    relabel_cmd.add_argument("--yes", action="store_true", help="Save the new labels.")
     args = parser.parse_args(argv)
 
     try:
@@ -354,6 +372,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         migrate()
         if args.command == "refill":
             return _refill_command(args)
+        if args.command == "relabel":
+            print(asyncio.run(_relabel(write=args.yes), loop_factory=loop_factory()))
+            return 0
         if args.command == "research":
             request = ResearchRequest(
                 company=args.company,

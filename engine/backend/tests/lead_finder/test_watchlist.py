@@ -321,6 +321,26 @@ def build(*rows: HubSpotRow, rules: LeadFinderRules = RULES, **options: bool) ->
     return build_watchlist(rows, rules, **options)
 
 
+@pytest.mark.parametrize(
+    ("api_label", "export_form"),
+    [
+        ("Hospital & Health Care", "Hospital Health Care"),
+        ("Mining & Metals", "Mining Metals"),
+        ("Electrical/Electronic Manufacturing", "Electrical Electronic Manufacturing"),
+        ("Non-Profit Organization Management", "Non Profit Organization Management"),
+        ("Information Technology and Services", "Information Technology And Services"),
+    ],
+)
+def test_hubspots_own_label_and_the_exports_form_land_in_the_same_list(
+    api_label: str, export_form: str
+) -> None:
+    def where(industry: str) -> tuple[int, int, int]:
+        counts = build(company(industry=industry), include_director=True).counts
+        return (counts.director, counts.likely, counts.unlikely)
+
+    assert where(api_label) == where(export_form)
+
+
 def with_staff_max_for_director(rules: LeadFinderRules, applies: bool) -> LeadFinderRules:
     staff = rules.watchlist.staff.model_copy(update={"staff_max_applies_to_director": applies})
     return rules.model_copy(
