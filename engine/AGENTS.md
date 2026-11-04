@@ -23,6 +23,9 @@ From `engine/backend/`:
 | Start the backend (applies database changes first) | `uv run engine serve` |
 | Start with auto-reload while coding | `uv run engine serve --reload` |
 | Apply database changes only | `uv run engine migrate` |
+| Make the Admin account (asks for the password twice, never shows it; needs a terminal) | `uv run engine create-admin --email name@company.com.au --username name` |
+| Give an account a new password, lift its lock and end its sessions (the only way to reset one) | `uv run engine reset-password --user <email or username>` |
+| End every session of every account | `uv run engine sign-out-everyone` |
 | Load a HubSpot export | `uv run engine import-hubspot ../../projects/leads/research/COMPANIES.xlsx` |
 | Which permissions the HubSpot key has, and what each project can do (free, changes nothing) | `uv run engine hubspot-check` |
 | Copy HubSpot into our database now (free; `--full` reads everything and finds deleted records, about 10 minutes) | `uv run engine hubspot-sync` |
@@ -89,6 +92,7 @@ backend/
     signalhire/        Signal Hire (client.py): company details, staff and people counts, senior people's names and job titles; details.py is the saved company record
     runs/              the run engine: start, stop, resume, live events, caps (manager.py, events.py, budget.py)
     prefs/             the settings a person can change on the Settings page
+    auth/              who may sign in (PLAN-V6): models.py (users, sessions, the sign-in log), passwords.py (argon2id, the rules, common_passwords.txt), clean.py, audit.py, users.py, sessions.py, admin.py (what the server commands do)
   apps/
     lead_finder/       the first project
       app.py           tells the core this project's name, endpoints and rules

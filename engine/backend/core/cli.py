@@ -1,5 +1,6 @@
 """The `engine` command: serve, migrate, import-hubspot, hubspot-check, hubspot-sync, openapi,
-rebuild-profiles and purge.
+rebuild-profiles, purge, and the three that run the sign-in from the server: create-admin,
+reset-password and sign-out-everyone.
 
 Run it with `uv run engine <command>` from engine/backend.
 """
@@ -7,6 +8,7 @@ Run it with `uv run engine <command>` from engine/backend.
 import argparse
 import asyncio
 import copy
+import getpass
 import importlib
 import ipaddress
 import json
@@ -283,6 +285,105 @@ async def _purge(days: int) -> str:
     )
 
 
+# --- create-admin, reset-password and sign-out-everyone ----------------------------------------
+# There is no sign-up page and no reset by email: the account and its password are made here, on
+# the server. The password is asked for twice, never shown, and never taken from an argument or a
+# pipe, where it would be kept in a shell history or a log.
+
+
+class NeedsTerminal(Exception):
+    """A command that asks for a password was started without a terminal."""
+
+
+def read_secret(prompt: str) -> str:
+    """Asks for a password without showing it. Tests replace this."""
+    if not sys.stdin.isatty():
+        raise NeedsTerminal
+    return getpass.getpass(prompt)
+
+
+def _complain(text: str) -> None:
+    print(text, file=sys.stderr)
+
+
+def _plural(count: int, word: str, many: str | None = None) -> str:
+    return f"{count} {word}" if count == 1 else f"{count} {many or word + 's'}"
+
+
+async def _create_admin(email: str, username: str | None, name: str | None) -> tuple[str, bool]:
+    """Makes an Admin account. Returns (what to tell the person, whether it worked)."""
+    from core.auth import admin, clean, users
+    from core.auth.passwords import PasswordRefused
+    from core.db.engine import get_engine, get_sessionmaker
+
+    try:
+        email, username = clean.email(email), clean.username(username)
+    except ValueError as error:
+        return str(error), False
+    password = admin.ask_new_password(read_secret, _complain, email=email, username=username)
+    if password is None:
+        return "No account was made: no good password was given.", False
+    try:
+        async with get_sessionmaker()() as db:
+            user = await admin.create_admin(
+                db,
+                email=email,
+                username=username,
+                name=name,
+                password=password,
+                now=datetime.now(UTC),
+            )
+    except users.LoginTaken as error:
+        return f"{error} To change its password: uv run engine reset-password --user <login>", False
+    except PasswordRefused as error:  # the rules were checked above, so this is a bug
+        return str(error), False
+    finally:
+        await get_engine().dispose()
+    return f"Made the Admin account for {user.email}. It signs in with its email or username.", True
+
+
+async def _reset_password(login: str) -> tuple[str, bool]:
+    """Gives an account a new password and ends its sessions."""
+    from core.auth import admin, users
+    from core.auth.passwords import PasswordRefused
+    from core.db.engine import get_engine, get_sessionmaker
+
+    try:
+        async with get_sessionmaker()() as db:
+            user = await users.find_by_login(db, login)
+            if user is None:
+                return "No account has that email or username.", False
+            password = admin.ask_new_password(
+                read_secret, _complain, email=user.email, username=user.username
+            )
+            if password is None:
+                return "The password was not changed: no good password was given.", False
+            ended = await admin.reset_password(db, user, password, now=datetime.now(UTC))
+    except PasswordRefused as error:  # the rules were checked above, so this is a bug
+        return str(error), False
+    finally:
+        await get_engine().dispose()
+    after = (
+        "It had no open sessions."
+        if ended == 0
+        else f"{_plural(ended, 'session')} ended: it must sign in again."
+    )
+    return f"The password for {user.email} is changed, and any lock is lifted. {after}", True
+
+
+async def _sign_out_everyone() -> str:
+    """Ends every session of every account."""
+    from core.auth import admin
+    from core.db.engine import get_engine, get_sessionmaker
+
+    try:
+        async with get_sessionmaker()() as db:
+            ended, people = await admin.sign_out_everyone(db, now=datetime.now(UTC))
+    finally:
+        await get_engine().dispose()
+    return f"Signed out {_plural(ended, 'session')} of {_plural(people, 'person', 'people')}."
+
+
 def _positive_days(text: str) -> int:
     try:
         days = int(text)
@@ -348,6 +449,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         required=True,
         help="Only runs that finished more than this many days ago",
     )
+    create_cmd = commands.add_parser(
+        "create-admin",
+        help="Make an Admin account. Asks for the password twice and never shows it.",
+    )
+    create_cmd.add_argument("--email", required=True, help="Its email, like name@company.com.au")
+    create_cmd.add_argument("--username", help="A second way to sign in (optional)")
+    create_cmd.add_argument("--name", help="What the top bar shows (default: from the email)")
+    reset_cmd = commands.add_parser(
+        "reset-password",
+        help="Give an account a new password, lift its lock and end its sessions.",
+    )
+    reset_cmd.add_argument("--user", required=True, help="The account's email or username")
+    commands.add_parser("sign-out-everyone", help="End every session of every account.")
 
     args = parser.parse_args(argv)
     try:
@@ -380,6 +494,25 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(message)
         elif args.command == "purge":
             print(asyncio.run(_purge(args.older_than_days), loop_factory=loop_factory()))
+        elif args.command == "create-admin":
+            text, ok = asyncio.run(
+                _create_admin(args.email, args.username, args.name), loop_factory=loop_factory()
+            )
+            print(text, file=sys.stdout if ok else sys.stderr)
+            return 0 if ok else 1
+        elif args.command == "reset-password":
+            text, ok = asyncio.run(_reset_password(args.user), loop_factory=loop_factory())
+            print(text, file=sys.stdout if ok else sys.stderr)
+            return 0 if ok else 1
+        elif args.command == "sign-out-everyone":
+            print(asyncio.run(_sign_out_everyone(), loop_factory=loop_factory()))
+    except NeedsTerminal:
+        print(
+            "This command asks for a password, so it has to run in a terminal. "
+            "With docker compose exec, leave out -T.",
+            file=sys.stderr,
+        )
+        return 1
     except OperationalError:
         print(DATABASE_DOWN, file=sys.stderr)
         return 1
