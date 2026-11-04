@@ -4,7 +4,7 @@ This plan connects the platform to HubSpot with the service key. It builds one s
 
 - **Built by:** Al-khair Pama. **Signed off by:** Levi Young.
 - **Last updated:** 2026-11-04. **TBC** means not confirmed yet.
-- **Progress:** 15 of 20 steps done. Work goes on branch `plan-v5`.
+- **Progress:** 16 of 20 steps done. Work goes on branch `plan-v5`.
 - **Comes after:** [PLAN-V4.md](PLAN-V4.md), merged into `master` on 3 Nov (87dfca8). Its open steps (A1, B5, D1, D2 and the docs in D3) stay in PLAN-V4 and don't block this plan. This plan builds PLAN-V1's Phase 5, "Send to HubSpot".
 
 ## In short
@@ -229,8 +229,7 @@ A session that stops in the middle of a step leaves the next one starting cold. 
   - Run `hubspot-check` and a sync on Contour's HubSpot. Look at the labels on 5 leads by hand.
   - **Done when:** the Log has the counts and anything that was wrong.
 
-- [ ] **E3. Docs, then merge.**
-  - Done so far (1be6df0): HUBSPOT.md section 13, AGENTS.md ("How a project uses HubSpot", commands, safety) and the README. Left: the AI Brain after the last steps, and the merge (Al-khair's call).
+- [x] **E3. Docs, then merge.** Done 2026-11-04: docs in 1be6df0, `plan-v5` merged into `master` by fast-forward (36b7050) at Al-khair's say, AI Brain updated.
   - Update [HUBSPOT.md](../HUBSPOT.md) section 13 (service keys replace private apps), [AGENTS.md](../engine/AGENTS.md) (how a new project uses HubSpot), the engine README and the AI Brain.
   - Merge `plan-v5` into `master` (Al-khair's call). Writing stays off until F3, so merging before Part F is safe.
   - **Done when:** it is merged, and the Log says so.
@@ -280,6 +279,8 @@ This starts when write access arrives, expected 4 Nov (**TBC**).
 ## Log
 
 Newest first. One line for each tick, pause or surprise.
+
+- 2026-11-04: E3 ticked. `plan-v5` merged into `master` by fast-forward at Al-khair's say (36b7050, 7 commits). Not pushed. Writing to HubSpot stays off, so the merge before Part F is safe. Left: A2 (the admin's answers) and Part F (write access).
 
 - 2026-11-04: E1 ticked: backend 2,602 passed and 25 skipped (4 min 16 s; a first run had 2 failures because the fake backend's test left HUBSPOT_WRITE_ENABLED=true for later tests, fixed by restoring every name it sets) with `RUN_GATES=1`; website lint (0 warnings), types, 708 tests and the build. E2 ticked: `engine hubspot-check` (reads yes, writes no) and two live full syncs (Log below). 5 relabelled leads checked against live HubSpot (free reads): all 5 are in HubSpot; the open-deal one has deals at 'Contour Validated Deal' and 'Unqualified Information Deal', right; a second is "Open deal" only through a Closed lost deal (see Waiting on, Levi); leads with no website saved matched by name, and where both have a website they agree.
 - 2026-11-04: D1 and D2 ticked (da104e4). D1: HubSpot's API gives industry labels with punctuation ("Hospital & Health Care"), the export and watchlist.yaml without ("Hospital Health Care"), so 8 hospitals left the Director list and miners and food makers counted as office-based. The industry comparison now ignores punctuation, "&" and "and". On the live copy the same 100 companies then give the export's lists exactly (47 Watch, 11 likely, 15 Director, 7 open deals); one company moved from "no office" to "no staff number" because HubSpot changed since 25 Oct. Whole live copy: 1,480 Watch (993 likely office-based), 593 Director, 1,167 open deal, 7,388 too small or no staff number (2,627 with no number), 3,285 with no office in a city we cover. D2: `lead-finder relabel` matched the 52 dev leads again: 35 were in HubSpot already (15 open deal, 9 dissolved deal, 5 in HubSpot, 6 possible match), saved with `--yes`. Results and scores stay as researched.
