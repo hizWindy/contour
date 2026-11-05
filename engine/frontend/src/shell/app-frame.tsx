@@ -1,6 +1,8 @@
 import { useState } from 'react'
-import { Outlet, ScrollRestoration } from 'react-router'
+import { Outlet, ScrollRestoration, useNavigation } from 'react-router'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
+import { useAfterActive } from '@/lib/use-after'
+import { cn } from '@/lib/utils'
 import { AppSidebar } from './app-sidebar'
 import { RequireSignIn } from './require-sign-in'
 import { TopBar } from './top-bar'
@@ -36,6 +38,9 @@ export function AppFrame() {
 
 function Frame() {
   const [openAtStart] = useState(() => window.matchMedia(WIDE_SCREEN).matches)
+  // A click on a page whose code is still on its way changes nothing for a moment. After 200 ms the
+  // page you are leaving dims, the way a table dims while its next page loads (PLAN-V7 B3).
+  const leaving = useAfterActive(useNavigation().state === 'loading')
   return (
     <SidebarProvider defaultOpen={openAtStart}>
       <a
@@ -51,7 +56,11 @@ function Frame() {
         <div
           id={MAIN_ID}
           tabIndex={-1}
-          className="mx-auto flex w-full max-w-(--content-max) min-w-0 flex-1 flex-col gap-6 p-4 outline-none sm:p-6"
+          aria-busy={leaving || undefined}
+          className={cn(
+            'mx-auto flex w-full max-w-(--content-max) min-w-0 flex-1 flex-col gap-6 p-4 outline-none transition-opacity duration-(--duration-fast) ease-(--ease) sm:p-6',
+            leaving && 'opacity-60',
+          )}
         >
           <Outlet />
         </div>

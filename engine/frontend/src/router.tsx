@@ -13,7 +13,8 @@ import { AppFrame } from '@/shell/app-frame'
 import type { RouteHandle } from '@/shell/crumbs'
 import { adminTabLabel } from '@/shell/nav'
 import { page, type PageModule } from '@/shell/page-route'
-import { NotFound, PageLoading, RouteError } from '@/shell/route-error'
+import { NotFound, RouteError } from '@/shell/route-error'
+import { ShellSkeleton } from '@/shell/shell-skeleton'
 
 function adminTab(segment: string, load: () => Promise<PageModule>): RouteObject {
   const handle: RouteHandle = { crumb: adminTabLabel(segment) ?? segment }
@@ -40,7 +41,8 @@ export const routes: RouteObject[] = [
     path: '/',
     element: <AppFrame />,
     errorElement: <RouteError />,
-    hydrateFallbackElement: <PageLoading />,
+    // The shape of the app, while the first page of a visit loads (PLAN-V7 B3).
+    hydrateFallbackElement: <ShellSkeleton />,
     children: [
       {
         index: true,

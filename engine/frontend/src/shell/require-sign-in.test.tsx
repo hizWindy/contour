@@ -132,9 +132,8 @@ describe('the app knows who is signed in', () => {
     })
     renderApp('/results')
 
-    expect(await screen.findByRole('status')).toHaveTextContent(
-      'You were signed out after 2 hours idle.',
-    )
+    // The app's shape (also a status) shows first, while the backend answers.
+    expect(await screen.findByText('You were signed out after 2 hours idle.')).toBeInTheDocument()
     expect(address()).toHaveTextContent('/login?next=%2Fresults&reason=idle')
     expect(screen.getByLabelText('Password')).toBeInTheDocument()
   })

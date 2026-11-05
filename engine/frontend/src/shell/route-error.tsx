@@ -51,12 +51,3 @@ export function RouteError() {
     />
   )
 }
-
-/** Shown while the first page of a visit loads. */
-export function PageLoading() {
-  return (
-    <p role="status" className="p-6 text-ui text-muted-foreground">
-      Loading the page.
-    </p>
-  )
-}

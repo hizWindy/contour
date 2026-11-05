@@ -9,9 +9,9 @@
  * - A session can end while a page is open (idle time, the longest session, "sign out
  *   everywhere"). Any request that then answers 401 `auth_required` marks the person signed out,
  *   and the same redirect happens. It watches every query and every change, so no page has to.
- * - While the backend answers, the page area stays empty (its own colour), so a signed-out person
- *   never sees a flash of the app. If the backend can't be reached, the page shows as before and
- *   its own errors say so.
+ * - While the backend answers, the page area shows only the shape of the app (a still skeleton,
+ *   after 200 ms), so a signed-out person never sees a flash of the app. If the backend can't be
+ *   reached, the page shows as before and its own errors say so.
  */
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, type ReactNode } from 'react'
@@ -20,6 +20,7 @@ import { isSignInNeeded } from '@/api/client'
 import { signedOutBy, useMe } from '@/api/hooks'
 import { queryKeys } from '@/api/query'
 import { loginAddress } from '@/auth/login-form'
+import { ShellSkeleton } from './shell-skeleton'
 
 /** Marks the person signed out as soon as any request says sign-in is needed. */
 function useSignedOutWatch(): void {
@@ -53,7 +54,7 @@ export function RequireSignIn({ children }: { children: ReactNode }) {
   useSignedOutWatch()
 
   if (me.isPending) {
-    return <div className="min-h-svh bg-background" aria-busy="true" />
+    return <ShellSkeleton />
   }
   if (me.data?.state === 'signed_out') {
     const here = `${location.pathname}${location.search}${location.hash}`
