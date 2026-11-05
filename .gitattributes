@@ -12,3 +12,9 @@ engine/frontend/**/*.ico binary
 engine/frontend/**/*.woff binary
 engine/frontend/**/*.woff2 binary
 *.sh text eol=lf
+
+# What goes into a Linux container, or runs on the server, is checked out with LF on every machine.
+# A Windows laptop would otherwise copy CRLF files into the images (PLAN-V6 G1 and G3).
+engine/deploy/** text eol=lf
+engine/backend/Dockerfile text eol=lf
+engine/backend/.dockerignore text eol=lf

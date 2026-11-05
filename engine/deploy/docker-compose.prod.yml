@@ -17,6 +17,14 @@
 
 name: contour
 
+# Docker keeps a container's log for ever unless told not to, and Caddy writes a line for each
+# request. This keeps the last 5 files of 10 MB for each part, so the logs can't fill the server's disk.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   web:
     image: contour-web:${TAG:-local}
@@ -24,6 +32,7 @@ services:
       context: ..
       dockerfile: frontend/Dockerfile
     restart: unless-stopped
+    logging: *logging
     environment:
       SITE_ADDRESS: ${SITE_ADDRESS:?Set SITE_ADDRESS in .env, like hq.contourinteriors.com.au}
       HSTS: ${HSTS:-max-age=31536000}
@@ -57,6 +66,7 @@ services:
     build:
       context: ../backend
     restart: unless-stopped
+    logging: *logging
     env_file: .env
     environment:
       SERVER_MODE: "true"
@@ -87,6 +97,7 @@ services:
       context: ../backend
     command: ["engine", "migrate"]
     restart: "no"
+    logging: *logging
     env_file: .env
     environment:
       POSTGRES_HOST: ${POSTGRES_HOST:-db}
@@ -102,6 +113,7 @@ services:
     profiles: ["trial"]
     image: pgvector/pgvector:pg18
     restart: unless-stopped
+    logging: *logging
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-leadfinder}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}

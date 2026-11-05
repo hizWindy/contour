@@ -12,8 +12,11 @@
 # In practice it is built and started by engine/deploy/docker-compose.prod.yml
 # (see engine/deploy/README.md). frontend/Dockerfile.dockerignore says what is left out.
 
-ARG NODE_IMAGE=node:22-slim
-ARG CADDY_IMAGE=caddy:2-alpine
+# The exact versions that were built and tried on 5 Nov 2026 (Node 22.23.4 on Debian 12, Caddy 2.11.8),
+# so a build next month gives the same image. To move to newer ones, change them here, rebuild and
+# run the checks in engine/deploy/README.md.
+ARG NODE_IMAGE=node:22.23.4-bookworm-slim
+ARG CADDY_IMAGE=caddy:2.11.8-alpine
 
 # --- Build: the website, once -----------------------------------------------------------------------
 FROM ${NODE_IMAGE} AS build
