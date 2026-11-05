@@ -4,7 +4,7 @@ This plan makes Contour HQ run on DigitalOcean's App Platform, where DigitalOcea
 
 - **Built by:** Al-khair Pama. **Signed off by:** Al-khair (nothing here changes a business rule, so nothing waits on Levi, except the HubSpot-data-in-Sydney OK that is already open).
 - **Last updated:** 2026-11-06. **TBC** means not confirmed yet.
-- **Progress:** 3 of 7 steps done (A1 to A3). B1 to B4 need a live app, which is Al-khair's to make. The work was done on branch `app-platform`, made from `master` at a966f89. **Merged into `master` on 2026-11-06** (a fast-forward, so `master` and `app-platform` are the same commit), **not pushed**.
+- **Progress:** 3 of 7 steps done (A1 to A3). B1 to B4 need a live app, which is Al-khair's to make. The work was done on branch `app-platform`, made from `master` at a966f89. **Merged into `master` and pushed on 2026-11-06** (a fast-forward, so `master` and `app-platform` are the same commit; only `master` was pushed).
 - **Comes after:** [PLAN-V7.md](PLAN-V7.md). The open steps of [PLAN-V6.md](PLAN-V6.md) (A2, and part H for a droplet) stay there.
 
 ## In short
@@ -48,9 +48,9 @@ This plan makes Contour HQ run on DigitalOcean's App Platform, where DigitalOcea
 
 ## Part B: The first deploy (Al-khair, needs a live app)
 
-- [ ] **B1. Make the app.** Push `master` (**Al-khair's call**), then follow "Set up" in the run book. **Done when:** the website opens at the app's address and the first Admin signs in.
-  - Done so far: `app-platform` merged into `master` on 2026-11-06, a fast-forward.
-  - Left: push `master`, then make the app.
+- [ ] **B1. Make the app.** Follow "Set up" in the run book (**Al-khair's call**: it creates paid resources). **Done when:** the website opens at the app's address and the first Admin signs in.
+  - Done so far: `app-platform` merged into `master`, and `master` pushed to GitHub, on 2026-11-06.
+  - Left: make the app.
 - [ ] **B2. Check the visitor's address.** Run check 1 of "Check after the first deploy" in the run book. **Done when:** the sign-in log shows your own public address after you send a fake `do-connecting-ip`. **If it shows the fake one,** App Platform does not replace the header and anyone could write their address. Don't put real data in. Decide then (**TBC**): another header, or the connection's address.
 - [ ] **B3. An update must work.** The deploy that adds the keys is the first test. **Done when:** a second deploy finishes with the backend healthy. **If the new backend can't start while the old one runs** (it finds the one-backend lock taken, and the log says `Another backend is already running`), build a **wait-for-the-lock** mode: the backend starts and answers, the run routes say "not ready" (as they do when the database is down), and a background task tries the lock every few seconds and then starts the run engine and the schedules. About half a day, with tests.
 - [ ] **B4. Before real data.** Move the dev database to a managed one. Check pgvector, and that `migrate` can make it. Put `production: true` and the cluster's name in the file. Only then add `HUBSPOT_SERVICE_KEY`, and only after Levi agrees to keep HubSpot data on a server in Sydney. **Done when:** a backup exists and a restore is tried.
@@ -58,7 +58,7 @@ This plan makes Contour HQ run on DigitalOcean's App Platform, where DigitalOcea
 ## Waiting on
 
 - **Levi:** the OK to keep HubSpot data on a server in Sydney. It is needed before the HubSpot key goes in, and PLAN-V6 has the same question open.
-- **Al-khair:** push `master` (B1), and whether to use a domain (`hq.contourinteriors.com.au`) or the `ondigitalocean.app` address for now. The app works without a domain. Contour owns and pays for the DigitalOcean account.
+- **Al-khair:** making the app (B1: it costs money, so it starts on his word), and whether to use a domain (`hq.contourinteriors.com.au`) or the `ondigitalocean.app` address for now. The app works without a domain. Contour owns and pays for the DigitalOcean account.
 
 ## Risks
 
@@ -72,5 +72,6 @@ This plan makes Contour HQ run on DigitalOcean's App Platform, where DigitalOcea
 
 Newest first.
 
+- 2026-11-06: **`master` pushed to `origin`** at Al-khair's word ("Push it"): 25 commits, a plain fast-forward push (nothing forced) from a373f0f. `app-platform` was not pushed. GitHub now has `.do/app.yaml` on `master`, which the app file reads. B1 is half done: the app is left.
 - 2026-11-06: **Merged into `master`** at Al-khair's word ("Merge it"). `master` was at a966f89 and had nothing of its own, so it was fast-forwarded to the tip of `app-platform` with no merge commit. Nothing was pushed: `master` is 24 commits ahead of `origin/master` (a373f0f, as last fetched). `app-platform` is kept (it is the same commit) and can be deleted when Al-khair likes. B1 is half done: the push and the app are left.
 - 2026-11-06: **A1 to A3 done** on `app-platform`, not merged, not pushed. Backend suite: 3,164 passed and 25 skipped in 6 min 31 s (`RUN_GATES=1`), against 3,099 and 25 before this plan. The sign-in tests ran again after the last change (the last line of a doubled header): 642 passed. **Read from DigitalOcean's docs the same day:** Sydney (`SYD`) is listed for App Platform apps, but the `syd` slug and a dev database there are not confirmed; `deploy_on_push` is valid on jobs; a service health check with no `http_path` is a TCP check; `preserve_path_prefix` exists. The docs do not say whether the Create page reads `.do/app.yaml`, or whether a new backend starts before the old one stops. **The file's own test caught one slip:** the migrate job had no `deploy_on_push: false`.
