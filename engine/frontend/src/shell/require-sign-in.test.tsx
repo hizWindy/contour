@@ -1,8 +1,9 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, type QueryClient } from '@tanstack/react-query'
 import { screen, waitFor } from '@testing-library/react'
 import { createMemoryRouter, Outlet, RouterProvider, useLocation } from 'react-router'
 import { describe, expect, it } from 'vitest'
 import { api, unwrap } from '@/api/client'
+import { meQueryOptions } from '@/api/hooks'
 import LoginPage from '@/auth/login-page'
 import {
   loginOk,
@@ -12,7 +13,7 @@ import {
   signInOff,
   stubAuthBackend,
 } from '@/test/fake-auth'
-import { renderWithProviders } from '@/test/render'
+import { createTestQueryClient, renderWithProviders } from '@/test/render'
 import { RequireSignIn } from './require-sign-in'
 import { UserMenu } from './user-menu'
 
@@ -31,7 +32,7 @@ function Results() {
 }
 
 /** The app as the guard sees it: the login page, and pages inside the guard with the top bar's menu. */
-function renderApp(start: string) {
+function renderApp(start: string, queryClient?: QueryClient) {
   const router = createMemoryRouter(
     [
       {
@@ -60,12 +61,23 @@ function renderApp(start: string) {
     ],
     { initialEntries: [start] },
   )
-  return renderWithProviders(<RouterProvider router={router} />, { withRouter: false })
+  return renderWithProviders(<RouterProvider router={router} />, { withRouter: false, queryClient })
 }
 
 const address = () => screen.getByTestId('address')
 
 describe('the app knows who is signed in', () => {
+  it('asks once when main.tsx started the question before the first draw (PLAN-V7 C1)', async () => {
+    const backend = stubAuthBackend({ me: signedIn() })
+    const queryClient = createTestQueryClient()
+    void queryClient.prefetchQuery(meQueryOptions())
+
+    renderApp('/', queryClient)
+
+    expect(await screen.findByText('Home')).toBeInTheDocument()
+    expect(backend.calls.filter((call) => call.path === '/auth/me')).toHaveLength(1)
+  })
+
   it('sends a signed-out visit to the login page, then back to where the person was', async () => {
     const backend = stubAuthBackend({ me: signedOut(), login: loginOk() })
     const { user } = renderApp('/results?city=Perth')

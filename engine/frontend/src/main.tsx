@@ -9,6 +9,7 @@ import '@fontsource/ibm-plex-serif/latin-400.css'
 import '@fontsource/ibm-plex-serif/latin-ext-400.css'
 
 import './styles/index.css'
+import { meQueryOptions } from './api/hooks'
 import { createQueryClient } from './api/query'
 import { App } from './App'
 import { createAppRouter, routes } from './router'
@@ -29,6 +30,8 @@ if (!root) {
 const queryClient = createQueryClient()
 const router = createAppRouter()
 prefetchOnNavigation(router, queryClient)
+// Every page waits for "who is signed in", so that goes out first too, not after the page's code.
+void queryClient.prefetchQuery(meQueryOptions())
 
 createRoot(root).render(
   <StrictMode>

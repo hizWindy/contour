@@ -12,7 +12,13 @@
  *
  * `useMe` turns the answer into one of three states, so the app never has to read a 401 itself.
  */
-import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
+import {
+  queryOptions,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from '@tanstack/react-query'
 import { api, isSignInNeeded, unwrap, type ApiProblem } from '../client'
 import { queryKeys } from '../query'
 import type { Schemas } from '../types'
@@ -37,8 +43,8 @@ export function signedOutBy(problem: ApiProblem): SignIn {
  * mounts (`retryOnMount: false`): the sign-in guard and the top bar both read it, and asking again
  * would hide the page, show it, and ask again, forever.
  */
-export function useMe() {
-  return useQuery<SignIn, ApiProblem>({
+export function meQueryOptions() {
+  return queryOptions<SignIn, ApiProblem>({
     queryKey: queryKeys.auth.me(),
     queryFn: async ({ signal }) => {
       try {
@@ -56,6 +62,10 @@ export function useMe() {
     retryOnMount: false,
     staleTime: 60_000,
   })
+}
+
+export function useMe() {
+  return useQuery(meQueryOptions())
 }
 
 export interface LoginBody {
