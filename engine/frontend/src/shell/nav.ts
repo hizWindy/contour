@@ -17,6 +17,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import type { RouteObject } from 'react-router'
+import type { ProjectTone } from './tone'
 
 export interface NavItem {
   /** The address, like "/results". */
@@ -43,6 +44,8 @@ export interface AppModule {
   /** The name in the sidebar and on Home. */
   name: string
   icon: LucideIcon
+  /** Its quiet colour (DESIGN.md "Project colour"), for its icon tiles, menu icon and Home card. */
+  tone?: ProjectTone
   /** What the project does, in one sentence, for its card on Home. */
   description: string
   /** Its pages, in menu order. */

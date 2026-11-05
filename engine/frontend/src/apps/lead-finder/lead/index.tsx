@@ -2,6 +2,7 @@
  * One lead on its own page, so it can be shared. Results also shows it in a side panel. A back
  * button above the title returns to where the person came from (the list, a run, a search).
  */
+import { Table2 } from 'lucide-react'
 import { useParams } from 'react-router'
 import { useLead } from '@/api/hooks'
 import { BackButton } from '@/components/back-button'
@@ -38,6 +39,8 @@ export default function LeadPage() {
     <>
       <BackButton fallbackTo="/results" fallbackLabel="Results" />
       <PageHeader
+        icon={Table2}
+        tone="lead"
         title={lead.data.company}
         description={lead.data.facts.industry.value ?? undefined}
       />

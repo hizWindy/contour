@@ -81,6 +81,23 @@
   --chart-4: light-dark(#a8742a, #d9a25a);
   --chart-5: light-dark(#b4412d, #d98471);
 
+  /* ---- Project colour: one quiet tint per project, so a page shows which project it belongs
+     to (DESIGN.md "Project colour"). Only on the project's icon tiles, its icon in the menu and a
+     3px line on its Home card. Never on buttons, text or status: Navy and the result colours keep
+     those jobs. The Lead Finder is Eucalyptus, a muted green-teal that sits with the earthy palette. */
+  --lead: light-dark(#3e6e66, #86b8ad);
+  --lead-soft: light-dark(#e0ece8, #263a35);
+  --lead-ink: light-dark(#2a4e47, #b5d9cf);
+
+  /* ---- The sign-in page's avatar: an illustration, never text --------------------------- */
+  --avatar-skin: light-dark(#d8a986, #c99a77);
+  --avatar-skin-shade: light-dark(#bd8b68, #ad7f5e);
+  --avatar-hair: light-dark(#3b3127, #2e261f);
+  --avatar-suit: light-dark(#3a3f47, #4a505a);
+  --avatar-shirt: light-dark(#fbfbf8, #e5e8db);
+  --avatar-tie: light-dark(#233a56, #8ea5c3);
+  --avatar-line: light-dark(#26231b, #1e1b15);
+
   /* ---- Brand panel: the sign-in page's Navy half, in both modes (PLAN-V6, "The login page") --
      Navy here is the brand, not an action, so it stays Navy in dark mode too. Text on it is the
      cream of Contour's wordmark (Stone), or a quieter blue-grey step for small print. */

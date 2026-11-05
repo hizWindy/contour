@@ -41,13 +41,16 @@ import {
 import { REDUCED_MOTION, useMediaQuery } from '@/lib/use-media-query'
 import { cn } from '@/lib/utils'
 import { BrandPanel } from './brand-panel'
+import { LoginAvatar } from './login-avatar'
 import {
+  avatarMood,
   FAILED_TEXT,
   LAPTOP,
   lockedText,
   loginSchema,
   NOTICE_TEXT,
   wrongText,
+  type LoginFocus,
   type LoginNotice,
   type LoginStatus,
   type LoginValues,
@@ -165,6 +168,25 @@ function LoginLayout({
   const [forgotOpen, setForgotOpen] = useState(false)
   const signingIn = status.kind === 'signing_in'
 
+  // The avatar: which field has the cursor, whether the person typed after the last answer, one
+  // head shake per failed try, and one wave when the page opens after a sign-out.
+  const [field, setField] = useState<LoginFocus>(null)
+  const [typedSinceStatus, setTypedSinceStatus] = useState(false)
+  const [shakes, setShakes] = useState(0)
+  const [wave] = useState(notice !== null)
+  useEffect(() => {
+    setTypedSinceStatus(false)
+    if (status.kind === 'wrong' || status.kind === 'locked' || status.kind === 'failed') {
+      setShakes((count) => count + 1)
+    }
+  }, [status])
+  const typed = (): void => {
+    setTypedSinceStatus(true)
+  }
+  const left = (): void => {
+    setField(null)
+  }
+
   const {
     register,
     handleSubmit,
@@ -200,6 +222,8 @@ function LoginLayout({
   const forgotId = `${ids}-forgot`
   const capsId = `${ids}-caps`
   const NoticeIcon = notice ? NOTICE_ICONS[notice] : null
+  const mood = avatarMood({ status, focus: field, showPassword, typedSinceStatus })
+  const look = (watch('identifier') || '').length / 24
 
   return (
     <div className="min-h-dvh bg-background lg:grid lg:grid-cols-2">
@@ -218,11 +242,14 @@ function LoginLayout({
             aria-labelledby={`${ids}-title`}
             className="flex flex-col gap-6 rounded-lg border bg-card p-6 sm:p-8"
           >
-            <div className="flex flex-col gap-1">
-              <h1 id={`${ids}-title`} className="font-serif text-title">
-                Welcome back
-              </h1>
-              <p className="text-ui text-muted-foreground">Sign in to Contour HQ</p>
+            <div className="flex items-center gap-4">
+              <LoginAvatar mood={mood} look={look} shakes={shakes} wave={wave} />
+              <div className="flex min-w-0 flex-col gap-1">
+                <h1 id={`${ids}-title`} className="font-serif text-title">
+                  Welcome back
+                </h1>
+                <p className="text-ui text-muted-foreground">Sign in to Contour HQ</p>
+              </div>
             </div>
 
             {notice && NoticeIcon ? (
@@ -260,7 +287,10 @@ function LoginLayout({
                     spellCheck={false}
                     aria-invalid={errors.identifier ? true : undefined}
                     aria-describedby={errors.identifier ? `${identifierId}-error` : undefined}
-                    {...register('identifier')}
+                    onFocus={() => {
+                      setField('identifier')
+                    }}
+                    {...register('identifier', { onChange: typed, onBlur: left })}
                   />
                 </InputGroup>
                 {errors.identifier ? (
@@ -290,9 +320,14 @@ function LoginLayout({
                     }
                     onKeyDown={capsCheck}
                     onKeyUp={capsCheck}
+                    onFocus={() => {
+                      setField('password')
+                    }}
                     {...register('password', {
+                      onChange: typed,
                       onBlur: () => {
                         setCapsLock(false)
+                        left()
                       },
                     })}
                   />

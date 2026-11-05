@@ -43,6 +43,30 @@ describe('the menu on different screens', () => {
   })
 })
 
+describe('the menu on a phone', () => {
+  it('slides shut once a page is picked, and stays open when a project row is opened or closed', async () => {
+    asPhone()
+    const { user } = renderAt('/runs')
+    await screen.findByRole('heading', { level: 1, name: 'Runs' }, { timeout: LAZY })
+    const panel = () => document.querySelector('[data-mobile=true]')
+
+    await user.click(screen.getByRole('button', { name: 'Show or hide the menu' }))
+    expect(panel()).not.toBeNull()
+    const menu = within(panel() as HTMLElement)
+
+    // The project's own row only folds its list, so the menu stays open.
+    await user.click(menu.getByRole('button', { name: 'Lead Finder' }))
+    await user.click(menu.getByRole('button', { name: 'Lead Finder' }))
+    expect(panel()).not.toBeNull()
+
+    await user.click(menu.getByRole('link', { name: 'Start a run' }))
+    await screen.findByRole('heading', { level: 1, name: 'Start a run' }, { timeout: LAZY })
+    await vi.waitFor(() => {
+      expect(panel()).toBeNull()
+    })
+  })
+})
+
 describe('the top bar on a phone', () => {
   it('keeps the search as a button with a name, though only its icon shows', async () => {
     asPhone()

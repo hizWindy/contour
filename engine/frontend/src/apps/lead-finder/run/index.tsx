@@ -117,6 +117,8 @@ function RunView({ runId, run }: { runId: string; run: Run }) {
   return (
     <>
       <PageHeader
+        icon={ListChecks}
+        tone="lead"
         title={`Run ${shortId(runId)}`}
         description={`${RUN_MODE_LABELS[final.mode] ?? final.mode}. Started ${formatDateTime(final.created_at)}.`}
         actions={

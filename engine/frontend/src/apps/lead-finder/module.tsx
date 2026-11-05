@@ -16,6 +16,7 @@ export const LEAD_FINDER: AppModule = {
   id: 'lead-finder',
   name: 'Lead Finder',
   icon: Target,
+  tone: 'lead',
   description:
     'Finds companies that fit Contour and show signs of an office change, and ranks them for sales.',
   pages: [

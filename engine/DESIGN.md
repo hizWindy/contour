@@ -43,7 +43,9 @@ Olive and Terracotta come from Contour's site. Ochre is a muted step of Contour'
 - Text is Ink on Stone, or Stone on Ink. All text passes 4.5:1 contrast: Ink on the page is about 14:1, quieter text about 6.5:1, and light text on Navy about 11:1.
 - Form field borders use `#8F937F`, which passes 3:1, so fields are easy to see. Plain dividers can be lighter.
 - One accent, Navy. No gradients.
+- **Project colour:** each project may have one quiet tint, so a page shows which project it belongs to. The Lead Finder is Eucalyptus (`--lead` `#3E6E66`, tile `--lead-soft` `#E0ECE8` with `--lead-ink` `#2A4E47`). It goes only on the project's icon tiles (Home card, page titles), its icon in the menu and a 3px line on top of its Home card. Never on buttons, text, links or status: Navy and the result colours keep those jobs. A second project picks its own muted tint from the same earthy family (**TBC**).
 - **The sign-in page** (PLAN-V6) has a Navy brand panel with Contour's cream wordmark and fine contour lines. There Navy is the brand, not an action, so the panel stays Navy in dark mode too (`--brand`). In the form, Navy is still only the "Sign in" button.
+- **The sign-in avatar** is an illustration of a person in a suit and glasses, in its own `--avatar-*` tokens. It is never text and never the only sign of a state.
 - **Dark mode** is a choice. The site opens in light colours. The Ctrl+K menu switches to dark, or to follow your computer's setting, and the browser remembers it. In dark mode, Ink becomes the background and Stone the text. Navy steps up to `#8EA5C3`, so it stays visible.
 
 **Results and labels**
@@ -93,7 +95,7 @@ Sizes are in rem, so browser zoom works. Nothing is smaller than 13px. Sentence 
 - **Screens:** the site works at every width, from a phone (360px) to a wide laptop.
   - **Laptop (1024px and up):** the menu is open, and a page may use two columns.
   - **Tablet (640 to 1023px):** the menu starts folded to its icons so the page keeps the room. The cost card on Start moves under the form, with a bar at the bottom of the screen for the cost and the Start button.
-  - **Phone (under 640px):** one column. The menu is a panel that slides in. The top bar is one line (a search icon, the breadcrumbs shorten with "..."). Admin tabs are one row that scrolls sideways. Tables show only the columns that tell rows apart (the rest are one tap away in the side panel). Results filters sit behind one Filters button that opens a sheet. The run page orders its cards: progress, cost, links, companies, events, setup.
+  - **Phone (under 640px):** one column. The menu is a panel that slides in, and slides shut once you pick a page (a project's own row only opens or closes its list). The top bar is one line (a search icon, the breadcrumbs shorten with "..."). Admin tabs are one row that scrolls sideways. Tables show only the columns that tell rows apart (the rest are one tap away in the side panel). Results filters sit behind one Filters button that opens a sheet. The run page orders its cards: progress, cost, links, companies, events, setup.
   - **Nothing scrolls the whole page sideways at any width.** A wide table scrolls inside its own box.
 - **Touch:** a phone, or any screen you tap with a finger, gets bigger controls (the `touch:` variant in `index.css`): buttons, toggles, fields and menu rows are 44px tall, and checkboxes have a larger hit area. Fields use 16px text so iPhones don't zoom in on focus. A mouse keeps the 36px sizes.
 
@@ -121,6 +123,7 @@ Sizes are in rem, so browser zoom works. Nothing is smaller than 13px. Sentence 
 - **Loading:** content fades in. No shimmer and no bouncing dots, so shadcn's Skeleton is used without its pulse.
 - **A live run** shows a filling progress bar and a static dot. Nothing pulses or loops.
 - **Reduced motion:** if your computer asks for it, motion turns off.
+- **Second exception, waiting for an OK (TBC):** the sign-in avatar reacts to the form. Its eyes follow the login as it is typed (150ms), it shakes its head once after a wrong try (0.6s) and waves once after a sign-out (1.8s). Nothing loops, and reduced motion keeps it still (the face still changes).
 - **One exception, waiting for an OK (TBC):** the sign-in page's contour lines draw once, over 1.6s, when the page opens. They never loop, and reduced motion turns them off.
 
 ## Icons
@@ -187,6 +190,7 @@ Phase 0 sets these as CSS variables (shadcn stores them in OKLCH). In shadcn, `-
 | `--destructive` | `#B4412D` | `#D98471` |
 | `--chart-1` to `--chart-5` | Navy, Olive, Sand, Ochre, Terracotta | Lighter steps of the same |
 | `--sidebar` | `#E5E8DB` | `#1E1B15` |
+| `--lead`, `--lead-soft`, `--lead-ink` (Lead Finder colour) | `#3E6E66`, `#E0ECE8`, `#2A4E47` | `#86B8AD`, `#263A35`, `#B5D9CF` |
 | `--brand` (sign-in panel) | `#233A56` | `#1F344E` |
 | `--brand-foreground`, `--brand-muted` | `#E5E8DB`, `#B4C0CF` | Same |
 | `--radius` | `0.625rem` | Same |

@@ -137,3 +137,36 @@ export const loginSchema = z.object({
 })
 
 export type LoginValues = z.infer<typeof loginSchema>
+
+/** Which field has the cursor, for the avatar. */
+export type LoginFocus = 'identifier' | 'password' | null
+
+/**
+ * The sign-in page's avatar follows the form, so it never says anything the words don't:
+ * - `ready`: a calm smile.
+ * - `watching`: eyes on the login being typed (or on a password the person chose to show).
+ * - `eyes_closed`: it looks away politely while a hidden password is typed.
+ * - `thinking`: while the sign-in is checked.
+ * - `concerned`: after a wrong try, a lock or a failure, until the person types again.
+ */
+export type AvatarMood = 'ready' | 'watching' | 'eyes_closed' | 'thinking' | 'concerned'
+
+export function avatarMood({
+  status,
+  focus,
+  showPassword,
+  typedSinceStatus,
+}: {
+  status: LoginStatus
+  focus: LoginFocus
+  showPassword: boolean
+  /** True once the person has typed after the last answer. */
+  typedSinceStatus: boolean
+}): AvatarMood {
+  if (status.kind === 'signing_in') return 'thinking'
+  const failed = status.kind === 'wrong' || status.kind === 'locked' || status.kind === 'failed'
+  if (failed && !typedSinceStatus) return 'concerned'
+  if (focus === 'password') return showPassword ? 'watching' : 'eyes_closed'
+  if (focus === 'identifier') return 'watching'
+  return 'ready'
+}

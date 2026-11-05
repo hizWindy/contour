@@ -89,6 +89,9 @@
   --color-watch: var(--watch);
   --color-watch-soft: var(--watch-soft);
   --color-watch-ink: var(--watch-ink);
+  --color-lead: var(--lead);
+  --color-lead-soft: var(--lead-soft);
+  --color-lead-ink: var(--lead-ink);
 
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);

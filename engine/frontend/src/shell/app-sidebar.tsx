@@ -21,8 +21,21 @@ import {
 } from '@/components/ui/sidebar'
 import { MODULES, PLANNED } from '@/modules'
 import { ADMIN, HOME, isHere, type AppModule, type NavItem } from './nav'
+import { TONE_CLASSES } from './tone'
 
 const PLANNED_LABEL_ID = 'menu-planned'
+
+/**
+ * On a phone the menu is a panel over the page, so picking a page slides it shut and shows the
+ * page. A project's own row only opens or closes its list, so it leaves the panel open. On a
+ * laptop or tablet the menu stays where it is.
+ */
+function useCloseOnPhone(): () => void {
+  const { isMobile, setOpenMobile } = useSidebar()
+  return () => {
+    if (isMobile) setOpenMobile(false)
+  }
+}
 
 function MenuLink({
   item,
@@ -36,6 +49,7 @@ function MenuLink({
 }) {
   const Icon = item.icon
   const here = isHere(pathname, item)
+  const closeOnPhone = useCloseOnPhone()
   return (
     <SidebarMenuItem>
       <SidebarMenuButton
@@ -45,7 +59,7 @@ function MenuLink({
         className={planned && !here ? 'text-muted-foreground' : undefined}
       >
         {/* A plain Link: this menu decides what counts as "here" (a lead card is in Results). */}
-        <Link to={item.to} aria-current={here ? 'page' : undefined}>
+        <Link to={item.to} aria-current={here ? 'page' : undefined} onClick={closeOnPhone}>
           <Icon aria-hidden="true" className="size-5" />
           <span>{item.label}</span>
         </Link>
@@ -58,6 +72,7 @@ function MenuLink({
 function SubLink({ item, pathname }: { item: NavItem; pathname: string }) {
   const Icon = item.icon
   const here = isHere(pathname, item)
+  const closeOnPhone = useCloseOnPhone()
   return (
     <SidebarMenuSubItem>
       <SidebarMenuSubButton
@@ -65,7 +80,7 @@ function SubLink({ item, pathname }: { item: NavItem; pathname: string }) {
         isActive={here}
         className="h-9 touch:h-11 data-active:font-semibold [&>svg]:size-5"
       >
-        <Link to={item.to} aria-current={here ? 'page' : undefined}>
+        <Link to={item.to} aria-current={here ? 'page' : undefined} onClick={closeOnPhone}>
           <Icon aria-hidden="true" />
           <span>{item.label}</span>
         </Link>
@@ -111,7 +126,10 @@ function ModuleGroup({ app, pathname }: { app: AppModule; pathname: string }) {
           <SidebarMenuItem className="group/collapsible">
             <CollapsibleTrigger asChild>
               <SidebarMenuButton id={labelId} isActive={!open && inside}>
-                <Icon aria-hidden="true" />
+                <Icon
+                  aria-hidden="true"
+                  className={app.tone ? TONE_CLASSES[app.tone].icon : undefined}
+                />
                 <span className="truncate">{app.name}</span>
                 <ChevronRight
                   aria-hidden="true"

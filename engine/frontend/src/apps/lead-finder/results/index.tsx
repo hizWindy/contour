@@ -217,6 +217,8 @@ export default function ResultsPage() {
   return (
     <>
       <PageHeader
+        icon={Table2}
+        tone="lead"
         title="Results"
         description="Every lead, best first. Open one to see why it fits, rule by rule."
         actions={

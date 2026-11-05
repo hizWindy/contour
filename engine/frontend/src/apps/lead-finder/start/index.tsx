@@ -9,7 +9,7 @@
  * - Start is safe to double-click: the same choices send the same Idempotency-Key, so a second
  *   click returns the first run instead of starting another.
  */
-import { CircleAlert, Play } from 'lucide-react'
+import { CircleAlert, MapPinned, Play } from 'lucide-react'
 import { useMemo, useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
 import { fieldErrorMap, newIdempotencyKey, toApiProblem } from '@/api/client'
@@ -542,6 +542,8 @@ export default function StartPage() {
   return (
     <>
       <PageHeader
+        icon={MapPinned}
+        tone="lead"
         title="Start a run"
         description="Choose what to look for, check the cost, then start. You can stop a run at any time."
       />

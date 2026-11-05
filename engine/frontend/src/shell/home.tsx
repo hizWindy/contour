@@ -7,7 +7,9 @@ import { PageHeader } from '@/components/page-header'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
 import { MODULES, PLANNED } from '@/modules'
+import { TONE_CLASSES } from './tone'
 
 export default function HomePage() {
   return (
@@ -20,11 +22,26 @@ export default function HomePage() {
         {MODULES.map((app) => {
           const Icon = app.icon
           return (
-            <Card key={app.id} aria-labelledby={`home-${app.id}`} role="region">
+            <Card
+              key={app.id}
+              aria-labelledby={`home-${app.id}`}
+              role="region"
+              className={app.tone ? TONE_CLASSES[app.tone].line : undefined}
+            >
               <CardHeader>
                 <CardTitle>
-                  <h2 id={`home-${app.id}`} className="flex items-center gap-2">
-                    <Icon aria-hidden="true" className="size-5 text-muted-foreground" />
+                  <h2 id={`home-${app.id}`} className="flex items-center gap-3">
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        'flex size-9 shrink-0 items-center justify-center rounded-md',
+                        app.tone
+                          ? TONE_CLASSES[app.tone].tile
+                          : 'bg-secondary text-muted-foreground',
+                      )}
+                    >
+                      <Icon className="size-5" />
+                    </span>
                     {app.name}
                   </h2>
                 </CardTitle>
