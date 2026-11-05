@@ -1025,6 +1025,45 @@ async def test_the_engine_is_still_closed_when_start_up_fails(
     assert steps == ["shutdown", "dispose"]
 
 
+async def test_a_backend_waiting_for_the_lock_starts_its_background_work_only_on_take_over(
+    app: FastAPI, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Server mode during a deploy (PLAN-V8 B3): the old backend still holds the run engine, so
+    the scheduler and the HubSpot copy start only once this one has taken it over."""
+    steps: list[str] = []
+
+    async def started(received: FastAPI) -> None:
+        received.state.run_engine_waiting = True
+        steps.append("startup, waiting")
+
+    async def background_work(received: FastAPI) -> None:
+        steps.append("background work")
+
+    def take_over_later(received: FastAPI, then: Any) -> None:
+        assert (received, then) == (app, background_work)
+        steps.append("take over later")
+
+    async def stop_waiting(received: FastAPI) -> None:
+        steps.append("stop waiting")
+
+    async def stopped(received: FastAPI) -> None:
+        steps.append("shutdown")
+
+    class FakeEngine:
+        async def dispose(self) -> None:
+            steps.append("dispose")
+
+    monkeypatch.setattr(lifecycle, "startup", started)
+    monkeypatch.setattr(lifecycle, "take_over_later", take_over_later)
+    monkeypatch.setattr(lifecycle, "stop_waiting", stop_waiting)
+    monkeypatch.setattr(lifecycle, "shutdown", stopped)
+    monkeypatch.setattr(app_module, "start_background_work", background_work)
+    monkeypatch.setattr(app_module, "get_engine", FakeEngine)
+    async with app.router.lifespan_context(app):
+        assert steps == ["startup, waiting", "take over later"]
+    assert steps == ["startup, waiting", "take over later", "stop waiting", "shutdown", "dispose"]
+
+
 async def test_the_app_starts_without_a_run_manager_when_the_database_is_down(
     app: FastAPI, monkeypatch: pytest.MonkeyPatch
 ) -> None:

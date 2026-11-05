@@ -3,8 +3,15 @@
 `startup` builds the real run manager, takes the Postgres advisory lock that keeps a second
 backend off the same database, marks the runs the last process left going as `interrupted`
 (`recover`), and puts the manager in `app.state.run_manager`:
-- If another backend holds the lock, the app refuses to start ("Another backend is already
-  running"). Two backends would both resume and both spend.
+- If another backend holds the lock, two backends would both resume and both spend, so this one
+  never runs the engine at the same time:
+  - On this computer the app refuses to start ("Another backend is already running").
+  - In server mode it starts without the run engine and waits (`take_over_later`). A deploy on
+    DigitalOcean App Platform starts the new backend while the old one still runs, and stops the
+    old one only once the new one is up (PLAN-V8 B3). Until then the run routes answer 503
+    (`runs_not_ready`) and the website and sign-in work. Every few seconds the new backend tries
+    the lock again. Once the old one has stopped and let it go, the new one recovers the runs,
+    starts the run engine, and then the scheduler and the HubSpot copy.
 - If the database is down, that is NOT fatal. It logs a plain message and leaves
   `app.state.run_manager` unset, so the run routes answer 503 (`runs_not_ready`) until the
   backend is restarted with the database up.
@@ -17,8 +24,10 @@ The lock lives on its own connection (autocommit), held for the life of the proc
 connection is lost, Postgres lets the lock go; the backend does not notice. TBC: watch it.
 """
 
+import asyncio
 import contextlib
 import logging
+from collections.abc import Awaitable, Callable
 from typing import Any, cast
 
 import psycopg
@@ -42,6 +51,12 @@ log = logging.getLogger(__name__)
 RUN_ENGINE_LOCK = 7_244_002  # a Postgres advisory lock key: one backend per database
 ANOTHER_BACKEND = (
     "Another backend is already running on this database. Stop it first, then start this one."
+)
+# In server mode, how often a backend that waits for the lock tries it again (PLAN-V8 B3).
+LOCK_RETRY_SECONDS = 5.0
+WAITING_FOR_LOCK = (
+    "Another backend holds the run engine on this database (during a deploy, the old one). This "
+    "one starts without it and takes it over when the other one stops."
 )
 # What a database that is down looks like at start-up.
 DATABASE_DOWN = (psycopg.Error, SQLAlchemyError, OSError, TimeoutError, Problem)
@@ -154,15 +169,73 @@ async def startup(app: FastAPI) -> None:
         return
     if not taken:
         await manager.shutdown()
-        raise RuntimeError(ANOTHER_BACKEND)
+        if not get_settings().server_mode:
+            raise RuntimeError(ANOTHER_BACKEND)
+        app.state.run_engine_waiting = True  # the lifespan then calls take_over_later
+        log.warning(WAITING_FOR_LOCK)
+        return
+    await _start_engine(app, manager)
+
+
+async def _start_engine(app: FastAPI, manager: RunManager) -> bool:
+    """With the lock held: recovers the runs and puts the manager in `app.state`. False (and the
+    lock let go) when the database is down."""
     try:
         recovered = await manager.recover()
     except DATABASE_DOWN as error:
         await manager.shutdown()  # lets the lock go
         _runs_off(error)
-        return
+        return False
     app.state.run_manager = manager
     log.info("run_engine_ready", extra={"recovered": recovered})
+    return True
+
+
+def waiting(app: FastAPI) -> bool:
+    """True when this backend started without the run engine because another one holds it."""
+    return bool(getattr(app.state, "run_engine_waiting", False))
+
+
+def take_over_later(
+    app: FastAPI,
+    then: Callable[[FastAPI], Awaitable[None]],
+    *,
+    every: float = LOCK_RETRY_SECONDS,
+) -> None:
+    """Tries the lock again every `every` seconds in the background. When it is free, starts the
+    run engine here, then calls `then` (the scheduler and the HubSpot copy). `stop_waiting` ends
+    the wait when the app stops first."""
+
+    async def wait() -> None:
+        manager = build(app)
+        try:
+            while True:
+                await asyncio.sleep(every)
+                try:
+                    if await manager.acquire_backend_lock():
+                        break
+                except DATABASE_DOWN:
+                    continue  # the database may be back by the next try
+        except asyncio.CancelledError:
+            await manager.shutdown()
+            raise
+        app.state.run_engine_waiting = False
+        if await _start_engine(app, manager):
+            log.info("run_engine_taken_over")
+            await then(app)
+
+    app.state.run_engine_waiter = asyncio.create_task(wait(), name="take-over-run-engine")
+
+
+async def stop_waiting(app: FastAPI) -> None:
+    """Ends the wait for the lock, if there is one. Safe to call when there is none."""
+    task: asyncio.Task[None] | None = getattr(app.state, "run_engine_waiter", None)
+    if task is None:
+        return
+    del app.state.run_engine_waiter
+    task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
 
 
 def _runs_off(error: BaseException) -> None:

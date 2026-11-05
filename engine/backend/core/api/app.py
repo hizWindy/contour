@@ -31,20 +31,31 @@ API_PREFIX = "/api/v1"
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Start the run engine, and on the way out stop it and close the database pool.
 
-    `lifecycle.shutdown` is safe to call when `startup` failed part way.
+    `lifecycle.shutdown` is safe to call when `startup` failed part way. In server mode, when
+    another backend still holds the run engine (a deploy on App Platform), this one starts without
+    it and takes it over in the background once the other one stops (PLAN-V8 B3).
     """
     try:
         await lifecycle.startup(app)
-        await hubspot_connection.start_up(app)  # a background sync if the last is old; never fails
-        await schedules.start_up(app)  # only where this backend holds the run engine's lock
+        if lifecycle.waiting(app):
+            lifecycle.take_over_later(app, then=start_background_work)
+        else:
+            await start_background_work(app)
         yield
     finally:
         try:
+            await lifecycle.stop_waiting(app)
             await schedules.shut_down(app)
             await hubspot_connection.shut_down(app)
             await lifecycle.shutdown(app)
         finally:
             await get_engine().dispose()
+
+
+async def start_background_work(app: FastAPI) -> None:
+    """The HubSpot copy and the scheduler. Neither ever fails a start-up."""
+    await hubspot_connection.start_up(app)  # a background sync if the last is old
+    await schedules.start_up(app)  # only where this backend holds the run engine's lock
 
 
 def operation_id(route: APIRoute) -> str:

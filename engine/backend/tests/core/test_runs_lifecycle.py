@@ -4,8 +4,10 @@ that is down, stopping runs at shut-down, and the checkpoint pool.
 Integration: they use the test database (the lock and the pool are real).
 """
 
+import asyncio
 import logging
 import uuid
+from collections.abc import Callable
 from decimal import Decimal
 from typing import Any
 
@@ -19,7 +21,7 @@ from core.api.app import create_app
 from core.config import get_settings
 from core.runs import lifecycle
 from core.runs.checkpoint import CheckpointStoreError, PoolCheckpointer
-from core.runs.lifecycle import ANOTHER_BACKEND, BackendLock
+from core.runs.lifecycle import ANOTHER_BACKEND, WAITING_FOR_LOCK, BackendLock
 from core.runs.manager import BACKEND_STOPPED, RunManager, kinds_from_specs
 from core.runs.models import Run
 from core.runs.schemas import RunCounts
@@ -127,6 +129,7 @@ async def test_a_second_backend_refuses_to_start(
     monkeypatch: pytest.MonkeyPatch,
     other_backend: BackendLock,
 ) -> None:
+    """On this computer: the message says to stop the other one."""
     assert await other_backend.acquire()
     monkeypatch.setattr(lifecycle, "build", build_with(make_manager, BackendLock()))
     app = FastAPI()
@@ -134,6 +137,96 @@ async def test_a_second_backend_refuses_to_start(
         await lifecycle.startup(app)
     assert not hasattr(app.state, "run_manager")
     assert ANOTHER_BACKEND.startswith("Another backend is already running")
+
+
+# --- In server mode a second backend waits, then takes over (PLAN-V8 B3) --------------------------
+
+
+@pytest.fixture
+def server_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The test settings in server mode, as the lifecycle reads them (same database)."""
+    server = get_settings().model_copy(update={"server_mode": True})
+    monkeypatch.setattr(lifecycle, "get_settings", lambda: server)
+
+
+async def wait_until(condition: Callable[[], bool], seconds: float = 5.0) -> None:
+    for _ in range(int(seconds / 0.05)):
+        if condition():
+            return
+        await asyncio.sleep(0.05)
+    pytest.fail("waited too long")
+
+
+async def test_in_server_mode_a_second_backend_waits_then_takes_over_when_the_first_stops(
+    make_manager: MakeManager,
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+    other_backend: BackendLock,
+    server_mode: None,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A deploy on App Platform starts the new backend while the old one still runs, and stops the
+    old one only once the new one is up."""
+    assert await other_backend.acquire()  # the old backend
+    monkeypatch.setattr(lifecycle, "build", build_with(make_manager, BackendLock()))
+    app = FastAPI()
+    started: list[FastAPI] = []
+
+    async def background_work(received: FastAPI) -> None:
+        started.append(received)
+
+    with caplog.at_level(logging.WARNING, logger="core.runs.lifecycle"):
+        await lifecycle.startup(app)  # does not refuse
+    assert WAITING_FOR_LOCK in caplog.text
+    assert lifecycle.waiting(app)
+    assert not hasattr(app.state, "run_manager")  # the run routes answer 503 meanwhile
+
+    lifecycle.take_over_later(app, background_work, every=0.05)
+    await asyncio.sleep(0.3)
+    assert not hasattr(app.state, "run_manager")  # the old one still holds the lock
+    assert started == []
+
+    cut_off = await insert_run(session_factory, "running")  # left going by the old one
+    await other_backend.release()  # the old backend stops
+    await wait_until(lambda: started == [app])
+
+    assert isinstance(app.state.run_manager, RunManager)
+    assert not lifecycle.waiting(app)
+    row = await run_row(session_factory, cut_off)
+    assert (row.status, row.stop_reason) == ("interrupted", BACKEND_STOPPED)
+    assert not await other_backend.acquire()  # this backend holds it now
+
+    await lifecycle.stop_waiting(app)  # the wait is over: nothing to stop
+    await lifecycle.shutdown(app)
+    assert await other_backend.acquire()  # let go at the end, as before
+
+
+async def test_a_backend_still_waiting_when_the_app_stops_stops_trying(
+    make_manager: MakeManager,
+    monkeypatch: pytest.MonkeyPatch,
+    other_backend: BackendLock,
+    server_mode: None,
+) -> None:
+    assert await other_backend.acquire()
+    monkeypatch.setattr(lifecycle, "build", build_with(make_manager, BackendLock()))
+    app = FastAPI()
+
+    async def never(received: FastAPI) -> None:
+        pytest.fail("a backend that stopped must not take over")
+
+    await lifecycle.startup(app)
+    lifecycle.take_over_later(app, never, every=0.05)
+    await asyncio.sleep(0.2)
+
+    await lifecycle.stop_waiting(app)
+    await lifecycle.stop_waiting(app)  # twice is fine
+    await lifecycle.shutdown(app)
+    assert not hasattr(app.state, "run_engine_waiter")
+
+    await other_backend.release()
+    await asyncio.sleep(0.2)
+    assert not hasattr(app.state, "run_manager")  # it stopped trying
+    assert await other_backend.acquire()  # and holds nothing
 
 
 async def test_a_database_that_is_down_turns_runs_off_without_stopping_the_app(
