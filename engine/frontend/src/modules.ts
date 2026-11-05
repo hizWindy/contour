@@ -3,7 +3,15 @@
  * src/apps/. The router, the sidebar, the command menu and Home all read this list, so adding a
  * project is its folder plus one line here.
  */
-import { Briefcase, CalendarDays, ClipboardList, Megaphone, Mic, Telescope } from 'lucide-react'
+import {
+  Briefcase,
+  CalendarDays,
+  ClipboardList,
+  LayoutDashboard,
+  Megaphone,
+  Mic,
+  Telescope,
+} from 'lucide-react'
 import { LEAD_FINDER } from '@/apps/lead-finder/module'
 import type { AppModule, PlannedModule } from '@/shell/nav'
 
@@ -12,7 +20,8 @@ export const MODULES: readonly AppModule[] = [LEAD_FINDER]
 /**
  * The projects still to be developed, in Levi's order: the 30 Oct meeting put calendar scheduling
  * and call notes right after the Lead Finder. Sources: PROJECTS.md and the meeting notes in
- * "minutes of meeting/". When one is built, it moves to MODULES.
+ * "minutes of meeting/". Dashboards was added at the end on 5 Nov and is not from those notes.
+ * When one is built, it moves to MODULES.
  */
 export const PLANNED: readonly PlannedModule[] = [
   {
@@ -67,5 +76,14 @@ export const PLANNED: readonly PlannedModule[] = [
     to: '/company-hub',
     description: 'Company announcements, and an onboarding guide for new starters.',
     status: 'An idea from Levi (30 Oct). Not planned yet.',
+  },
+  {
+    id: 'dashboards',
+    name: 'Dashboards',
+    icon: LayoutDashboard,
+    to: '/dashboards',
+    description:
+      'Different dashboards in one place: dashboards for the company, and dashboards for sales.',
+    status: 'Not planned yet. Which dashboards, and which numbers they show, are TBC.',
   },
 ]

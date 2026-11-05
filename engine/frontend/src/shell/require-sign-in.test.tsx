@@ -83,7 +83,7 @@ describe('the app knows who is signed in', () => {
     expect(address()).toHaveTextContent('/results?city=Perth')
   })
 
-  it('shows who is signed in, and Sign out ends the session and says so', async () => {
+  it('shows who is signed in, and Sign out in its menu ends the session and says so', async () => {
     const backend = stubAuthBackend({
       me: signedIn(),
       other: (url) =>
@@ -94,18 +94,20 @@ describe('the app knows who is signed in', () => {
     const { user } = renderApp('/results')
 
     expect(await screen.findByText('The results')).toBeInTheDocument()
-    expect(screen.getByText(SAMPLE_USER.name)).toBeInTheDocument()
-    expect(screen.getByText('Signed in as')).toHaveClass('sr-only')
+    const account = screen.getByRole('button', { name: `Account menu, ${SAMPLE_USER.name}` })
+    expect(account).toHaveTextContent(SAMPLE_USER.name)
+    expect(screen.queryByRole('menuitem', { name: 'Sign out' })).toBeNull() // shut until opened
 
     backend.handlers.me = signedOut()
-    await user.click(screen.getByRole('button', { name: 'Sign out' }))
+    await user.click(account)
+    await user.click(await screen.findByRole('menuitem', { name: 'Sign out' }))
 
     expect(await screen.findByRole('status')).toHaveTextContent('You signed out.')
     expect(address()).toHaveTextContent('/login?next=%2Fresults&reason=signed_out')
     expect(
       backend.calls.some((call) => call.method === 'POST' && call.path === '/auth/logout'),
     ).toBe(true)
-    expect(screen.queryByRole('button', { name: 'Sign out' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Account menu/ })).toBeNull()
   })
 
   it('a session that ends while a page is open goes to the login page and says why', async () => {
@@ -125,7 +127,7 @@ describe('the app knows who is signed in', () => {
     expect(screen.getByLabelText('Password')).toBeInTheDocument()
   })
 
-  it('with sign-in off, the page shows with no Sign out and no redirect', async () => {
+  it('with sign-in off, the page shows with no account menu and no redirect', async () => {
     stubAuthBackend({
       me: signInOff(),
       other: (url) =>
@@ -137,7 +139,7 @@ describe('the app knows who is signed in', () => {
 
     expect(await screen.findByText('The results')).toBeInTheDocument()
     expect(address()).toHaveTextContent('/results')
-    expect(screen.queryByRole('button', { name: 'Sign out' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Account menu/ })).toBeNull()
   })
 
   it("if the backend can't be reached, the page shows and its own errors say so", async () => {
