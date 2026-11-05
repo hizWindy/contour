@@ -13,11 +13,19 @@
  * and the number fields wait until typing pauses for 300 ms, so one request goes out per pause.
  */
 import { CalendarDays, ListFilter, Search, SlidersHorizontal, X } from 'lucide-react'
-import { useEffect, useEffectEvent, useState, type ComponentProps, type ReactNode } from 'react'
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useEffectEvent,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+} from 'react'
 import type { LeadFacets } from '@/api/types'
+import { Pending } from '@/components/skeletons'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Calendar } from '@/components/ui/calendar'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
   Command,
@@ -31,6 +39,7 @@ import {
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   Sheet,
   SheetContent,
@@ -54,7 +63,21 @@ import {
 import { PHONE, useMediaQuery } from '@/lib/use-media-query'
 import { cn } from '@/lib/utils'
 import { activeChips, panelFilterCount } from './chips'
+import { loadCalendar } from './lazy-parts'
 import { dateOf, dayOf, oneOf, type LeadFilters } from './params'
+
+// The calendar library is big, so the calendar is a file of its own (PLAN-V7 D1). Results asks for
+// it when the browser is idle, and a date filter asks again when it is pointed at or opened.
+const Calendar = lazy(loadCalendar)
+
+/** The room a calendar takes, while it downloads. */
+function CalendarPending() {
+  return (
+    <Pending label="Loading the calendar.">
+      <Skeleton className="m-3 h-64 w-64" />
+    </Pending>
+  )
+}
 
 interface Option {
   value: string
@@ -259,6 +282,8 @@ function DateFilter({ title, from, until = null, range = false, onChange }: Date
           variant="outline"
           size="sm"
           className="h-9 w-full justify-start touch:h-11"
+          onPointerEnter={() => void loadCalendar()}
+          onFocus={() => void loadCalendar()}
         >
           <CalendarDays aria-hidden="true" />
           {/* The table has a column with the same name, so a screen reader hears the difference. */}
@@ -271,33 +296,35 @@ function DateFilter({ title, from, until = null, range = false, onChange }: Date
         </Button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-auto p-0">
-        {range ? (
-          <Calendar
-            mode="range"
-            selected={{
-              from: from ? dateOf(from) : undefined,
-              to: until ? dateOf(until) : undefined,
-            }}
-            defaultMonth={from ? dateOf(from) : today}
-            disabled={{ after: today }}
-            onSelect={(picked) => {
-              onChange(
-                picked?.from ? dayOf(picked.from) : null,
-                picked?.to ? dayOf(picked.to) : null,
-              )
-            }}
-          />
-        ) : (
-          <Calendar
-            mode="single"
-            selected={from ? dateOf(from) : undefined}
-            defaultMonth={from ? dateOf(from) : today}
-            disabled={{ after: today }}
-            onSelect={(picked) => {
-              onChange(picked ? dayOf(picked) : null, null)
-            }}
-          />
-        )}
+        <Suspense fallback={<CalendarPending />}>
+          {range ? (
+            <Calendar
+              mode="range"
+              selected={{
+                from: from ? dateOf(from) : undefined,
+                to: until ? dateOf(until) : undefined,
+              }}
+              defaultMonth={from ? dateOf(from) : today}
+              disabled={{ after: today }}
+              onSelect={(picked) => {
+                onChange(
+                  picked?.from ? dayOf(picked.from) : null,
+                  picked?.to ? dayOf(picked.to) : null,
+                )
+              }}
+            />
+          ) : (
+            <Calendar
+              mode="single"
+              selected={from ? dateOf(from) : undefined}
+              defaultMonth={from ? dateOf(from) : today}
+              disabled={{ after: today }}
+              onSelect={(picked) => {
+                onChange(picked ? dayOf(picked) : null, null)
+              }}
+            />
+          )}
+        </Suspense>
         {from || until ? (
           <div className="border-t p-2">
             <Button

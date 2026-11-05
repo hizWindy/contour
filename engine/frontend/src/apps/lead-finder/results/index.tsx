@@ -13,7 +13,7 @@
  */
 import type { OnChangeFn, SortingState } from '@tanstack/react-table'
 import { Download, Map as MapIcon, Table2 } from 'lucide-react'
-import { useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { fetchLeadsCsv, leadQueryOptions, useLeadFacets, useLeadMap, useLeads } from '@/api/hooks'
@@ -24,8 +24,9 @@ import { EmptyState } from '@/components/empty-state'
 import { ErrorState } from '@/components/error-state'
 import { PageHeader } from '@/components/page-header'
 import { Button } from '@/components/ui/button'
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { Pending } from '@/components/skeletons'
+import { whenIdle } from '@/lib/idle'
 import { saveFile } from '@/lib/download'
 import { useIsMobile } from '@/lib/use-mobile'
 import { formatNumber, pluralise } from '@/lib/format'
@@ -34,6 +35,7 @@ import { sparing } from '@/shell/preload'
 import { LIST_COLUMNS, TABLE_COLUMNS } from './columns'
 import { FilterBar } from './filter-bar'
 import { LeadPanel } from './lead-panel'
+import { loadCalendar, loadMapSplit } from './lazy-parts'
 import {
   activeFilterCount,
   exportQuery,
@@ -105,7 +107,28 @@ function MapNote({ map }: { map: MapOut | undefined }) {
   )
 }
 
+const MapSplit = lazy(loadMapSplit)
+
+/** The room the list and the map take, while the code that divides it downloads. */
+function MapSplitPending() {
+  return (
+    <Pending label="Loading the map view.">
+      <div className="min-h-[36rem] rounded-lg border bg-card" />
+    </Pending>
+  )
+}
+
 export default function ResultsPage() {
+  // Once the page is up and the browser is idle, the parts only some visits use (the divider for
+  // the map view, the calendar for the date filters) download, so they are there when asked for.
+  useEffect(() => {
+    if (!sparing()) {
+      whenIdle(() => {
+        void loadMapSplit()
+        void loadCalendar()
+      })
+    }
+  }, [])
   const [params, setParams] = useSearchParams()
   const navigate = useNavigate()
   const state = readResults(params)
@@ -299,20 +322,9 @@ export default function ResultsPage() {
             {table(LIST_COLUMNS, 'Leads beside the map', true)}
           </div>
         ) : (
-          <ResizablePanelGroup
-            orientation="horizontal"
-            className="min-h-[36rem] rounded-lg border bg-card"
-          >
-            <ResizablePanel defaultSize="42%" minSize="25%">
-              <div className="h-full overflow-auto p-3">
-                {table(LIST_COLUMNS, 'Leads beside the map', true)}
-              </div>
-            </ResizablePanel>
-            <ResizableHandle withHandle aria-label="Resize the list and the map" />
-            <ResizablePanel defaultSize="58%" minSize="30%">
-              <div className="h-full p-3">{mapPart}</div>
-            </ResizablePanel>
-          </ResizablePanelGroup>
+          <Suspense fallback={<MapSplitPending />}>
+            <MapSplit list={table(LIST_COLUMNS, 'Leads beside the map', true)} map={mapPart} />
+          </Suspense>
         )
       ) : (
         table(TABLE_COLUMNS, 'Leads', compact)

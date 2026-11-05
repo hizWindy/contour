@@ -10,6 +10,7 @@
  * the router's own call, later, finds it done.
  */
 import { matchRoutes, type RouteObject } from 'react-router'
+import { whenIdle } from '@/lib/idle'
 
 /** Addresses that match a page, not real ones: "/leads/x" is the lead page. */
 export const NEXT_PAGES: readonly string[] = [
@@ -55,12 +56,7 @@ export function preloadNextPages(
   if (sparing()) {
     return
   }
-  const start = (): void => {
+  whenIdle(() => {
     void loadCode(routes, pages)
-  }
-  if (typeof window.requestIdleCallback === 'function') {
-    window.requestIdleCallback(start, { timeout: 5000 })
-  } else {
-    window.setTimeout(start, 3000)
-  }
+  })
 }
