@@ -5,7 +5,6 @@
  * The words match the backend's own (`core/auth/words.py`): when the backend sends a sentence, the
  * page shows it; these are for when it sends none, and for the mockup.
  */
-import { z } from 'zod'
 import { isApiProblem } from '@/api/client'
 
 /** A laptop: the page splits into two halves. Below it, the brand is a band on top. */
@@ -125,18 +124,9 @@ export function rememberLogin(login: string): void {
   }
 }
 
-export const loginSchema = z.object({
-  identifier: z
-    .string()
-    .trim()
-    .min(1, 'Enter your email or username.')
-    .max(254, 'That is longer than any email or username here.'),
-  // No rules here beyond "not empty": the rules are for making a password, not for signing in.
-  password: z.string().min(1, 'Enter your password.').max(1024, 'That password is too long.'),
-  keepSignedIn: z.boolean(),
-})
-
-export type LoginValues = z.infer<typeof loginSchema>
+// The checks themselves are in login-schema.ts, so this file (read by the sign-in guard on every
+// first visit) does not pull `zod` in. A type costs nothing at run time.
+export type { LoginValues } from './login-schema'
 
 /** Which field has the cursor, for the avatar. */
 export type LoginFocus = 'identifier' | 'password' | null

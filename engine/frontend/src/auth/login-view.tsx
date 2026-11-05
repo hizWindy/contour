@@ -42,12 +42,12 @@ import { REDUCED_MOTION, useMediaQuery } from '@/lib/use-media-query'
 import { cn } from '@/lib/utils'
 import { BrandPanel } from './brand-panel'
 import { LoginAvatar } from './login-avatar'
+import { loginSchema } from './login-schema'
 import {
   avatarMood,
   FAILED_TEXT,
   LAPTOP,
   lockedText,
-  loginSchema,
   NOTICE_TEXT,
   wrongText,
   type LoginFocus,
