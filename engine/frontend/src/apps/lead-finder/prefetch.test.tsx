@@ -48,6 +48,12 @@ const PAGES: PageCase[] = [
     page: () => import('./results'),
   },
   {
+    name: 'Results in the map view, which also asks for the map',
+    address: '/results?view=map&city=Perth',
+    pattern: '/results',
+    page: () => import('./results'),
+  },
+  {
     name: 'A lead',
     address: '/leads/l1',
     pattern: '/leads/:leadId',

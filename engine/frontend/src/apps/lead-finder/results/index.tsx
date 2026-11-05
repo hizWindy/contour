@@ -13,10 +13,17 @@
  */
 import type { OnChangeFn, SortingState } from '@tanstack/react-table'
 import { Download, Map as MapIcon, Table2 } from 'lucide-react'
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useEffectEvent, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useSearchParams } from 'react-router'
-import { fetchLeadsCsv, leadQueryOptions, useLeadFacets, useLeadMap, useLeads } from '@/api/hooks'
+import {
+  fetchLeadsCsv,
+  leadMapQueryOptions,
+  leadQueryOptions,
+  useLeadFacets,
+  useLeadMap,
+  useLeads,
+} from '@/api/hooks'
 import type { LeadPage, MapOut } from '@/api/types'
 import { CityMap } from '@/components/city-map'
 import { DataTable, DensityToggle } from '@/components/data-table'
@@ -119,16 +126,6 @@ function MapSplitPending() {
 }
 
 export default function ResultsPage() {
-  // Once the page is up and the browser is idle, the parts only some visits use (the divider for
-  // the map view, the calendar for the date filters) download, so they are there when asked for.
-  useEffect(() => {
-    if (!sparing()) {
-      whenIdle(() => {
-        void loadMapSplit()
-        void loadCalendar()
-      })
-    }
-  }, [])
   const [params, setParams] = useSearchParams()
   const navigate = useNavigate()
   const state = readResults(params)
@@ -178,8 +175,21 @@ export default function ResultsPage() {
   const filtersQuery = filterQuery(state.filters)
   const leads = useLeads(listQuery(state))
   const facets = useLeadFacets(filtersQuery)
-  const map = useLeadMap(filtersQuery)
   const mapView = state.view === 'map'
+  // Up to 2,000 pins: asked for in the map view only. A pointer resting on the Map button, or the
+  // browser being idle after the page shows, starts it, so the map view opens with its pins.
+  const map = useLeadMap(filtersQuery, { enabled: mapView })
+  const startMap = (): void => {
+    if (!sparing()) {
+      void queryClient.prefetchQuery(leadMapQueryOptions(filtersQuery))
+    }
+  }
+  const startParts = useEffectEvent((): void => {
+    void loadMapSplit()
+    void loadCalendar()
+    startMap()
+  })
+  useEffect(() => (sparing() ? undefined : whenIdle(startParts)), [])
   const filtered = activeFilterCount(state.filters) > 0
   const activeRow = state.lead ?? active
 
@@ -272,7 +282,7 @@ export default function ResultsPage() {
                 <Table2 aria-hidden="true" />
                 Table
               </ToggleGroupItem>
-              <ToggleGroupItem value="map">
+              <ToggleGroupItem value="map" onPointerEnter={startMap} onFocus={startMap}>
                 <MapIcon aria-hidden="true" />
                 Map
               </ToggleGroupItem>

@@ -48,8 +48,13 @@ export function leadMapQueryOptions(query: QueryOf<'lead_map'> = {}) {
   })
 }
 
-export function useLeadMap(query: QueryOf<'lead_map'> = {}) {
-  return useQuery({ ...leadMapQueryOptions(query), placeholderData: keepPreviousData })
+/** `enabled: false` asks for nothing, for a page that shows the map only in one of its views. */
+export function useLeadMap(query: QueryOf<'lead_map'> = {}, options: { enabled?: boolean } = {}) {
+  return useQuery({
+    ...leadMapQueryOptions(query),
+    placeholderData: keepPreviousData,
+    enabled: options.enabled ?? true,
+  })
 }
 
 /**

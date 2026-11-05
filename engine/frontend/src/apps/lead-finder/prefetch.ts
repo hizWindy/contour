@@ -42,13 +42,18 @@ export function prefetchRun({ client, params }: PrefetchArgs): void {
   }
 }
 
-/** The page, the filter counts and the map, for the filters in the address; and the open lead. */
+/**
+ * The page and the filter counts, for the filters in the address; the map only in the map view
+ * (it is up to 2,000 pins and the table view never shows it); and the open lead.
+ */
 export function prefetchResults({ client, search }: PrefetchArgs): void {
   const state = readResults(search)
   const filters = filterQuery(state.filters)
   void client.prefetchQuery(leadsQueryOptions(listQuery(state)))
   void client.prefetchQuery(leadFacetsQueryOptions(filters))
-  void client.prefetchQuery(leadMapQueryOptions(filters))
+  if (state.view === 'map') {
+    void client.prefetchQuery(leadMapQueryOptions(filters))
+  }
   if (state.lead) {
     void client.prefetchQuery(leadQueryOptions(state.lead))
   }

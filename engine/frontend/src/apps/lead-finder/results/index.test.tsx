@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { Route, Routes, useLocation, useNavigate } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { LeadFacets, LeadRow, MapPoint } from '@/api/types'
@@ -447,11 +447,13 @@ describe('the results page', () => {
 
   it('does not load a lead card for a pointer that only sweeps over its row', async () => {
     const backend = mockApi()
-    const { user } = renderResults()
+    renderResults()
     const row = await screen.findByRole('button', { name: 'Acme Software' })
 
-    await user.hover(row)
-    await user.unhover(row)
+    // Straight after each other, with no time between (user-event's own pauses can run long on a busy
+    // machine, and a pointer that rests for 100 ms is meant to start the card).
+    fireEvent.pointerOver(row, { pointerType: 'mouse' })
+    fireEvent.pointerOut(row, { pointerType: 'mouse' })
     await new Promise((resolve) => setTimeout(resolve, 200))
 
     expect(
@@ -597,6 +599,41 @@ describe('the results page', () => {
     expect(await screen.findByText('Too many leads for one file')).toBeInTheDocument()
     expect(screen.getByText(/Narrow the filters so that fewer than 2,000/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Download CSV' })).toBeEnabled()
+  })
+
+  describe('the map, which is up to 2,000 pins (PLAN-V7)', () => {
+    const mapRequests = (backend: Backend) =>
+      backend.requests.filter((url) => url.pathname === '/api/v1/lead-finder/leads/map')
+
+    it('is not asked for in the table view, which never shows it', async () => {
+      const backend = mockApi()
+      renderResults()
+      await screen.findByRole('button', { name: 'Acme Software' })
+      await new Promise((resolve) => setTimeout(resolve, 100))
+
+      expect(mapRequests(backend)).toHaveLength(0)
+    })
+
+    it('is asked for in the map view', async () => {
+      const backend = mockApi()
+      renderResults('?view=map')
+
+      await screen.findByRole('list', { name: 'Leads on the map' })
+
+      expect(mapRequests(backend)).toHaveLength(1)
+    })
+
+    it('starts loading when a pointer rests on the Map button, so the view opens with its pins', async () => {
+      const backend = mockApi()
+      const { user } = renderResults()
+      await screen.findByRole('button', { name: 'Acme Software' })
+
+      await user.hover(screen.getByRole('radio', { name: 'Map' }))
+
+      await waitFor(() => {
+        expect(mapRequests(backend)).toHaveLength(1)
+      })
+    })
   })
 
   it('shows the list and the map side by side, with approximate pins', async () => {
