@@ -48,6 +48,23 @@ export function createQueryClient(): QueryClient {
   })
 }
 
+/**
+ * Cache times for reads that change more slowly (or cost more) than the 15 seconds above
+ * (PLAN-V7 C3). `staleTime` is how long an answer counts as fresh, so going back to a page inside
+ * that time asks the backend nothing. `gcTime` is how long an unused answer is kept, and it must be
+ * longer than `staleTime`, or the longer time means nothing.
+ *
+ * A change you make (a Reject, a new run, a saved setting) clears what it affects with
+ * `invalidateQueries`, whatever time is set here, so a longer time never hides your own change.
+ * The run options stay at the 15 seconds: they hold "left today", which each run changes.
+ */
+export const CACHE_TIMES = {
+  /** The rules change only when the team publishes new ones. */
+  rules: { staleTime: 10 * 60_000, gcTime: 30 * 60_000 },
+  /** The filter counts are the costliest read, and a few seconds old is fine. */
+  counts: { staleTime: 30_000 },
+} as const
+
 /*
   The shared keys. Keep this list small and stable: pages build on it.
   A key starts with its group, so `invalidateQueries({ queryKey: queryKeys.runs.all })` refreshes
@@ -78,7 +95,9 @@ export const queryKeys = {
     lists: () => ['leads', 'list'] as const,
     list: (query: QueryOf<'list_leads'>) => ['leads', 'list', query ?? {}] as const,
     facets: (query: QueryOf<'lead_facets'>) => ['leads', 'facets', query ?? {}] as const,
+    allFacets: () => ['leads', 'facets'] as const,
     map: (query: QueryOf<'lead_map'>) => ['leads', 'map', query ?? {}] as const,
+    allMaps: () => ['leads', 'map'] as const,
     detail: (leadId: string) => ['leads', 'detail', leadId] as const,
     similar: (leadId: string) => ['leads', 'similar', leadId] as const,
   },

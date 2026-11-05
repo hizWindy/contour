@@ -4,40 +4,62 @@ import {
   useMutation,
   useQuery,
   useQueryClient,
+  type QueryClient,
 } from '@tanstack/react-query'
 import { melbourneDate } from '@/lib/format'
 import { api, unwrap, type ApiProblem } from '../client'
-import { queryKeys } from '../query'
+import { CACHE_TIMES, queryKeys } from '../query'
 import type { LeadDetail, LeadPatch, QueryOf, Run } from '../types'
 
-/** A page of leads for the results table. The previous page stays while the next one loads. */
-export function useLeads(query: QueryOf<'list_leads'> = {}) {
-  return useQuery({
+/** A page of leads for the results table. */
+export function leadsQueryOptions(query: QueryOf<'list_leads'> = {}) {
+  return queryOptions({
     queryKey: queryKeys.leads.list(query),
     queryFn: async ({ signal }) =>
       unwrap(await api.GET('/lead-finder/leads', { params: { query }, signal })),
-    placeholderData: keepPreviousData,
   })
+}
+
+/** A page of leads for the results table. The previous page stays while the next one loads. */
+export function useLeads(query: QueryOf<'list_leads'> = {}) {
+  return useQuery({ ...leadsQueryOptions(query), placeholderData: keepPreviousData })
 }
 
 /** Filter options with counts. Pass the same filters as the table. */
-export function useLeadFacets(query: QueryOf<'lead_facets'> = {}) {
-  return useQuery({
+export function leadFacetsQueryOptions(query: QueryOf<'lead_facets'> = {}) {
+  return queryOptions({
     queryKey: queryKeys.leads.facets(query),
     queryFn: async ({ signal }) =>
       unwrap(await api.GET('/lead-finder/leads/facets', { params: { query }, signal })),
-    placeholderData: keepPreviousData,
+    ...CACHE_TIMES.counts,
   })
 }
 
+export function useLeadFacets(query: QueryOf<'lead_facets'> = {}) {
+  return useQuery({ ...leadFacetsQueryOptions(query), placeholderData: keepPreviousData })
+}
+
 /** The pins for the map (up to 2000, with approximate places). */
-export function useLeadMap(query: QueryOf<'lead_map'> = {}) {
-  return useQuery({
+export function leadMapQueryOptions(query: QueryOf<'lead_map'> = {}) {
+  return queryOptions({
     queryKey: queryKeys.leads.map(query),
     queryFn: async ({ signal }) =>
       unwrap(await api.GET('/lead-finder/leads/map', { params: { query }, signal })),
-    placeholderData: keepPreviousData,
   })
+}
+
+export function useLeadMap(query: QueryOf<'lead_map'> = {}) {
+  return useQuery({ ...leadMapQueryOptions(query), placeholderData: keepPreviousData })
+}
+
+/**
+ * A lead changed, or a run found more: the lists, the filter counts and the map read again the
+ * next time they are shown (or now, if they are on screen).
+ */
+export function refreshLeads(queryClient: QueryClient): void {
+  void queryClient.invalidateQueries({ queryKey: queryKeys.leads.lists() })
+  void queryClient.invalidateQueries({ queryKey: queryKeys.leads.allFacets() })
+  void queryClient.invalidateQueries({ queryKey: queryKeys.leads.allMaps() })
 }
 
 export interface LeadsCsv {
@@ -121,9 +143,7 @@ export function usePatchLead() {
       ),
     onSuccess: (lead) => {
       queryClient.setQueryData(queryKeys.leads.detail(lead.id), lead)
-      void queryClient.invalidateQueries({ queryKey: queryKeys.leads.lists() })
-      void queryClient.invalidateQueries({ queryKey: ['leads', 'facets'] })
-      void queryClient.invalidateQueries({ queryKey: ['leads', 'map'] })
+      refreshLeads(queryClient)
     },
   })
 }

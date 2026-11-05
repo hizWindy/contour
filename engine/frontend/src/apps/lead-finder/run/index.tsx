@@ -22,7 +22,7 @@ import { useEffect } from 'react'
 import { Link, useParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { ApiProblem } from '@/api/client'
-import { useCancelRun, useResumeRun, useRun } from '@/api/hooks'
+import { refreshLeads, useCancelRun, useResumeRun, useRun } from '@/api/hooks'
 import { queryKeys } from '@/api/query'
 import type { Run } from '@/api/types'
 import { CostMeter } from '@/components/cost-meter'
@@ -93,6 +93,9 @@ function RunView({ runId, run }: { runId: string; run: Run }) {
   useEffect(() => {
     if (state.finished) {
       void queryClient.invalidateQueries({ queryKey: queryKeys.runs.detail(runId) })
+      // Its status and cost show in the runs list and on Home, and its leads in the counts.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.runs.lists() })
+      refreshLeads(queryClient)
     }
   }, [state.finished, queryClient, runId])
 
@@ -109,7 +112,7 @@ function RunView({ runId, run }: { runId: string; run: Run }) {
   const researched = counts.researched
   useEffect(() => {
     if (researched > 0) {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.leads.lists() })
+      refreshLeads(queryClient)
       void queryClient.invalidateQueries({ queryKey: queryKeys.searches.all })
     }
   }, [researched, queryClient])

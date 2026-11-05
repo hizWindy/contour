@@ -32,13 +32,17 @@ export function useRun(runId: string | undefined, options: UseRunOptions = {}) {
   })
 }
 
-/** A page of runs, newest first. The previous page stays on screen while the next one loads. */
-export function useRuns(query: QueryOf<'list_runs'> = {}) {
-  return useQuery({
+/** A page of runs, newest first. */
+export function runsQueryOptions(query: QueryOf<'list_runs'> = {}) {
+  return queryOptions({
     queryKey: queryKeys.runs.list(query),
     queryFn: async ({ signal }) => unwrap(await api.GET('/runs', { params: { query }, signal })),
-    placeholderData: keepPreviousData,
   })
+}
+
+/** A page of runs, newest first. The previous page stays on screen while the next one loads. */
+export function useRuns(query: QueryOf<'list_runs'> = {}) {
+  return useQuery({ ...runsQueryOptions(query), placeholderData: keepPreviousData })
 }
 
 /** The events of a run after `after`, oldest first. The live feed uses `useRunEvents` instead. */
