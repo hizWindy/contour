@@ -16,8 +16,9 @@ import { ScheduledMark } from '@/components/scheduled-mark'
 import { StatusBadge } from '@/components/status-badge'
 import { formatDateTime, formatNumber, shortId } from '@/lib/format'
 import { RUN_MODE_LABELS } from '@/lib/labels'
+import { RUNS_PAGE_SIZE } from './runs-query'
 
-const PAGE_SIZE = 50
+const PAGE_SIZE = RUNS_PAGE_SIZE
 
 const help = createColumnHelper<Run>()
 const columns = [

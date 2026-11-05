@@ -11,13 +11,14 @@ import { StatusBadge } from '@/components/status-badge'
 import { formatNumber, formatRelative, pluralise } from '@/lib/format'
 import { RESULT_ORDER, resultLabel } from '@/lib/labels'
 import { formatMoney } from '@/lib/money'
+import { LAST_RUN } from './prefetch'
 
 function Quiet({ children }: { children: string }) {
   return <span className="text-muted-foreground">{children}</span>
 }
 
 function LastRun() {
-  const runs = useRuns({ app: 'lead_finder', limit: 1 })
+  const runs = useRuns(LAST_RUN)
   if (runs.isPending) return <PendingText className="w-40" />
   if (runs.isError) return <Quiet>Can't load the runs right now.</Quiet>
   const last = runs.data.items.at(0)

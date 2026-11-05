@@ -16,6 +16,7 @@ import {
   Upload,
   type LucideIcon,
 } from 'lucide-react'
+import type { QueryClient } from '@tanstack/react-query'
 import type { ComponentType } from 'react'
 import type { RouteObject } from 'react-router'
 import type { ProjectTone } from './tone'
@@ -51,6 +52,8 @@ export interface AppModule {
   description: string
   /** Where the project stands, for its Home card (the last run, the leads). Optional. */
   summary?: ComponentType
+  /** Starts what `summary` asks for, while Home's code downloads (PLAN-V7 C1). Optional. */
+  prefetchSummary?: (client: QueryClient) => void
   /** Its pages, in menu order. On Home each shows with its `purpose`. */
   pages: readonly NavItem[]
   /** Its addresses, inside the app frame. */

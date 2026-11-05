@@ -44,7 +44,15 @@ export const routes: RouteObject[] = [
     children: [
       {
         index: true,
-        handle: { crumb: 'Home' } satisfies RouteHandle,
+        handle: {
+          crumb: 'Home',
+          // The cards on Home ask for their own data (each project's `summary`).
+          prefetch: ({ client }) => {
+            for (const app of MODULES) {
+              app.prefetchSummary?.(client)
+            }
+          },
+        } satisfies RouteHandle,
         ...page(() => import('@/shell/home')),
       },
       ...MODULES.flatMap((app) => app.routes),

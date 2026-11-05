@@ -9,8 +9,10 @@ import '@fontsource/ibm-plex-serif/latin-400.css'
 import '@fontsource/ibm-plex-serif/latin-ext-400.css'
 
 import './styles/index.css'
+import { createQueryClient } from './api/query'
 import { App } from './App'
-import { routes } from './router'
+import { createAppRouter, routes } from './router'
+import { prefetchOnNavigation } from './shell/prefetch'
 import { preloadNextPages } from './shell/preload'
 import { applyTheme, readThemeChoice } from './shell/theme'
 
@@ -22,9 +24,15 @@ if (!root) {
   throw new Error('index.html has no #root element')
 }
 
+// The page's data starts downloading with the page's code, not after it (PLAN-V7 C1). That needs
+// the router and the cache before the first draw, so they are made here and handed to the app.
+const queryClient = createQueryClient()
+const router = createAppRouter()
+prefetchOnNavigation(router, queryClient)
+
 createRoot(root).render(
   <StrictMode>
-    <App />
+    <App queryClient={queryClient} router={router} />
   </StrictMode>,
 )
 

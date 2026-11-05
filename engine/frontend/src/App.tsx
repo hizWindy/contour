@@ -10,7 +10,10 @@ import { createAppRouter } from '@/router'
 type AppRouter = ReturnType<typeof createBrowserRouter>
 
 export interface AppProps {
-  /** For tests: a memory router over the same routes, or a prepared query client. */
+  /**
+   * A router and a query client made outside the app: by main.tsx, which starts each page's data
+   * early with them, and by tests (a memory router over the same routes, a prepared client).
+   */
   router?: AppRouter
   queryClient?: QueryClient
 }
