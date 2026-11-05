@@ -3,6 +3,7 @@
     uv run python -m tests.e2e.serve              # from engine/backend
     uv run python -m tests.e2e.serve --hubspot-ok # also allow the HubSpot watchlist runs
     uv run python -m tests.e2e.serve --auth       # sign-in on, with a demo Admin (PLAN-V6)
+    uv run python -m tests.e2e.serve --perf       # the big database, kept as it is (PLAN-V7)
 
 It is for clicking through the website (and for browser checks) without the real Claude:
 
@@ -21,7 +22,9 @@ It is for clicking through the website (and for browser checks) without the real
   it on (`AUTH_REQUIRED=true`) and makes a demo Admin, `demo@example.test` (or `demo`), with a new
   random password printed once when it starts. The sign-in tables are wiped on every start, so the
   account and its sessions are new each time. This is how the login page is tried in a browser.
-- It serves on the usual address (127.0.0.1:8000), so the website's dev server proxies to it.
+- `--perf` serves `leadfinder_perf` as it is: nothing is wiped and nothing is seeded, so the
+  10,000 fake leads that `python -m tests.e2e.perf_seed` made stay (PLAN-V7 A2). Sign-in is off.
+- It serves on `API_PORT` (the usual 127.0.0.1:8000), so the website's dev server proxies to it.
 """
 
 import argparse
@@ -38,6 +41,7 @@ if TYPE_CHECKING:
     from tests.lead_finder.samples import FakeClaude
 
 DATABASE = "leadfinder_e2e"
+PERF_DATABASE = "leadfinder_perf"  # PLAN-V7: 10,000 fake leads, for timing the website
 ENGINE_DIR = Path(__file__).resolve().parents[3]
 EXPORT = ENGINE_DIR.parent / "projects" / "leads" / "research" / "COMPANIES.xlsx"
 DELAY_SECONDS = 0.6
@@ -78,11 +82,14 @@ DEMO_WORDS = (
 )  # fmt: skip
 
 
-def use_e2e_database(hubspot_ok: bool = False, auth: bool = False) -> None:
-    """Points the settings at the e2e database and blanks the Claude, Signal Hire and HubSpot
-    keys, so no run can reach them, whatever engine/.env holds. Sign-in is off unless `auth`, and
-    never Secure (the fake backend is plain http). Call before anything reads the settings."""
-    os.environ["POSTGRES_DB"] = DATABASE
+def use_e2e_database(
+    hubspot_ok: bool = False, auth: bool = False, database: str = DATABASE
+) -> None:
+    """Points the settings at the e2e database (or the perf one) and blanks the Claude, Signal
+    Hire and HubSpot keys, so no run can reach them, whatever engine/.env holds. Sign-in is off
+    unless `auth`, and never Secure (the fake backend is plain http). Call before anything reads
+    the settings."""
+    os.environ["POSTGRES_DB"] = database
     os.environ["AUTH_REQUIRED"] = "true" if auth else "false"
     os.environ["SESSION_COOKIE_SECURE"] = "false"
     os.environ["ANTHROPIC_API_KEY"] = ""
@@ -96,8 +103,8 @@ def use_e2e_database(hubspot_ok: bool = False, auth: bool = False) -> None:
     from core.config import get_settings
 
     get_settings.cache_clear()
-    if get_settings().postgres_db != DATABASE:
-        raise SystemExit(f"The fake backend only runs on {DATABASE}.")
+    if get_settings().postgres_db != database:
+        raise SystemExit(f"The fake backend only runs on {database}.")
 
 
 def sample_world(today: date) -> tuple[dict[tuple[str, str], list[Any]], dict[str, Any]]:
@@ -246,7 +253,7 @@ def build_app(claude: "FakeClaude") -> "FastAPI":
     return app
 
 
-def prepare_database() -> None:
+def prepare_database(database: str = DATABASE) -> None:
     """Makes the e2e database if needed, migrates it and wipes what runs made."""
     import psycopg
     from psycopg import sql
@@ -257,12 +264,12 @@ def prepare_database() -> None:
     settings = get_settings()
     with psycopg.connect(_conninfo(settings, "postgres"), autocommit=True) as connection:
         exists = connection.execute(
-            "SELECT 1 FROM pg_database WHERE datname = %s", (DATABASE,)
+            "SELECT 1 FROM pg_database WHERE datname = %s", (database,)
         ).fetchone()
         if exists is None:
-            connection.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(DATABASE)))
+            connection.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(database)))
     migrate()
-    with psycopg.connect(_conninfo(settings, DATABASE), autocommit=True) as connection:
+    with psycopg.connect(_conninfo(settings, database), autocommit=True) as connection:
         connection.execute(f"TRUNCATE {', '.join(WIPED_TABLES)} CASCADE")
         connection.execute("DROP SCHEMA IF EXISTS langgraph CASCADE")
 
@@ -422,6 +429,29 @@ async def serve(app: "FastAPI") -> None:
     await uvicorn.Server(config).serve()
 
 
+def serve_perf() -> int:
+    """Serves the perf database as it is: no wipe, no seeding (PLAN-V7 A2)."""
+    import psycopg
+
+    from core.config import get_settings
+    from core.runtime import loop_factory
+
+    use_e2e_database(database=PERF_DATABASE)
+    settings = get_settings()
+    with psycopg.connect(_conninfo(settings, "postgres"), autocommit=True) as connection:
+        found = connection.execute(
+            "SELECT 1 FROM pg_database WHERE datname = %s", (PERF_DATABASE,)
+        ).fetchone()
+    if found is None:
+        raise SystemExit(
+            f"No {PERF_DATABASE} yet. Make it first: uv run python -m tests.e2e.perf_seed"
+        )
+    app = build_app(fake_claude(date.today()))
+    print(f"Fake backend on the perf database {PERF_DATABASE}.", file=sys.stderr)
+    asyncio.run(serve(app), loop_factory=loop_factory())
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="The fake backend for the website.")
     parser.add_argument(
@@ -434,7 +464,16 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Turn sign-in on and make a demo Admin. Its password is printed once.",
     )
+    parser.add_argument(
+        "--perf",
+        action="store_true",
+        help="Serve the big perf database as it is (see tests.e2e.perf_seed). Sign-in is off.",
+    )
     args = parser.parse_args(argv)
+    if args.perf and args.auth:
+        raise SystemExit("--perf runs without sign-in: leave out --auth.")
+    if args.perf:
+        return serve_perf()
     use_e2e_database(hubspot_ok=args.hubspot_ok, auth=args.auth)
 
     from core.runtime import loop_factory

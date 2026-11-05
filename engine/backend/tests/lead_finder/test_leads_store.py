@@ -66,8 +66,13 @@ def compiled(filters: LeadFilters, **kwargs: Any) -> tuple[str, dict[str, Any]]:
 def test_no_filters_leave_out_tests_and_keep_only_the_newest_row_of_each_company() -> None:
     sql, _ = compiled(LeadFilters())
     assert "is_test IS false" in sql
-    assert "row_number() OVER (PARTITION BY lead_finder.leads.company_key" in sql
-    assert "lead_finder.leads.is_test" in sql
+    # "No newer lead of the same company, test or not" (PLAN-V7 E1). It was a ranking over the
+    # whole table; the rows are the same, and the tests below with real rows prove it.
+    assert "NOT (EXISTS" in sql
+    assert "leads_1.company_key = lead_finder.leads.company_key" in sql
+    assert "leads_1.is_test = lead_finder.leads.is_test" in sql
+    assert "(leads_1.created_at, leads_1.id) > (lead_finder.leads.created_at" in sql
+    assert "row_number()" not in sql
 
 
 def test_every_filter_becomes_a_condition() -> None:

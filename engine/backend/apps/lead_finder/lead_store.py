@@ -24,8 +24,20 @@ from datetime import date, datetime
 from typing import Any, Final
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import ColumnElement, Date, case, cast, delete, distinct, func, select, tuple_
+from sqlalchemy import (
+    ColumnElement,
+    Date,
+    case,
+    cast,
+    delete,
+    distinct,
+    exists,
+    func,
+    select,
+    tuple_,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from apps.lead_finder.context import Origin
 from apps.lead_finder.geo import CITY_CENTRES, approximate_point
@@ -216,22 +228,22 @@ def lead_conditions(
     where += tests
     if newest_only(filters):
         # A test lead and a real lead with one company_key are two companies here, so each keeps
-        # its own newest row (and `include_tests=true` doesn't let one hide the other). The
-        # ranking comes BEFORE the other filters: "newest" means newest of the company.
-        ranked = (
-            select(
-                Lead.id.label("id"),
-                func.row_number()
-                .over(
-                    partition_by=(Lead.company_key, Lead.is_test),
-                    order_by=(Lead.created_at.desc(), Lead.id.desc()),
-                )
-                .label("rank"),
+        # its own newest row (and `include_tests=true` doesn't let one hide the other). "Newest"
+        # means newest of the company, whatever the other filters say, so it looks at every lead
+        # of the company, not only at the ones that pass the filters.
+        #
+        # "No newer lead of the same company" is one look-up in ix_leads_company_key for each
+        # row. It replaced a ranking over the whole table (row_number), which cost about 20 ms in
+        # every query with 10,000 leads, and again in each of the 12 facet counts (PLAN-V7 E1).
+        # The same rows come out: the newest is the latest created_at, then the highest id.
+        newer = aliased(Lead)
+        where.append(
+            ~exists().where(
+                newer.company_key == Lead.company_key,
+                newer.is_test == Lead.is_test,
+                tuple_(newer.created_at, newer.id) > tuple_(Lead.created_at, Lead.id),
             )
-            .where(*tests)
-            .subquery()
         )
-        where.append(Lead.id.in_(select(ranked.c.id).where(ranked.c.rank == 1)))
     return where
 
 
@@ -363,7 +375,13 @@ async def list_leads(
     """One page of rows, and how many leads match in all."""
     where = lead_conditions(filters)
     total = await session.scalar(select(func.count()).select_from(Lead).where(*where))
-    page = _row_query().where(*where).order_by(*lead_order(sort, order)).limit(limit).offset(offset)
+    # The page is chosen first, from plain columns, and only then are the card's parts read for
+    # those rows. Done in one statement, Postgres read the card of every matching lead before it
+    # sorted (134,000 buffers for 10,000 leads, about 290 ms) to show 50 (PLAN-V7 E1).
+    order_by = lead_order(sort, order)
+    chosen = select(Lead.id).where(*where).order_by(*order_by).limit(limit).offset(offset)
+    ids = chosen.subquery()
+    page = _row_query().join(ids, ids.c.id == Lead.id).order_by(*order_by)
     rows = (await session.execute(page)).mappings().all()
     labels = trigger_labels()
     return LeadPage(total=total or 0, items=[_row(row, labels) for row in rows])
