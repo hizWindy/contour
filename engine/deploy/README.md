@@ -206,66 +206,64 @@ docker compose up -d --build
 
 When you are finished, `docker compose down -v` removes the trial database and the certificates with it.
 
-## On App Platform (PLAN-V8: **not tried on DigitalOcean yet**)
+## On App Platform (PLAN-V8: **live since 6 Nov 2026**)
 
-DigitalOcean builds the app from the GitHub repo and runs it. There is no server and no Caddy to look after. One file describes all of it: [.do/app.yaml](../../.do/app.yaml). It makes four parts:
+The app is `contour-hq` in Sydney (SYD1), at https://contour-hq-mxeqw.ondigitalocean.app. DigitalOcean builds it from GitHub (`master`) and runs it, so there is no server and no Caddy to look after. [.do/app.yaml](../../.do/app.yaml) is its spec. It has three parts, and it uses a managed database made on its own:
 
-- **backend:** the same image as above, **one copy only** (`instance_count: 1`; never scale it up).
+- **backend:** the same image as above, 2 GB, **one copy only** (`instance_count: 1`; never scale it up).
 - **web:** the website, built with `npm run build` and served as a static site.
 - **migrate:** runs `engine migrate` before every deploy, and a failure stops the deploy. It also makes the first Admin account.
-- **db:** a Postgres. The file asks for a **dev** database: about US$7 a month, 512 MB, **no backups**. Move to a managed database before any real data (see "Before real data").
+- **The database:** the managed cluster `contour-db` (PostgreSQL 18, Sydney, the US$15.15 plan: 1 GB, 22 connections, daily backups). The app connects as `doadmin`. **A dev database doesn't work:** it won't let the app create its schemas (`permission denied for database`, tried 6 Nov).
 
-The front door gives an HTTPS address like `https://contour-hq-abc12.ondigitalocean.app`. It sends `/api` to the backend and everything else to the website. The backend learns its own address from `PUBLIC_ORIGIN=${APP_URL}`, and who a visitor is from `CLIENT_IP_HEADER=do-connecting-ip`: the front door writes the visitor's address in that header, so no proxy address is needed.
+The front door gives the HTTPS address. It sends `/api` to the backend and everything else to the website. The backend learns its own address from `PUBLIC_ORIGIN=${APP_URL}`, and who a visitor is from `CLIENT_IP_HEADER=do-connecting-ip`: the front door writes the visitor's address in that header, so no proxy address is needed.
 
-Cost, read from DigitalOcean's pricing page on 6 Nov (**TBC**: check on the day): the backend on `apps-s-1vcpu-2gb` US$25 a month, the dev database US$7, the migrate step only for the seconds it runs. The static site is free or about US$3 a month (the free tier is for apps with only static sites, and this one has a backend too). After a week of watching the memory graph, try `apps-s-1vcpu-1gb` (US$12).
+Cost, from DigitalOcean's pages on 6 Nov: the backend US$25 a month, the database US$15.15, the migrate step only for the seconds it runs, and the static site free or about US$3. About US$40 to US$43 a month.
 
 ### Set up (once)
 
-You need the code on GitHub on the branch the file names (`master`; to try another branch first, change the three `branch:` lines), DigitalOcean allowed to read that private repo (the dashboard asks you to install its GitHub app the first time; do it before `doctl`), a DigitalOcean account with billing, the Anthropic key, and an email and a password (14 characters or more) for the first Admin.
+This is what was done on 6 Nov, in this order. Do it the same way for a second app.
 
-1. **Make the app from the file.** Run this (needs `doctl`, signed in), or make an app from the repo in the dashboard and paste the file at Settings, App Spec, Edit, then Save. **TBC:** whether the Create page reads `.do/app.yaml` by itself. DigitalOcean's docs don't say.
+1. **The database first.** Create, Databases: PostgreSQL 18, Standard edition, Sydney, the smallest Basic plan, name `contour-db`, project Contour HQ. Wait until it says Online. Skip "Secure this database cluster": the app is added to its trusted sources when it attaches.
+2. **The app.** Either run `doctl apps create --spec .do/app.yaml` (needs `doctl`, signed in), or use the dashboard: Create, App Platform, GitHub repo `hizWindy/contour`, branch `master`, source directory `engine/backend`, region Sydney, name `contour-hq`, no database and no variables, then Create App. The dashboard can't read this file, so its first deploy is a backend-only draft, and it fails. That is expected.
+3. **The spec.** Settings, App Spec, Edit: delete everything, paste `.do/app.yaml` and Save. This deploys the real app.
+4. **The keys.** Settings, App-Level Environment Variables, Edit. Scope **Run time**, and tick **Encrypt**: `ANTHROPIC_API_KEY`, `FIRST_ADMIN_EMAIL`, `FIRST_ADMIN_PASSWORD` (14 characters or more), `SIGNALHIRE_API_KEY` if you use it, and `HUBSPOT_SERVICE_KEY` only after Levi agrees to HubSpot data in Sydney. Saving deploys again.
+5. In that deploy's `migrate` log, look for `Made the first Admin account for ...`. Sign in, then delete `FIRST_ADMIN_PASSWORD` from the variables.
+
+### Updates and the one-backend lock
+
+A deploy starts the new backend while the old one still runs, and stops the old one once the new one is up. The engine allows one run engine for each database, so in server mode the new backend starts **without** it and waits. Meanwhile the website and sign-in work, and a run started in those seconds answers "not ready, try again". Every 5 seconds it tries the lock again. Once the old one has stopped and let it go, it takes over the runs, the scheduler and the HubSpot copy (log: `run_engine_taken_over`). A run that was going in the old backend is marked **interrupted**: open it and press Resume.
+
+Before this change (6 Nov) the new backend quit with `Another backend is already running on this database`, and no update could finish. On a laptop a second backend still refuses to start.
+
+### Check after a deploy
+
+1. **The visitor's address.** Send one wrong sign-in with an address of your own making in the header:
 
 ```bash
-doctl apps create --spec .do/app.yaml
+curl -s -X POST https://contour-hq-mxeqw.ondigitalocean.app/api/v1/auth/login -H "Origin: https://contour-hq-mxeqw.ondigitalocean.app" -H "Content-Type: application/json" -H "do-connecting-ip: 203.0.113.50" -d '{"login":"nobody@example.com","password":"a wrong password here"}'
 ```
 
-2. **Check the region.** The file says `syd` (Sydney). **TBC:** the slug, and whether a dev database can be made there. DigitalOcean lists Sydney for App Platform apps and says nothing about databases. If the dashboard refuses `syd`, pick Sydney there.
-3. **Add the keys.** The first deploy starts when the app is made, and it has no keys yet. Go to Settings, App-Level Environment Variables, Edit. Add `ANTHROPIC_API_KEY`, `FIRST_ADMIN_EMAIL` and `FIRST_ADMIN_PASSWORD` (and `SIGNALHIRE_API_KEY` if you use it), and tick **Encrypt** on every key and on the password. Add `HUBSPOT_SERVICE_KEY` last, after Levi agrees to HubSpot data on a server in Sydney (**TBC**): with it the backend copies HubSpot at start and every day. Saving deploys.
-4. In that deploy's `migrate` log, look for `Made the first Admin account for ...`. Open the app's address and sign in.
-5. **Remove `FIRST_ADMIN_PASSWORD`** from the variables. It deploys again, and `migrate` says an Admin already exists. Nothing else changes.
+Then sign in in the browser and open `https://contour-hq-mxeqw.ondigitalocean.app/api/v1/auth/log`. The newest `sign_in_failed` must show **your own public address**, not `203.0.113.50`. If it shows `203.0.113.50`, the front door does not replace that header: anyone could write their own address, and the limit on wrong tries from one address would mean nothing. Don't put real data in, and go to PLAN-V8 B2.
 
-### Check after the first deploy
-
-1. **The visitor's address.** Send one wrong sign-in with an address of your own making in the header. Use your app's address for `YOUR-APP`.
-
-```bash
-curl -s -X POST https://YOUR-APP/api/v1/auth/login -H "Origin: https://YOUR-APP" -H "Content-Type: application/json" -H "do-connecting-ip: 203.0.113.50" -d '{"login":"nobody@example.com","password":"a wrong password here"}'
-```
-
-Then sign in in the browser and open `https://YOUR-APP/api/v1/auth/log`. The newest `sign_in_failed` must show **your own public address**, not `203.0.113.50`. If it shows `203.0.113.50`, the front door does not replace that header: anyone could write their own address, and the limit on wrong tries from one address would mean nothing. Don't put real data in, and go to PLAN-V8 B2.
-
-2. **An update.** The deploy in "Set up" step 3 is the first update, so it is the test: it should finish with the backend healthy. **TBC:** if App Platform starts the new backend before it stops the old one, the new one finds the one-backend lock taken and stops (`Another backend is already running on this database`), the deploy fails, and the old one keeps running: nothing is lost. Then the backend needs a wait-for-the-lock mode (PLAN-V8 B3, about half a day). Until it is built, an update can't finish.
-3. **Healthy.** The backend shows as healthy. The file uses a TCP check on the port, because the backend answers only to its own public host name, and what host name App Platform's check sends is not known.
+2. **The update.** The deploy finishes with the backend healthy, and the backend's log says `run_engine_taken_over` a little after the old one stops.
+3. **Healthy.** The file uses a TCP check on the port, because the backend answers only to its own public host name, and what host name App Platform's check sends is not known.
 
 ### Day to day
 
-- **An update:** merge to the branch, then press Deploy (the file turns deploy on push off). The `migrate` step runs first. The backend restarts, so a run in progress stops and is marked **interrupted**: open it and press Resume.
+- **An update:** merge to `master`, push, then press Deploy (the file turns deploy on push off). The `migrate` step runs first, then the new backend takes over as above.
 - **A rollback:** the dashboard lists every deployment and can go back to an earlier one. As in "A rollback" above, older code may not work with a database an update changed. **TBC:** not tried.
 - **A command** (reset a password, sign everyone out): open the backend's Console tab and run it there, like `engine reset-password --user you@example.com`. **TBC:** whether the console's password prompt works. The command needs a terminal.
 - **The logs:** the Runtime Logs tab. They never hold a password, a key or a cookie.
-- **Changing the file later:** change the live spec the same way (Settings, App Spec, Edit). Don't paste this file over a running app: it would drop the keys added in the dashboard.
-
-### Before real data
-
-1. **A managed database.** A dev database has no backups. Move it to a managed one (Settings, the database, Database Type & Scale, **Convert to a Managed Database**: the data moves with it), then put `production: true` and the cluster's name in the file's `databases` part, so the file matches. A managed one has daily backups and more room for connections. The backend opens at most 15 with the file's settings, and a dev database's own limit is not confirmed (**TBC**).
-2. **The dev database's limits.** **TBC:** whether it has pgvector and lets the first `migrate` make it (if `migrate` fails on `CREATE EXTENSION vector`, use a managed database from the start), and whether it accepts TLS (the file asks for `require`; if `migrate` says the server does not support SSL, use `prefer` until the managed database). DigitalOcean offers Postgres 15 to 18 for a dev database, so the file's `18` is allowed.
-3. **The checks above,** both of them.
+- **Changing the file later:** change the live spec the same way (Settings, App Spec, Edit), and keep `.do/app.yaml` the same. Don't paste this file over a running app without the keys: it would drop the ones added in the dashboard.
+- **Backups:** the managed database keeps daily backups and can restore to a point in time, into a **new** cluster.
 
 ### Not confirmed (TBC)
 
 - **Security headers on the website.** App Platform serves the website's files without Caddy's `Strict-Transport-Security`, `Content-Security-Policy` and `X-Frame-Options`. The backend's own answers keep `Cache-Control: no-store`, `X-Content-Type-Options` and `Referrer-Policy`. We know of no setting in the app file for the rest. The pages hold no secret, but without `frame-ancestors 'none'` another site could embed them.
+- **The live run feed through the front door.** `disable_edge_cache` can't be set for an app with a static site. Open a running run and check that its steps appear as they happen.
 - **A rate limit at the front door.** None that we know of. The backend limits wrong sign-ins by itself (see "Open items").
-- **The region slug, the dev database's limits (above), and the two checks above.**
+- **The database user.** The app connects as the admin user `doadmin`. A user of its own, with only the rights the engine needs, would be safer.
+- **The visitor-address check above.**
 
 ## A new server (PLAN-V6 H1 and H2: **not tried on a real server yet**)
 

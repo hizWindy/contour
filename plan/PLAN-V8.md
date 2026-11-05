@@ -4,7 +4,7 @@ This plan makes Contour HQ run on DigitalOcean's App Platform, where DigitalOcea
 
 - **Built by:** Al-khair Pama. **Signed off by:** Al-khair (nothing here changes a business rule, so nothing waits on Levi, except the HubSpot-data-in-Sydney OK that is already open).
 - **Last updated:** 2026-11-06. **TBC** means not confirmed yet.
-- **Progress:** 3 of 7 steps done (A1 to A3). B1 to B4 need a live app, which is Al-khair's to make. The work was done on branch `app-platform`, made from `master` at a966f89. **Merged into `master` and pushed on 2026-11-06** (a fast-forward, so `master` and `app-platform` are the same commit; only `master` was pushed).
+- **Progress:** 3 of 7 steps done (A1 to A3), and B1, B3 and B4 half done. **The app is live** since 6 Nov: `contour-hq` in Sydney, https://contour-hq-mxeqw.ondigitalocean.app, on the managed database `contour-db`. The take-over change for B3 is on `master`, not deployed yet. The work was done on branch `app-platform`, made from `master` at a966f89. **Merged into `master` and pushed on 2026-11-06** (a fast-forward, so `master` and `app-platform` are the same commit; only `master` was pushed).
 - **Comes after:** [PLAN-V7.md](PLAN-V7.md). The open steps of [PLAN-V6.md](PLAN-V6.md) (A2, and part H for a droplet) stay there.
 
 ## In short
@@ -49,22 +49,27 @@ This plan makes Contour HQ run on DigitalOcean's App Platform, where DigitalOcea
 ## Part B: The first deploy (Al-khair, needs a live app)
 
 - [ ] **B1. Make the app.** Follow "Set up" in the run book (**Al-khair's call**: it creates paid resources). **Done when:** the website opens at the app's address and the first Admin signs in.
-  - Done so far: `app-platform` merged into `master`, and `master` pushed to GitHub, on 2026-11-06.
-  - Left: make the app.
+  - Done so far: `app-platform` merged into `master` and pushed, then the app made on 6 Nov (dashboard draft, then the spec pasted). The website opens and the backend is healthy.
+  - Left: the first Admin signs in. The deploy that added the keys failed on B3, so the keys aren't in the running backend yet. The migrate step ran before it, so the account is probably there already.
 - [ ] **B2. Check the visitor's address.** Run check 1 of "Check after the first deploy" in the run book. **Done when:** the sign-in log shows your own public address after you send a fake `do-connecting-ip`. **If it shows the fake one,** App Platform does not replace the header and anyone could write their address. Don't put real data in. Decide then (**TBC**): another header, or the connection's address.
-- [ ] **B3. An update must work.** The deploy that adds the keys is the first test. **Done when:** a second deploy finishes with the backend healthy. **If the new backend can't start while the old one runs** (it finds the one-backend lock taken, and the log says `Another backend is already running`), build a **wait-for-the-lock** mode: the backend starts and answers, the run routes say "not ready" (as they do when the database is down), and a background task tries the lock every few seconds and then starts the run engine and the schedules. About half a day, with tests.
-- [ ] **B4. Before real data.** Move the dev database to a managed one. Check pgvector, and that `migrate` can make it. Put `production: true` and the cluster's name in the file. Only then add `HUBSPOT_SERVICE_KEY`, and only after Levi agrees to keep HubSpot data on a server in Sydney. **Done when:** a backup exists and a restore is tried.
+- [ ] **B3. An update must work.** **Done when:** a deploy finishes with the backend healthy, and its log says `run_engine_taken_over`.
+  - Done so far: the first update (6 Nov, adding the keys) failed as feared: the new backend quit with `Another backend is already running on this database` while the old one kept running. Built the **take-over** mode (`take_over_later` in `core/runs/lifecycle.py`): in server mode the new backend starts without the run engine (the run routes answer 503 `runs_not_ready`, the rest works), tries the lock every 5 seconds, and once the old one has let it go recovers the runs and starts the run engine, the scheduler and the HubSpot copy. On a laptop a second backend still refuses to start. Tests: `test_runs_lifecycle.py` (waits, takes over, recovers a run the old one left; stops trying when the app stops) and `test_contract_routes.py` (the lifespan starts the background work only on take-over).
+  - Left: deploy it. The deploy that brings this change still meets the old code, which holds the lock and stops normally, so it should go through. Then one more deploy proves it.
+- [ ] **B4. Before real data.** **Done when:** a backup exists and a restore is tried, and Levi has agreed to HubSpot data in Sydney.
+  - Done so far (6 Nov): the dev database couldn't be used at all (`permission denied for database db` on `CREATE SCHEMA core`: a dev database doesn't let the app make schemas), so the managed cluster `contour-db` was made first (PostgreSQL 18, Sydney, US$15.15: 1 GB, 22 connections, daily backups) and the app connects as `doadmin`. pgvector and every migration worked on it. `.do/app.yaml` now matches the live spec (managed database, alerts, and no `disable_edge_cache`, which App Platform refuses for an app with a static site).
+  - Left: a restore tried once, Levi's OK before the HubSpot key is used (it was added on 6 Nov), and a database user of the engine's own instead of `doadmin` (**TBC**).
 
 ## Waiting on
 
 - **Levi:** the OK to keep HubSpot data on a server in Sydney. It is needed before the HubSpot key goes in, and PLAN-V6 has the same question open.
-- **Al-khair:** making the app (B1: it costs money, so it starts on his word), and whether to use a domain (`hq.contourinteriors.com.au`) or the `ondigitalocean.app` address for now. The app works without a domain. Contour owns and pays for the DigitalOcean account.
+- **Al-khair:** whether to use a domain (`hq.contourinteriors.com.au`) or the `ondigitalocean.app` address for now. The app works without a domain. Contour owns and pays for the DigitalOcean account.
 
 ## Risks
 
-- **A deploy may not be able to replace the one backend** (B3). The old one keeps running and nothing is lost, but updates can't finish until the wait-for-the-lock mode exists.
+- **The take-over mode is not proven live yet** (B3). If a deploy still fails, the old backend keeps running and nothing is lost.
 - **A visitor-written header** (B2). Only the live check settles it.
-- **The dev database has no backups.** Use it with no real data only.
+- **The app uses the database's admin user** (`doadmin`). Fine for now; a user with fewer rights is safer (**TBC**).
+- **The keys shown in a screenshot on 6 Nov** (Anthropic, Signal Hire, HubSpot) should be replaced with new ones.
 - **The website's files come without Caddy's security headers** (`Strict-Transport-Security`, `Content-Security-Policy`, `X-Frame-Options`). Not confirmed whether App Platform can add them. If it can't, serve the website through the backend or a small Caddy.
 - **A deploy stops a run in progress.** It is marked interrupted: open it and press Resume. That is why a push doesn't deploy by itself.
 
@@ -72,6 +77,7 @@ This plan makes Contour HQ run on DigitalOcean's App Platform, where DigitalOcea
 
 Newest first.
 
+- 2026-11-06: **The app is live, and the take-over mode is built.** In order: the dashboard's Create page made a backend-only draft from `engine/backend` (it can't read `.do/app.yaml`), which failed as expected; pasting the spec was refused for `disable_edge_cache` (not allowed with a static site), then accepted without it; the deploy stopped at `migrate` because the dev database doesn't let the app create schemas; the managed cluster `contour-db` was made and the spec pointed at it (`production: true`, `db_name: defaultdb`, `db_user: doadmin`), and the deploy went live at 02:46 (the `syd` region name and pgvector both worked). Adding the keys started the first update, which failed on B3; the take-over mode was built for it on `master`.
 - 2026-11-06: **`master` pushed to `origin`** at Al-khair's word ("Push it"): 25 commits, a plain fast-forward push (nothing forced) from a373f0f. `app-platform` was not pushed. GitHub now has `.do/app.yaml` on `master`, which the app file reads. B1 is half done: the app is left.
 - 2026-11-06: **Merged into `master`** at Al-khair's word ("Merge it"). `master` was at a966f89 and had nothing of its own, so it was fast-forwarded to the tip of `app-platform` with no merge commit. Nothing was pushed: `master` is 24 commits ahead of `origin/master` (a373f0f, as last fetched). `app-platform` is kept (it is the same commit) and can be deleted when Al-khair likes. B1 is half done: the push and the app are left.
 - 2026-11-06: **A1 to A3 done** on `app-platform`, not merged, not pushed. Backend suite: 3,164 passed and 25 skipped in 6 min 31 s (`RUN_GATES=1`), against 3,099 and 25 before this plan. The sign-in tests ran again after the last change (the last line of a doubled header): 642 passed. **Read from DigitalOcean's docs the same day:** Sydney (`SYD`) is listed for App Platform apps, but the `syd` slug and a dev database there are not confirmed; `deploy_on_push` is valid on jobs; a service health check with no `http_path` is a TCP check; `preserve_path_prefix` exists. The docs do not say whether the Create page reads `.do/app.yaml`, or whether a new backend starts before the old one stops. **The file's own test caught one slip:** the migrate job had no `deploy_on_push: false`.

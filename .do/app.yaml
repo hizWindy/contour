@@ -1,11 +1,12 @@
 # Contour HQ on DigitalOcean App Platform (PLAN-V8). The run book is engine/deploy/README.md,
-# "On App Platform". Make the app from this file with `doctl apps create --spec .do/app.yaml`, or
-# make an app from the repo in the dashboard and paste this file at Settings, App Spec, Edit, then
-# Save. Not confirmed: whether the Create page reads .do/app.yaml by itself.
+# "On App Platform". This is the spec the live app `contour-hq` runs on (6 Nov 2026). Make an app
+# from it with `doctl apps create --spec .do/app.yaml`, or paste it at Settings, App Spec, Edit, then
+# Save. The dashboard's Create page does not read this file: it builds a backend-only draft.
 #
-# What it makes: the website (a static site), the backend (one container), the migration step that
-# runs before every deploy, and a Postgres. There is no Caddy: App Platform's front door gives the
-# HTTPS address and sends /api to the backend.
+# What it makes: the website (a static site), the backend (one container) and the migration step
+# that runs before every deploy. The database is a managed cluster made beforehand (see the
+# `databases` part). There is no Caddy: App Platform's front door gives the HTTPS address and sends
+# /api to the backend.
 #
 # Secrets are NOT in this file. Add these in the dashboard once the app exists (Settings, App-Level
 # Environment Variables, Edit, and tick Encrypt):
@@ -16,14 +17,18 @@
 # Do not apply this file again over a running app with `doctl apps update` without first exporting
 # the live spec: it would drop the secrets added in the dashboard.
 
-name: contour-hq
-# Sydney. Not confirmed that "syd" is the slug App Platform uses: if the dashboard refuses it, pick
-# Sydney there instead, and the database lands in the same region.
-region: syd
+# Emails when a deploy or the domain fails, and the build system DigitalOcean picked for the app.
+alerts:
+  - rule: DEPLOYMENT_FAILED
+  - rule: DOMAIN_FAILED
+features:
+  - buildpack-stack=ubuntu-22
 
-# Nothing an answer holds may sit at an edge cache. (The backend also sends "no-store" on every
-# answer, and the live run feed needs the cache off.)
-disable_edge_cache: true
+name: contour-hq
+# Sydney (SYD1).
+region: syd
+# No `disable_edge_cache`: App Platform refuses it for an app with a static site. The backend sends
+# "Cache-Control: no-store" on every answer, so the edge keeps none of them.
 
 services:
   - name: backend
@@ -85,16 +90,18 @@ jobs:
     instance_size_slug: apps-s-1vcpu-1gb
 
 databases:
+  # A managed cluster, made first in the dashboard (Databases, PostgreSQL 18, Sydney, the US$15.15
+  # plan: 1 GB, 22 connections, daily backups). A dev database can't be used: it doesn't let the
+  # app create its schemas ("permission denied for database", tried 6 Nov).
   - name: db
     engine: PG
-    # Version 18 is what the engine runs on. DigitalOcean offers 15 to 18 for a dev database.
     version: "18"
-    # A dev database: US$7 a month, 512 MB, NO BACKUPS. Fine to try the deploy with no real data.
-    # Before the first real run or HubSpot copy, upgrade it to a managed database (one click in the
-    # dashboard, the data moves with it) or point this at a cluster of your own:
-    #   production: true
-    #   cluster_name: <the managed cluster's name>
-    production: false
+    production: true
+    cluster_name: contour-db
+    # The admin user, which may create the schemas and the pgvector extension. TBC: a user of the
+    # engine's own with only the rights it needs.
+    db_name: defaultdb
+    db_user: doadmin
 
 ingress:
   rules:
@@ -146,7 +153,7 @@ envs:
   - key: POSTGRES_SSLMODE
     value: require
     scope: RUN_TIME
-  # The backend opens at most 15 connections with these (the smallest database allows about 22).
+  # The backend opens at most 15 connections with these (the cluster's plan allows 22).
   - key: DB_POOL_SIZE
     value: "6"
     scope: RUN_TIME

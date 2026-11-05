@@ -34,8 +34,8 @@ DATABASE_VALUES = {
     "DATABASE": "contour",
 }
 
-# DigitalOcean's smallest managed database lets an app open about 22 connections (TBC: the run
-# book says to check on the day).
+# The managed cluster's plan (US$15.15: 1 GB) lets an app open 22 connections (read on
+# DigitalOcean's Create page, 6 Nov 2026).
 SMALLEST_DATABASE_CONNECTIONS = 22
 
 
@@ -166,11 +166,11 @@ def test_names_are_ones_app_platform_accepts() -> None:
         assert allowed.fullmatch(name), name
 
 
-def test_the_app_is_in_sydney_with_no_edge_cache() -> None:
-    """The people and the data are in Australia. Nothing the backend answers may sit in a cache
-    (it sends no-store, and the live run feed needs the cache off)."""
+def test_the_app_is_in_sydney_and_never_asks_to_turn_the_edge_cache_off() -> None:
+    """The people and the data are in Australia. App Platform refuses `disable_edge_cache` for an
+    app with a static site (tried 6 Nov); the backend's own no-store keeps its answers out of it."""
     assert spec()["region"] == "syd"
-    assert spec()["disable_edge_cache"] is True
+    assert "disable_edge_cache" not in spec()
 
 
 # --- The front door ----------------------------------------------------------------------------
@@ -253,10 +253,14 @@ def test_the_database_is_the_one_the_file_makes_and_the_backend_talks_to_it_over
     assert settings.postgres_sslmode == "require"
 
 
-def test_the_database_is_postgres_and_its_version_is_text() -> None:
+def test_the_database_is_the_managed_cluster_and_its_version_is_text() -> None:
+    """A dev database doesn't let the app create its schemas (tried 6 Nov), so it is a managed
+    cluster, reached as a user that may create them."""
     (database,) = spec()["databases"]
     assert database["engine"] == "PG"
     assert isinstance(database["version"], str)  # an unquoted 18 is a number
+    assert database["production"] is True
+    assert (database["cluster_name"], database["db_user"]) == ("contour-db", "doadmin")
 
 
 def test_the_backend_stays_inside_the_connections_the_smallest_database_allows(
