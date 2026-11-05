@@ -121,7 +121,7 @@ Sizes are in rem, so browser zoom works. Nothing is smaller than 13px. Sentence 
 
 - **One curve:** `cubic-bezier(0.4, 0, 0.2, 1)`. 150ms for small changes like hover, 250ms for panels and dialogs.
 - **Hover** changes the border, background or opacity. Never the size or the shadow.
-- **Loading:** content fades in. No shimmer and no bouncing dots, so shadcn's Skeleton is used without its pulse.
+- **Loading:** content fades in. No shimmer and no bouncing dots, so shadcn's Skeleton is used without its pulse. A page that is loading shows the shape of what is coming (the rows of a table, a card, a detail page, the menu and top bar of the app), still and grey, and only after 200 ms, so a quick answer never flashes grey blocks (`src/components/skeletons.tsx`, `src/shell/shell-skeleton.tsx`). The skeleton keeps the real content's size, so nothing jumps when it arrives, and a screen reader hears one line ("Loading the leads.") in a hidden status, never the grey blocks. A click on a page whose code is still on its way dims the page you are leaving after 200 ms (`aria-busy`, 150ms), the way a table dims while its next page loads.
 - **A live run** shows a filling progress bar and a static dot. Nothing pulses or loops.
 - **Reduced motion:** if your computer asks for it, motion turns off.
 - **Second exception, waiting for an OK (TBC):** the sign-in avatar reacts to the form. Its eyes follow the login as it is typed (150ms), it shakes its head once after a wrong try (0.6s) and waves once after a sign-out (1.8s). Nothing loops, and reduced motion keeps it still (the face still changes).

@@ -4,7 +4,7 @@ This plan makes Contour HQ feel fast and stay fast as the data grows. Pages show
 
 - **Built by:** Al-khair Pama. **Signed off by:** Al-khair (no business rules change, so nothing waits on Levi).
 - **Last updated:** 2026-11-05. **TBC** means not confirmed yet.
-- **Progress:** 13 of 24 steps done (A1, A2, A4, B1, C1, C2, C3, C4, C5, D1, D2, D3, E1). A3 and B2 are half done. C5 was added during the work (see the Log). Work goes on branch `plan-v7`, made from `master` at 3b0179f.
+- **Progress:** 18 of 24 steps done (A1 to A4, B1 to B3, C1 to C5, D1 to D4, E1, F1). E2, E3 and E4 are not needed yet (A5 decides), F2 and F3 are left, and A5 is Al-khair's. C5 was added during the work (see the Log). Work goes on branch `plan-v7`, made from `master` at 3b0179f.
 - **Comes after:** [PLAN-V6.md](PLAN-V6.md). Its open steps (A2, part H and part I) stay there. This plan doesn't block them, and they don't block it.
 
 ## In short
@@ -70,12 +70,12 @@ These rules are for Al-khair and for Claude. At the start of every session: read
   - The fake backend can start on it, with a flag (**TBC**: the flag's name).
   - **Done when:** the fake backend serves 10,000 leads from `leadfinder_perf`, and the script runs again from nothing in under 5 minutes.
 
-- [ ] **A3. Measure the website.**
+- [x] **A3. Measure the website.** Done 2026-11-05: the sizes 2a9e710, the timings in "Results" below.
   - A size report of the build: which libraries sit in which code file. Recommendation: `rollup-plugin-visualizer` as a dev-only package (**TBC**: Al-khair's OK on the package, and whether it works with Vite 8).
   - Web Vitals on a production build (`vite build`, then `vite preview`) for Home, Start, Results, a lead card and Runs, on a laptop size and a phone size, against A2's database.
   - Count the waits: for each page, how long from the click to the code, and from the code to the data.
   - **Done when:** the sizes and the timings are a table in the Log.
-  - **Done so far:** `frontend/scripts/bundle-report.js` (2a9e710). It builds in memory with Vite's own API, so no package is needed. **The sizes are done** (the table is in the Log). **Left:** the Web Vitals, and the click-to-content timing (needs a production build and the 10,000-lead backend).
+  - **Done:** `frontend/scripts/bundle-report.js` (2a9e710) builds in memory with Vite's own API, so no package was needed. The timings came from a small test server kept outside the repo (see "Results").
 
 - [x] **A4. Measure the backend.** Done 2026-11-05, fd03c62. `backend/scripts/loadtest.py`, plain Python and httpx, so no tool was added. The numbers are in the Log.
   - The time each route takes, logged per request (check first whether the logs already have it).
@@ -96,11 +96,11 @@ These rules are for Al-khair and for Claude. At the start of every session: read
   - A screen reader hears one line, like "Loading the leads.", in a hidden status.
   - **Done when:** the parts and their tests are in, and the design and contrast checks pass.
 
-- [ ] **B2. Use them everywhere.** **Done so far** (2a9e710): 13 places changed (the table, the lead page and panel, the run page, Start, Rules, Settings, the HubSpot and runs tabs, the look-alikes, Home). **Left:** the CLS number (needs A3's browser run). The table (`data-table.tsx`), the lead card and side panel, the run page, Start, Rules, Settings, the Admin tabs and Home's status lines. About 14 places today.
+- [x] **B2. Use them everywhere.** Done 2026-11-05: loading shapes in 13 places (2a9e710) and the shape of the app (f3effbe). **CLS** (largest of 3 runs, the five pages): 0.0075 on a laptop and 0.021 on a phone (Home), 0 on the rest; before, up to 0.039. The target (under 0.1) is met.
   - **Moves:** CLS (nothing jumps when the data arrives) and how long the page looks empty.
   - **Done when:** no page shows "Loading." on its own, and CLS is under 0.1 on the five pages.
 
-- [ ] **B3. The page while its code loads.** Instead of "Loading the page.", the menu and top bar stay, and the page shows a skeleton of its header and main block.
+- [x] **B3. The page while its code loads.** Done 2026-11-05, f3effbe. While the first page of a visit loads, and while the backend says who is signed in, the app shows its own shape (menu, top bar, page header and a block, still, after 200 ms) instead of "Loading the page.". A click on a page whose code is still on its way dims the page you are leaving after 200 ms.
   - **Done when:** opening a page you haven't visited shows its shape at once.
 
 ## Part C: Load before the click
@@ -135,7 +135,7 @@ These rules are for Al-khair and for Claude. At the start of every session: read
 - [x] **D3. Fonts.** Done 2026-11-05, 9ac4484. `index.html` preloads the two Titillium Web weights the first screen uses (latin 400 and 600), and the fonts already use `font-display: swap`, so text shows in the system font until they arrive.
   - **Done when:** A3's timing shows the fonts start in the first round of downloads. Done: they start at about 100 ms instead of 380 to 620 ms.
 
-- [ ] **D4. The map with many pins.** If A3 shows the map slow with 2,000 pins, draw them on a canvas (Leaflet's canvas renderer) instead of one shape each.
+- [x] **D4. The map with many pins.** Not needed (A3 shows it already is fine), 2026-11-05. In a production build with 2,000 pins (Leaflet draws each as an SVG shape), a zoom in, a drag and a zoom out had a worst frame of 153 ms and one other over 50 ms (62 ms). The target is under 200 ms. A canvas would only matter on a slower computer, and the map request is now made only in the map view (C5).
   - **Done when:** moving and zooming the map stays smooth (INP under 200 ms) with 2,000 pins, or A3 shows it already is.
 
 ## Part E: The backend for more data (only where A4 shows the need)
@@ -143,18 +143,18 @@ These rules are for Al-khair and for Claude. At the start of every session: read
 - [x] **E1. Filter counts in one go.** Done 2026-11-05, fd03c62, in a different way than planned (measuring found two bigger causes; see the Log). The 12 count queries are still 12, but each is about 5 times cheaper. About 12 queries one after another become one or two (Postgres `GROUPING SETS`, or `FILTER` counts).
   - **Done when:** the filter-count route's p95 is under the target, with the same counts as today (tests compare them).
 
-- [ ] **E2. Indexes.** A trigram index for search by name (`pg_trgm`, so `ILIKE '%text%'` stops reading every lead), and an index for the default sort, if `EXPLAIN ANALYZE` shows it reads too much. One migration (0013), with its `SCHEMA-0013.md`.
+- [ ] **E2. Indexes.** A trigram index for search by name (`pg_trgm`, so `ILIKE '%text%'` stops reading every lead), and an index for the default sort, if `EXPLAIN ANALYZE` shows it reads too much. One migration (0013), with its `SCHEMA-0013.md`. **Status 5 Nov: not needed yet.** Search by name takes 40 ms on 10,000 leads after E1. It reads every lead, so it would grow with the data: look again at about 100,000 leads.
   - **Done when:** the slow queries from A4 use the indexes, and the schema check passes.
 
-- [ ] **E3. Deep pages.** If page 100 of Results is slow, page by "after this lead" (keyset paging) instead of skipping rows (`OFFSET`).
+- [ ] **E3. Deep pages.** If page 100 of Results is slow, page by "after this lead" (keyset paging) instead of skipping rows (`OFFSET`). **Status 5 Nov: not needed yet.** Page 140 of Results (offset 7,000) takes about 365 ms alone, and real people do not go there.
   - **Done when:** the last page is as fast as the first, or A4 shows it already is.
 
-- [ ] **E4. Short caches on the server.** Home's figures and the filter counts with no filters, kept for 30 seconds in memory and cleared when a run finishes or a lead changes. Safe because only one backend runs at a time (the one-backend lock).
+- [ ] **E4. Short caches on the server.** Home's figures and the filter counts with no filters, kept for 30 seconds in memory and cleared when a run finishes or a lead changes. Safe because only one backend runs at a time (the one-backend lock). **Status 5 Nov: not needed.** With 20 people at once, the p50 of every route is under 140 ms (see the E1 line in the Log).
   - **Done when:** A4's load test shows the gain, and a test proves a new lead shows at once after a change.
 
 ## Part F: Measure again and merge
 
-- [ ] **F1. Measure again.** Repeat A3 and A4 exactly. A table in the Log: before, after and the target, for each number.
+- [x] **F1. Measure again.** Done 2026-11-05. The table is in "Results" below, with the targets. The backend load test was repeated (same p50 on every route).
   - **Done when:** every target is met, or the gap and the reason are written down.
 
 - [ ] **F2. Full checks.** The website (tests, lint, types, prettier, build) and the backend suite with `RUN_GATES=1`, one at a time. A browser check on a phone size and a laptop size, light and dark, with reduced motion on.
@@ -183,10 +183,40 @@ These rules are for Al-khair and for Claude. At the start of every session: read
 - **A skeleton that doesn't match the real layout makes the page jump.** The CLS target (under 0.1) catches it.
 - **This laptop isn't the server.** The numbers here are for comparing before and after, not promises about the live site.
 
+## Results (F1, 5 Nov)
+
+**How it was measured.** A production build of each side (before: `master` at 3b0179f, after: `plan-v7` at f3effbe), served by a small test server kept outside the repo. It adds a delay to every response, limits and shares the bandwidth, and compresses code and JSON the way Caddy does. A page is loaded in a frame, and "ready" is when its content and its data are on screen and no loading shape is left. Each number is the median of 3 runs, in milliseconds from the start of the load, with nothing cached unless it says so. The backend is the fake one with 10,001 leads (A2).
+
+| Where, and how fast the link is | Home | Start | Runs | Results | A lead |
+|---|---|---|---|---|---|
+| Laptop, 30 ms delay, no limit: before | 522 | 468 | 416 | 555 | 420 |
+| after | 453 | 390 | 377 | 468 | 357 |
+| Laptop, files already in the browser: before | 315 | n/a | 234 | 334 | n/a |
+| after | 253 | n/a | 158 | 203 | n/a |
+| Phone, 80 ms, 9 Mbps ("4G"): before | 1,061 | 1,136 | 1,016 | 1,243 | 995 |
+| after | 896 | 960 | 873 | 1,037 | 863 |
+| Phone, 150 ms, 1.6 Mbps ("3G-ish"): before | 2,938 | 3,484 | 3,024 | 3,989 | 3,076 |
+| after | 2,652 | 3,008 | 2,702 | 3,386 | 2,715 |
+
+**Limits of these numbers.** (1) The test server speaks HTTP/1.1, which lets a browser open 6 connections. The real site is behind Caddy on HTTPS, so it speaks HTTP/2, where the number of files at the start costs nothing. The "after" build has more files at the start (framework, fonts), so it looks up to about 100 ms slower here than it will be; with the files in the browser it does not show. (2) Start and a lead were not comparable with the files already in the browser, because the old build had no loading marker on them, so "ready" came before their data. Home, Start and a lead, with nothing cached, were measured again with a marker on their data (5 runs each). (3) Runs vary by about 50 ms, because the laptop was also running the test. (4) "LCP" from the browser was too erratic in a frame to use, so "ready" stands in for it.
+
+**Against the targets**
+
+| Target | Result |
+|---|---|
+| First visit, laptop: LCP under 2.5 s, CLS under 0.1 | Met. Content ready in 0.38 to 0.47 s, CLS 0.0075 at most. On the "3G-ish" phone it is 2.7 to 3.4 s: not met on that very slow link (about 260 to 350 kB of code, styles and fonts at 200 kB/s). |
+| A page seen in the last 5 minutes: content at once, then refreshed | Met. With the files in the browser, 158 to 253 ms. After resting the pointer on a link, the page opens in 14 to 45 ms. Going back to Rules or the filter counts inside 10 minutes or 30 seconds asks the backend nothing (tests). |
+| Clicking anything: INP under 200 ms | Not measured with a tool for most clicks. The map with 2,000 pins: worst frame 153 ms. **TBC** on a slower computer. |
+| Main code file: no build warning | Met. No size warning; the main file is 125 kB (40 kB gzip), was 446 kB. |
+| API with 10,000 leads and 20 people: p95 under 300 ms | p50 met on every route (lead card 12 ms, list 37, map 37, filter counts 133). **p95 not met on this laptop** (filter counts 790 ms, map 930 ms) because it stalls for about 1.3 s now and then in every run, before and after. Measure p95 again on the server (PLAN-V6 H). |
+
+**Also:** the first visit is 200 kB of JavaScript (was 219 kB), in 18 files; the code Results needs for its first screen is 91 kB (was 125 kB); `framework` (React, router, TanStack Query, 108 kB) keeps its name when only our code changes.
+
 ## Log
 
 Newest first. One line for each tick, pause or surprise.
 
+- 2026-11-05: **A3, B2, B3, D4 and F1 done** (f3effbe and this commit). The table and the targets are in "Results" above. **B3:** the app shows its own shape while it loads (`shell/shell-skeleton.tsx`) and a slow click dims the page you are leaving (`useAfterActive`). **Tried and undone:** a `color-scheme: light` meta tag (to stop a dark page flashing before the styles load): the browser does not paint before its styles arrive, so there was nothing to fix and no way to show a gain. **What the bench taught:** (1) compare builds only with the same markers: the old Home, Start and lead had no loading marker, so "ready" came before the data; (2) a test server on HTTP/1.1 charges every file at the start, which a real HTTP/2 server does not; (3) a shared, limited link shows the cost of bytes that a delay alone hides; (4) `prefetchQuery` with a test cache that counts data as old at once makes a second request, so tests of "asks once" need the real cache times. The load test was repeated: same p50 on every route, no errors.
 - 2026-11-05: **D1 done and C5 added** (7373985, d4667bd). **A slower, fairer test bench first:** the earlier bench added only a delay to each response. It now also limits the bandwidth, shared by all downloads, and compresses like Caddy (gzip for code and JSON). Profile "3G-ish": 150 ms and 1.6 Mbps. A first visit to Results there takes about 3.4 to 4.1 s to the first rows (median of 3, nothing cached). **D1, Results:** calendar and divider lazy: first rows 4.12 s to 3.91 s (about 210 ms, the transfer of 33 kB gzip at 200 kB/s); with 80 ms and no limit there is no change (939 and 937 ms), as expected. **D1, Admin runs chart:** lazy made it worse (table 690 to 780 ms, whole page 825 to 1,270 ms at 80 ms per response), so it was undone. **The finding behind C5:** Results asked for the 2,000-pin map in the table view, where it is not shown. **C5:** first rows 3.66 s to 3.40 s at the 3G-ish profile (about 260 ms); the backend skips a query and about 300 kB of JSON (about 40 kB compressed) per visit and per filter change. **The idle preload of the next pages' code does not slow the first rows** (3.91 s with it, 4.03 s without, within noise). **A flaky test found and fixed:** an idle callback from an earlier page could fire during a later test; `whenIdle` now returns a cancel function and Results cancels it when the page is left. Website: 870 tests, lint, types and prettier pass.
 - 2026-11-05: **D2 and D3 done** (9ac4484). **D2:** a `framework` file (React, React DOM, scheduler, router, TanStack Query; 108 kB gzip) in `vite.config.ts`. The main file goes from 326 kB to 125 kB raw. The first visit is 200 kB gzip in 17 files (was 199 kB in 15). **Two builds, one string changed in the Rules page:** 27 of our own files get new names (the main file and the files that import from it) and 25 library files (170 kB gzip, with `framework`) keep theirs, so a returning visitor after a deploy no longer downloads React again (about 108 kB gzip saved each time). **D3:** the fonts start at about 100 ms, not 380 to 620 ms. On a production build with 80 ms added to each response (median of 3 to 4, after the first): Results CLS 0.0049 to 0, Start LCP about 710 to 630 ms, a lead the same, Results LCP about 865 to 960 ms. **That last one is not a loss:** the content is ready at the same time (about 745 ms both ways). LCP names the largest element painted, and once the narrower web font is there at first paint, a table text block becomes the largest instead of an earlier paragraph. The first run of each series is slower (cold start) and is left out. Website: 864 tests, lint and prettier pass.
 - 2026-11-05: **C2 (data part) and C4 done** (e55f47b). **C2 measured** (production build, 80 ms added to every response, a click on a menu link after the idle preload, median of 3, ms from the click to content, with the pointer first resting on the link for 400 ms, as a person's does; without resting in brackets): Start 33 ms (140), Runs 32 (127), Results 45 (181), Rules 14 (101). The page is already there when the click lands. **Backend load:** a rest of 100 ms on a link or row starts the same requests the page would make a moment later, once (data inside its cache time is not asked again), so it adds at most one page's requests per page you are about to open; a sweep across the menu starts none. Not yet checked in a load test (A4's script has no hover step). **C4:** 3 new tests (the panel shows the row while the card is pending; a row starts its card; a sweep starts none). Website: 860 tests, lint, types, prettier pass.

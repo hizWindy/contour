@@ -42,6 +42,9 @@ From `engine/backend/`:
 | New database change | `uv run alembic revision --autogenerate -m "what changed"`, then read and fix the file |
 
 | Fake backend for the website (sample companies, no Claude, own database; **not** the real one) | `uv run python -m tests.e2e.serve` |
+| A fake database of 10,001 leads and 50 runs for speed tests (about a minute; own database `leadfinder_perf`, never the real one) | `uv run --no-sync python -m tests.e2e.perf_seed` |
+| The fake backend on that big database, on its own port | `$env:API_PORT = '8010'; uv run --no-sync python -m tests.e2e.serve --perf` |
+| A load test: 20 people at once, reading only, against that fake backend (it refuses a live server and port 8000) | `uv run --no-sync python scripts/loadtest.py --users 20 --seconds 120` |
 | Write the API contract the website's types come from | `uv run engine openapi` |
 
 From `engine/frontend/`:
@@ -53,6 +56,7 @@ From `engine/frontend/`:
 | New types after the API contract changed | `npm run types` |
 | Lint, types, tests, build | `npm run lint`, `npm run typecheck`, `npm test`, `npm run build` |
 | Format | `npm run format` |
+| Where the bytes go: the first visit and each page, in gzip (builds in memory, adds no package) | `node scripts/bundle-report.js` |
 
 Swagger is at http://127.0.0.1:8000/docs while the backend runs. All endpoints sit under `/api/v1/`. Don't run the backend tests and the website tests at the same time on this laptop: together they run out of memory.
 
