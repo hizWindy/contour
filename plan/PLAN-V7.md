@@ -4,7 +4,7 @@ This plan makes Contour HQ feel fast and stay fast as the data grows. Pages show
 
 - **Built by:** Al-khair Pama. **Signed off by:** Al-khair (no business rules change, so nothing waits on Levi).
 - **Last updated:** 2026-11-05. **TBC** means not confirmed yet.
-- **Progress:** 19 of 24 steps done (A1 to A4, B1 to B3, C1 to C5, D1 to D4, E1, F1, F2). E2, E3 and E4 are not needed yet (A5 decides), F3 waits for the merge, and A5 is Al-khair's. C5 was added during the work (see the Log). Work goes on branch `plan-v7`, made from `master` at 3b0179f.
+- **Progress:** 20 of 24 steps done (A1 to A4, B1 to B3, C1 to C5, D1 to D4, E1, F1 to F3). E2, E3 and E4 are not needed yet and A5 is Al-khair's. C5 was added during the work (see the Log). **Merged into `master` on 2026-11-05** (a fast-forward, so `master` and `plan-v7` are the same commit), not pushed. The work was done on branch `plan-v7`, made from `master` at 3b0179f.
 - **Comes after:** [PLAN-V6.md](PLAN-V6.md). Its open steps (A2, part H and part I) stay there. This plan doesn't block them, and they don't block it.
 
 ## In short
@@ -160,7 +160,7 @@ These rules are for Al-khair and for Claude. At the start of every session: read
 - [x] **F2. Full checks.** Done 2026-11-05. Website (f3effbe): 875 tests, lint, types, prettier and the build pass, and the build has no size warning. Backend (`RUN_GATES=1`): 3,099 passed and 25 skipped in 5 min 40 s, the same as at the start. Browser check on a production build: laptop size light (Home) and dark (Results and the lead panel), phone size light (Home; the menu opens and shuts when a page is picked) and dark (Results). No console errors. **Reduced motion was not switched on in the browser** (the pane has no switch for it). One global rule (`styles/index.css`) turns off every animation and transition when it is on, and the new fades and the dimming use only those.
   - **Done when:** all pass, and the browser check is in the Log.
 
-- [ ] **F3. Docs and merge.** **Done so far (2026-11-05):** `DESIGN.md` (the loading rule), `AGENTS.md` (the speed-test commands, and the prefetch step for a new project), the AI Brain (notes, three decisions, and the test bench kept in the vault). **Left:** merge into `master`, when Al-khair says.
+- [x] **F3. Docs and merge.** Done 2026-11-05. `DESIGN.md` (the loading rule), `AGENTS.md` (the speed-test commands, and the prefetch step for a new project), the AI Brain (notes, three decisions, and the test bench kept in the vault), and the merge: at Al-khair's word, `master` was fast-forwarded from 3b0179f to the tip of `plan-v7`. Nothing is pushed.
   - **Done when:** merged, and the Log says so.
 
 ## Later, not in this plan
@@ -172,7 +172,7 @@ These rules are for Al-khair and for Claude. At the start of every session: read
 
 ## Waiting on
 
-- **Al-khair:** A5 (the sizes and targets, and which parts to do), and each merge. No dev-only package was needed: the size report and the load test are small scripts of our own. Also: whether the test bench (a small server and a test page, about 300 lines, now in the AI Brain vault under `projects/contour/bench/`) should move into the repo. Today the numbers in "Results" cannot be repeated without it.
+- **Al-khair:** A5 (the sizes and targets, and which parts to do), and the push (`master` is 21 commits ahead of `origin/master`, nothing is pushed). No dev-only package was needed: the size report and the load test are small scripts of our own. Also: whether the test bench (a small server and a test page, about 300 lines, now in the AI Brain vault under `projects/contour/bench/`) should move into the repo. Today the numbers in "Results" cannot be repeated without it.
 - **Levi:** nothing.
 
 ## Risks
@@ -216,6 +216,7 @@ These rules are for Al-khair and for Claude. At the start of every session: read
 
 Newest first. One line for each tick, pause or surprise.
 
+- 2026-11-05: **F3 done: merged into `master`** at Al-khair's word ("Merge it now"). `master` was behind `plan-v7` and had nothing of its own, so it was fast-forwarded from 3b0179f to the tip of `plan-v7` with no merge commit. Nothing was pushed. `plan-v7` is kept (it is the same commit); it can be deleted when Al-khair likes.
 - 2026-11-05: **F2 done.** Website 875 tests and the backend suite (3,099 passed, 25 skipped, 5 min 40 s) pass; the browser check on a laptop and a phone, light and dark, found nothing. F3 is left for the merge, which is Al-khair's call: `plan-v7` is 17 commits ahead of `master`, nothing is pushed.
 - 2026-11-05: **A3, B2, B3, D4 and F1 done** (f3effbe and this commit). The table and the targets are in "Results" above. **B3:** the app shows its own shape while it loads (`shell/shell-skeleton.tsx`) and a slow click dims the page you are leaving (`useAfterActive`). **Tried and undone:** a `color-scheme: light` meta tag (to stop a dark page flashing before the styles load): the browser does not paint before its styles arrive, so there was nothing to fix and no way to show a gain. **What the bench taught:** (1) compare builds only with the same markers: the old Home, Start and lead had no loading marker, so "ready" came before the data; (2) a test server on HTTP/1.1 charges every file at the start, which a real HTTP/2 server does not; (3) a shared, limited link shows the cost of bytes that a delay alone hides; (4) `prefetchQuery` with a test cache that counts data as old at once makes a second request, so tests of "asks once" need the real cache times. The load test was repeated: same p50 on every route, no errors.
 - 2026-11-05: **D1 done and C5 added** (7373985, d4667bd). **A slower, fairer test bench first:** the earlier bench added only a delay to each response. It now also limits the bandwidth, shared by all downloads, and compresses like Caddy (gzip for code and JSON). Profile "3G-ish": 150 ms and 1.6 Mbps. A first visit to Results there takes about 3.4 to 4.1 s to the first rows (median of 3, nothing cached). **D1, Results:** calendar and divider lazy: first rows 4.12 s to 3.91 s (about 210 ms, the transfer of 33 kB gzip at 200 kB/s); with 80 ms and no limit there is no change (939 and 937 ms), as expected. **D1, Admin runs chart:** lazy made it worse (table 690 to 780 ms, whole page 825 to 1,270 ms at 80 ms per response), so it was undone. **The finding behind C5:** Results asked for the 2,000-pin map in the table view, where it is not shown. **C5:** first rows 3.66 s to 3.40 s at the 3G-ish profile (about 260 ms); the backend skips a query and about 300 kB of JSON (about 40 kB compressed) per visit and per filter change. **The idle preload of the next pages' code does not slow the first rows** (3.91 s with it, 4.03 s without, within noise). **A flaky test found and fixed:** an idle callback from an earlier page could fire during a later test; `whenIdle` now returns a cancel function and Results cancels it when the page is left. Website: 870 tests, lint, types and prettier pass.
