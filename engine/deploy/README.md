@@ -1,9 +1,9 @@
 # Contour HQ on a server: the run book
 
-Contour HQ runs in Docker: one command starts it, and one command updates it. This folder has the files and the steps.
+Contour HQ runs in Docker: one command starts it, and one command updates it. This folder has the files and the steps. There are two ways to run it: **Docker on a server you look after** (this file, up to "A new server"), and **DigitalOcean App Platform**, where DigitalOcean looks after the server (see "On App Platform").
 
-- **Last updated:** 2026-11-05. **TBC** means not confirmed yet.
-- **Plan:** [PLAN-V6](../../plan/PLAN-V6.md), Parts G and H.
+- **Last updated:** 2026-11-06. **TBC** means not confirmed yet.
+- **Plan:** [PLAN-V6](../../plan/PLAN-V6.md), Parts G and H (Docker on a server). [PLAN-V8](../../plan/PLAN-V8.md) for DigitalOcean App Platform.
 - **Tried so far (4 and 5 Nov):** everything in this folder, from a clean start, on a Windows laptop with Docker Desktop: a new database migrated from nothing, the real login page in a browser, a lead card, an update, a rollback, a stop and start, a backup and a restore. **Not tried:** a real server, DigitalOcean's managed database, a real HTTPS certificate (the laptop trial uses Caddy's own), and `engine create-admin` typed at its password prompt inside a container.
 
 ## The parts
@@ -19,6 +19,7 @@ The files:
 - [Caddyfile](Caddyfile) is Caddy's settings.
 - [.env.example](.env.example) lists the settings and keys. The real file is `.env`, next to it, and is never in git.
 - The Dockerfiles are in [../backend](../backend/Dockerfile) and [../frontend](../frontend/Dockerfile).
+- [../../.do/app.yaml](../../.do/app.yaml) is the whole app for DigitalOcean App Platform (PLAN-V8).
 
 ## Before you start
 
@@ -51,7 +52,7 @@ cp .env.example .env
 chmod 600 .env
 ```
 
-Open `.env` and fill it in: the domain, the database, and the keys. Every line says what it is for. Keep the `COMPOSE_FILE` line. It makes `docker compose` use the file in this folder. Without it, compose climbs to the folder above and starts the development database there instead.
+Open `.env` and fill it in: the domain, the database, the keys, and the first Admin's email and password. Every line says what it is for. Keep the `COMPOSE_FILE` line. It makes `docker compose` use the file in this folder. Without it, compose climbs to the folder above and starts the development database there instead.
 
 3. Build and start. The first build takes several minutes: it also downloads the memory model (about 65 MB) into the image, so the backend never downloads it later. A build after a change takes about a minute, because the packages and the model are kept.
 
@@ -69,7 +70,13 @@ The order is fixed: `migrate`, then `backend`, then `web`. Check that `backend` 
 docker compose ps
 ```
 
-4. Make the Admin account. It asks for the password twice and never shows it. Use at least 14 characters. A short phrase is fine.
+4. Make the Admin account. **By itself:** if `FIRST_ADMIN_EMAIL` and `FIRST_ADMIN_PASSWORD` are in `.env`, step 3's `migrate` part already made it. Look for `Made the first Admin account` in its log. Then delete the `FIRST_ADMIN_PASSWORD` line from `.env`: once an Admin exists the settings are ignored, and a password shouldn't sit in a file for nothing. (**Not tried in Docker yet:** the tests ran it against a real database, not inside this container.)
+
+```bash
+docker compose logs migrate
+```
+
+**By hand,** if you left them out: it asks for the password twice and never shows it. Use at least 14 characters. A short phrase is fine.
 
 ```bash
 docker compose run --rm -it backend engine create-admin --email you@example.com --name "Your Name"
@@ -198,6 +205,67 @@ docker compose up -d --build
 3. Open `https://localhost`. The browser warns about the certificate, because Caddy made it itself. Accept it for this trial.
 
 When you are finished, `docker compose down -v` removes the trial database and the certificates with it.
+
+## On App Platform (PLAN-V8: **not tried on DigitalOcean yet**)
+
+DigitalOcean builds the app from the GitHub repo and runs it. There is no server and no Caddy to look after. One file describes all of it: [.do/app.yaml](../../.do/app.yaml). It makes four parts:
+
+- **backend:** the same image as above, **one copy only** (`instance_count: 1`; never scale it up).
+- **web:** the website, built with `npm run build` and served as a static site.
+- **migrate:** runs `engine migrate` before every deploy, and a failure stops the deploy. It also makes the first Admin account.
+- **db:** a Postgres. The file asks for a **dev** database: about US$7 a month, 512 MB, **no backups**. Move to a managed database before any real data (see "Before real data").
+
+The front door gives an HTTPS address like `https://contour-hq-abc12.ondigitalocean.app`. It sends `/api` to the backend and everything else to the website. The backend learns its own address from `PUBLIC_ORIGIN=${APP_URL}`, and who a visitor is from `CLIENT_IP_HEADER=do-connecting-ip`: the front door writes the visitor's address in that header, so no proxy address is needed.
+
+Cost, read from DigitalOcean's pricing page on 6 Nov (**TBC**: check on the day): the backend on `apps-s-1vcpu-2gb` US$25 a month, the dev database US$7, the migrate step only for the seconds it runs. The static site is free or about US$3 a month (the free tier is for apps with only static sites, and this one has a backend too). After a week of watching the memory graph, try `apps-s-1vcpu-1gb` (US$12).
+
+### Set up (once)
+
+You need the code on GitHub on the branch the file names (`master`; to try another branch first, change the three `branch:` lines), DigitalOcean allowed to read that private repo (the dashboard asks you to install its GitHub app the first time; do it before `doctl`), a DigitalOcean account with billing, the Anthropic key, and an email and a password (14 characters or more) for the first Admin.
+
+1. **Make the app from the file.** Run this (needs `doctl`, signed in), or make an app from the repo in the dashboard and paste the file at Settings, App Spec, Edit, then Save. **TBC:** whether the Create page reads `.do/app.yaml` by itself. DigitalOcean's docs don't say.
+
+```bash
+doctl apps create --spec .do/app.yaml
+```
+
+2. **Check the region.** The file says `syd` (Sydney). **TBC:** the slug, and whether a dev database can be made there. DigitalOcean lists Sydney for App Platform apps and says nothing about databases. If the dashboard refuses `syd`, pick Sydney there.
+3. **Add the keys.** The first deploy starts when the app is made, and it has no keys yet. Go to Settings, App-Level Environment Variables, Edit. Add `ANTHROPIC_API_KEY`, `FIRST_ADMIN_EMAIL` and `FIRST_ADMIN_PASSWORD` (and `SIGNALHIRE_API_KEY` if you use it), and tick **Encrypt** on every key and on the password. Add `HUBSPOT_SERVICE_KEY` last, after Levi agrees to HubSpot data on a server in Sydney (**TBC**): with it the backend copies HubSpot at start and every day. Saving deploys.
+4. In that deploy's `migrate` log, look for `Made the first Admin account for ...`. Open the app's address and sign in.
+5. **Remove `FIRST_ADMIN_PASSWORD`** from the variables. It deploys again, and `migrate` says an Admin already exists. Nothing else changes.
+
+### Check after the first deploy
+
+1. **The visitor's address.** Send one wrong sign-in with an address of your own making in the header. Use your app's address for `YOUR-APP`.
+
+```bash
+curl -s -X POST https://YOUR-APP/api/v1/auth/login -H "Origin: https://YOUR-APP" -H "Content-Type: application/json" -H "do-connecting-ip: 203.0.113.50" -d '{"login":"nobody@example.com","password":"a wrong password here"}'
+```
+
+Then sign in in the browser and open `https://YOUR-APP/api/v1/auth/log`. The newest `sign_in_failed` must show **your own public address**, not `203.0.113.50`. If it shows `203.0.113.50`, the front door does not replace that header: anyone could write their own address, and the limit on wrong tries from one address would mean nothing. Don't put real data in, and go to PLAN-V8 B2.
+
+2. **An update.** The deploy in "Set up" step 3 is the first update, so it is the test: it should finish with the backend healthy. **TBC:** if App Platform starts the new backend before it stops the old one, the new one finds the one-backend lock taken and stops (`Another backend is already running on this database`), the deploy fails, and the old one keeps running: nothing is lost. Then the backend needs a wait-for-the-lock mode (PLAN-V8 B3, about half a day). Until it is built, an update can't finish.
+3. **Healthy.** The backend shows as healthy. The file uses a TCP check on the port, because the backend answers only to its own public host name, and what host name App Platform's check sends is not known.
+
+### Day to day
+
+- **An update:** merge to the branch, then press Deploy (the file turns deploy on push off). The `migrate` step runs first. The backend restarts, so a run in progress stops and is marked **interrupted**: open it and press Resume.
+- **A rollback:** the dashboard lists every deployment and can go back to an earlier one. As in "A rollback" above, older code may not work with a database an update changed. **TBC:** not tried.
+- **A command** (reset a password, sign everyone out): open the backend's Console tab and run it there, like `engine reset-password --user you@example.com`. **TBC:** whether the console's password prompt works. The command needs a terminal.
+- **The logs:** the Runtime Logs tab. They never hold a password, a key or a cookie.
+- **Changing the file later:** change the live spec the same way (Settings, App Spec, Edit). Don't paste this file over a running app: it would drop the keys added in the dashboard.
+
+### Before real data
+
+1. **A managed database.** A dev database has no backups. Move it to a managed one (Settings, the database, Database Type & Scale, **Convert to a Managed Database**: the data moves with it), then put `production: true` and the cluster's name in the file's `databases` part, so the file matches. A managed one has daily backups and more room for connections. The backend opens at most 15 with the file's settings, and a dev database's own limit is not confirmed (**TBC**).
+2. **The dev database's limits.** **TBC:** whether it has pgvector and lets the first `migrate` make it (if `migrate` fails on `CREATE EXTENSION vector`, use a managed database from the start), and whether it accepts TLS (the file asks for `require`; if `migrate` says the server does not support SSL, use `prefer` until the managed database). DigitalOcean offers Postgres 15 to 18 for a dev database, so the file's `18` is allowed.
+3. **The checks above,** both of them.
+
+### Not confirmed (TBC)
+
+- **Security headers on the website.** App Platform serves the website's files without Caddy's `Strict-Transport-Security`, `Content-Security-Policy` and `X-Frame-Options`. The backend's own answers keep `Cache-Control: no-store`, `X-Content-Type-Options` and `Referrer-Policy`. We know of no setting in the app file for the rest. The pages hold no secret, but without `frame-ancestors 'none'` another site could embed them.
+- **A rate limit at the front door.** None that we know of. The backend limits wrong sign-ins by itself (see "Open items").
+- **The region slug, the dev database's limits (above), and the two checks above.**
 
 ## A new server (PLAN-V6 H1 and H2: **not tried on a real server yet**)
 

@@ -1,0 +1,155 @@
+# Contour HQ on DigitalOcean App Platform (PLAN-V8). The run book is engine/deploy/README.md,
+# "On App Platform". Make the app from this file with `doctl apps create --spec .do/app.yaml`, or
+# make an app from the repo in the dashboard and paste this file at Settings, App Spec, Edit, then
+# Save. Not confirmed: whether the Create page reads .do/app.yaml by itself.
+#
+# What it makes: the website (a static site), the backend (one container), the migration step that
+# runs before every deploy, and a Postgres. There is no Caddy: App Platform's front door gives the
+# HTTPS address and sends /api to the backend.
+#
+# Secrets are NOT in this file. Add these in the dashboard once the app exists (Settings, App-Level
+# Environment Variables, Edit, and tick Encrypt):
+#   ANTHROPIC_API_KEY, SIGNALHIRE_API_KEY, HUBSPOT_SERVICE_KEY
+#   FIRST_ADMIN_EMAIL and FIRST_ADMIN_PASSWORD (the first Admin account, made by the migration step)
+# Paste the HubSpot key last, after Levi's OK to keep HubSpot data on a server in Sydney: with the
+# key in place the backend copies HubSpot into the database at start and every day.
+# Do not apply this file again over a running app with `doctl apps update` without first exporting
+# the live spec: it would drop the secrets added in the dashboard.
+
+name: contour-hq
+# Sydney. Not confirmed that "syd" is the slug App Platform uses: if the dashboard refuses it, pick
+# Sydney there instead, and the database lands in the same region.
+region: syd
+
+# Nothing an answer holds may sit at an edge cache. (The backend also sends "no-store" on every
+# answer, and the live run feed needs the cache off.)
+disable_edge_cache: true
+
+services:
+  - name: backend
+    github:
+      repo: hizWindy/contour
+      branch: master
+      # A deploy restarts the backend, and a run in progress stops (it is marked interrupted; open
+      # it and press Resume). So a push does not deploy by itself: press Deploy when you want it.
+      deploy_on_push: false
+    source_dir: engine/backend
+    dockerfile_path: engine/backend/Dockerfile
+    http_port: 8000
+    # ONE copy only: the engine allows one backend for each database. Never raise this, and never
+    # turn on autoscaling.
+    instance_count: 1
+    # The backend uses about 150 MiB idle and 300 MiB more once the memory model is loaded. 2 GiB
+    # leaves room for a run and a HubSpot copy at the same time. Try apps-s-1vcpu-1gb (US$12 instead
+    # of US$25) after watching the memory graph for a week.
+    instance_size_slug: apps-s-1vcpu-2gb
+    # A TCP check, on purpose: the backend answers only to its own public host name (the host check
+    # in core/api/security.py), and what host name App Platform's health check sends is not known.
+    # The backend opens its port only after it has taken the one-backend lock and set itself up.
+    health_check:
+      port: 8000
+      initial_delay_seconds: 60
+      period_seconds: 15
+      timeout_seconds: 5
+      failure_threshold: 5
+
+static_sites:
+  - name: web
+    github:
+      repo: hizWindy/contour
+      branch: master
+      deploy_on_push: false
+    source_dir: engine/frontend
+    environment_slug: node-js
+    # `npm run build` checks the types and builds into dist/. Node comes from engines in
+    # package.json (>=22.12.0); the laptop builds it on Node 26 and the Docker image on Node 22.
+    build_command: npm run build
+    output_dir: dist
+    # Every address that is not a file is a page of the website (React Router). A missing /assets
+    # file is not: the build puts every file the pages ask for in dist/.
+    catchall_document: index.html
+
+jobs:
+  # Runs before every deploy, and a failure stops the deploy. It builds the tables, and makes the
+  # first Admin account when FIRST_ADMIN_* is set and there is no Admin yet.
+  - name: migrate
+    kind: PRE_DEPLOY
+    github:
+      repo: hizWindy/contour
+      branch: master
+      deploy_on_push: false
+    source_dir: engine/backend
+    dockerfile_path: engine/backend/Dockerfile
+    run_command: engine migrate
+    instance_count: 1
+    instance_size_slug: apps-s-1vcpu-1gb
+
+databases:
+  - name: db
+    engine: PG
+    # Version 18 is what the engine runs on. DigitalOcean offers 15 to 18 for a dev database.
+    version: "18"
+    # A dev database: US$7 a month, 512 MB, NO BACKUPS. Fine to try the deploy with no real data.
+    # Before the first real run or HubSpot copy, upgrade it to a managed database (one click in the
+    # dashboard, the data moves with it) or point this at a cluster of your own:
+    #   production: true
+    #   cluster_name: <the managed cluster's name>
+    production: false
+
+ingress:
+  rules:
+    - match:
+        path:
+          prefix: /api
+      component:
+        name: backend
+        # The backend's routes start with /api/v1. Without this the front door cuts "/api" off.
+        preserve_path_prefix: true
+    - match:
+        path:
+          prefix: /
+      component:
+        name: web
+
+# Shared by the backend and the migration step.
+envs:
+  # Server mode: the backend answers to one https address and needs a sign-in. The address is the
+  # app's own (a *.ondigitalocean.app name, or the custom domain once it is the primary one).
+  - key: SERVER_MODE
+    value: "true"
+    scope: RUN_TIME
+  - key: PUBLIC_ORIGIN
+    value: ${APP_URL}
+    scope: RUN_TIME
+  # The front door writes the visitor's real address in this header. (No TRUSTED_PROXIES: the front
+  # door has no fixed address.) Check once, after the first deploy: send a request with your own
+  # do-connecting-ip header and make sure the sign-in log still shows your real address.
+  - key: CLIENT_IP_HEADER
+    value: do-connecting-ip
+    scope: RUN_TIME
+  # The database. App Platform fills these in.
+  - key: POSTGRES_HOST
+    value: ${db.HOSTNAME}
+    scope: RUN_TIME
+  - key: POSTGRES_PORT
+    value: ${db.PORT}
+    scope: RUN_TIME
+  - key: POSTGRES_USER
+    value: ${db.USERNAME}
+    scope: RUN_TIME
+  - key: POSTGRES_PASSWORD
+    value: ${db.PASSWORD}
+    scope: RUN_TIME
+  - key: POSTGRES_DB
+    value: ${db.DATABASE}
+    scope: RUN_TIME
+  - key: POSTGRES_SSLMODE
+    value: require
+    scope: RUN_TIME
+  # The backend opens at most 15 connections with these (the smallest database allows about 22).
+  - key: DB_POOL_SIZE
+    value: "6"
+    scope: RUN_TIME
+  - key: DB_MAX_OVERFLOW
+    value: "4"
+    scope: RUN_TIME

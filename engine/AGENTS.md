@@ -23,7 +23,7 @@ From `engine/backend/`:
 | Start the backend (applies database changes first) | `uv run engine serve` |
 | Start with auto-reload while coding | `uv run engine serve --reload` |
 | Apply database changes only | `uv run engine migrate` |
-| Make the Admin account (asks for the password twice, never shows it; needs a terminal) | `uv run engine create-admin --email name@company.com.au --username name` |
+| Make the Admin account (asks for the password twice, never shows it; needs a terminal. A server makes the first one by itself from `FIRST_ADMIN_*`: see Sign-in) | `uv run engine create-admin --email name@company.com.au --username name` |
 | Give an account a new password, lift its lock and end its sessions (the only way to reset one) | `uv run engine reset-password --user <email or username>` |
 | End every session of every account | `uv run engine sign-out-everyone` |
 | Load a HubSpot export | `uv run engine import-hubspot ../../projects/leads/research/COMPANIES.xlsx` |
@@ -127,6 +127,7 @@ backend/
   scripts/             checks run by hand: hubspot_schema.py (Contour's HubSpot fields) and schema_map.py (our database); see scripts/README.md
 schema/                our database schema, one file for each migration, like SCHEMA-0008.md, made by scripts/schema_map.py
 deploy/                the server files: docker-compose.prod.yml, Caddyfile, .env.example and README.md (the run book)
+../.do/app.yaml        the DigitalOcean App Platform app (PLAN-V8); its run book is deploy/README.md, "On App Platform"
 frontend/
   openapi.json         the API contract, written by `uv run engine openapi`
   src/api/             the typed API client and the data hooks
@@ -234,6 +235,7 @@ Commands, from `backend/`: `uv run engine hubspot-check` (which scopes the key h
 
 - **Off on this computer** (`AUTH_REQUIRED=false`, the default), so local work and the fake backend need no password. Where it is on, **every route needs a session**, except `GET /health`, `POST /auth/login` and the Swagger pages. The guard (`core/api/guard.py`) is plain ASGI middleware with deny by default: it answers 401 `auth_required` from the headers alone, before any body is read, and an unknown path gets the same 401, so a route a project adds later is covered with no change. The fake backend takes `--auth` to turn sign-in on and make a demo Admin (its password is printed once).
 - **The account is made on the server:** `uv run engine create-admin`. There is no sign-up page and no reset by email. `reset-password` and `sign-out-everyone` are commands too.
+- **The first Admin can be made by `engine migrate`** ([PLAN-V8](../plan/PLAN-V8.md)): with `FIRST_ADMIN_EMAIL` and `FIRST_ADMIN_PASSWORD` set and no Admin yet, the migrate step makes the account (`_first_admin` in `core/cli.py`, `create_first_admin` in `core/auth/admin.py`), so a deploy needs nobody at a terminal. It does nothing once an Admin exists (it says to remove the password), so the settings can stay without failing a deploy. Only one of the two set, a login that isn't allowed, or a password that breaks the rules fails the migrate and names the reason. The password follows the same rules as a typed one, is a `SecretStr` that `core/logs.py` redacts, and is never printed. The sign-in log says `by: settings`.
 - **Passwords** are saved only as an argon2id hash (RFC 9106's low-memory settings). A new one has 14 to 256 characters, isn't common (`core/auth/common_passwords.txt`), doesn't hold the email, the username or "contour", and isn't a repeat or a simple run. A hash made with older settings is saved again at the next sign-in.
 - **Sessions:** the cookie holds a random 256-bit token and the database only its SHA-256. Signed out after 2 hours idle and after 12 hours at most. "Keep me signed in" has no idle limit and lasts 14 days. The numbers are `SESSION_IDLE_MINUTES`, `SESSION_MAX_HOURS` and `SESSION_REMEMBER_DAYS`. "Last seen" is written at most once a minute.
 - **The cookie** is `HttpOnly` and `SameSite=Strict`. Over HTTPS (`SESSION_COOKIE_SECURE=true`) it is `Secure` and named `__Host-contour_session`.
@@ -246,9 +248,10 @@ Commands, from `backend/`: `uv run engine hubspot-check` (which scopes the key h
 
 [PLAN-V6](../plan/PLAN-V6.md) B5. The engine on a server, behind Caddy and HTTPS. Off on this laptop, where nothing changes: the engine answers to `localhost` and `127.0.0.1` and listens on `127.0.0.1`.
 
-- **On** with `SERVER_MODE=true`. It needs `PUBLIC_ORIGIN` (the website's `https://` address, no path) and `TRUSTED_PROXIES` (Caddy's address or network, never `*`), or the backend refuses to start and names what is missing.
+- **On** with `SERVER_MODE=true`. It needs `PUBLIC_ORIGIN` (the website's `https://` address, no path) and one of `TRUSTED_PROXIES` (Caddy's address or network, never `*`) or `CLIENT_IP_HEADER` (App Platform, below), or the backend refuses to start and names what is missing.
 - **It sets up:** the host check lets the public host through (and `localhost` and `127.0.0.1`, for the container's own health check); the origin guard allows the public origin and no other; the backend listens on `0.0.0.0` inside its container; sign-in is required; the cookie is `Secure` and `__Host-` named; the backend doesn't migrate at start (a one-off `engine migrate` runs first); the Swagger pages aren't served (`engine openapi` still writes the contract).
 - **Whose word is taken for a client's IP address:** only a connection from `TRUSTED_PROXIES`, by uvicorn's `forwarded_allow_ips`. Caddy adds the real address at the end of `X-Forwarded-For`, and what a client writes before it is not believed. On this computer no header is believed at all.
+- **Behind App Platform** ([PLAN-V8](../plan/PLAN-V8.md)): the front door has no fixed address, so `TRUSTED_PROXIES` can't name it. Set `CLIENT_IP_HEADER=do-connecting-ip` instead (never both). `client_ip` in `core/api/signin.py` then reads the address from that one header (the last line, if it comes more than once), only if it holds one valid IP address, and from the connection otherwise; uvicorn trusts no forwarding header at all (`proxy_headers` is off). A name a visitor can write (`X-Forwarded-For`, `Forwarded`, `Host`, ...) is refused as the setting. It is safe only if App Platform replaces a header a visitor sends: check the live app (run book, "Check after the first deploy").
 - **Nothing is quietly overruled:** `AUTH_REQUIRED=false`, `SESSION_COOKIE_SECURE=false` or `AUTO_MIGRATE=true` together with server mode is refused.
 
 ## Containers
@@ -262,6 +265,17 @@ Commands, from `backend/`: `uv run engine hubspot-check` (which scopes the key h
 - **Line endings:** `.gitattributes` checks out the files that go into Linux containers (`deploy/`, `backend/Dockerfile`, `backend/.dockerignore`) with LF on every machine, as it does for `frontend/`.
 - **Caddy's address is fixed** (`172.28.0.2`), and `TRUSTED_PROXIES` is that one address. The other parts get addresses from the upper half of the network, so none of them can take it first.
 - **Database TLS:** `POSTGRES_SSLMODE` and `POSTGRES_SSLROOTCERT` (a managed database needs `require` at least; `verify-full` also needs the certificate file).
+
+## App Platform
+
+[PLAN-V8](../plan/PLAN-V8.md). The same backend image on DigitalOcean App Platform, with no Caddy and no server of our own. The file is `../.do/app.yaml`, and the run book is [deploy/README.md](deploy/README.md), "On App Platform".
+
+- **Parts:** the backend (`instance_count: 1`, never more: the engine allows one backend for each database), the website (a static site built by `npm run build`), the `migrate` job (`PRE_DEPLOY`: runs `engine migrate` before every deploy, and makes the first Admin) and a Postgres. The front door sends `/api` to the backend with `preserve_path_prefix` (the backend's routes start with `/api/v1`) and the rest to the website.
+- **Settings** are the file's `envs`: `SERVER_MODE`, `PUBLIC_ORIGIN=${APP_URL}`, `CLIENT_IP_HEADER=do-connecting-ip`, the `POSTGRES_*` values from the database part, `POSTGRES_SSLMODE=require` and a smaller connection pool (at most 15 connections). **No key is in the file:** the keys and `FIRST_ADMIN_*` are added in the dashboard, encrypted.
+- **No deploy on push** (`deploy_on_push: false`): a deploy restarts the backend and stops a run in progress, so someone presses Deploy.
+- **A TCP health check, on purpose:** the host check answers only to the public host name, and what host name App Platform's check sends is not known. The backend opens its port only after it has taken the one-backend lock.
+- **Tests without DigitalOcean:** `backend/tests/core/test_app_platform_file.py` checks what the file must keep: one backend, the same build as compose, the migrate step first, the `/api` path kept whole, every setting is a real setting and builds a valid server-mode `Settings`, no key in the file, and the connection count. `test_client_ip.py` and `test_first_admin.py` cover the two backend changes.
+- **Not confirmed (TBC):** that App Platform replaces a `do-connecting-ip` a visitor sends, that a deploy can replace the one backend (the new one may start before the old one stops), the `syd` slug, pgvector on a dev database, and the website's security headers (App Platform serves the static files, without Caddy's).
 
 ## Safety
 

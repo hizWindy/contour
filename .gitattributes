@@ -18,3 +18,6 @@ engine/frontend/**/*.woff2 binary
 engine/deploy/** text eol=lf
 engine/backend/Dockerfile text eol=lf
 engine/backend/.dockerignore text eol=lf
+
+# The App Platform file is read on DigitalOcean's Linux machines (PLAN-V8).
+.do/** text eol=lf
