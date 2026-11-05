@@ -18,6 +18,7 @@ from core.auth.passwords import Hasher, check_rules, get_hasher, require_good_pa
 
 PASSWORD_ATTEMPTS = 3  # how many times the command asks before it gives up
 BY_COMMAND = "command"
+BY_SETTINGS = "settings"  # the first Admin, made by `engine migrate` from FIRST_ADMIN_*
 
 
 def default_name(email: str) -> str:
@@ -36,9 +37,11 @@ async def create_admin(
     password: str,
     now: datetime,
     hasher: Hasher | None = None,
+    by: str = BY_COMMAND,
 ) -> User:
     """Makes an Admin account. Raises ValueError for a login that isn't allowed, `PasswordRefused`
-    for a password that breaks the rules, and `users.LoginTaken` for a login already in use."""
+    for a password that breaks the rules, and `users.LoginTaken` for a login already in use.
+    `by` is what the sign-in log says made it."""
     email = clean.email(email)
     username = clean.username(username)
     require_good_password(password, email=email, username=username)
@@ -56,11 +59,42 @@ async def create_admin(
         db,
         "account_created",
         user_id=user.id,
-        details={"by": BY_COMMAND, "role": user.role},
+        details={"by": by, "role": user.role},
         at=now,
     )
     await db.commit()
     return user
+
+
+async def create_first_admin(
+    db: AsyncSession,
+    *,
+    email: str,
+    username: str | None,
+    name: str | None,
+    password: str,
+    now: datetime,
+    hasher: Hasher | None = None,
+) -> User | None:
+    """Makes the first Admin account, unless there is an Admin already: then it changes nothing and
+    returns None (and does not look at the password). Raises like `create_admin` for a login that
+    isn't allowed and a password that breaks the rules. If another `engine migrate` made the same
+    account a moment ago, that is the same as "there is an Admin already"."""
+    if await users.admin_exists(db):
+        return None
+    try:
+        return await create_admin(
+            db,
+            email=email,
+            username=username,
+            name=name,
+            password=password,
+            now=now,
+            hasher=hasher,
+            by=BY_SETTINGS,
+        )
+    except users.LoginTaken:
+        return None
 
 
 async def reset_password(

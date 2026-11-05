@@ -40,6 +40,11 @@ async def find_by_id(db: AsyncSession, user_id: uuid.UUID) -> User | None:
     return await db.get(User, user_id)
 
 
+async def admin_exists(db: AsyncSession) -> bool:
+    """True when at least one Admin account exists."""
+    return await db.scalar(select(User.id).where(User.role == "admin").limit(1)) is not None
+
+
 async def create(
     db: AsyncSession,
     *,

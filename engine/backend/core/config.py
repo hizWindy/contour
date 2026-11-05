@@ -32,6 +32,10 @@ ENGINE_DIR = BACKEND_DIR.parent
 CONNECT_TIMEOUT_SECONDS = 5
 LOOPBACK_HOSTS = ("localhost", "127.0.0.1", "::1")  # for the web origins in cors_origins
 API_HOSTS = ("localhost", "127.0.0.1")  # for api_host: the host check in core/api accepts these
+# Headers a visitor can write themselves, so none of them can say who the visitor is.
+FORGEABLE_ADDRESS_HEADERS = frozenset(
+    {"x-forwarded-for", "forwarded", "x-real-ip", "host", "cookie", "authorization", "user-agent"}
+)
 # Schemas that belong to something else. The run checkpoints may not live in any of them.
 RESERVED_SCHEMAS = frozenset({"public", "core", "lead_finder", "information_schema"})
 
@@ -239,6 +243,22 @@ class Settings(BaseSettings):
     # The proxy's address (or its network, like Docker's 172.18.0.0/16), as the engine sees it.
     # A comma-separated list. Without it every visitor would look like the proxy.
     trusted_proxies: Annotated[list[str], NoDecode] = []
+    # The other way to say whose word is taken for a client's IP address (server mode needs this
+    # or TRUSTED_PROXIES, never both). Behind DigitalOcean App Platform there is no proxy of ours
+    # with a fixed address: its front door writes the visitor's real address in a header of its
+    # own, `do-connecting-ip`, and this is that header's name. It is only safe where nothing can
+    # reach the backend except through that front door, which sets the header itself.
+    client_ip_header: str | None = None
+
+    # --- The first Admin account, made by `engine migrate` (env-only) ----------------------
+    # With the email and the password both set, and no Admin yet, `engine migrate` makes the
+    # account, so a deploy needs nobody at a terminal. Once an Admin exists these are ignored, and
+    # the password can be removed. The password follows the same rules as one typed at
+    # `create-admin`. An empty value counts as not set.
+    first_admin_email: str | None = None
+    first_admin_password: SecretStr | None = None
+    first_admin_username: str | None = None
+    first_admin_name: str | None = None
 
     # --- Memory (FastEmbed runs on this computer) --------------------------------------
     embedding_model: str = "BAAI/bge-small-en-v1.5"
@@ -382,6 +402,35 @@ class Settings(BaseSettings):
     def _proxy_addresses(cls, value: list[str]) -> list[str]:
         return list(dict.fromkeys(_clean_proxy(entry) for entry in value))
 
+    @field_validator("client_ip_header")
+    @classmethod
+    def _client_ip_header_name(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        name = value.strip().lower()
+        if name in FORGEABLE_ADDRESS_HEADERS:
+            raise ValueError(
+                f"client_ip_header can't be {name}: a visitor can write it. Behind a proxy of your "
+                "own with a fixed address, use TRUSTED_PROXIES instead"
+            )
+        if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,62}", name):
+            raise ValueError("client_ip_header must be a header name, like do-connecting-ip")
+        return name
+
+    @field_validator("first_admin_email", "first_admin_username", "first_admin_name")
+    @classmethod
+    def _blank_is_not_set(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return value.strip() or None
+
+    @field_validator("first_admin_password", mode="before")
+    @classmethod
+    def _blank_password_is_not_set(cls, value: Any) -> Any:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
     @field_validator("cors_origins")
     @classmethod
     def _loopback_origins(cls, value: list[str]) -> list[str]:
@@ -421,6 +470,24 @@ class Settings(BaseSettings):
         or AUTO_MIGRATE=true in .env is refused rather than quietly overruled, so nobody believes
         a setting they wrote is in force. (The origin is already known to be https if it is there.)
         """
+        if not self.server_mode and self.client_ip_header is not None:
+            raise ValidationError.from_exception_data(
+                "Settings",
+                [
+                    InitErrorDetails(
+                        type=PydanticCustomError(
+                            "server_mode",
+                            "{message}",
+                            {
+                                "message": "CLIENT_IP_HEADER only works with SERVER_MODE=true: it "
+                                "says whose word is taken for a visitor's address on a server."
+                            },
+                        ),
+                        loc=("client_ip_header",),
+                        input=self.client_ip_header,
+                    )
+                ],
+            )
         if not self.server_mode:
             return self
         asked = self.model_fields_set
@@ -433,14 +500,23 @@ class Settings(BaseSettings):
                     "https://hq.contourinteriors.com.au",
                 )
             )
-        if not self.trusted_proxies:
+        if self.trusted_proxies and self.client_ip_header:
+            problems.append(
+                (
+                    "client_ip_header",
+                    "Use TRUSTED_PROXIES (behind a proxy with a fixed address, like Caddy) or "
+                    "CLIENT_IP_HEADER (behind App Platform), not both.",
+                )
+            )
+        elif not self.trusted_proxies and not self.client_ip_header:
             problems.append(
                 (
                     "trusted_proxies",
                     "SERVER_MODE needs TRUSTED_PROXIES: the address of the proxy that passes on "
                     "the client's IP address, like 172.18.0.0/16. Without it every visitor looks "
                     "like the proxy, and the limit on tries from one IP address would lock "
-                    "everyone out together.",
+                    "everyone out together. Behind DigitalOcean App Platform, set "
+                    "CLIENT_IP_HEADER=do-connecting-ip instead.",
                 )
             )
         if "auth_required" in asked and not self.auth_required:

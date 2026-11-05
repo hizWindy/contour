@@ -9,6 +9,7 @@ leaves the answer in `request.state.auth`. These dependencies use it when it is 
 cookie up themselves when it isn't, so a route is safe even if it is mounted without the guard.
 """
 
+import ipaddress
 from datetime import datetime
 from typing import Annotated
 
@@ -57,8 +58,30 @@ HasherDep = Annotated[Hasher, Depends(hasher_dependency)]
 AuthSettingsDep = Annotated[Settings, Depends(auth_settings_dependency)]
 
 
+def _address_in(value: str | None) -> str | None:
+    """The IP address in a header value, or None if it holds anything else."""
+    try:
+        return str(ipaddress.ip_address((value or "").strip()))
+    except ValueError:
+        return None
+
+
 def client_ip(request: Request) -> str | None:
-    """The address the request came from, as the server sees it (behind Caddy, as Caddy says)."""
+    """The address the request came from, as the server sees it.
+
+    Behind Caddy that is what uvicorn made of Caddy's word (`core.cli.serve`). Behind App Platform
+    (`CLIENT_IP_HEADER`) it is the address in the header its front door writes. A request without
+    that header, or with something that is not an IP address in it, gets the address of whoever
+    connected. A forwarding header is never read here: only the one header named in settings.
+    """
+    header: str | None = getattr(request.app.state, "client_ip_header", None)
+    if header:
+        # A visitor can send this header too. A front door that adds its own line instead of
+        # replacing theirs adds it last, so the last line is the one believed.
+        lines = request.headers.getlist(header)
+        found = _address_in(lines[-1]) if lines else None
+        if found:
+            return found
     return request.client.host if request.client else None
 
 

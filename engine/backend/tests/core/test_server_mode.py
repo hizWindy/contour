@@ -25,18 +25,25 @@ from core.api.security import (
     allowed_origins,
     trusted_hosts,
 )
+from core.auth.models import AuditEntry
 from core.config import Settings, get_settings
-from tests.core.auth_world import World, build_world, make_account, me, sign_in
+from tests.core.auth_world import World, all_rows, build_world, make_account, me, sign_in
 from tests.core.test_auth_guard import NoSessionFactory
 
 ORIGIN = "https://hq.example.com.au"
 HOST = "hq.example.com.au"
 PROXIES = "172.18.0.0/16"
 SERVER: dict[str, Any] = {"server_mode": True, "public_origin": ORIGIN, "trusted_proxies": PROXIES}
+APP_PLATFORM: dict[str, Any] = {
+    "server_mode": True,
+    "public_origin": ORIGIN,
+    "client_ip_header": "do-connecting-ip",
+}
 SERVER_ENV_NAMES = (
     "SERVER_MODE",
     "PUBLIC_ORIGIN",
     "TRUSTED_PROXIES",
+    "CLIENT_IP_HEADER",
     "AUTH_REQUIRED",
     "SESSION_COOKIE_SECURE",
     "AUTO_MIGRATE",
@@ -245,6 +252,82 @@ def test_the_settings_come_from_the_environment_the_way_the_server_gives_them(
         True,
         False,
     )
+
+
+# --- Behind App Platform: CLIENT_IP_HEADER instead of TRUSTED_PROXIES (PLAN-V8) ---------------
+
+
+def test_behind_app_platform_the_header_name_stands_in_for_the_trusted_proxies() -> None:
+    settings = make(**APP_PLATFORM)
+    assert (settings.client_ip_header, settings.trusted_proxies) == ("do-connecting-ip", [])
+    assert (settings.auth_required, settings.session_cookie_secure) == (True, True)
+    assert settings.listen_host == "0.0.0.0"
+    assert trusted_hosts(settings) == [HOST, "localhost", "127.0.0.1"]
+    assert allowed_origins(settings) == frozenset({ORIGIN})
+
+
+def test_the_header_name_is_cleaned_and_blank_means_not_set() -> None:
+    assert make(**{**APP_PLATFORM, "client_ip_header": " DO-Connecting-IP "}).client_ip_header == (
+        "do-connecting-ip"
+    )
+    assert make().client_ip_header is None
+    blank = problems(**{**APP_PLATFORM, "client_ip_header": "  "})
+    assert "needs TRUSTED_PROXIES" in blank["trusted_proxies"]  # nothing named, so one is needed
+
+
+def test_the_message_for_a_missing_proxy_points_to_app_platform() -> None:
+    refused = problems(server_mode=True, public_origin=ORIGIN)
+    assert "CLIENT_IP_HEADER=do-connecting-ip" in refused["trusted_proxies"]
+
+
+def test_both_ways_to_say_who_the_visitor_is_at_once_are_refused() -> None:
+    refused = problems(**APP_PLATFORM, trusted_proxies=PROXIES)
+    assert set(refused) == {"client_ip_header"}
+    assert "not both" in refused["client_ip_header"]
+
+
+@pytest.mark.parametrize(
+    "name", ["x-forwarded-for", "X-Forwarded-For", "Forwarded", "x-real-ip", "host", "cookie"]
+)
+def test_a_header_a_visitor_can_write_cannot_be_the_one_believed(name: str) -> None:
+    refused = problems(**{**APP_PLATFORM, "client_ip_header": name})
+    assert "a visitor can write it" in refused["client_ip_header"]
+
+
+@pytest.mark.parametrize("name", ["do connecting ip", "do:ip", "-do-ip", "do_ip", "a" * 70])
+def test_the_header_name_must_be_a_header_name(name: str) -> None:
+    refused = problems(**{**APP_PLATFORM, "client_ip_header": name})
+    assert "must be a header name" in refused["client_ip_header"]
+
+
+def test_the_header_name_without_server_mode_is_refused_not_quietly_ignored() -> None:
+    refused = problems(client_ip_header="do-connecting-ip")
+    assert "only works with SERVER_MODE=true" in refused["client_ip_header"]
+
+
+# --- The first Admin account's settings (PLAN-V8) ---------------------------------------------
+
+
+def test_the_first_admin_is_not_set_by_default_and_blank_means_not_set() -> None:
+    settings = make()
+    assert (settings.first_admin_email, settings.first_admin_password) == (None, None)
+    blank = make(first_admin_email="  ", first_admin_password="   ", first_admin_name="")
+    assert (blank.first_admin_email, blank.first_admin_password, blank.first_admin_name) == (
+        None,
+        None,
+        None,
+    )
+
+
+def test_the_first_admins_password_is_a_secret_that_is_never_written_out() -> None:
+    settings = make(first_admin_email=" Al@Example.test ", first_admin_password="tulip harbour 77")
+    assert (
+        settings.first_admin_email == "Al@Example.test"
+    )  # cleaned of spaces; the command lowers it
+    assert settings.first_admin_password is not None
+    assert settings.first_admin_password.get_secret_value() == "tulip harbour 77"
+    for shown in (repr(settings), str(settings), settings.model_dump_json()):
+        assert "tulip harbour" not in shown
 
 
 # --- The host check and the origin guard ------------------------------------------------------
@@ -465,6 +548,20 @@ def test_serve_on_a_server_listens_everywhere_trusts_only_the_proxy_and_does_not
     assert capture.migrations == []  # the migrate step is its own step, before the backend
 
 
+def test_serve_behind_app_platform_trusts_no_forwarding_header_at_all(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The front door's address is not fixed, so no address may say what a header means. The
+    one header in settings is read by core.api.signin.client_ip, not by uvicorn."""
+    capture = Capture(monkeypatch)
+    monkeypatch.setattr(cli, "get_settings", lambda: make(**APP_PLATFORM))
+    assert cli.serve() == 0
+    assert (capture.config["host"], capture.config["proxy_headers"]) == ("0.0.0.0", False)
+    assert capture.migrations == []
+    assert cli.serve(reload=True) == 0
+    assert (capture.reload["proxy_headers"], capture.reload["forwarded_allow_ips"]) == (False, None)
+
+
 def test_serve_with_reload_gives_the_same_answers_to_uvicorn(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -534,6 +631,57 @@ async def test_on_a_server_the_cookie_is_host_prefixed_and_secure_and_only_our_o
         assert (refused.status_code, refused.json()["code"]) == (403, "origin_not_allowed")
         site.headers["Origin"] = ORIGIN
         assert (await site.post("/api/v1/auth/logout")).status_code == 204
+
+
+@pytest.fixture
+def app_platform_world(session_factory: Any, server_env: Callable[..., None]) -> World:
+    server_env(SERVER_MODE="true", PUBLIC_ORIGIN=ORIGIN, CLIENT_IP_HEADER="do-connecting-ip")
+    world = build_world(session_factory)
+    world.settings(**APP_PLATFORM)
+    return world
+
+
+async def sign_in_entries(world: World) -> list[AuditEntry]:
+    """The log's entries for people signing in (the account was made by a command: no address)."""
+    return [
+        entry for entry in await all_rows(world, AuditEntry) if entry.event != "account_created"
+    ]
+
+
+@pytest.mark.integration
+async def test_behind_app_platform_the_sign_in_log_holds_the_address_in_the_named_header(
+    app_platform_world: World,
+) -> None:
+    await make_account(app_platform_world)
+    # The front door (10.1.2.3) says the visitor is 203.0.113.9. The visitor also wrote their own
+    # forwarding headers, which count for nothing.
+    async with app_platform_world.browser(base_url=ORIGIN, ip="10.1.2.3") as site:
+        site.headers.update(
+            {
+                "Origin": ORIGIN,
+                "do-connecting-ip": "203.0.113.9",
+                "X-Forwarded-For": "198.51.100.7",
+                "Forwarded": "for=198.51.100.8",
+            }
+        )
+        assert (await sign_in(site)).status_code == 200
+        assert (await sign_in(site, password="a wrong password here")).status_code == 401
+    entries = await sign_in_entries(app_platform_world)
+    assert {entry.event for entry in entries} == {"sign_in", "sign_in_failed"}
+    assert {entry.ip for entry in entries} == {"203.0.113.9"}
+
+
+@pytest.mark.integration
+async def test_without_the_header_the_log_holds_whoever_connected(
+    app_platform_world: World,
+) -> None:
+    """No header, so the log holds whoever connected, and no forwarding header changes that."""
+    await make_account(app_platform_world)
+    async with app_platform_world.browser(base_url=ORIGIN, ip="10.9.9.9") as site:
+        site.headers.update({"Origin": ORIGIN, "X-Forwarded-For": "198.51.100.7"})
+        assert (await sign_in(site)).status_code == 200
+    entries = await sign_in_entries(app_platform_world)
+    assert {entry.ip for entry in entries} == {"10.9.9.9"}
 
 
 # --- Whose word is taken for a client's address (a real uvicorn server) -----------------------

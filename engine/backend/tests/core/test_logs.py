@@ -541,6 +541,31 @@ def test_the_real_settings_supply_the_secrets(
         get_settings.cache_clear()  # no later test sees what this one set
 
 
+def test_the_first_admins_password_from_the_environment_never_reaches_the_log(
+    monkeypatch: pytest.MonkeyPatch, output: io.StringIO
+) -> None:
+    """FIRST_ADMIN_PASSWORD stays in a deploy's environment until someone removes it (PLAN-V8)."""
+    for key in Settings.model_fields:
+        monkeypatch.delenv(key.upper(), raising=False)
+    monkeypatch.setenv("FIRST_ADMIN_EMAIL", "boss@example.test")
+    monkeypatch.setenv("FIRST_ADMIN_PASSWORD", "tulip harbour bicycle moonlight")
+    get_settings.cache_clear()
+    try:
+        try:
+            raise RuntimeError("could not make the account with tulip harbour bicycle moonlight")
+        except RuntimeError:
+            log.exception("deploy step failed for boss@example.test")
+        written = output.getvalue()
+        assert "tulip harbour" not in written
+        assert "moonlight" not in written
+        (entry,) = lines(output)
+        # The email is not a secret, so it stays: the log still says whose account it was.
+        assert entry["message"] == "deploy step failed for boss@example.test"
+        assert f"could not make the account with {REDACTED}" in entry["error"]
+    finally:
+        get_settings.cache_clear()  # no later test sees what this one set
+
+
 @pytest.fixture
 def root_logger_restored() -> Iterator[logging.Logger]:
     root = logging.getLogger()

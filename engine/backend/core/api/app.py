@@ -114,6 +114,7 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json" if pages else None,
     )
     app.state.apps = specs
+    app.state.client_ip_header = settings.client_ip_header  # None unless behind App Platform
     # The guard is added first, so it is inside the CORS layer (a 401 still carries its headers)
     # and inside the origin guard and the host check, which refuse before it looks at a cookie.
     app.add_middleware(SessionGuard)

@@ -78,6 +78,7 @@ def _configured_secrets() -> tuple[str, ...]:
         settings.anthropic_api_key,
         settings.signalhire_api_key,
         settings.hubspot_service_key,
+        settings.first_admin_password,
     ):
         if key is not None:
             configured.append(key.get_secret_value())

@@ -76,11 +76,14 @@ def serve(reload: bool = False) -> int:
         migrate()
     target = "core.api.app:create_app"
     # Whose word is taken for a client's IP address. On this computer: nobody's (uvicorn would
-    # otherwise trust a header from 127.0.0.1). On a server: only a connection from the proxy
-    # (Caddy), by its address. Settings refuse "*", so no other connection can set it.
+    # otherwise trust a header from 127.0.0.1). On a server behind Caddy: only a connection from
+    # the proxy, by its address. Settings refuse "*", so no other connection can set it. On a
+    # server behind App Platform (CLIENT_IP_HEADER): uvicorn trusts no forwarding header at all,
+    # and core.api.signin.client_ip reads the one header that the front door writes.
+    behind_proxy = settings.server_mode and not settings.client_ip_header
     proxy: dict[str, Any] = {
-        "proxy_headers": settings.server_mode,
-        "forwarded_allow_ips": ",".join(settings.trusted_proxies) if settings.server_mode else None,
+        "proxy_headers": behind_proxy,
+        "forwarded_allow_ips": ",".join(settings.trusted_proxies) if behind_proxy else None,
     }
     if reload:
         # uvicorn's reloader runs the app in a child process on the selector loop.
@@ -353,6 +356,58 @@ async def _create_admin(email: str, username: str | None, name: str | None) -> t
     return f"Made the Admin account for {user.email}. It signs in with its email or username.", True
 
 
+async def _first_admin() -> tuple[str, bool]:
+    """After `engine migrate`: makes the first Admin account from FIRST_ADMIN_* when there is none.
+
+    Returns (what to tell the person, whether it went well). The text is empty when the settings
+    are not there, so a laptop's `migrate` says nothing more and does not touch the database. Once
+    an Admin exists the settings are ignored, so removing the password after the first deploy (or
+    leaving it) never fails a deploy.
+    """
+    from core.auth import admin, clean, users
+    from core.auth.passwords import PasswordRefused
+    from core.db.engine import get_engine, get_sessionmaker
+
+    settings = get_settings()
+    email, secret = settings.first_admin_email, settings.first_admin_password
+    if email is None and secret is None:
+        return "", True
+    try:
+        async with get_sessionmaker()() as db:
+            if await users.admin_exists(db):
+                return (
+                    "An Admin account already exists, so FIRST_ADMIN_* was not used. "
+                    "Remove FIRST_ADMIN_PASSWORD: it is not needed any more."
+                ), True
+            if email is None or secret is None:
+                return "Set both FIRST_ADMIN_EMAIL and FIRST_ADMIN_PASSWORD, or neither.", False
+            try:
+                email = clean.email(email)
+                username = clean.username(settings.first_admin_username)
+            except ValueError as error:
+                return f"FIRST_ADMIN_EMAIL or FIRST_ADMIN_USERNAME isn't allowed. {error}", False
+            try:
+                user = await admin.create_first_admin(
+                    db,
+                    email=email,
+                    username=username,
+                    name=settings.first_admin_name,
+                    password=secret.get_secret_value(),
+                    now=datetime.now(UTC),
+                )
+            except PasswordRefused as error:
+                rules = "".join(f"\n  - {problem}" for problem in error.problems)
+                return f"FIRST_ADMIN_PASSWORD breaks the rules:{rules}", False
+    finally:
+        await get_engine().dispose()
+    if user is None:  # another `engine migrate` made the account a moment ago
+        return "An Admin account already exists, so FIRST_ADMIN_* was not used.", True
+    return (
+        f"Made the first Admin account for {user.email} from FIRST_ADMIN_*. "
+        "Remove FIRST_ADMIN_PASSWORD now: it is not read again."
+    ), True
+
+
 async def _reset_password(login: str) -> tuple[str, bool]:
     """Gives an account a new password and ends its sessions."""
     from core.auth import admin, users
@@ -481,6 +536,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.command == "migrate":
             migrate()
             print("The database is up to date.")
+            text, ok = asyncio.run(_first_admin(), loop_factory=loop_factory())
+            if text:
+                print(text, file=sys.stdout if ok else sys.stderr)
+            if not ok:
+                return 1
         elif args.command == "import-hubspot":
             if not args.path.is_file():
                 print(f"File not found: {args.path}", file=sys.stderr)
