@@ -74,6 +74,18 @@ const securityHeaders = {
   'Referrer-Policy': 'same-origin',
 }
 
+/**
+ * The libraries every page runs on. They go in a file of their own (`framework`), whose name only
+ * changes when one of them is upgraded, so a browser that has it keeps it when only our own code
+ * changed (PLAN-V7 D2). Without this, React sits inside the main file, and every deploy makes each
+ * visitor download it again.
+ *
+ * Only these. A group for all of node_modules would pull the chart, the map, the date picker and
+ * the sign-in form's libraries into the first visit. src/test/vite-config.test.ts checks that.
+ */
+export const FRAMEWORK_LIBRARIES =
+  /[\\/]node_modules[\\/](?:react|react-dom|scheduler|react-router|@tanstack[\\/]react-query|@tanstack[\\/]query-core)[\\/]/
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), ...(process.env.VITEST ? [] : [tailwindcss()])],
@@ -120,6 +132,9 @@ export default defineConfig({
     // Keep every file a file. A font inlined as a data: URL would be blocked by the CSP.
     assetsInlineLimit: 0,
     sourcemap: false,
+    rolldownOptions: {
+      output: { codeSplitting: { groups: [{ name: 'framework', test: FRAMEWORK_LIBRARIES }] } },
+    },
   },
   test: {
     environment: 'jsdom',

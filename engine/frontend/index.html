@@ -9,6 +9,22 @@
     />
     <meta name="color-scheme" content="light dark" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- The two weights of the body font that the first screen uses start downloading with the page, not
+         after the styles are read (PLAN-V7 D3). The build puts in the hashed file names. -->
+    <link
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      crossorigin
+      href="/node_modules/@fontsource/titillium-web/files/titillium-web-latin-400-normal.woff2"
+    />
+    <link
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      crossorigin
+      href="/node_modules/@fontsource/titillium-web/files/titillium-web-latin-600-normal.woff2"
+    />
     <title>Contour</title>
   </head>
   <body>

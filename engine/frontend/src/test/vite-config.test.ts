@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import config from '../../vite.config'
+import config, { FRAMEWORK_LIBRARIES } from '../../vite.config'
 
 /*
   Guards the dev server settings that matter for safety and for the run feed.
@@ -36,6 +36,47 @@ describe('vite.config.ts', () => {
     expect(proxy.proxyTimeout).toBe(0)
     expect(typeof proxy.configure).toBe('function')
     expect(preview?.proxy).toBe(server?.proxy)
+  })
+
+  it('puts only the libraries every page runs on in the framework file (PLAN-V7 D2)', () => {
+    const groups = config.build?.rolldownOptions?.output
+    const group =
+      groups && !Array.isArray(groups) && typeof groups.codeSplitting === 'object'
+        ? groups.codeSplitting.groups?.[0]
+        : undefined
+
+    expect(group?.name).toBe('framework')
+    expect(group?.test).toBe(FRAMEWORK_LIBRARIES)
+    for (const library of [
+      'react',
+      'react-dom',
+      'scheduler',
+      'react-router',
+      '@tanstack/react-query',
+      '@tanstack/query-core',
+    ]) {
+      expect(FRAMEWORK_LIBRARIES.test(`/app/node_modules/${library}/index.js`), library).toBe(true)
+      expect(FRAMEWORK_LIBRARIES.test(`C:\\app\\node_modules\\${library}\\index.js`), library).toBe(
+        true,
+      )
+    }
+    // Anything only some pages use must stay out, or it is downloaded on the first visit.
+    for (const library of [
+      'recharts',
+      'leaflet',
+      'react-leaflet',
+      'react-day-picker',
+      'react-resizable-panels',
+      'react-hook-form',
+      'zod',
+      'motion',
+      'date-fns',
+      'react-dom-something',
+      'react-router-dom-extra',
+      '@tanstack/react-table',
+    ]) {
+      expect(FRAMEWORK_LIBRARIES.test(`/app/node_modules/${library}/index.js`), library).toBe(false)
+    }
   })
 
   it('keeps every asset a file, so the CSP never meets a data: font', () => {
