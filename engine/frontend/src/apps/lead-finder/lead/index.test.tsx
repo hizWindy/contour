@@ -334,7 +334,9 @@ describe('the lead page', () => {
     mockApi(makeLead({ form_failed: true }))
     renderLead()
 
-    const note = await screen.findByRole('status')
+    // The loading shape is a status too, so wait for the card first.
+    await screen.findByRole('region', { name: 'Quick view' })
+    const note = screen.getByRole('status')
     expect(note).toHaveTextContent('Facts missing.')
     expect(note).toHaveTextContent('Re-check this lead.')
   })

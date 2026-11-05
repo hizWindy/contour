@@ -12,7 +12,7 @@ import { toast } from 'sonner'
 import { fieldErrorMap, toApiProblem } from '@/api/client'
 import { useResetSetting, useSettings, useUpdateSettings } from '@/api/hooks'
 import type { SettingField, SettingValue } from '@/api/types'
-import { EmptyState } from '@/components/empty-state'
+import { PendingForm } from '@/components/skeletons'
 import { ErrorState } from '@/components/error-state'
 import { Money } from '@/components/money'
 import { Badge } from '@/components/ui/badge'
@@ -136,7 +136,7 @@ export default function AdminSettingsTab() {
     return <ErrorState error={settings.error} context="The settings couldn't be loaded." />
   }
   if (!settings.data) {
-    return <EmptyState title="Loading the settings." headingLevel={3} />
+    return <PendingForm label="Loading the settings." fields={8} />
   }
   const fields = settings.data.fields
   const editable = fields.filter((field) => field.editable)

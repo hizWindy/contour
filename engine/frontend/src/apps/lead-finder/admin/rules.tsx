@@ -3,7 +3,7 @@
  * (`apps/lead_finder/rules/`), and every choice still to be confirmed with Levi is listed as TBC.
  */
 import { useRules } from '@/api/hooks'
-import { EmptyState } from '@/components/empty-state'
+import { PendingCards } from '@/components/skeletons'
 import { ErrorState } from '@/components/error-state'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -39,7 +39,7 @@ export default function AdminRulesTab() {
     return <ErrorState error={rules.error} context="The rules couldn't be loaded." />
   }
   if (!rules.data) {
-    return <EmptyState title="Loading the rules." headingLevel={3} />
+    return <PendingCards label="Loading the rules." cards={3} />
   }
   const { criteria, watchlist, version } = rules.data
   const tbc = [...criteria.tbc, ...watchlist.tbc]

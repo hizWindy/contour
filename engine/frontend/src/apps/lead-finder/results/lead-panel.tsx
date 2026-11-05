@@ -7,7 +7,7 @@ import { ExternalLink } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { useLead } from '@/api/hooks'
-import { EmptyState } from '@/components/empty-state'
+import { PendingDetail } from '@/components/skeletons'
 import { ErrorState } from '@/components/error-state'
 import {
   Sheet,
@@ -89,7 +89,7 @@ export function LeadPanel({ leadId, onClose, onOpenFullPage }: LeadPanelProps) {
           ) : lead.data ? (
             <LeadCardView lead={lead.data} compact />
           ) : (
-            <EmptyState title="Loading the lead." headingLevel={3} />
+            <PendingDetail label="Loading the lead." />
           )}
         </div>
       </SheetContent>

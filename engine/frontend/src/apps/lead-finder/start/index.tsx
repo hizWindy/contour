@@ -16,7 +16,7 @@ import { fieldErrorMap, newIdempotencyKey, toApiProblem } from '@/api/client'
 import { useCreateRun, useEstimateRun, useRunOptions } from '@/api/hooks'
 import type { RunCreate, RunOptions } from '@/api/types'
 import { CityMap } from '@/components/city-map'
-import { EmptyState } from '@/components/empty-state'
+import { PendingForm } from '@/components/skeletons'
 import { ErrorState } from '@/components/error-state'
 import { Money } from '@/components/money'
 import { PageHeader } from '@/components/page-header'
@@ -556,7 +556,7 @@ export default function StartPage() {
       ) : options.data ? (
         <StartFormView options={options.data} />
       ) : (
-        <EmptyState title="Loading the choices." />
+        <PendingForm label="Loading the choices." />
       )}
     </>
   )

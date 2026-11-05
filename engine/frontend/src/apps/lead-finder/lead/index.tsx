@@ -6,7 +6,7 @@ import { Table2 } from 'lucide-react'
 import { useParams } from 'react-router'
 import { useLead } from '@/api/hooks'
 import { BackButton } from '@/components/back-button'
-import { EmptyState } from '@/components/empty-state'
+import { PendingDetail } from '@/components/skeletons'
 import { ErrorState } from '@/components/error-state'
 import { PageHeader } from '@/components/page-header'
 import { LeadCardView } from './lead-card-view'
@@ -31,7 +31,7 @@ export default function LeadPage() {
     return (
       <>
         <BackButton fallbackTo="/results" fallbackLabel="Results" />
-        <EmptyState title="Loading the lead." />
+        <PendingDetail label="Loading the lead." />
       </>
     )
   }

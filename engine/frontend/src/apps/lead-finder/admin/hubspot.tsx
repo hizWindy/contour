@@ -12,6 +12,7 @@ import { useHubspotSummary, useImportHubspot, useRebuildProfiles, useWatchlist }
 import type { WatchlistOut } from '@/api/types'
 import { DataTable } from '@/components/data-table'
 import { ErrorState } from '@/components/error-state'
+import { PendingText } from '@/components/skeletons'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
@@ -161,9 +162,11 @@ function Watchlist() {
       <CardHeader>
         <CardTitle className="text-section font-semibold">Watchlist preview</CardTitle>
         <CardDescription>
-          {data
-            ? `${formatNumber(data.counts.watch)} to watch (${formatNumber(data.counts.likely)} likely to work in an office), ${formatNumber(data.counts.director)} for Director review. Left out: ${formatNumber(data.counts.open_deal)} with an open deal, ${formatNumber(data.counts.dropped_small)} too small or with no staff number, ${formatNumber(data.counts.no_office)} with no office in a city we cover.`
-            : 'Loading.'}
+          {data ? (
+            `${formatNumber(data.counts.watch)} to watch (${formatNumber(data.counts.likely)} likely to work in an office), ${formatNumber(data.counts.director)} for Director review. Left out: ${formatNumber(data.counts.open_deal)} with an open deal, ${formatNumber(data.counts.dropped_small)} too small or with no staff number, ${formatNumber(data.counts.no_office)} with no office in a city we cover.`
+          ) : (
+            <PendingText />
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent>

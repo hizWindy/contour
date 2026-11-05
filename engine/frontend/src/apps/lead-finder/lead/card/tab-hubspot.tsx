@@ -7,6 +7,7 @@ import { Link } from 'react-router'
 import { useLeadHubSpot, useLeadSimilar } from '@/api/hooks'
 import type { LeadDetail } from '@/api/types'
 import { ErrorState } from '@/components/error-state'
+import { PendingText } from '@/components/skeletons'
 import { InHubSpotBadge } from '@/components/hubspot'
 import { ResultBadge } from '@/components/result-badge'
 import { formatDate, formatPercent } from '@/lib/format'
@@ -72,7 +73,7 @@ function LookAlikes({ leadId }: { leadId: string }) {
   return (
     <Section title="Look-alikes">
       {!data ? (
-        <p className="text-muted-foreground">Loading.</p>
+        <PendingText />
       ) : data.basis === 'none' ? (
         <p className="text-muted-foreground">{data.note ?? 'This lead has no profile yet.'}</p>
       ) : (

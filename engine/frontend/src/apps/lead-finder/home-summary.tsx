@@ -6,6 +6,7 @@
 import { Link } from 'react-router'
 import { useLeadFacets, useRuns } from '@/api/hooks'
 import { ResultBadge } from '@/components/result-badge'
+import { PendingText } from '@/components/skeletons'
 import { StatusBadge } from '@/components/status-badge'
 import { formatNumber, formatRelative, pluralise } from '@/lib/format'
 import { RESULT_ORDER, resultLabel } from '@/lib/labels'
@@ -17,7 +18,7 @@ function Quiet({ children }: { children: string }) {
 
 function LastRun() {
   const runs = useRuns({ app: 'lead_finder', limit: 1 })
-  if (runs.isPending) return <Quiet>Loading.</Quiet>
+  if (runs.isPending) return <PendingText className="w-40" />
   if (runs.isError) return <Quiet>Can't load the runs right now.</Quiet>
   const last = runs.data.items.at(0)
   if (!last) return <Quiet>No runs yet. Start one to find leads.</Quiet>
@@ -37,7 +38,7 @@ function LastRun() {
 
 function Leads() {
   const facets = useLeadFacets()
-  if (facets.isPending) return <Quiet>Loading.</Quiet>
+  if (facets.isPending) return <PendingText className="w-56" />
   if (facets.isError) return <Quiet>Can't load the leads right now.</Quiet>
   const counts = new Map(facets.data.result.map((facet) => [facet.value, facet.count]))
   const total = facets.data.result.reduce((sum, facet) => sum + facet.count, 0)

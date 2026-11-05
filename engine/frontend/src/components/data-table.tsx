@@ -29,6 +29,7 @@ import {
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, Rows4 } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
   TableBody,
@@ -41,9 +42,52 @@ import {
 import { Toggle } from '@/components/ui/toggle'
 import { useListKeyboard } from '@/hooks/useListKeyboard'
 import { formatNumber } from '@/lib/format'
+import { useAfter } from '@/lib/use-after'
 import { cn } from '@/lib/utils'
 // The column `meta` fields (align, className). Imported so every program that uses the table has them.
 import './data-table-types'
+
+/** How many rows of shapes show while the first page loads. */
+const LOADING_ROWS = 8
+const LOADING_WIDTHS = ['w-3/4', 'w-1/2', 'w-2/3', 'w-1/3', 'w-5/6']
+
+/**
+ * The shape of the rows while the first page loads (PLAN-V7 B2). They are as tall as real rows, so
+ * nothing jumps when the data arrives, and they show only after 200 ms, so a fast answer never
+ * flashes them. A screen reader hears "Loading." at once.
+ */
+function LoadingRows({ columns }: { columns: number }) {
+  const shown = useAfter()
+  return (
+    <>
+      <TableRow className="h-0 border-0 hover:bg-transparent">
+        <TableCell colSpan={columns} className="h-0 p-0">
+          <span role="status" className="sr-only">
+            Loading.
+          </span>
+        </TableCell>
+      </TableRow>
+      {Array.from({ length: LOADING_ROWS }, (_, row) => (
+        <TableRow
+          key={row}
+          aria-hidden="true"
+          className={cn(
+            'hover:bg-transparent',
+            shown ? 'animate-in duration-150 fade-in-0' : 'invisible',
+          )}
+        >
+          {Array.from({ length: columns }, (_, column) => (
+            <TableCell key={column}>
+              <Skeleton
+                className={cn('h-4', LOADING_WIDTHS[(row + column) % LOADING_WIDTHS.length])}
+              />
+            </TableCell>
+          ))}
+        </TableRow>
+      ))}
+    </>
+  )
+}
 
 /** Which page is shown, and how many rows there are in all (from the server's `total`). */
 export interface DataTablePage {
@@ -258,16 +302,12 @@ export function DataTable<TData>({
             ))}
           </TableHeader>
           <TableBody ref={bodyRef} className={cn(loading && rows.length > 0 && 'opacity-60')}>
-            {rows.length === 0 ? (
+            {rows.length === 0 && loading ? (
+              <LoadingRows columns={columnCount} />
+            ) : rows.length === 0 ? (
               <TableRow className="hover:bg-transparent">
                 <TableCell colSpan={columnCount} className="h-24 whitespace-normal">
-                  {loading ? (
-                    <span role="status" className="text-muted-foreground">
-                      Loading.
-                    </span>
-                  ) : (
-                    (empty ?? <span className="text-muted-foreground">Nothing to show.</span>)
-                  )}
+                  {empty ?? <span className="text-muted-foreground">Nothing to show.</span>}
                 </TableCell>
               </TableRow>
             ) : (

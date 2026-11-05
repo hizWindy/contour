@@ -26,7 +26,7 @@ import { useCancelRun, useResumeRun, useRun } from '@/api/hooks'
 import { queryKeys } from '@/api/query'
 import type { Run } from '@/api/types'
 import { CostMeter } from '@/components/cost-meter'
-import { EmptyState } from '@/components/empty-state'
+import { PendingDetail } from '@/components/skeletons'
 import { ErrorState } from '@/components/error-state'
 import { PageHeader } from '@/components/page-header'
 import { ResultBadge } from '@/components/result-badge'
@@ -332,7 +332,7 @@ export default function RunPage() {
     )
   }
   if (!run.data) {
-    return <EmptyState title="Loading the run." />
+    return <PendingDetail label="Loading the run." />
   }
   return <RunView runId={runId} run={run.data} />
 }

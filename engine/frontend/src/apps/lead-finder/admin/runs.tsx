@@ -3,6 +3,7 @@ import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts'
 import { useRunSummary } from '@/api/hooks'
 import { ErrorState } from '@/components/error-state'
 import { Money } from '@/components/money'
+import { PendingText } from '@/components/skeletons'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   ChartContainer,
@@ -36,7 +37,7 @@ export default function AdminRunsTab() {
                 since {data.since}.
               </>
             ) : (
-              'Loading.'
+              <PendingText />
             )}
           </CardDescription>
         </CardHeader>
