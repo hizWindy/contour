@@ -4,7 +4,7 @@ This plan puts the platform online as **Contour HQ**. It adds a sign-in for one 
 
 - **Built by:** Al-khair Pama. **Signed off by:** Levi Young (the name and the cloud data OK).
 - **Last updated:** 2026-11-05. **TBC** means not confirmed yet.
-- **Progress:** 20 of 31 steps done (A1, A3, B1 to B5, C2, C3, D1 to D3, E2, E3, F2, F3, G1 to G3). C1, E1 and F1 wait only for Al-khair's yes. Part H (the server, the database, the deploy, the backups) costs money and needs A2's answers. I1 waits for the live domain. Work goes on branch `plan-v6` (both tracks merged on 5 Nov); `master` holds everything up to C3.
+- **Progress:** 20 of 31 steps done (A1, A3, B1 to B5, C2, C3, D1 to D3, E2, E3, F2, F3, G1 to G3). C1, E1 and F1 wait only for Al-khair's yes. Part H (the server, the database, the deploy, the backups) costs money and needs A2's answers. I1 waits for the live domain. Work goes on branch `plan-v6` (both tracks merged on 5 Nov); `master` holds everything up to G3 (fast-forwarded on 5 Nov).
 - **Comes after:** [PLAN-V5.md](PLAN-V5.md), merged into `master` and pushed on 4 Nov (6f676ae). Its open steps (A2 and Part F, HubSpot write access) stay there and don't block this plan.
 
 ## In short
@@ -306,6 +306,8 @@ These rules are for Al-khair and for Claude. At the start of every session: read
 ## Log
 
 Newest first. One line for each tick, pause or surprise.
+
+- 2026-11-05: **`plan-v6` merged into `master` again by fast-forward, at Al-khair's say** (this commit): `master` now holds G1 and G3 (4c87a20, 1943b3e) and this note. **Not pushed:** GitHub's `master` is still 8d51805 until Al-khair says push. **A slip, fixed before anything was pushed:** the checkout had been switched to `master` between two turns, so the G1 and G3 commit first landed on `master`; it was moved to `plan-v6` and `master` put back to 8d51805. The rule stands: commits go on `plan-v6`, and `git branch --show-current` comes before each one.
 
 - 2026-11-05: **G1 and G3 ticked** (4c87a20). Both images and the whole stack ran on the laptop (Docker Desktop), then a trial at `https://localhost` on a new database: the real login page, a lead card, sign-out, an update, a rollback, a stop and start, a backup and a restore (the numbers are under G1 and G3). **Three faults found by running it, all fixed.** (1) Caddy gave `index.html` with a 200 and a year-long cache header for every address that wasn't a file, a missing `/assets` file too, because `try_files` takes no matcher and read `@pages` as a file name; the cloud session had checked the headers but not a missing file (a G2 fix). (2) ONNX Runtime sends usage events to Microsoft unless `ORT_DISABLE_TELEMETRY=1`; the image sets it, and sets `HF_HUB_OFFLINE=1` too. (3) The model was fetched after the code was copied, so each code change downloaded it again (194 s); a rebuild is now about a minute. Also: versions fixed (Python 3.12.16, Node 22.23.4, Caddy 2.11.8), logs kept to 5 x 10 MB, LF endings for the Linux-bound files, the run book got the server steps and the connection limit, and nine tests without Docker. **The laptop's own runs still have ONNX telemetry on** (AGENTS.md, "Safety"): Al-khair's call. The trial's database, account, password and settings file were deleted afterwards. **Not tried:** a real server, DigitalOcean's managed database, a real certificate. **Next:** A2 (the domain, the DigitalOcean account, Levi's two answers), then H1 to H4 (**costs money**).
 
