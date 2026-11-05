@@ -198,8 +198,9 @@ frontend/
 4. Put its tables in its own schema, added with a migration.
 5. Add its pages in `frontend/src/apps/<name>/`, and its tests in `backend/tests/<name>/`.
 6. In `frontend/src/apps/<name>/module.tsx`, define its `AppModule`: name, icon, one-line description, menu pages and routes. Add it to `MODULES` in `frontend/src/modules.ts`, and take it out of `PLANNED` there (the list of projects still to be developed, each with one "to be developed" page). The sidebar group, its card on Home and the Ctrl+K entries then appear by themselves. Its own admin pages go in its menu; only what every project shares goes under Admin.
-7. If it uses HubSpot, see "How a project uses HubSpot" below.
-8. If it has work that should start on its own, list `JobSpec`s in `AppSpec.jobs` (see "Schedules" below).
+7. For each page, put what it asks for first in the route's `handle.prefetch` (a function that calls `client.prefetchQuery(...)` with the same `xxxQueryOptions` the page uses, built from the same address). The website starts it when a navigation starts, and when someone points at a link, so the data downloads with the page's code (PLAN-V7). Add the page to the list in `frontend/src/apps/lead-finder/prefetch.test.tsx` (or one like it): it proves the page uses everything started for it and asks once.
+8. If it uses HubSpot, see "How a project uses HubSpot" below.
+9. If it has work that should start on its own, list `JobSpec`s in `AppSpec.jobs` (see "Schedules" below).
 
 The core doesn't change.
 
