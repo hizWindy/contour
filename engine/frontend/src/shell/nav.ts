@@ -16,6 +16,7 @@ import {
   Upload,
   type LucideIcon,
 } from 'lucide-react'
+import type { ComponentType } from 'react'
 import type { RouteObject } from 'react-router'
 import type { ProjectTone } from './tone'
 
@@ -48,7 +49,9 @@ export interface AppModule {
   tone?: ProjectTone
   /** What the project does, in one sentence, for its card on Home. */
   description: string
-  /** Its pages, in menu order. */
+  /** Where the project stands, for its Home card (the last run, the leads). Optional. */
+  summary?: ComponentType
+  /** Its pages, in menu order. On Home each shows with its `purpose`. */
   pages: readonly NavItem[]
   /** Its addresses, inside the app frame. */
   routes: RouteObject[]

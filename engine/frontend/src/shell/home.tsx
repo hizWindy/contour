@@ -1,15 +1,83 @@
 /**
- * Home: one card per project, with what it does and a link to each of its pages, then the projects
- * still to be developed. The cards come from src/modules.ts, so a new project shows here by itself.
+ * Home: one card per project, then the projects still to be developed. The cards come from
+ * src/modules.ts, so a new project shows here by itself.
+ *
+ * A project's card works like a small table of contents, not a poster: its name and what it does,
+ * where things stand now (the project's own summary, like the last run and the leads), then its
+ * pages as rows, each with one line on what you do there. The whole row is the link.
  */
+import { ChevronRight } from 'lucide-react'
+import { useId } from 'react'
 import { Link } from 'react-router'
 import { PageHeader } from '@/components/page-header'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { MODULES, PLANNED } from '@/modules'
+import type { AppModule, NavItem } from './nav'
 import { TONE_CLASSES } from './tone'
+
+/**
+ * One page of a project. The link's name is the page's name; the line under it is read as its
+ * description, so a screen reader hears "Runs, link, every run, newest first".
+ */
+function PageRow({ item }: { item: NavItem }) {
+  const Icon = item.icon
+  const purposeId = useId()
+  return (
+    <li>
+      <Link
+        to={item.to}
+        aria-describedby={item.purpose ? purposeId : undefined}
+        className="flex min-h-12 items-center gap-3 px-6 py-2.5 transition-colors duration-150 hover:bg-muted focus-visible:-outline-offset-2 touch:min-h-14"
+      >
+        <Icon aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="font-semibold text-foreground">{item.label}</span>
+          {item.purpose ? (
+            <span id={purposeId} aria-hidden="true" className="text-caption text-muted-foreground">
+              {item.purpose}
+            </span>
+          ) : null}
+        </span>
+        <ChevronRight aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+      </Link>
+    </li>
+  )
+}
+
+function ProjectCard({ app }: { app: AppModule }) {
+  const Icon = app.icon
+  const Summary = app.summary
+  const titleId = `home-${app.id}`
+  return (
+    <Card role="region" aria-labelledby={titleId} className="gap-0 py-0">
+      <div className="flex flex-col gap-1 px-6 pt-6 pb-5">
+        <h2 id={titleId} className="flex items-center gap-2 text-section font-semibold">
+          <Icon
+            aria-hidden="true"
+            className={cn(
+              'size-5 shrink-0',
+              app.tone ? TONE_CLASSES[app.tone].icon : 'text-muted-foreground',
+            )}
+          />
+          {app.name}
+        </h2>
+        <p className="max-w-prose text-ui text-muted-foreground">{app.description}</p>
+      </div>
+      {Summary ? (
+        <div className="border-t px-6 py-4">
+          <Summary />
+        </div>
+      ) : null}
+      <ul className="divide-y border-t">
+        {app.pages.map((item) => (
+          <PageRow key={item.to} item={item} />
+        ))}
+      </ul>
+    </Card>
+  )
+}
 
 export default function HomePage() {
   return (
@@ -18,52 +86,10 @@ export default function HomePage() {
         title="Home"
         description="Contour's AI projects in one place. Each card opens a project's pages."
       />
-      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-        {MODULES.map((app) => {
-          const Icon = app.icon
-          return (
-            <Card
-              key={app.id}
-              aria-labelledby={`home-${app.id}`}
-              role="region"
-              className={app.tone ? TONE_CLASSES[app.tone].line : undefined}
-            >
-              <CardHeader>
-                <CardTitle>
-                  <h2 id={`home-${app.id}`} className="flex items-center gap-3">
-                    <span
-                      aria-hidden="true"
-                      className={cn(
-                        'flex size-9 shrink-0 items-center justify-center rounded-md',
-                        app.tone
-                          ? TONE_CLASSES[app.tone].tile
-                          : 'bg-secondary text-muted-foreground',
-                      )}
-                    >
-                      <Icon className="size-5" />
-                    </span>
-                    {app.name}
-                  </h2>
-                </CardTitle>
-                <CardDescription>{app.description}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ul className="flex flex-wrap gap-2">
-                  {app.pages.map(({ to, label, icon: PageIcon }) => (
-                    <li key={to}>
-                      <Button asChild variant="outline" size="sm">
-                        <Link to={to}>
-                          <PageIcon aria-hidden="true" />
-                          {label}
-                        </Link>
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
-          )
-        })}
+      <div className="grid gap-6 lg:grid-cols-2">
+        {MODULES.map((app) => (
+          <ProjectCard key={app.id} app={app} />
+        ))}
       </div>
       {PLANNED.length > 0 ? (
         <section aria-labelledby="home-planned" className="flex flex-col gap-4">

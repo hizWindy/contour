@@ -11,26 +11,53 @@ import { shortId } from '@/lib/format'
 import type { RouteHandle } from '@/shell/crumbs'
 import type { AppModule } from '@/shell/nav'
 import { page } from '@/shell/page-route'
+import { LeadFinderSummary } from './home-summary'
 
 export const LEAD_FINDER: AppModule = {
   id: 'lead-finder',
   name: 'Lead Finder',
   icon: Target,
   tone: 'lead',
+  summary: LeadFinderSummary,
   description:
     'Finds companies that fit Contour and show signs of an office change, and ranks them for sales.',
   pages: [
-    { to: '/start', label: 'Start a run', icon: MapPinned, keywords: ['new', 'discovery', 'map'] },
-    { to: '/runs', label: 'Runs', icon: ListChecks, keywords: ['progress', 'live', 'history'] },
+    {
+      to: '/start',
+      label: 'Start a run',
+      icon: MapPinned,
+      keywords: ['new', 'discovery', 'map'],
+      purpose: 'Pick cities and signs, see the cost, then start.',
+    },
+    {
+      to: '/runs',
+      label: 'Runs',
+      icon: ListChecks,
+      keywords: ['progress', 'live', 'history'],
+      purpose: 'Every run, newest first, with its progress and cost.',
+    },
     {
       to: '/results',
       label: 'Results',
       icon: Table2,
       keywords: ['leads', 'table', 'csv', 'export'],
       alsoActiveOn: ['/leads'],
+      purpose: 'Every lead, best first. Open one to see why it fits.',
     },
-    { to: '/rules', label: 'Rules', icon: ScrollText, keywords: ['criteria', 'tbc'] },
-    { to: '/test-set', label: 'Test set', icon: FlaskConical, keywords: ['tests', 'scores'] },
+    {
+      to: '/rules',
+      label: 'Rules',
+      icon: ScrollText,
+      keywords: ['criteria', 'tbc'],
+      purpose: 'What decides each result: cities, size and signs. Read only.',
+    },
+    {
+      to: '/test-set',
+      label: 'Test set',
+      icon: FlaskConical,
+      keywords: ['tests', 'scores'],
+      purpose: '10 public companies, to check the scores still hold.',
+    },
   ],
   routes: [
     {
