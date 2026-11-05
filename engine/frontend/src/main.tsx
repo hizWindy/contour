@@ -10,6 +10,8 @@ import '@fontsource/ibm-plex-serif/latin-ext-400.css'
 
 import './styles/index.css'
 import { App } from './App'
+import { routes } from './router'
+import { preloadNextPages } from './shell/preload'
 import { applyTheme, readThemeChoice } from './shell/theme'
 
 // A light or dark choice made in the command menu, kept from the last visit.
@@ -25,3 +27,6 @@ createRoot(root).render(
     <App />
   </StrictMode>,
 )
+
+// Once the first screen is up and the browser is idle: the code of the pages people open next.
+preloadNextPages(routes)
