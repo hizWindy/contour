@@ -392,7 +392,8 @@ describe('the results page', () => {
     const { user } = renderResults()
     await user.click(await screen.findByRole('button', { name: 'Acme Software' }))
     const panel = await screen.findByRole('dialog', { name: 'Acme Software' })
-    expect(await within(panel).findByText('Score 51 of 77 checked')).toBeInTheDocument()
+    expect(await within(panel).findByRole('tablist', { name: 'Lead details' })).toBeInTheDocument()
+    expect(within(panel).getByText('Score 51 of 77 checked')).toBeInTheDocument()
     expect(within(panel).getByRole('link', { name: 'Open the full page' })).toHaveAttribute(
       'href',
       `/leads/${LEAD_ID}`,
@@ -404,6 +405,58 @@ describe('the results page', () => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     })
     expect(address().has('lead')).toBe(false)
+  })
+
+  it('opens the side panel with what the row already has, while the card loads (PLAN-V7 C4)', async () => {
+    mockApi()
+    const answer = vi.mocked(fetch).getMockImplementation() as typeof fetch
+    // The lead card never arrives in this test.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((request: Request) =>
+        new URL(request.url).pathname === `/api/v1/lead-finder/leads/${LEAD_ID}`
+          ? new Promise<Response>(() => undefined)
+          : answer(request),
+      ),
+    )
+    const { user } = renderResults()
+
+    await user.click(await screen.findByRole('button', { name: 'Acme Software' }))
+
+    const panel = await screen.findByRole('dialog', { name: 'Acme Software' })
+    expect(within(panel).getByText('Software, Melbourne')).toBeInTheDocument()
+    expect(within(panel).getByText('Score 51 of 77 checked')).toBeInTheDocument()
+    expect(within(panel).getByText('Loading the lead.')).toBeInTheDocument()
+    expect(within(panel).queryByRole('tablist')).toBeNull()
+  })
+
+  it('starts loading a lead card when the pointer rests on its row (PLAN-V7 C2)', async () => {
+    const backend = mockApi()
+    const { user } = renderResults()
+    const row = await screen.findByRole('button', { name: 'Acme Software' })
+    const cardRequests = () =>
+      backend.requests.filter((url) => url.pathname === `/api/v1/lead-finder/leads/${LEAD_ID}`)
+
+    await user.hover(row)
+
+    await waitFor(() => {
+      expect(cardRequests()).toHaveLength(1)
+    })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument() // nothing was opened
+  })
+
+  it('does not load a lead card for a pointer that only sweeps over its row', async () => {
+    const backend = mockApi()
+    const { user } = renderResults()
+    const row = await screen.findByRole('button', { name: 'Acme Software' })
+
+    await user.hover(row)
+    await user.unhover(row)
+    await new Promise((resolve) => setTimeout(resolve, 200))
+
+    expect(
+      backend.requests.some((url) => url.pathname === `/api/v1/lead-finder/leads/${LEAD_ID}`),
+    ).toBe(false)
   })
 
   it('opens the full page with the panel dropped, so Back returns to the list as it was', async () => {

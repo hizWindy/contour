@@ -28,7 +28,7 @@ interface NetworkInformation {
 }
 
 /** True on a connection that asked to save data, or is slow. */
-function sparing(): boolean {
+export function sparing(): boolean {
   const connection = (navigator as Navigator & { connection?: NetworkInformation }).connection
   return (
     connection?.saveData === true || ['slow-2g', '2g'].includes(connection?.effectiveType ?? '')
@@ -36,7 +36,7 @@ function sparing(): boolean {
 }
 
 /** Starts the downloads, one after another, so they never crowd out what a person clicked. */
-async function load(routes: RouteObject[], pages: readonly string[]): Promise<void> {
+export async function loadCode(routes: RouteObject[], pages: readonly string[]): Promise<void> {
   for (const page of pages) {
     for (const match of matchRoutes(routes, page) ?? []) {
       const { lazy } = match.route
@@ -56,7 +56,7 @@ export function preloadNextPages(
     return
   }
   const start = (): void => {
-    void load(routes, pages)
+    void loadCode(routes, pages)
   }
   if (typeof window.requestIdleCallback === 'function') {
     window.requestIdleCallback(start, { timeout: 5000 })

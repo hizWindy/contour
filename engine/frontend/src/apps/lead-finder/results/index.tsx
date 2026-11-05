@@ -14,8 +14,9 @@
 import type { OnChangeFn, SortingState } from '@tanstack/react-table'
 import { Download, Map as MapIcon, Table2 } from 'lucide-react'
 import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useSearchParams } from 'react-router'
-import { fetchLeadsCsv, useLeadFacets, useLeadMap, useLeads } from '@/api/hooks'
+import { fetchLeadsCsv, leadQueryOptions, useLeadFacets, useLeadMap, useLeads } from '@/api/hooks'
 import type { LeadPage, MapOut } from '@/api/types'
 import { CityMap } from '@/components/city-map'
 import { DataTable, DensityToggle } from '@/components/data-table'
@@ -29,6 +30,7 @@ import { saveFile } from '@/lib/download'
 import { useIsMobile } from '@/lib/use-mobile'
 import { formatNumber, pluralise } from '@/lib/format'
 import { toastProblem } from '@/lib/problems'
+import { sparing } from '@/shell/preload'
 import { LIST_COLUMNS, TABLE_COLUMNS } from './columns'
 import { FilterBar } from './filter-bar'
 import { LeadPanel } from './lead-panel'
@@ -111,6 +113,7 @@ export default function ResultsPage() {
   const [active, setActive] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
   const isMobile = useIsMobile()
+  const queryClient = useQueryClient()
 
   const go = (next: ResultsState): void => {
     setParams(writeResults(next), { replace: true, preventScrollReset: true })
@@ -124,6 +127,12 @@ export default function ResultsPage() {
   const openLead = (id: string): void => {
     setActive(id)
     go({ ...state, lead: id })
+  }
+  // A pointer resting on a row: the card it opens starts loading (PLAN-V7 C2).
+  const startLead = (id: string): void => {
+    if (!sparing()) {
+      void queryClient.prefetchQuery(leadQueryOptions(id))
+    }
   }
   const closeLead = (): void => {
     if (state.lead !== null) {
@@ -208,6 +217,7 @@ export default function ResultsPage() {
       activeRowId={activeRow}
       onActiveRowChange={setActive}
       onOpenRow={openLead}
+      onRowIntent={startLead}
       onEscape={closeLead}
       loading={leads.isFetching}
       empty={<Empty filtered={filtered} onClear={clearFilters} />}
@@ -307,7 +317,12 @@ export default function ResultsPage() {
       ) : (
         table(TABLE_COLUMNS, 'Leads', compact)
       )}
-      <LeadPanel leadId={state.lead} onClose={closeLead} onOpenFullPage={openFullPage} />
+      <LeadPanel
+        leadId={state.lead}
+        onClose={closeLead}
+        onOpenFullPage={openFullPage}
+        rows={page?.items}
+      />
     </>
   )
 }

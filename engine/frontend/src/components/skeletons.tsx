@@ -127,16 +127,21 @@ export function PendingText({
   )
 }
 
-/** One thing in full: a title with badges, a summary, a strip of tabs and a block of content. */
-export function PendingDetail({ label }: { label: string }) {
+/**
+ * One thing in full: a title with badges, a summary, a strip of tabs and a block of content.
+ * `titled={false}` leaves out the title and badges, for a page that already shows them.
+ */
+export function PendingDetail({ label, titled = true }: { label: string; titled?: boolean }) {
   return (
     <Pending label={label}>
       <div className="flex flex-col gap-6">
-        <div className="flex flex-wrap items-center gap-3">
-          <Skeleton className="h-7 w-64" />
-          <Skeleton className="h-6 w-24" />
-          <Skeleton className="h-6 w-20" />
-        </div>
+        {titled ? (
+          <div className="flex flex-wrap items-center gap-3">
+            <Skeleton className="h-7 w-64" />
+            <Skeleton className="h-6 w-24" />
+            <Skeleton className="h-6 w-20" />
+          </div>
+        ) : null}
         <SkeletonLines count={3} />
         <div className="flex gap-3">
           {Array.from({ length: 5 }, (_, index) => (

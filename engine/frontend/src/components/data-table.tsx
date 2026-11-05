@@ -16,6 +16,8 @@
  *   while the others scroll past it. The page buttons stay in view under the box.
  * - On a phone a column with `meta: { hideBelow: 'sm' | 'md' }` is hidden, so the rows show only
  *   what tells them apart. Details are one tap away.
+ * - `onRowIntent` is called with a row's id once the pointer has rested on the row for a moment,
+ *   so a page can start loading what opening the row needs (PLAN-V7 C2).
  * - Every cell renders React children, so text from the backend is always plain text.
  */
 import {
@@ -43,6 +45,7 @@ import { Toggle } from '@/components/ui/toggle'
 import { useListKeyboard } from '@/hooks/useListKeyboard'
 import { formatNumber } from '@/lib/format'
 import { useAfter } from '@/lib/use-after'
+import { POINT_MS } from '@/lib/pointing'
 import { cn } from '@/lib/utils'
 // The column `meta` fields (align, className). Imported so every program that uses the table has them.
 import './data-table-types'
@@ -113,6 +116,8 @@ export interface DataTableProps<TData> {
   activeRowId?: string | null
   onActiveRowChange?: (id: string) => void
   onOpenRow?: (id: string) => void
+  /** Called with a row's id once the pointer has rested on it for a moment (about to open it). */
+  onRowIntent?: (id: string) => void
   onEscape?: () => void
   /** True while a new page or sort loads. The rows already shown stay, dimmed. */
   loading?: boolean
@@ -173,6 +178,50 @@ const STICKY_CELL =
 
 const SORT_WORDS = { asc: 'ascending', desc: 'descending' } as const
 
+/**
+ * Pointer handlers for the table body that call `onIntent` with a row's id after the pointer has
+ * rested on the row for `POINT_MS`. One pair of handlers covers every row (the row is found from
+ * the event). A touch has no resting, so it starts nothing here: the tap that opens the row does.
+ */
+function useRowIntent(onIntent: ((id: string) => void) | undefined) {
+  const resting = useRef<{ id: string; timer: number } | null>(null)
+  const stop = (): void => {
+    if (resting.current) {
+      window.clearTimeout(resting.current.timer)
+      resting.current = null
+    }
+  }
+  useEffect(() => stop, [])
+  if (!onIntent) {
+    return {}
+  }
+  return {
+    onPointerOver: (event: React.PointerEvent) => {
+      const row = (event.target as Element).closest<HTMLElement>('[data-row-id]')
+      const id = row?.dataset.rowId
+      if (event.pointerType === 'touch' || !id || id === resting.current?.id) {
+        return
+      }
+      stop()
+      resting.current = {
+        id,
+        timer: window.setTimeout(() => {
+          resting.current = null
+          onIntent(id)
+        }, POINT_MS),
+      }
+    },
+    onPointerOut: (event: React.PointerEvent) => {
+      const into = event.relatedTarget
+      const stays =
+        into instanceof Element && into.closest('[data-row-id]')?.getAttribute('data-row-id')
+      if (resting.current && stays !== resting.current.id) {
+        stop()
+      }
+    },
+  }
+}
+
 export function DataTable<TData>({
   label,
   columns,
@@ -186,6 +235,7 @@ export function DataTable<TData>({
   activeRowId = null,
   onActiveRowChange,
   onOpenRow,
+  onRowIntent,
   onEscape,
   loading = false,
   empty,
@@ -213,6 +263,7 @@ export function DataTable<TData>({
   const rows = table.getRowModel().rows
   const ids = rows.map((row) => row.id)
   const bodyRef = useRef<HTMLTableSectionElement>(null)
+  const rowIntent = useRowIntent(onRowIntent)
 
   useListKeyboard({
     enabled: onActiveRowChange !== undefined && rows.length > 0,
@@ -301,7 +352,11 @@ export function DataTable<TData>({
               </TableRow>
             ))}
           </TableHeader>
-          <TableBody ref={bodyRef} className={cn(loading && rows.length > 0 && 'opacity-60')}>
+          <TableBody
+            ref={bodyRef}
+            className={cn(loading && rows.length > 0 && 'opacity-60')}
+            {...rowIntent}
+          >
             {rows.length === 0 && loading ? (
               <LoadingRows columns={columnCount} />
             ) : rows.length === 0 ? (

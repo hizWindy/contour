@@ -13,6 +13,7 @@ import { meQueryOptions } from './api/hooks'
 import { createQueryClient } from './api/query'
 import { App } from './App'
 import { createAppRouter, routes } from './router'
+import { preloadOnIntent } from './shell/intent'
 import { prefetchOnNavigation } from './shell/prefetch'
 import { preloadNextPages } from './shell/preload'
 import { applyTheme, readThemeChoice } from './shell/theme'
@@ -41,3 +42,5 @@ createRoot(root).render(
 
 // Once the first screen is up and the browser is idle: the code of the pages people open next.
 preloadNextPages(routes)
+// And a page's code and data as soon as someone points at its link (PLAN-V7 C2).
+preloadOnIntent(routes, queryClient)
