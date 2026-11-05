@@ -4,7 +4,7 @@ This plan makes Contour HQ feel fast and stay fast as the data grows. Pages show
 
 - **Built by:** Al-khair Pama. **Signed off by:** Al-khair (no business rules change, so nothing waits on Levi).
 - **Last updated:** 2026-11-05. **TBC** means not confirmed yet.
-- **Progress:** 0 of 23 steps done. Work goes on branch `plan-v7`, made from `master` at 3b0179f.
+- **Progress:** 5 of 23 steps done (A1, A2, A4, B1, E1). A3 and B2 are half done. Work goes on branch `plan-v7`, made from `master` at 3b0179f.
 - **Comes after:** [PLAN-V6.md](PLAN-V6.md). Its open steps (A2, part H and part I) stay there. This plan doesn't block them, and they don't block it.
 
 ## In short
@@ -60,12 +60,12 @@ These rules are for Al-khair and for Claude. At the start of every session: read
 
 ## Part A: Measure first
 
-- [ ] **A1. Branch and baseline.**
+- [x] **A1. Branch and baseline.** Done 2026-11-05, c34687e. Website 818 tests (3b0179f); backend 3,099 passed and 25 skipped in 5 min 50 s (`RUN_GATES=1`).
   - `plan-v7` from `master` (3b0179f). This plan is its first commit.
   - Run the website checks and the backend suite, one at a time. The last numbers were website 818 tests (5 Nov) and backend 3,090 passed and 25 skipped (`RUN_GATES=1`, 5 Nov).
   - **Done when:** the numbers are in the Log.
 
-- [ ] **A2. A big test database.**
+- [x] **A2. A big test database.** Done 2026-11-05, fd03c62. `uv run --no-sync python -m tests.e2e.perf_seed` (about a minute), then `API_PORT=8010 uv run --no-sync python -m tests.e2e.serve --perf`. The flag is `--perf`. 10,001 leads and 50 runs, 70 MB.
   - A script that fills a new database, `leadfinder_perf`, with 10,000 fake leads ("Sample ..." names, spread over the cities, results and signs) and 50 fake runs. It follows the fake backend's pattern (`tests/e2e/serve.py`) and never touches `leadfinder` (the dev database).
   - The fake backend can start on it, with a flag (**TBC**: the flag's name).
   - **Done when:** the fake backend serves 10,000 leads from `leadfinder_perf`, and the script runs again from nothing in under 5 minutes.
@@ -75,8 +75,9 @@ These rules are for Al-khair and for Claude. At the start of every session: read
   - Web Vitals on a production build (`vite build`, then `vite preview`) for Home, Start, Results, a lead card and Runs, on a laptop size and a phone size, against A2's database.
   - Count the waits: for each page, how long from the click to the code, and from the code to the data.
   - **Done when:** the sizes and the timings are a table in the Log.
+  - **Done so far:** `frontend/scripts/bundle-report.js` (2a9e710). It builds in memory with Vite's own API, so no package is needed. **Left:** run it, the Web Vitals, and the click-to-content timing (needs a production build and the 10,000-lead backend).
 
-- [ ] **A4. Measure the backend.**
+- [x] **A4. Measure the backend.** Done 2026-11-05, fd03c62. `backend/scripts/loadtest.py`, plain Python and httpx, so no tool was added. The numbers are in the Log.
   - The time each route takes, logged per request (check first whether the logs already have it).
   - A load test: 20 people at once for 5 minutes, opening Results with different filters, the filter counts, the map and lead cards. Recommendation: Locust, a Python tool, as a dev-only package (**TBC**: Al-khair's OK; k6 is the other choice).
   - `EXPLAIN ANALYZE` for the slowest queries.
@@ -89,13 +90,13 @@ These rules are for Al-khair and for Claude. At the start of every session: read
 
 ## Part B: Loading that keeps its shape
 
-- [ ] **B1. Skeleton parts.**
+- [x] **B1. Skeleton parts.** Done 2026-11-05, 2a9e710. `components/skeletons.tsx` and `lib/use-after.ts`.
   - A few shared parts in `src/components/`: a table, a card, a detail panel and a page header, each shaped like the real thing. They use shadcn's Skeleton without its pulse, and fade in.
   - Shown only when loading takes more than 200 ms, so a fast answer never flashes grey blocks.
   - A screen reader hears one line, like "Loading the leads.", in a hidden status.
   - **Done when:** the parts and their tests are in, and the design and contrast checks pass.
 
-- [ ] **B2. Use them everywhere.** The table (`data-table.tsx`), the lead card and side panel, the run page, Start, Rules, Settings, the Admin tabs and Home's status lines. About 14 places today.
+- [ ] **B2. Use them everywhere.** **Done so far** (2a9e710): 13 places changed (the table, the lead page and panel, the run page, Start, Rules, Settings, the HubSpot and runs tabs, the look-alikes, Home). **Left:** the CLS number (needs A3's browser run). The table (`data-table.tsx`), the lead card and side panel, the run page, Start, Rules, Settings, the Admin tabs and Home's status lines. About 14 places today.
   - **Moves:** CLS (nothing jumps when the data arrives) and how long the page looks empty.
   - **Done when:** no page shows "Loading." on its own, and CLS is under 0.1 on the five pages.
 
@@ -135,7 +136,7 @@ These rules are for Al-khair and for Claude. At the start of every session: read
 
 ## Part E: The backend for more data (only where A4 shows the need)
 
-- [ ] **E1. Filter counts in one go.** About 12 queries one after another become one or two (Postgres `GROUPING SETS`, or `FILTER` counts).
+- [x] **E1. Filter counts in one go.** Done 2026-11-05, fd03c62, in a different way than planned (measuring found two bigger causes; see the Log). The 12 count queries are still 12, but each is about 5 times cheaper. About 12 queries one after another become one or two (Postgres `GROUPING SETS`, or `FILTER` counts).
   - **Done when:** the filter-count route's p95 is under the target, with the same counts as today (tests compare them).
 
 - [ ] **E2. Indexes.** A trigram index for search by name (`pg_trgm`, so `ILIKE '%text%'` stops reading every lead), and an index for the default sort, if `EXPLAIN ANALYZE` shows it reads too much. One migration (0013), with its `SCHEMA-0013.md`.
@@ -167,7 +168,7 @@ These rules are for Al-khair and for Claude. At the start of every session: read
 
 ## Waiting on
 
-- **Al-khair:** A5 (the sizes and targets, and which parts to do), the OK on two dev-only tools (a size report and a load-test tool), and each merge.
+- **Al-khair:** A5 (the sizes and targets, and which parts to do), and each merge. No dev-only package was needed: the size report and the load test are small scripts of our own.
 - **Levi:** nothing.
 
 ## Risks
@@ -182,4 +183,7 @@ These rules are for Al-khair and for Claude. At the start of every session: read
 
 Newest first. One line for each tick, pause or surprise.
 
+- 2026-11-05: **E1 done, ahead of its turn, and A4's numbers** (fd03c62). Measuring found the cause before any guessing. **Cause 1:** "only the newest lead of each company" ranked the whole table (`row_number`) in every query, and again in each of the 12 facet counts, about 20 ms each. It is now "no newer lead of the same company", a look-up in the existing `ix_leads_company_key` (no new index; a count went from 37 ms to 6 ms). **Cause 2:** the Results page query read the card of every matching lead before it sorted, to show 50 (134,000 buffers); it now picks the 50 ids first and reads the card for those only. **One request alone, 10,000 leads:** Results page 308 ms to 23 ms, filter counts 535 ms to 118 ms, map 52 ms to 11 ms, search by name 114 ms to 40 ms; a page at offset 7,000 is still 365 ms (the sort; real people don't go there). **20 people, 3 to 10 s between steps, 120 s (p50; p95 in brackets):** filter counts 464 ms (1,883) to 133 ms (996); Results list 112 (625) to 39 (644); deep page 93 (486) to 30 (454); map 93 (1,025) to 42 (1,273); lead card 11 ms (34) to 12 (22); Runs list 18 (542) to 18 (775). **The p95 numbers are not reliable on this laptop:** every route, before and after, has the same stall of about 1.3 s now and then (p99 1.3 to 1.5 s), so p95 mostly measures the laptop. Judge by p50 here, and measure p95 again on the server (PLAN-V6 H). **Stress** (0.2 to 1 s between steps, far busier than people): filter counts p50 1,222 ms to 535 ms, and 25% more requests served. The 12 count queries, an index for search by name and deep paging are **not needed yet**: E2 and E3 stay open, E4 (a short cache) only if A5's targets are missed.
+- 2026-11-05: **B1 done, B2 half done** (2a9e710). Still shapes in place of "Loading." in 13 places, with 200 ms before they show, and the words at once for a screen reader. One lead test found the loading status first and now waits for the card. Lint, types and prettier pass; the full website run had 2 failures (that test, and the word "shimmer" in a comment, which the design lint bans), both fixed and the affected files re-run. The whole suite runs again at F2. **Left in B2:** the CLS number.
+- 2026-11-05: **A1, A2 done** (c34687e, fd03c62). See their lines above.
 - 2026-11-05: **Plan written.** Read from the code first: loading is mostly words (about 14 places), pages wait for their code and then their data, the 5 Nov build has a 446 kB main file, and Results runs about 12 count queries per filter change. Nothing changed yet. Next: A1.
