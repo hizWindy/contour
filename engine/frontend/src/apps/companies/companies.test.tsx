@@ -1,0 +1,471 @@
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { useLocation } from 'react-router'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type {
+  CompanyDetail,
+  CompanyRow,
+  CompanySearch,
+  PrepChip,
+  PrepFacts,
+  PrepOut,
+} from '@/api/types'
+import { renderWithProviders } from '@/test/render'
+import CompaniesPage from './index'
+
+const API = '/api/v1/companies'
+
+function row(changes: Partial<CompanyRow> = {}): CompanyRow {
+  return {
+    key: '101',
+    name: 'ABC Logistics',
+    domain: 'abclogistics.com.au',
+    city: 'Perth',
+    industry: 'Logistics and Supply Chain',
+    staff: 300,
+    owner: 'Levi',
+    last_talk: '2026-10-01',
+    next_lease_end: '2027-06-30',
+    deal: 'open',
+    source: 'hubspot',
+    lead_result: null,
+    lead_score: null,
+    ...changes,
+  }
+}
+
+const ROWS: CompanyRow[] = [
+  row(),
+  row({
+    key: '103',
+    name: 'Zed Mining',
+    domain: 'zed.com.au',
+    city: 'Brisbane',
+    industry: 'Mining and Metals',
+    staff: 900,
+    owner: null,
+    last_talk: null,
+    next_lease_end: null,
+    deal: 'none',
+  }),
+]
+
+function detail(changes: Partial<CompanyDetail> = {}): CompanyDetail {
+  return {
+    key: '101',
+    source: 'hubspot',
+    name: 'ABC Logistics',
+    domain: 'abclogistics.com.au',
+    website: 'https://abclogistics.com.au',
+    city: 'Perth',
+    state: 'WA',
+    industry: 'Logistics and Supply Chain',
+    staff: 300,
+    linkedin_staff: 280,
+    description: 'Moves freight across WA.',
+    owner: 'Levi',
+    lifecycle_stage: 'Opportunity',
+    last_talk: '2026-10-01',
+    last_talk_note: null,
+    next_lease_end: '2027-06-30',
+    deal: 'open',
+    hubspot_url: 'https://app.hubspot.com/contacts/1/company/101',
+    offices: [
+      {
+        label: 'Perth',
+        city: 'Perth',
+        street: '1 Hay St',
+        level: 'Level 5',
+        lease_end: '2027-06-30',
+        moved_in: null,
+        office_m2: '1200',
+        linkedin_staff: 150,
+        quality: null,
+      },
+    ],
+    deals: [
+      {
+        name: 'Perth fit-out',
+        stage: 'Qualified Deal',
+        state: 'open',
+        pipeline: 'Sales Pipeline',
+        amount_aud: '1500000',
+        close_date: '2027-03-01',
+        owner: 'Levi',
+        next_step: 'Site visit',
+        hubspot_url: null,
+      },
+    ],
+    notes: [],
+    people: [],
+    calls: [],
+    people_status: 'waiting',
+    lead: null,
+    ...changes,
+  }
+}
+
+const FACETS = {
+  cities: [
+    { value: 'Perth', count: 1 },
+    { value: 'Adelaide', count: 0 },
+  ],
+  owners: [{ value: 'Levi', count: 1 }],
+  leads_shown: false,
+}
+
+const SEARCH: CompanySearch = {
+  people: [
+    {
+      id: '201',
+      name: 'Jason Reeds',
+      title: 'Head of Operations',
+      company_key: '101',
+      company_name: 'ABC Logistics',
+    },
+  ],
+  companies: [
+    { key: '101', name: 'ABC Logistics', city: 'Perth', industry: 'Logistics', source: 'hubspot' },
+  ],
+}
+
+function facts(changes: Partial<PrepFacts> = {}): PrepFacts {
+  return {
+    company_key: '101',
+    company_name: 'ABC Logistics',
+    city: 'Perth',
+    industry: 'Logistics and Supply Chain',
+    staff: 300,
+    owner: 'Levi',
+    deal: 'open',
+    next_lease_end: '2027-06-30',
+    last_talk: '2026-10-01',
+    hubspot_url: null,
+    person: { id: '201', name: 'Jason Reeds', title: 'Head of Operations' },
+    phone: '+61 8 9000 1234',
+    last_call: {
+      id: '301',
+      called_at: '2026-10-01T01:00:00Z',
+      person: 'Jason Reeds',
+      owner: 'Levi',
+      minutes: 7,
+      outcome: 'Connected',
+      note: 'Lease ends next year. Call back in March.',
+      hubspot_url: null,
+    },
+    facts: [],
+    people: [
+      {
+        id: '201',
+        name: 'Jason Reeds',
+        title: 'Head of Operations',
+        phone: null,
+        last_activity: null,
+      },
+    ],
+    people_status: 'ready',
+    prep_enabled: true,
+    names_ok: true,
+    ...changes,
+  }
+}
+
+function prep(changes: Partial<PrepOut> = {}): PrepOut {
+  return {
+    id: 'aaaaaaaa-1111-2222-3333-444444444444',
+    company_key: '101',
+    company_name: 'ABC Logistics',
+    person: { id: '201', name: 'Jason Reeds', title: 'Head of Operations' },
+    kind: 'person',
+    trigger: 'person',
+    status: 'ready',
+    stage: 3,
+    error: null,
+    script: {
+      still_there: 'yes',
+      still_there_note: { text: 'Jason is still Head of Operations.', sources: ['W1'] },
+      news: [{ text: 'ABC Logistics won a A$40M contract.', sources: ['W1'] }],
+      opener: [{ text: 'Hi Jason, we spoke on 1 Oct about Perth.', sources: ['F11'] }],
+      why_now: [{ text: 'The Perth lease ends in June 2027.', sources: ['F7'] }],
+      questions: [{ text: 'Are you planning to renew or move?', sources: ['F7'] }],
+      if_they_say: [
+        { they_say: "We're not ready yet.", answer: { text: 'Fair enough.', sources: ['F7'] } },
+      ],
+      goal: { text: 'Book a site visit in Perth.', sources: ['F7'] },
+      dropped: 1,
+    },
+    sources: [
+      { id: 'F7', kind: 'hubspot', label: 'HubSpot: Perth office', url: null, date: null },
+      { id: 'F11', kind: 'call', label: 'HubSpot call, 1 Oct 2026', url: null, date: '2026-10-01' },
+      {
+        id: 'W1',
+        kind: 'web',
+        label: 'ABC Logistics wins contract',
+        url: 'https://www.afr.com/abc',
+        date: '2026-10-20',
+      },
+    ],
+    web_checked: true,
+    reused: false,
+    made_by: 'Mia',
+    created_at: '2026-11-09T19:30:00Z',
+    finished_at: '2026-11-09T19:30:09Z',
+    ...changes,
+  }
+}
+
+interface Backend {
+  rows: CompanyRow[]
+  leadsShown: boolean
+  detail: CompanyDetail
+  prep: PrepOut
+  prepStatus: number
+  chips: PrepChip[]
+  requests: Request[]
+}
+
+function mockApi(changes: Partial<Backend> = {}): Backend {
+  const backend: Backend = {
+    rows: ROWS,
+    leadsShown: false,
+    detail: detail(),
+    prep: prep(),
+    prepStatus: 202,
+    chips: [],
+    requests: [],
+    ...changes,
+  }
+  const respond = (request: Request, url: URL): Response => {
+    const path = url.pathname
+    if (path === API) {
+      return Response.json({
+        total: backend.rows.length,
+        items: backend.rows,
+        leads_shown: backend.leadsShown,
+      })
+    }
+    if (path === `${API}/facets`) return Response.json(FACETS)
+    if (path === `${API}/search`) return Response.json(SEARCH)
+    if (path === `${API}/preps/today`) return Response.json(backend.chips)
+    if (path === `${API}/preps` && request.method === 'POST') {
+      if (backend.prepStatus === 409) {
+        return Response.json(
+          { title: 'Call prep is off', status: 409, code: 'prep_off', detail: 'Off.' },
+          { status: 409 },
+        )
+      }
+      return Response.json(backend.prep, { status: backend.prepStatus })
+    }
+    if (path.startsWith(`${API}/preps/`)) return Response.json(backend.prep)
+    if (path.endsWith('/facts')) {
+      const contact = url.searchParams.get('contact_id')
+      return Response.json(contact ? facts() : facts({ person: null, phone: '(08) 9000 0000' }))
+    }
+    if (path === `${API}/101`) return Response.json(backend.detail)
+    return Response.json({ title: 'Not found', status: 404 }, { status: 404 })
+  }
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((request: Request) => {
+      backend.requests.push(request)
+      return Promise.resolve(respond(request, new URL(request.url)))
+    }),
+  )
+  return backend
+}
+
+function Address() {
+  return <output aria-label="Address">{useLocation().search}</output>
+}
+
+function renderCompanies(search = '') {
+  return renderWithProviders(
+    <>
+      <CompaniesPage />
+      <Address />
+    </>,
+    { route: `/companies${search}` },
+  )
+}
+
+afterEach(() => {
+  window.localStorage.clear()
+})
+
+describe('the Companies page', () => {
+  it('lists the companies with their deal, lease end and last talk, and no Lead Finder column', async () => {
+    mockApi()
+    renderCompanies()
+    const table = await screen.findByRole('table', { name: 'Companies' })
+    await within(table).findByText('ABC Logistics')
+    expect(within(table).getByText('Open deal')).toBeInTheDocument()
+    expect(within(table).getByText('No deal')).toBeInTheDocument()
+    expect(within(table).getByText('No owner')).toBeInTheDocument()
+    expect(within(table).queryByRole('columnheader', { name: 'Lead Finder' })).toBeNull()
+    expect(screen.getByText('2 companies')).toBeInTheDocument()
+  })
+
+  it('shows the Lead Finder column and "Not in HubSpot yet" for its tick', async () => {
+    mockApi({
+      leadsShown: true,
+      rows: [
+        ...ROWS,
+        row({
+          key: 'lead:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+          name: 'Delta Freight',
+          source: 'lead',
+          deal: 'none',
+          lead_result: 'pass',
+          lead_score: 82,
+        }),
+      ],
+    })
+    renderCompanies()
+    const table = await screen.findByRole('table', { name: 'Companies' })
+    await within(table).findByText('Delta Freight')
+    expect(within(table).getByRole('columnheader', { name: 'Lead Finder' })).toBeInTheDocument()
+    expect(within(table).getByText('Not in HubSpot yet')).toBeInTheDocument()
+  })
+
+  it('filters only through the filter bar, and keeps it in the address', async () => {
+    const backend = mockApi()
+    const { user } = renderCompanies()
+    await screen.findByText('ABC Logistics')
+    await user.type(screen.getByRole('searchbox', { name: /Filter companies/ }), 'logis')
+    await waitFor(() => {
+      const asked = backend.requests.map((request) => new URL(request.url))
+      expect(
+        asked.some((url) => url.pathname === API && url.searchParams.get('q') === 'logis'),
+      ).toBe(true)
+    })
+    expect(new URLSearchParams(screen.getByLabelText('Address').textContent).get('q')).toBe('logis')
+  })
+
+  it('opens the panel filled from the row, and Esc closes it and puts focus back on the row', async () => {
+    mockApi()
+    const { user } = renderCompanies()
+    const name = await screen.findByRole('button', { name: 'ABC Logistics' })
+    await user.click(name)
+    const panel = await screen.findByRole('dialog', { name: 'ABC Logistics' })
+    // The four boxes come from the row at once; the rest follows.
+    expect(within(panel).getByText('Next lease end')).toBeInTheDocument()
+    expect(await within(panel).findByText('Moves freight across WA.')).toBeInTheDocument()
+    expect(
+      within(panel).getAllByText('Waiting for HubSpot access to contacts and calls.'),
+    ).toHaveLength(2)
+    expect(within(panel).getByRole('link', { name: /Open in HubSpot/ })).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull()
+    })
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'ABC Logistics' })).toHaveFocus()
+    })
+  })
+})
+
+describe('the prep box and the call prep', () => {
+  it('"/" puts the cursor in the prep box, and a person opens their script', async () => {
+    mockApi()
+    const { user } = renderCompanies()
+    await screen.findByText('ABC Logistics')
+    fireEvent.keyDown(document.body, { key: '/' })
+    const box = screen.getByRole('combobox', { name: /Who are you calling/ })
+    expect(box).toHaveFocus()
+    await user.type(box, 'jas')
+    const option = await screen.findByRole('option', { name: /Jason Reeds/ })
+    expect(option).toBeInTheDocument()
+    await user.keyboard('{Enter}')
+    const modal = await screen.findByRole('dialog', { name: /Jason Reeds/ })
+    expect(within(modal).getByText('Before you dial')).toBeInTheDocument()
+    expect(await within(modal).findByText('Still there')).toBeInTheDocument()
+    expect(within(modal).getByText('Are you planning to renew or move?')).toBeInTheDocument()
+    expect(
+      within(modal).getByText('1 line was left out because it had no source.'),
+    ).toBeInTheDocument()
+    expect(within(modal).getByText('Lease ends next year. Call back in March.')).toBeInTheDocument()
+    expect(within(modal).getAllByText('W1').length).toBeGreaterThan(0)
+  })
+
+  it('a company asks "Who are you calling?", and a cold call goes to the switchboard', async () => {
+    const backend = mockApi({ prep: prep({ person: null, kind: 'cold' }) })
+    const { user } = renderCompanies()
+    await screen.findByText('ABC Logistics')
+    await user.click(screen.getByRole('combobox', { name: /Who are you calling/ }))
+    await user.type(screen.getByRole('combobox', { name: /Who are you calling/ }), 'abc')
+    await user.click(await screen.findByRole('option', { name: /^ABC Logistics/ }))
+    const modal = await screen.findByRole('dialog', { name: 'ABC Logistics' })
+    expect(await within(modal).findByText('Who are you calling?')).toBeInTheDocument()
+    await user.click(within(modal).getByRole('button', { name: 'Prep a cold call' }))
+    await screen.findByRole('dialog', { name: /cold call/ })
+    await waitFor(() => {
+      const posted = backend.requests.find((request) => request.method === 'POST')
+      expect(posted).toBeDefined()
+    })
+    expect(await screen.findByText('(08) 9000 0000')).toBeInTheDocument()
+  })
+
+  it('shows the 3-step bar while searching, and says so once', async () => {
+    mockApi({ prep: prep({ status: 'searching', stage: 2, script: null, sources: [] }) })
+    const { user } = renderCompanies()
+    await screen.findByText('ABC Logistics')
+    await user.type(screen.getByRole('combobox', { name: /Who are you calling/ }), 'jas')
+    await user.click(await screen.findByRole('option', { name: /Jason Reeds/ }))
+    const modal = await screen.findByRole('dialog', { name: /Jason Reeds/ })
+    expect(await within(modal).findByRole('progressbar', { name: /Preparing/ })).toBeInTheDocument()
+    expect(within(modal).getAllByText('Searching.').length).toBeGreaterThan(0)
+    expect(within(modal).getByText('Web check')).toBeInTheDocument()
+  })
+
+  it('says a failed prep in plain words, and a searched-ahead one with its time', async () => {
+    mockApi({
+      prep: prep({
+        status: 'failed',
+        script: null,
+        error: 'Claude did not answer. Press Refresh.',
+      }),
+    })
+    const { user } = renderCompanies()
+    await screen.findByText('ABC Logistics')
+    await user.type(screen.getByRole('combobox', { name: /Who are you calling/ }), 'jas')
+    await user.click(await screen.findByRole('option', { name: /Jason Reeds/ }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Claude did not answer. Press Refresh.',
+    )
+  })
+
+  it('a searched-ahead prep says so', async () => {
+    mockApi({ prep: prep({ trigger: 'search_ahead', made_by: null }), prepStatus: 200 })
+    const { user } = renderCompanies()
+    await screen.findByText('ABC Logistics')
+    await user.type(screen.getByRole('combobox', { name: /Who are you calling/ }), 'jas')
+    await user.click(await screen.findByRole('option', { name: /Jason Reeds/ }))
+    expect(await screen.findByText(/Ready\. Searched ahead at/)).toBeInTheDocument()
+  })
+
+  it('while call prep is off, the facts still show', async () => {
+    mockApi({ prepStatus: 409 })
+    const { user } = renderCompanies()
+    await screen.findByText('ABC Logistics')
+    await user.type(screen.getByRole('combobox', { name: /Who are you calling/ }), 'jas')
+    await user.click(await screen.findByRole('option', { name: /Jason Reeds/ }))
+    expect(await screen.findByText(/Call scripts are switched off/)).toBeInTheDocument()
+    expect(screen.getByText('Lease ends next year. Call back in March.')).toBeInTheDocument()
+  })
+
+  it('copies the number and says "Copied"', async () => {
+    mockApi()
+    const { user } = renderCompanies()
+    await screen.findByText('ABC Logistics')
+    await user.type(screen.getByRole('combobox', { name: /Who are you calling/ }), 'jas')
+    await user.click(await screen.findByRole('option', { name: /Jason Reeds/ }))
+    const modal = await screen.findByRole('dialog', { name: /Jason Reeds/ })
+    // user-event puts its own clipboard in place when it is set up, so the spy goes on that one.
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText')
+    await user.click(await within(modal).findByRole('button', { name: 'Copy number' }))
+    expect(writeText).toHaveBeenCalledWith('+61 8 9000 1234')
+    expect(await within(modal).findByText('Copied')).toBeInTheDocument()
+    await act(async () => {
+      await Promise.resolve()
+    })
+  })
+})

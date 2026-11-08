@@ -23,6 +23,7 @@ import { PLANNED } from '@/modules'
 import { useVisibleModules } from './visible-modules'
 import { ADMIN, HOME, isHere, type AppModule, type NavItem } from './nav'
 import { TONE_CLASSES } from './tone'
+import { cn } from '@/lib/utils'
 
 const PLANNED_LABEL_ID = 'menu-planned'
 
@@ -42,11 +43,14 @@ function MenuLink({
   item,
   pathname,
   planned = false,
+  iconClassName,
 }: {
   item: NavItem
   pathname: string
   /** A project still to be developed: quieter text, and the tooltip says so. */
   planned?: boolean
+  /** A project's own colour on its icon (a one-page project's link). */
+  iconClassName?: string
 }) {
   const Icon = item.icon
   const here = isHere(pathname, item)
@@ -61,7 +65,7 @@ function MenuLink({
       >
         {/* A plain Link: this menu decides what counts as "here" (a lead card is in Results). */}
         <Link to={item.to} aria-current={here ? 'page' : undefined} onClick={closeOnPhone}>
-          <Icon aria-hidden="true" className="size-5" />
+          <Icon aria-hidden="true" className={cn('size-5', iconClassName)} />
           <span>{item.label}</span>
         </Link>
       </SidebarMenuButton>
@@ -161,6 +165,9 @@ function ModuleGroup({ app, pathname }: { app: AppModule; pathname: string }) {
 export function AppSidebar() {
   const { pathname } = useLocation()
   const modules = useVisibleModules()
+  // A project with one page is a plain link under Home, not a dropdown (PLAN-V10 B1).
+  const single = modules.filter((app) => app.pages.length === 1)
+  const grouped = modules.filter((app) => app.pages.length !== 1)
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
@@ -175,10 +182,20 @@ export function AppSidebar() {
             <SidebarGroupContent>
               <SidebarMenu>
                 <MenuLink item={HOME} pathname={pathname} />
+                {single.map((app) =>
+                  app.pages[0] ? (
+                    <MenuLink
+                      key={app.id}
+                      item={app.pages[0]}
+                      pathname={pathname}
+                      iconClassName={app.tone ? TONE_CLASSES[app.tone].icon : undefined}
+                    />
+                  ) : null,
+                )}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
-          {modules.map((app) => (
+          {grouped.map((app) => (
             <ModuleGroup key={app.id} app={app} pathname={pathname} />
           ))}
           {PLANNED.length > 0 ? (

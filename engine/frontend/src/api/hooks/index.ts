@@ -1,4 +1,5 @@
 export * from './auth'
+export * from './companies'
 export * from './hubspot'
 export * from './leads'
 export * from './memory'

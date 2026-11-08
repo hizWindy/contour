@@ -43,7 +43,7 @@ Olive and Terracotta come from Contour's site. Ochre is a muted step of Contour'
 - Text is Ink on Stone, or Stone on Ink. All text passes 4.5:1 contrast: Ink on the page is about 14:1, quieter text about 6.5:1, and light text on Navy about 11:1.
 - Form field borders use `#8F937F`, which passes 3:1, so fields are easy to see. Plain dividers can be lighter.
 - One accent, Navy. No gradients.
-- **Project colour:** each project may have one quiet tint, so a page shows which project it belongs to. The Lead Finder is Eucalyptus (`--lead` `#3E6E66`, tile `--lead-soft` `#E0ECE8` with `--lead-ink` `#2A4E47`). It goes only on the project's icon tiles (Home card, page titles), its icon in the menu and on its Home card. Never on buttons, text, links or status: Navy and the result colours keep those jobs. A second project picks its own muted tint from the same earthy family (**TBC**).
+- **Project colour:** each project may have one quiet tint, so a page shows which project it belongs to. The Lead Finder is Eucalyptus (`--lead` `#3E6E66`, tile `--lead-soft` `#E0ECE8` with `--lead-ink` `#2A4E47`). It goes only on the project's icon tiles (Home card, page titles), its icon in the menu and on its Home card. Never on buttons, text, links or status: Navy and the result colours keep those jobs. The Companies page (PLAN-V10) is Heath, a muted plum (`--companies` `#6E5470`, tile `--companies-soft` `#ECE4EC` with `--companies-ink` `#4E3A50`; **TBC**).
 - **The sign-in page** (PLAN-V6) has a Navy brand panel with Contour's cream wordmark and fine contour lines. There Navy is the brand, not an action, so the panel stays Navy in dark mode too (`--brand`). In the form, Navy is still only the "Sign in" button.
 - **The sign-in avatar** is an illustration of a person in a suit and glasses, in its own `--avatar-*` tokens. It is never text and never the only sign of a state.
 - **Dark mode** is a choice. The site opens in light colours. The Ctrl+K menu switches to dark, or to follow your computer's setting, and the browser remembers it. In dark mode, Ink becomes the background and Stone the text. Navy steps up to `#8EA5C3`, so it stays visible.
@@ -64,7 +64,7 @@ Where a company came from (From HubSpot, Found, Typed) is a quiet mark, not a ba
 ## Type
 
 - **Titillium Web** for all text, in two weights: Regular (400) and SemiBold (600). It has no 500 weight.
-- **IBM Plex Serif** for three moments only: empty states, the first-run welcome, and quotes from sources on the lead card.
+- **IBM Plex Serif** for three moments only: empty states, the first-run welcome, and quotes from sources (on the lead card, and the HubSpot call notes on the Companies page).
 - Two typefaces in total. Fontsource serves both from the app, and text shows in a system font until they load.
 - Contour's own website uses Yellix, a paid font. This tool uses Titillium Web, which is free.
 - Titillium Web's digits are all the same width (checked 25 Oct 2026), so numbers line up in tables. Numbers are right-aligned and show their unit: m², $ or staff.
@@ -120,6 +120,7 @@ Sizes are in rem, so browser zoom works. Nothing is smaller than 13px. Sentence 
 ## Motion
 
 - **One curve:** `cubic-bezier(0.4, 0, 0.2, 1)`. 150ms for small changes like hover, 250ms for panels and dialogs.
+- **Leaving is quicker than arriving** (PLAN-V10, 9 Nov): a panel or dialog that closes fades (and a panel slides) out in 150ms, so closing feels instant. The call prep modal also rises 8px as it fades in, and a new person in it cross-fades in 150ms while the modal keeps its size.
 - **Hover** changes the border, background or opacity. Never the size or the shadow.
 - **Loading:** content fades in. No shimmer and no bouncing dots, so shadcn's Skeleton is used without its pulse. A page that is loading shows the shape of what is coming (the rows of a table, a card, a detail page, the menu and top bar of the app), still and grey, and only after 200 ms, so a quick answer never flashes grey blocks (`src/components/skeletons.tsx`, `src/shell/shell-skeleton.tsx`). The skeleton keeps the real content's size, so nothing jumps when it arrives, and a screen reader hears one line ("Loading the leads.") in a hidden status, never the grey blocks. A click on a page whose code is still on its way dims the page you are leaving after 200 ms (`aria-busy`, 150ms), the way a table dims while its next page loads.
 - **A live run** shows a filling progress bar and a static dot. Nothing pulses or loops.
@@ -192,6 +193,7 @@ Phase 0 sets these as CSS variables (shadcn stores them in OKLCH). In shadcn, `-
 | `--chart-1` to `--chart-5` | Navy, Olive, Sand, Ochre, Terracotta | Lighter steps of the same |
 | `--sidebar` | `#E5E8DB` | `#1E1B15` |
 | `--lead`, `--lead-soft`, `--lead-ink` (Lead Finder colour) | `#3E6E66`, `#E0ECE8`, `#2A4E47` | `#86B8AD`, `#263A35`, `#B5D9CF` |
+| `--companies`, `--companies-soft`, `--companies-ink` (Companies colour) | `#6E5470`, `#ECE4EC`, `#4E3A50` | `#C2A8C4`, `#3A2E3B`, `#E2CFE3` |
 | `--brand` (sign-in panel) | `#233A56` | `#1F344E` |
 | `--brand-foreground`, `--brand-muted` | `#E5E8DB`, `#B4C0CF` | Same |
 | `--radius` | `0.625rem` | Same |

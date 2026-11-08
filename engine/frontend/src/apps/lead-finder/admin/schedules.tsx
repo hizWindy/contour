@@ -45,6 +45,10 @@ import { Switch } from '@/components/ui/switch'
 import { formatDateTime } from '@/lib/format'
 import { toastProblem } from '@/lib/problems'
 
+
+/** A run's id. A start that made something else (a sync, a search ahead) has another ref. */
+const RUN_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 const EVERY_MAX = { days: 365, weeks: 52 } as const
 
@@ -312,7 +316,8 @@ function ScheduleCard({ schedule }: { schedule: Schedule }) {
     runNow.mutate(schedule.id, {
       onSuccess: (result) => {
         if (result.status === 'started') {
-          if (result.ref && !result.ref.startsWith('sync:')) {
+          // A run opens its page. A sync or the morning search ahead (PLAN-V10 D5) has none.
+          if (result.ref && RUN_ID.test(result.ref)) {
             void navigate(`/runs/${result.ref}`)
           } else {
             toast('Started. It runs in the background.')

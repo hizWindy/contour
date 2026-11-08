@@ -6,22 +6,23 @@
 import {
   Briefcase,
   CalendarDays,
-  ClipboardList,
   LayoutDashboard,
   Megaphone,
   Mic,
   Telescope,
 } from 'lucide-react'
+import { COMPANIES } from '@/apps/companies/module'
 import { LEAD_FINDER } from '@/apps/lead-finder/module'
 import type { AppModule, PlannedModule } from '@/shell/nav'
 
-export const MODULES: readonly AppModule[] = [LEAD_FINDER]
+export const MODULES: readonly AppModule[] = [LEAD_FINDER, COMPANIES]
 
 /**
  * The projects still to be developed, in Levi's order: the 30 Oct meeting put calendar scheduling
  * and call notes right after the Lead Finder. Sources: PROJECTS.md and the meeting notes in
  * "minutes of meeting/". Dashboards was added at the end on 5 Nov and is not from those notes.
- * When one is built, it moves to MODULES.
+ * When one is built, it moves to MODULES. Meeting prep left the list on 9 Nov: the Companies page
+ * and its call prep replace it (PLAN-V10 B1).
  */
 export const PLANNED: readonly PlannedModule[] = [
   {
@@ -41,15 +42,6 @@ export const PLANNED: readonly PlannedModule[] = [
     description:
       'Dictate notes after a call or meeting. It logs them in HubSpot, creates the follow-up task and updates details like a lease expiry, so nobody has to type and click.',
     status: 'Next after the Lead Finder (Levi, 30 Oct). Needs HubSpot write access (TBC).',
-  },
-  {
-    id: 'meeting-prep',
-    name: 'Meeting prep',
-    icon: ClipboardList,
-    to: '/meeting-prep',
-    description:
-      "A one-page brief before each meeting or call: who they are, the history in HubSpot, recent news, the last contact and the questions to ask. It's saved in HubSpot and sent to the team.",
-    status: 'On hold (Levi, 23 Oct).',
   },
   {
     id: 'deal-review',

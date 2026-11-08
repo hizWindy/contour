@@ -146,11 +146,21 @@ describe('the router', () => {
     const menu = within(screen.getByRole('navigation', { name: 'Main menu' }))
     expect(menu.getByRole('link', { name: HOME.label })).toHaveAttribute('href', '/')
     for (const app of MODULES) {
+      if (app.pages.length === 1) {
+        // A project with one page is a plain link under Home, not a group (PLAN-V10 B1).
+        const [only] = app.pages
+        expect(menu.queryByRole('group', { name: app.name })).toBeNull()
+        expect(menu.getByRole('link', { name: only?.label })).toHaveAttribute('href', only?.to)
+        continue
+      }
       const group = within(menu.getByRole('group', { name: app.name }))
       for (const item of app.pages) {
         expect(group.getByRole('link', { name: item.label })).toHaveAttribute('href', item.to)
       }
     }
+    // The Companies page sits right under Home.
+    const links = menu.getAllByRole('link').map((link) => link.getAttribute('href'))
+    expect(links.slice(0, 2)).toEqual(['/', '/companies'])
     expect(menu.getByRole('link', { name: ADMIN.label })).toHaveAttribute('href', '/admin')
     // Rules and the Test set are the Lead Finder's own, not shared Admin tabs.
     const leadFinder = within(menu.getByRole('group', { name: LEAD_FINDER.name }))

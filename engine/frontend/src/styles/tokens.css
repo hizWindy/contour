@@ -88,6 +88,10 @@
   --lead: light-dark(#3e6e66, #86b8ad);
   --lead-soft: light-dark(#e0ece8, #263a35);
   --lead-ink: light-dark(#2a4e47, #b5d9cf);
+  /* The Companies page (PLAN-V10) is Heath, a muted plum from the same earthy family (TBC). */
+  --companies: light-dark(#6e5470, #c2a8c4);
+  --companies-soft: light-dark(#ece4ec, #3a2e3b);
+  --companies-ink: light-dark(#4e3a50, #e2cfe3);
 
   /* ---- The sign-in page's avatar: an illustration, never text --------------------------- */
   --avatar-skin: light-dark(#d8a986, #c99a77);

@@ -4,11 +4,16 @@
  * and on its Home card, and nowhere else: buttons, text and status keep Navy and the
  * result colours.
  */
-export type ProjectTone = 'lead'
+export type ProjectTone = 'lead' | 'companies'
 
 export const TONE_CLASSES: Record<ProjectTone, { icon: string; tile: string }> = {
   lead: {
     icon: 'text-lead',
     tile: 'bg-lead-soft text-lead-ink',
+  },
+  // The Companies page is Heath, a muted plum (PLAN-V10, TBC).
+  companies: {
+    icon: 'text-companies',
+    tile: 'bg-companies-soft text-companies-ink',
   },
 }

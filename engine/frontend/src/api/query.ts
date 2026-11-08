@@ -123,6 +123,18 @@ export const queryKeys = {
     all: ['memory'] as const,
     search: (query: QueryOf<'search_memory'>) => ['memory', 'search', query] as const,
   },
+  companies: {
+    all: ['companies'] as const,
+    lists: () => ['companies', 'list'] as const,
+    list: (query: QueryOf<'list_companies'>) => ['companies', 'list', query ?? {}] as const,
+    facets: () => ['companies', 'facets'] as const,
+    detail: (key: string) => ['companies', 'detail', key] as const,
+    search: (q: string) => ['companies', 'search', q] as const,
+    facts: (key: string, contactId: string | null) =>
+      ['companies', 'facts', key, contactId ?? null] as const,
+    prep: (id: string) => ['companies', 'prep', id] as const,
+    today: () => ['companies', 'today'] as const,
+  },
   hubspot: {
     all: ['hubspot'] as const,
     summary: () => ['hubspot', 'summary'] as const,

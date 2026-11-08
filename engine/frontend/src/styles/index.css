@@ -92,6 +92,9 @@
   --color-lead: var(--lead);
   --color-lead-soft: var(--lead-soft);
   --color-lead-ink: var(--lead-ink);
+  --color-companies: var(--companies);
+  --color-companies-soft: var(--companies-soft);
+  --color-companies-ink: var(--companies-ink);
 
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);

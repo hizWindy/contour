@@ -246,6 +246,8 @@ describe('text contrast is at least 4.5:1 in light and dark mode', () => {
     ['watch-ink', 'watch-soft'],
     ['lead-ink', 'lead-soft'],
     ['lead-ink', 'card'],
+    ['companies-ink', 'companies-soft'],
+    ['companies-ink', 'card'],
     ['destructive-ink', 'destructive-soft'],
     // Soft badges and outlined badges sit on cards and on the page
     ['foreground', 'pass-soft'],
