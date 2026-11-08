@@ -2,6 +2,8 @@
 
 Last updated: 2026-11-09. **TBC** means to be confirmed.
 
+**Status (9 Nov):** built and tested on the branch `plan-v10` ([PLAN-V10](../../plan/PLAN-V10.md)), not merged or switched on yet. What works now, from our HubSpot copy: the Companies page, the company panel, the prep box and the call prep modal. Call scripts stay off until Al-khair switches them on. People and call history wait for HubSpot access to contacts. The questions for Levi are in [EMAIL.md](EMAIL.md).
+
 Call prep tells a salesperson what they need to know before they ring someone. They type a person or a company, and get a short call script. It is the second project after the Lead Finder (Levi, 2 Nov meeting).
 
 Sources: the 2 Nov and 5 Nov meeting notes in `minutes of meeting/`.

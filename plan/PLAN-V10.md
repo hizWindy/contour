@@ -3,8 +3,8 @@
 This plan builds the second project after the Lead Finder. A new Companies page lists every company we know. Clicking a company shows what we know about the client. Prep gives a salesperson a short call script before they ring someone.
 
 - **Built by:** Al-khair Pama. **Signed off by:** Al-khair for the code and the look. Levi confirms what is marked **TBC** (to be confirmed).
-- **Last updated:** 2026-11-09 (plan written, no code yet).
-- **Progress:** 0 of 18 steps done.
+- **Last updated:** 2026-11-09 (built on `plan-v10`: 11 steps done; the rest wait on screenshots, Levi or Al-khair's word).
+- **Progress:** 11 of 18 steps done. Open: A2, B4, C2, D4, E1, E3, E4.
 - **Sources:** [projects/prep/PREP.md](../projects/prep/PREP.md), and the meeting notes of 2 Nov and 5 Nov in `minutes of meeting/`.
 - **The look to copy:** the clickable prototype, with made-up data: https://claude.ai/artifact/XLy7eG12m19r3Ne8uK5MTC (private). Where it differs from `engine/DESIGN.md`, DESIGN.md wins (see "Fix these from the prototype").
 - **Comes after:** [PLAN-V9.md](PLAN-V9.md). It reuses the Lead Finder tick on each account (PLAN-V9 E1).
@@ -119,7 +119,7 @@ The prototype breaks 4 house rules. The build must not copy them.
 
 ## Part A: Get ready
 
-- [ ] **A1. Own copy and a baseline.** Make the worktree on branch `plan-v10` (see "How to work this plan"). Run the backend and frontend tests once with `heavy.sh`, and note the counts in the Log.
+- [x] **A1. Own copy and a baseline.** (2026-11-09, `c652c92`) Make the worktree on branch `plan-v10` (see "How to work this plan"). Run the backend and frontend tests once with `heavy.sh`, and note the counts in the Log.
   - **Done when:** the worktree exists, and the test counts are in the Log.
 - [ ] **A2. Ask Levi.** One short email, written with `/plain` and sent on Al-khair's word. Ask for:
   1. HubSpot read access to contacts and calls. The HubSpot admin adds it. The exact scope names are **TBC**.
@@ -132,7 +132,7 @@ The prototype breaks 4 house rules. The build must not copy them.
 
 ## Part B: The Companies page (works from the HubSpot copy)
 
-- [ ] **B1. A new project: Companies.**
+- [x] **B1. A new project: Companies.** (2026-11-09, `66b8f12`, `8898430`)
   - A folder `engine/backend/apps/companies/` with its `AppSpec`: schema `companies`, routes under `/companies`. Add it to `apps` in `core/config.py`.
   - A "Companies" tick on the People tab, the same way as the Lead Finder tick (`APP_TITLES` and `require_app` in `core/api/access.py`).
   - On the website, a module in `src/apps/companies/`.
@@ -140,7 +140,7 @@ The prototype breaks 4 house rules. The build must not copy them.
   - Remove "Meeting prep" from `PLANNED` in `src/modules.ts`, because Companies replaces it.
   - **Files:** the new folder, `core/config.py`, `core/api/access.py`, `src/modules.ts`, `shell/app-sidebar.tsx`, tests.
   - **Done when:** an account without the tick gets a 403 on every Companies route (a test walks them all), and the sidebar shows Companies under Home.
-- [ ] **B2. The list (backend).**
+- [x] **B2. The list (backend).** (2026-11-09, `66b8f12`)
   - `GET /companies` reads our HubSpot copy (`core.hubspot_companies`, with its offices, deals and owners).
     - **Search:** name, website and industry.
     - **Filters:** city, owner, deal (open, customer or none) and source.
@@ -155,7 +155,7 @@ The prototype breaks 4 house rules. The build must not copy them.
     - tests cover each filter and sort;
     - a page of 13,913 fake rows comes back in under 300 ms (**TBC**);
     - an account without the Lead Finder tick gets no Lead Finder field.
-- [ ] **B3. One company (backend).**
+- [x] **B3. One company (backend).** (2026-11-09, `66b8f12`)
   - `GET /companies/{key}` returns:
     - what the company does, its offices, deals and owner, and the date of the last talk;
     - saved notes from the shared memory (`core.memory`), from any project, under 30 days old;
@@ -167,7 +167,7 @@ The prototype breaks 4 house rules. The build must not copy them.
   - The table uses the shared `components/data-table.tsx`.
   - The filter only filters the list. The prep box only preps.
   - **Done when:** it works by keyboard and on a phone, in light and dark, and passes the design bar.
-- [ ] **B5. The company panel.**
+- [x] **B5. The company panel.** (2026-11-09, `8898430`)
   - Clicking a row opens a Sheet from the right, built like the Results lead panel (`results/lead-panel.tsx`):
     - a header with "Prep a call", "Open in HubSpot" and "Open full page";
     - four boxes: next lease end, last talk, deal and owner;
@@ -179,7 +179,7 @@ The prototype breaks 4 house rules. The build must not copy them.
 
 ## Part C: People and calls from HubSpot (waits on Levi's access)
 
-- [ ] **C1. Copy contacts and calls.**
+- [x] **C1. Copy contacts and calls.** (2026-11-09, `4f1dcc6`)
   - Two new core tables, in one migration with the next free number (0014 today):
     - `core.hubspot_contacts`: name, job title, phone, company and last activity;
     - `core.hubspot_calls`: company, contact, owner, date, length, outcome and the note.
@@ -193,19 +193,19 @@ The prototype breaks 4 house rules. The build must not copy them.
 
 ## Part D: Call prep
 
-- [ ] **D1. The prep box.**
+- [x] **D1. The prep box.** (2026-11-09, `66b8f12`, `8898430`)
   - `GET /companies/search?q=` returns up to 4 people and 4 companies, from the HubSpot copy and, after C1, the contacts. A trigram index keeps it fast (**TBC**).
   - On the website it is a search box with a list of matches, built on the shared `components/ui/command.tsx`.
   - "Today" chips reopen my preps from today.
   - **Done when:** matches come back in under 150 ms on the full copy (**TBC**), and the keyboard tests pass.
-- [ ] **D2. The facts pack (free).**
+- [x] **D2. The facts pack (free).** (2026-11-09, `4f1dcc6`)
   - One function gathers everything we know about the company and the person, each fact with its source:
     - HubSpot fields and call notes;
     - saved notes in the memory;
     - the Lead Finder lead.
   - The modal shows its HubSpot parts at once from this, before any Claude request.
   - **Done when:** tests show every fact with its source, and a note over 30 days old is left out.
-- [ ] **D3. The prep request (Claude).**
+- [x] **D3. The prep request (Claude).** (2026-11-09, `4f1dcc6`)
   - **The request:** one Claude request with web search, up to 3 searches (**TBC**). It looks for:
     - news from the last 90 days;
     - "still there?" for the person, if Levi agrees.
@@ -241,7 +241,7 @@ The prototype breaks 4 house rules. The build must not copy them.
     - failed, in plain words, with what to do next.
   - While a prep is searching, the website asks for it again every 2 seconds. Live updates like the run pages are another option (**TBC**).
   - **Done when:** there are tests for each state, the keyboard and focus return. It is checked on a laptop and a phone, in light and dark.
-- [ ] **D5. Search ahead.**
+- [x] **D5. Search ahead.** (2026-11-09, `4f1dcc6`)
   - A schedule (`JobSpec` "companies.search_ahead") runs on weekdays at 6:30, after the 6:00 HubSpot sync.
   - It preps the companies with an open deal, and the Lead Finder's good leads. Each prep is for the person on the last call, or a cold call when nobody is named.
   - It skips a company with a prep or saved news under 7 days old.
@@ -255,7 +255,7 @@ The prototype breaks 4 house rules. The build must not copy them.
   - Go through "The design and motion bar" on every screen. That includes the 4 fixes from the prototype, and adding the 150 ms exit to DESIGN.md first.
   - Take the screenshots listed there.
   - **Done when:** every check passes, and Al-khair signs off the look.
-- [ ] **E2. Access and safety check.**
+- [x] **E2. Access and safety check.** (2026-11-09, `08033d5`)
   - A test walks every Companies route as four accounts: no tick, Companies only, Companies and Lead Finder, and Admin.
   - A test checks that no email address and no phone number is ever in a Claude request.
   - **Done when:** both tests pass.
@@ -281,6 +281,8 @@ The prototype breaks 4 house rules. The build must not copy them.
   - the names, and who gets the Companies tick;
   - which Lead Finder leads show on the Companies page.
 - **Al-khair:**
+  - sending the email to Levi (drafted in [EMAIL.md](../projects/prep/EMAIL.md));
+  - the screenshots and the look (E1), in a browser on his laptop;
   - the spend for E3;
   - switching on `prep_enabled` and search ahead;
   - merging, pushing and deploying.
@@ -306,5 +308,17 @@ The prototype breaks 4 house rules. The build must not copy them.
 ## Log
 
 Newest first.
+
+- 2026-11-09: **What is left, and why.** A2: the email is drafted in [EMAIL.md](../projects/prep/EMAIL.md), to send on Al-khair's word. B4, C2 and D4: built and tested by keyboard, but not yet looked at on a phone or in dark mode, because no browser could be driven here (the Chrome extension isn't connected, and Playwright isn't installed: installing it downloads a browser, which needs Al-khair's OK). E1 needs those screenshots and Al-khair's sign-off. E3: every check passes (below); the 10 paid preps wait on his word. E4: the docs are done ([PREP.md](../projects/prep/PREP.md), `engine/README.md`, `engine/AGENTS.md`); merging, pushing, deploying, the ticks and switching on wait on his word.
+- 2026-11-09: **Checks after the build.** Backend `RUN_GATES=1`: 3,323 passed, 25 skipped, with the known timing test left out. Website: lint and types clean, 62 files and 899 tests pass, the build works (the Companies page's code is 14 kB, 5 kB zipped). The contrast, design-lint and icon tests pass with the new colour.
+- 2026-11-09: **Decisions made while building, for Levi or Al-khair to confirm (TBC).**
+  - A deal is won at "Ordered - Contract Signed" or "Handed over to client relations"; "Closed lost" and "Dissolved" are closed; everything else is open. A customer has a won deal or HubSpot's lifecycle stage "Customer".
+  - Lead Finder rows: Pass and Director review, not rejected, not in HubSpot, by each company's newest research (a newer Drop hides an older Pass).
+  - Calls are read with the contacts scope (`crm.objects.contacts.read`). The sync copies every contact and the calls of the last 2 years each day.
+  - A prep is one Claude request (Sonnet 5.5 by default, on the Settings page). The cap per prep stops a second try; it can't stop a request already sent. Search ahead runs every day at 6:30 and skips weekends itself, because a schedule can't say "weekdays".
+  - With two projects, a core list that names no project (runs, the search log, memory) now shows the projects the person may use, so a Lead Finder account still sees its own runs. Before, it needed every project's tick.
+  - DESIGN.md: panels and dialogs now leave in 150 ms, and the Companies colour is Heath, a muted plum.
+- 2026-11-09: **Speed (B2, D1).** On 13,913 made-up companies with offices, deals and 40,000 people: a page of the list takes 35 to 75 ms (limit 300) and the prep box 40 ms (limit 150). No trigram index was needed.
+- 2026-11-09: **A1 baseline,** in the worktree `../contour-v10` on `plan-v10` from `3f13174`. Backend `RUN_GATES=1`: 3,270 passed, 1 failed, 25 skipped. The failure is the timing test `test_cancel_mid_run_keeps_what_finished_and_marks_it_cancelled`, which passed 3 times in a row on its own. Website on the same commit: 61 files, 885 tests, all pass.
 
 - 2026-11-09: **Plan written,** from `projects/prep/PREP.md` and the prototype. No code yet.
