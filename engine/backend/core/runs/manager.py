@@ -104,6 +104,7 @@ UNEXPECTED_ERROR = (
 )
 MAX_RESUMES = 3
 CANCEL_WAIT_SECONDS = 10
+FINISHED_HOOK_SECONDS = 60  # the most a kind's `finished` hook (an email) may take
 SHUTDOWN_WAIT_SECONDS = 10
 CHECKPOINT_CLOSE_SECONDS = 5
 IDEMPOTENCY_KEY_MAX = 64
@@ -859,6 +860,24 @@ class RunManager:
             "run_finished",
             extra={"run_id": str(run_id), "status": final.status, "mode": entry.mode},
         )
+        await self._after_finish(entry, job, final)
+
+    async def _after_finish(self, entry: _Entry, job: _Job, final: _Final) -> None:
+        """The kind's `finished` hook, for a run that ended for good. It is given at most
+        `FINISHED_HOOK_SECONDS`, and whatever goes wrong is logged: the run is already written."""
+        hook = job.kind.finished
+        if hook is None or final.status not in ("done", "failed", "cancelled"):
+            return
+        try:
+            async with asyncio.timeout(FINISHED_HOOK_SECONDS):
+                run = await self._out(entry.run_id)
+                async with self.session_factory() as session:
+                    await hook(run, session, job.settings)
+        except Exception as error:
+            log.warning(
+                "run_finished_hook_failed",
+                extra={"run_id": str(entry.run_id), "reason": type(error).__name__},
+            )
 
     @staticmethod
     async def _write_final(

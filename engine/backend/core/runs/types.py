@@ -35,6 +35,7 @@ from core.runs.schemas import (
     RunCounts,
     RunEstimate,
     RunEvent,
+    RunOut,
     event_type_of,
 )
 
@@ -231,6 +232,10 @@ type CheckFn[P: BaseModel] = Callable[[P, Settings, RunCaps], None]
 type CapsOverrideFn[P: BaseModel] = Callable[[P], CapsOverride]
 # The versions this kind of run uses right now. Pure and quick: it only reads loaded files.
 type VersionsFn = Callable[[], RunVersions]
+# Called once a run has ended for good (done, failed or cancelled), after its last write, with the
+# run as it now stands, a session and the run's settings. Like the Lead Finder's run email (PLAN-V9
+# C2). A failure in it is logged and never changes the run.
+type FinishedFn = Callable[[RunOut, AsyncSession, Settings], Awaitable[None]]
 
 
 @dataclass(frozen=True)
@@ -245,6 +250,8 @@ class RunKind[P: BaseModel]:
     - `versions()` gives the rules and prompt versions. The manager saves them in the run row
       (`rules_version`, `prompt_versions`), puts them in `run_started` and in the `RunContext`.
       Without it they are empty text.
+    - `finished(run, session, settings)` is called once the run has ended for good (done, failed
+      or cancelled), after its last write. An interrupted run is not over: it carries on later.
     """
 
     mode: str  # like "discovery"
@@ -255,6 +262,7 @@ class RunKind[P: BaseModel]:
     check: CheckFn[P] | None = None
     caps_override: CapsOverrideFn[P] | None = None
     versions: VersionsFn | None = None
+    finished: FinishedFn | None = None
 
 
 # --- What the manager is built from -------------------------------------------------------

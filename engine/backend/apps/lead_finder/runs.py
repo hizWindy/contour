@@ -16,6 +16,7 @@ anything outside the run context, so a run is testable with a fake Claude.
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.lead_finder import prompts
 from apps.lead_finder.params import (
@@ -25,6 +26,7 @@ from apps.lead_finder.params import (
     WatchlistParams,
 )
 from apps.lead_finder.rules import load_rules
+from apps.lead_finder.run_email import run_finished
 from apps.lead_finder.steps.discover import MAX_CANDIDATES
 from apps.lead_finder.steps.plan import check_discovery_size, make_slices
 from apps.lead_finder.steps.state import CompanyTask
@@ -33,7 +35,7 @@ from apps.lead_finder.watchlist import load_watchlist
 from core.api.errors import Problem
 from core.config import Settings
 from core.hubspot.models import HubSpotCompany
-from core.runs.schemas import Blocked, RunCaps, RunEstimate
+from core.runs.schemas import Blocked, RunCaps, RunEstimate, RunOut
 from core.runs.types import (
     CapsOverride,
     EstimateContext,
@@ -260,6 +262,11 @@ async def estimate_testset(ctx: EstimateContext[TestsetParams]) -> RunEstimate:
     return _estimate(ctx, len(load_testset().companies))
 
 
+async def email_when_finished(run: RunOut, session: AsyncSession, settings: Settings) -> None:
+    """A scheduled discovery run emails its result when it ends (PLAN-V9 C2, `run_email.py`)."""
+    await run_finished(run, session, settings)
+
+
 RUN_KINDS: tuple[RunKind[Any], ...] = (
     RunKind(
         mode="discovery",
@@ -270,6 +277,7 @@ RUN_KINDS: tuple[RunKind[Any], ...] = (
         check=check_discovery,
         caps_override=caps_override,
         versions=run_versions,
+        finished=email_when_finished,  # PLAN-V9 C2: a scheduled run emails its result
     ),
     RunKind(
         mode="watchlist",
