@@ -495,7 +495,9 @@ async def test_a_client_made_from_the_settings_is_used_and_closed(
     card = await research(session, FakeClaude(facts=NO_STAFF), rules=SIGNALHIRE_RULES)
 
     assert card.from_signalhire == [SIGNALHIRE_NOTE]
-    assert owned.closes == 2  # one client for the details, and one for the staff and the people
+    # one client each for the details, the staff count read before the search (PLAN-V9 B2), and
+    # the people
+    assert owned.closes == 3
 
 
 async def test_a_client_made_from_the_settings_is_closed_even_when_it_fails(
@@ -508,7 +510,7 @@ async def test_a_client_made_from_the_settings_is_closed_even_when_it_fails(
     card = await research(session, FakeClaude(facts=NO_STAFF), rules=SIGNALHIRE_RULES)
 
     assert card.problems and card.from_signalhire == []
-    assert owned.closes == 2
+    assert owned.closes == 3  # the details, the early staff count and the people (PLAN-V9 B2)
 
 
 async def test_without_a_key_there_is_no_client_and_nothing_happens(
@@ -716,3 +718,88 @@ async def test_refilling_needs_fresh_notes_and_a_lead(session: AsyncSession) -> 
     assert await refill_lead(session, get_embedder(), claude, rules, settings, failed.id) is None
     assert await refill_lead(session, get_embedder(), claude, rules, settings, uuid.uuid4()) is None
     assert claude.calls == []  # nothing was paid for
+
+
+# --- Too small to research (PLAN-V9 B2) -----------------------------------------------------------
+
+
+async def test_signal_hire_saying_4_staff_stops_before_any_claude_request(
+    session: AsyncSession,
+) -> None:
+    fake = FakeSignalHire([ACME_SOFTWARE], info=ACME_INFO, people=2)  # 2 on file x 2 = 4 staff
+    claude = FakeClaude(facts=NO_STAFF)
+
+    card = await research(session, claude, rules=SIGNALHIRE_RULES, signalhire=fake)
+
+    assert claude.calls == []  # no Claude request at all
+    assert card.result == "drop"
+    assert card.summary.startswith("Too small: 4 staff (Signal Hire), under 50.")
+    assert "no Claude request" in card.summary
+    size = next(check for check in card.checks if check.rule == "Size")
+    assert (size.outcome, size.detail.endswith("under 50 staff, too small")) == ("fail", True)
+    assert card.research.claude_requests == 0 and card.research.cost_usd == 0
+    assert sum(call.startswith("people:") for call in fake.calls) == 1  # counted once, not twice
+    assert not any(call.startswith("leaders:") for call in fake.calls)  # no people search either
+    assert await count(session, Lead, result="drop") == 1
+
+
+async def test_hubspot_saying_small_stops_it_too(session: AsyncSession) -> None:
+    session.add(HubSpotCompany(hubspot_id="102", name="Acme Software Pty Ltd", source="export"))
+    await session.flush()
+    session.add(HubSpotOffice(hubspot_company_id="102", label="Melbourne", linkedin_staff=6))
+    await session.commit()
+    claude = FakeClaude(facts=NO_STAFF)
+
+    card = await research(session, claude)
+
+    assert claude.calls == []
+    assert card.summary.startswith("Too small: 12 staff (HubSpot), under 50.")
+    assert card.result == "drop"
+
+
+async def test_one_number_at_the_floor_or_more_lets_the_research_go_on(
+    session: AsyncSession,
+) -> None:
+    session.add(HubSpotCompany(hubspot_id="102", name="Acme Software Pty Ltd", source="export"))
+    await session.flush()
+    session.add(HubSpotOffice(hubspot_company_id="102", label="Melbourne", linkedin_staff=40))
+    await session.commit()
+    fake = FakeSignalHire([ACME_SOFTWARE], info=ACME_INFO, people=2)  # 4, but HubSpot says 80
+    claude = FakeClaude(facts=NO_STAFF)
+
+    card = await research(session, claude, rules=SIGNALHIRE_RULES, signalhire=fake)
+
+    assert claude.calls  # researched as usual
+    assert not card.summary.startswith("Too small")
+
+
+async def test_a_growth_sign_from_discovery_is_never_stopped_for_its_size(
+    session: AsyncSession,
+) -> None:
+    from apps.lead_finder.context import Signal
+
+    fake = FakeSignalHire([ACME_SOFTWARE], info=ACME_INFO, people=2)
+    claude = FakeClaude(facts=NO_STAFF)
+    growth = Signal(
+        trigger_id="fast_growth",
+        what_happened="Acme raised $40M to hire 150 people.",
+        url="https://news.example.com/acme",
+    )
+
+    card = await research(
+        session,
+        claude,
+        rules=SIGNALHIRE_RULES,
+        signalhire=fake,
+        context=ResearchContext(signals=(growth,)),
+    )
+
+    assert claude.calls  # a growing company is judged on what it plans
+    assert not card.summary.startswith("Too small")
+
+
+async def test_no_known_number_means_no_stop(session: AsyncSession) -> None:
+    claude = FakeClaude(facts=NO_STAFF)
+    card = await research(session, claude)  # no HubSpot office and no Signal Hire
+    assert claude.calls
+    assert not card.summary.startswith("Too small")

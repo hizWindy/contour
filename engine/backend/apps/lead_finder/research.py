@@ -5,6 +5,9 @@ The steps, in order:
    Signal Hire's details for the company, when it is switched on: Claude gets them as hints.
 2. Search: one Claude request per angle (property, people, money) that memory didn't cover.
 3. Fill the answer form from the notes, then check every fact's source.
+   Before any Claude request, the staff numbers HubSpot and Signal Hire already have are read
+   (PLAN-V9 B2). When every one of them is under `size.staff_floor` and the company wasn't found
+   with a growth sign, the research stops there: a short Drop, "too small", with no Claude request.
 4. Gap check: if the city, size or a trigger is missing, one more targeted search. Then stop.
 5. Match HubSpot. Signal Hire's checked name, website and industry are applied first. HubSpot,
    Signal Hire and the research each give a staff number, and the first source in
@@ -48,6 +51,7 @@ from apps.lead_finder.fields import AngleNotes, CompanyFacts, Fact
 from apps.lead_finder.headcount import (
     Resolved,
     SignalHirePerson,
+    StaffReading,
     find_leaders,
     read_staff,
     resolve,
@@ -300,6 +304,11 @@ class Job:
     form_failed: bool = False  # the last form fill failed, so every fact is unknown
     lookup: CompanyLookup | None = None  # Signal Hire's details, read before the search
     credits: CreditMeter = field(default_factory=lambda: CreditMeter(0))
+    # Signal Hire's staff count, read before the search (PLAN-V9 B2) for this city. Step 5 uses it
+    # again for the same city, so the count is asked once.
+    early_staff: StaffReading | None = None
+    early_city: str | None = None
+    too_small: str | None = None  # why the research stopped before Claude (PLAN-V9 B2)
 
     @property
     def company(self) -> str:
@@ -360,6 +369,16 @@ async def research_company(
     covered = await _notes_from_memory(session, job, now) if request.use_memory else set()
     await session.rollback()
     await _company_details(session, job, signalhire, now)
+
+    # 1c. Too small? HubSpot's and Signal Hire's staff numbers, before any Claude request.
+    job.too_small = await _too_small(session, job, signalhire)
+    if job.too_small is not None:
+        facts = empty_facts(job.company, job.too_small)
+        card, hubspot, place, metro, profile_text = await _judge_and_card(
+            session, embedder, job, facts, [], covered, now, signalhire
+        )
+        await _save(session, embedder, job, card, hubspot, key, place, metro, profile_text)
+        return card
 
     # 2. Search the angles memory didn't cover
     try:
@@ -736,16 +755,25 @@ async def _signalhire_step(
     card's problems: the lead is still saved and the run goes on."""
     origin = job.context.origin
     staff = wants_signalhire(job.rules, job.settings, origin=origin, city=city)
-    leaders = wants_people(job.rules, job.settings, origin=origin, city=city)
+    leaders = job.too_small is None and wants_people(
+        job.rules, job.settings, origin=origin, city=city
+    )
     if city is None or not (staff or leaders):
         return None, [], []
+    early = job.early_staff if job.early_city == city else None
+    if early is not None:  # read before the search for this city: not asked again
+        staff = False
+        early = _as_hint_if_site_heavy(early, facts, city, job.rules)
+        job.problems.extend(early.problems)
+        if not leaders:
+            return early.candidate, list(early.notes), []
     owned = None if given is not None else get_signalhire(job.settings)  # closed below
     client: SignalHire | None = given if given is not None else owned
     if client is None:  # no key: Signal Hire is off
         return None, [], []
     await session.rollback()  # no connection waits on Signal Hire (an answer can be slow)
-    candidate: StaffCandidate | None = None
-    notes: list[str] = []
+    candidate: StaffCandidate | None = early.candidate if early is not None else None
+    notes: list[str] = list(early.notes) if early is not None else []
     people: list[SignalHirePerson] = []
     try:
         resolved = await _resolved(client, job, website)
@@ -777,6 +805,86 @@ async def _signalhire_step(
         if owned is not None:
             await owned.aclose()
     return candidate, notes, people
+
+
+async def _too_small(session: AsyncSession, job: Job, given: SignalHire | None) -> str | None:
+    """Why the company is too small to research, or None (PLAN-V9 B2).
+
+    The numbers are the ones HubSpot and Signal Hire already have for the office in the asked-for
+    city: HubSpot's LinkedIn count (doubled) for a sure match, and Signal Hire's count (x its
+    multiplier). Reading them costs no Claude request. It stops only when every known number is
+    under `size.staff_floor`, and never when discovery found the company with a growth sign
+    (`size.growth_signs`): a growing company is judged on what it plans. Signal Hire's reading is
+    kept, so step 5 doesn't ask again.
+    """
+    rules = job.rules
+    size = rules.criteria.size
+    if {signal.trigger_id for signal in job.context.signals} & set(size.growth_signs):
+        return None
+    metro = city_of(job.request.city, rules) if job.request.city else None
+    if metro is None:
+        return None
+    numbers: list[tuple[int, str]] = []
+    if "hubspot" in size.staff_sources:
+        match = await match_company(
+            session,
+            job.company,
+            website=job.request.website,
+            city=metro,
+            hubspot_id=job.context.hubspot_id,
+            fuzzy_min=job.settings.match_fuzzy_min,
+        )
+        if match.hubspot_id is not None and match.status != "possible_match":
+            found = hubspot_staff(await office_numbers(session, match.hubspot_id, metro), rules)
+            if found is not None:
+                numbers.append((found.staff, "HubSpot"))
+        await session.rollback()  # a read only, and no connection waits on Signal Hire
+    if wants_signalhire(rules, job.settings, origin=job.context.origin, city=metro):
+        owned = None if given is not None else get_signalhire(job.settings)
+        client: SignalHire | None = given if given is not None else owned
+        if client is not None:
+            try:
+                resolved = await _resolved(client, job, job.request.website)
+                job.early_staff = await read_staff(
+                    empty_facts(job.company),
+                    client,
+                    company=job.company,
+                    website=job.request.website,
+                    city=metro,
+                    rules=rules,
+                    resolved=resolved,
+                )
+                job.early_city = metro
+            finally:
+                if owned is not None:
+                    await owned.aclose()
+            candidate = job.early_staff.candidate
+            if candidate is not None:
+                numbers.append((candidate.staff, "Signal Hire"))
+    if not numbers or any(staff >= size.staff_floor for staff, _ in numbers):
+        return None
+    said = ", ".join(f"{staff:,} staff ({source})" for staff, source in numbers)
+    return (
+        f"Too small: {said}, under {size.staff_floor}. Not researched, so no Claude request "
+        "was made. Re-check it if the company has grown."
+    )
+
+
+def _as_hint_if_site_heavy(
+    reading: StaffReading, facts: CompanyFacts, city: str, rules: LeadFinderRules
+) -> StaffReading:
+    """Signal Hire's count read before the search, now that the industry is known: for a site-heavy
+    industry it counts shop, site and plant staff too, so it is a hint, not the office's staff (the
+    same rule as `headcount.read_staff`)."""
+    group = facts.industry_group
+    candidate = reading.candidate
+    if candidate is None or group not in rules.criteria.industries.check_office_size:
+        return reading
+    note = (
+        f"Signal Hire's count in {city} ({candidate.text}) counts shop, site and plant staff too "
+        f"in {group}, so it isn't used as the office's staff. Check the office size."
+    )
+    return StaffReading(notes=[note], problems=reading.problems)
 
 
 async def _resolved(client: SignalHire, job: Job, website: str | None) -> Resolved:
