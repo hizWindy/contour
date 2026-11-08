@@ -22,6 +22,7 @@ from tests.companies.helpers import (
     add,
     company,
     names,
+    person,
     signed_in_as,
     soon,
 )
@@ -57,6 +58,32 @@ async def test_every_companies_route_refuses_a_person_without_the_tick(world: Wo
             assert answer.status_code == 403, (method, path, answer.status_code, answer.text)
             assert answer.json()["code"] == "app_not_allowed"
             assert "Companies page" in answer.json()["detail"]
+
+
+@pytest.mark.parametrize(
+    ("login", "apps", "role", "open_"),
+    [
+        ("nobody", [], "staff", False),
+        ("mia", ["companies"], "staff", True),
+        ("lena", ["companies", "lead_finder"], "staff", True),
+        ("boss", [], "admin", True),
+    ],
+)
+async def test_every_companies_route_walked_as_four_accounts(
+    world: World, login: str, apps: list[str], role: str, open_: bool
+) -> None:
+    """E2: no tick, Companies only, Companies and the Lead Finder, and an Admin."""
+    await a_small_copy(world)
+    await person(world, login, apps=apps, role=role)
+    async with world.browser() as client:
+        assert (await sign_in(client, login=login)).status_code == 200
+        for method, path in companies_routes(world.app):
+            answer = await client.request(method, filled(path) + "?q=ab", json={})
+            if open_:
+                assert answer.status_code != 403, (login, method, path, answer.text)
+            else:
+                assert answer.status_code == 403, (login, method, path, answer.status_code)
+                assert answer.json()["code"] == "app_not_allowed"
 
 
 async def test_with_the_tick_every_companies_route_is_open(world: World) -> None:
