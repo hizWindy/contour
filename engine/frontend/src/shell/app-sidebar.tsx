@@ -19,7 +19,8 @@ import {
   SidebarRail,
   useSidebar,
 } from '@/components/ui/sidebar'
-import { MODULES, PLANNED } from '@/modules'
+import { PLANNED } from '@/modules'
+import { useVisibleModules } from './visible-modules'
 import { ADMIN, HOME, isHere, type AppModule, type NavItem } from './nav'
 import { TONE_CLASSES } from './tone'
 
@@ -159,6 +160,7 @@ function ModuleGroup({ app, pathname }: { app: AppModule; pathname: string }) {
  */
 export function AppSidebar() {
   const { pathname } = useLocation()
+  const modules = useVisibleModules()
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
@@ -176,7 +178,7 @@ export function AppSidebar() {
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
-          {MODULES.map((app) => (
+          {modules.map((app) => (
             <ModuleGroup key={app.id} app={app} pathname={pathname} />
           ))}
           {PLANNED.length > 0 ? (

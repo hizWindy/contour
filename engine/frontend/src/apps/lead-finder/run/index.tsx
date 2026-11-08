@@ -39,6 +39,7 @@ import type { FeedTone, RunEventsState } from '@/hooks/run-events'
 import { formatDateTime, formatNumber, formatTime, shortId } from '@/lib/format'
 import { isTerminalRunStatus, RESULT_ORDER, RUN_MODE_LABELS } from '@/lib/labels'
 import { cn } from '@/lib/utils'
+import { GoodLeadsLine } from '../good-leads'
 import { FunnelLine, RunCompanies, RunCostSplit, RunSetupCard } from './details'
 
 const TONE_ICON: Record<FeedTone, LucideIcon> = {
@@ -280,6 +281,10 @@ function RunView({ runId, run }: { runId: string; run: Run }) {
             </CardHeader>
             <CardContent className="flex flex-col gap-3 text-ui">
               <CostMeter cost={cost} cap={caps.run_cap_usd} status={status} />
+              <p>
+                Good leads (Pass or Director review):{' '}
+                <GoodLeadsLine counts={counts} cost={cost} className="font-semibold" />
+              </p>
               <p className="text-caption text-muted-foreground">
                 {formatNumber(state.lastSeq > 0 ? state.claudeRequests : final.claude_requests)}{' '}
                 Claude requests,{' '}
@@ -302,7 +307,7 @@ function RunView({ runId, run }: { runId: string; run: Run }) {
               <Button asChild variant="outline">
                 <Link to={`/results?run_id=${encodeURIComponent(runId)}`}>
                   <Table2 aria-hidden="true" />
-                  See this run's leads
+                  Review this run's leads
                 </Link>
               </Button>
               <Button asChild variant="ghost">

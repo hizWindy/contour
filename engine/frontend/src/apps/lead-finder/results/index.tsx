@@ -10,10 +10,12 @@
  *   above the list). Pins are coloured by result and sit at an approximate place.
  * - A click on a row or a pin opens the lead card in a side panel. J and K move through the rows,
  *   Enter opens the active one and Esc closes the panel.
+ * - For one run (`?run_id=...`, the link in the run email) it is the review page (PLAN-V9 C3):
+ *   tick boxes, and a bar to approve leads for HubSpot, reject them or watch them.
  */
 import type { OnChangeFn, SortingState } from '@tanstack/react-table'
 import { Download, Map as MapIcon, Table2 } from 'lucide-react'
-import { lazy, Suspense, useEffect, useEffectEvent, useState } from 'react'
+import { lazy, Suspense, useEffect, useEffectEvent, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import {
@@ -39,9 +41,10 @@ import { useIsMobile } from '@/lib/use-mobile'
 import { formatNumber, pluralise } from '@/lib/format'
 import { toastProblem } from '@/lib/problems'
 import { sparing } from '@/shell/preload'
-import { LIST_COLUMNS, TABLE_COLUMNS } from './columns'
+import { listColumns, tableColumns, type Tick } from './columns'
 import { FilterBar } from './filter-bar'
 import { LeadPanel } from './lead-panel'
+import { ReviewBar } from './review-bar'
 import { loadCalendar, loadMapSplit } from './lazy-parts'
 import {
   activeFilterCount,
@@ -217,6 +220,47 @@ export default function ResultsPage() {
   }
 
   const page: LeadPage | undefined = leads.data
+  // The review page: one run's leads, with tick boxes (PLAN-V9 C3). The ticks stay while you page
+  // through the run, and go when you leave it.
+  const reviewRun = state.filters.run_id
+  const [ticked, setTicked] = useState<{ run: string | null; ids: ReadonlySet<string> }>({
+    run: null,
+    ids: new Set(),
+  })
+  const selected = useMemo(
+    () => (ticked.run === reviewRun ? ticked.ids : new Set<string>()),
+    [ticked, reviewRun],
+  )
+  const pageIds = useMemo(() => (page?.items ?? []).map((row) => row.id), [page])
+  const tick: Tick | undefined = useMemo(
+    () =>
+      reviewRun
+        ? {
+            selected,
+            pageIds,
+            onToggle: (id, on) => {
+              const next = new Set(selected)
+              if (on) next.add(id)
+              else next.delete(id)
+              setTicked({ run: reviewRun, ids: next })
+            },
+            onTogglePage: (on) => {
+              const next = new Set(selected)
+              for (const id of pageIds) {
+                if (on) next.add(id)
+                else next.delete(id)
+              }
+              setTicked({ run: reviewRun, ids: next })
+            },
+          }
+        : undefined,
+    [reviewRun, selected, pageIds],
+  )
+  const untick = (ids: string[]): void => {
+    const next = new Set(selected)
+    for (const id of ids) next.delete(id)
+    setTicked({ run: reviewRun, ids: next })
+  }
   const mapPart = (
     <div className="flex flex-col gap-2">
       {map.error ? (
@@ -234,7 +278,7 @@ export default function ResultsPage() {
       <MapNote map={map.data} />
     </div>
   )
-  const table = (columns: typeof TABLE_COLUMNS, label: string, dense: boolean) => (
+  const table = (columns: ReturnType<typeof tableColumns>, label: string, dense: boolean) => (
     <DataTable
       label={label}
       columns={columns}
@@ -300,6 +344,7 @@ export default function ResultsPage() {
           </>
         }
       />
+      {reviewRun && tick ? <ReviewBar runId={reviewRun} tick={tick} onDone={untick} /> : null}
       <FilterBar
         filters={state.filters}
         facets={facets.data}
@@ -329,15 +374,15 @@ export default function ResultsPage() {
           // A phone has no room for two columns: the map comes first, then the list.
           <div className="flex flex-col gap-4">
             {mapPart}
-            {table(LIST_COLUMNS, 'Leads beside the map', true)}
+            {table(listColumns(tick), 'Leads beside the map', true)}
           </div>
         ) : (
           <Suspense fallback={<MapSplitPending />}>
-            <MapSplit list={table(LIST_COLUMNS, 'Leads beside the map', true)} map={mapPart} />
+            <MapSplit list={table(listColumns(tick), 'Leads beside the map', true)} map={mapPart} />
           </Suspense>
         )
       ) : (
-        table(TABLE_COLUMNS, 'Leads', compact)
+        table(tableColumns(tick), 'Leads', compact)
       )}
       <LeadPanel
         leadId={state.lead}

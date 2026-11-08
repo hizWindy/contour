@@ -1,6 +1,7 @@
 /**
  * The Research tab: what the research cost and searched, its problems, what the source check left
- * out, the run that found it, older researches of the same company, and what each page said.
+ * out, the run that found it, older researches of the same company, what each page said, and the
+ * rivals to check (PLAN-V9 B5).
  */
 import { Link } from 'react-router'
 import type { LeadDetail } from '@/api/types'
@@ -90,10 +91,42 @@ function Research({ lead }: { lead: LeadDetail }) {
   )
 }
 
+const RIVAL_STATUS: Record<LeadDetail['rivals'][number]['status'], string> = {
+  pending: 'The next run for the city researches it',
+  used: 'Researched',
+  skipped: 'Left out by a rule, like an open deal',
+}
+
+function Rivals({ lead }: { lead: LeadDetail }) {
+  if (lead.rivals.length === 0) return null
+  return (
+    <Section title="Rivals to check">
+      <p className="text-caption text-muted-foreground">
+        Competitors in {lead.rivals[0]?.city}, found because this is a good lead in a booming
+        industry. The next run for the city looks at them.
+      </p>
+      <ul className="flex flex-col gap-2">
+        {lead.rivals.map((rival) => (
+          <li key={`${rival.name}-${rival.city}`} className="flex flex-col gap-1">
+            <span className="font-semibold">{rival.name}</span>
+            <span>{rival.why}</span>
+            <span className="flex flex-wrap items-center gap-2 text-caption text-muted-foreground">
+              <span>{RIVAL_STATUS[rival.status]}</span>
+              {rival.website ? <span>{rival.website}</span> : null}
+              <SourceLink href={rival.url} />
+            </span>
+          </li>
+        ))}
+      </ul>
+    </Section>
+  )
+}
+
 export function ResearchTab({ lead }: { lead: LeadDetail }) {
   return (
     <>
       <Research lead={lead} />
+      <Rivals lead={lead} />
       <Notes lead={lead} />
     </>
   )

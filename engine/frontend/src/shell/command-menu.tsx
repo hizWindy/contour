@@ -14,7 +14,8 @@ import {
 } from '@/components/ui/command'
 import { Kbd, KbdGroup } from '@/components/ui/kbd'
 import { useSidebar } from '@/components/ui/sidebar'
-import { MODULES, PLANNED } from '@/modules'
+import { PLANNED } from '@/modules'
+import { useVisibleModules } from './visible-modules'
 import { ADMIN_TABS, HOME, type NavItem } from './nav'
 import { applyTheme, type ThemeChoice } from './theme'
 
@@ -58,6 +59,7 @@ function PageItem({ item, onSelect }: { item: NavItem; onSelect: (to: string) =>
  */
 export function CommandMenu(): ReactNode {
   const [open, setOpen] = useState(false)
+  const modules = useVisibleModules()
   const navigate = useNavigate()
   const { toggleSidebar } = useSidebar()
 
@@ -118,7 +120,7 @@ export function CommandMenu(): ReactNode {
             <CommandGroup heading="Pages">
               <PageItem item={HOME} onSelect={go} />
             </CommandGroup>
-            {MODULES.map((app) => (
+            {modules.map((app) => (
               <CommandGroup key={app.id} heading={app.name}>
                 {app.pages.map((item) => (
                   <PageItem key={item.to} item={item} onSelect={go} />

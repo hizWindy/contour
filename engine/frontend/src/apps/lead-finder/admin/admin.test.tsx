@@ -356,6 +356,8 @@ const RULES_V2 = {
     size: {
       staff_min: 100,
       staff_hint_min: 75,
+      staff_floor: 50,
+      growth_signs: ['fast_growth', 'new_to_australia'],
       staff_max: 600,
       staff_counted_in: 'city',
       linkedin_staff_multiplier: 2,
@@ -389,6 +391,14 @@ const RULES_V2 = {
       window_years: 3,
       best_window_years: [1, 3],
     },
+    rivals: {
+      enabled: true,
+      tiers: ['tier_1', 'tier_2'],
+      per_lead: 5,
+      per_run: 5,
+      max_searches: 2,
+      sign: 'rival_growth',
+    },
     never_suggest: {
       already_sent: true,
       open_deal: true,
@@ -411,6 +421,8 @@ describe('Admin, Rules', () => {
           size: {
             staff_min: 100,
             staff_hint_min: 75,
+            staff_floor: 50,
+            growth_signs: ['fast_growth', 'new_to_australia'],
             staff_max: 600,
             staff_counted_in: 'city',
             linkedin_staff_multiplier: 2,
@@ -444,6 +456,14 @@ describe('Admin, Rules', () => {
             window_years: 3,
             best_window_years: [1, 3],
           },
+          rivals: {
+            enabled: true,
+            tiers: ['tier_1', 'tier_2'],
+            per_lead: 5,
+            per_run: 5,
+            max_searches: 2,
+            sign: 'rival_growth',
+          },
           never_suggest: {
             already_sent: true,
             open_deal: true,
@@ -468,9 +488,9 @@ describe('Admin, Rules', () => {
       '/api/v1/lead-finder/rules': RULES_V2,
     })
     renderWithProviders(<AdminRulesTab />)
-    expect(
-      await screen.findByText(/staff is only a hint: 75\s*\+ office staff/),
-    ).toBeInTheDocument()
+    expect(await screen.findByText(/75\s*\+ fits; 50 to 74 is a Watch/)).toBeInTheDocument()
+    expect(screen.getByText(/under 50 is a Drop, too small/)).toBeInTheDocument()
+    expect(screen.getByText(/up to 5 of its rivals in the same city/)).toBeInTheDocument()
     expect(screen.getByText('Business or property trigger: 25 points')).toBeInTheDocument()
     expect(
       screen.getByText(/75 to 100 research first, 50 to 74 investigate, under 50 nurture/),

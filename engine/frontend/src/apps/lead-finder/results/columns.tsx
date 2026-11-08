@@ -7,46 +7,42 @@
  * owner, and when it was researched. Everything else is one click away, on the lead card.
  *
  * The company name is a button: a click or Enter opens the lead card, through the row's own click.
+ *
+ * On the review page (Results for one run, PLAN-V9 C3) the Company column also has a tick box for
+ * each lead (`tableColumns(tick)`). The box for the whole page is in the review bar, because the
+ * Company header is a sort button.
  */
 import { createColumnHelper } from '@tanstack/react-table'
 import type { LeadRow } from '@/api/types'
 import { HubSpotBadge } from '@/components/hubspot-badge'
 import { ResultBadge } from '@/components/result-badge'
-import { SourceMark } from '@/components/source-mark'
-import { Badge } from '@/components/ui/badge'
 import { formatDate, formatScore, UNKNOWN } from '@/lib/format'
+import { CompanyName, RowTick, type Tick } from './company-cell'
+
+export type { Tick }
 
 const help = createColumnHelper<LeadRow>()
 
-const company = help.accessor('company', {
-  header: 'Company',
-  // The name stays in view while the other columns scroll sideways.
-  meta: { sticky: true, className: 'max-w-64 sm:min-w-44' },
-  cell: (info) => {
-    const { score, score_checked: checked, city, is_test: isTest, origin } = info.row.original
-    const points = formatScore(score, checked)
-    return (
-      <span className="flex min-w-0 flex-col">
-        <span className="flex items-center gap-2">
-          <button
-            type="button"
-            className="min-w-0 truncate rounded-sm text-left font-semibold underline-offset-4 hover:underline"
-          >
-            {info.getValue()}
-          </button>
-          {isTest ? <Badge variant="outline">Test set</Badge> : null}
+function companyColumn(tick?: Tick) {
+  return help.accessor('company', {
+    header: 'Company',
+    // The name stays in view while the other columns scroll sideways.
+    meta: { sticky: true, className: 'max-w-64 sm:min-w-44' },
+    cell: (info) => {
+      const { id, score, score_checked: checked, city, is_test: isTest, origin } = info.row.original
+      const points = formatScore(score, checked)
+      const name = info.getValue()
+      return (
+        <span className="flex min-w-0 items-start gap-3">
+          {tick ? <RowTick tick={tick} id={id} name={name} /> : null}
+          <CompanyName name={name} points={points} city={city} isTest={isTest} origin={origin} />
         </span>
-        <span className="flex min-w-0 items-center gap-x-2">
-          <SourceMark origin={origin} />
-          {/* On a phone the score and city columns are hidden, so they sit under the name. */}
-          <span className="truncate text-caption text-muted-foreground sm:hidden">
-            {city ? `Score ${points}, ${city}` : `Score ${points}`}
-          </span>
-        </span>
-      </span>
-    )
-  },
-})
+      )
+    },
+  })
+}
+
+const company = companyColumn()
 
 const result = help.accessor('result', {
   header: 'Result',
@@ -119,3 +115,15 @@ export const TABLE_COLUMNS = [company, result, score, sign, city, hubspot, resea
 
 /** The list beside the map: enough to tell the leads apart. */
 export const LIST_COLUMNS = [company, result, score, city]
+
+/** The full table, with tick boxes on the review page. */
+export function tableColumns(tick?: Tick) {
+  return tick
+    ? [companyColumn(tick), result, score, sign, city, hubspot, researched]
+    : TABLE_COLUMNS
+}
+
+/** The list beside the map, with tick boxes on the review page. */
+export function listColumns(tick?: Tick) {
+  return tick ? [companyColumn(tick), result, score, city] : LIST_COLUMNS
+}

@@ -11,6 +11,7 @@ const RUN = {
   mode: 'discovery',
   created_at: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
   cost_usd: '5.48',
+  counts: { by_result: { pass: 1, director_review: 1, watch: 3 } },
 }
 
 /** A backend with `runs` and the result counts of the leads, or one that fails. */
@@ -46,6 +47,7 @@ describe('the Lead Finder card on Home', () => {
     renderWithProviders(<HomePage />)
 
     const lastRun = await within(card()).findByRole('link', { name: '2 hours ago' })
+    expect(within(card()).getByText(/2 good leads/)).toBeInTheDocument()
     expect(lastRun).toHaveAttribute('href', `/runs/${RUN.id}`)
     expect(within(card()).getByText('US$5.48')).toBeInTheDocument()
 

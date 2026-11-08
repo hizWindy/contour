@@ -13,7 +13,8 @@ import { PageHeader } from '@/components/page-header'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
-import { MODULES, PLANNED } from '@/modules'
+import { PLANNED } from '@/modules'
+import { useVisibleModules } from './visible-modules'
 import type { AppModule, NavItem } from './nav'
 import { TONE_CLASSES } from './tone'
 
@@ -80,6 +81,7 @@ function ProjectCard({ app }: { app: AppModule }) {
 }
 
 export default function HomePage() {
+  const modules = useVisibleModules()
   return (
     <>
       <PageHeader
@@ -87,7 +89,7 @@ export default function HomePage() {
         description="Contour's AI projects in one place. Each card opens a project's pages."
       />
       <div className="grid gap-6 lg:grid-cols-2">
-        {MODULES.map((app) => (
+        {modules.map((app) => (
           <ProjectCard key={app.id} app={app} />
         ))}
       </div>

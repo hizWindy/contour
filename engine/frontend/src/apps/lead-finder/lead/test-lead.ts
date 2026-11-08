@@ -180,6 +180,7 @@ export function makeLead(changes: Partial<LeadDetail> = {}): LeadDetail {
     created_at: '2026-10-26T04:00:00Z',
     status: 'new',
     reject_reason: null,
+    reject_note: null,
     note: null,
     useful: null,
     run_id: null,
@@ -187,6 +188,7 @@ export function makeLead(changes: Partial<LeadDetail> = {}): LeadDetail {
     is_test: false,
     updated_at: '2026-10-26T04:00:00Z',
     previous: [],
+    rivals: [],
     ...changes,
   }
 }

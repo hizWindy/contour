@@ -1,6 +1,6 @@
 /**
- * Where the Lead Finder stands, on its Home card: the last run (when, how it ended, what it cost)
- * and the leads by result. Each part links to the page with the detail, and a result opens
+ * Where the Lead Finder stands, on its Home card: the last run (when, how it ended, what it cost,
+ * its good leads and what each cost) and the leads by result. Each part links to the page with the detail, and a result opens
  * Results with only that result. If the backend can't be reached, it says so in one quiet line.
  */
 import { Link } from 'react-router'
@@ -11,6 +11,7 @@ import { StatusBadge } from '@/components/status-badge'
 import { formatNumber, formatRelative, pluralise } from '@/lib/format'
 import { RESULT_ORDER, resultLabel } from '@/lib/labels'
 import { formatMoney } from '@/lib/money'
+import { GoodLeadsLine } from './good-leads'
 import { LAST_RUN } from './prefetch'
 
 function Quiet({ children }: { children: string }) {
@@ -33,6 +34,11 @@ function LastRun() {
       </Link>
       <StatusBadge status={last.status} />
       <span className="text-muted-foreground tabular-nums">{formatMoney(last.cost_usd)}</span>
+      <GoodLeadsLine
+        counts={last.counts}
+        cost={last.cost_usd}
+        className="text-muted-foreground tabular-nums"
+      />
     </span>
   )
 }

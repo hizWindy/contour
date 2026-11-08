@@ -388,6 +388,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/lead-finder/leads/reject-reasons": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How many leads were rejected for each reason
+         * @description Counts the rejected leads by reason, over the last `days` days (90 by default), by when the lead was last changed. Every reason is listed, most used first. Test leads are left out. The counts show which rule to tune (PLAN-V9 D1).
+         */
+        get: operations["reject_reasons"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/lead-finder/leads/{lead_id}": {
         parameters: {
             query?: never;
@@ -404,7 +424,7 @@ export interface paths {
         head?: never;
         /**
          * Change a lead's status, note or feedback
-         * @description A merge patch: a field you leave out stays as it is, and `null` clears it. `status` is new, watching or rejected, and rejecting needs `reject_reason`. Leaving rejected clears the reason. Setting the status to `new` removes the lead's outcome from memory; any other change replaces it. Returns the updated lead, so the Undo button can send back the exact values it had.
+         * @description A merge patch: a field you leave out stays as it is, and `null` clears it. `status` is new, watching or rejected, and rejecting needs `reject_reason` (and `reject_note` for the reason other). Leaving rejected clears both. Setting the status to `new` removes the lead's outcome from memory; any other change replaces it. Returns the updated lead, so the Undo button can send back the exact values it had.
          */
         patch: operations["patch_lead"];
         trace?: never;
@@ -523,6 +543,66 @@ export interface paths {
          * @description Checks memory first, then searches the web from three angles (property, people, money), fills the answer form, checks every source, matches HubSpot and applies the rules. Costs money: about US$1 per company, capped by the company cap. It also counts toward the daily limit. This is for Swagger and the command line: the website uses runs. Use public companies until Levi approves using HubSpot names.
          */
         post: operations["research"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/lead-finder/review/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve the ticked leads and send them to HubSpot
+         * @description Each lead is previewed and written with the HubSpot writer, once only (a lead already sent is reported as done). A lead that fails gets its own line; the others still go. While HUBSPOT_WRITE_ENABLED is false it answers 409 hubspot_write_off and writes nothing.
+         */
+        post: operations["review_send"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/lead-finder/review/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Watch or reject the ticked leads
+         * @description Each lead is changed as the lead card changes it. Rejecting needs reject_reason, and the reason other needs reject_note. A lead that can't change (it was sent, or it is gone) gets its own line with the reason; the others still change.
+         */
+        post: operations["review_status"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/lead-finder/review/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The review bar for one run
+         * @description The run's city, its good leads (Pass and Director review), Watch and Drop, the cost and the cost per good lead, and whether HubSpot writing is on. Free.
+         */
+        get: operations["get_review"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -684,6 +764,44 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/people": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Everyone with an account */
+        get: operations["list_people"];
+        put?: never;
+        /**
+         * Add a person
+         * @description A new account with a starting password under today's rules (the same rules as create-admin). `apps` is the projects it may use, like ["lead_finder"]. Admins only.
+         */
+        post: operations["add_person"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/people/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change a person's projects, role or whether they can sign in */
+        patch: operations["change_person"];
         trace?: never;
     };
     "/runs": {
@@ -1066,6 +1184,8 @@ export interface components {
         Cities: {
             /** Director Review */
             director_review: string[];
+            /** No City Director Signs */
+            no_city_director_signs?: string[];
             /**
              * Other Cities
              * @enum {string}
@@ -1397,6 +1517,7 @@ export interface components {
             office_age: components["schemas"]["OfficeAge"];
             /** Results */
             results: ("pass" | "director_review" | "watch" | "drop")[];
+            rivals: components["schemas"]["Rivals"];
             score: components["schemas"]["Score"];
             size: components["schemas"]["Size"];
             source_domains: components["schemas"]["SourceDomains"];
@@ -2024,14 +2145,24 @@ export interface components {
             problems: string[];
             /** Prompt Version */
             prompt_version: string;
+            /**
+             * Reject Note
+             * @description What 'other' means, or more detail
+             */
+            reject_note: string | null;
             /** Reject Reason */
-            reject_reason: string | null;
+            reject_reason: ("too_small" | "wrong_industry" | "already_talking" | "bad_timing" | "not_a_real_sign" | "other") | null;
             research: components["schemas"]["ResearchCost"];
             /**
              * Result
              * @enum {string}
              */
             result: "pass" | "director_review" | "watch" | "drop";
+            /**
+             * Rivals
+             * @description Rivals to check: competitors found because this is a good lead in a booming industry (PLAN-V9 B5). Empty for most leads.
+             */
+            rivals: components["schemas"]["RivalOut"][];
             /** Rules Version */
             rules_version: string;
             /** Run Id */
@@ -2223,10 +2354,15 @@ export interface components {
              */
             note?: string | null;
             /**
-             * Reject Reason
-             * @description Required when the status becomes rejected. Cleared when it leaves rejected.
+             * Reject Note
+             * @description Required when the reason is other. Cleared when it leaves rejected.
              */
-            reject_reason?: string | null;
+            reject_note?: string | null;
+            /**
+             * Reject Reason
+             * @description Why: too_small, wrong_industry, already_talking, bad_timing, not_a_real_sign or other. Required when the status becomes rejected. Cleared when it leaves rejected.
+             */
+            reject_reason?: ("too_small" | "wrong_industry" | "already_talking" | "bad_timing" | "not_a_real_sign" | "other") | null;
             /**
              * Status
              * @description new, watching or rejected. It can't be cleared, only changed.
@@ -2380,7 +2516,7 @@ export interface components {
              * Event
              * @enum {string}
              */
-            event: "sign_in" | "sign_in_failed" | "account_locked" | "sign_out" | "sign_out_everywhere" | "password_changed" | "account_created";
+            event: "sign_in" | "sign_in_failed" | "account_locked" | "sign_out" | "sign_out_everywhere" | "password_changed" | "account_created" | "account_changed";
             /** Id */
             id: number;
             /** Ip */
@@ -2714,6 +2850,87 @@ export interface components {
             /** Points */
             points: number;
         };
+        /** PersonIn */
+        PersonIn: {
+            /**
+             * Apps
+             * @example [
+             *       "lead_finder"
+             *     ]
+             */
+            apps?: string[];
+            /**
+             * Email
+             * @example marcus@contourinteriors.com.au
+             */
+            email: string;
+            /**
+             * Name
+             * @example Marcus Lee
+             */
+            name: string;
+            /**
+             * Password
+             * @description The starting password, under today's rules. Never shown again.
+             */
+            password: string;
+            /**
+             * Role
+             * @default staff
+             * @enum {string}
+             */
+            role: "admin" | "staff" | "viewer";
+            /** Username */
+            username?: string | null;
+        };
+        /** PersonOut */
+        PersonOut: {
+            /**
+             * Active
+             * @description false: this account can't sign in
+             */
+            active: boolean;
+            /**
+             * Apps
+             * @description The projects this person may use. An Admin may use all
+             */
+            apps: string[];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Email */
+            email: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Last Signed In At */
+            last_signed_in_at: string | null;
+            /** Name */
+            name: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "admin" | "staff" | "viewer";
+            /** Username */
+            username: string | null;
+        };
+        /**
+         * PersonPatch
+         * @description A merge patch: a field left out stays as it is.
+         */
+        PersonPatch: {
+            /** Active */
+            active?: boolean | null;
+            /** Apps */
+            apps?: string[] | null;
+            /** Role */
+            role?: ("admin" | "staff" | "viewer") | null;
+        };
         /** PlanReadyData */
         PlanReadyData: {
             /**
@@ -2927,6 +3144,33 @@ export interface components {
             /** Within Days */
             within_days: number;
         };
+        /** RejectReasonCount */
+        RejectReasonCount: {
+            /** Count */
+            count: number;
+            /** Label */
+            label: string;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "too_small" | "wrong_industry" | "already_talking" | "bad_timing" | "not_a_real_sign" | "other";
+        };
+        /**
+         * RejectReasonCounts
+         * @description How many leads were rejected for each reason lately. The counts show which rule to tune.
+         */
+        RejectReasonCounts: {
+            /** Days */
+            days: number;
+            /**
+             * Reasons
+             * @description Every reason, most used first
+             */
+            reasons: components["schemas"]["RejectReasonCount"][];
+            /** Total */
+            total: number;
+        };
         /** ResearchCost */
         ResearchCost: {
             /** Angles From Memory */
@@ -2967,6 +3211,156 @@ export interface components {
              * @example cultureamp.com
              */
             website?: string | null;
+        };
+        /** ReviewItem */
+        ReviewItem: {
+            /**
+             * Company
+             * @description Empty when there is no such lead
+             */
+            company: string | null;
+            /** Hubspot Url */
+            hubspot_url?: string | null;
+            /**
+             * Lead Id
+             * Format: uuid
+             */
+            lead_id: string;
+            /** Ok */
+            ok: boolean;
+            /**
+             * Problem
+             * @description Why this lead failed, in plain words
+             */
+            problem: string | null;
+        };
+        /**
+         * ReviewOut
+         * @description What the review bar shows for one run.
+         */
+        ReviewOut: {
+            /** Cities */
+            cities: string[];
+            /**
+             * Cost Per Good Lead Usd
+             * @description The run's cost shared over its good leads. Empty when there are none.
+             */
+            cost_per_good_lead_usd: string | null;
+            /** Cost Usd */
+            cost_usd: string;
+            /** Drop */
+            drop: number;
+            /**
+             * Good Leads
+             * @description Pass and Director review
+             */
+            good_leads: number;
+            /** Hubspot Write Enabled */
+            hubspot_write_enabled: boolean;
+            /**
+             * Hubspot Write Off
+             * @description Why the send button is greyed out, or empty when sending works
+             */
+            hubspot_write_off: string | null;
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /**
+             * Scheduled
+             * @description A schedule started the run
+             */
+            scheduled: boolean;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "done" | "failed" | "cancelled" | "interrupted";
+            /** Watch */
+            watch: number;
+        };
+        /** ReviewResult */
+        ReviewResult: {
+            /** Done */
+            done: number;
+            /** Failed */
+            failed: number;
+            /**
+             * Items
+             * @description One line for each ticked lead, in the order sent
+             */
+            items: components["schemas"]["ReviewItem"][];
+        };
+        /** ReviewSendBody */
+        ReviewSendBody: {
+            /** Lead Ids */
+            lead_ids: string[];
+        };
+        /** ReviewStatusBody */
+        ReviewStatusBody: {
+            /** Lead Ids */
+            lead_ids: string[];
+            /** Reject Note */
+            reject_note?: string | null;
+            /**
+             * Reject Reason
+             * @description Required with rejected: too_small, wrong_industry, ... or other
+             */
+            reject_reason?: ("too_small" | "wrong_industry" | "already_talking" | "bad_timing" | "not_a_real_sign" | "other") | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "watching" | "rejected";
+        };
+        /**
+         * RivalOut
+         * @description A competitor of this lead, to check (PLAN-V9 B5).
+         */
+        RivalOut: {
+            /** City */
+            city: string;
+            /**
+             * Found At
+             * Format: date-time
+             */
+            found_at: string;
+            /** Name */
+            name: string;
+            /**
+             * Status
+             * @description pending (the next run for the city adds it), used (a run researched it) or skipped (a rule left it out, like an open deal)
+             * @enum {string}
+             */
+            status: "pending" | "used" | "skipped";
+            /**
+             * Url
+             * @description The page that shows it is a rival
+             */
+            url: string;
+            /** Website */
+            website: string | null;
+            /** Why */
+            why: string;
+        };
+        /**
+         * Rivals
+         * @description Rivals of a booming company (PLAN-V9 B5). The code is apps/lead_finder/rivals.py.
+         */
+        Rivals: {
+            /** Enabled */
+            enabled: boolean;
+            /** Max Searches */
+            max_searches: number;
+            /** Per Lead */
+            per_lead: number;
+            /** Per Run */
+            per_run: number;
+            /** Sign */
+            sign: string;
+            /** Tiers */
+            tiers: ("tier_1" | "tier_2")[];
         };
         /** RuleCheck */
         RuleCheck: {
@@ -4094,6 +4488,8 @@ export interface components {
             ];
             /** Grow Into Range Months */
             grow_into_range_months: number;
+            /** Growth Signs */
+            growth_signs?: string[];
             /** Headcount Tool Multiplier */
             headcount_tool_multiplier: number;
             /**
@@ -4114,6 +4510,8 @@ export interface components {
              * @enum {string}
              */
             staff_counted_in: "city" | "company";
+            /** Staff Floor */
+            staff_floor: number;
             /** Staff Hint Min */
             staff_hint_min: number;
             /** Staff Max */
@@ -4547,6 +4945,11 @@ export interface components {
         };
         /** UserOut */
         UserOut: {
+            /**
+             * Apps
+             * @description The projects this person may use, like lead_finder. An Admin may use all.
+             */
+            apps: string[];
             /** Email */
             email: string;
             /**
@@ -4561,7 +4964,7 @@ export interface components {
             name: string;
             /**
              * Role
-             * @description admin today. staff and viewer are for later
+             * @description admin, staff or viewer
              * @enum {string}
              */
             role: "admin" | "staff" | "viewer";
@@ -7292,6 +7695,128 @@ export interface operations {
             };
         };
     };
+    reject_reasons: {
+        parameters: {
+            query?: {
+                /** @description How many days back */
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RejectReasonCounts"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     get_lead: {
         parameters: {
             query?: never;
@@ -8270,6 +8795,373 @@ export interface operations {
             };
         };
     };
+    review_send: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewSendBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewResult"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    review_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewStatusBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewResult"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_review: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewOut"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     get_rules: {
         parameters: {
             query?: never;
@@ -9139,6 +10031,373 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MemoryHitOut"][];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_people: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonOut"][];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    add_person: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonOut"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    change_person: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonOut"];
                 };
             };
             /** @description The request can't be understood */

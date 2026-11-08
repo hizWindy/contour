@@ -651,7 +651,10 @@ describe('the lead page', () => {
     await user.click(await screen.findByRole('button', { name: 'Undo' }))
 
     await waitFor(() => {
-      expect(seen.patches).toEqual([{ status: 'watching' }, { status: 'new', reject_reason: null }])
+      expect(seen.patches).toEqual([
+        { status: 'watching' },
+        { status: 'new', reject_reason: null, reject_note: null },
+      ])
     })
   })
 
@@ -662,13 +665,21 @@ describe('the lead page', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Reject Acme Software' })
 
     await user.click(within(dialog).getByRole('button', { name: 'Reject' }))
-    expect(within(dialog).getByText('Say why it is rejected.')).toBeInTheDocument()
+    expect(within(dialog).getByText('Pick a reason.')).toBeInTheDocument()
     expect(seen.patches).toEqual([])
 
-    await user.type(within(dialog).getByLabelText('Reason'), 'Too small for us')
+    // "Other" needs a note (PLAN-V9 D1).
+    await user.click(within(dialog).getByRole('radio', { name: 'Other' }))
+    await user.click(within(dialog).getByRole('button', { name: 'Reject' }))
+    expect(within(dialog).getByText('Say what the other reason is.')).toBeInTheDocument()
+
+    await user.click(within(dialog).getByRole('radio', { name: 'Too small' }))
+    await user.type(within(dialog).getByLabelText('A note (optional)'), 'About 20 staff')
     await user.click(within(dialog).getByRole('button', { name: 'Reject' }))
     await waitFor(() => {
-      expect(seen.patches).toEqual([{ status: 'rejected', reject_reason: 'Too small for us' }])
+      expect(seen.patches).toEqual([
+        { status: 'rejected', reject_reason: 'too_small', reject_note: 'About 20 staff' },
+      ])
     })
   })
 

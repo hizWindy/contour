@@ -14,6 +14,7 @@ import {
   Settings2,
   SlidersHorizontal,
   Upload,
+  Users,
   type LucideIcon,
 } from 'lucide-react'
 import type { QueryClient } from '@tanstack/react-query'
@@ -43,6 +44,11 @@ export interface NavItem {
 export interface AppModule {
   /** A short name for code and tests, like "lead-finder". */
   id: string
+  /**
+   * The backend's name for the project, like "lead_finder". A person whose account doesn't list it
+   * (and who isn't an Admin) doesn't see the project in the menu, on Home or in Ctrl+K (PLAN-V9 E1).
+   */
+  app?: string
   /** The name in the sidebar and on Home. */
   name: string
   icon: LucideIcon
@@ -127,6 +133,14 @@ export const ADMIN_TABS: readonly NavItem[] = [
     keywords: ['import', 'watchlist'],
     purpose:
       'The HubSpot connection for every project: its permissions, the syncs, the writes and the watchlist. Nothing is written without a preview and a confirm.',
+  },
+  {
+    to: '/admin/people',
+    label: 'People',
+    icon: Users,
+    keywords: ['accounts', 'access', 'users', 'staff'],
+    purpose:
+      'Who has an account, and which projects each person may use. Tick Lead Finder to open it to someone. Admins may use everything.',
   },
   {
     to: '/admin/settings',

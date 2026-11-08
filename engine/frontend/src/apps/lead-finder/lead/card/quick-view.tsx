@@ -20,6 +20,7 @@ import { formatM2, formatScore, formatStaff } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { Actions } from './actions'
 import { BAND_WORDS, bestTrigger, firstPerson, sourceWord } from './words'
+import { rejectReasonLabel } from '../../reject-reasons-data'
 
 /** The points earned out of the points the tool could check, as words and as a bar. */
 function ScoreBar({ lead }: { lead: LeadDetail }) {
@@ -123,7 +124,10 @@ export function QuickView({ lead }: { lead: LeadDetail }) {
         </p>
       ) : null}
       {lead.status === 'rejected' && lead.reject_reason ? (
-        <p className="text-ui text-muted-foreground">Rejected: {lead.reject_reason}</p>
+        <p className="text-ui text-muted-foreground">
+          Rejected: {rejectReasonLabel(lead.reject_reason)}
+          {lead.reject_note ? `. ${lead.reject_note}` : ''}
+        </p>
       ) : null}
 
       <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">

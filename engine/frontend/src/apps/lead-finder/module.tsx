@@ -24,6 +24,7 @@ import {
 
 export const LEAD_FINDER: AppModule = {
   id: 'lead-finder',
+  app: 'lead_finder',
   name: 'Lead Finder',
   icon: Target,
   tone: 'lead',

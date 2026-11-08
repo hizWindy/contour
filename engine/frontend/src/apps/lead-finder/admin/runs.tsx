@@ -1,6 +1,9 @@
-/** Admin, Runs and cost: what Claude cost each day (Melbourne days), and every run. */
+/**
+ * Admin, Runs and cost: what Claude cost each day (Melbourne days), why leads were rejected over the
+ * last 90 days (PLAN-V9 D1: the counts show which rule to tune), and every run.
+ */
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts'
-import { useRunSummary } from '@/api/hooks'
+import { useRejectReasons, useRunSummary } from '@/api/hooks'
 import { ErrorState } from '@/components/error-state'
 import { Money } from '@/components/money'
 import { PendingText } from '@/components/skeletons'
@@ -14,6 +17,51 @@ import {
 import { formatNumber } from '@/lib/format'
 import { chartNumber } from '@/lib/money'
 import { RunsTable } from '../run/runs-table'
+
+function RejectReasonsCard() {
+  const reasons = useRejectReasons(90)
+  const data = reasons.data
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-section font-semibold">Why leads were rejected</CardTitle>
+        <CardDescription>
+          {data ? (
+            data.total === 0 ? (
+              'No lead was rejected in the last 90 days.'
+            ) : (
+              <>
+                {formatNumber(data.total)} rejected in the last {data.days} days. The reason picked
+                most shows which rule to change first.
+              </>
+            )
+          ) : (
+            <PendingText />
+          )}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {reasons.error ? (
+          <ErrorState error={reasons.error} context="The reasons couldn't be loaded." />
+        ) : data && data.total > 0 ? (
+          <dl
+            aria-label="Rejected leads by reason"
+            className="grid max-w-md grid-cols-[minmax(0,1fr)_auto] gap-x-6 gap-y-1 text-ui"
+          >
+            {data.reasons.map((item) => (
+              <div key={item.reason} className="contents">
+                <dt className={item.count === 0 ? 'text-muted-foreground' : undefined}>
+                  {item.label}
+                </dt>
+                <dd className="text-right tabular-nums">{formatNumber(item.count)}</dd>
+              </div>
+            ))}
+          </dl>
+        ) : null}
+      </CardContent>
+    </Card>
+  )
+}
 
 const CHART: ChartConfig = { cost: { label: 'Cost (US$)', color: 'var(--chart-1)' } }
 
@@ -59,6 +107,7 @@ export default function AdminRunsTab() {
           )}
         </CardContent>
       </Card>
+      <RejectReasonsCard />
       <RunsTable />
     </div>
   )

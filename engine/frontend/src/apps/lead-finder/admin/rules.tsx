@@ -66,13 +66,21 @@ export default function AdminRulesTab() {
             decides.
           </p>
           <p>
-            When the office size isn&apos;t known, staff is only a hint:{' '}
-            {criteria.size.staff_hint_min}+ office staff. Below it a company gets a flag, never a
-            Drop. Over {formatNumber(criteria.size.staff_max)} staff goes to a Director.
+            When the office size isn&apos;t known, the staff in the city decide:{' '}
+            {criteria.size.staff_hint_min}+ fits; {criteria.size.staff_floor} to{' '}
+            {criteria.size.staff_hint_min - 1} is a Watch with a &quot;check office size&quot; flag;
+            under {criteria.size.staff_floor} is a Drop, too small. Over{' '}
+            {formatNumber(criteria.size.staff_max)} staff goes to a Director.
           </p>
           <p>
             A small company that will need an office in range within{' '}
-            {criteria.size.grow_into_range_months} months still fits.
+            {criteria.size.grow_into_range_months} months still fits, whatever its staff today. So
+            does an overseas company that announces an office here big enough.
+          </p>
+          <p>
+            A company found with a growth sign is always researched. Any other company that HubSpot
+            and Signal Hire both say has under {criteria.size.staff_floor} staff is dropped before
+            any paid search.
           </p>
           <p>LinkedIn staff counts are multiplied by {criteria.size.linkedin_staff_multiplier}.</p>
         </Block>
@@ -145,6 +153,23 @@ export default function AdminRulesTab() {
           <p className="text-muted-foreground">
             An event counts for {criteria.triggers.recent_months} months.
           </p>
+        </Block>
+        <Block title="Rivals of a booming company">
+          {criteria.rivals.enabled ? (
+            <>
+              <p>
+                When a good lead is in a tier 1 or tier 2 industry, one cheap web search names up to{' '}
+                {criteria.rivals.per_lead} of its rivals in the same city. The lead card lists them
+                under Rivals to check.
+              </p>
+              <p>
+                The next run for that city adds up to {criteria.rivals.per_run} of them, with the
+                weak sign &quot;a rival of a booming company&quot;, so real news still ranks first.
+              </p>
+            </>
+          ) : (
+            <p className="text-muted-foreground">Switched off in the rules.</p>
+          )}
         </Block>
         <Block title="Never suggest">
           <ul className="list-disc pl-5">

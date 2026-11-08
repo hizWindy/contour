@@ -1,6 +1,8 @@
 /**
  * The table of runs, newest first: when it started (with "Scheduled" under it when a schedule
- * started it), what kind it was, its status, what it found and what it cost. A row opens the run. The Runs page and the Admin "Runs and cost" tab both show it.
+ * started it), what kind it was, its status, what it found, its good leads and what each cost
+ * (PLAN-V9 D2), and what it cost. A row opens the run. The Runs page and the Admin "Runs and cost"
+ * tab both show it.
  */
 import { createColumnHelper } from '@tanstack/react-table'
 import { ListChecks } from 'lucide-react'
@@ -16,6 +18,7 @@ import { ScheduledMark } from '@/components/scheduled-mark'
 import { StatusBadge } from '@/components/status-badge'
 import { formatDateTime, formatNumber, shortId } from '@/lib/format'
 import { RUN_MODE_LABELS } from '@/lib/labels'
+import { costPerGoodLead, goodLeads, NO_GOOD_LEADS } from '../good-leads-data'
 import { RUNS_PAGE_SIZE } from './runs-query'
 
 const PAGE_SIZE = RUNS_PAGE_SIZE
@@ -61,11 +64,32 @@ const columns = [
     meta: { align: 'right', hideBelow: 'md' },
     cell: (info) => formatNumber(info.getValue()),
   }),
+  help.accessor((run) => goodLeads(run.counts), {
+    id: 'good',
+    header: 'Good leads',
+    enableSorting: false,
+    meta: { align: 'right', hideBelow: 'sm' },
+    cell: (info) => formatNumber(info.getValue()),
+  }),
   help.accessor('cost_usd', {
     header: 'Cost',
     enableSorting: false,
     meta: { align: 'right' },
     cell: (info) => <Money value={info.getValue()} />,
+  }),
+  help.accessor((run) => costPerGoodLead(run.cost_usd, goodLeads(run.counts)), {
+    id: 'per_good',
+    header: 'Per good lead',
+    enableSorting: false,
+    meta: { align: 'right', hideBelow: 'md' },
+    cell: (info) => {
+      const each = info.getValue()
+      return each === null ? (
+        <span className="text-muted-foreground">{NO_GOOD_LEADS}</span>
+      ) : (
+        <Money value={each} />
+      )
+    },
   }),
 ]
 

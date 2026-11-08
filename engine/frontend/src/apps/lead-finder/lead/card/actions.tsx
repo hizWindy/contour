@@ -3,7 +3,7 @@
  * Re-check, then the thumbs (Useful, Not useful).
  *
  * Watch, Reject and the thumbs change the lead, and each shows a toast with Undo, which sends back
- * the exact values from before. Re-check costs money, so it asks first and has no Undo. Send to
+ * the exact values from before. Reject asks for a reason from a fixed list (PLAN-V9 D1). Re-check costs money, so it asks first and has no Undo. Send to
  * HubSpot previews first and writes once only (send-lead.tsx).
  */
 import { Bookmark, BookmarkCheck, RefreshCw, ThumbsDown, ThumbsUp, XCircle } from 'lucide-react'
@@ -25,24 +25,18 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import { Field, FieldError, FieldLabel } from '@/components/ui/field'
-import { Textarea } from '@/components/ui/textarea'
 import { toastProblem } from '@/lib/problems'
+import { RejectDialog } from '../../reject-reasons'
 import { SendLead } from '../send-lead'
 
 /** The values a change touches, as they were before it, for Undo. */
 function before(lead: LeadDetail, patch: LeadPatch): LeadPatch {
   const previous: LeadPatch = {}
   if ('status' in patch) previous.status = lead.status === 'sent' ? 'new' : lead.status
-  if ('status' in patch || 'reject_reason' in patch) previous.reject_reason = lead.reject_reason
+  if ('status' in patch || 'reject_reason' in patch) {
+    previous.reject_reason = lead.reject_reason
+    previous.reject_note = lead.reject_note
+  }
   if ('useful' in patch) previous.useful = lead.useful
   if ('note' in patch) previous.note = lead.note
   return previous
@@ -53,8 +47,6 @@ export function Actions({ lead }: { lead: LeadDetail }) {
   const patchLead = usePatchLead()
   const recheck = useRecheckLead()
   const [rejecting, setRejecting] = useState(false)
-  const [reason, setReason] = useState('')
-  const [reasonError, setReasonError] = useState<string | null>(null)
 
   const change = (patch: LeadPatch, done: string, onDone?: () => void): void => {
     const undo = before(lead, patch)
@@ -105,8 +97,6 @@ export function Actions({ lead }: { lead: LeadDetail }) {
           variant="outline"
           disabled={patchLead.isPending || lead.status === 'rejected' || lead.status === 'sent'}
           onClick={() => {
-            setReason('')
-            setReasonError(null)
             setRejecting(true)
           }}
         >
@@ -182,55 +172,21 @@ export function Actions({ lead }: { lead: LeadDetail }) {
         </Button>
       </div>
 
-      <Dialog open={rejecting} onOpenChange={setRejecting}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Reject {lead.company}</DialogTitle>
-            <DialogDescription>
-              Say why, so the rules can learn from it. You can undo this.
-            </DialogDescription>
-          </DialogHeader>
-          <Field>
-            <FieldLabel htmlFor={`reason-${lead.id}`}>Reason</FieldLabel>
-            <Textarea
-              id={`reason-${lead.id}`}
-              value={reason}
-              onChange={(event) => {
-                setReason(event.target.value)
-              }}
-              aria-invalid={reasonError ? true : undefined}
-              placeholder="Too small for us, or already with another fitout company"
-            />
-            {reasonError ? <FieldError>{reasonError}</FieldError> : null}
-          </Field>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setRejecting(false)
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              disabled={patchLead.isPending}
-              onClick={() => {
-                if (reason.trim() === '') {
-                  setReasonError('Say why it is rejected.')
-                  return
-                }
-                change({ status: 'rejected', reject_reason: reason.trim() }, 'Rejected.', () => {
-                  setRejecting(false)
-                })
-              }}
-            >
-              Reject
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <RejectDialog
+        open={rejecting}
+        onOpenChange={setRejecting}
+        title={`Reject ${lead.company}`}
+        pending={patchLead.isPending}
+        onReject={(reason, note) => {
+          change(
+            { status: 'rejected', reject_reason: reason, reject_note: note },
+            'Rejected.',
+            () => {
+              setRejecting(false)
+            },
+          )
+        }}
+      />
     </div>
   )
 }
