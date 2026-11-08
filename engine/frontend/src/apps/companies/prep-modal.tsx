@@ -613,11 +613,13 @@ export function PrepModal({ target, onClose, onChangeTarget }: PrepModalProps) {
     setShown(target)
   }
   const [prepIds, setPrepIds] = useState<Record<string, string>>({})
-  const [off, setOff] = useState(false)
+  // Which target was refused because call prep is switched off (so it never carries over).
+  const [offFor, setOffFor] = useState<string | null>(null)
   const started = useRef(new Set<string>())
   const start = useStartPrep()
 
   const key = shown ? targetKey(shown) : ''
+  const off = offFor !== null && offFor === key
   const picking = shown !== null && !shown.prepId && !shown.person && !shown.cold
   // A Refresh replaces what a chip opened, so the newest prep for this key wins.
   const prepId = prepIds[key] ?? shown?.prepId
@@ -640,12 +642,12 @@ export function PrepModal({ target, onClose, onChangeTarget }: PrepModalProps) {
       },
       {
         onSuccess: (made) => {
-          setOff(false)
+          setOffFor(null)
           setPrepIds((ids) => ({ ...ids, [askKey]: made.id }))
         },
         onError: (error) => {
           if (isApiProblem(error) && error.code === 'prep_off') {
-            setOff(true)
+            setOffFor(askKey)
           }
         },
       },

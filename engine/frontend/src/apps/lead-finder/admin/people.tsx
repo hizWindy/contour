@@ -1,6 +1,7 @@
 /**
- * Admin, People (PLAN-V9 E1): who has an account, and which projects each may use. The "Lead
- * Finder" tick opens it to a person; an Admin may use everything. Adding a person needs a starting
+ * Admin, People (PLAN-V9 E1): who has an account, and which projects each may use. One tick per
+ * project (from src/modules.ts, so a new project gets its tick by itself): "Lead Finder" and, since
+ * PLAN-V10, "Companies". An Admin may use everything. Adding a person needs a starting
  * password under today's rules: give it to them in person, not by email. Changing your own
  * password is PLAN-V6 C4, still to come; a forgotten one is reset with `engine reset-password`.
  */
@@ -26,8 +27,30 @@ import {
 } from '@/components/ui/select'
 import { formatRelative } from '@/lib/format'
 import { toastProblem } from '@/lib/problems'
+import { MODULES } from '@/modules'
 
 const LEAD_FINDER = 'lead_finder'
+
+interface Project {
+  /** The backend's name, like "lead_finder". */
+  app: string
+  /** Its name on the tick, like "Lead Finder". */
+  name: string
+  /** In a sentence, like "the Lead Finder". */
+  phrase: string
+}
+
+const PHRASES: Record<string, string> = {
+  lead_finder: 'the Lead Finder',
+  companies: 'the Companies page',
+}
+
+/** Every project that has a tick, in menu order. */
+const PROJECTS: readonly Project[] = MODULES.flatMap((module) =>
+  module.app
+    ? [{ app: module.app, name: module.name, phrase: PHRASES[module.app] ?? module.name }]
+    : [],
+)
 const ROLES = [
   { id: 'staff', label: 'Staff' },
   { id: 'admin', label: 'Admin' },
@@ -39,11 +62,11 @@ function roleLabel(role: string): string {
   return ROLES.find((item) => item.id === role)?.label ?? role
 }
 
-function LeadFinderTick({ person, self }: { person: Person; self: boolean }) {
+function ProjectTick({ person, project }: { person: Person; project: Project }) {
   const change = useChangePerson()
   const id = useId()
   const admin = person.role === 'admin'
-  const ticked = admin || person.apps.includes(LEAD_FINDER)
+  const ticked = admin || person.apps.includes(project.app)
   return (
     <label htmlFor={id} className="flex items-center gap-2 text-ui">
       <Checkbox
@@ -52,16 +75,16 @@ function LeadFinderTick({ person, self }: { person: Person; self: boolean }) {
         disabled={admin || change.isPending}
         onCheckedChange={(next) => {
           const apps = next
-            ? [...person.apps.filter((app) => app !== LEAD_FINDER), LEAD_FINDER]
-            : person.apps.filter((app) => app !== LEAD_FINDER)
+            ? [...person.apps.filter((app) => app !== project.app), project.app]
+            : person.apps.filter((app) => app !== project.app)
           change.mutate(
             { userId: person.id, patch: { apps } },
             {
               onSuccess: () => {
                 toast(
                   next
-                    ? `${person.name} can use the Lead Finder.`
-                    : `Lead Finder closed to ${person.name}.`,
+                    ? `${person.name} can use ${project.phrase}.`
+                    : `${project.name} closed to ${person.name}.`,
                 )
               },
               onError: toastProblem,
@@ -69,13 +92,23 @@ function LeadFinderTick({ person, self }: { person: Person; self: boolean }) {
           )
         }}
       />
-      Lead Finder
-      {admin ? (
+      {project.name}
+    </label>
+  )
+}
+
+function ProjectTicks({ person, self }: { person: Person; self: boolean }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+      {PROJECTS.map((project) => (
+        <ProjectTick key={project.app} person={person} project={project} />
+      ))}
+      {person.role === 'admin' ? (
         <span className="text-caption text-muted-foreground">
           {self ? '(you are an Admin)' : '(an Admin has every project)'}
         </span>
       ) : null}
-    </label>
+    </div>
   )
 }
 
@@ -96,7 +129,7 @@ function PersonRow({ person, self }: { person: Person; self: boolean }) {
             : 'Has not signed in yet'}
         </span>
       </div>
-      <LeadFinderTick person={person} self={self} />
+      <ProjectTicks person={person} self={self} />
     </li>
   )
 }
@@ -107,7 +140,8 @@ function AddPerson() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<Role>('staff')
-  const [leadFinder, setLeadFinder] = useState(true)
+  // The Lead Finder starts ticked, as before. Who gets the Companies tick is TBC with Levi.
+  const [picked, setPicked] = useState<ReadonlySet<string>>(() => new Set([LEAD_FINDER]))
   const [password, setPassword] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -123,7 +157,8 @@ function AddPerson() {
         name: name.trim(),
         email: email.trim(),
         role,
-        apps: leadFinder && role !== 'admin' ? [LEAD_FINDER] : [],
+        apps:
+          role === 'admin' ? [] : PROJECTS.map((item) => item.app).filter((app) => picked.has(app)),
         password,
       },
       {
@@ -227,18 +262,29 @@ function AddPerson() {
             />
             {errors.password ? <FieldError>{errors.password}</FieldError> : null}
           </Field>
-          <label htmlFor={`${id}-lf`} className="flex items-center gap-2 text-ui sm:col-span-2">
-            <Checkbox
-              id={`${id}-lf`}
-              checked={leadFinder || role === 'admin'}
-              disabled={role === 'admin'}
-              onCheckedChange={(next) => {
-                setLeadFinder(next === true)
-              }}
-            />
-            Can use the Lead Finder
-            {errors.apps ? <span className="text-destructive">{errors.apps}</span> : null}
-          </label>
+          <div className="flex flex-col gap-2 sm:col-span-2">
+            {PROJECTS.map((project) => (
+              <label
+                key={project.app}
+                htmlFor={`${id}-${project.app}`}
+                className="flex items-center gap-2 text-ui"
+              >
+                <Checkbox
+                  id={`${id}-${project.app}`}
+                  checked={picked.has(project.app) || role === 'admin'}
+                  disabled={role === 'admin'}
+                  onCheckedChange={(next) => {
+                    const changed = new Set(picked)
+                    if (next === true) changed.add(project.app)
+                    else changed.delete(project.app)
+                    setPicked(changed)
+                  }}
+                />
+                Can use {project.phrase}
+              </label>
+            ))}
+            {errors.apps ? <span className="text-ui text-destructive">{errors.apps}</span> : null}
+          </div>
           <div className="sm:col-span-2">
             <Button type="submit" disabled={add.isPending}>
               <UserPlus aria-hidden="true" />
@@ -273,8 +319,8 @@ export default function AdminPeopleTab() {
         <CardHeader>
           <CardTitle className="text-section font-semibold">Everyone with an account</CardTitle>
           <CardDescription>
-            Tick Lead Finder to open it to a person. Without the tick it isn&apos;t in their menu,
-            and its pages answer &quot;Not open to you&quot;.
+            Tick a project to open it to a person. Without the tick it isn&apos;t in their menu, and
+            its pages answer &quot;Not open to you&quot;.
           </CardDescription>
         </CardHeader>
         <CardContent>

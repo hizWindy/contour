@@ -140,7 +140,7 @@ export const ADMIN_TABS: readonly NavItem[] = [
     icon: Users,
     keywords: ['accounts', 'access', 'users', 'staff'],
     purpose:
-      'Who has an account, and which projects each person may use. Tick Lead Finder to open it to someone. Admins may use everything.',
+      'Who has an account, and which projects each person may use. Tick a project, like Lead Finder or Companies, to open it to someone. Admins may use everything.',
   },
   {
     to: '/admin/settings',

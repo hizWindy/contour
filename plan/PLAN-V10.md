@@ -132,7 +132,7 @@ The prototype breaks 4 house rules. The build must not copy them.
 
 ## Part B: The Companies page (works from the HubSpot copy)
 
-- [x] **B1. A new project: Companies.** (2026-11-09, `66b8f12`, `8898430`)
+- [x] **B1. A new project: Companies.** (2026-11-09, `66b8f12`, `8898430`, and the People tab's tick in the next commit)
   - A folder `engine/backend/apps/companies/` with its `AppSpec`: schema `companies`, routes under `/companies`. Add it to `apps` in `core/config.py`.
   - A "Companies" tick on the People tab, the same way as the Lead Finder tick (`APP_TITLES` and `require_app` in `core/api/access.py`).
   - On the website, a module in `src/apps/companies/`.
@@ -310,7 +310,7 @@ The prototype breaks 4 house rules. The build must not copy them.
 Newest first.
 
 - 2026-11-09: **What is left, and why.** A2: the email is drafted in [EMAIL.md](../projects/prep/EMAIL.md), to send on Al-khair's word. B4, C2 and D4: built and tested by keyboard, but not yet looked at on a phone or in dark mode, because no browser could be driven here (the Chrome extension isn't connected, and Playwright isn't installed: installing it downloads a browser, which needs Al-khair's OK). E1 needs those screenshots and Al-khair's sign-off. E3: every check passes (below); the 10 paid preps wait on his word. E4: the docs are done ([PREP.md](../projects/prep/PREP.md), `engine/README.md`, `engine/AGENTS.md`); merging, pushing, deploying, the ticks and switching on wait on his word.
-- 2026-11-09: **Checks after the build.** Backend `RUN_GATES=1`: 3,323 passed, 25 skipped, with the known timing test left out. Website: lint and types clean, 62 files and 899 tests pass, the build works (the Companies page's code is 14 kB, 5 kB zipped). The contrast, design-lint and icon tests pass with the new colour.
+- 2026-11-09: **Checks after the build.** Backend `RUN_GATES=1`: 3,323 passed, 25 skipped, with the known timing test left out. Website: lint and types clean, 62 files and 900 tests pass (with the People tab's Companies tick), the build works (the Companies page's code is 14 kB, 5 kB zipped). The contrast, design-lint and icon tests pass with the new colour.
 - 2026-11-09: **Decisions made while building, for Levi or Al-khair to confirm (TBC).**
   - A deal is won at "Ordered - Contract Signed" or "Handed over to client relations"; "Closed lost" and "Dissolved" are closed; everything else is open. A customer has a won deal or HubSpot's lifecycle stage "Customer".
   - Lead Finder rows: Pass and Director review, not rejected, not in HubSpot, by each company's newest research (a newer Drop hides an older Pass).

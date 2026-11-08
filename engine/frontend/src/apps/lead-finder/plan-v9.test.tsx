@@ -317,6 +317,26 @@ describe('the People tab (PLAN-V9 E1)', () => {
     })
   })
 
+  it('ticks the Companies page too, one tick per project (PLAN-V10 B1)', async () => {
+    const calls = mockApi({
+      '/api/v1/auth/me': { auth_required: false, user: null, session: null },
+      'GET /api/v1/people': [ADMIN, { ...MARCUS, apps: ['lead_finder'] }],
+      [`PATCH /api/v1/people/${MARCUS.id}`]: { ...MARCUS, apps: ['lead_finder', 'companies'] },
+    })
+    const { user } = renderWithProviders(<AdminPeopleTab />)
+    const people = await screen.findByRole('list', { name: 'People' })
+    const rows = within(people).getAllByRole('listitem')
+    const adminTick = within(rows[0]).getByRole('checkbox', { name: /Companies/ })
+    expect(adminTick).toBeChecked()
+    expect(adminTick).toBeDisabled()
+    await user.click(within(rows[1]).getByRole('checkbox', { name: /Companies/ }))
+    await waitFor(() => {
+      expect(calls.find((call) => call.method === 'PATCH')?.body).toEqual({
+        apps: ['lead_finder', 'companies'],
+      })
+    })
+  })
+
   it('adds a person with the tick and a starting password', async () => {
     const calls = mockApi({
       '/api/v1/auth/me': { auth_required: false, user: null, session: null },
