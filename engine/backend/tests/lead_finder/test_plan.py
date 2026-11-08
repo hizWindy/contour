@@ -40,16 +40,27 @@ def with_areas(areas: dict[str, dict[str, list[str]]]) -> LeadFinderRules:
 # --- Slices ---------------------------------------------------------------------------------
 
 
-def test_the_default_run_is_three_cities_times_four_triggers_city_by_city() -> None:
+def test_the_default_run_is_one_city_times_the_six_main_signs() -> None:
     slices = make_slices(DiscoveryParams(), RULES)
-    assert len(slices) == 12
-    assert [s.city for s in slices] == ["Melbourne"] * 4 + ["Adelaide"] * 4 + ["Perth"] * 4
-    assert [s.trigger_id for s in slices[:4]] == [
+    assert len(slices) == 6
+    assert [s.city for s in slices] == ["Melbourne"] * 6
+    assert [s.trigger_id for s in slices] == [
         "lease_ending",
         "merger_or_takeover",
         "big_new_contract",
         "fast_growth",
+        "new_to_australia",
+        "hot_industry_growth",
     ]
+
+
+def test_three_cities_go_city_by_city() -> None:
+    params = DiscoveryParams(cities=["Melbourne", "Adelaide", "Perth"], triggers=["fast_growth"])
+    assert [s.city for s in make_slices(params, RULES)] == ["Melbourne", "Adelaide", "Perth"]
+
+
+def test_the_first_default_slice_is_melbournes_lease_ending() -> None:
+    slices = make_slices(DiscoveryParams(), RULES)
     assert slices[0] == Slice(
         id="melbourne:lease_ending",
         trigger_id="lease_ending",
@@ -98,7 +109,7 @@ def test_the_inner_label_says_inner_suburbs() -> None:
 
 
 def test_the_full_params_model_works_too() -> None:
-    assert len(make_slices(LeadFinderRunParams(), RULES)) == 12
+    assert len(make_slices(LeadFinderRunParams(), RULES)) == 6
 
 
 def test_sydney_is_a_slice_like_any_city() -> None:

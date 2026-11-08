@@ -92,18 +92,16 @@ async def test_the_page_reads_the_default_schedule_with_its_estimate(
 
     item = await the_item(client)
 
-    assert item["name"] == "Find new leads"
+    assert item["name"] == "Find new leads: Melbourne"
     assert item["when"] == "Every 2 weeks on Monday at 7:00 am"
     assert item["enabled"] is False and item["next_run_at"] is None
-    assert item["summary"] == (
-        "Searches Melbourne, Adelaide and Perth for the 4 main signs, looking back 14 days."
-    )
+    assert item["summary"] == ("Searches Melbourne for the 6 main signs, looking back 14 days.")
     assert item["estimate"] == {
         "valid": True,
         "problem": None,
-        "typical_usd": "7.80",  # 12 searches at US$0.15 and 20 companies at US$0.30
+        "typical_usd": "6.90",  # 6 searches at US$0.15 and 20 companies at US$0.30
         "worst_usd": "20.00",  # the run's own limit stops it there
-        "per_month_usd": "16.96",  # 7.80 x 30.4375 / 14 days, rounded up
+        "per_month_usd": "15.01",  # 6.90 x 30.4375 / 14 days, rounded up
         "cap_usd": "20.00",
         "daily_left_usd": "50.00",
         "basis": (
@@ -119,9 +117,9 @@ async def test_without_past_prices_the_page_says_the_run_would_not_start(
     estimate = (await the_item(client))["estimate"]
 
     assert estimate["valid"] is True  # the choices are fine
-    assert estimate["typical_usd"] == "24.80"  # the placeholder prices
+    assert estimate["typical_usd"] == "22.40"  # the placeholder prices
     assert estimate["problem"].startswith(
-        "A typical run costs about US$24.80, which is more than the run limit of US$20.00."
+        "A typical run costs about US$22.40, which is more than the run limit of US$20.00."
     )
     assert "US$1.00 a company, a default" in estimate["problem"]
 
@@ -139,12 +137,12 @@ async def test_adding_sydney_is_saved_and_the_page_says_it_is_too_large(
     assert answer.status_code == 200, answer.text
     item = answer.json()
     assert item["summary"] == (
-        "Searches Melbourne, Adelaide, Perth and Sydney for the 4 main signs, looking back 14 days."
+        "Searches Melbourne, Adelaide, Perth and Sydney for the 6 main signs, looking back 14 days."
     )
     assert item["estimate"]["valid"] is False
     assert item["estimate"]["problem"] == (
         "The saved choices can't be used. cities, triggers: "
-        "16 searches is too many (the most that fit is 13). Choose fewer."
+        "24 searches is too many (the most that fit is 13). Choose fewer."
     )
 
 
@@ -152,7 +150,7 @@ async def test_choices_are_checked_and_saved_cleaned(client: httpx.AsyncClient) 
     saved = await change(client, {"settings": {"cities": ["perth"], "since_days": 7}})
     assert saved.status_code == 200, saved.text
     assert saved.json()["settings"] == {"cities": ["Perth"], "since_days": 7}
-    assert saved.json()["summary"] == ("Searches Perth for the 4 main signs, looking back 7 days.")
+    assert saved.json()["summary"] == ("Searches Perth for the 6 main signs, looking back 7 days.")
 
 
 @pytest.mark.parametrize(
@@ -171,7 +169,7 @@ async def test_choices_that_cant_be_used_are_refused_in_plain_words(
     assert answer.status_code == 422
     (error,) = answer.json()["errors"]
     assert error["field"] == "body.settings" and said in error["message"]
-    assert (await the_item(client))["settings"]["cities"] == ["Melbourne", "Adelaide", "Perth"]
+    assert (await the_item(client))["settings"]["cities"] == ["Melbourne"]
 
 
 # --- What the page does ------------------------------------------------------------
@@ -215,14 +213,14 @@ async def test_switching_on_then_run_now_starts_a_run_the_runs_list_marks(
 async def test_run_now_over_the_limit_says_why_and_starts_nothing(
     client: httpx.AsyncClient, session_factory: Factory
 ) -> None:
-    item = await the_item(client)  # no past prices: the default run looks like US$24.80
+    item = await the_item(client)  # no past prices: the default run looks like US$22.40
 
     answer = await client.post(f"{URL}/{item['id']}/run")
 
     assert answer.status_code == 200
     body = answer.json()
     assert body["status"] == "skipped" and body["ref"] is None
-    assert body["reason"].startswith("A typical run costs about US$24.80, which is more than")
+    assert body["reason"].startswith("A typical run costs about US$22.40, which is more than")
     assert await all_runs(session_factory) == []
     assert (await the_item(client))["last_error"] == body["reason"]
 

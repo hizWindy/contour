@@ -36,6 +36,8 @@ class Cities(Strict):
     pass_: list[str] = Field(alias="pass", min_length=1)
     director_review: list[str]
     other_cities: Literal["director_review", "drop"]
+    # A lead with one of these signs and no known city goes to a Director, not to Watch (PLAN-V9 B3)
+    no_city_director_signs: list[str] = Field(default_factory=list)
 
 
 StaffSource = Literal["hubspot", "headcount_tool", "linkedin", "web_research"]
@@ -342,10 +344,13 @@ class Criteria(Strict):
     @model_validator(mode="after")
     def check_growth_signs(self) -> Self:
         known = {trigger.id for trigger in self.triggers.every}
-        unknown = sorted(set(self.size.growth_signs) - known)
+        unknown = sorted(
+            (set(self.size.growth_signs) | set(self.cities.no_city_director_signs)) - known
+        )
         if unknown:
             raise ValueError(
-                f"size.growth_signs has signs that aren't triggers: {', '.join(unknown)}"
+                f"size.growth_signs or cities.no_city_director_signs has signs that aren't "
+                f"triggers: {', '.join(unknown)}"
             )
         return self
 

@@ -457,7 +457,7 @@ def test_run_options_can_be_built_and_carry_the_defaults() -> None:
     )
     dumped = options.model_dump(mode="json")
     assert dumped["caps"]["daily_left_usd"] == "38.10"
-    assert dumped["defaults"]["cities"] == ["Melbourne", "Adelaide", "Perth"]
+    assert dumped["defaults"]["cities"] == ["Melbourne"]  # one city at a time (PLAN-V9 C4)
     assert dumped["cities"][0]["areas"][0]["id"] == "cbd"
     assert RunOptions.model_validate(dumped) == options
 

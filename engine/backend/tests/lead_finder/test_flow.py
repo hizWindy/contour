@@ -118,6 +118,10 @@ async def test_start_watch_filter_open_mark_and_download(
     # What the Start page sends for "Find new leads" with nothing changed.
     defaults = options["defaults"]
     params = {key: defaults[key] for key in ("cities", "triggers", "since_days", "area")}
+    # The sample run of the 3 pass cities and the first 4 main signs (12 slices). The Start page
+    # starts with one city since PLAN-V9 C4, so they are chosen here.
+    params["cities"] = ["Melbourne", "Adelaide", "Perth"]
+    params["triggers"] = ["lease_ending", "merger_or_takeover", "big_new_contract", "fast_growth"]
     estimate = await ok(
         client.post(
             f"{API}/runs/estimate",

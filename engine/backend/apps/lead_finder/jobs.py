@@ -1,20 +1,25 @@
-"""The Lead Finder's scheduled run: the job `lead_finder.discovery`. PLAN-V6 D2.
+"""The Lead Finder's scheduled runs: one job for each city, like `lead_finder.discovery.melbourne`.
+PLAN-V6 D2, and PLAN-V9 C4 (Levi, 5 Nov: Perth, Adelaide, Melbourne and Sydney, every 2 weeks).
 
 A schedule starts a discovery run on its own, from the choices saved in the schedule (its
 `settings`). They are the Start page's choices: `cities`, `triggers` (the signs), `area`,
 `since_days` (how far back) and `caps`. What a schedule leaves out gets the Start page's starting
-value. The default one saves the cities, the signs and the look-back.
+value. Each default saves its city, the signs, the look-back and its own company limit.
 
-**The default schedule:** every 2 weeks on Monday at 7:00 am Melbourne time, and **off**: each run
-costs money, so a person switches it on. It searches the Start page's own default: Melbourne,
-Adelaide and Perth, and the 4 main signs (12 searches), and looks back 14 days, the time between two
-runs, so no day is missed and none is read twice.
+**The four default schedules:** one for each city, every 2 weeks at 7:00 am Melbourne time, on
+different days of the same fortnight: Melbourne on Monday, Adelaide on Tuesday, Perth on Wednesday
+and Sydney on Thursday (Sydney's leads still go to a Director). All are **off**: each run costs
+money, so Al-khair switches them on. Each searches its city for the 6 main signs (6 searches),
+looks back 14 days, the time between two runs, so no day is missed and none is read twice, and
+researches at most `SCHEDULED_COMPANIES` companies until the volume test sets each city's number
+(PLAN-V9 D3). **TBC** with Levi (the days, the time and the signs).
 
-**Why not the 4 cities of the plan.** Sydney makes 16 searches, and the default limits allow 13
-(`slice_reserve_usd` is held for each search, against 40% of the run limit: see `core/config.py`).
-A default that can't start would be no default. To search Sydney too, raise the run limit in
-Settings to US$25 (16 x US$0.60 fits 40% of that), then add it to the saved choices. **TBC** with
-Levi (the cities and signs) and Al-khair (the limit).
+**Why separate days.** Only one run goes at a time; the daily limit is US$50; the server's memory
+is small; and each email stays short.
+
+**The schedule before PLAN-V9.** It was one job, `lead_finder.discovery` (Mondays, 3 cities). Its
+job stays known here with no default, so an old schedule that someone switched on still starts
+runs; migration 0013 removes it where it was still off and had never run.
 
 **Money, before it starts.** The run's estimate is checked, the same one the Start page shows. The
 run doesn't start when a typical run (`cost_usd_low`, never the worst case) costs more than the run
@@ -54,23 +59,53 @@ APP = "lead_finder"
 MODE = "discovery"
 DISCOVERY = "lead_finder.discovery"  # the job's key, and the `job` of its schedule
 
-# The default choices: what the Start page starts with (the pass cities and the main signs), kept
-# here in full so a change in the rules can't change a schedule without a decision. A test keeps
-# them the same as the Start page's, and inside the default limits.
-SCHEDULED_CITIES = ("Melbourne", "Adelaide", "Perth")
+# The default choices, kept here in full so a change in the rules can't change a schedule without
+# a decision. A test keeps the signs the same as the main signs, and each city inside the default
+# limits.
+CITY_DAYS: tuple[tuple[str, int], ...] = (
+    ("Melbourne", 0),  # 0 is Monday
+    ("Adelaide", 1),
+    ("Perth", 2),
+    ("Sydney", 3),  # Sydney's leads still go to a Director
+)
+SCHEDULED_CITIES = tuple(city for city, _ in CITY_DAYS)
 SCHEDULED_SIGNS = (
     "lease_ending",
     "merger_or_takeover",
     "big_new_contract",
     "fast_growth",
+    "new_to_australia",
+    "hot_industry_growth",
 )
 LOOK_BACK_DAYS = 14
-DEFAULT_CADENCE = Cadence(every=2, unit="weeks", weekday=0, at=time(7, 0))  # 0 is Monday
-DEFAULT_SETTINGS: dict[str, Any] = {
-    "cities": list(SCHEDULED_CITIES),
-    "triggers": list(SCHEDULED_SIGNS),
-    "since_days": LOOK_BACK_DAYS,
-}
+SCHEDULED_COMPANIES = 20  # each city's company limit until the volume test sets it (PLAN-V9 D3)
+AT = time(7, 0)
+LEGACY_DISCOVERY = "lead_finder.discovery"  # the one schedule before PLAN-V9 C4
+
+
+def job_key(city: str) -> str:
+    """The job of one city's schedule, like `lead_finder.discovery.melbourne`."""
+    return f"{LEGACY_DISCOVERY}.{city.lower()}"
+
+
+def cadence_for(weekday: int) -> Cadence:
+    return Cadence(every=2, unit="weeks", weekday=weekday, at=AT)
+
+
+def settings_for(city: str) -> dict[str, Any]:
+    """What one city's default schedule saves."""
+    return {
+        "cities": [city],
+        "triggers": list(SCHEDULED_SIGNS),
+        "since_days": LOOK_BACK_DAYS,
+        "caps": {"max_companies": SCHEDULED_COMPANIES},
+    }
+
+
+DISCOVERY = job_key("Melbourne")  # the first city's job
+DISCOVERY_KEYS = tuple(job_key(city) for city in SCHEDULED_CITIES)
+DEFAULT_CADENCE = cadence_for(0)  # Melbourne's
+DEFAULT_SETTINGS: dict[str, Any] = settings_for("Melbourne")
 
 CENT = Decimal("0.01")
 SLOT_TAKEN = "A run is already going, so this time was skipped."
@@ -222,16 +257,28 @@ async def discovery_running(context: JobContext) -> bool:
         )
 
 
-JOBS = (
-    JobSpec(
-        key=DISCOVERY,
+def _discovery_job(key: str, title: str, default: DefaultSchedule | None) -> JobSpec:
+    return JobSpec(
+        key=key,
         project=APP,
-        title="Find new leads",
+        title=title,
         start=start_discovery,
         running=discovery_running,
         estimate=estimate_discovery_job,
         describe=describe_discovery,
         check_settings=check_discovery_settings,
-        default=DefaultSchedule(cadence=DEFAULT_CADENCE, enabled=False, settings=DEFAULT_SETTINGS),
+        default=default,
+    )
+
+
+JOBS = (
+    *(
+        _discovery_job(
+            job_key(city),
+            f"Find new leads: {city}",
+            DefaultSchedule(cadence=cadence_for(day), enabled=False, settings=settings_for(city)),
+        )
+        for city, day in CITY_DAYS
     ),
+    _discovery_job(LEGACY_DISCOVERY, "Find new leads", None),
 )

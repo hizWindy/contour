@@ -16,9 +16,9 @@ What each fact means:
 - office_since: when the company moved into its current office in that city, like "2016" or "2016-03". null if no note says.
 - last_fitout: when that office last had a move, fitout or refit, like "2024-05". The move-in counts too. null if no note says.
 - expected_move: when an office change might happen, like "2027", only if a note points to it.
-- growth_plan: true only if a note says the company has raised big money or made a big announcement AND plans to hire a lot. false if a note says it has no such plan. null if no note says.
-- size_needed_m2: the floor area, in square metres, of the office the company says it will need after that growth. If a note gives only the staff it will have, work it out as staff x 10 and label it "estimated". null if no note says.
-- growth_by: when it expects to need that office, like "2027-06" or "2027". null if no note says.
+- growth_plan: true only if a note says the company has raised big money or made a big announcement AND plans to hire a lot. Also true when an overseas company announces its first, or a much bigger, office in an Australian city, with the staff or office it plans there. false if a note says it has no such plan. null if no note says.
+- size_needed_m2: the floor area, in square metres, of the office the company says it will need after that growth, or of the Australian office an overseas company announces. If a note gives only the staff it will have, work it out as staff x 10 and label it "estimated". null if no note says.
+- growth_by: when it expects to need that office, or when the Australian office opens, like "2027-06" or "2027". null if no note says.
 
 Triggers are signs of an office change. Use these ids only:
 $triggers

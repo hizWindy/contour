@@ -10,6 +10,9 @@ cities:
   pass: [Melbourne, Adelaide, Perth]
   director_review: [Sydney]
   other_cities: director_review # "Sydney or another city" goes to a Director
+  # A lead with one of these signs and no city at all goes to a Director, not to Watch. An overseas
+  # company new to Australia must name an Australian city to pass (30 Oct decision, PLAN-V9 B3).
+  no_city_director_signs: [new_to_australia]
 
 size:
   staff_min: 100 # the brief's "100+ in one office". The HubSpot watchlist lists companies from here
@@ -17,7 +20,7 @@ size:
   staff_floor: 50 # Levi, 5 Nov: "about 50 if growing". A size worked out from staff under this is a Drop, "too small", unless the company is growing (PLAN-V9 B1)
   # The discovery signs that mean a company is growing. A company found with one of these is never
   # stopped before research for being small (PLAN-V9 B2): its size comes from what it plans.
-  growth_signs: [fast_growth, big_new_contract]
+  growth_signs: [fast_growth, big_new_contract, new_to_australia, hot_industry_growth]
   staff_max: 600 # over this goes to Director review (a possible Whale Pipeline project)
   staff_counted_in: city
   office_m2_min: 1000
@@ -121,6 +124,10 @@ triggers:
       label: Big new contract or project award, needing about 100 more office staff
     - id: fast_growth
       label: Fast or planned headcount growth, like many job ads, big funding or growth news
+    - id: new_to_australia # PLAN-V9 B3, Levi 5 Nov. Its size comes from the staff or office it announces here
+      label: An overseas company opening its first or a much bigger office in an Australian city
+    - id: hot_industry_growth # PLAN-V9 B4, Levi 2 Nov. Its searches name the industries (queries.yaml)
+      label: Growing because its industry is booming, like the energy transition, defence or critical minerals
   other:
     - id: office_consolidation
       label: Merging several offices into one
@@ -281,6 +288,10 @@ tbc:
     note: From the Profile and DEAL.md. Shown as text on the lead card. The tool can't see when a consultant is appointed.
   - key: triggers
     note: Version 2 adds three triggers (new facility, new business unit, underperforming workplace) and moves the leadership change up from weak to other, counting only when strategy changes. All from the Profile and Levi's brief, none confirmed.
+  - key: triggers.main
+    note: PLAN-V9 adds new_to_australia (Levi, 5 Nov) and hot_industry_growth (Levi, 2 Nov) to the main signs, so the schedules look for them. Whether they are main signs is for Levi.
+  - key: cities.no_city_director_signs
+    note: Our proposal (PLAN-V9 B3). An overseas company new to Australia with no Australian city named yet goes to a Director, not to Watch.
   - key: triggers.recent_months
     note: Our proposal. How old an event can be and still count as a trigger.
   - key: source_domains

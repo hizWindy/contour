@@ -39,7 +39,8 @@ def first_error(model: type[BaseModel], data: dict[str, Any]) -> dict[str, Any]:
 def test_the_defaults_are_the_pass_cities_and_the_main_triggers() -> None:
     params = LeadFinderRunParams()
     rules = load_rules().criteria
-    assert params.cities == rules.cities.pass_ == ["Melbourne", "Adelaide", "Perth"]
+    assert rules.cities.pass_ == ["Melbourne", "Adelaide", "Perth"]
+    assert params.cities == ["Melbourne"]  # one city at a time since PLAN-V9 C4
     assert params.triggers == [t.id for t in rules.triggers.main]
     assert params.since_days == 30
     assert params.area == {}
@@ -54,7 +55,7 @@ def test_the_defaults_are_the_pass_cities_and_the_main_triggers() -> None:
 def test_defaults_are_not_shared_between_instances() -> None:
     first = LeadFinderRunParams()
     first.cities.append("Sydney")
-    assert LeadFinderRunParams().cities == ["Melbourne", "Adelaide", "Perth"]
+    assert LeadFinderRunParams().cities == ["Melbourne"]
 
 
 def test_sydney_is_allowed_as_a_director_review_city() -> None:

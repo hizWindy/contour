@@ -53,8 +53,10 @@ def known_trigger_ids() -> list[str]:
 
 
 def default_cities() -> list[str]:
-    """The pass cities. Sydney is allowed, but it is a person's choice."""
-    return list(load_rules().criteria.cities.pass_)
+    """The first pass city (Melbourne). Runs go one city at a time since PLAN-V9 C4 (one schedule
+    for each city), and the 6 main signs in all 3 pass cities would make 18 searches, more than the
+    default limits allow (13). Adelaide, Perth and Sydney are a person's choice."""
+    return list(load_rules().criteria.cities.pass_[:1])
 
 
 def default_triggers() -> list[str]:

@@ -236,6 +236,10 @@ def _city(facts: CompanyFacts, rules: LeadFinderRules) -> RuleCheck:
     cities = rules.criteria.cities
     place = facts.city.value
     if place is None:
+        signs = {trigger.id for trigger in facts.triggers} & set(cities.no_city_director_signs)
+        if signs:  # an overseas company new to Australia that names no city yet (PLAN-V9 B3)
+            detail = "New to Australia, but no Australian city is named yet: a Director decides"
+            return RuleCheck(rule="City", outcome="director", detail=detail)
         return RuleCheck(rule="City", outcome="unknown", detail="City not known")
     city = city_of(place, rules)
     if city in cities.pass_:

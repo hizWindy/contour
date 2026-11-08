@@ -570,3 +570,72 @@ def test_a_possible_match_with_no_candidate_still_asks_a_person() -> None:
         "flag",
         "Possible match in HubSpot. A person confirms.",
     )
+
+
+# --- New to Australia (PLAN-V9 B3) ---------------------------------------------------------------
+
+
+def new_to_australia(**changes: Any) -> Verdict:
+    """Sample Nordic Energy: an overseas company with 120 staff planned in Adelaide by 2027, and
+    nobody here yet."""
+    facts = make_facts(
+        name="Sample Nordic Energy",
+        city=fact("Adelaide"),
+        industry=fact("Renewable energy"),
+        tier_group="Energy and infrastructure",
+        office_m2=fact(None),
+        staff_in_city=fact(None),
+        growth_plan=fact(True, NEWS),
+        size_needed_m2=fact(1200, NEWS, "estimated"),
+        growth_by=fact("2027", NEWS),
+        triggers=[
+            TriggerFound(
+                id="new_to_australia",
+                what_happened="Sample Nordic Energy opens its first Australian office in "
+                "Adelaide, with 120 staff by 2027.",
+                date="2026-10",
+                source_url=NEWS,
+                label="confirmed",
+            )
+        ],
+    )
+    return judge(facts.model_copy(update=changes), NEW, load_rules(), TODAY)
+
+
+def test_an_overseas_company_new_to_adelaide_passes_as_growing() -> None:
+    result = new_to_australia()
+    assert result.result == "pass"
+    check = size_check(result)
+    assert check.outcome == "ok"
+    assert check.detail == "Growing into the range: will need about 1,200 m² by 2027"
+    assert result.triggers[0].group == "main"
+    assert score_check(result, "industry_tier").earned == 7  # energy is tier 1
+
+
+def test_new_to_australia_with_no_city_goes_to_a_director() -> None:
+    result = new_to_australia(city=fact(None))
+    assert result.result == "director_review"
+    (city,) = [check for check in result.checks if check.rule == "City"]
+    assert city.outcome == "director"
+    assert "no Australian city is named yet" in city.detail
+
+
+def test_another_sign_with_no_city_is_still_a_watch() -> None:
+    assert verdict(city=fact(None)).result == "watch"
+
+
+def test_a_booming_industry_sign_counts_as_a_main_sign() -> None:
+    result = verdict(
+        triggers=[
+            TriggerFound(
+                id="hot_industry_growth",
+                what_happened="Acme is hiring 80 engineers for the energy transition.",
+                date="2026-10",
+                source_url=NEWS,
+                label="confirmed",
+            )
+        ]
+    )
+    assert result.result == "pass"
+    assert result.triggers[0].trigger.id == "hot_industry_growth"
+    assert result.triggers[0].group == "main"

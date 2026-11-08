@@ -37,6 +37,8 @@ def test_rules_match_the_criteria_documents() -> None:
         "merger_or_takeover",
         "big_new_contract",
         "fast_growth",
+        "new_to_australia",  # PLAN-V9 B3
+        "hot_industry_growth",  # PLAN-V9 B4
     ]
     assert [t.id for t in criteria.triggers.other] == [
         "office_consolidation",
@@ -125,7 +127,7 @@ def test_a_staff_floor_above_the_hint_stops_start_up(tmp_path: Path) -> None:
 def test_a_growth_sign_must_be_a_trigger(tmp_path: Path) -> None:
     rules_dir = copy_rules(tmp_path)
     edit(rules_dir / "criteria.yaml", "growth_signs: [fast_growth", "growth_signs: [fast_grwth")
-    with pytest.raises(ValidationError, match="growth_signs has signs that aren't triggers"):
+    with pytest.raises(ValidationError, match="has signs that aren't triggers: fast_grwth"):
         read_rules(rules_dir)
 
 
@@ -292,3 +294,47 @@ def test_every_source_kind_needs_a_score(tmp_path: Path) -> None:
     edit(rules_dir / "criteria.yaml", " job_ads: 2 }", " }")
     with pytest.raises(ValidationError, match="one entry for each kind"):
         read_rules(rules_dir)
+
+
+# --- The two new signs (PLAN-V9 B3, B4) ---------------------------------------------------------
+
+
+def test_the_new_signs_are_main_signs_with_their_own_searches() -> None:
+    rules = load_rules()
+    main = {t.id: t.label for t in rules.criteria.triggers.main}
+    assert "Australian city" in main["new_to_australia"]
+    assert "booming" in main["hot_industry_growth"]
+    assert len(rules.queries.discovery["new_to_australia"]) == 3
+    booming = rules.queries.discovery["hot_industry_growth"]
+    assert any("energy transition" in search for search in booming)
+    assert any("defence" in search for search in booming)
+    assert any("critical minerals" in search for search in booming)
+    assert {"new_to_australia", "hot_industry_growth"} <= set(rules.criteria.size.growth_signs)
+    assert {"triggers.main", "cities.no_city_director_signs"} <= {n.key for n in rules.criteria.tbc}
+
+
+def test_a_sign_with_no_search_stops_start_up(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    edit(rules_dir / "queries.yaml", "  hot_industry_growth:", "  hot_industry_growth_off:")
+    with pytest.raises(ValidationError, match="hot_industry_growth"):
+        read_rules(rules_dir)
+
+
+def test_another_booming_industry_is_one_more_line(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    edit(
+        rules_dir / "queries.yaml",
+        '    - "{city} critical minerals company expansion {year}"',
+        '    - "{city} critical minerals company expansion {year}"\n'
+        '    - "{city} space industry company expansion {year}"',
+    )
+    assert len(read_rules(rules_dir).queries.discovery["hot_industry_growth"]) == 4
+
+
+def test_the_extract_prompt_lists_the_new_signs_and_reads_an_announced_office() -> None:
+    from apps.lead_finder.prompts import extract_prompt
+
+    text = extract_prompt(load_rules()).text
+    assert "- new_to_australia:" in text
+    assert "- hot_industry_growth:" in text
+    assert "overseas company announces its first" in text

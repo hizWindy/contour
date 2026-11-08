@@ -12,16 +12,20 @@ from fastapi import FastAPI
 
 from apps.lead_finder.app import APP
 from apps.lead_finder.jobs import (
+    CITY_DAYS,
     DEFAULT_CADENCE,
     DEFAULT_SETTINGS,
     DISCOVERY,
     JOBS,
+    LEGACY_DISCOVERY,
     LOOK_BACK_DAYS,
     NOT_READY,
     SCHEDULED_CITIES,
+    SCHEDULED_COMPANIES,
     SCHEDULED_SIGNS,
     discovery_running,
     doesnt_fit,
+    settings_for,
     start_discovery,
     usd,
 )
@@ -63,17 +67,38 @@ def estimate(**changes: Any) -> RunEstimate:
 # --- The default schedule ----------------------------------------------------------------------
 
 
-def test_the_default_schedule_is_every_2_weeks_on_monday_at_7_and_off() -> None:
-    (job,) = JOBS
-    assert job.key == DISCOVERY == "lead_finder.discovery"
-    assert job.project == "lead_finder"
-    assert job.default is not None
-    cadence = job.default.cadence
-    assert (cadence.every, cadence.unit, cadence.weekday) == (2, "weeks", 0)  # 0 is Monday
-    assert (cadence.at.hour, cadence.at.minute) == (7, 0)
-    assert cadence.zone == "Australia/Melbourne"
-    assert job.default.enabled is False  # each run costs money, so a person switches it on
-    assert cadence is DEFAULT_CADENCE
+def test_there_is_one_schedule_for_each_city_on_its_own_day_and_all_are_off() -> None:
+    """PLAN-V9 C4: Melbourne Monday, Adelaide Tuesday, Perth Wednesday, Sydney Thursday."""
+    made = [job for job in JOBS if job.default is not None]
+    assert [job.key for job in made] == [
+        "lead_finder.discovery.melbourne",
+        "lead_finder.discovery.adelaide",
+        "lead_finder.discovery.perth",
+        "lead_finder.discovery.sydney",
+    ]
+    assert [job.title for job in made] == [
+        "Find new leads: Melbourne",
+        "Find new leads: Adelaide",
+        "Find new leads: Perth",
+        "Find new leads: Sydney",
+    ]
+    for job, (city, weekday) in zip(made, CITY_DAYS, strict=True):
+        assert job.project == "lead_finder"
+        assert job.default is not None
+        cadence = job.default.cadence
+        assert (cadence.every, cadence.unit, cadence.weekday) == (2, "weeks", weekday)
+        assert (cadence.at.hour, cadence.at.minute) == (7, 0)
+        assert cadence.zone == "Australia/Melbourne"
+        assert job.default.enabled is False  # each run costs money, so Al-khair switches it on
+        assert job.default.settings == settings_for(city)
+    assert [weekday for _, weekday in CITY_DAYS] == [0, 1, 2, 3]
+    assert DISCOVERY == "lead_finder.discovery.melbourne"
+    assert made[0].default is not None and made[0].default.cadence == DEFAULT_CADENCE
+
+
+def test_the_old_job_stays_known_with_no_default() -> None:
+    old = next(job for job in JOBS if job.key == LEGACY_DISCOVERY)
+    assert old.default is None  # an old row someone switched on still runs; no new one is made
 
 
 def test_the_default_schedule_first_runs_on_a_monday_at_7_am_melbourne_time() -> None:
@@ -86,39 +111,35 @@ def test_the_lead_finder_offers_this_job_to_the_scheduler() -> None:
     assert APP.jobs == JOBS
 
 
-def test_the_default_choices_are_the_start_pages_own() -> None:
-    # If the rules change what the Start page starts with, this fails: whether the schedule follows
-    # is a decision (a new city or sign changes what a run costs).
-    assert list(SCHEDULED_CITIES) == default_cities()
+def test_the_signs_are_the_main_signs_and_the_cities_every_city() -> None:
+    # If the rules change the main signs, this fails: whether the schedules follow is a decision
+    # (a new sign changes what a run costs).
     assert list(SCHEDULED_SIGNS) == default_triggers()
-    assert DEFAULT_SETTINGS["cities"] == list(SCHEDULED_CITIES)
-    assert DEFAULT_SETTINGS["triggers"] == list(SCHEDULED_SIGNS)
+    assert list(SCHEDULED_CITIES) == known_cities()
+    assert default_cities() == ["Melbourne"]  # the Start page also starts with one city
 
 
-def test_the_default_choices_make_a_valid_discovery_run() -> None:
-    params = DiscoveryParams.model_validate(DEFAULT_SETTINGS)
-    assert params.cities == ["Melbourne", "Adelaide", "Perth"]
-    assert params.area == {}  # the whole of each city
-    assert params.caps.run_cap_usd is None  # the run limit in Settings applies
-
-
-def test_the_default_choices_fit_the_default_limits() -> None:
+@pytest.mark.parametrize("city", ["Melbourne", "Adelaide", "Perth", "Sydney"])
+def test_each_citys_choices_make_a_valid_run_inside_the_default_limits(city: str) -> None:
     settings = Settings(_env_file=None)
-    params = DiscoveryParams.model_validate(DEFAULT_SETTINGS)
-    assert len(make_slices(params, load_rules())) == 12
+    params = DiscoveryParams.model_validate(settings_for(city))
+    assert params.cities == [city]
+    assert params.area == {}  # the whole city
+    assert params.caps.run_cap_usd is None  # the run limit in Settings applies
+    assert params.caps.max_companies == SCHEDULED_COMPANIES
+    assert len(make_slices(params, load_rules())) == 6
     check_discovery_size(params, settings, make_caps(settings))  # raises when too large
 
 
-def test_the_4_cities_of_the_plan_are_too_large_for_the_default_limits() -> None:
-    # Why the default is not the plan's 4 cities: 16 searches, and at most 13 fit. If the limits
-    # change, this fails and the plan's default can be looked at again.
+def test_all_4_cities_in_one_run_are_too_large_for_the_default_limits() -> None:
+    # Why there is one schedule for each city: 24 searches, and at most 13 fit.
     settings = Settings(_env_file=None)
     params = DiscoveryParams(cities=known_cities(), triggers=list(SCHEDULED_SIGNS), since_days=14)
     assert len(known_cities()) == 4
     with pytest.raises(Problem) as refused:
         check_discovery_size(params, settings, make_caps(settings))
     assert refused.value.code == "discovery_too_large"
-    assert "16 searches is too many (the most that fit is 13)" in str(refused.value.extra)
+    assert "24 searches is too many (the most that fit is 13)" in str(refused.value.extra)
 
 
 def test_the_look_back_is_the_time_between_two_runs() -> None:
@@ -128,9 +149,10 @@ def test_the_look_back_is_the_time_between_two_runs() -> None:
 
 
 def test_the_default_choices_are_the_schedules_own_copy_of_the_settings() -> None:
-    (job,) = JOBS
+    job = next(job for job in JOBS if job.key == DISCOVERY)
     assert job.default is not None
     assert job.default.settings == DEFAULT_SETTINGS
+    assert job.default.settings is not settings_for("Melbourne")  # each call makes a new one
 
 
 # --- Does it fit? ---------------------------------------------------------------------------------

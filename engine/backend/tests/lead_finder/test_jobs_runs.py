@@ -101,7 +101,7 @@ async def test_the_default_choices_start_a_run_that_says_a_schedule_started_it(
     run = await manager.get_run(run_id)
     assert run.schedule_id == schedule.id
     assert (run.app, run.mode) == ("lead_finder", "discovery")
-    assert run.params["cities"] == ["Melbourne", "Adelaide", "Perth"]
+    assert run.params["cities"] == ["Melbourne"]
     assert run.params["since_days"] == 14
     assert run.params["triggers"] == default_triggers()
     assert run.params["area"] == {}
@@ -144,7 +144,7 @@ async def test_a_typical_run_above_the_run_limit_does_not_start(
     reason = await refused(context_for(manager, schedule))
 
     assert (
-        "A typical run costs about US$24.80, which is more than the run limit of US$20.00."
+        "A typical run costs about US$22.40, which is more than the run limit of US$20.00."
         in reason
     )
     assert "US$1.00 a company, a default" in reason  # where the number came from

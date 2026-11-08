@@ -66,14 +66,21 @@ async def test_the_run_options_have_everything_the_start_page_draws(
     assert list(areas) == ["cbd", "inner", "all"]
     assert "Docklands" in areas["cbd"]["suburbs"] and areas["all"]["suburbs"] == []
     defaults = [t["id"] for t in body["triggers"] if t["default"]]
-    assert defaults == ["lease_ending", "merger_or_takeover", "big_new_contract", "fast_growth"]
+    assert defaults == [
+        "lease_ending",
+        "merger_or_takeover",
+        "big_new_contract",
+        "fast_growth",
+        "new_to_australia",
+        "hot_industry_growth",
+    ]
     assert body["since_days"] == {"choices": [7, 30], "default": 30}
     modes = {mode["mode"]: mode for mode in body["modes"]}
     assert modes["watchlist"]["needs_approval"] is True
     assert modes["watchlist"]["approved"] is False  # no OK from Levi in the test settings
     assert modes["discovery"]["approved"] is True
     assert body["companies_limit"] == {"min": 1, "max": 25}
-    assert body["defaults"]["cities"] == ["Melbourne", "Adelaide", "Perth"]
+    assert body["defaults"]["cities"] == ["Melbourne"]
     assert set(body["caps"]) == {
         "run_cap_usd",
         "max_companies",
