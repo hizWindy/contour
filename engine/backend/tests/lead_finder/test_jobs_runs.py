@@ -40,7 +40,7 @@ from core.schedules.runner import Scheduler
 from core.searches.models import SearchLog
 from tests.core.auth_world import Clock
 from tests.core.runs_fakes import wait_until_idle
-from tests.lead_finder.conftest import MakeLeadFinderManager
+from tests.lead_finder.conftest import MakeLeadFinderManager, lf_settings
 from tests.lead_finder.jobs_world import (
     FIRST_MONDAY,
     NOW,
@@ -68,8 +68,22 @@ def gate() -> Gate:
 
 
 @pytest.fixture
-def manager(make_lf_manager: MakeLeadFinderManager, gate: Gate) -> RunManager:
-    return make_lf_manager(FakeClaude(), kinds=waiting_kinds(gate))
+def limits() -> dict[str, Any]:
+    """Settings for the test's manager. A test that needs a lower limit overrides this with
+    `@pytest.mark.parametrize("limits", [...])`."""
+    return {}
+
+
+@pytest.fixture
+def manager(
+    make_lf_manager: MakeLeadFinderManager, gate: Gate, limits: dict[str, Any]
+) -> RunManager:
+    return make_lf_manager(FakeClaude(), kinds=waiting_kinds(gate), settings=lf_settings(**limits))
+
+
+# An automatic run's limit of US$50, under a typical run at the placeholder prices (US$62.40:
+# 6 searches at US$0.40 and 60 companies at US$1.00), so a test can see a run refused.
+LOW = [{"scheduled_run_cap_usd": Decimal("50")}]
 
 
 def context_for(manager: RunManager, schedule: Schedule) -> JobContext:
@@ -136,6 +150,7 @@ async def test_a_run_a_person_starts_has_no_schedule_and_the_list_tells_them_apa
 # --- The limits ----------------------------------------------------------------------------------
 
 
+@pytest.mark.parametrize("limits", LOW)
 async def test_a_typical_run_above_the_run_limit_does_not_start(
     session_factory: Factory, manager: RunManager
 ) -> None:
@@ -144,7 +159,7 @@ async def test_a_typical_run_above_the_run_limit_does_not_start(
     reason = await refused(context_for(manager, schedule))
 
     assert (
-        "A typical run costs about US$22.40, which is more than the run limit of US$20.00."
+        "A typical run costs about US$62.40, which is more than the run limit of US$50.00."
         in reason
     )
     assert "US$1.00 a company, a default" in reason  # where the number came from
@@ -157,7 +172,7 @@ async def test_a_run_the_daily_limit_cannot_cover_does_not_start_until_there_is_
 ) -> None:
     schedule = await the_schedule(session_factory, SMALL)
     context = context_for(manager, schedule)
-    await spend_today(session_factory, "48")  # the daily limit is US$50: US$2.00 is left
+    await spend_today(session_factory, "148")  # the daily limit is US$150: US$2.00 is left
 
     reason = await refused(context)
 
@@ -178,9 +193,10 @@ async def test_the_run_still_has_its_own_limits_while_it_works(
     schedule = await the_schedule(session_factory, SMALL)
     result = await start_discovery(context_for(manager, schedule))
     run = await manager.get_run(uuid.UUID(result.ref))
-    # The saved cap lowers the run's company limit, and the run limit comes from Settings.
+    # The saved cap lowers the run's company limit, and the run limit is the automatic run's
+    # limit in Settings (US$150), not a person's run limit (US$20).
     assert run.caps.max_companies == 3
-    assert run.caps.run_cap_usd == D("20.00")
+    assert run.caps.run_cap_usd == D("150.00")
 
 
 # --- The saved choices ----------------------------------------------------------------------------
@@ -323,7 +339,7 @@ async def test_the_reason_it_didnt_start_is_kept_on_the_schedule(
 ) -> None:
     schedule = await the_schedule(session_factory, SMALL)
     await switch_on(session_factory, schedule)
-    await spend_today(session_factory, "48")
+    await spend_today(session_factory, "148")  # US$2.00 left of the US$150 daily limit
     loop = make_loop(manager, session_factory, clock_at(FIRST_MONDAY))
 
     (fired,) = await loop.tick()

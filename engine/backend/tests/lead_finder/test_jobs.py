@@ -21,7 +21,6 @@ from apps.lead_finder.jobs import (
     LOOK_BACK_DAYS,
     NOT_READY,
     SCHEDULED_CITIES,
-    SCHEDULED_COMPANIES,
     SCHEDULED_SIGNS,
     discovery_running,
     doesnt_fit,
@@ -126,9 +125,9 @@ def test_each_citys_choices_make_a_valid_run_inside_the_default_limits(city: str
     assert params.cities == [city]
     assert params.area == {}  # the whole city
     assert params.caps.run_cap_usd is None  # the run limit in Settings applies
-    assert params.caps.max_companies == SCHEDULED_COMPANIES
+    assert params.caps.max_companies is None  # the automatic run's limits in Settings apply
     assert len(make_slices(params, load_rules())) == 6
-    check_discovery_size(params, settings, make_caps(settings))  # raises when too large
+    check_discovery_size(params, settings, make_caps(settings, scheduled=True))
 
 
 def test_all_4_cities_in_one_run_are_too_large_for_the_default_limits() -> None:

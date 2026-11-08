@@ -10,9 +10,14 @@ value. Each default saves its city, the signs, the look-back and its own company
 different days of the same fortnight: Melbourne on Monday, Adelaide on Tuesday, Perth on Wednesday
 and Sydney on Thursday (Sydney's leads still go to a Director). All are **off**: each run costs
 money, so Al-khair switches them on. Each searches its city for the 6 main signs (6 searches),
-looks back 14 days, the time between two runs, so no day is missed and none is read twice, and
-researches at most `SCHEDULED_COMPANIES` companies until the volume test sets each city's number
-(PLAN-V9 D3). **TBC** with Levi (the days, the time and the signs).
+looks back 14 days, the time between two runs, so no day is missed and none is read twice. **TBC**
+with Levi (the days, the time and the signs).
+
+**An automatic run's limits** (9 Nov, Al-khair). It has no company limit of its own: it stops at its
+share of the goal (`goal.py`: 100 good leads a round by default), or when no company is left. Its
+money limit is `scheduled_run_cap_usd` (US$150), a brake against a fault; a city run usually costs
+about US$25 to US$30 (TBC). Both are on the Settings page, under ceilings in .env. A run a person
+starts keeps its own limits (US$20 and 20 companies).
 
 **Why separate days.** Only one run goes at a time; the daily limit is US$50; the server's memory
 is small; and each email stays short.
@@ -78,7 +83,6 @@ SCHEDULED_SIGNS = (
     "hot_industry_growth",
 )
 LOOK_BACK_DAYS = 14
-SCHEDULED_COMPANIES = 20  # each city's company limit until the volume test sets it (PLAN-V9 D3)
 AT = time(7, 0)
 LEGACY_DISCOVERY = "lead_finder.discovery"  # the one schedule before PLAN-V9 C4
 
@@ -93,12 +97,12 @@ def cadence_for(weekday: int) -> Cadence:
 
 
 def settings_for(city: str) -> dict[str, Any]:
-    """What one city's default schedule saves."""
+    """What one city's default schedule saves: no limits of its own, so the automatic run's limits
+    on the Settings page apply (`make_caps(..., scheduled=True)`)."""
     return {
         "cities": [city],
         "triggers": list(SCHEDULED_SIGNS),
         "since_days": LOOK_BACK_DAYS,
-        "caps": {"max_companies": SCHEDULED_COMPANIES},
     }
 
 
@@ -173,7 +177,9 @@ def _refusal(problem: Problem) -> str:
 async def _estimate(context: JobContext) -> RunEstimate:
     """The run's estimate for the saved choices: the one the Start page shows."""
     manager = _manager(context.app)
-    return await manager.estimate(RunCreate(app=APP, mode=MODE, params=context.settings))
+    return await manager.estimate(
+        RunCreate(app=APP, mode=MODE, params=context.settings), scheduled=True
+    )
 
 
 async def start_discovery(context: JobContext) -> JobResult:

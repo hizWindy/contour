@@ -4,7 +4,8 @@ In order, for each company:
 1. Wait for a place (the run's research gate, `run_company_concurrency` at once).
 2. Already researched in this run? (a resume, or the same name twice) Then nothing more: no event,
    no cost. The lead id is fixed by the run and the company, so this is a plain lookup.
-3. A HubSpot name (the watchlist) waits for Levi's OK: `company_skipped` if it is off.
+3. A HubSpot name (the watchlist) waits for Levi's OK: `company_skipped` if it is off. An
+   automatic run that already has its goal of good leads skips the rest (`goal.py`).
 4. Count the company against `max_companies`, and hold the company cap in the run budget. When
    the run's money is used up, the run stops cleanly (`cap_reached`) and the rest is skipped.
 5. Save discovery's signals to memory under the name being researched (research then reads them).
@@ -23,6 +24,7 @@ from decimal import Decimal
 from typing import Any
 
 from apps.lead_finder.context import ResearchContext, StepModels
+from apps.lead_finder.goal import good_of
 from apps.lead_finder.research import (
     APP,
     LeadCard,
@@ -52,6 +54,13 @@ from core.searches.service import log_reply
 log = logging.getLogger(__name__)
 
 NOT_APPROVED = "HubSpot names are not approved"
+
+
+def goal_reached(goal: int) -> str:
+    """Why an automatic run skips the companies left once it has its goal."""
+    return f"the run reached its goal of {goal} good leads"
+
+
 CAP_REACHED = "the run's cost limit is reached"
 RESEARCH_FAILED = "Research failed because of an unexpected error. The details are in the log."
 SIGNAL_MAX_CHARS = 400
@@ -176,6 +185,9 @@ async def research_one(run: RunCtx, task: CompanyTask) -> dict[str, Any]:
             return outcome(task, "done", lead_id=str(existing.id), result=existing.result)
         if run.stop_reason is not None:
             return await _skip(run, task, run.stop_reason)
+        goal = task.get("goal")
+        if goal is not None and good_of({"by_result": ctx.totals.counts.by_result}) >= goal:
+            return await _skip(run, task, goal_reached(goal))
         if task["origin"] == "hubspot" and not _hubspot_names_approved(run):
             return await _skip(run, task, NOT_APPROVED)
         if not ctx.budget.start_company():

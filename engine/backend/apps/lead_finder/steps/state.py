@@ -32,6 +32,9 @@ class CompanyTask(TypedDict):
     recheck: bool  # search again even when memory is fresh
     signals: list[dict[str, Any]]  # `Signal` fields, from discovery
     today: str  # the run's day, YYYY-MM-DD
+    # An automatic run's goal in good leads (`goal.py`): research stops once the run has this many.
+    # Missing or None: no goal (a run a person started).
+    goal: NotRequired[int | None]
 
 
 class SliceTask(TypedDict):
@@ -49,6 +52,7 @@ class State(TypedDict):
     candidates: NotRequired[Annotated[list[dict[str, Any]], operator.add]]  # from every slice
     merged: NotRequired[list[dict[str, Any]]]
     chosen: NotRequired[list[CompanyTask]]
+    goal: NotRequired[int | None]  # an automatic run's goal, worked out once in `plan`
     outcomes: NotRequired[Annotated[list[dict[str, Any]], operator.add]]  # one per company
 
 

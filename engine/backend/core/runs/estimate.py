@@ -202,16 +202,23 @@ async def estimate_run(
     kinds: Mapping[KindKey, RunKind[Any]],
     session_factory: async_sessionmaker[AsyncSession],
     settings_provider: SettingsProvider,
+    scheduled: bool = False,
 ) -> RunEstimate:
     """What a run would cost. An invalid body is `valid: false`, not an error. Raises
-    Problem 404 only for an unknown app or mode."""
+    Problem 404 only for an unknown app or mode. `scheduled` uses the limits of a run a
+    schedule starts (`make_caps`)."""
     kind = find_kind(kinds, body.app, body.mode)
     settings: Settings = await settings_provider()
     params, errors = try_parse_params(kind.params_model, body.params)
-    caps = make_caps(settings)  # without the person's own limits, until the params are valid
+    # Without the person's own limits, until the params are valid
+    caps = make_caps(settings, scheduled=scheduled)
     blocked: Blocked | None = None
     if params is not None:
-        caps = make_caps(settings, kind.caps_override(params) if kind.caps_override else None)
+        caps = make_caps(
+            settings,
+            kind.caps_override(params) if kind.caps_override else None,
+            scheduled=scheduled,
+        )
         if kind.check is not None:
             try:
                 kind.check(params, settings, caps)

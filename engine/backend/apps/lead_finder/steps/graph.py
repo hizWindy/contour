@@ -4,8 +4,9 @@ resume continues where it stopped instead of paying twice.
     plan -> (discover, one per slice | choose) -> merge -> choose -> (research, one per company
     | finish) -> finish
 
-- `plan`: discovery makes its slices (cities x triggers), and adds up to `rivals.per_run` pending
-  rivals of booming companies in its cities, with the weak sign `rival_growth` (PLAN-V9 B5). The
+- `plan`: an automatic run (one a schedule started) works out its goal in good leads first
+  (`goal.py`). Discovery makes its slices (cities x triggers), and adds up to `rivals.per_run`
+  pending rivals of booming companies in its cities, with the weak sign `rival_growth`. The
   other modes already know their companies (`State.known`): the watchlist, the typed list, the
   test set.
 - `discover`: one Claude request per slice, side by side (the run's discover gate). It holds the
@@ -15,7 +16,8 @@ resume continues where it stopped instead of paying twice.
 - `choose`: the rules that skip a company (HubSpot deals, fresh or decided leads), then the best
   first, up to the run's company limit. The watchlist keeps its own order. Typed companies and
   the test set are researched as asked, up to the limit.
-- `research`: one company (steps/company.py), side by side (the run's research gate).
+- `research`: one company (steps/company.py), side by side (the run's research gate). An
+  automatic run stops starting companies once it has its goal of good leads.
 - `finish`: nothing. The run's outcome is worked out after the graph, from the database.
 
 Every router returns its `Send`s or a plain node name, so a fan-out with nothing in it never ends
@@ -43,6 +45,7 @@ from langgraph.types import Send  # noqa: E402
 from sqlalchemy import func, select  # noqa: E402
 
 from apps.lead_finder.context import CreditMeter  # noqa: E402
+from apps.lead_finder.goal import goal_for_run  # noqa: E402
 from apps.lead_finder.prompts import discover_prompt  # noqa: E402
 from apps.lead_finder.rivals import (  # noqa: E402
     mark_rivals,
@@ -121,6 +124,15 @@ async def plan(state: State, runtime: Runtime[RunCtx]) -> dict[str, Any]:
     found: dict[str, Any] = {"slices": [s.model_dump(mode="json") for s in slices]}
     if rivals:
         found["candidates"] = [rival.model_dump(mode="json") for rival in rivals]
+    if ctx.schedule_id is not None:  # an automatic run aims for its share of the round's goal
+        async with ctx.session() as session:
+            found["goal"] = await goal_for_run(
+                session,
+                ctx.settings.lead_finder_goal_good_leads,
+                datetime.now(UTC),
+                ctx.run_id,
+                ctx.schedule_id,
+            )
     return found
 
 
@@ -238,7 +250,9 @@ async def merge_step(state: State, runtime: Runtime[RunCtx]) -> dict[str, Any]:
 # --- choose ----------------------------------------------------------------------------------
 
 
-def _task_of_merged(company: Merged, today: str, recheck: bool) -> CompanyTask:
+def _task_of_merged(
+    company: Merged, today: str, recheck: bool, goal: int | None = None
+) -> CompanyTask:
     return CompanyTask(
         name=company.name,
         city=company.city,
@@ -258,6 +272,7 @@ def _task_of_merged(company: Merged, today: str, recheck: bool) -> CompanyTask:
             for s in company.signals
         ],
         today=today,
+        goal=goal,
     )
 
 
@@ -344,7 +359,9 @@ async def choose(state: State, runtime: Runtime[RunCtx]) -> dict[str, Any]:
         skipped = decision.skipped
         over = decision.over_limit_count
         chosen = [
-            tasks[company.key] if company.key in tasks else _task_of_merged(company, today, recheck)
+            tasks[company.key]
+            if company.key in tasks
+            else _task_of_merged(company, today, recheck, state.get("goal"))
             for company in decision.chosen
         ]
         if mode == "discovery":

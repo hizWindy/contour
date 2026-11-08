@@ -108,6 +108,7 @@ backend/
       api.py           the /api/v1/lead-finder endpoints (also api_leads.py, api_runs.py, api_watchlist.py)
       runs.py          the four kinds of run: find new leads, watchlist, typed companies, test set
       jobs.py          the scheduled runs: one for each city (`lead_finder.discovery.melbourne` ...), off by default, and the check against the limits before one starts
+      goal.py          the automatic runs' goal: each aims for its share of the good leads still needed this round (100 every 2 weeks, on the Settings page)
       run_email.py     the email when a scheduled run ends (PLAN-V9 C2), to LEAD_FINDER_NOTIFY_EMAILS
       rivals.py        rivals of a good lead in a booming industry (PLAN-V9 B5): the search, the rivals table, and what the next run adds
       api_review.py    the review page's routes (PLAN-V9 C3): the bar, Watch and Reject for many leads, Approve and send to HubSpot

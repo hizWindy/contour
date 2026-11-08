@@ -127,15 +127,25 @@ class CapsOverride:
     max_companies: int | None = None
 
 
-def make_caps(settings: Settings, override: CapsOverride | None = None) -> RunCaps:
+# The company limit of a run a schedule started: the most `run_max_companies` allows. It goes on
+# until its project's own goal, or until no company is left (9 Nov, Al-khair).
+SCHEDULED_MAX_COMPANIES = 100
+
+
+def make_caps(
+    settings: Settings, override: CapsOverride | None = None, *, scheduled: bool = False
+) -> RunCaps:
     """The caps a run starts with, from the effective settings and what the person chose.
 
     Both `POST /runs` and `POST /runs/estimate` use this, so the estimate shows the cap the run
     would really get. The discovery cap is the discovery share of the (lowered) run cap, in whole
     cents rounded down. One company can never cost more than the whole run.
+
+    A run a schedule started (`scheduled`) gets `scheduled_run_cap_usd` and
+    `SCHEDULED_MAX_COMPANIES` instead of the limits for a run a person starts.
     """
-    run_cap = settings.run_cap_usd
-    max_companies = settings.run_max_companies
+    run_cap = settings.scheduled_run_cap_usd if scheduled else settings.run_cap_usd
+    max_companies = SCHEDULED_MAX_COMPANIES if scheduled else settings.run_max_companies
     if override is not None:
         if override.run_cap_usd is not None:
             run_cap = min(run_cap, override.run_cap_usd)
@@ -175,6 +185,9 @@ class RunContext[P: BaseModel]:
     budget: RunBudget
     research_gate: asyncio.Semaphore  # size run_company_concurrency, made once for the run
     discover_gate: asyncio.Semaphore  # size run_discover_concurrency, made once for the run
+    # The schedule that started this run, or None for a run a person started. Last, with a default,
+    # so a RunContext made in a test needs no change.
+    schedule_id: uuid.UUID | None = None
 
     @asynccontextmanager
     async def session(self) -> AsyncIterator[AsyncSession]:

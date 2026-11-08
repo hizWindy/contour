@@ -54,6 +54,9 @@ EDITABLE_KEYS: Final[list[str]] = [
     "request_reserve_usd",
     "run_cap_usd",
     "run_max_companies",
+    "scheduled_run_cap_usd",
+    "daily_cap_usd",
+    "lead_finder_goal_good_leads",
     "slice_reserve_usd",
     "slice_max_searches",
     "discovery_share",
@@ -77,6 +80,8 @@ CEILINGS: Final[dict[str, str]] = {
     "request_reserve_usd": "hard_company_cap_usd",
     "slice_reserve_usd": "hard_company_cap_usd",
     "run_cap_usd": "hard_run_cap_usd",
+    "scheduled_run_cap_usd": "hard_scheduled_run_cap_usd",
+    "daily_cap_usd": "hard_daily_cap_usd",
     "run_company_concurrency": "hard_concurrency",
     "run_discover_concurrency": "hard_concurrency",
     "max_concurrent_runs": "hard_concurrency",
@@ -278,7 +283,13 @@ class Settings(BaseSettings):
     hard_run_cap_usd: Decimal = Field(Decimal("50"), ge=Decimal("1"), le=1000)
     hard_company_cap_usd: Decimal = Field(Decimal("5"), ge=Decimal("0.10"), le=1000)
     hard_concurrency: int = Field(4, ge=1, le=16)
-    daily_cap_usd: Decimal = Field(Decimal("50"), gt=0, le=10_000)
+    # The ceilings of the two limits below. The Settings page can't go above them, so a typo there
+    # (US$1,000 for US$100) is stopped. They change only in .env, then a restart. TBC with Al-khair.
+    hard_scheduled_run_cap_usd: Decimal = Field(Decimal("200"), ge=Decimal("1"), le=10_000)
+    hard_daily_cap_usd: Decimal = Field(Decimal("300"), ge=Decimal("1"), le=100_000)
+    # All Claude spending in 24 hours, every run together (core/claude/daily.py). On the Settings
+    # page since 9 Nov, up to hard_daily_cap_usd. US$150: an automatic run may spend that much.
+    daily_cap_usd: Decimal = Field(Decimal("150"), ge=Decimal("1"), le=Decimal("300"))
 
     # --- Claude. Prices per model are in core/claude/pricing.py. -----------------------
     anthropic_api_key: SecretStr | None = None
@@ -345,6 +356,16 @@ class Settings(BaseSettings):
     # --- Caps for one run --------------------------------------------------------------
     run_cap_usd: Decimal = Field(Decimal("20.00"), ge=Decimal("1"), le=Decimal("50"))
     run_max_companies: int = Field(20, ge=1, le=100)
+    # --- Automatic runs: the ones a schedule starts (9 Nov, Al-khair) ----------------------
+    # They have no company limit of their own: they go on until their share of the goal below, or
+    # until no company is left. This is their money limit, a brake against a fault: a normal city
+    # run costs about US$25 to US$30 (TBC). A run a person starts keeps run_cap_usd and
+    # run_max_companies above.
+    scheduled_run_cap_usd: Decimal = Field(Decimal("150.00"), ge=Decimal("1"), le=Decimal("200"))
+    # The Lead Finder's goal: good leads (Pass or Director review) that the automatic runs find
+    # together in one round of the city schedules, every 2 weeks (Levi, 5 Nov: about 100; 90 or
+    # 100 is TBC with him).
+    lead_finder_goal_good_leads: int = Field(100, ge=1, le=1000)
     # Held for each discovery request. 0.60 lets the default Start choice (3 cities x 4 main
     # triggers = 12 requests, US$7.20) fit discovery's share of the default run cap (US$8.00).
     # A discovery request is expected to cost about US$0.40 (TBC: measure on the first runs).

@@ -29,7 +29,8 @@ ENV_ONLY = [
     "hard_run_cap_usd",
     "hard_company_cap_usd",
     "hard_concurrency",
-    "daily_cap_usd",
+    "hard_scheduled_run_cap_usd",
+    "hard_daily_cap_usd",
     "embedding_threads",
     "langgraph_schema",
     "db_pool_size",
@@ -70,7 +71,10 @@ def test_defaults_are_the_ones_in_the_design() -> None:
     assert (s.memory_fresh_days, s.match_fuzzy_min, s.match_profile_min) == (30, 90, 0.90)
     assert (s.model_discover, s.model_search, s.model_extract) == (None, None, None)
     assert (s.hard_run_cap_usd, s.hard_company_cap_usd) == (Decimal("50"), Decimal("5"))
-    assert (s.hard_concurrency, s.daily_cap_usd) == (4, Decimal("50"))
+    assert (s.hard_concurrency, s.daily_cap_usd) == (4, Decimal("150"))
+    # Automatic runs (9 Nov, Al-khair): US$150 a run, 100 good leads a round, under ceilings.
+    assert (s.scheduled_run_cap_usd, s.lead_finder_goal_good_leads) == (Decimal("150"), 100)
+    assert (s.hard_scheduled_run_cap_usd, s.hard_daily_cap_usd) == (Decimal("200"), Decimal("300"))
     assert (s.db_pool_size, s.db_max_overflow, s.db_pool_timeout) == (10, 10, 10)
     assert s.langgraph_schema == "langgraph"
     assert s.embedding_threads is None

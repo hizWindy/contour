@@ -8,6 +8,8 @@ What it shows:
 - the city, and the number of good leads (Pass and Director review), Watch and Drop;
 - the cost, and the cost per good lead;
 - the top 5 good leads, each with one line on why it fits (its best sign);
+- how far the round of city runs is: good leads so far out of the goal, and what it cost
+  (`goal.py`);
 - a "Review the leads" link to the run's review page (`/results?run_id=...`).
 
 A run that failed or was stopped sends a short email saying why. A run that was interrupted (the
@@ -22,12 +24,14 @@ import html
 import logging
 import uuid
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from apps.lead_finder.goal import Round, round_so_far
 from apps.lead_finder.tables import Lead
 from core.config import Settings
 from core.email.sender import EmailError, EmailSender, Sent, send
@@ -124,8 +128,23 @@ async def top_good_leads(session: AsyncSession, run_id: uuid.UUID) -> list[GoodL
     ]
 
 
-def build_email(run: RunOut, top: list[GoodLead], link: str) -> RunEmail:
-    """The email for a finished run. Pure: the run, its top leads and the review link."""
+def round_line(state: Round) -> str:
+    """How far the round of automatic city runs is, in one line."""
+    runs = "1 city run" if state.runs == 1 else f"{state.runs} city runs"
+    line = (
+        f"This round so far: {state.found} of {state.goal} good leads, "
+        f"{usd(state.spent_usd)} spent ({runs})."
+    )
+    if state.found >= state.goal:
+        line += " The goal is reached."
+    return line
+
+
+def build_email(
+    run: RunOut, top: list[GoodLead], link: str, state: Round | None = None
+) -> RunEmail:
+    """The email for a finished run. Pure: the run, its top leads, the review link and the round
+    so far (for a run a schedule started)."""
     where = _where(run.params)
     counts = run.counts.by_result
     good = good_leads(counts)
@@ -162,6 +181,8 @@ def build_email(run: RunOut, top: list[GoodLead], link: str) -> RunEmail:
     lines = [f"The scheduled {where} run is done.", tally, cost]
     if run.stop_reason:
         lines.append(f"It stopped early: {run.stop_reason}")
+    if state is not None:
+        lines.append(round_line(state))
     lines.append("")
     if top:
         lines.append("The top good leads:")
@@ -182,6 +203,8 @@ def build_email(run: RunOut, top: list[GoodLead], link: str) -> RunEmail:
         for lead in top
     )
     stopped = f"<p>It stopped early: {html.escape(run.stop_reason)}</p>" if run.stop_reason else ""
+    if state is not None:
+        stopped += f"<p>{html.escape(round_line(state))}</p>"
     body = (
         f"<p>The scheduled {html.escape(where)} run is done.</p>"
         f"<p>{html.escape(tally)}<br>{html.escape(cost)}</p>{stopped}"
@@ -223,7 +246,8 @@ async def run_finished(
         return None
     try:
         top = await top_good_leads(session, run.id) if run.status == "done" else []
-        email = build_email(run, top, review_link(settings, run.id))
+        state = await round_so_far(session, settings.lead_finder_goal_good_leads, datetime.now(UTC))
+        email = build_email(run, top, review_link(settings, run.id), state)
         return await send(
             to,
             email.subject,

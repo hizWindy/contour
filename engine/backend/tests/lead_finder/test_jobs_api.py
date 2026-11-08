@@ -5,6 +5,7 @@ slot and the start are the real ones.
 
 import uuid
 from collections.abc import AsyncIterator
+from decimal import Decimal
 from typing import Any
 
 import httpx
@@ -20,7 +21,7 @@ from core.schedules.runner import Scheduler
 from core.schedules.runtime import all_jobs
 from tests.core.auth_world import Clock
 from tests.core.runs_fakes import wait_until_idle
-from tests.lead_finder.conftest import MakeLeadFinderManager
+from tests.lead_finder.conftest import MakeLeadFinderManager, lf_settings
 from tests.lead_finder.jobs_world import (
     NOW,
     Factory,
@@ -43,8 +44,22 @@ def gate() -> Gate:
 
 
 @pytest.fixture
-def manager(make_lf_manager: MakeLeadFinderManager, gate: Gate) -> RunManager:
-    return make_lf_manager(FakeClaude(), kinds=waiting_kinds(gate))
+def limits() -> dict[str, Any]:
+    """Settings for the test's manager. A test that needs a lower limit overrides this with
+    `@pytest.mark.parametrize("limits", [...])`."""
+    return {}
+
+
+@pytest.fixture
+def manager(
+    make_lf_manager: MakeLeadFinderManager, gate: Gate, limits: dict[str, Any]
+) -> RunManager:
+    return make_lf_manager(FakeClaude(), kinds=waiting_kinds(gate), settings=lf_settings(**limits))
+
+
+# An automatic run's limit of US$50, under a typical run at the placeholder prices (US$62.40:
+# 6 searches at US$0.40 and 60 companies at US$1.00), so a test can see a run refused.
+LOW = [{"scheduled_run_cap_usd": Decimal("50")}]
 
 
 @pytest.fixture
@@ -99,11 +114,13 @@ async def test_the_page_reads_the_default_schedule_with_its_estimate(
     assert item["estimate"] == {
         "valid": True,
         "problem": None,
-        "typical_usd": "6.90",  # 6 searches at US$0.15 and 20 companies at US$0.30
-        "worst_usd": "20.00",  # the run's own limit stops it there
-        "per_month_usd": "15.01",  # 6.90 x 30.4375 / 14 days, rounded up
-        "cap_usd": "20.00",
-        "daily_left_usd": "50.00",
+        # 6 searches at US$0.15, and 60 companies at US$0.30: the most 6 searches can find,
+        # since an automatic run has no company limit of its own (9 Nov)
+        "typical_usd": "18.90",
+        "worst_usd": "150.00",  # the automatic run's own limit stops it there
+        "per_month_usd": "41.10",  # 18.90 x 30.4375 / 14 days, rounded up
+        "cap_usd": "150.00",
+        "daily_left_usd": "150.00",
         "basis": (
             "US$0.30 a company, the average of 6 past companies; "
             "US$0.15 a slice, the average of 6 past slices"
@@ -111,20 +128,30 @@ async def test_the_page_reads_the_default_schedule_with_its_estimate(
     }
 
 
-async def test_without_past_prices_the_page_says_the_run_would_not_start(
+async def test_without_past_prices_an_automatic_run_still_fits_its_limit(
+    client: httpx.AsyncClient,
+) -> None:
+    estimate = (await the_item(client))["estimate"]
+    assert estimate["valid"] is True
+    assert estimate["typical_usd"] == "62.40"  # the placeholder prices
+    assert estimate["problem"] is None  # under the automatic run's US$150
+
+
+@pytest.mark.parametrize("limits", LOW)
+async def test_without_past_prices_the_page_says_a_run_over_the_limit_would_not_start(
     client: httpx.AsyncClient,
 ) -> None:
     estimate = (await the_item(client))["estimate"]
 
     assert estimate["valid"] is True  # the choices are fine
-    assert estimate["typical_usd"] == "22.40"  # the placeholder prices
+    assert estimate["typical_usd"] == "62.40"  # the placeholder prices
     assert estimate["problem"].startswith(
-        "A typical run costs about US$22.40, which is more than the run limit of US$20.00."
+        "A typical run costs about US$62.40, which is more than the run limit of US$50.00."
     )
     assert "US$1.00 a company, a default" in estimate["problem"]
 
 
-async def test_adding_sydney_is_saved_and_the_page_says_it_is_too_large(
+async def test_adding_three_cities_is_saved_and_fits_an_automatic_run(
     client: httpx.AsyncClient, session_factory: Factory
 ) -> None:
     await add_past_prices(session_factory)
@@ -139,11 +166,10 @@ async def test_adding_sydney_is_saved_and_the_page_says_it_is_too_large(
     assert item["summary"] == (
         "Searches Melbourne, Adelaide, Perth and Sydney for the 6 main signs, looking back 14 days."
     )
-    assert item["estimate"]["valid"] is False
-    assert item["estimate"]["problem"] == (
-        "The saved choices can't be used. cities, triggers: "
-        "24 searches is too many (the most that fit is 13). Choose fewer."
-    )
+    # 24 searches x US$0.60 = US$14.40 fits discovery's share of US$150 (US$60). A run a person
+    # starts with the same choices would be too large (13 searches at most).
+    assert item["estimate"]["valid"] is True
+    assert item["estimate"]["problem"] is None
 
 
 async def test_choices_are_checked_and_saved_cleaned(client: httpx.AsyncClient) -> None:
@@ -210,17 +236,18 @@ async def test_switching_on_then_run_now_starts_a_run_the_runs_list_marks(
     assert (await the_item(client))["running"] is False
 
 
+@pytest.mark.parametrize("limits", LOW)
 async def test_run_now_over_the_limit_says_why_and_starts_nothing(
     client: httpx.AsyncClient, session_factory: Factory
 ) -> None:
-    item = await the_item(client)  # no past prices: the default run looks like US$22.40
+    item = await the_item(client)  # no past prices: the default run looks like US$62.40
 
     answer = await client.post(f"{URL}/{item['id']}/run")
 
     assert answer.status_code == 200
     body = answer.json()
     assert body["status"] == "skipped" and body["ref"] is None
-    assert body["reason"].startswith("A typical run costs about US$22.40, which is more than")
+    assert body["reason"].startswith("A typical run costs about US$62.40, which is more than")
     assert await all_runs(session_factory) == []
     assert (await the_item(client))["last_error"] == body["reason"]
 

@@ -48,7 +48,7 @@ def fields_of(out: Any) -> dict[str, Any]:
 def test_rows_for_env_only_or_unknown_keys_are_ignored() -> None:
     rows = {
         "hubspot_names_to_claude_ok": True,  # the Levi data OK: only .env can turn it on
-        "daily_cap_usd": "5000",
+        "hard_daily_cap_usd": "5000",
         "hard_run_cap_usd": "999",
         "anthropic_api_key": "sk-ant-x",
         "nonsense": 1,
@@ -56,7 +56,7 @@ def test_rows_for_env_only_or_unknown_keys_are_ignored() -> None:
     }
     resolved = resolve_settings(base(), rows)
     assert resolved.settings.hubspot_names_to_claude_ok is False
-    assert resolved.settings.daily_cap_usd == D("50")
+    assert resolved.settings.hard_daily_cap_usd == D("300")
     assert resolved.settings.hard_run_cap_usd == D("50")
     assert resolved.settings.run_max_companies == 7
     assert dict(resolved.used) == {"run_max_companies": 7}
@@ -250,7 +250,7 @@ async def test_null_puts_a_step_model_back_to_the_main_model(session: AsyncSessi
             "body.values.hubspot_names_to_claude_ok",
             "engine/.env",
         ),
-        ({"daily_cap_usd": "1.00"}, "body.values.daily_cap_usd", "engine/.env"),
+        ({"hard_daily_cap_usd": "1.00"}, "body.values.hard_daily_cap_usd", "engine/.env"),
         ({"run_cap_usd": 15}, "body.values.run_cap_usd", 'Send this as a string, like "2.50".'),
         ({"run_cap_usd": "lots"}, "body.values.run_cap_usd", "This isn't a number."),
         ({"run_cap_usd": "0.50"}, "body.values.run_cap_usd", "Must be at least 1.00."),
@@ -319,7 +319,7 @@ async def test_reset_removes_one_override_and_refuses_an_unknown_key(session: As
     assert fields_of(out)["run_max_companies"].value == 20
     assert await stored(session) == {"run_cap_usd": "15.00"}
     await reset_setting(session, "run_max_companies")  # not overridden: fine
-    for key in ("nope", "hubspot_names_to_claude_ok", "daily_cap_usd"):
+    for key in ("nope", "hubspot_names_to_claude_ok", "hard_daily_cap_usd"):
         problem = await problem_of(reset_setting(session, key))
         assert (problem.status, problem.code) == (404, "setting_not_found")
 

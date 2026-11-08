@@ -37,7 +37,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from core.api.errors import Problem
 from core.claude import client as claude_client
-from core.claude.client import Claude
+from core.claude.client import Claude, configure_claude
 from core.config import Settings, get_settings
 from core.db import engine as db_engine
 from core.memory.embedder import get_embedder
@@ -152,9 +152,15 @@ def _claude_provider(app: FastAPI) -> ClaudeProvider:
 
 
 def _settings_provider(factory: async_sessionmaker[AsyncSession]) -> SettingsProvider:
+    """The settings a run starts with: .env with the Settings page on top. The shared Claude gets
+    them too (the daily limit, the model), so a run a schedule starts after a restart, with no
+    page opened since, still uses what the Settings page says."""
+
     async def provider() -> Settings:
         async with factory() as session:
-            return await prefs_service.effective_settings(session)
+            settings = await prefs_service.effective_settings(session)
+        configure_claude(settings)
+        return settings
 
     return provider
 

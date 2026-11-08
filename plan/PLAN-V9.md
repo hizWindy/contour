@@ -3,8 +3,8 @@
 This plan makes the changes Levi asked for after he used the Lead Finder on the live site. It finds bigger companies, looks in booming industries and at overseas companies coming to Australia, runs all 4 cities by itself, and emails Levi a list to review before anything goes to HubSpot. It also gets more good leads for the money.
 
 - **Built by:** Al-khair Pama. **Signed off by:** Al-khair for the code. Levi confirms the business rules marked **TBC** (to be confirmed).
-- **Last updated:** 2026-11-09 (D4 added: limits for manual and automatic runs, agreed with Al-khair, not built).
-- **Progress:** 10 of 19 steps done. The code of the first 18 steps is built on `plan-v9` (not merged, not pushed). C1, C3, D1, E2 and E3 are built and wait on one check each; A2, A3 and D3 wait on Al-khair. D4 (added 9 Nov) is not built.
+- **Last updated:** 2026-11-09 (D4 built: limits for manual and automatic runs).
+- **Progress:** 11 of 19 steps done. All the code is built on `plan-v9` (not merged, not pushed). C1, C3, D1, E2 and E3 are built and wait on one check each; A2, A3 and D3 wait on Al-khair.
 - **Sources:** the meeting notes of 2 Nov and 5 Nov in `minutes of meeting/`.
 - **Comes after:** [PLAN-V8.md](PLAN-V8.md). Its open steps (B1 to B4) stay there, but A2 below needs B3.
 
@@ -174,7 +174,7 @@ Two extras of ours:
   - Then set each city's company limit so the 4 cities give about 100 good leads per fortnight within US$100 to US$200.
   - One run can't go over US$50 (`hard_run_cap_usd`), so the limit per city stays at or under that.
   - **Done when:** the numbers are in the Log and the four schedules have their limits.
-- [ ] **D4. Limits for manual and automatic runs.** Agreed with Al-khair on 9 Nov. Build it after D3, from D3's numbers.
+- [x] **D4. Limits for manual and automatic runs.** (2026-11-09) Agreed with Al-khair on 9 Nov. Built before D3, at his word; D3's numbers can still change the limits on the Settings page.
 
   **The idea.** Manual runs keep low limits, because a person can start one as often as they like. Automatic runs have no working limit: they aim for a goal, with high safety brakes. A safety brake is like a fuse: it never trips unless something goes wrong, like Claude repeating a search.
 
@@ -182,28 +182,29 @@ Two extras of ours:
   |---|---|---|
   | One company | US$2.50, as today | US$2.50, the same |
   | How many companies | 20, as today. Al-khair changes it in Settings (up to 100) | No set number. It goes on until its goal, or until no company is left (about 60 at most in one city) |
-  | One run | US$20, as today. Al-khair changes it in Settings (up to US$50) | Safety brake US$100 |
-  | One day, all runs together | US$50 today | US$150 |
+  | One run | US$20, as today. Al-khair changes it in Settings (up to US$50) | US$150 (Al-khair, 9 Nov). On the Settings page, up to US$200 |
+  | One day, all runs together | US$150 (was US$50). On the Settings page, up to US$300 | (the same) |
 
   **An automatic run stops at whichever comes first:**
   1. its goal: 25 good leads for its city, so 100 across the 4 cities;
   2. no company left to research;
-  3. the run's safety brake, US$100;
-  4. the day's safety brake, US$150.
+  3. the run's money limit, US$150;
+  4. the day's limit, US$150.
 
   **The goal carries over.** The run counts the good leads of the fortnight so far. A city that falls short leaves more for the cities after it. Example: Melbourne finds 18 on Monday, so Adelaide, Perth and Sydney share the other 82.
 
   **What it should cost** (from one real run, **TBC** until D3): a company about US$0.40, a city run about US$25 to US$30, a fortnight about US$100 to US$120 for about 100 good leads. That is inside Levi's US$100 to US$200.
 
   **Who controls what:**
-  - The Settings page (Al-khair): the manual run's money limit and company count, as today.
-  - `engine/.env` (Al-khair, on App Platform its variables): the automatic run's safety brake (new, US$100), the daily limit (US$50 now, US$150), and the goal (new, 100 good leads a fortnight). These change only with a restart, so a click can't raise them.
+  - The Settings page (Al-khair): the manual run's money limit and company count, as today; the automatic run's limit (US$150); the day's limit (US$150); and the goal (100 good leads a round).
+  - `engine/.env` (on App Platform, its variables): the ceilings the page can't pass, to stop a typo: US$200 for an automatic run (`HARD_SCHEDULED_RUN_CAP_USD`) and US$300 a day (`HARD_DAILY_CAP_USD`), **TBC**. They change only with a restart.
+  - A round is the city runs of the last 7 days: Monday to Thursday sit inside one week, and the next round starts 2 weeks on. If the schedules' days are spread over more than a week, the carry-over counts less than it should.
 
   **The run email** says how far the fortnight is, like "62 of 100 good leads so far, US$80 spent". The tool can't promise 100: it finds only companies with news. A quiet fortnight may give about 70, and the email says so. Then Al-khair can widen the search (more signs, a longer look-back).
 
   **Unchanged:** up to 12 web searches for one company, 6 searches per city to find companies (one per sign), one run at a time, each city every 2 weeks.
 
-  - **Files (TBC):** `core/config.py` (the new settings), `jobs.py` (no company limit of its own, the goal), `steps/choose.py` and `steps/company.py` (stop at the goal), `run_email.py` (the fortnight so far), the run book, tests.
+  - **Files:** `core/config.py` and `core/prefs/service.py` (the new settings), `core/runs` (an automatic run's limits, its estimate and its resume), `goal.py` (the share of the goal), `jobs.py` (no company limit of its own), `steps/graph.py` and `steps/company.py` (stop at the goal), `run_email.py` (the round so far), `tests/lead_finder/test_goal.py`.
   - **Done when:**
     - a test shows a scheduled run that stops at its goal, and one that stops when no company is left;
     - a test shows a manual run still stopping at its company count and money limit;
@@ -276,6 +277,8 @@ Two extras of ours:
 ## Log
 
 Newest first.
+
+- 2026-11-09: **D4 built.** An automatic run gets US$150 and up to 100 companies (`make_caps(scheduled=True)`, also in its estimate and its resume), aims for its share of the round's 100 good leads (`goal.py`), and skips the companies left once it has it ("the run reached its goal of N good leads"). A run a person starts keeps US$20 and 20 companies. The day's limit is US$150 and is on the Settings page now; the ceilings are US$200 a run and US$300 a day in .env. A run now gives the shared Claude the Settings page's values when it starts, so a schedule after a restart uses them too. The run email says how far the round is. Tests: `test_goal.py` (14), including the real scheduler loop starting a run with these limits and waiting 14 days. Backend `RUN_GATES=1`: 3,270 passed, 1 failed, 25 skipped; the one failure (`test_cancel_mid_run_keeps_what_finished_and_marks_it_cancelled`) is a timing test that passed 5 times in a row on its own, with about 800 MB free during the full run.
 
 - 2026-11-09: **D4 added, not built.** Al-khair stopped a change that raised the defaults to US$50 and 50 companies (nothing was changed). Agreed instead: manual runs keep their limits in Settings; automatic runs aim for 100 good leads a fortnight, 25 per city, with safety brakes of US$100 a run and US$150 a day. Build after D3.
 

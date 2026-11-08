@@ -52,8 +52,9 @@ SETTINGS_LOCK = 7_244_003
 # Shown as read-only rows. They change only in engine/.env, then a restart.
 ENV_ONLY_KEYS: tuple[str, ...] = (
     "hubspot_names_to_claude_ok",
-    "daily_cap_usd",
     "hard_run_cap_usd",
+    "hard_scheduled_run_cap_usd",
+    "hard_daily_cap_usd",
     "hard_company_cap_usd",
     "hard_concurrency",
 )
@@ -90,6 +91,20 @@ TEXT: dict[str, tuple[str, str]] = {
     "run_max_companies": (
         "Companies in one run",
         "The most companies one run researches. The best ranked come first.",
+    ),
+    "scheduled_run_cap_usd": (
+        "Cap for one automatic run (US$)",
+        "The most a run that a schedule started may cost. It has no company limit: it stops at "
+        "its share of the goal, or when no company is left. A city run usually costs far less.",
+    ),
+    "daily_cap_usd": (
+        "Cap for one day (US$)",
+        "The most every run together may spend in 24 hours, manual and automatic.",
+    ),
+    "lead_finder_goal_good_leads": (
+        "Good leads to aim for every 2 weeks",
+        "The automatic runs aim for this many Pass and Director review leads between them, in "
+        "one round of the city schedules. A city that falls short leaves more for the next.",
     ),
     "slice_reserve_usd": (
         "Money held for each discovery request (US$)",
@@ -157,15 +172,17 @@ TEXT: dict[str, tuple[str, str]] = {
         "The data approval from Levi. While it is off, no HubSpot company name is sent to "
         "Claude. " + ENV_ONLY_NOTE,
     ),
-    "daily_cap_usd": (
-        "Daily limit (US$)",
-        "The most Claude may cost in any 24 hours, across every run and request. "
-        + ENV_ONLY_NOTE
-        + " TBC with Levi.",
-    ),
     "hard_run_cap_usd": (
         "Highest run cap (US$)",
         "The run cap can't be set above this. " + ENV_ONLY_NOTE + " TBC with Levi.",
+    ),
+    "hard_scheduled_run_cap_usd": (
+        "Highest automatic run cap (US$)",
+        "The cap for one automatic run can't be set above this. " + ENV_ONLY_NOTE,
+    ),
+    "hard_daily_cap_usd": (
+        "Highest daily cap (US$)",
+        "The cap for one day can't be set above this. " + ENV_ONLY_NOTE,
     ),
     "hard_company_cap_usd": (
         "Highest company cap (US$)",

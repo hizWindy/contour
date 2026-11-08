@@ -425,7 +425,11 @@ class RunManager:
             )
         model = parse_params(kind.params_model, params)
         settings = await self._settings()
-        caps = make_caps(settings, kind.caps_override(model) if kind.caps_override else None)
+        caps = make_caps(
+            settings,
+            kind.caps_override(model) if kind.caps_override else None,
+            scheduled=schedule_id is not None,
+        )
         if kind.check is not None:
             kind.check(model, settings, caps)
         versions = kind.versions() if kind.versions is not None else RunVersions()
@@ -778,6 +782,7 @@ class RunManager:
             ),
             research_gate=asyncio.Semaphore(settings.run_company_concurrency),
             discover_gate=asyncio.Semaphore(settings.run_discover_concurrency),
+            schedule_id=job.schedule_id,
         )
 
     async def _tick(self, run_id: UUID, ctx: RunContext[Any]) -> None:
@@ -990,7 +995,10 @@ class RunManager:
             raise self._not_resumable(
                 f"This run was already resumed {MAX_RESUMES} times. Start a new run instead."
             )
-        caps = _lowest(RunCaps.model_validate(row.caps), make_caps(settings))
+        caps = _lowest(
+            RunCaps.model_validate(row.caps),
+            make_caps(settings, scheduled=row.schedule_id is not None),
+        )
         if row.cost_usd >= caps.run_cap_usd:
             raise self._not_resumable("This run has already spent its limit. Start a new run.")
         if kind.check is not None:
@@ -1022,6 +1030,7 @@ class RunManager:
             saver=saver,
             resume=True,
             from_status=row.status,
+            schedule_id=row.schedule_id,
         )
         launch = asyncio.ensure_future(self._reopen(entry, job))
         self._launching.add(launch)
@@ -1074,6 +1083,7 @@ class RunManager:
             saver=job.saver,
             resume=True,
             from_status=job.from_status,
+            schedule_id=job.schedule_id,
         )
         self._launch(entry, job)
         return out
@@ -1216,12 +1226,14 @@ class RunManager:
         Australia/Melbourne dates."""
         return await reads.summary(self.session_factory, since)
 
-    async def estimate(self, body: RunCreate) -> RunEstimate:
+    async def estimate(self, body: RunCreate, *, scheduled: bool = False) -> RunEstimate:
         """What a run would cost. Never starts a run. An invalid body is `valid: false`, not an
-        error. Raises Problem 404 only for an unknown app or mode."""
+        error. Raises Problem 404 only for an unknown app or mode. `scheduled`: the estimate of a
+        run a schedule would start, with the limits of an automatic run."""
         return await estimate_run(
             body,
             kinds=self.kinds,
             session_factory=self.session_factory,
             settings_provider=self.settings_provider,
+            scheduled=scheduled,
         )
