@@ -24,7 +24,9 @@ from core.hubspot.matching import CandidateReason, HubSpotMatch
 Outcome = Literal["ok", "fail", "director", "unknown", "flag"]
 Group = Literal["main", "other", "weak"]
 Band = Literal["research_first", "investigate", "nurture"]
-SizeBasis = Literal["confirmed", "estimated", "growing", "director", "below", "none"]
+# "small": worked out from staff between staff_floor and staff_hint_min. The lead is a Watch at
+# best, with a "check office size" flag (PLAN-V9 B1).
+SizeBasis = Literal["confirmed", "estimated", "growing", "director", "small", "below", "none"]
 DAYS_PER_YEAR = 365.25
 REASON_WORDS: dict[CandidateReason, str] = {
     "close_name": "close name",
@@ -136,6 +138,8 @@ def judge(
         result = "drop"
     elif not triggers:
         result = "watch"
+    elif sized.basis == "small":
+        result = "watch"  # 50 to 74 staff, not growing: a person checks the office size first
     elif "director" in outcomes:
         result = "director_review"
     elif unknown_core:
@@ -245,8 +249,10 @@ def _city(facts: CompanyFacts, rules: LeadFinderRules) -> RuleCheck:
 
 def _size(facts: CompanyFacts, rules: LeadFinderRules, today: date) -> SizeJudgement:
     """The size rule. A known office size is judged against the range. A size worked out from
-    staff is only a hint (Criteria_v2): it can raise a flag, never a Drop. A small company that
-    will soon need an office in range still fits (`_growing`)."""
+    staff follows the staff numbers (PLAN-V9 B1, Levi 5 Nov): `staff_hint_min` (75) or more is
+    fine; from `staff_floor` (50) up to it is a Watch with a "check office size" flag; under the
+    floor is a Drop, "too small". A small company that will soon need an office in range still
+    fits (`_growing`), whatever its staff today."""
     size = rules.criteria.size
     staff = facts.staff_in_city.value
     if staff is not None and facts.staff_from_linkedin:
@@ -276,12 +282,17 @@ def _size(facts: CompanyFacts, rules: LeadFinderRules, today: date) -> SizeJudge
         return SizeJudgement(RuleCheck(rule="Size", outcome="ok", detail=text), m2, estimated, got)
     why: SizeBasis = "below"
     if from_staff and staff is not None:
-        hint = size.staff_hint_min
+        hint, floor = size.staff_hint_min, size.staff_floor
         if staff >= hint:
             detail = f"{text}: at the staff hint ({hint}+)"
             return SizeJudgement(RuleCheck(rule="Size", outcome="ok", detail=detail), m2, True, got)
-        detail = f"{text}: below the staff hint ({hint}+). Check the office size"
-        check = RuleCheck(rule="Size", outcome="flag", detail=detail)
+        if staff >= floor:
+            why = "small"
+            detail = f"{text}: under {hint} staff, so a Watch. Check the office size"
+            check = RuleCheck(rule="Size", outcome="flag", detail=detail)
+        else:
+            detail = f"{text}: under {floor} staff, too small"
+            check = RuleCheck(rule="Size", outcome="fail", detail=detail)
     elif m2 >= low:
         why = "director"
         check = RuleCheck(rule="Size", outcome="director", detail=f"{text}: just under the minimum")
@@ -500,6 +511,7 @@ def _score_parts(
         "estimated": score.size.estimated_in_range,
         "growing": score.size.growing_into_range,
         "director": score.size.director,
+        "small": 0,
         "below": 0,
         "none": 0,
     }

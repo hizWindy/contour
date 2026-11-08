@@ -44,6 +44,10 @@ StaffSource = Literal["hubspot", "headcount_tool", "linkedin", "web_research"]
 class Size(Strict):
     staff_min: int = Field(gt=0)
     staff_hint_min: int = Field(gt=0)
+    # Under this, a size worked out from staff is a Drop unless the company is growing (PLAN-V9 B1)
+    staff_floor: int = Field(gt=0)
+    # Discovery signs that mean the company is growing: never stopped early for its size (B2)
+    growth_signs: list[str] = Field(default_factory=list)
     staff_max: int = Field(gt=0)
     staff_counted_in: Literal["city", "company"]
     office_m2_min: int = Field(gt=0)
@@ -67,6 +71,10 @@ class Size(Strict):
             raise ValueError("staff_min must be below staff_max")
         if self.staff_hint_min > self.staff_min:
             raise ValueError("staff_hint_min must not be above staff_min")
+        if self.staff_floor > self.staff_hint_min:
+            raise ValueError("staff_floor must not be above staff_hint_min")
+        if len(set(self.growth_signs)) != len(self.growth_signs):
+            raise ValueError("growth_signs lists a sign twice")
         if len(set(self.staff_sources)) != len(self.staff_sources):
             raise ValueError("staff_sources lists a source twice")
         if self.office_m2_min >= self.office_m2_max:
@@ -329,6 +337,16 @@ class Criteria(Strict):
     def check_sources(self) -> Self:
         if set(self.score.source) != set(self.sources_rank):
             raise ValueError("score.source needs one entry for each kind in sources_rank")
+        return self
+
+    @model_validator(mode="after")
+    def check_growth_signs(self) -> Self:
+        known = {trigger.id for trigger in self.triggers.every}
+        unknown = sorted(set(self.size.growth_signs) - known)
+        if unknown:
+            raise ValueError(
+                f"size.growth_signs has signs that aren't triggers: {', '.join(unknown)}"
+            )
         return self
 
     @model_validator(mode="after")

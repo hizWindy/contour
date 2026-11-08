@@ -77,8 +77,14 @@ def test_the_old_industry_check_is_compared_with_the_office_check() -> None:
 def test_a_dropped_small_company_may_no_longer_be_dropped() -> None:
     card = version_1_card(office_m2=fact(None), staff_in_city=fact(60))
     item = rejudge("Small Co", "drop", 0, card, RULES, TODAY)
-    assert item.now.result == "pass"  # staff is only a hint, so a flag and never a Drop
+    assert item.now.result == "watch"  # 50 to 74 staff: a Watch with a flag (PLAN-V9 B1)
     assert item.now.band is not None
+
+
+def test_a_pass_under_the_staff_floor_becomes_a_drop() -> None:
+    card = version_1_card(office_m2=fact(None), staff_in_city=fact(28))
+    item = rejudge("Tiny Co", "pass", 60, card, RULES, TODAY)
+    assert item.now.result == "drop"  # under 50 staff: too small (PLAN-V9 B1)
 
 
 def test_the_table_lists_each_lead_and_counts_the_moves() -> None:

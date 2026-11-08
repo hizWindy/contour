@@ -13,7 +13,11 @@ cities:
 
 size:
   staff_min: 100 # the brief's "100+ in one office". The HubSpot watchlist lists companies from here
-  staff_hint_min: 75 # the Profile's "75+ office staff". When judging a lead, a size worked out from staff is only a hint: below this it gets a "check office size" flag, never a Drop
+  staff_hint_min: 75 # the Profile's "75+ office staff" (Levi, 5 Nov). A size worked out from staff between staff_floor and this is a Watch with a "check office size" flag
+  staff_floor: 50 # Levi, 5 Nov: "about 50 if growing". A size worked out from staff under this is a Drop, "too small", unless the company is growing (PLAN-V9 B1)
+  # The discovery signs that mean a company is growing. A company found with one of these is never
+  # stopped before research for being small (PLAN-V9 B2): its size comes from what it plans.
+  growth_signs: [fast_growth, big_new_contract]
   staff_max: 600 # over this goes to Director review (a possible Whale Pipeline project)
   staff_counted_in: city
   office_m2_min: 1000
@@ -232,7 +236,11 @@ tbc:
   - key: size.m2_per_staff
     note: Question 8. Is 10 m² per person right?
   - key: size.staff_hint_min
-    note: Levi's brief says 100+ in one office. The Profile says 75+. We start at 75, because a flag costs less than a missed lead. Levi picks, and then staff_min should match.
+    note: Levi said 75+ on 5 Nov (his brief said 100+ in one office). Between staff_floor and this a size worked out from staff is a Watch with a flag, not a Pass (PLAN-V9 B1). Levi's team confirms the number.
+  - key: size.staff_floor
+    note: Levi said about 50 if growing (5 Nov). Under 50 staff, worked out from staff, is a Drop unless the company is growing. Levi's team confirms the number (PLAN-V9 A3).
+  - key: size.growth_signs
+    note: Our proposal (PLAN-V9 B2). A company found with one of these signs is researched even when HubSpot and Signal Hire say it is small.
   - key: size.staff_sources
     note: The order from the 27 Oct meeting. HubSpot first, then a headcount tool (Signal Hire), then LinkedIn doubled, then the AI's web research. The first source with a number wins, and the others stay on the lead card (PLAN-V4 C3); before that, HubSpot and Signal Hire only filled a gap. Signal Hire is on since 2 Nov, before its test (PLAN-V3 A4, B1) shows how far its counts can be trusted. Our export has a LinkedIn staff count for most offices, but no office size, no manual headcount, and almost no lease expiry or last-moved dates.
   - key: data_sources

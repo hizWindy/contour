@@ -123,7 +123,7 @@ def test_the_industry_tier_is_not_known_when_the_industry_is_not() -> None:
         ({"office_m2": fact(2500, label="estimated")}, 16),
         ({"office_m2": fact(None), "staff_in_city": fact(100)}, 16),  # worked out from staff
         ({"office_m2": fact(900)}, 10),  # just under the minimum: a Director decides
-        ({"office_m2": fact(None), "staff_in_city": fact(40)}, 0),  # below the hint: a flag
+        ({"office_m2": fact(None), "staff_in_city": fact(60)}, 0),  # 50 to 74: a Watch, a flag
     ],
 )
 def test_the_size_check_follows_what_the_size_rests_on(
@@ -192,7 +192,10 @@ def size_check(result: Verdict) -> RuleCheck:
 @pytest.mark.parametrize(
     ("staff", "expected", "outcome"),
     [
-        (74, "pass", "flag"),  # below the hint: check the office size, never a Drop
+        (4, "drop", "fail"),  # under the floor (50): too small (PLAN-V9 B1)
+        (49, "drop", "fail"),
+        (50, "watch", "flag"),  # 50 to 74: a Watch, check the office size
+        (74, "watch", "flag"),
         (75, "pass", "ok"),
         (99, "pass", "ok"),
         (100, "pass", "ok"),
@@ -200,7 +203,7 @@ def size_check(result: Verdict) -> RuleCheck:
         (601, "director_review", "director"),
     ],
 )
-def test_staff_is_only_a_hint_when_the_office_size_is_unknown(
+def test_staff_numbers_set_the_result_when_the_office_size_is_unknown(
     staff: int, expected: str, outcome: str
 ) -> None:
     result = verdict(office_m2=fact(None), staff_in_city=fact(staff))
@@ -208,6 +211,30 @@ def test_staff_is_only_a_hint_when_the_office_size_is_unknown(
     assert size_check(result).outcome == outcome
     assert result.office_m2 == staff * 10
     assert result.office_m2_estimated
+
+
+def test_the_size_words_say_why() -> None:
+    small = size_check(verdict(office_m2=fact(None), staff_in_city=fact(12)))
+    assert small.detail == "120 m² (estimated: 12 staff x 10 m²): under 50 staff, too small"
+    watch = size_check(verdict(office_m2=fact(None), staff_in_city=fact(60)))
+    assert watch.detail.endswith("under 75 staff, so a Watch. Check the office size")
+
+
+def test_a_watch_by_size_stays_a_watch_in_sydney() -> None:
+    result = verdict(office_m2=fact(None), staff_in_city=fact(60), city=fact("Sydney"))
+    assert result.result == "watch"
+
+
+def test_a_known_office_keeps_todays_rule_whatever_the_staff() -> None:
+    result = verdict(office_m2=fact(2000), staff_in_city=fact(20))
+    assert result.result == "pass"
+    assert size_check(result).outcome == "ok"
+
+
+def test_a_growing_company_of_30_staff_fits() -> None:
+    result = growing(staff_in_city=fact(30))
+    assert result.result == "pass"
+    assert size_check(result).outcome == "ok"
 
 
 GROWING: dict[str, Any] = {
@@ -245,9 +272,11 @@ def test_a_small_company_that_is_growing_into_the_range_fits() -> None:
     ],
 )
 def test_growth_needs_a_plan_a_big_enough_office_and_a_near_date(changes: dict[str, Any]) -> None:
-    check = size_check(growing(**changes))
+    result = growing(**changes)
+    check = size_check(result)
     assert "Growing" not in check.detail
-    assert check.outcome == "flag"  # 35 staff is 350 m², below the staff hint
+    assert check.outcome == "fail"  # 35 staff is under the floor of 50 (PLAN-V9 B1)
+    assert result.result == "drop"
 
 
 def test_growth_with_no_date_is_a_flag_to_check() -> None:

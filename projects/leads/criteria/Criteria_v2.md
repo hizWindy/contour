@@ -1,6 +1,6 @@
 # Company criteria, version 2
 
-**Draft.** Levi to confirm. Last updated 2026-10-30. The engine now follows this version. It was built following [PLAN-V2.md](../../../plan/PLAN-V2.md), and [version 1](Criteria_v1.md) is the old one. Every number here is still **TBC** until Levi confirms it, and the engine reads them from `criteria.yaml`, so a change from Levi is an edit to that file.
+**Draft.** Levi to confirm. Last updated 2026-11-08. The engine now follows this version. It was built following [PLAN-V2.md](../../../plan/PLAN-V2.md), and [version 1](Criteria_v1.md) is the old one. Every number here is still **TBC** until Levi confirms it, and the engine reads them from `criteria.yaml`, so a change from Levi is an edit to that file.
 
 These rules decide which companies the research agent looks for, **before anyone calls them**. Everything new in this version is **TBC** (to be confirmed) until Levi checks it.
 
@@ -37,7 +37,7 @@ Fail any rule → **Drop**. The exceptions are the Director cases in section 5.
 
 | # | Rule | Passes if |
 |---|---|---|
-| 1 | Size | An office of 1,000 to 6,000 m² in that city. That's a $1.5M to $10M fitout. If the size isn't known, staff is a hint: 75+ office staff (Profile) or 100+ in one office (brief), at about 10 m² per person. Below that, the company gets a "check office size" flag, not a Drop (**TBC**). A company that will soon grow into range also passes (see below). |
+| 1 | Size | An office of 1,000 to 6,000 m² in that city. That's a $1.5M to $10M fitout. If the size isn't known, it is worked out from staff at about 10 m² per person, and the staff numbers decide (Levi, 5 Nov, **TBC**): 75+ staff fits; 50 to 74 is a **Watch** with a "check office size" flag; under 50 is a **Drop**, "too small". A company that will soon grow into range still passes, whatever its staff today (see below). |
 | 2 | City | An office in Melbourne, Adelaide or Perth. Sydney and other cities go to a Director (section 5). |
 | 3 | Office | The office matters to how they work: growth, performance, culture, collaboration or talent. Judge the office, not the industry. A miner's or engineering firm's corporate or technical office counts. Warehouses, plants and shops don't. If unsure: a "check office size" flag (**TBC**). |
 | 4 | Local team | Local decision makers have real influence over the project, even if the company is owned overseas. Red flag example from the brief: "the whole team is in Singapore" (**TBC**). |
@@ -165,6 +165,18 @@ Levi sent 23 Gold customers from HubSpot on 29 Oct, all Active. They let us chec
 - **Customers come back, and some may be due again.** Mettler-Toledo has been a client for 20 years and Qube for 15. Strategy work led to fitouts at Draeger and Engie. Fivecast took a 5-year lease at the end of 2022, with options, so it may end around late 2027. Bunge's Melbourne lease ends in 2029. Engie may still move.
 
 **Proposal (TBC):** use these 23 as a test set. The tool should rate them as a fit. Their lease and growth news also suits job 1, ranking current HubSpot companies.
+
+### What the 5 Nov size rule says about the 52 leads we have (8 Nov)
+
+Levi asked for 75+ staff, or about 50 if growing (5 Nov). Before this, a small staff count was only a flag, and a flag never stopped a Pass. That's why a company of 28 staff showed as a Pass. `uv run lead-finder rejudge` (free, read only) on the 52 dev leads:
+
+| Company | Staff (worked out) | Was | Now |
+|---|---|---|---|
+| Acendre | 28 | Pass | Drop, too small |
+| Euroz Hartleys Group | 14 | Director review | Drop, too small |
+| Razilio | 22 | Director review | Drop, too small |
+
+24 of the 52 change in all. These 3 come from the new size rule. Budget Direct (50) and JOEST Australia (66) were Drops under version 1 and are Watch now. The other 19 change because the HubSpot copy has changed since the leads were saved (for example, an open deal is now on record), not because of a rule.
 
 ### What version 2 says about the 16 leads we have (30 Oct)
 

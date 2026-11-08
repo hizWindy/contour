@@ -107,6 +107,28 @@ def test_a_staff_hint_above_the_minimum_stops_start_up(tmp_path: Path) -> None:
         read_rules(rules_dir)
 
 
+def test_the_staff_floor_is_50_and_marked_tbc() -> None:
+    """Levi, 5 Nov: 75+ staff, or about 50 if growing (PLAN-V9 B1). Both wait on his team."""
+    criteria = load_rules().criteria
+    assert (criteria.size.staff_floor, criteria.size.staff_hint_min) == (50, 75)
+    tbc = {note.key for note in criteria.tbc}
+    assert {"size.staff_floor", "size.staff_hint_min"} <= tbc
+
+
+def test_a_staff_floor_above_the_hint_stops_start_up(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    edit(rules_dir / "criteria.yaml", "staff_floor: 50", "staff_floor: 80")
+    with pytest.raises(ValidationError, match="staff_floor must not be above staff_hint_min"):
+        read_rules(rules_dir)
+
+
+def test_a_growth_sign_must_be_a_trigger(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    edit(rules_dir / "criteria.yaml", "growth_signs: [fast_growth", "growth_signs: [fast_grwth")
+    with pytest.raises(ValidationError, match="growth_signs has signs that aren't triggers"):
+        read_rules(rules_dir)
+
+
 def test_signal_hire_is_on_with_our_guesses_for_its_numbers() -> None:
     """Switched on 2 Nov at Al-khair's say, before the test of 5 companies (PLAN-V3 A4, B1), so a
     run asks Signal Hire for a staff number nobody else found. Its two numbers are guesses."""
