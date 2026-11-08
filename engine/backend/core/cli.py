@@ -450,6 +450,27 @@ async def _sign_out_everyone() -> str:
     return f"Signed out {_plural(ended, 'session')} of {_plural(people, 'person', 'people')}."
 
 
+async def _email_test(to: str) -> tuple[str, bool]:
+    """Sends one test email through the provider in settings (PLAN-V9 C1). With the log provider
+    it only writes it to the log."""
+    from core.email.sender import EmailError, send
+
+    settings = get_settings()
+    try:
+        sent = await send(
+            [to],
+            "Contour HQ: a test email",
+            "This is a test email from Contour HQ. If you can read it, email works.",
+            "<p>This is a test email from Contour HQ. If you can read it, email works.</p>",
+            settings=settings,
+        )
+    except EmailError as error:
+        return f"{error.title}. {error.detail}", False
+    if sent.provider == "log":
+        return "EMAIL_PROVIDER is log, so the email was written to the log, not sent.", True
+    return f"Sent through {sent.provider} (id {sent.id}).", True
+
+
 def _positive_days(text: str) -> int:
     try:
         days = int(text)
@@ -528,6 +549,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     reset_cmd.add_argument("--user", required=True, help="The account's email or username")
     commands.add_parser("sign-out-everyone", help="End every session of every account.")
+    email_cmd = commands.add_parser(
+        "email-test", help="Send one test email (the log provider only writes it to the log)."
+    )
+    email_cmd.add_argument("--to", required=True, help="The address to send it to")
 
     args = parser.parse_args(argv)
     try:
@@ -577,6 +602,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0 if ok else 1
         elif args.command == "sign-out-everyone":
             print(asyncio.run(_sign_out_everyone(), loop_factory=loop_factory()))
+        elif args.command == "email-test":
+            text, ok = asyncio.run(_email_test(args.to), loop_factory=loop_factory())
+            print(text, file=sys.stdout if ok else sys.stderr)
+            return 0 if ok else 1
     except NeedsTerminal:
         print(
             "This command asks for a password, so it has to run in a terminal. "

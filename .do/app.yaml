@@ -12,6 +12,8 @@
 # Environment Variables, Edit, and tick Encrypt):
 #   ANTHROPIC_API_KEY, SIGNALHIRE_API_KEY, HUBSPOT_SERVICE_KEY
 #   FIRST_ADMIN_EMAIL and FIRST_ADMIN_PASSWORD (the first Admin account, made by the migration step)
+#   EMAIL_API_KEY (Resend, PLAN-V9 C1), with EMAIL_PROVIDER=resend, EMAIL_FROM and
+#   LEAD_FINDER_NOTIFY_EMAILS (who gets the run email). Without them no email is sent.
 # Paste the HubSpot key last, after Levi's OK to keep HubSpot data on a server in Sydney: with the
 # key in place the backend copies HubSpot into the database at start and every day.
 # Do not apply this file again over a running app with `doctl apps update` without first exporting

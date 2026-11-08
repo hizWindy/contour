@@ -301,6 +301,18 @@ class Settings(BaseSettings):
     signalhire_max_credits_per_run: int = Field(20, ge=0, le=1000)
     signalhire_details_fresh_days: int = Field(30, ge=1, le=365)
 
+    # --- Email (PLAN-V9 C1, env-only): core/email/sender.py ---------------------------
+    # log writes each email to the log and sends nothing (the laptop and the tests). resend sends
+    # through Resend's web API, with EMAIL_API_KEY and EMAIL_FROM.
+    email_provider: Literal["log", "resend"] = "log"
+    email_api_key: SecretStr | None = None
+    email_from: str | None = None  # like "Contour HQ <leads@contourinteriors.com.au>"
+    # The website's address, for links in emails. Empty: the public origin, else the laptop's.
+    app_url: str | None = None
+    # Who gets the email when a scheduled Lead Finder run ends (PLAN-V9 C2, Levi TBC). A
+    # comma-separated list. Empty: no email.
+    lead_finder_notify_emails: Annotated[list[str], NoDecode] = []
+
     # --- HubSpot: the service key (PLAN-V5). None means no call reaches HubSpot. ---------
     hubspot_service_key: SecretStr | None = None
     # HubSpot's dated API version, like 2026-09 (the newest on 3 Nov 2026), or v3 for its older
@@ -396,6 +408,34 @@ class Settings(BaseSettings):
                     raise ValueError("trusted_proxies isn't a valid list") from error
             return [part for part in re.split(r"[,\s]+", text) if part]
         return value
+
+    @field_validator("lead_finder_notify_emails", mode="before")
+    @classmethod
+    def _split_emails(cls, value: Any) -> Any:
+        """A comma-separated list (or a JSON list), like trusted_proxies."""
+        if isinstance(value, str):
+            text = value.strip()
+            if text.startswith("["):
+                try:
+                    return json.loads(text)
+                except json.JSONDecodeError as error:
+                    raise ValueError("lead_finder_notify_emails isn't a valid list") from error
+            return [part for part in re.split(r"[,;\s]+", text) if part]
+        return value
+
+    @field_validator("lead_finder_notify_emails")
+    @classmethod
+    def _emails(cls, value: list[str]) -> list[str]:
+        cleaned = list(dict.fromkeys(address.strip().lower() for address in value if address))
+        for address in cleaned:
+            if not re.fullmatch(r"[^@\s,;<>]+@[^@\s,;<>]+\.[^@\s,;<>]+", address):
+                raise ValueError("lead_finder_notify_emails has something that isn't an address")
+        return cleaned
+
+    @field_validator("email_from", "app_url")
+    @classmethod
+    def _blank_is_none(cls, value: str | None) -> str | None:
+        return value.strip() or None if value is not None else None
 
     @field_validator("trusted_proxies")
     @classmethod
