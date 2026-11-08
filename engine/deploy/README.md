@@ -265,6 +265,20 @@ Then sign in in the browser and open `https://contour-hq-mxeqw.ondigitalocean.ap
 - **The database user.** The app connects as the admin user `doadmin`. A user of its own, with only the rights the engine needs, would be safer.
 - **The visitor-address check above.**
 
+## Email (PLAN-V9 C1 and C2)
+
+The backend sends one kind of email today: the run email, when a **scheduled** Lead Finder run ends. A run started by hand never emails.
+
+| Setting | What it does |
+|---|---|
+| `EMAIL_PROVIDER` | `log` (the default) writes each email to the backend log and sends nothing. `resend` sends through Resend. |
+| `EMAIL_API_KEY` | Resend's key. A secret: on App Platform, tick **Encrypt**. Contour already pays for Resend (Levi, 2 Nov); access to that account is **TBC**. |
+| `EMAIL_FROM` | The sender, like `Contour HQ <leads@contourinteriors.com.au>`. Its domain must be checked in Resend, which needs DNS records on Contour's domain (**TBC**: Dawn or IT). Until then, test with Al-khair's own address. |
+| `APP_URL` | The website's address, for the email's "Review the leads" link. Empty: the public origin. |
+| `LEAD_FINDER_NOTIFY_EMAILS` | Who gets the run email, comma-separated (Levi, **TBC**). Empty: no email. |
+
+To check it: `engine email-test --to you@example.com` (on App Platform, in the backend's Console). It sends one email, on Al-khair's word only.
+
 ## A new server (PLAN-V6 H1 and H2: **not tried on a real server yet**)
 
 These steps cost money (the droplet and the managed database), so they start only when Al-khair says so.

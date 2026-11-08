@@ -68,9 +68,9 @@ It needs at least one trigger: a sign of an office change. No trigger yet → **
 
 | Group | Triggers |
 |---|---|
-| Main | Lease ending in 1 to 3 years, or a relocation. A merger or acquisition, where one company has an old office. A big new contract or project award, needing about 100 more office staff. Fast or planned headcount growth, like many job ads, big funding or growth news. |
+| Main | Lease ending in 1 to 3 years, or a relocation. A merger or acquisition, where one company has an old office. A big new contract or project award, needing about 100 more office staff. Fast or planned headcount growth, like many job ads, big funding or growth news. **New to Australia:** an overseas company opening its first or a much bigger office in an Australian city (Levi, 5 Nov). **Growing with a booming industry**, like the energy transition, defence or critical minerals (Levi, 2 Nov). Both new ones are **TBC** as main signs. |
 | Other | Merging offices. Return to office. A restructure. A **new business unit**. A **leadership change that changes direction or strategy** (moved up from Weak). A **new engineering, project or manufacturing facility with a big office part**. An **underperforming workplace**, or a major business or industry change. |
-| Weak | Culture change. Pressure on talent, client experience or productivity, like a hiring push. |
+| Weak | Culture change. Pressure on talent, client experience or productivity, like a hiring push. **A rival of a booming company** (see below). |
 
 **Timing**
 - The project is likely within 3 years, and a consultant is appointed within 18 months (Profile and [DEAL.md](DEAL.md)).
@@ -78,6 +78,14 @@ It needs at least one trigger: a sign of an office change. No trigger yet → **
 - An event like a merger counts for 12 months (**TBC**).
 
 Levi's brief gives an example website for mergers and acquisitions, but the link is missing.
+
+**New to Australia (TBC).** Its size is the staff or office it announces here, judged like a growing company: today's headcount here is near zero, so the size rule alone would drop it. It still needs a named Australian city (30 Oct decision). With no city named yet, it goes to a Director.
+
+**Booming industries (TBC).** Each industry is one search in `queries.yaml`, so adding one is one line. Which kinds of mining is for Levi.
+
+**Rivals of a booming company (TBC).** When a lead in a tier 1 or tier 2 industry is a Pass or a Director review, one cheap web search names up to 5 Australian rivals with an office in the same city. The next run for that city researches up to 5 of them, with the weak sign, so real news still ranks first. Whether rivals with no news of their own are wanted is for Levi.
+
+**Not researched when tiny.** Before any paid search, HubSpot's and Signal Hire's staff numbers are read. When every one is under 50, and the company wasn't found with a growth sign, it is a Drop, "too small", with no Claude request.
 
 ## 5. Sent to a Director
 

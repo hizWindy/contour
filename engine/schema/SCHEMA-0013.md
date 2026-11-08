@@ -1,6 +1,6 @@
 # Database schema 0013
 
-Migration `0013_plan_v9`, the newest one applied to the database `leadfinder_test`.
+Migration `0013_plan_v9`, the newest one applied to the database `leadfinder`.
 
 - **Tables:** 22 in 3 schemas (`core`, `lead_finder`, `langgraph`).
 - **Links:** 9 foreign keys and 4 soft links.
@@ -10,6 +10,7 @@ Migration `0013_plan_v9`, the newest one applied to the database `leadfinder_tes
 ## Changes since 0012
 
 - New table `lead_finder.rivals` (13 columns).
+- `core.audit_log`: check `ck_audit_log_event` changed.
 - `core.users`: new column `apps` (varchar(64)[]).
 - `lead_finder.leads`: new check `ck_leads_reject_reason`.
 - `lead_finder.leads`: new column `reject_note` (text).
@@ -357,7 +358,7 @@ The sign-in log: every sign-in, failure, lock, sign-out and password change, wit
 
 **Checks**
 
-- `ck_audit_log_event`: (((event) = ANY ((ARRAY['sign_in', 'sign_in_failed', 'account_locked', 'sign_out', 'sign_out_everywhere', 'password_changed', 'account_created']))))
+- `ck_audit_log_event`: (((event) = ANY ((ARRAY['sign_in', 'sign_in_failed', 'account_locked', 'sign_out', 'sign_out_everywhere', 'password_changed', 'account_created', 'account_changed']))))
 
 ### core.hubspot_companies
 

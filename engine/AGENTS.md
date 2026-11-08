@@ -25,6 +25,7 @@ From `engine/backend/`:
 | Apply database changes only | `uv run engine migrate` |
 | Make the Admin account (asks for the password twice, never shows it; needs a terminal. A server makes the first one by itself from `FIRST_ADMIN_*`: see Sign-in) | `uv run engine create-admin --email name@company.com.au --username name` |
 | Give an account a new password, lift its lock and end its sessions (the only way to reset one) | `uv run engine reset-password --user <email or username>` |
+| Send one test email (`EMAIL_PROVIDER=log`, the default, only writes it to the log) | `uv run engine email-test --to you@example.com` |
 | End every session of every account | `uv run engine sign-out-everyone` |
 | Load a HubSpot export | `uv run engine import-hubspot ../../projects/leads/research/COMPANIES.xlsx` |
 | Which permissions the HubSpot key has, and what each project can do (free, changes nothing) | `uv run engine hubspot-check` |
@@ -58,6 +59,8 @@ From `engine/frontend/`:
 | Format | `npm run format` |
 | Where the bytes go: the first visit and each page, in gzip (builds in memory, adds no package) | `node scripts/bundle-report.js` |
 
+**If Windows App Control blocks a command** (`engine.exe` and `mypy.exe` were blocked on 8 Nov, os error 4551): run the same code through Python, as Al-khair agreed then. `uv run --no-sync python -m core.cli <command>` instead of `uv run engine <command>` (like `python -m core.cli serve`), and `uv run --no-sync python -m mypy`. The commit hook already uses `python -m mypy`.
+
 Swagger is at http://127.0.0.1:8000/docs while the backend runs. All endpoints sit under `/api/v1/`. Don't run the backend tests and the website tests at the same time on this laptop: together they run out of memory.
 
 ## Which backend is running
@@ -87,7 +90,8 @@ backend/
     cli.py             the `engine` command: serve, migrate, import-hubspot
     apps.py            loads the projects listed in settings
     logs.py            structured logs
-    api/               the FastAPI app, shared endpoints, the error format
+    api/               the FastAPI app, shared endpoints, the error format; access.py (who may use which project: the Lead Finder tick, PLAN-V9 E1), people.py (Admin's People tab)
+    email/             sending email (PLAN-V9 C1): sender.py, one send(); EMAIL_PROVIDER log (the default) or resend
     db/                the database connection, the base model, migrations
     claude/            Claude with web search and fetch (client.py), prices (pricing.py), caps (budget.py)
     searches/          the search log: every Claude request and its cost
@@ -103,7 +107,10 @@ backend/
       app.py           tells the core this project's name, endpoints and rules
       api.py           the /api/v1/lead-finder endpoints (also api_leads.py, api_runs.py, api_watchlist.py)
       runs.py          the four kinds of run: find new leads, watchlist, typed companies, test set
-      jobs.py          the scheduled run (`lead_finder.discovery`): its default schedule, and the check against the limits before it starts
+      jobs.py          the scheduled runs: one for each city (`lead_finder.discovery.melbourne` ...), off by default, and the check against the limits before one starts
+      run_email.py     the email when a scheduled run ends (PLAN-V9 C2), to LEAD_FINDER_NOTIFY_EMAILS
+      rivals.py        rivals of a good lead in a booming industry (PLAN-V9 B5): the search, the rivals table, and what the next run adds
+      api_review.py    the review page's routes (PLAN-V9 C3): the bar, Watch and Reject for many leads, Approve and send to HubSpot
       steps/           the run's steps: plan, discover, merge, choose, company (research one), graph (LangGraph)
       options.py       what the Start page offers (cities, areas, signs, limits)
       lead_store.py    lead filters, sorting, facets, the map and the CSV
@@ -113,7 +120,7 @@ backend/
       sourcing.py      which source wins for each fact (staff, name, website, industry, offices, people), what the others said, and the flags (pure code)
       rules.py         checks the rules files
       rules/           criteria.yaml, queries.yaml, hubspot_map.yaml
-      research.py      researches one company: memory, Signal Hire's details, search, form, gap check, then HubSpot and Signal Hire next to the research's own numbers, save
+      research.py      researches one company: memory, Signal Hire's details, the too-small check before any Claude request (PLAN-V9 B2), search, form, gap check, then HubSpot and Signal Hire next to the research's own numbers, save
       fields.py        the answer forms Claude fills in
       sources.py       the source check (pure code)
       scoring.py       the rules and the score (pure code)

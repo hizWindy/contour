@@ -3,8 +3,8 @@
 This plan makes the changes Levi asked for after he used the Lead Finder on the live site. It finds bigger companies, looks in booming industries and at overseas companies coming to Australia, runs all 4 cities by itself, and emails Levi a list to review before anything goes to HubSpot. It also gets more good leads for the money.
 
 - **Built by:** Al-khair Pama. **Signed off by:** Al-khair for the code. Levi confirms the business rules marked **TBC** (to be confirmed).
-- **Last updated:** 2026-11-08.
-- **Progress:** 0 of 18 steps done.
+- **Last updated:** 2026-11-08 (the code built on `plan-v9`).
+- **Progress:** 10 of 18 steps done. All the code is built on `plan-v9` (not merged, not pushed). C1, C3, D1, E2 and E3 are built and wait on one check each; A2, A3 and D3 wait on Al-khair.
 - **Sources:** the meeting notes of 2 Nov and 5 Nov in `minutes of meeting/`.
 - **Comes after:** [PLAN-V8.md](PLAN-V8.md). Its open steps (B1 to B4) stay there, but A2 below needs B3.
 
@@ -52,7 +52,7 @@ Two extras of ours:
 
 ## Part A: Get ready
 
-- [ ] **A1. The branch and the baseline.** Make `plan-v9` from `master`. Run the full backend suite (`RUN_GATES=1`) and the website checks, and write the numbers in the Log. **Done when:** both pass and the numbers are in the Log.
+- [x] **A1. The branch and the baseline.** (2026-11-08, `9ce0d99`) Make `plan-v9` from `master`. Run the full backend suite (`RUN_GATES=1`) and the website checks, and write the numbers in the Log. **Done when:** both pass and the numbers are in the Log.
 - [ ] **A2. Deploy what's waiting, and watch the memory.** **Al-khair's call.** Deploy `master`: the take-over change `83b9659` is pushed but not live. During one live run, read the backend's peak memory in DigitalOcean's Insights. Move to a bigger size only if the peak is above about 80% (that costs money, **TBC**). **Done when:** PLAN-V8 B3 is ticked, and the peak memory is in the Log.
 - [ ] **A3. Ask Levi.** Put these in the 5 Nov requirements email:
   - the staff numbers (50 and 75);
@@ -65,7 +65,7 @@ Two extras of ours:
 
 ## Part B: Better leads (the rules)
 
-- [ ] **B1. The size rule.** This only changes a size worked out from staff. A known office size keeps today's rule.
+- [x] **B1. The size rule.** (2026-11-08, `5a3e8c5`) This only changes a size worked out from staff. A known office size keeps today's rule.
 
   | Staff in the city | Today | New |
   |---|---|---|
@@ -79,14 +79,14 @@ Two extras of ours:
     - the tests cover all three rows and a growing company of 30 staff;
     - `rejudge` lists the dev leads that change;
     - the numbers say **TBC** until Levi's team confirms them.
-- [ ] **B2. Don't pay to research tiny companies.** Today the staff numbers from HubSpot and Signal Hire are read at the end (step 5 in `research.py`), after the Claude searches. Read them first instead.
+- [x] **B2. Don't pay to research tiny companies.** (2026-11-08, `281dfac`) Today the staff numbers from HubSpot and Signal Hire are read at the end (step 5 in `research.py`), after the Claude searches. Read them first instead.
   - If every known number is under the floor, and the discovery sign isn't a growth sign (`fast_growth`, `big_new_contract`, `new_to_australia`, `hot_industry_growth`), stop.
   - Save a short Drop, "too small: 12 staff (HubSpot)", with no Claude request.
   - The next run skips it, as it does any fresh lead (`memory_fresh_days`, 30 days).
   - This saves about US$0.34 to US$0.42 per tiny company. Signal Hire's count uses its daily search quota, not credits, and it is asked anyway today.
   - **Files:** `research.py`, `headcount.py`, `office_numbers.py`, tests.
   - **Done when:** a test with a fake Signal Hire saying 4 staff makes no Claude request, and the card says why.
-- [ ] **B3. New sign: new to Australia.** Add the sign `new_to_australia`: "An overseas company opening its first or a much bigger office in an Australian city".
+- [x] **B3. New sign: new to Australia.** (2026-11-08, `af8f80c`) Add the sign `new_to_australia`: "An overseas company opening its first or a much bigger office in an Australian city".
   - Add it to `main` in `criteria.yaml`, so the schedules use it (**TBC** with Levi).
   - Add 2 or 3 discovery searches in `rules/queries.yaml`. Examples: "international company opens first Australian office {city}", "{city} global firm Australian headquarters {year}".
   - **Size:** the extract prompt fills `growth_plan`, `size_needed_m2` and `growth_by` from the staff or office they announce in Australia. The existing growing rule then judges it, so there's no new size code. Today's headcount here is near zero, so the size rule alone would drop them.
@@ -95,7 +95,7 @@ Two extras of ours:
     - a test company, "Sample Nordic Energy, 120 staff in Adelaide by 2027", passes as growing;
     - one with no Australian city goes to a Director;
     - the Start page shows the sign.
-- [ ] **B4. New sign: growing with a booming industry.** Add the sign `hot_industry_growth`: "Growing because its industry is booming". Add it to `main` (**TBC**).
+- [x] **B4. New sign: growing with a booming industry.** (2026-11-08, `af8f80c`) Add the sign `hot_industry_growth`: "Growing because its industry is booming". Add it to `main` (**TBC**).
   - Its searches in `queries.yaml` name the industries, one search each. Examples: "{city} energy transition company expansion {year}", "{city} defence contractor new office {year}", "{city} critical minerals company expansion {year}".
   - **To add an industry later:** add a line to that list. No code changes.
   - Energy and mining are tier 1 and defence is tier 2 already, so these leads also score higher.
@@ -103,7 +103,7 @@ Two extras of ours:
     - the rules check passes (every sign needs a search);
     - a test shows the sign on a lead;
     - the Rules page lists it.
-- [ ] **B5. Rivals of a booming company.** When a lead in a tier 1 or tier 2 industry is a good lead, one cheap Claude web search names up to 5 Australian rivals with an office in the same city.
+- [x] **B5. Rivals of a booming company.** (2026-11-08, `a059570`, card `2c4040c`) When a lead in a tier 1 or tier 2 industry is a good lead, one cheap Claude web search names up to 5 Australian rivals with an office in the same city.
   - Save them in a new table `lead_finder.rivals`: name, website, city, which lead, the date, and pending, used or skipped. One migration, the next free number (0013 today).
   - The lead card shows "Rivals to check".
   - The next discovery run for that city adds up to 5 pending rivals to its list, with the weak sign `rival_growth`: "A rival of a booming company". A weak sign earns few points, so real news still ranks first.
@@ -114,14 +114,14 @@ Two extras of ours:
 
 ## Part C: Runs by themselves, and Levi reviews
 
-- [ ] **C1. Sending email, in the core.** Add `core/email/` with one `send(to, subject, text, html)` and two kinds of sender:
+- [ ] **C1. Sending email, in the core.** (Built 2026-11-08, `4cd37d3`. Left: one real email to Al-khair, on his word, once Resend's key and sender are set.) Add `core/email/` with one `send(to, subject, text, html)` and two kinds of sender:
   - `resend`: Resend's web API, with the HTTP client we already use. Contour already pays for Resend (Levi, 2 Nov). Access to that account is **TBC**.
   - `log`: writes the email to the log, for the laptop and the tests.
 
   Settings: `EMAIL_PROVIDER`, `EMAIL_API_KEY`, `EMAIL_FROM`, `APP_URL` (the live site's address, for links). A command, `engine email-test --to <address>`, sends one test email.
   - **Done when:** the tests pass with the log sender, and one real email reaches Al-khair (on his word).
   - **Not confirmed:** sending from a contourinteriors.com.au address needs DNS records on Contour's domain (Dawn or IT). Outlook through Microsoft's API can come later, when Levi gives Outlook admin.
-- [ ] **C2. The run email.** When a scheduled run ends, email the addresses in a new setting, `lead_finder.notify_emails` (Levi, **TBC**). Hand-started runs don't email, so tests don't spam Levi.
+- [x] **C2. The run email.** (2026-11-08, `c79e39b`) When a scheduled run ends, email the addresses in a new setting, `lead_finder.notify_emails` (Levi, **TBC**). Hand-started runs don't email, so tests don't spam Levi.
   - **What it shows:**
     - the city and the number of good leads, Watch and Drop;
     - the cost, and the cost per good lead;
@@ -129,14 +129,14 @@ Two extras of ours:
     - a **Review the leads** button that opens the review page.
   - A run that stops or fails sends a short email saying why.
   - **Done when:** a fake scheduled run sends one email (log sender) with the right numbers and link, and a stopped run sends the "why" email.
-- [ ] **C3. The review page.** Results for one run gets tick boxes and a bar with three actions:
+- [ ] **C3. The review page.** (Built 2026-11-08, `5a391bb`, `2c4040c`. Left: the check in the browser, laptop and phone, light and dark.) Results for one run gets tick boxes and a bar with three actions:
   - **Approve and send to HubSpot:** a new endpoint sends each ticked lead with the existing writer, which already has the once-only key and the write log. It reports any lead that failed, one by one.
   - **Reject:** asks why (D1).
   - **Watch.**
 
   While HubSpot writing is off (PLAN-V5 F1 to F3), the send button is greyed out with "HubSpot writing is off", and Reject and Watch still work.
   - **Done when:** the tests pass on the fake HubSpot (including one failed lead in a batch), and it is checked in the browser on a laptop and a phone, light and dark.
-- [ ] **C4. Four cities on a schedule.** Swap the one default schedule (Mondays, 3 cities, off) for four, one per city, on different days of the same fortnight, at 7:00 am Melbourne time (**TBC**):
+- [x] **C4. Four cities on a schedule.** (2026-11-08, `af8f80c`, migration 0013 in `a059570`) Swap the one default schedule (Mondays, 3 cities, off) for four, one per city, on different days of the same fortnight, at 7:00 am Melbourne time (**TBC**):
 
   | City | Day |
   |---|---|
@@ -156,7 +156,7 @@ Two extras of ours:
 
 ## Part D: More good leads for the money
 
-- [ ] **D1. Reject reasons.** Rejecting a lead asks why:
+- [ ] **D1. Reject reasons.** (Built 2026-11-08, `a059570`, `2c4040c`. Left: the check in the browser.) Rejecting a lead asks why:
   - too small;
   - wrong industry;
   - already talking to them;
@@ -167,7 +167,7 @@ Two extras of ours:
   Save it on the lead (`reject_reason`, `reject_note`, in the same migration as B5). Admin's Runs tab shows the count by reason for the last 90 days.
   - **Why:** it tells us which rule to change, with numbers.
   - **Done when:** the tests cover saving and counting, and it is checked in the browser.
-- [ ] **D2. Cost per good lead.** Show the number of good leads and the cost per good lead on the run page, the Runs list and the Home card. It's free: the run already keeps its counts by result and its cost.
+- [x] **D2. Cost per good lead.** (2026-11-08, `2c4040c`) Show the number of good leads and the cost per good lead on the run page, the Runs list and the Home card. It's free: the run already keeps its counts by result and its cost.
   - **Done when:** the tests cover a run with none (shown as "no good leads yet") and one with 3.
 - [ ] **D3. The volume test.** **Costs money: about US$20 to US$25 (TBC), only on Al-khair's word.** Run Melbourne once with the new rules at 50 companies.
   - Write in the Log: good leads, cost per good lead, minutes taken and peak memory.
@@ -177,7 +177,7 @@ Two extras of ours:
 
 ## Part E: Access, check and merge
 
-- [ ] **E1. Lead Finder access.** Add a Lead Finder tick to each account. An Admin sees everything. A `staff` user without the tick doesn't see the Lead Finder in the sidebar, and gets a 403 on every Lead Finder route.
+- [x] **E1. Lead Finder access.** (2026-11-08, `497a74e`, `2c4040c`) Add a Lead Finder tick to each account. An Admin sees everything. A `staff` user without the tick doesn't see the Lead Finder in the sidebar, and gets a 403 on every Lead Finder route.
   - Admin gets a People tab: add a person (name, email, role, the tick, a starting password under today's rules).
   - Changing your own password is PLAN-V6 C4, still open.
   - **Files:**
@@ -193,11 +193,11 @@ Two extras of ours:
     - with the tick, it gets 200;
     - the sidebar hides it.
   - Levi's two other people get accounts once he names them.
-- [ ] **E2. The full check.**
+- [ ] **E2. The full check.** (Suites, lint, types, build and openapi.json done 2026-11-08. Left: the browser check.)
   - Run the backend suite with `RUN_GATES=1`, then the website tests, lint, types and build, and regenerate `openapi.json`.
   - In the browser, on the fake backend, check the Start page (new signs), a lead card (rivals), the review page, Schedules, People and the run email in the log. Check a laptop and a phone, light and dark.
   - **Done when:** all pass, with the numbers in the Log.
-- [ ] **E3. Docs, merge and switch on.**
+- [ ] **E3. Docs, merge and switch on.** (Docs done 2026-11-08. Left: merge, push and deploy on Al-khair's word, then D3, then switching on.)
   - Update the docs: `engine/AGENTS.md`, `Criteria_v2.md` (size rule, new signs, rivals), the run book (email settings) and the Rules page text.
   - Merge into `master` and push, both on Al-khair's word, then deploy.
   - Switch on the four schedules after D3.
@@ -240,5 +240,19 @@ Two extras of ours:
 ## Log
 
 Newest first.
+
+- 2026-11-08: **The local system, real (not the fake backend).** `python -m core.cli serve` on the dev database (it migrated to 0013) and `npm run dev`. Checked through the API the pages use: the Start page starts with Melbourne and the 6 main signs, and doesn't offer `rival_growth`; Schedules lists the four cities, all off, each about US$7.71 a run at past prices; the last real run (Perth and Sydney) shows 8 good leads for US$6.36, US$0.79 each, with sending greyed out ("HubSpot writing is off"); People lists the laptop Admin. Not checked: the pages in a browser (the Chrome extension wasn't connected). No run was started, so nothing was spent.
+- 2026-11-08: **E2 checks.** Backend `RUN_GATES=1`: 3,253 passed, 25 skipped (5 min). Website: 885 tests, lint, types, build. `openapi.json` and `schema/SCHEMA-0013.md` match.
+- 2026-11-08: **Decisions while building** (for Al-khair to look at):
+  - The Start page starts with **Melbourne only**: the 6 main signs in the 3 pass cities make 18 searches, and the default limits allow 13. The flow test still runs 3 cities with the first 4 signs.
+  - Each city schedule saves a **company limit of 20** until D3 sets it. At today's placeholder prices (a new database) a run looks like US$22.40, over the US$20 run limit, so a schedule on a new database waits until there are past prices.
+  - **Old reject reasons** (free text) moved to the new note, with the reason "other" (migration 0013).
+  - **B2 applies to every research**, not only runs: a typed company with tiny HubSpot or Signal Hire numbers is a Drop too. A growth sign from discovery always goes ahead.
+  - **E1 also guards the core routes** that show Lead Finder data: runs, the search log and memory. A list with no project named needs every project.
+  - **The run email** is sent by a new `finished` hook on the run kind, after the run's last write; it never changes the run. An interrupted run sends none (it carries on later).
+  - The sign-in log gained `account_changed`, for a change on the People tab.
+- 2026-11-08: **App Control** blocked `engine.exe` and `mypy.exe` (os error 4551). On Al-khair's word: `uv run --no-sync python -m core.cli <command>` and `python -m mypy`; the commit hook now runs `python -m mypy`.
+- 2026-11-08: **B1 `rejudge`** on the 52 dev leads: 24 change. 3 from the new size rule: Acendre (28 staff, Pass to Drop), Euroz Hartleys Group (14, Director review to Drop), Razilio (22, Director review to Drop). Budget Direct (50) and JOEST Australia (66) are Watch. The other 19 changed because the HubSpot copy changed since they were saved (open deals now on record).
+- 2026-11-08: **A1 baseline** on `plan-v9`: backend `RUN_GATES=1` 3,168 passed, 25 skipped (6 min); website 875 tests in 60 files, lint, types and build.
 
 - 2026-11-08: Plan written from the 2 Nov and 5 Nov meetings. No code changed yet.
