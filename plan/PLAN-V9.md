@@ -278,6 +278,8 @@ Two extras of ours:
 
 Newest first.
 
+- 2026-11-09: **Merged into `master`** by fast-forward, at Al-khair's word. Not pushed, not deployed (E3 left: push and deploy on his word, D3, then switching the schedules on).
+
 - 2026-11-09: **D4 built.** An automatic run gets US$150 and up to 100 companies (`make_caps(scheduled=True)`, also in its estimate and its resume), aims for its share of the round's 100 good leads (`goal.py`), and skips the companies left once it has it ("the run reached its goal of N good leads"). A run a person starts keeps US$20 and 20 companies. The day's limit is US$150 and is on the Settings page now; the ceilings are US$200 a run and US$300 a day in .env. A run now gives the shared Claude the Settings page's values when it starts, so a schedule after a restart uses them too. The run email says how far the round is. Tests: `test_goal.py` (14), including the real scheduler loop starting a run with these limits and waiting 14 days. Backend `RUN_GATES=1`: 3,270 passed, 1 failed, 25 skipped; the one failure (`test_cancel_mid_run_keeps_what_finished_and_marks_it_cancelled`) is a timing test that passed 5 times in a row on its own, with about 800 MB free during the full run.
 
 - 2026-11-09: **D4 added, not built.** Al-khair stopped a change that raised the defaults to US$50 and 50 companies (nothing was changed). Agreed instead: manual runs keep their limits in Settings; automatic runs aim for 100 good leads a fortnight, 25 per city, with safety brakes of US$100 a run and US$150 a day. Build after D3.
