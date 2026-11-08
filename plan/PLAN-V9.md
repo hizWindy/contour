@@ -3,8 +3,8 @@
 This plan makes the changes Levi asked for after he used the Lead Finder on the live site. It finds bigger companies, looks in booming industries and at overseas companies coming to Australia, runs all 4 cities by itself, and emails Levi a list to review before anything goes to HubSpot. It also gets more good leads for the money.
 
 - **Built by:** Al-khair Pama. **Signed off by:** Al-khair for the code. Levi confirms the business rules marked **TBC** (to be confirmed).
-- **Last updated:** 2026-11-08 (the code built on `plan-v9`).
-- **Progress:** 10 of 18 steps done. All the code is built on `plan-v9` (not merged, not pushed). C1, C3, D1, E2 and E3 are built and wait on one check each; A2, A3 and D3 wait on Al-khair.
+- **Last updated:** 2026-11-09 (D4 added: limits for manual and automatic runs, agreed with Al-khair, not built).
+- **Progress:** 10 of 19 steps done. The code of the first 18 steps is built on `plan-v9` (not merged, not pushed). C1, C3, D1, E2 and E3 are built and wait on one check each; A2, A3 and D3 wait on Al-khair. D4 (added 9 Nov) is not built.
 - **Sources:** the meeting notes of 2 Nov and 5 Nov in `minutes of meeting/`.
 - **Comes after:** [PLAN-V8.md](PLAN-V8.md). Its open steps (B1 to B4) stay there, but A2 below needs B3.
 
@@ -20,7 +20,7 @@ What Levi asked for, and how this plan does it:
 | If one company is booming, check its competitors too (2 Nov) | B5: up to 5 rivals of a good lead are found and researched in the next run. |
 | Runs for Perth, Adelaide, Melbourne and Sydney, every 2 weeks (5 Nov) | C4: one schedule per city, on different days. |
 | An email to him when a run is done (5 Nov), with a link to review first (2 Nov) | C1 to C3: the email, then a review page where he approves or rejects. |
-| More leads: about US$100 to 200 for about 100 good leads every 2 weeks is fine (5 Nov) | D2, D3: show the cost per good lead, test a bigger run, then set the limits. |
+| More leads: about US$100 to 200 for about 100 good leads every 2 weeks is fine (5 Nov) | D2, D3, D4: show the cost per good lead, test a bigger run, then let the automatic runs aim for 100 good leads, with safety brakes. |
 | Only Levi, Marcus and one other person see the Lead Finder (5 Nov) | E1: a Lead Finder tick on each person's account. |
 
 Two extras of ours:
@@ -145,7 +145,7 @@ Two extras of ours:
   | Perth | Wednesday |
   | Sydney | Thursday (still goes to Director review) |
 
-  Each saves its city, the main signs including B3 and B4, 14 days of look-back and its own company limit (set in D3). All stay off until Al-khair switches them on.
+  Each saves its city, the main signs including B3 and B4, and 14 days of look-back. Built with its own company limit of 20; D4 replaces that limit with a goal. All stay off until Al-khair switches them on.
   - **Why separate days:**
     - only one run goes at a time;
     - the daily limit is US$50;
@@ -174,6 +174,42 @@ Two extras of ours:
   - Then set each city's company limit so the 4 cities give about 100 good leads per fortnight within US$100 to US$200.
   - One run can't go over US$50 (`hard_run_cap_usd`), so the limit per city stays at or under that.
   - **Done when:** the numbers are in the Log and the four schedules have their limits.
+- [ ] **D4. Limits for manual and automatic runs.** Agreed with Al-khair on 9 Nov. Build it after D3, from D3's numbers.
+
+  **The idea.** Manual runs keep low limits, because a person can start one as often as they like. Automatic runs have no working limit: they aim for a goal, with high safety brakes. A safety brake is like a fuse: it never trips unless something goes wrong, like Claude repeating a search.
+
+  | Limit | Manual run (Start page) | Automatic run (the 4 schedules) |
+  |---|---|---|
+  | One company | US$2.50, as today | US$2.50, the same |
+  | How many companies | 20, as today. Al-khair changes it in Settings (up to 100) | No set number. It goes on until its goal, or until no company is left (about 60 at most in one city) |
+  | One run | US$20, as today. Al-khair changes it in Settings (up to US$50) | Safety brake US$100 |
+  | One day, all runs together | US$50 today | US$150 |
+
+  **An automatic run stops at whichever comes first:**
+  1. its goal: 25 good leads for its city, so 100 across the 4 cities;
+  2. no company left to research;
+  3. the run's safety brake, US$100;
+  4. the day's safety brake, US$150.
+
+  **The goal carries over.** The run counts the good leads of the fortnight so far. A city that falls short leaves more for the cities after it. Example: Melbourne finds 18 on Monday, so Adelaide, Perth and Sydney share the other 82.
+
+  **What it should cost** (from one real run, **TBC** until D3): a company about US$0.40, a city run about US$25 to US$30, a fortnight about US$100 to US$120 for about 100 good leads. That is inside Levi's US$100 to US$200.
+
+  **Who controls what:**
+  - The Settings page (Al-khair): the manual run's money limit and company count, as today.
+  - `engine/.env` (Al-khair, on App Platform its variables): the automatic run's safety brake (new, US$100), the daily limit (US$50 now, US$150), and the goal (new, 100 good leads a fortnight). These change only with a restart, so a click can't raise them.
+
+  **The run email** says how far the fortnight is, like "62 of 100 good leads so far, US$80 spent". The tool can't promise 100: it finds only companies with news. A quiet fortnight may give about 70, and the email says so. Then Al-khair can widen the search (more signs, a longer look-back).
+
+  **Unchanged:** up to 12 web searches for one company, 6 searches per city to find companies (one per sign), one run at a time, each city every 2 weeks.
+
+  - **Files (TBC):** `core/config.py` (the new settings), `jobs.py` (no company limit of its own, the goal), `steps/choose.py` and `steps/company.py` (stop at the goal), `run_email.py` (the fortnight so far), the run book, tests.
+  - **Done when:**
+    - a test shows a scheduled run that stops at its goal, and one that stops when no company is left;
+    - a test shows a manual run still stopping at its company count and money limit;
+    - a test shows the goal carrying over from one city to the next;
+    - the run email shows the fortnight so far.
+  - **Waiting on Levi (TBC):** whether the goal is 100 or 90 good leads a fortnight.
 
 ## Part E: Access, check and merge
 
@@ -200,7 +236,7 @@ Two extras of ours:
 - [ ] **E3. Docs, merge and switch on.** (Docs done 2026-11-08. Left: merge, push and deploy on Al-khair's word, then D3, then switching on.)
   - Update the docs: `engine/AGENTS.md`, `Criteria_v2.md` (size rule, new signs, rivals), the run book (email settings) and the Rules page text.
   - Merge into `master` and push, both on Al-khair's word, then deploy.
-  - Switch on the four schedules after D3.
+  - Switch on the four schedules after D3 and D4.
   - **Done when:** the first scheduled run's email reaches Levi.
 
 ## Waiting on
@@ -240,6 +276,8 @@ Two extras of ours:
 ## Log
 
 Newest first.
+
+- 2026-11-09: **D4 added, not built.** Al-khair stopped a change that raised the defaults to US$50 and 50 companies (nothing was changed). Agreed instead: manual runs keep their limits in Settings; automatic runs aim for 100 good leads a fortnight, 25 per city, with safety brakes of US$100 a run and US$150 a day. Build after D3.
 
 - 2026-11-08: **The local system, real (not the fake backend).** `python -m core.cli serve` on the dev database (it migrated to 0013) and `npm run dev`. Checked through the API the pages use: the Start page starts with Melbourne and the 6 main signs, and doesn't offer `rival_growth`; Schedules lists the four cities, all off, each about US$7.71 a run at past prices; the last real run (Perth and Sydney) shows 8 good leads for US$6.36, US$0.79 each, with sending greyed out ("HubSpot writing is off"); People lists the laptop Admin. Not checked: the pages in a browser (the Chrome extension wasn't connected). No run was started, so nothing was spent.
 - 2026-11-08: **E2 checks.** Backend `RUN_GATES=1`: 3,253 passed, 25 skipped (5 min). Website: 885 tests, lint, types, build. `openapi.json` and `schema/SCHEMA-0013.md` match.
