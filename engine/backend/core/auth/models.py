@@ -31,7 +31,7 @@ from sqlalchemy import (
     Uuid,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from core.db.base import CORE_SCHEMA, Base
@@ -89,6 +89,11 @@ class User(Base):
         DateTime(timezone=True), server_default=text("now()")
     )
     last_signed_in_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # The projects this person may use, by name, like ["lead_finder"] (PLAN-V9 E1). An Admin may use
+    # every project, whatever this says.
+    apps: Mapped[list[str]] = mapped_column(
+        ARRAY(String(64)), default=list, server_default=text("'{}'::varchar[]")
+    )
 
 
 class UserSession(Base):

@@ -83,10 +83,10 @@ def test_a_slice_follows_the_order_the_person_gave() -> None:
 def test_every_slice_id_is_different_and_the_same_params_give_the_same_slices() -> None:
     params = DiscoveryParams(
         cities=["Melbourne", "Adelaide", "Perth", "Sydney"],
-        triggers=[item.id for item in RULES.criteria.triggers.every],
+        triggers=[item.id for item in RULES.criteria.searchable_triggers],
     )
     first = make_slices(params, RULES)
-    assert len({s.id for s in first}) == len(first) == 4 * len(RULES.criteria.triggers.every)
+    assert len({s.id for s in first}) == len(first) == 4 * len(RULES.criteria.searchable_triggers)
     assert make_slices(params, RULES) == first
 
 

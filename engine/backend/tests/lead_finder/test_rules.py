@@ -49,7 +49,11 @@ def test_rules_match_the_criteria_documents() -> None:
         "new_facility",
         "underperforming_workplace",
     ]
-    assert [t.id for t in criteria.triggers.weak] == ["culture_change", "hiring_push"]
+    assert [t.id for t in criteria.triggers.weak] == [
+        "culture_change",
+        "hiring_push",
+        "rival_growth",  # PLAN-V9 B5
+    ]
     assert criteria.triggers.consultant_window_months == 18
     assert (criteria.office_age.due_years, criteria.office_age.recent_move_years) == (5, 3)
     assert criteria.never_suggest.dissolved_deal_wait_months == 12
@@ -67,8 +71,11 @@ def test_numbers_line_up_with_the_deal_criteria() -> None:
 
 def test_every_trigger_has_search_templates() -> None:
     rules = load_rules()
-    for trigger in rules.criteria.triggers.every:
+    for trigger in rules.criteria.searchable_triggers:
         assert rules.queries.discovery[trigger.id], trigger.id
+    # The rivals' sign has no search: it comes from the rivals table (PLAN-V9 B5).
+    assert rules.criteria.rivals.sign == "rival_growth"
+    assert "rival_growth" not in rules.queries.discovery
 
 
 def test_watchlist_searches_from_three_angles() -> None:

@@ -11,6 +11,9 @@ In order, for each company:
 6. `company_started`, research, `company_done`. One company failing never stops the others:
    `company_failed` with a plain reason (the details go to the log). Claude being down
    (`ClaudeUnavailable`) and a cancel stop the whole run.
+7. A good lead in a tier 1 or tier 2 industry: one cheap Claude web search names up to 5 rivals in
+   its city, saved for a later run (PLAN-V9 B5). It is paid from the same company hold, and a
+   problem with it never changes the lead.
 The hold ends in a `finally` with what the company really cost.
 """
 
@@ -22,17 +25,19 @@ from typing import Any
 from apps.lead_finder.context import ResearchContext, StepModels
 from apps.lead_finder.research import (
     APP,
+    LeadCard,
     ResearchRequest,
     known_note_urls,
     lead_of_run,
     research_company,
 )
+from apps.lead_finder.rivals import RIVALS_PROMPT_VERSION, find_rivals, save_rivals, wants_rivals
 from apps.lead_finder.sanitize import one_line, safe_http_url
-from apps.lead_finder.scoring import parse_date
+from apps.lead_finder.scoring import city_of, parse_date
 from apps.lead_finder.steps.choose import OVER_LIMIT_REASON
 from apps.lead_finder.steps.state import CompanyTask, RunCtx, day_of, signals_of
 from apps.lead_finder.tables import company_key
-from core.claude.budget import BudgetSpent
+from core.claude.budget import Budget, BudgetSpent
 from core.claude.client import ClaudeUnavailable, Reply
 from core.logs import scrub
 from core.memory.service import Note, remember_many
@@ -42,6 +47,7 @@ from core.runs.schemas import (
     CompanySkippedData,
     CompanyStartedData,
 )
+from core.searches.service import log_reply
 
 log = logging.getLogger(__name__)
 
@@ -99,6 +105,63 @@ async def save_signals(run: RunCtx, task: CompanyTask) -> int:
         await remember_many(session, run.run.embedder, notes, app=APP, kind="source_note")
         await session.commit()
     return len(notes)
+
+
+async def _rivals(
+    run: RunCtx, card: LeadCard, task: CompanyTask, spent: Decimal, on_reply: Any
+) -> int:
+    """Finds and saves the rivals of a good lead in a booming industry (PLAN-V9 B5). Returns how
+    many were saved. Paid from what is left of the company's hold; a problem is logged, never
+    raised, except Claude being down or the daily limit (the run stops for those anyway)."""
+    ctx = run.run
+    rules = run.rules
+    place = card.facts.city.value if isinstance(card.facts.city.value, str) else task["city"]
+    city = city_of(place, rules) if place else None
+    if not wants_rivals(rules, card.result, card.facts.tier_group, city):
+        return 0
+    assert city is not None  # wants_rivals says no without a city
+    left = ctx.caps.company_cap_usd - spent
+    budget = Budget(
+        max(left, Decimal(0)),
+        rules.criteria.rivals.max_searches,
+        request_reserve_usd=min(ctx.settings.request_reserve_usd, max(left, Decimal(0))),
+    )
+    industry = card.facts.industry.value if isinstance(card.facts.industry.value, str) else None
+    try:
+        found = await find_rivals(
+            ctx.claude,
+            rules,
+            ctx.settings,
+            company=card.company,
+            industry=industry,
+            city=city,
+            budget=budget,
+            on_reply=on_reply,
+        )
+    except (ClaudeUnavailable, BudgetSpent):
+        raise
+    except Exception as error:
+        log.warning(
+            "rivals_failed", extra={"run_id": str(ctx.run_id), "kind": type(error).__name__}
+        )
+        return 0
+    async with ctx.session() as session:
+        if found.reply is not None:
+            log_reply(
+                session,
+                found.reply,
+                app=APP,
+                step="rivals",
+                job_id=card.id,
+                run_id=ctx.run_id,
+                subject=card.company,
+                prompt_version=RIVALS_PROMPT_VERSION,
+            )
+        saved = await save_rivals(session, card.id, card.company, city, found.rivals)
+        await session.commit()
+    for problem in found.problems:
+        log.info("rivals_problem", extra={"run_id": str(ctx.run_id), "problem": problem})
+    return saved
 
 
 async def research_one(run: RunCtx, task: CompanyTask) -> dict[str, Any]:
@@ -168,6 +231,8 @@ async def research_one(run: RunCtx, task: CompanyTask) -> dict[str, Any]:
                     day_of(task["today"]),
                     context,
                 )
+            if not task["is_test"]:
+                await _rivals(run, card, task, spent, on_reply)
         except ClaudeUnavailable:
             raise  # Claude is down: the whole run stops (failed), and can be resumed
         except BudgetSpent as stop:  # the daily limit: nothing more can be sent today

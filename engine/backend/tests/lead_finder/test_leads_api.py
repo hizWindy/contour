@@ -554,6 +554,10 @@ async def test_reject_without_a_reason_is_a_422_on_the_reason_field(
         f"{BASE}/{lead.id}", json={"status": "rejected", "reject_reason": "   "}
     )
     assert "body.reject_reason" in field_errors(blank)
+    other = await client.patch(
+        f"{BASE}/{lead.id}", json={"status": "rejected", "reject_reason": "other"}
+    )
+    assert "body.reject_note" in field_errors(other)
     assert (await client.get(f"{BASE}/{lead.id}")).json()["status"] == "new"
     assert await memory_count(session) == 0
 
@@ -563,12 +567,12 @@ async def test_reject_then_undo(client: httpx.AsyncClient, session: AsyncSession
     lead = make_lead("Acme")
     await add_all(session, lead)
     rejected = await client.patch(
-        f"{BASE}/{lead.id}", json={"status": "rejected", "reject_reason": "Too small"}
+        f"{BASE}/{lead.id}", json={"status": "rejected", "reject_reason": "too_small"}
     )
     assert rejected.status_code == 200
     assert (rejected.json()["status"], rejected.json()["reject_reason"]) == (
         "rejected",
-        "Too small",
+        "too_small",
     )
     assert await memory_count(session) == 1
 
@@ -598,9 +602,13 @@ async def test_leaving_rejected_for_watching_clears_the_reason(
 ) -> None:
     lead = make_lead("Acme")
     await add_all(session, lead)
-    await client.patch(f"{BASE}/{lead.id}", json={"status": "rejected", "reject_reason": "No"})
+    await client.patch(
+        f"{BASE}/{lead.id}",
+        json={"status": "rejected", "reject_reason": "other", "reject_note": "No"},
+    )
     moved = await client.patch(f"{BASE}/{lead.id}", json={"status": "watching"})
     assert (moved.json()["status"], moved.json()["reject_reason"]) == ("watching", None)
+    assert moved.json()["reject_note"] is None
     assert await memory_count(session) == 1  # replaced, not added
 
 
@@ -674,7 +682,8 @@ async def test_the_patch_returns_the_updated_lead_with_a_newer_updated_at(
         ({"status": "done"}, "body.status"),
         ({"status": None}, "body.status"),
         ({"useful": "maybe"}, "body.useful"),
-        ({"reject_reason": "x" * 1001}, "body.reject_reason"),
+        ({"reject_reason": "Too small"}, "body.reject_reason"),
+        ({"reject_note": "x" * 1001}, "body.reject_note"),
         ({"note": "x" * 2001}, "body.note"),
         ({"note": "a\x00b"}, "body.note"),
         ({"company": "Hacked"}, "body.company"),
@@ -700,7 +709,7 @@ async def test_a_reason_without_rejecting_is_refused(
 ) -> None:
     lead = make_lead("Acme")
     await add_all(session, lead)
-    response = await client.patch(f"{BASE}/{lead.id}", json={"reject_reason": "Too small"})
+    response = await client.patch(f"{BASE}/{lead.id}", json={"reject_reason": "too_small"})
     assert response.status_code == 422
     assert "body.reject_reason" in field_errors(response)
 
@@ -726,7 +735,7 @@ async def test_the_outcome_is_saved_with_the_real_memory_model(
     lead = make_lead("Acme")
     await add_all(session, lead)
     response = await client.patch(
-        f"{BASE}/{lead.id}", json={"status": "rejected", "reject_reason": "Office too small"}
+        f"{BASE}/{lead.id}", json={"status": "rejected", "reject_reason": "too_small"}
     )
     assert response.status_code == 200
     [item] = list(

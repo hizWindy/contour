@@ -32,6 +32,17 @@ from core.hubspot.matching import clean_name
 SCHEMA = "lead_finder"
 LEAD_STATUSES = ("new", "watching", "rejected", "sent")
 LEAD_ORIGINS = ("typed", "web", "hubspot")
+# Why a person rejected a lead (PLAN-V9 D1). The counts show which rule to tune. "other" needs a
+# note. Migration 0013 moved the free-text reasons of earlier leads to the note, as "other".
+REJECT_REASONS = (
+    "too_small",
+    "wrong_industry",
+    "already_talking",
+    "bad_timing",
+    "not_a_real_sign",
+    "other",
+)
+RIVAL_STATUSES = ("pending", "used", "skipped")  # PLAN-V9 B5
 
 
 def _in_list(column: str, values: tuple[str, ...]) -> str:
@@ -62,6 +73,12 @@ LIMITS: Final[dict[str, int]] = {
     "lead.hubspot_id": 32,
     "lead.rules_version": 32,
     "lead.prompt_version": 64,
+    "rival.lead_company": 300,
+    "rival.name": 300,
+    "rival.company_key": 300,
+    "rival.website": 255,
+    "rival.city": 120,
+    "rival.status": 16,
     "run.app": 64,
     "run.mode": 32,
     "run.status": 16,
@@ -138,6 +155,10 @@ class Lead(Base):
     __table_args__ = (
         CheckConstraint(_in_list("status", LEAD_STATUSES), name="status"),
         CheckConstraint(_in_list("origin", LEAD_ORIGINS), name="origin"),
+        CheckConstraint(
+            f"reject_reason IS NULL OR {_in_list('reject_reason', REJECT_REASONS)}",
+            name="reject_reason",
+        ),
         Index("ix_leads_run_id", "run_id"),
         Index("ix_leads_company_key", "company_key"),
         Index("ix_leads_domain", "domain"),
@@ -189,7 +210,8 @@ class Lead(Base):
     trigger_date: Mapped[date | None] = mapped_column(Date)
     contact_role: Mapped[str | None] = mapped_column(_string("lead.contact_role"))
     status: Mapped[str] = mapped_column(_string("lead.status"), server_default="new")  # new, ...
-    reject_reason: Mapped[str | None] = mapped_column(Text)
+    reject_reason: Mapped[str | None] = mapped_column(Text)  # one of REJECT_REASONS
+    reject_note: Mapped[str | None] = mapped_column(Text)  # what "other" means, or more detail
     note: Mapped[str | None] = mapped_column(Text)
     useful: Mapped[bool | None] = mapped_column(Boolean)  # a person's thumbs up or down
     hubspot_status: Mapped[str] = mapped_column(_string("lead.hubspot_status"))
@@ -209,6 +231,42 @@ class Lead(Base):
 
 # Newest first: the results page and the "latest" view read leads in this order.
 Index("ix_leads_created_at", Lead.created_at.desc())
+
+
+class Rival(Base):
+    """A competitor of a good lead in a booming industry, to research in a later run (PLAN-V9 B5).
+
+    Found by one Claude web search when the lead is a Pass or a Director review in a tier 1 or tier
+    2 industry (`rivals.py`). `pending` until the next discovery run for its city: `used` when that
+    run chose it, `skipped` when a rule left it out (researched lately, an open deal). One lead
+    lists a rival once.
+    """
+
+    __tablename__ = "rivals"
+    __table_args__ = (
+        CheckConstraint(_in_list("status", RIVAL_STATUSES), name="status"),
+        Index("uq_rivals_lead_id_company_key", "lead_id", "company_key", unique=True),
+        Index("ix_rivals_pending", "city", "found_at", postgresql_where=text("status = 'pending'")),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    lead_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey(f"{SCHEMA}.leads.id", ondelete="CASCADE")
+    )
+    lead_company: Mapped[str] = mapped_column(_string("rival.lead_company"))  # whose rival it is
+    name: Mapped[str] = mapped_column(_string("rival.name"))
+    company_key: Mapped[str] = mapped_column(_string("rival.company_key"))
+    website: Mapped[str | None] = mapped_column(_string("rival.website"))
+    city: Mapped[str] = mapped_column(_string("rival.city"))
+    url: Mapped[str] = mapped_column(Text)  # the page that shows it is a rival
+    why: Mapped[str] = mapped_column(Text)  # one plain sentence
+    status: Mapped[str] = mapped_column(_string("rival.status"), server_default="pending")
+    run_id: Mapped[uuid.UUID | None] = mapped_column(  # the run that used or skipped it
+        Uuid, ForeignKey(f"{CORE_SCHEMA}.runs.id", ondelete="SET NULL")
+    )
+    found_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class SignalHireDetails(Base):

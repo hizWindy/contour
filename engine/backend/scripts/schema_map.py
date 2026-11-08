@@ -85,6 +85,9 @@ PURPOSE = {
         "One row per researched company. `card` holds the whole lead card. The other columns "
         "are copies, for filtering and sorting."
     ),
+    "lead_finder.rivals": (
+        "Rivals of a good lead in a booming industry, to research in a later run (PLAN-V9 B5)."
+    ),
     "lead_finder.signalhire_details": (
         "Signal Hire's company record, saved so a company is paid for once a month."
     ),

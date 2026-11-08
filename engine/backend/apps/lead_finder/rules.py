@@ -172,6 +172,17 @@ class Triggers(Strict):
         return self
 
 
+class Rivals(Strict):
+    """Rivals of a booming company (PLAN-V9 B5). The code is apps/lead_finder/rivals.py."""
+
+    enabled: bool
+    tiers: list[Literal["tier_1", "tier_2"]] = Field(min_length=1)
+    per_lead: int = Field(ge=1, le=10)
+    per_run: int = Field(ge=0, le=20)
+    max_searches: int = Field(ge=1, le=5)
+    sign: str = Field(pattern=r"^[a-z][a-z_]*$")
+
+
 class NeverSuggest(Strict):
     already_sent: bool
     open_deal: bool
@@ -326,6 +337,7 @@ class Criteria(Strict):
     fit: Fit
     office_age: OfficeAge
     triggers: Triggers
+    rivals: Rivals
     boosters: list[Item]
     never_suggest: NeverSuggest
     sources_rank: list[str] = Field(min_length=1)
@@ -353,6 +365,17 @@ class Criteria(Strict):
                 f"triggers: {', '.join(unknown)}"
             )
         return self
+
+    @model_validator(mode="after")
+    def check_rival_sign(self) -> Self:
+        if self.rivals.sign not in {trigger.id for trigger in self.triggers.weak}:
+            raise ValueError(f"rivals.sign {self.rivals.sign!r} must be a weak trigger")
+        return self
+
+    @property
+    def searchable_triggers(self) -> list[Item]:
+        """The signs a discovery search can look for: every sign but the rivals' own."""
+        return [trigger for trigger in self.triggers.every if trigger.id != self.rivals.sign]
 
     @model_validator(mode="after")
     def check_stages(self) -> Self:
@@ -517,7 +540,8 @@ class LeadFinderRules(Strict):
 
     @model_validator(mode="after")
     def check_together(self) -> Self:
-        trigger_ids = {trigger.id for trigger in self.criteria.triggers.every}
+        # The rivals' sign has no search: it comes from the rivals table (PLAN-V9 B5).
+        trigger_ids = {trigger.id for trigger in self.criteria.searchable_triggers}
         missing = sorted(i for i in trigger_ids if not self.queries.discovery.get(i))
         if missing:
             raise ValueError(f"No discovery templates for triggers: {', '.join(missing)}")

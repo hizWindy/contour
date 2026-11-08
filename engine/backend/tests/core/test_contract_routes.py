@@ -89,6 +89,7 @@ ROUTES = [
     ("GET", f"{LF}/leads/facets"),
     ("GET", f"{LF}/leads/export"),
     ("GET", f"{LF}/leads/map"),
+    ("GET", f"{LF}/leads/reject-reasons"),
     ("GET", f"{LF}/leads/{{lead_id}}"),
     ("PATCH", f"{LF}/leads/{{lead_id}}"),
     ("GET", f"{LF}/leads/{{lead_id}}/similar"),

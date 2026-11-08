@@ -630,6 +630,93 @@ def test_0012_marks_the_runs_a_schedule_started(scratch: Scratch) -> None:
     assert run_schedule_column(scratch) is not None
 
 
+@pytest.mark.integration
+def test_0013_rivals_reasons_projects_and_the_old_schedule(scratch: Scratch) -> None:
+    """PLAN-V9: the rivals table, reasons from a fixed list (old free text moves to the note), each
+    person's projects, and the old discovery schedule removed only when it is off and never ran."""
+    config = alembic_config(scratch.url)
+    command.upgrade(config, "0012_run_schedule")
+    lead, gone = uuid.uuid4(), uuid.uuid4()
+    with scratch.connect() as connection:
+        connection.execute(
+            "INSERT INTO lead_finder.leads (id, company, company_key, result, score, "
+            "hubspot_status, card, cost_usd, web_searches, rules_version, prompt_version, status, "
+            "reject_reason) VALUES (%s, 'Acme', 'acme', 'pass', 70, 'new', '{}', 0, 0, 'v', 'p', "
+            "'rejected', 'Office too small for us')",
+            (lead,),
+        )
+        connection.execute(
+            "INSERT INTO core.users (id, email, name, password_hash) VALUES (%s, "
+            "'al@example.test', 'Al', '$argon2id$not-a-real-hash')",
+            (uuid.uuid4(),),
+        )
+        connection.execute(
+            "INSERT INTO core.schedules (id, project, job, name, every, unit, weekday, at_time) "
+            "VALUES (%s, 'lead_finder', 'lead_finder.discovery', 'Find new leads', 2, 'weeks', 0, "
+            "'07:00')",
+            (gone,),
+        )
+
+    command.upgrade(config, "head")
+    command.check(config)  # the models declare the same tables, columns and keys
+    with scratch.connect() as connection:
+        row = connection.execute(
+            "SELECT reject_reason, reject_note FROM lead_finder.leads WHERE id = %s", (lead,)
+        ).fetchone()
+        assert row == {"reject_reason": "other", "reject_note": "Office too small for us"}
+        with pytest.raises(psycopg.errors.CheckViolation):
+            connection.execute(
+                "UPDATE lead_finder.leads SET reject_reason = 'free text' WHERE id = %s", (lead,)
+            )
+        apps = connection.execute("SELECT apps FROM core.users").fetchone()
+        assert apps == {"apps": []}
+        left = connection.execute("SELECT id FROM core.schedules").fetchall()
+        assert left == []  # the old one was off and never ran, so it went
+        connection.execute(
+            "INSERT INTO lead_finder.rivals (id, lead_id, lead_company, name, company_key, city, "
+            "url, why, found_at) VALUES (%s, %s, 'Acme', 'Rival', 'rival', 'Melbourne', "
+            "'https://example.com', 'Why.', now())",
+            (uuid.uuid4(), lead),
+        )
+        status = connection.execute("SELECT status FROM lead_finder.rivals").fetchone()
+        assert status == {"status": "pending"}
+        connection.execute("DELETE FROM lead_finder.leads WHERE id = %s", (lead,))
+        assert connection.execute("SELECT count(*) AS n FROM lead_finder.rivals").fetchone() == {
+            "n": 0
+        }  # a lead's rivals go with it
+
+    command.downgrade(config, "0012_run_schedule")
+    with scratch.connect() as connection:
+        gone_table = connection.execute(
+            "SELECT to_regclass('lead_finder.rivals') AS rivals"
+        ).fetchone()
+        assert gone_table == {"rivals": None}
+    command.upgrade(config, "head")
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    ("enabled", "next_run", "last_run"),
+    [(True, "2026-11-09 20:00+00", None), (False, None, "2026-11-01 20:00+00")],
+)
+def test_0013_keeps_an_old_schedule_that_is_on_or_has_run(
+    scratch: Scratch, enabled: bool, next_run: str | None, last_run: str | None
+) -> None:
+    config = alembic_config(scratch.url)
+    command.upgrade(config, "0012_run_schedule")
+    with scratch.connect() as connection:
+        connection.execute(
+            "INSERT INTO core.schedules (id, project, job, name, every, unit, weekday, at_time, "
+            "enabled, next_run_at, last_run_at) VALUES (%s, 'lead_finder', "
+            "'lead_finder.discovery', 'Find new leads', 2, 'weeks', 0, '07:00', %s, %s, %s)",
+            (uuid.uuid4(), enabled, next_run, last_run),
+        )
+    command.upgrade(config, "head")
+    with scratch.connect() as connection:
+        left = connection.execute("SELECT job FROM core.schedules").fetchall()
+    assert left == [{"job": "lead_finder.discovery"}]
+
+
 def fact(value: Any) -> dict[str, Any]:
     found = value is not None
     return {
@@ -960,7 +1047,7 @@ def test_downgrade_to_0002_restores_the_card_columns_and_the_way_back_fills_them
         )
         marked = connection.execute(
             "UPDATE lead_finder.leads SET run_id = %s, origin = 'web', is_test = true, "
-            "useful = true, note = 'Called them', reject_reason = 'Too small' "
+            "useful = true, note = 'Called them', reject_reason = 'too_small' "
             "WHERE company = 'Mystery Co' "
             "RETURNING run_id, origin, is_test, useful, note, reject_reason",
             (run_id,),
@@ -971,7 +1058,7 @@ def test_downgrade_to_0002_restores_the_card_columns_and_the_way_back_fills_them
         "is_test": True,
         "useful": True,
         "note": "Called them",
-        "reject_reason": "Too small",
+        "reject_reason": "too_small",
     }
     assert "ix_searches_created_at" in search_log_indexes(legacy)
 

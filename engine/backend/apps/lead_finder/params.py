@@ -49,7 +49,8 @@ def known_cities() -> list[str]:
 
 
 def known_trigger_ids() -> list[str]:
-    return [trigger.id for trigger in load_rules().criteria.triggers.every]
+    """The signs a run may search for. The rivals' sign is not one: it has no search."""
+    return [trigger.id for trigger in load_rules().criteria.searchable_triggers]
 
 
 def default_cities() -> list[str]:

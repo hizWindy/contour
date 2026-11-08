@@ -60,6 +60,7 @@ def build_run_options(
             ("weak", triggers.weak),
         )
         for item in items
+        if item.id != rules.criteria.rivals.sign  # found by the rivals step, never searched for
     ]
     caps = make_caps(settings)
     return RunOptions(

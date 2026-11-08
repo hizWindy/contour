@@ -148,6 +148,20 @@ triggers:
       label: Culture change
     - id: hiring_push # the id stays. The label is the Profile's wording
       label: Pressure on talent, client experience or productivity, like a hiring push
+    - id: rival_growth # PLAN-V9 B5. It has no search: it comes from the rivals table (below)
+      label: A rival of a booming company
+
+# Rivals of a booming company (PLAN-V9 B5, Levi 2 Nov). When a lead in one of these tiers is a Pass or
+# a Director review, one Claude web search names up to per_lead Australian rivals with an office in
+# the same city. The next discovery run for that city adds up to per_run of them to its list, with
+# the weak sign below, so real news still ranks first. Set enabled to false to stop it.
+rivals:
+  enabled: true
+  tiers: [tier_1, tier_2]
+  per_lead: 5
+  per_run: 5
+  max_searches: 2 # web searches in the one request (about US$0.05 to US$0.10, TBC)
+  sign: rival_growth
 
 # What Claude may report as evidence for the score. Each earns points in a score check below,
 # except can_pay: the Profile has no place for it, so it only shows on the card (and may break ties).
@@ -290,6 +304,8 @@ tbc:
     note: Version 2 adds three triggers (new facility, new business unit, underperforming workplace) and moves the leadership change up from weak to other, counting only when strategy changes. All from the Profile and Levi's brief, none confirmed.
   - key: triggers.main
     note: PLAN-V9 adds new_to_australia (Levi, 5 Nov) and hot_industry_growth (Levi, 2 Nov) to the main signs, so the schedules look for them. Whether they are main signs is for Levi.
+  - key: rivals
+    note: Our proposal (PLAN-V9 B5). Whether rivals with no news of their own are wanted is for Levi (PLAN-V9 A3). At most 5 a run, and the weak sign ranks them after real news.
   - key: cities.no_city_director_signs
     note: Our proposal (PLAN-V9 B3). An overseas company new to Australia with no Australian city named yet goes to a Director, not to Watch.
   - key: triggers.recent_months

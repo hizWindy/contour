@@ -72,6 +72,7 @@ TEST_TABLES = (
     "core.audit_log",
     "core.sessions",
     "core.users",
+    "lead_finder.rivals",
     "lead_finder.leads",
     "lead_finder.signalhire_details",
     "core.searches",

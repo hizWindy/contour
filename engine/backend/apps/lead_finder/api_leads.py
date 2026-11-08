@@ -27,6 +27,7 @@ from apps.lead_finder.schemas import (
     LeadSort,
     LeadStatus,
     MapOut,
+    RejectReasonCounts,
     SimilarOut,
     SortOrder,
 )
@@ -205,6 +206,23 @@ async def lead_map(session: SessionDep, filters: Filters) -> MapOut:
     return await lead_store.map_points(session, filters)
 
 
+@router.get(
+    "/reject-reasons",
+    response_model=RejectReasonCounts,
+    summary="How many leads were rejected for each reason",
+    description=(
+        "Counts the rejected leads by reason, over the last `days` days (90 by default), by when "
+        "the lead was last changed. Every reason is listed, most used first. Test leads are left "
+        "out. The counts show which rule to tune (PLAN-V9 D1)."
+    ),
+)
+async def reject_reasons(
+    session: SessionDep,
+    days: Annotated[int, Query(ge=1, le=365, description="How many days back")] = 90,
+) -> RejectReasonCounts:
+    return await lead_store.reject_reason_counts(session, days)
+
+
 @router.get("/{lead_id}", response_model=LeadDetail, summary="One lead card")
 async def get_lead(lead_id: uuid.UUID, session: SessionDep) -> LeadDetail:
     detail = await lead_store.get_detail(session, lead_id)
@@ -219,10 +237,10 @@ async def get_lead(lead_id: uuid.UUID, session: SessionDep) -> LeadDetail:
     summary="Change a lead's status, note or feedback",
     description=(
         "A merge patch: a field you leave out stays as it is, and `null` clears it. `status` "
-        "is new, watching or rejected, and rejecting needs `reject_reason`. Leaving rejected "
-        "clears the reason. Setting the status to `new` removes the lead's outcome from memory; "
-        "any other change replaces it. Returns the updated lead, so the Undo button can send "
-        "back the exact values it had."
+        "is new, watching or rejected, and rejecting needs `reject_reason` (and `reject_note` "
+        "for the reason other). Leaving rejected clears both. Setting the status to `new` "
+        "removes the lead's outcome from memory; any other change replaces it. Returns the "
+        "updated lead, so the Undo button can send back the exact values it had."
     ),
 )
 async def patch_lead(

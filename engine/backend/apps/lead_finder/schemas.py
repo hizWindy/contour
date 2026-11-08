@@ -26,6 +26,24 @@ HubSpotStatus = Status
 LeadStatus = Literal["new", "watching", "rejected", "sent"]
 # A person can set these. `sent` is set only by the HubSpot send, which comes in Phase 5.
 PatchableStatus = Literal["new", "watching", "rejected"]
+# Why a person rejected a lead (PLAN-V9 D1). The same list as tables.REJECT_REASONS.
+RejectReason = Literal[
+    "too_small",
+    "wrong_industry",
+    "already_talking",
+    "bad_timing",
+    "not_a_real_sign",
+    "other",
+]
+REJECT_REASON_LABELS: dict[str, str] = {
+    "too_small": "Too small",
+    "wrong_industry": "Wrong industry",
+    "already_talking": "Already talking to them",
+    "bad_timing": "Bad timing",
+    "not_a_real_sign": "Not a real sign",
+    "other": "Other",
+}
+RivalStatus = Literal["pending", "used", "skipped"]
 CityKind = Literal["pass", "director_review"]
 TriggerGroup = Literal["main", "other", "weak"]
 LeadSort = Literal[
@@ -184,11 +202,27 @@ class PreviousLead(BaseModel):
     status: LeadStatus
 
 
+class RivalOut(BaseModel):
+    """A competitor of this lead, to check (PLAN-V9 B5)."""
+
+    name: str
+    website: str | None
+    city: str
+    url: str = Field(description="The page that shows it is a rival")
+    why: str
+    status: RivalStatus = Field(
+        description="pending (the next run for the city adds it), used (a run researched it) or "
+        "skipped (a rule left it out, like an open deal)"
+    )
+    found_at: datetime
+
+
 class LeadDetail(LeadCard):
     """The full lead card, and what a person has done with the lead."""
 
     status: LeadStatus
-    reject_reason: str | None
+    reject_reason: RejectReason | None
+    reject_note: str | None = Field(None, description="What 'other' means, or more detail")
     note: str | None
     useful: bool | None
     run_id: UUID | None
@@ -197,6 +231,11 @@ class LeadDetail(LeadCard):
     updated_at: datetime
     previous: list[PreviousLead] = Field(
         description="Older researches of the same company, newest first"
+    )
+    rivals: list[RivalOut] = Field(
+        default_factory=list,
+        description="Rivals to check: competitors found because this is a good lead in a booming "
+        "industry (PLAN-V9 B5). Empty for most leads.",
     )
 
 
@@ -211,10 +250,16 @@ class LeadPatch(BaseModel):
     status: PatchableStatus | None = Field(
         None, description="new, watching or rejected. It can't be cleared, only changed."
     )
-    reject_reason: SafeText | None = Field(
+    reject_reason: RejectReason | None = Field(
+        None,
+        description="Why: too_small, wrong_industry, already_talking, bad_timing, "
+        "not_a_real_sign or other. Required when the status becomes rejected. Cleared when it "
+        "leaves rejected.",
+    )
+    reject_note: SafeText | None = Field(
         None,
         max_length=1000,
-        description="Required when the status becomes rejected. Cleared when it leaves rejected.",
+        description="Required when the reason is other. Cleared when it leaves rejected.",
     )
     note: SafeText | None = Field(
         None, max_length=2000, description="A person's note. null clears it."
@@ -422,3 +467,20 @@ class TestReport(BaseModel):
 
     summary: TestSummary
     items: list[TestItem]
+
+
+# --- Reject reasons (PLAN-V9 D1) --------------------------------------------------------------
+
+
+class RejectReasonCount(BaseModel):
+    reason: RejectReason
+    label: str
+    count: int
+
+
+class RejectReasonCounts(BaseModel):
+    """How many leads were rejected for each reason lately. The counts show which rule to tune."""
+
+    days: int
+    total: int
+    reasons: list[RejectReasonCount] = Field(description="Every reason, most used first")

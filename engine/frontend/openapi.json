@@ -211,6 +211,13 @@
             "title": "Director Review",
             "type": "array"
           },
+          "no_city_director_signs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "No City Director Signs",
+            "type": "array"
+          },
           "other_cities": {
             "enum": [
               "director_review",
@@ -925,6 +932,9 @@
             "title": "Results",
             "type": "array"
           },
+          "rivals": {
+            "$ref": "#/components/schemas/Rivals"
+          },
           "score": {
             "$ref": "#/components/schemas/Score"
           },
@@ -979,6 +989,7 @@
           "fit",
           "office_age",
           "triggers",
+          "rivals",
           "boosters",
           "never_suggest",
           "sources_rank",
@@ -2517,9 +2528,29 @@
             "title": "Prompt Version",
             "type": "string"
           },
+          "reject_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What 'other' means, or more detail",
+            "title": "Reject Note"
+          },
           "reject_reason": {
             "anyOf": [
               {
+                "enum": [
+                  "too_small",
+                  "wrong_industry",
+                  "already_talking",
+                  "bad_timing",
+                  "not_a_real_sign",
+                  "other"
+                ],
                 "type": "string"
               },
               {
@@ -2540,6 +2571,14 @@
             ],
             "title": "Result",
             "type": "string"
+          },
+          "rivals": {
+            "description": "Rivals to check: competitors found because this is a good lead in a booming industry (PLAN-V9 B5). Empty for most leads.",
+            "items": {
+              "$ref": "#/components/schemas/RivalOut"
+            },
+            "title": "Rivals",
+            "type": "array"
           },
           "rules_version": {
             "title": "Rules Version",
@@ -2690,13 +2729,15 @@
           "created_at",
           "status",
           "reject_reason",
+          "reject_note",
           "note",
           "useful",
           "run_id",
           "origin",
           "is_test",
           "updated_at",
-          "previous"
+          "previous",
+          "rivals"
         ],
         "title": "LeadDetail",
         "type": "object"
@@ -3003,7 +3044,7 @@
             "description": "A person's note. null clears it.",
             "title": "Note"
           },
-          "reject_reason": {
+          "reject_note": {
             "anyOf": [
               {
                 "maxLength": 1000,
@@ -3014,7 +3055,27 @@
                 "type": "null"
               }
             ],
-            "description": "Required when the status becomes rejected. Cleared when it leaves rejected.",
+            "description": "Required when the reason is other. Cleared when it leaves rejected.",
+            "title": "Reject Note"
+          },
+          "reject_reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "too_small",
+                  "wrong_industry",
+                  "already_talking",
+                  "bad_timing",
+                  "not_a_real_sign",
+                  "other"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why: too_small, wrong_industry, already_talking, bad_timing, not_a_real_sign or other. Required when the status becomes rejected. Cleared when it leaves rejected.",
             "title": "Reject Reason"
           },
           "status": {
@@ -4658,6 +4719,65 @@
         "title": "Recency",
         "type": "object"
       },
+      "RejectReasonCount": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "reason": {
+            "enum": [
+              "too_small",
+              "wrong_industry",
+              "already_talking",
+              "bad_timing",
+              "not_a_real_sign",
+              "other"
+            ],
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "label",
+          "count"
+        ],
+        "title": "RejectReasonCount",
+        "type": "object"
+      },
+      "RejectReasonCounts": {
+        "description": "How many leads were rejected for each reason lately. The counts show which rule to tune.",
+        "properties": {
+          "days": {
+            "title": "Days",
+            "type": "integer"
+          },
+          "reasons": {
+            "description": "Every reason, most used first",
+            "items": {
+              "$ref": "#/components/schemas/RejectReasonCount"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "days",
+          "total",
+          "reasons"
+        ],
+        "title": "RejectReasonCounts",
+        "type": "object"
+      },
       "ResearchCost": {
         "properties": {
           "angles_from_memory": {
@@ -4746,6 +4866,120 @@
           "company"
         ],
         "title": "ResearchRequest",
+        "type": "object"
+      },
+      "RivalOut": {
+        "description": "A competitor of this lead, to check (PLAN-V9 B5).",
+        "properties": {
+          "city": {
+            "title": "City",
+            "type": "string"
+          },
+          "found_at": {
+            "format": "date-time",
+            "title": "Found At",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "status": {
+            "description": "pending (the next run for the city adds it), used (a run researched it) or skipped (a rule left it out, like an open deal)",
+            "enum": [
+              "pending",
+              "used",
+              "skipped"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "url": {
+            "description": "The page that shows it is a rival",
+            "title": "Url",
+            "type": "string"
+          },
+          "website": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Website"
+          },
+          "why": {
+            "title": "Why",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "website",
+          "city",
+          "url",
+          "why",
+          "status",
+          "found_at"
+        ],
+        "title": "RivalOut",
+        "type": "object"
+      },
+      "Rivals": {
+        "additionalProperties": false,
+        "description": "Rivals of a booming company (PLAN-V9 B5). The code is apps/lead_finder/rivals.py.",
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "max_searches": {
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Max Searches",
+            "type": "integer"
+          },
+          "per_lead": {
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Per Lead",
+            "type": "integer"
+          },
+          "per_run": {
+            "maximum": 20.0,
+            "minimum": 0.0,
+            "title": "Per Run",
+            "type": "integer"
+          },
+          "sign": {
+            "pattern": "^[a-z][a-z_]*$",
+            "title": "Sign",
+            "type": "string"
+          },
+          "tiers": {
+            "items": {
+              "enum": [
+                "tier_1",
+                "tier_2"
+              ],
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Tiers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "enabled",
+          "tiers",
+          "per_lead",
+          "per_run",
+          "max_searches",
+          "sign"
+        ],
+        "title": "Rivals",
         "type": "object"
       },
       "RuleCheck": {
@@ -7170,6 +7404,13 @@
             "title": "Grow Into Range Months",
             "type": "integer"
           },
+          "growth_signs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Growth Signs",
+            "type": "array"
+          },
           "headcount_tool_multiplier": {
             "exclusiveMinimum": 0.0,
             "maximum": 20.0,
@@ -7213,6 +7454,11 @@
             "title": "Staff Counted In",
             "type": "string"
           },
+          "staff_floor": {
+            "exclusiveMinimum": 0.0,
+            "title": "Staff Floor",
+            "type": "integer"
+          },
           "staff_hint_min": {
             "exclusiveMinimum": 0.0,
             "title": "Staff Hint Min",
@@ -7246,6 +7492,7 @@
         "required": [
           "staff_min",
           "staff_hint_min",
+          "staff_floor",
           "staff_max",
           "staff_counted_in",
           "office_m2_min",
@@ -13365,6 +13612,160 @@
         ]
       }
     },
+    "/lead-finder/leads/reject-reasons": {
+      "get": {
+        "description": "Counts the rejected leads by reason, over the last `days` days (90 by default), by when the lead was last changed. Every reason is listed, most used first. Test leads are left out. The counts show which rule to tune (PLAN-V9 D1).",
+        "operationId": "reject_reasons",
+        "parameters": [
+          {
+            "description": "How many days back",
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 90,
+              "description": "How many days back",
+              "maximum": 365,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RejectReasonCounts"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "How many leads were rejected for each reason",
+        "tags": [
+          "Lead Finder",
+          "leads"
+        ]
+      }
+    },
     "/lead-finder/leads/{lead_id}": {
       "get": {
         "operationId": "get_lead",
@@ -13514,7 +13915,7 @@
         ]
       },
       "patch": {
-        "description": "A merge patch: a field you leave out stays as it is, and `null` clears it. `status` is new, watching or rejected, and rejecting needs `reject_reason`. Leaving rejected clears the reason. Setting the status to `new` removes the lead's outcome from memory; any other change replaces it. Returns the updated lead, so the Undo button can send back the exact values it had.",
+        "description": "A merge patch: a field you leave out stays as it is, and `null` clears it. `status` is new, watching or rejected, and rejecting needs `reject_reason` (and `reject_note` for the reason other). Leaving rejected clears both. Setting the status to `new` removes the lead's outcome from memory; any other change replaces it. Returns the updated lead, so the Undo button can send back the exact values it had.",
         "operationId": "patch_lead",
         "parameters": [
           {

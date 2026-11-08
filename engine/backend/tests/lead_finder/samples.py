@@ -44,6 +44,7 @@ from apps.lead_finder.fields import (
     Note,
     TriggerFound,
 )
+from apps.lead_finder.rivals import RivalCandidate, RivalCandidates
 from apps.lead_finder.rules import LeadFinderRules
 from apps.lead_finder.signalhire_company import build_details
 from core.claude.client import ClaudeError, ClaudeUnavailable, Reply, Source, WebTools
@@ -294,6 +295,8 @@ class FakeClaude:
     facts: CompanyFacts | None = None
     company_facts: dict[str, CompanyFacts] = field(default_factory=dict)
     scenario: dict[tuple[str, str], list[Candidate]] = field(default_factory=dict)
+    # PLAN-V9 B5: the rivals the rivals search names for a company, by its name
+    rivals: dict[str, list[RivalCandidate]] = field(default_factory=dict)
     invented_url: bool = False  # the notes cite a page the search never returned
     unread_websites: bool = False
     off_form: bool = False
@@ -376,6 +379,8 @@ class FakeClaude:
         parsed: Any
         if form is Candidates:
             parsed, sources, queries, usage, cost = self._discover(prompt, web)
+        elif form is RivalCandidates:
+            parsed, sources, queries, usage, cost = self._rivals(company)
         elif form is AngleNotes:
             parsed, sources, queries, usage, cost = self._angle(prompt, company, web)
         else:
@@ -400,6 +405,8 @@ class FakeClaude:
     def _step(form: type[BaseModel], prompt: str) -> str:
         if form is Candidates:
             return "discover"
+        if form is RivalCandidates:
+            return "rivals"
         if form is AngleNotes:
             return f"search:{FakeClaude._angle_name(prompt)}"
         return "extract"
@@ -437,6 +444,21 @@ class FakeClaude:
             if company is not None and "acme" not in company.casefold():
                 facts = _for_company(facts, company).model_copy(update={"name": company})
         return facts, (), (), Usage(input_tokens=5_000, output_tokens=1_000), self.extract_cost
+
+    def _rivals(
+        self, company: str | None
+    ) -> tuple[Any, tuple[Source, ...], tuple[str, ...], Usage, Decimal]:
+        named = {name.casefold(): found for name, found in self.rivals.items()}
+        found = named.get((company or "").casefold(), [])
+        sources = tuple(Source(item.url, "A page") for item in found)
+        usage = Usage(input_tokens=3_000, output_tokens=400, web_searches=2)
+        return (
+            RivalCandidates(rivals=list(found)),
+            sources,
+            (f"rivals of {company}",),
+            usage,
+            Decimal("0.07"),
+        )
 
     def _discover(
         self, prompt: str, web: WebTools | None

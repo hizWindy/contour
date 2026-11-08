@@ -19,6 +19,7 @@ from apps.lead_finder.tables import (
     LIMITS,
     UNNAMED_KEY,
     Lead,
+    Rival,
     _company_key_from_company,
     clip,
     company_key,
@@ -123,7 +124,7 @@ def test_the_column_default_gives_the_company_key_of_the_company() -> None:
 
 # --- Column length limits and clip -------------------------------------------------------------
 
-MODELS = {"lead": Lead, "run": Run}
+MODELS = {"lead": Lead, "rival": Rival, "run": Run}
 
 
 def string_lengths(prefix: str) -> dict[str, int]:
@@ -136,7 +137,7 @@ def string_lengths(prefix: str) -> dict[str, int]:
     }
 
 
-@pytest.mark.parametrize("prefix", ["lead", "run"])
+@pytest.mark.parametrize("prefix", ["lead", "rival", "run"])
 def test_limits_match_the_columns_of_the_models(prefix: str) -> None:
     """One list of limits, and the models agree with it. This is what keeps the Run numbers
     (repeated in core/runs/models.py) in step."""
@@ -144,8 +145,8 @@ def test_limits_match_the_columns_of_the_models(prefix: str) -> None:
     assert in_limits == string_lengths(prefix)
 
 
-def test_every_limit_belongs_to_the_lead_or_the_run() -> None:
-    assert {key.split(".")[0] for key in LIMITS} == {"lead", "run"}
+def test_every_limit_belongs_to_the_lead_the_rival_or_the_run() -> None:
+    assert {key.split(".")[0] for key in LIMITS} == {"lead", "rival", "run"}
 
 
 def test_the_search_log_time_index_is_in_the_model() -> None:

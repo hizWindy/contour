@@ -20,7 +20,7 @@ import io
 import uuid
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any, Final
 from zoneinfo import ZoneInfo
 
@@ -45,6 +45,7 @@ from apps.lead_finder.research import APP
 from apps.lead_finder.rules import Result, load_rules
 from apps.lead_finder.sanitize import one_line, safe_http_url
 from apps.lead_finder.schemas import (
+    REJECT_REASON_LABELS,
     DateRange,
     FacetValue,
     HubSpotStatus,
@@ -59,12 +60,14 @@ from apps.lead_finder.schemas import (
     MapOut,
     MapPoint,
     PreviousLead,
+    RejectReasonCount,
+    RejectReasonCounts,
     RunFacet,
     SortOrder,
     TriggerFacet,
 )
 from apps.lead_finder.scoring import band_of
-from apps.lead_finder.tables import Lead
+from apps.lead_finder.tables import REJECT_REASONS, Lead, Rival
 from core.api.errors import Problem
 from core.memory.embedder import Embedder
 from core.memory.models import MemoryItem
@@ -760,9 +763,25 @@ async def get_detail(session: AsyncSession, lead_id: uuid.UUID) -> LeadDetail | 
         )
         for row in older
     ]
+    rivals = await session.scalars(
+        select(Rival).where(Rival.lead_id == lead.id).order_by(Rival.found_at, Rival.name)
+    )
     extras: dict[str, Any] = {
         "status": lead.status,
         "reject_reason": lead.reject_reason,
+        "reject_note": lead.reject_note,
+        "rivals": [
+            {
+                "name": rival.name,
+                "website": rival.website,
+                "city": rival.city,
+                "url": rival.url,
+                "why": rival.why,
+                "status": rival.status,
+                "found_at": rival.found_at,
+            }
+            for rival in rivals
+        ],
         "note": lead.note,
         "useful": lead.useful,
         "run_id": lead.run_id,
@@ -785,6 +804,7 @@ class LeadState:
     reject_reason: str | None
     note: str | None
     useful: bool | None
+    reject_note: str | None = None
 
 
 def _text_or_none(value: str | None) -> str | None:
@@ -805,9 +825,10 @@ def apply_patch(current: LeadState, patch: LeadPatch) -> LeadState:
     """The lead as it will be after the patch. A merge patch: a field that was not sent stays,
     `null` clears. Raises Problem 422 when the result isn't allowed:
 
-    - rejecting needs a reason (`body.reject_reason`);
-    - a reason belongs to a rejected lead only, so leaving `rejected` clears it, and sending a
-      reason with another status is refused.
+    - rejecting needs a reason (`body.reject_reason`), and the reason `other` needs a note
+      (`body.reject_note`) (PLAN-V9 D1);
+    - a reason and its note belong to a rejected lead only, so leaving `rejected` clears them, and
+      sending one with another status is refused.
     A lead that was already sent to HubSpot keeps its status (409).
     """
     sent = set(patch.model_fields_set)
@@ -819,21 +840,29 @@ def apply_patch(current: LeadState, patch: LeadPatch) -> LeadState:
             "It is in HubSpot, so its status can't be changed here.",
             code="lead_sent",
         )
+    stays = current.status == status == "rejected"
+    reason: str | None
     if "reject_reason" in sent:
-        reason = _text_or_none(patch.reject_reason)
+        reason = patch.reject_reason
     else:  # kept only while the lead stays rejected
-        reason = current.reject_reason if current.status == status == "rejected" else None
+        reason = current.reject_reason if stays else None
+    if "reject_note" in sent:
+        reject_note = _text_or_none(patch.reject_note)
+    else:
+        reject_note = current.reject_note if stays and "reject_reason" not in sent else None
     if status == "rejected" and reason is None:
         raise _invalid("reject_reason", "Say why you are rejecting this lead.")
-    if status != "rejected" and reason is not None:
-        raise _invalid(
-            "reject_reason", "A reason belongs to a rejected lead. Send status rejected with it."
-        )
+    if status == "rejected" and reason == "other" and reject_note is None:
+        raise _invalid("reject_note", "Say what the other reason is.")
+    if status != "rejected" and (reason is not None or reject_note is not None):
+        field = "reject_reason" if reason is not None else "reject_note"
+        raise _invalid(field, "A reason belongs to a rejected lead. Send status rejected with it.")
     return LeadState(
         status=status,
         reject_reason=reason,
         note=_text_or_none(patch.note) if "note" in sent else current.note,
         useful=patch.useful if "useful" in sent else current.useful,
+        reject_note=reject_note,
     )
 
 
@@ -858,7 +887,10 @@ def outcome_text(lead: Lead, state: LeadState, outcome: str) -> str:
     place = ", ".join(part for part in (lead.city, lead.industry) if part)
     text = f"{head}: {lead.company}" + (f" ({place})" if place else "") + "."
     if state.status == "rejected" and state.reject_reason:
-        text += f" Reason: {state.reject_reason.rstrip('.!? ')}."
+        said = REJECT_REASON_LABELS.get(state.reject_reason, state.reject_reason)
+        text += f" Reason: {said}."
+        if state.reject_note:
+            text += f" {state.reject_note.rstrip('.!? ')}."
     if outcome == "rejected" and state.useful is not None:
         text += " The research was rated " + ("useful." if state.useful else "not useful.")
     return one_line(text, 600)
@@ -908,7 +940,9 @@ async def patch_lead(
     )
     if lead is None:
         raise Problem(404, *NOT_FOUND)
-    current = LeadState(lead.status, lead.reject_reason, lead.note, lead.useful)
+    current = LeadState(
+        lead.status, lead.reject_reason, lead.note, lead.useful, reject_note=lead.reject_note
+    )
     try:
         new = apply_patch(current, patch)
     except Problem:
@@ -917,11 +951,13 @@ async def patch_lead(
     if new != current:
         lead.status = new.status
         lead.reject_reason = new.reject_reason
+        lead.reject_note = new.reject_note
         lead.note = new.note
         lead.useful = new.useful
-        outcome_moved = (new.status, new.reject_reason, new.useful) != (
+        outcome_moved = (new.status, new.reject_reason, new.reject_note, new.useful) != (
             current.status,
             current.reject_reason,
+            current.reject_note,
             current.useful,
         )
         if outcome_moved:
@@ -931,3 +967,39 @@ async def patch_lead(
     detail = await get_detail(session, lead_id)
     assert detail is not None  # the row was locked a moment ago
     return detail
+
+
+# --- Reject reasons (PLAN-V9 D1) --------------------------------------------------------------
+
+
+async def reject_reason_counts(
+    session: AsyncSession, days: int, now: datetime | None = None
+) -> RejectReasonCounts:
+    """How many leads were rejected for each reason in the last `days` days, by when the lead was
+    last changed. Test leads are left out. Every reason is listed, most used first."""
+    since = (now or datetime.now(UTC)) - timedelta(days=days)
+    rows = (
+        await session.execute(
+            select(Lead.reject_reason, func.count())
+            .where(
+                Lead.status == "rejected",
+                Lead.reject_reason.is_not(None),
+                Lead.is_test.is_(False),
+                Lead.updated_at >= since,
+            )
+            .group_by(Lead.reject_reason)
+        )
+    ).all()
+    counts = {str(reason): int(count) for reason, count in rows}
+    reasons = sorted(
+        (
+            RejectReasonCount(
+                reason=reason,
+                label=REJECT_REASON_LABELS[reason],
+                count=counts.get(reason, 0),
+            )
+            for reason in REJECT_REASONS
+        ),
+        key=lambda item: (-item.count, REJECT_REASONS.index(item.reason)),
+    )
+    return RejectReasonCounts(days=days, total=sum(counts.values()), reasons=reasons)

@@ -13,6 +13,7 @@ from decimal import Decimal
 from typing import Any
 
 import pytest
+from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -236,7 +237,7 @@ def patch(**given: Any) -> LeadPatch:
 
 
 NEW = LeadState(status="new", reject_reason=None, note=None, useful=None)
-REJECTED = LeadState(status="rejected", reject_reason="Too small", note="n", useful=False)
+REJECTED = LeadState(status="rejected", reject_reason="too_small", note="n", useful=False)
 
 
 def refused(current: LeadState, body: LeadPatch) -> Problem:
@@ -259,10 +260,30 @@ def test_rejecting_needs_a_reason_and_names_the_field() -> None:
     problem = refused(NEW, patch(status="rejected"))
     assert problem.status == 422
     assert problem.extra["errors"][0]["field"] == "body.reject_reason"
-    assert refused(NEW, patch(status="rejected", reject_reason="  ")).status == 422
     assert refused(NEW, patch(status="rejected", reject_reason=None)).status == 422
-    done = apply_patch(NEW, patch(status="rejected", reject_reason=" Too small "))
-    assert (done.status, done.reject_reason) == ("rejected", "Too small")
+    done = apply_patch(NEW, patch(status="rejected", reject_reason="too_small"))
+    assert (done.status, done.reject_reason) == ("rejected", "too_small")
+
+
+def test_a_reason_is_one_of_the_list() -> None:
+    with pytest.raises(ValidationError):
+        patch(status="rejected", reject_reason="Too small for us")
+
+
+def test_other_needs_a_note_and_keeps_it() -> None:
+    problem = refused(NEW, patch(status="rejected", reject_reason="other"))
+    assert problem.extra["errors"][0]["field"] == "body.reject_note"
+    assert (
+        refused(NEW, patch(status="rejected", reject_reason="other", reject_note=" ")).status == 422
+    )
+    done = apply_patch(
+        NEW, patch(status="rejected", reject_reason="other", reject_note=" Sold last week ")
+    )
+    assert (done.reject_reason, done.reject_note) == ("other", "Sold last week")
+    assert apply_patch(done, patch(note="x")).reject_note == "Sold last week"
+    assert apply_patch(done, patch(status="new")).reject_note is None
+    # A new reason without a note drops the old note.
+    assert apply_patch(done, patch(reject_reason="bad_timing")).reject_note is None
 
 
 def test_leaving_rejected_clears_the_reason() -> None:
@@ -273,15 +294,17 @@ def test_leaving_rejected_clears_the_reason() -> None:
 
 
 def test_a_rejected_lead_keeps_or_changes_its_reason_but_cannot_lose_it() -> None:
-    assert apply_patch(REJECTED, patch(note="x")).reject_reason == "Too small"
-    assert apply_patch(REJECTED, patch(reject_reason="Wrong city")).reject_reason == "Wrong city"
-    assert apply_patch(REJECTED, patch(status="rejected")).reject_reason == "Too small"
+    assert apply_patch(REJECTED, patch(note="x")).reject_reason == "too_small"
+    changed = apply_patch(REJECTED, patch(reject_reason="wrong_industry"))
+    assert changed.reject_reason == "wrong_industry"
+    assert apply_patch(REJECTED, patch(status="rejected")).reject_reason == "too_small"
     assert refused(REJECTED, patch(reject_reason=None)).status == 422
 
 
 def test_a_reason_without_rejecting_is_refused() -> None:
-    assert refused(NEW, patch(reject_reason="Too small")).status == 422
-    assert refused(REJECTED, patch(status="watching", reject_reason="x")).status == 422
+    assert refused(NEW, patch(reject_reason="too_small")).status == 422
+    assert refused(REJECTED, patch(status="watching", reject_reason="bad_timing")).status == 422
+    assert refused(NEW, patch(reject_note="a note")).status == 422
 
 
 def test_a_lead_that_was_sent_keeps_its_status_but_takes_notes() -> None:
@@ -297,7 +320,7 @@ def test_a_lead_that_was_sent_keeps_its_status_but_takes_notes() -> None:
     [
         (LeadState("new", None, None, None), None),
         (LeadState("watching", None, None, None), "watching"),
-        (LeadState("rejected", "x", None, None), "rejected"),
+        (LeadState("rejected", "too_small", None, None), "rejected"),
         (LeadState("new", None, None, True), "useful"),
         (LeadState("new", None, None, False), "not_useful"),
         (LeadState("watching", None, None, False), "not_useful"),
@@ -311,10 +334,12 @@ def test_the_outcome_word_kept_in_memory(state: LeadState, outcome: str | None) 
 
 def test_the_outcome_text_has_no_note_and_stays_one_line() -> None:
     lead = make_lead("Acme Software", city="Perth", industry="Software")
-    state = LeadState("rejected", "Too small\nfor us", "my private note", False)
+    state = LeadState(
+        "rejected", "other", "my private note", False, reject_note="Too small\nfor us"
+    )
     text = outcome_text(lead, state, "rejected")
     assert text == (
-        "Rejected lead: Acme Software (Perth, Software). Reason: Too small for us. "
+        "Rejected lead: Acme Software (Perth, Software). Reason: Other. Too small for us. "
         "The research was rated not useful."
     )
     assert "private" not in text
@@ -408,7 +433,7 @@ async def world(session: AsyncSession) -> dict[str, Any]:
             office_m2=300,
             hubspot_status="open_deal",
             status="rejected",
-            reject_reason="Open deal",
+            reject_reason="already_talking",
             run_id=second.id,
         ),
         "echo": make_lead(
@@ -673,7 +698,7 @@ async def researched_twice(session: AsyncSession) -> dict[str, Lead]:
     """Acme researched three times (the oldest rejected), Beta once, and a test-set lead with
     Acme's key. The oldest Acme and Beta are in the first run."""
     first_run, second_run, third_run = make_run(), make_run(), make_run()
-    old = make_lead("Acme", status="rejected", reject_reason="x", run_id=first_run.id)
+    old = make_lead("Acme", status="rejected", reject_reason="other", run_id=first_run.id)
     beta = make_lead("Beta", run_id=first_run.id)
     middle = make_lead("Acme Pty Ltd", run_id=second_run.id)  # the same company_key as "Acme"
     new = make_lead("Acme", run_id=third_run.id)
@@ -1092,7 +1117,7 @@ async def test_the_detail_holds_the_card_and_what_a_person_did(session: AsyncSes
     lead = make_lead(
         "Acme",
         status="rejected",
-        reject_reason="Too small",
+        reject_reason="too_small",
         note="call Bob",
         useful=False,
         run_id=run.id,
@@ -1103,7 +1128,7 @@ async def test_the_detail_holds_the_card_and_what_a_person_did(session: AsyncSes
     assert (detail.id, detail.company, detail.result, detail.score) == (lead.id, "Acme", "pass", 70)
     assert (detail.status, detail.reject_reason, detail.note, detail.useful) == (
         "rejected",
-        "Too small",
+        "too_small",
         "call Bob",
         False,
     )
@@ -1135,9 +1160,9 @@ async def test_rejecting_saves_one_outcome_and_undoing_removes_it(session: Async
     embedder = FakeEmbedder()
     lead = await one_lead(session)
     detail = await lead_store.patch_lead(
-        session, embedder, lead.id, patch(status="rejected", reject_reason="Too small")
+        session, embedder, lead.id, patch(status="rejected", reject_reason="too_small")
     )
-    assert (detail.status, detail.reject_reason) == ("rejected", "Too small")
+    assert (detail.status, detail.reject_reason) == ("rejected", "too_small")
     [item] = await outcome_items(session, lead)
     assert (item.app, item.kind, item.subject) == ("lead_finder", "lead_outcome", "Acme Software")
     assert item.meta == {"lead_id": str(lead.id), "outcome": "rejected"}
@@ -1159,13 +1184,13 @@ async def test_changing_the_reason_replaces_the_item_and_never_adds_a_second(
     embedder = FakeEmbedder()
     lead = await one_lead(session)
     await lead_store.patch_lead(
-        session, embedder, lead.id, patch(status="rejected", reject_reason="A")
+        session, embedder, lead.id, patch(status="rejected", reject_reason="bad_timing")
     )
     [first] = await outcome_items(session, lead)
-    await lead_store.patch_lead(session, embedder, lead.id, patch(reject_reason="B"))
+    await lead_store.patch_lead(session, embedder, lead.id, patch(reject_reason="too_small"))
     [second] = await outcome_items(session, lead)
     assert second.id != first.id
-    assert "Reason: B" in second.content and "Reason: A" not in second.content
+    assert "Reason: Too small" in second.content and "Bad timing" not in second.content
     await lead_store.patch_lead(session, embedder, lead.id, patch(status="watching"))
     [third] = await outcome_items(session, lead)
     assert third.meta["outcome"] == "watching"
@@ -1281,7 +1306,8 @@ async def test_two_patches_at_once_still_leave_one_outcome_item(
                 own, embedder, lead.id, patch(status="rejected", reject_reason=reason)
             )
 
-    await asyncio.gather(*(reject(f"Reason {number}") for number in range(5)))
+    reasons = ["too_small", "wrong_industry", "already_talking", "bad_timing", "not_a_real_sign"]
+    await asyncio.gather(*(reject(reason) for reason in reasons))
     items = await outcome_items(session, lead)
     assert len(items) == 1
     count = await session.scalar(
@@ -1296,7 +1322,7 @@ async def test_the_real_memory_model_embeds_the_outcome(
 ) -> None:
     lead = await one_lead(session)
     await lead_store.patch_lead(
-        session, embedder, lead.id, patch(status="rejected", reject_reason="Office too small")
+        session, embedder, lead.id, patch(status="rejected", reject_reason="too_small")
     )
     [item] = await outcome_items(session, lead)
     assert len(item.embedding) == 384
@@ -1330,3 +1356,30 @@ async def test_leads_whose_form_failed_can_be_listed_on_their_own(session: Async
         "Myer": True,
         "Acme Software": False,
     }
+
+
+@db
+async def test_reject_reasons_are_counted_over_the_last_90_days(session: AsyncSession) -> None:
+    """PLAN-V9 D1: the counts on the Runs tab. Every reason is listed, most used first."""
+    now = datetime(2026, 11, 8, tzinfo=UTC)
+    recent = datetime(2026, 10, 20, tzinfo=UTC)
+    old = datetime(2026, 7, 1, tzinfo=UTC)
+    await add_all(
+        session,
+        make_lead("A", status="rejected", reject_reason="too_small", updated_at=recent),
+        make_lead("B", status="rejected", reject_reason="too_small", updated_at=recent),
+        make_lead("C", status="rejected", reject_reason="bad_timing", updated_at=recent),
+        make_lead("D", status="rejected", reject_reason="too_small", updated_at=old),  # too old
+        make_lead(
+            "E", status="rejected", reject_reason="too_small", updated_at=recent, is_test=True
+        ),
+        make_lead("F", status="watching", updated_at=recent),
+    )
+    counts = await lead_store.reject_reason_counts(session, 90, now=now)
+    assert (counts.days, counts.total) == (90, 3)
+    assert [(item.reason, item.count) for item in counts.reasons[:2]] == [
+        ("too_small", 2),
+        ("bad_timing", 1),
+    ]
+    assert len(counts.reasons) == 6 and counts.reasons[0].label == "Too small"
+    assert {item.count for item in counts.reasons[2:]} == {0}

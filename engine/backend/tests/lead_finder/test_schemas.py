@@ -151,7 +151,9 @@ def test_a_patch_refuses_other_fields_and_long_text() -> None:
     with pytest.raises(ValidationError):
         LeadPatch.model_validate({"score": 100})
     with pytest.raises(ValidationError):
-        LeadPatch.model_validate({"reject_reason": "x" * 1001})
+        LeadPatch.model_validate({"reject_reason": "Too small"})  # one of the list only
+    with pytest.raises(ValidationError):
+        LeadPatch.model_validate({"reject_note": "x" * 1001})
     with pytest.raises(ValidationError):
         LeadPatch.model_validate({"note": "x" * 2001})
     with pytest.raises(ValidationError):

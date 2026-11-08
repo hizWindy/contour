@@ -4,8 +4,10 @@ resume continues where it stopped instead of paying twice.
     plan -> (discover, one per slice | choose) -> merge -> choose -> (research, one per company
     | finish) -> finish
 
-- `plan`: discovery makes its slices (cities x triggers). The other modes already know their
-  companies (`State.known`): the watchlist, the typed list, the test set.
+- `plan`: discovery makes its slices (cities x triggers), and adds up to `rivals.per_run` pending
+  rivals of booming companies in its cities, with the weak sign `rival_growth` (PLAN-V9 B5). The
+  other modes already know their companies (`State.known`): the watchlist, the typed list, the
+  test set.
 - `discover`: one Claude request per slice, side by side (the run's discover gate). It holds the
   slice reserve in the run budget. Only the search log is written; what it finds travels in the
   state.
@@ -42,6 +44,11 @@ from sqlalchemy import func, select  # noqa: E402
 
 from apps.lead_finder.context import CreditMeter  # noqa: E402
 from apps.lead_finder.prompts import discover_prompt  # noqa: E402
+from apps.lead_finder.rivals import (  # noqa: E402
+    mark_rivals,
+    pending_for_run,
+    rival_found,
+)
 from apps.lead_finder.rules import LeadFinderRules, load_rules  # noqa: E402
 from apps.lead_finder.steps.choose import (  # noqa: E402
     OVER_LIMIT_REASON,
@@ -102,10 +109,19 @@ async def plan(state: State, runtime: Runtime[RunCtx]) -> dict[str, Any]:
         return {}
     slices = make_slices(ctx.params, run.rules)
     ctx.totals.counts.slices = len(slices)
+    setup = run.rules.criteria.rivals
+    rivals = []
+    if setup.enabled and setup.per_run > 0:
+        async with ctx.session() as session:
+            pending = await pending_for_run(session, ctx.params.cities, setup.per_run)
+        rivals = [rival_found(item, setup.sign) for item in pending]
     await ctx.emit_event(
-        PlanReadyData(slices=len(slices), companies=0, labels=[s.label for s in slices])
+        PlanReadyData(slices=len(slices), companies=len(rivals), labels=[s.label for s in slices])
     )
-    return {"slices": [s.model_dump(mode="json") for s in slices]}
+    found: dict[str, Any] = {"slices": [s.model_dump(mode="json") for s in slices]}
+    if rivals:
+        found["candidates"] = [rival.model_dump(mode="json") for rival in rivals]
+    return found
 
 
 def after_plan(state: State) -> list[Send] | str:
@@ -331,6 +347,8 @@ async def choose(state: State, runtime: Runtime[RunCtx]) -> dict[str, Any]:
             tasks[company.key] if company.key in tasks else _task_of_merged(company, today, recheck)
             for company in decision.chosen
         ]
+        if mode == "discovery":
+            await _mark_rivals(ctx, run.rules.criteria.rivals.sign, merged, decision)
     counts = ctx.totals.counts
     counts.chosen = len(chosen)
     for name, reason in skipped:
@@ -342,6 +360,29 @@ async def choose(state: State, runtime: Runtime[RunCtx]) -> dict[str, Any]:
             CompanySkippedData(name=f"{over} more", reason=OVER_LIMIT_REASON, count=over)
         )
     return {"chosen": chosen}
+
+
+async def _mark_rivals(
+    ctx: RunContext[Any], sign: str, merged: list[Merged], decision: Any
+) -> None:
+    """The rivals this run chose are used; the ones a rule skipped are skipped. The ones the company
+    limit left out stay pending for the next run (PLAN-V9 B5)."""
+    rivals = {
+        company.key for company in merged if any(s.trigger_id == sign for s in company.signals)
+    }
+    if not rivals:
+        return
+    used = [company.key for company in decision.chosen if company.key in rivals]
+    skipped = [key for name, _ in decision.skipped if (key := company_key(name)) in rivals]
+    async with ctx.session() as session:
+        await mark_rivals(
+            session,
+            ctx.run_id,
+            used_keys=used,
+            skipped_keys=skipped,
+            cities=list(ctx.params.cities),
+        )
+        await session.commit()
 
 
 def after_choose(state: State) -> list[Send] | str:

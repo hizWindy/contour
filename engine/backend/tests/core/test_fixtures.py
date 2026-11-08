@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import (
 )
 from sse_starlette.sse import AppStatus, EventSourceResponse
 
-from apps.lead_finder.tables import Lead, SignalHireDetails
+from apps.lead_finder.tables import Lead, Rival, SignalHireDetails
 from core.auth.models import AuditEntry, User, UserSession
 from core.config import get_settings
 from core.hubspot.models import (
@@ -125,6 +125,20 @@ async def fill_every_table(factory: async_sessionmaker[AsyncSession]) -> None:
                     prompt_version="p",
                 ),
             ]
+        )
+        await db_session.flush()
+        lead_id = await db_session.scalar(select(Lead.id).where(Lead.company_key == "acme"))
+        db_session.add(
+            Rival(
+                lead_id=lead_id,
+                lead_company="Acme",
+                name="Rival Co",
+                company_key="rival co",
+                city="Melbourne",
+                url="https://example.com",
+                why="It competes with Acme.",
+                found_at=datetime.now(UTC),
+            )
         )
         await db_session.commit()
 
