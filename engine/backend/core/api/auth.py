@@ -47,6 +47,7 @@ Event = Literal[
     "sign_out_everywhere",
     "password_changed",
     "account_created",
+    "account_changed",
 ]
 
 
@@ -73,7 +74,11 @@ class UserOut(OutModel):
     email: str
     username: str | None = Field(description="The second way to sign in, if the account has one")
     name: str = Field(description="What the top bar shows")
-    role: Role = Field(description="admin today. staff and viewer are for later")
+    role: Role = Field(description="admin, staff or viewer")
+    apps: list[str] = Field(
+        default_factory=list,
+        description="The projects this person may use, like lead_finder. An Admin may use all.",
+    )
 
 
 class SessionOut(OutModel):
@@ -142,6 +147,7 @@ def user_out(user: User) -> UserOut:
         username=user.username,
         name=user.name,
         role=cast(Role, user.role),  # the table's check keeps it one of the three
+        apps=list(user.apps or []),
     )
 
 

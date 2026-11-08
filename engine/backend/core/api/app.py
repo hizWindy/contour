@@ -4,13 +4,14 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, Depends, FastAPI
 from fastapi.routing import APIRoute
 
 from core.api import auth as auth_routes
-from core.api import health, hubspot, memory, runs, runs_read, searches
+from core.api import health, hubspot, memory, people, runs, runs_read, searches
 from core.api import schedules as schedule_routes
 from core.api import settings as settings_routes
+from core.api.access import require_app
 from core.api.errors import PROBLEM_RESPONSES, add_error_handlers
 from core.api.guard import SessionGuard, document_sign_in
 from core.api.routes import api_routes
@@ -151,7 +152,14 @@ def create_app() -> FastAPI:
     api.include_router(settings_routes.router)
     api.include_router(schedule_routes.router)
     for spec in specs:
-        api.include_router(spec.router, prefix=spec.route_prefix, tags=[spec.title])
+        # Only the people with the project ticked (and Admins) may use it (PLAN-V9 E1).
+        api.include_router(
+            spec.router,
+            prefix=spec.route_prefix,
+            tags=[spec.title],
+            dependencies=[Depends(require_app(spec.name))],
+        )
+    api.include_router(people.router)
     app.include_router(api)
     _check_operation_ids(app)
     return app

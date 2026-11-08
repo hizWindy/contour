@@ -42,6 +42,35 @@ async def create_admin(
     """Makes an Admin account. Raises ValueError for a login that isn't allowed, `PasswordRefused`
     for a password that breaks the rules, and `users.LoginTaken` for a login already in use.
     `by` is what the sign-in log says made it."""
+    return await create_person(
+        db,
+        email=email,
+        username=username,
+        name=name,
+        role="admin",
+        apps=[],
+        password=password,
+        now=now,
+        hasher=hasher,
+        by=by,
+    )
+
+
+async def create_person(
+    db: AsyncSession,
+    *,
+    email: str,
+    username: str | None,
+    name: str | None,
+    role: str,
+    apps: list[str],
+    password: str,
+    now: datetime,
+    hasher: Hasher | None = None,
+    by: str = BY_COMMAND,
+) -> User:
+    """Makes an account with a role and the projects it may use (PLAN-V9 E1). The same rules as
+    `create_admin`: a starting password under today's rules, and a login nobody has."""
     email = clean.email(email)
     username = clean.username(username)
     require_good_password(password, email=email, username=username)
@@ -51,10 +80,11 @@ async def create_admin(
         email=email,
         username=username,
         name=(name or "").strip()[:120] or default_name(email),
-        role="admin",
+        role=role,
         password_hash=password_hash,
         now=now,
     )
+    user.apps = list(dict.fromkeys(apps))
     audit.add_entry(
         db,
         "account_created",

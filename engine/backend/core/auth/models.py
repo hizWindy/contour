@@ -47,7 +47,8 @@ AUDIT_EVENTS = (
     "sign_out",  # a person signed out
     "sign_out_everywhere",  # every session of a user ended (by the person, or by a command)
     "password_changed",  # a new password was set (a reset by command, or a change)
-    "account_created",  # `create-admin`, or `engine migrate` with FIRST_ADMIN_*, made one
+    "account_created",  # `create-admin`, `engine migrate` with FIRST_ADMIN_*, or the People tab
+    "account_changed",  # an Admin changed a person's projects, role or sign-in (PLAN-V9 E1)
 )
 
 USER_AGENT_MAX = 300  # the browser's name is cut to this many characters before it is saved

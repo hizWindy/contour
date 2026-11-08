@@ -22,6 +22,7 @@ import anyio
 from fastapi import APIRouter, Header, Query, Request, Response
 from sse_starlette.sse import EventSourceResponse
 
+from core.api.access import AppAccessDep
 from core.api.deps import run_manager_dependency
 from core.api.errors import ProblemDetails
 from core.api.models import INT32_MAX
@@ -122,6 +123,7 @@ async def create_run(
     body: RunCreate,
     request: Request,
     response: Response,
+    access: AppAccessDep,
     idempotency_key: Annotated[
         str | None,
         Header(
@@ -135,6 +137,7 @@ async def create_run(
         ),
     ] = None,
 ) -> RunOut:
+    access.check(body.app)
     manager = manager_of(request)
     run = await manager.start(body.app, body.mode, body.params, idempotency_key)
     response.headers["Location"] = f"{request.url.path.rstrip('/')}/{run.id}"
@@ -174,6 +177,7 @@ async def create_run(
 async def stream_run_events(
     run_id: uuid.UUID,
     request: Request,
+    access: AppAccessDep,
     after: Annotated[
         int, Query(ge=0, le=INT32_MAX, description="Only events with a higher seq")
     ] = 0,
@@ -182,6 +186,8 @@ async def stream_run_events(
     ] = None,
 ) -> Response:
     manager = manager_of(request)
+    if not access.open:
+        access.check((await manager.get_run(run_id)).app)
     start = max(after, last_event_id_of(last_event_id))
     if await manager.stream_is_over(run_id, start):
         return Response(status_code=204)  # so the browser's EventSource stops trying again
@@ -198,8 +204,11 @@ async def stream_run_events(
         "or already stopping is returned as it is."
     ),
 )
-async def cancel_run(run_id: uuid.UUID, request: Request) -> RunOut:
-    return await manager_of(request).cancel(run_id)
+async def cancel_run(run_id: uuid.UUID, request: Request, access: AppAccessDep) -> RunOut:
+    manager = manager_of(request)
+    if not access.open:
+        access.check((await manager.get_run(run_id)).app)
+    return await manager.cancel(run_id)
 
 
 @router.post(
@@ -212,5 +221,8 @@ async def cancel_run(run_id: uuid.UUID, request: Request) -> RunOut:
         "3 resumes. Nothing resumes by itself."
     ),
 )
-async def resume_run(run_id: uuid.UUID, request: Request) -> RunOut:
-    return await manager_of(request).resume(run_id)
+async def resume_run(run_id: uuid.UUID, request: Request, access: AppAccessDep) -> RunOut:
+    manager = manager_of(request)
+    if not access.open:
+        access.check((await manager.get_run(run_id)).app)
+    return await manager.resume(run_id)

@@ -7,6 +7,7 @@ from typing import Annotated, Any, Literal
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
+from core.api.access import AppAccessDep
 from core.api.deps import EmbedderDep, SessionDep, SettingsDep
 from core.api.errors import Problem
 from core.api.models import SafeText
@@ -86,8 +87,13 @@ def check_note_limits(body: MemoryIn, settings: Settings) -> None:
 
 @router.post("", status_code=201, response_model=MemoryOut, summary="Save a note to memory")
 async def save_note(
-    body: MemoryIn, session: SessionDep, embedder: EmbedderDep, settings: SettingsDep
+    body: MemoryIn,
+    session: SessionDep,
+    embedder: EmbedderDep,
+    settings: SettingsDep,
+    access: AppAccessDep,
 ) -> MemoryOut:
+    access.check(body.app)
     check_note_limits(body, settings)
     item = await remember(
         session,
@@ -111,6 +117,7 @@ async def save_note(
 async def search_memory(
     session: SessionDep,
     embedder: EmbedderDep,
+    access: AppAccessDep,
     q: Annotated[
         SafeText, Query(min_length=2, max_length=500, examples=["dairy company moving offices"])
     ],
@@ -118,6 +125,10 @@ async def search_memory(
     kind: Kind | None = None,
     limit: Annotated[int, Query(ge=1, le=50)] = 5,
 ) -> list[MemoryHitOut]:
+    if app is not None:
+        access.check(app)
+    else:
+        access.check_all()
     hits = await search(session, embedder, q, app=app, kind=kind, limit=limit)
     return [
         MemoryHitOut.model_validate(

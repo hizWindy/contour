@@ -5,7 +5,8 @@
 - `lead_finder.leads.reject_note` and a fixed list for `reject_reason` (D1). A reason saved before
   this was free text: it moves to the note, and the reason becomes `other`.
 - `core.users.apps` (E1): the projects a person may use, like {lead_finder}. An Admin may use them
-  all. Accounts made before this get an empty list, which changes nothing for an Admin.
+  all. Accounts made before this get an empty list, which changes nothing for an Admin. The
+  sign-in log gains `account_changed`, for an Admin changing a person on the People tab.
 - The schedule `lead_finder.discovery` (C4): it becomes four, one for each city, made by the
   backend at its next start. The old one is removed only if it is off and has never run; one that
   someone switched on, or that has run, stays as it is.
@@ -37,6 +38,20 @@ REASONS = (
     "other",
 )
 REASON_LIST = ", ".join(f"'{reason}'" for reason in REASONS)
+AUDIT_BEFORE = (
+    "sign_in",
+    "sign_in_failed",
+    "account_locked",
+    "sign_out",
+    "sign_out_everywhere",
+    "password_changed",
+    "account_created",
+)
+AUDIT_AFTER = (*AUDIT_BEFORE, "account_changed")
+
+
+def _events(values: tuple[str, ...]) -> str:
+    return f"event IN ({', '.join(repr(value) for value in values)})"
 
 
 def upgrade() -> None:
@@ -111,6 +126,11 @@ def upgrade() -> None:
         schema=CORE,
     )
 
+    op.drop_constraint(op.f("ck_audit_log_event"), "audit_log", type_="check", schema=CORE)
+    op.create_check_constraint(
+        op.f("ck_audit_log_event"), "audit_log", _events(AUDIT_AFTER), schema=CORE
+    )
+
     op.execute(
         f"DELETE FROM {CORE}.schedules WHERE job = 'lead_finder.discovery' "
         "AND enabled = false AND last_run_at IS NULL"
@@ -119,6 +139,11 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     # The four city schedules stay: a backend on the older code ignores them, and remakes its one.
+    op.execute(f"DELETE FROM {CORE}.audit_log WHERE event = 'account_changed'")
+    op.drop_constraint(op.f("ck_audit_log_event"), "audit_log", type_="check", schema=CORE)
+    op.create_check_constraint(
+        op.f("ck_audit_log_event"), "audit_log", _events(AUDIT_BEFORE), schema=CORE
+    )
     op.drop_column("users", "apps", schema=CORE)
     op.drop_constraint(op.f("ck_leads_reject_reason"), "leads", type_="check", schema=LF)
     op.execute(

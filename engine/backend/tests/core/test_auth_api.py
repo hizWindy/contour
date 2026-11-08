@@ -55,6 +55,7 @@ async def test_signing_in_sets_the_cookie_and_answers_with_the_user_and_the_sess
         "username": "alkhair",
         "name": "Al Khair",
         "role": "admin",
+        "apps": [],
     }
     session = body["session"]
     assert (session["current"], session["keep_signed_in"]) == (True, False)

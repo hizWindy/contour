@@ -16,6 +16,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
+from core.api.access import AppAccessDep
 from core.api.deps import RunManagerDep
 from core.api.models import INT32_MAX, OFFSET_MAX, SafeText
 from core.runs.schemas import (
@@ -41,7 +42,10 @@ router = APIRouter(prefix="/runs", tags=["runs"])
         "`errors`. `blocked` says why a valid run can't start."
     ),
 )
-async def estimate_run(body: RunCreate, manager: RunManagerDep) -> RunEstimate:
+async def estimate_run(
+    access: AppAccessDep, body: RunCreate, manager: RunManagerDep
+) -> RunEstimate:
+    access.check(body.app)
     return await manager.estimate(body)
 
 
@@ -56,6 +60,7 @@ async def estimate_run(body: RunCreate, manager: RunManagerDep) -> RunEstimate:
     ),
 )
 async def list_runs(
+    access: AppAccessDep,
     manager: RunManagerDep,
     app: Annotated[SafeText | None, Query(max_length=64, examples=["lead_finder"])] = None,
     mode: Annotated[SafeText | None, Query(max_length=32, examples=["discovery"])] = None,
@@ -71,6 +76,10 @@ async def list_runs(
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0, le=OFFSET_MAX)] = 0,
 ) -> RunPage:
+    if app is not None:
+        access.check(app)
+    else:
+        access.check_all()
     return await manager.list_runs(
         app=app, mode=mode, status=status, since=since, until=until, limit=limit, offset=offset
     )
@@ -86,18 +95,22 @@ async def list_runs(
     ),
 )
 async def run_summary(
+    access: AppAccessDep,
     manager: RunManagerDep,
     since: Annotated[
         date | None,
         Query(description="First day (Australia/Melbourne). Default: 30 days ago"),
     ] = None,
 ) -> RunSummary:
+    access.check_all()
     return await manager.summary(since)
 
 
 @router.get("/{run_id}", response_model=RunOut, summary="One run")
-async def get_run(run_id: uuid.UUID, manager: RunManagerDep) -> RunOut:
-    return await manager.get_run(run_id)
+async def get_run(run_id: uuid.UUID, manager: RunManagerDep, access: AppAccessDep) -> RunOut:
+    run = await manager.get_run(run_id)
+    access.check(run.app)
+    return run
 
 
 @router.get(
@@ -112,9 +125,12 @@ async def get_run(run_id: uuid.UUID, manager: RunManagerDep) -> RunOut:
 async def get_run_log(
     run_id: uuid.UUID,
     manager: RunManagerDep,
+    access: AppAccessDep,
     after: Annotated[
         int, Query(ge=0, le=INT32_MAX, description="Only events with a higher seq")
     ] = 0,
     limit: Annotated[int, Query(ge=1, le=200)] = 200,
 ) -> EventLog:
+    if not access.open:
+        access.check((await manager.get_run(run_id)).app)
     return await manager.event_log(run_id, after, limit)
