@@ -155,6 +155,34 @@ TEXT: dict[str, tuple[str, str]] = {
         "Claude requests at once",
         "The most requests to Claude running together, across every run and request.",
     ),
+    "prep_enabled": (
+        "Call prep is on",
+        "Lets the Companies page write call scripts with Claude. Off: the page still shows what "
+        "we know from HubSpot, free.",
+    ),
+    "prep_cap_usd": (
+        "Cap for one call prep (US$)",
+        "The most one call script may cost. TBC: set from the first 10 real preps.",
+    ),
+    "prep_max_searches": (
+        "Searches for one call prep",
+        "The most web searches one call script may use, for news and whether the person is "
+        "still there.",
+    ),
+    "prep_reuse_days": (
+        "Days a call prep is reused",
+        "A ready script for the same company and person is shown again for free this long. "
+        "Refresh makes a new one.",
+    ),
+    "model_prep": (
+        "Model for call prep",
+        "The Claude model that writes call scripts. Empty: the default model.",
+    ),
+    "search_ahead_cap_usd": (
+        "Cap for searching ahead, per day (US$)",
+        "The most the morning search ahead may spend in one day. It also counts in the cap "
+        "for one day.",
+    ),
     "memory_fresh_days": (
         "Days a note stays fresh",
         "Notes and leads younger than this are reused instead of searched again.",

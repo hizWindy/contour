@@ -5279,6 +5279,23 @@
         "title": "NoteOut",
         "type": "object"
       },
+      "Objection": {
+        "properties": {
+          "answer": {
+            "$ref": "#/components/schemas/ScriptLine"
+          },
+          "they_say": {
+            "title": "They Say",
+            "type": "string"
+          }
+        },
+        "required": [
+          "they_say",
+          "answer"
+        ],
+        "title": "Objection",
+        "type": "object"
+      },
       "OfficeAge": {
         "additionalProperties": false,
         "properties": {
@@ -5701,6 +5718,637 @@
           "data"
         ],
         "title": "PlanReadyEvent",
+        "type": "object"
+      },
+      "PrepAsk": {
+        "properties": {
+          "cold": {
+            "default": false,
+            "description": "A cold call to the switchboard: no person",
+            "title": "Cold",
+            "type": "boolean"
+          },
+          "company_key": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Company Key",
+            "type": "string"
+          },
+          "contact_id": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "HubSpot's contact id",
+            "title": "Contact Id"
+          },
+          "refresh": {
+            "default": false,
+            "description": "Make a new one, even if one is fresh",
+            "title": "Refresh",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "company_key"
+        ],
+        "title": "PrepAsk",
+        "type": "object"
+      },
+      "PrepChip": {
+        "description": "One of my preps from today, for the chips under the prep box.",
+        "properties": {
+          "company_key": {
+            "title": "Company Key",
+            "type": "string"
+          },
+          "company_name": {
+            "title": "Company Name",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "person",
+              "cold"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "person_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Person Name"
+          },
+          "status": {
+            "enum": [
+              "searching",
+              "ready",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "company_key",
+          "company_name",
+          "person_name",
+          "kind",
+          "status",
+          "created_at"
+        ],
+        "title": "PrepChip",
+        "type": "object"
+      },
+      "PrepFact": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/PrepSource"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "text",
+          "source"
+        ],
+        "title": "PrepFact",
+        "type": "object"
+      },
+      "PrepFacts": {
+        "description": "Everything we already know, each fact with its source. Free: no Claude request.",
+        "properties": {
+          "city": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "City"
+          },
+          "company_key": {
+            "title": "Company Key",
+            "type": "string"
+          },
+          "company_name": {
+            "title": "Company Name",
+            "type": "string"
+          },
+          "deal": {
+            "enum": [
+              "open",
+              "customer",
+              "none"
+            ],
+            "title": "Deal",
+            "type": "string"
+          },
+          "facts": {
+            "items": {
+              "$ref": "#/components/schemas/PrepFact"
+            },
+            "title": "Facts",
+            "type": "array"
+          },
+          "hubspot_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hubspot Url"
+          },
+          "industry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Industry"
+          },
+          "last_call": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CompanyCall"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_talk": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Talk"
+          },
+          "names_ok": {
+            "description": "False: no names go to Claude (Levi's OK pending), so there is no web check",
+            "title": "Names Ok",
+            "type": "boolean"
+          },
+          "next_lease_end": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Lease End"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner"
+          },
+          "people": {
+            "description": "For 'Who are you calling?'",
+            "items": {
+              "$ref": "#/components/schemas/CompanyPerson"
+            },
+            "title": "People",
+            "type": "array"
+          },
+          "people_status": {
+            "enum": [
+              "ready",
+              "waiting"
+            ],
+            "title": "People Status",
+            "type": "string"
+          },
+          "person": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PrepPerson"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The number to ring: the person's, else the company's",
+            "title": "Phone"
+          },
+          "prep_enabled": {
+            "description": "False: call scripts are switched off (Settings)",
+            "title": "Prep Enabled",
+            "type": "boolean"
+          },
+          "staff": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Staff"
+          }
+        },
+        "required": [
+          "company_key",
+          "company_name",
+          "city",
+          "industry",
+          "staff",
+          "owner",
+          "deal",
+          "next_lease_end",
+          "last_talk",
+          "hubspot_url",
+          "person",
+          "phone",
+          "last_call",
+          "facts",
+          "people",
+          "people_status",
+          "prep_enabled",
+          "names_ok"
+        ],
+        "title": "PrepFacts",
+        "type": "object"
+      },
+      "PrepOut": {
+        "properties": {
+          "company_key": {
+            "title": "Company Key",
+            "type": "string"
+          },
+          "company_name": {
+            "title": "Company Name",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it failed, in plain words",
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "person",
+              "cold"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "made_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who asked, or None for the morning search ahead",
+            "title": "Made By"
+          },
+          "person": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PrepPerson"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reused": {
+            "description": "True when a ready prep from the last days came back",
+            "title": "Reused",
+            "type": "boolean"
+          },
+          "script": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PrepScript"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/PrepSource"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "stage": {
+            "description": "0 to 3: facts, web check, script. For the progress bar",
+            "title": "Stage",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "searching",
+              "ready",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "trigger": {
+            "enum": [
+              "person",
+              "search_ahead"
+            ],
+            "title": "Trigger",
+            "type": "string"
+          },
+          "web_checked": {
+            "description": "True when this prep searched the web itself",
+            "title": "Web Checked",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "company_key",
+          "company_name",
+          "person",
+          "kind",
+          "trigger",
+          "status",
+          "stage",
+          "error",
+          "script",
+          "sources",
+          "web_checked",
+          "reused",
+          "made_by",
+          "created_at",
+          "finished_at"
+        ],
+        "title": "PrepOut",
+        "type": "object"
+      },
+      "PrepPerson": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "title"
+        ],
+        "title": "PrepPerson",
+        "type": "object"
+      },
+      "PrepScript": {
+        "properties": {
+          "dropped": {
+            "description": "Lines left out because they had no source",
+            "title": "Dropped",
+            "type": "integer"
+          },
+          "goal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScriptLine"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "if_they_say": {
+            "items": {
+              "$ref": "#/components/schemas/Objection"
+            },
+            "title": "If They Say",
+            "type": "array"
+          },
+          "news": {
+            "items": {
+              "$ref": "#/components/schemas/ScriptLine"
+            },
+            "title": "News",
+            "type": "array"
+          },
+          "opener": {
+            "items": {
+              "$ref": "#/components/schemas/ScriptLine"
+            },
+            "title": "Opener",
+            "type": "array"
+          },
+          "questions": {
+            "items": {
+              "$ref": "#/components/schemas/ScriptLine"
+            },
+            "title": "Questions",
+            "type": "array"
+          },
+          "still_there": {
+            "enum": [
+              "yes",
+              "no",
+              "unknown",
+              "not_checked"
+            ],
+            "title": "Still There",
+            "type": "string"
+          },
+          "still_there_note": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScriptLine"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "why_now": {
+            "items": {
+              "$ref": "#/components/schemas/ScriptLine"
+            },
+            "title": "Why Now",
+            "type": "array"
+          }
+        },
+        "required": [
+          "still_there",
+          "still_there_note",
+          "news",
+          "opener",
+          "why_now",
+          "questions",
+          "if_they_say",
+          "goal",
+          "dropped"
+        ],
+        "title": "PrepScript",
+        "type": "object"
+      },
+      "PrepSource": {
+        "properties": {
+          "date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          },
+          "id": {
+            "description": "F1, F2 ... for a fact from the pack, W1, W2 ... for a web page",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "hubspot",
+              "call",
+              "memory",
+              "lead",
+              "web"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "description": "Where it came from, like 'HubSpot: Perth office'",
+            "title": "Label",
+            "type": "string"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "label",
+          "url",
+          "date"
+        ],
+        "title": "PrepSource",
         "type": "object"
       },
       "PreviousLead": {
@@ -8248,6 +8896,28 @@
           "checks"
         ],
         "title": "ScorePart",
+        "type": "object"
+      },
+      "ScriptLine": {
+        "properties": {
+          "sources": {
+            "description": "The ids of the sources this line rests on",
+            "items": {
+              "type": "string"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "sources"
+        ],
+        "title": "ScriptLine",
         "type": "object"
       },
       "SearchOut": {
@@ -12131,6 +12801,443 @@
         ]
       }
     },
+    "/companies/preps": {
+      "post": {
+        "description": "For a person at the company (`contact_id`), or a cold call to the switchboard (`cold`). A ready prep for the same company and person from the last `prep_reuse_days` days comes back free, with 200. `refresh` makes a new one. A new one comes back `searching` (202). 409 `prep_off` while call prep is switched off. 404 `company_not_found` when the company isn't open to this account, `person_not_found` when the person isn't at it.",
+        "operationId": "start_prep",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrepAsk"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrepOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Prep a call",
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/preps/today": {
+      "get": {
+        "description": "For the chips under the prep box: newest first, at most 8, one per person.",
+        "operationId": "my_preps_today",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PrepChip"
+                  },
+                  "title": "Response My Preps Today",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "My call preps from today",
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/preps/{prep_id}": {
+      "get": {
+        "description": "Asked again every 2 seconds while it is searching. A prep left searching for 5 minutes with nothing running it (after a restart) is marked failed. 404 `prep_not_found`.",
+        "operationId": "get_prep",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "prep_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Prep Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrepOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "One call prep",
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
     "/companies/search": {
       "get": {
         "description": "Up to 4 people (once HubSpot's contacts are copied) and up to 4 companies whose name matches `q`, best first. Fewer than 2 letters give nothing.",
@@ -12428,6 +13535,173 @@
           }
         ],
         "summary": "One company",
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/{key}/facts": {
+      "get": {
+        "description": "The facts pack for a company and, with `contact_id`, a person at it: each fact with its source. Free and quick, so the modal shows it at once. No Claude request is made.",
+        "operationId": "get_facts",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "contact_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 32,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Contact Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrepFacts"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "What we know, before any Claude request",
         "tags": [
           "Companies"
         ]

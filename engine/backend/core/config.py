@@ -72,6 +72,13 @@ EDITABLE_KEYS: Final[list[str]] = [
     "memory_fresh_days",
     "match_fuzzy_min",
     "match_profile_min",
+    # Call prep (PLAN-V10 D3, D5)
+    "prep_enabled",
+    "prep_cap_usd",
+    "prep_max_searches",
+    "prep_reuse_days",
+    "model_prep",
+    "search_ahead_cap_usd",
 ]
 
 # Which env-only ceiling caps each editable key.
@@ -82,6 +89,8 @@ CEILINGS: Final[dict[str, str]] = {
     "run_cap_usd": "hard_run_cap_usd",
     "scheduled_run_cap_usd": "hard_scheduled_run_cap_usd",
     "daily_cap_usd": "hard_daily_cap_usd",
+    "prep_cap_usd": "hard_company_cap_usd",
+    "search_ahead_cap_usd": "hard_daily_cap_usd",
     "run_company_concurrency": "hard_concurrency",
     "run_discover_concurrency": "hard_concurrency",
     "max_concurrent_runs": "hard_concurrency",
@@ -381,6 +390,15 @@ class Settings(BaseSettings):
     memory_fresh_days: int = Field(30, ge=1, le=365)  # notes younger than this are reused
     match_fuzzy_min: int = Field(90, ge=70, le=100)  # close-name score, 0 to 100
     match_profile_min: float = Field(0.90, ge=0.70, le=1.0)  # look-alike similarity
+
+    # --- Call prep (PLAN-V10 D3, D5). Off until Al-khair switches it on. -----------------
+    # The numbers are TBC: E3 measures 10 real preps and sets them from what they cost.
+    prep_enabled: StrictBool = False
+    prep_cap_usd: Decimal = Field(Decimal("0.25"), ge=Decimal("0.05"), le=Decimal("5"))
+    prep_max_searches: int = Field(3, ge=1, le=10)
+    prep_reuse_days: int = Field(7, ge=1, le=30)  # a ready prep is reused this long, for free
+    model_prep: ClaudeModel | None = "claude-sonnet-5-5"  # None: claude_model
+    search_ahead_cap_usd: Decimal = Field(Decimal("5"), ge=Decimal("1"), le=Decimal("100"))
 
     # --- Validators --------------------------------------------------------------------
 

@@ -42,10 +42,14 @@ READ_SCOPES = (
     "crm.schemas.companies.read",
 )
 WRITE_SCOPES = ("crm.objects.companies.write", "crm.lists.write")
+# People and calls need the contacts scope (PLAN-V10 C1). The fake key starts without it.
+PEOPLE_SCOPE = "crm.objects.contacts.read"
 SCOPE_FOR: dict[str, str] = {
     "companies": "crm.objects.companies.read",
     "deals": "crm.objects.deals.read",
     "notes": "crm.objects.companies.read",
+    "contacts": PEOPLE_SCOPE,
+    "calls": PEOPLE_SCOPE,
 }
 PORTAL_ID = 1234567
 
@@ -96,7 +100,8 @@ class FakeRecord:
     id: str
     properties: dict[str, str | None]
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    companies: tuple[str, ...] = ()  # for a deal: its companies, the first is primary
+    companies: tuple[str, ...] = ()  # for a deal or a call: its companies, the first is primary
+    contacts: tuple[str, ...] = ()  # for a call: the people on it
 
     def as_object(self, wanted: Sequence[str], with_links: bool) -> HubSpotObject:
         links = {}
@@ -104,7 +109,10 @@ class FakeRecord:
             links = {
                 "companies": tuple(
                     Association(company, primary=i == 0) for i, company in enumerate(self.companies)
-                )
+                ),
+                "contacts": tuple(
+                    Association(contact, primary=i == 0) for i, contact in enumerate(self.contacts)
+                ),
             }
         return HubSpotObject(
             id=self.id,
@@ -120,6 +128,8 @@ class FakeHubSpot:
     companies: dict[str, FakeRecord] = field(default_factory=dict)
     deals: dict[str, FakeRecord] = field(default_factory=dict)
     notes: dict[str, FakeRecord] = field(default_factory=dict)
+    contacts: dict[str, FakeRecord] = field(default_factory=dict)
+    call_log: dict[str, FakeRecord] = field(default_factory=dict)  # HubSpot's calls (PLAN-V10)
     owners_active: list[Owner] = field(default_factory=list)
     owners_archived: list[Owner] = field(default_factory=list)
     pipeline_list: list[Pipeline] = field(default_factory=lambda: [SALES, WHALES])
@@ -150,6 +160,30 @@ class FakeHubSpot:
         self.deals[deal_id] = record
         return record
 
+    def add_contact(self, contact_id: str, **properties: str | None) -> FakeRecord:
+        record = FakeRecord(contact_id, dict(properties))
+        self.contacts[contact_id] = record
+        return record
+
+    def add_call(
+        self,
+        call_id: str,
+        company: str | None,
+        contact: str | None = None,
+        **properties: str | None,
+    ) -> FakeRecord:
+        record = FakeRecord(
+            call_id,
+            dict(properties),
+            companies=(company,) if company else (),
+            contacts=(contact,) if contact else (),
+        )
+        self.call_log[call_id] = record
+        return record
+
+    def grant_people(self) -> None:
+        self.scopes.add(PEOPLE_SCOPE)
+
     def grant_writes(self) -> None:
         self.scopes |= set(WRITE_SCOPES)
         self.writes_allowed = True
@@ -163,7 +197,13 @@ class FakeHubSpot:
             raise HubSpotMissingScope([scope])
 
     def _store(self, object_type: ObjectType) -> dict[str, FakeRecord]:
-        return {"companies": self.companies, "deals": self.deals, "notes": self.notes}[object_type]
+        return {
+            "companies": self.companies,
+            "deals": self.deals,
+            "notes": self.notes,
+            "contacts": self.contacts,
+            "calls": self.call_log,
+        }[object_type]
 
     def _page(
         self, records: list[FakeRecord], wanted: Sequence[str], after: str | None, links: bool

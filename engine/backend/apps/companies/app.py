@@ -2,6 +2,7 @@
 needs. Its rows from other projects come through their `company_leads` hook."""
 
 from apps.companies.api import router
+from apps.companies.jobs import JOBS
 from core.apps import AppSpec
 from core.hubspot.needs import HubSpotNeeds
 
@@ -34,4 +35,5 @@ APP = AppSpec(
     check_rules=check_rules,
     tables_module="apps.companies.tables",
     hubspot_needs=HUBSPOT_NEEDS,
+    jobs=JOBS,  # the morning search ahead (PLAN-V10 D5)
 )

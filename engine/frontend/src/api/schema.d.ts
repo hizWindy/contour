@@ -177,6 +177,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/preps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Prep a call
+         * @description For a person at the company (`contact_id`), or a cold call to the switchboard (`cold`). A ready prep for the same company and person from the last `prep_reuse_days` days comes back free, with 200. `refresh` makes a new one. A new one comes back `searching` (202). 409 `prep_off` while call prep is switched off. 404 `company_not_found` when the company isn't open to this account, `person_not_found` when the person isn't at it.
+         */
+        post: operations["start_prep"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/preps/today": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * My call preps from today
+         * @description For the chips under the prep box: newest first, at most 8, one per person.
+         */
+        get: operations["my_preps_today"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/preps/{prep_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One call prep
+         * @description Asked again every 2 seconds while it is searching. A prep left searching for 5 minutes with nothing running it (after a restart) is marked failed. 404 `prep_not_found`.
+         */
+        get: operations["get_prep"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/search": {
         parameters: {
             query?: never;
@@ -209,6 +269,26 @@ export interface paths {
          * @description What it does, its offices, deals and owner, the last talk, saved notes under 30 days old from any project, and (with HubSpot's contacts and calls) its people and calls. The Lead Finder section comes only with the Lead Finder tick. 404 `company_not_found` when there is no such company, or it isn't open to this account.
          */
         get: operations["get_company"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{key}/facts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What we know, before any Claude request
+         * @description The facts pack for a company and, with `contact_id`, a person at it: each fact with its source. Free and quick, so the modal shows it at once. No Claude request is made.
+         */
+        get: operations["get_facts"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3203,6 +3283,12 @@ export interface components {
             /** Url */
             url: string;
         };
+        /** Objection */
+        Objection: {
+            answer: components["schemas"]["ScriptLine"];
+            /** They Say */
+            they_say: string;
+        };
         /** OfficeAge */
         OfficeAge: {
             /** Due Years */
@@ -3373,6 +3459,245 @@ export interface components {
              * @enum {string}
              */
             type: "plan_ready";
+        };
+        /** PrepAsk */
+        PrepAsk: {
+            /**
+             * Cold
+             * @description A cold call to the switchboard: no person
+             * @default false
+             */
+            cold: boolean;
+            /** Company Key */
+            company_key: string;
+            /**
+             * Contact Id
+             * @description HubSpot's contact id
+             */
+            contact_id?: string | null;
+            /**
+             * Refresh
+             * @description Make a new one, even if one is fresh
+             * @default false
+             */
+            refresh: boolean;
+        };
+        /**
+         * PrepChip
+         * @description One of my preps from today, for the chips under the prep box.
+         */
+        PrepChip: {
+            /** Company Key */
+            company_key: string;
+            /** Company Name */
+            company_name: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "person" | "cold";
+            /** Person Name */
+            person_name: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "searching" | "ready" | "failed";
+        };
+        /** PrepFact */
+        PrepFact: {
+            /** Id */
+            id: string;
+            source: components["schemas"]["PrepSource"];
+            /** Text */
+            text: string;
+        };
+        /**
+         * PrepFacts
+         * @description Everything we already know, each fact with its source. Free: no Claude request.
+         */
+        PrepFacts: {
+            /** City */
+            city: string | null;
+            /** Company Key */
+            company_key: string;
+            /** Company Name */
+            company_name: string;
+            /**
+             * Deal
+             * @enum {string}
+             */
+            deal: "open" | "customer" | "none";
+            /** Facts */
+            facts: components["schemas"]["PrepFact"][];
+            /** Hubspot Url */
+            hubspot_url: string | null;
+            /** Industry */
+            industry: string | null;
+            last_call: components["schemas"]["CompanyCall"] | null;
+            /** Last Talk */
+            last_talk: string | null;
+            /**
+             * Names Ok
+             * @description False: no names go to Claude (Levi's OK pending), so there is no web check
+             */
+            names_ok: boolean;
+            /** Next Lease End */
+            next_lease_end: string | null;
+            /** Owner */
+            owner: string | null;
+            /**
+             * People
+             * @description For 'Who are you calling?'
+             */
+            people: components["schemas"]["CompanyPerson"][];
+            /**
+             * People Status
+             * @enum {string}
+             */
+            people_status: "ready" | "waiting";
+            person: components["schemas"]["PrepPerson"] | null;
+            /**
+             * Phone
+             * @description The number to ring: the person's, else the company's
+             */
+            phone: string | null;
+            /**
+             * Prep Enabled
+             * @description False: call scripts are switched off (Settings)
+             */
+            prep_enabled: boolean;
+            /** Staff */
+            staff: number | null;
+        };
+        /** PrepOut */
+        PrepOut: {
+            /** Company Key */
+            company_key: string;
+            /** Company Name */
+            company_name: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Error
+             * @description Why it failed, in plain words
+             */
+            error: string | null;
+            /** Finished At */
+            finished_at: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "person" | "cold";
+            /**
+             * Made By
+             * @description Who asked, or None for the morning search ahead
+             */
+            made_by: string | null;
+            person: components["schemas"]["PrepPerson"] | null;
+            /**
+             * Reused
+             * @description True when a ready prep from the last days came back
+             */
+            reused: boolean;
+            script: components["schemas"]["PrepScript"] | null;
+            /** Sources */
+            sources: components["schemas"]["PrepSource"][];
+            /**
+             * Stage
+             * @description 0 to 3: facts, web check, script. For the progress bar
+             */
+            stage: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "searching" | "ready" | "failed";
+            /**
+             * Trigger
+             * @enum {string}
+             */
+            trigger: "person" | "search_ahead";
+            /**
+             * Web Checked
+             * @description True when this prep searched the web itself
+             */
+            web_checked: boolean;
+        };
+        /** PrepPerson */
+        PrepPerson: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Title */
+            title: string | null;
+        };
+        /** PrepScript */
+        PrepScript: {
+            /**
+             * Dropped
+             * @description Lines left out because they had no source
+             */
+            dropped: number;
+            goal: components["schemas"]["ScriptLine"] | null;
+            /** If They Say */
+            if_they_say: components["schemas"]["Objection"][];
+            /** News */
+            news: components["schemas"]["ScriptLine"][];
+            /** Opener */
+            opener: components["schemas"]["ScriptLine"][];
+            /** Questions */
+            questions: components["schemas"]["ScriptLine"][];
+            /**
+             * Still There
+             * @enum {string}
+             */
+            still_there: "yes" | "no" | "unknown" | "not_checked";
+            still_there_note: components["schemas"]["ScriptLine"] | null;
+            /** Why Now */
+            why_now: components["schemas"]["ScriptLine"][];
+        };
+        /** PrepSource */
+        PrepSource: {
+            /** Date */
+            date: string | null;
+            /**
+             * Id
+             * @description F1, F2 ... for a fact from the pack, W1, W2 ... for a web page
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "hubspot" | "call" | "memory" | "lead" | "web";
+            /**
+             * Label
+             * @description Where it came from, like 'HubSpot: Perth office'
+             */
+            label: string;
+            /** Url */
+            url: string | null;
         };
         /**
          * PreviousLead
@@ -4578,6 +4903,16 @@ export interface components {
              * @description The part's points in the Profile's 100
              */
             max: number;
+        };
+        /** ScriptLine */
+        ScriptLine: {
+            /**
+             * Sources
+             * @description The ids of the sources this line rests on
+             */
+            sources: string[];
+            /** Text */
+            text: string;
         };
         /** SearchOut */
         SearchOut: {
@@ -6644,6 +6979,369 @@ export interface operations {
             };
         };
     };
+    start_prep: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrepAsk"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrepOut"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    my_preps_today: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrepChip"][];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_prep: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                prep_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrepOut"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     search_companies: {
         parameters: {
             query: {
@@ -6784,6 +7482,129 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CompanyDetail"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_facts: {
+        parameters: {
+            query?: {
+                contact_id?: string | null;
+            };
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrepFacts"];
                 };
             };
             /** @description The request can't be understood */

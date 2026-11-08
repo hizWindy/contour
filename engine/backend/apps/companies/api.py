@@ -9,10 +9,11 @@ This file has the reads. The call prep routes are in api_preps.py.
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Path, Query, Request
+from fastapi import APIRouter, Path, Query
 
 from apps.companies import api_preps, store
 from apps.companies.deals import DealState
+from apps.companies.deps import LeadsDep
 from apps.companies.schemas import (
     CompanyDetail,
     CompanyFacets,
@@ -22,26 +23,13 @@ from apps.companies.schemas import (
     SortOrder,
     Source,
 )
-from core.api.access import SignedInDep, can_use
 from core.api.deps import SessionDep
 from core.api.errors import Problem
 from core.api.models import OFFSET_MAX, SafeText
-from core.company_leads import CompanyLeads
 
 router = APIRouter()
 
 
-async def visible_leads(request: Request, auth: SignedInDep) -> list[CompanyLeads]:
-    """The projects whose companies this person may see: those whose tick they have."""
-    specs = getattr(request.app.state, "apps", [])
-    return [
-        spec.company_leads
-        for spec in specs
-        if spec.company_leads is not None and can_use(auth, spec.name)
-    ]
-
-
-LeadsDep = Annotated[list[CompanyLeads], Depends(visible_leads)]
 Key = Annotated[
     str,
     Path(

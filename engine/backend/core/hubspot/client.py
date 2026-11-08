@@ -54,7 +54,8 @@ WRITE_METHODS = frozenset({"POST", "PATCH", "PUT", "DELETE"})
 NOT_SENT = (httpx2.ConnectError, httpx2.ConnectTimeout, httpx2.PoolTimeout)
 MAX_DETAIL_CHARS = 300
 
-ObjectType = Literal["companies", "deals", "notes"]
+# contacts and calls: read for the Companies page (PLAN-V10 C1), once the key has the scope.
+ObjectType = Literal["companies", "deals", "notes", "contacts", "calls"]
 WriteScopeProbe = Literal["companies", "lists"]
 # Searches that are reads: HubSpot uses POST for them, so the method alone can't say.
 READ_POSTS = ("/search", "/batch/read")

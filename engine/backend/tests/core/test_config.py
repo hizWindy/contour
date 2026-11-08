@@ -39,7 +39,16 @@ ENV_ONLY = [
     "cors_origins",
     "api_host",
 ]
-CHOICE_KEYS = {"claude_model", "model_discover", "model_search", "model_extract", "claude_effort"}
+CHOICE_KEYS = {
+    "claude_model",
+    "model_discover",
+    "model_search",
+    "model_extract",
+    "model_prep",
+    "claude_effort",
+}
+BOOL_KEYS = {"prep_enabled"}  # a switch has no min or max
+NOT_NUMBERS = CHOICE_KEYS | BOOL_KEYS
 
 
 @pytest.fixture(autouse=True)
@@ -96,7 +105,7 @@ def test_editable_keys_exist_and_env_only_keys_are_not_editable() -> None:
 def test_every_editable_number_has_a_min_and_a_max_and_the_default_sits_inside() -> None:
     defaults = make()
     for key in EDITABLE_KEYS:
-        if key in CHOICE_KEYS:
+        if key in NOT_NUMBERS:
             continue
         low, high = field_bounds(key)
         assert low is not None and high is not None, key
@@ -168,7 +177,7 @@ PARTNER_AT_THE_END: dict[tuple[str, str], dict[str, Any]] = {
 }
 
 
-@pytest.mark.parametrize("key", [k for k in EDITABLE_KEYS if k not in CHOICE_KEYS])
+@pytest.mark.parametrize("key", [k for k in EDITABLE_KEYS if k not in NOT_NUMBERS])
 def test_values_outside_the_bounds_are_refused(key: str) -> None:
     low, high = field_bounds(key)
     for bad in (nudge(low, -1), nudge(high, 1)):

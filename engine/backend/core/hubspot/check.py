@@ -55,6 +55,13 @@ async def _company_fields(hubspot: HubSpot) -> object:
     return await hubspot.get_property("companies", "name")
 
 
+async def _people(hubspot: HubSpot) -> object:
+    """People and their logged calls (PLAN-V10 C1). HubSpot reads calls with the contacts scope
+    (TBC with Contour's HubSpot admin)."""
+    await hubspot.list_objects("contacts", properties=["firstname"], limit=1)
+    return await hubspot.list_objects("calls", properties=["hs_timestamp"], limit=1)
+
+
 async def _write(hubspot: HubSpot, what: Literal["companies", "lists"]) -> bool | None:
     return await hubspot.probe_write_scope(what)
 
@@ -65,6 +72,12 @@ PROBES: tuple[Probe, ...] = (
     Probe("crm.objects.owners.read", "read", "Read owners' names", _owners),
     Probe("crm.lists.read", "read", "Read lists", _lists),
     Probe("crm.schemas.companies.read", "read", "Read company fields", _company_fields),
+    Probe(
+        "crm.objects.contacts.read",
+        "read",
+        "Read people at companies and their logged calls",
+        _people,
+    ),
     Probe(
         "crm.objects.companies.write",
         "write",

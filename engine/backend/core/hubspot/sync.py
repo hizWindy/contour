@@ -45,6 +45,7 @@ from core.hubspot.client import (
     Filter,
     HubSpot,
     HubSpotError,
+    HubSpotMissingScope,
     HubSpotObject,
     Owner,
     PropertyInfo,
@@ -62,6 +63,8 @@ from core.hubspot.mapping import (
     load_field_map,
 )
 from core.hubspot.models import HubSpotCompany, HubSpotDeal, HubSpotSync
+from core.hubspot.people import WAITING as PEOPLE_WAITING
+from core.hubspot.people import read_people, save_people
 from core.hubspot.profiles import rebuild_profiles
 from core.hubspot.service import replace_offices, upsert_companies, upsert_deals, upsert_owners
 from core.logs import scrub
@@ -409,6 +412,34 @@ async def _companies_we_have(session: AsyncSession, ids: Collection[str]) -> set
 # --- The whole sync ----------------------------------------------------------------------------
 
 
+PEOPLE_FAILED = "Contacts and calls weren't copied this time. The companies were."
+
+
+async def sync_people(
+    sessions: async_sessionmaker[AsyncSession], hubspot: HubSpot, owners: Sequence[Owner]
+) -> list[str]:
+    """Copies contacts and calls. Returns the warnings for the sync row."""
+    names = {owner.id: owner.name for owner in owners}
+    try:
+        people = await read_people(hubspot, names)
+    except HubSpotMissingScope:
+        return [PEOPLE_WAITING]
+    except HubSpotError as error:
+        log.warning("hubspot_people_failed", extra={"reason": error.title})
+        return [f"Contacts and calls weren't copied: {error.title}."]
+    except Exception:
+        log.exception("hubspot_people_failed")
+        return [PEOPLE_FAILED]
+    try:
+        async with sessions() as session:
+            await save_people(session, people)
+            await session.commit()
+    except Exception:
+        log.exception("hubspot_people_not_saved")
+        return [PEOPLE_FAILED]
+    return []
+
+
 async def run(
     plan: SyncPlan,
     *,
@@ -451,6 +482,9 @@ async def run(
 
         rebuilt = 0
         warnings = list(snapshot.warnings)
+        # People and calls (PLAN-V10 C1), once the key can read them. Saved on their own, so a
+        # problem there never undoes the companies.
+        warnings += await sync_people(sessions, hubspot, snapshot.owners)
         try:
             async with sessions() as session:
                 rebuilt = await rebuild_profiles(

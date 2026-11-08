@@ -5,7 +5,7 @@ import pytest
 from core.hubspot.check import KNOWN_SCOPES, PROBES, ConnectionCheck, check_connection
 from core.hubspot.client import HubSpotUnavailable
 from core.hubspot.needs import HubSpotNeeds, readiness
-from tests.core.hubspot_fake import READ_SCOPES, WRITE_SCOPES, FakeHubSpot
+from tests.core.hubspot_fake import PEOPLE_SCOPE, READ_SCOPES, WRITE_SCOPES, FakeHubSpot
 
 LEAD_FINDER = HubSpotNeeds(read=READ_SCOPES, write=WRITE_SCOPES, uses="leads")
 
@@ -29,6 +29,7 @@ async def test_a_read_key_reads_yes_and_writes_no_and_nothing_is_written() -> No
     assert states(check) == {
         **dict.fromkeys(READ_SCOPES, "yes"),
         **dict.fromkeys(WRITE_SCOPES, "no"),
+        PEOPLE_SCOPE: "no",  # contacts and calls wait for the HubSpot admin (PLAN-V10 C1)
     }
     assert not any(call.startswith(("create", "update", "add_to")) for call in fake.calls)
 
@@ -36,6 +37,7 @@ async def test_a_read_key_reads_yes_and_writes_no_and_nothing_is_written() -> No
 async def test_a_key_with_write_scopes_reads_yes_everywhere() -> None:
     fake = FakeHubSpot()
     fake.scopes |= set(WRITE_SCOPES)
+    fake.grant_people()
     assert set(states(await check_connection(fake)).values()) == {"yes"}
 
 
