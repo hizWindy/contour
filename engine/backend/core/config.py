@@ -200,7 +200,7 @@ class Settings(BaseSettings):
     langgraph_schema: str = "langgraph"  # Postgres schema for the run checkpoints
 
     # Projects to load, by folder name in apps/
-    apps: list[str] = ["lead_finder"]
+    apps: list[str] = ["lead_finder", "companies"]  # companies: PLAN-V10
 
     # --- API (env-only) ----------------------------------------------------------------
     api_host: str = "127.0.0.1"  # must be this computer; the engine is not for a network

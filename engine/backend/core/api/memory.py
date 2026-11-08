@@ -125,11 +125,12 @@ async def search_memory(
     kind: Kind | None = None,
     limit: Annotated[int, Query(ge=1, le=50)] = 5,
 ) -> list[MemoryHitOut]:
+    apps: list[str] | None = None
     if app is not None:
         access.check(app)
     else:
-        access.check_all()
-    hits = await search(session, embedder, q, app=app, kind=kind, limit=limit)
+        apps = access.allowed()  # only the projects this person may use
+    hits = await search(session, embedder, q, app=app, apps=apps, kind=kind, limit=limit)
     return [
         MemoryHitOut.model_validate(
             MemoryOut.model_validate(hit.item).model_dump() | {"similarity": hit.similarity}

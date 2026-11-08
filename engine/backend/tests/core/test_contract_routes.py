@@ -50,6 +50,11 @@ RUN_BODY = {"app": "lead_finder", "mode": "discovery"}
 # Every route in section 5 of the design, with the names this code uses for the ids.
 ROUTES = [
     ("GET", f"{API}/health"),
+    # The Companies page (PLAN-V10)
+    ("GET", f"{API}/companies"),
+    ("GET", f"{API}/companies/facets"),
+    ("GET", f"{API}/companies/search"),
+    ("GET", f"{API}/companies/{{key}}"),
     ("POST", f"{API}/auth/login"),
     ("POST", f"{API}/auth/logout"),
     ("POST", f"{API}/auth/logout-everywhere"),

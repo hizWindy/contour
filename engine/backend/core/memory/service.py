@@ -1,6 +1,6 @@
 """Save text to memory, and search it by meaning."""
 
-from collections.abc import Collection, Mapping
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any, cast
@@ -114,6 +114,7 @@ async def search(
     query: str,
     *,
     app: str | None = None,
+    apps: Sequence[str] | None = None,
     kind: str | None = None,
     limit: int = 5,
 ) -> list[MemoryHit]:
@@ -122,6 +123,8 @@ async def search(
     statement = select(MemoryItem, distance).order_by(distance).limit(limit)
     if app is not None:
         statement = statement.where(MemoryItem.app == app)
+    if apps is not None:
+        statement = statement.where(MemoryItem.app.in_(list(apps)))
     if kind is not None:
         statement = statement.where(MemoryItem.kind == kind)
     rows = (await session.execute(statement)).all()

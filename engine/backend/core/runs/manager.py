@@ -1198,6 +1198,7 @@ class RunManager:
         self,
         *,
         app: str | None = None,
+        apps: Sequence[str] | None = None,
         mode: str | None = None,
         status: Sequence[RunStatus] | None = None,
         since: date | None = None,
@@ -1205,10 +1206,12 @@ class RunManager:
         limit: int = 50,
         offset: int = 0,
     ) -> RunPage:
-        """Runs, newest first. `since` and `until` are Australia/Melbourne dates, both included."""
+        """Runs, newest first. `since` and `until` are Australia/Melbourne dates, both included.
+        `apps`: only these projects (None: all)."""
         return await reads.list_runs(
             self.session_factory,
             app=app,
+            apps=apps,
             mode=mode,
             status=status,
             since=since,
@@ -1221,10 +1224,12 @@ class RunManager:
         """The stored events after seq `after`, oldest first. Raises Problem 404 if unknown."""
         return await reads.event_log(self.session_factory, run_id, after, limit)
 
-    async def summary(self, since: date | None = None) -> RunSummary:
+    async def summary(
+        self, since: date | None = None, *, apps: Sequence[str] | None = None
+    ) -> RunSummary:
         """Cost and run counts by day, from `since` (default: 30 days ago). Days are
-        Australia/Melbourne dates."""
-        return await reads.summary(self.session_factory, since)
+        Australia/Melbourne dates. `apps`: only these projects (None: all)."""
+        return await reads.summary(self.session_factory, since, apps=apps)
 
     async def estimate(self, body: RunCreate, *, scheduled: bool = False) -> RunEstimate:
         """What a run would cost. Never starts a run. An invalid body is `valid: false`, not an

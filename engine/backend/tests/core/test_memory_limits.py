@@ -101,7 +101,7 @@ async def test_only_a_loaded_project_can_have_notes(
     response = await client.post("/api/v1/memory", json=NOTE | {"app": app_name})
 
     assert problem_fields(response) == {
-        "body.app": "That isn't a project this engine runs. Use one of: lead_finder."
+        "body.app": "That isn't a project this engine runs. Use one of: lead_finder, companies."
     }
 
 

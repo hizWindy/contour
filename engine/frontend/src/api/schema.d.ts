@@ -137,6 +137,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List companies
+         * @description One page of companies from the HubSpot copy, by name unless `sort` says otherwise. With the Lead Finder tick, its good leads that aren't in HubSpot yet are added (`source` lead), and each row has the Lead Finder's newest result. `q` looks in the name, website and industry. `city` matches the company's city or any of its offices.
+         */
+        get: operations["list_companies"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/facets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What the filters offer
+         * @description The cities, with how many companies have an office there, and the owners.
+         */
+        get: operations["company_facets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Matches for the prep box
+         * @description Up to 4 people (once HubSpot's contacts are copied) and up to 4 companies whose name matches `q`, best first. Fewer than 2 letters give nothing.
+         */
+        get: operations["search_companies"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One company
+         * @description What it does, its offices, deals and owner, the last talk, saved notes under 30 days old from any project, and (with HubSpot's contacts and calls) its people and calls. The Lead Finder section comes only with the Lead Finder tick. 404 `company_not_found` when there is no such company, or it isn't open to this account.
+         */
+        get: operations["get_company"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -1224,6 +1304,121 @@ export interface components {
             /** Min */
             min: number;
         };
+        /** CompanyCall */
+        CompanyCall: {
+            /** Called At */
+            called_at: string | null;
+            /** Hubspot Url */
+            hubspot_url: string | null;
+            /** Id */
+            id: string;
+            /** Minutes */
+            minutes: number | null;
+            /** Note */
+            note: string | null;
+            /** Outcome */
+            outcome: string | null;
+            /** Owner */
+            owner: string | null;
+            /** Person */
+            person: string | null;
+        };
+        /** CompanyDeal */
+        CompanyDeal: {
+            /** Amount Aud */
+            amount_aud: string | null;
+            /** Close Date */
+            close_date: string | null;
+            /** Hubspot Url */
+            hubspot_url: string | null;
+            /** Name */
+            name: string;
+            /** Next Step */
+            next_step: string | null;
+            /** Owner */
+            owner: string | null;
+            /** Pipeline */
+            pipeline: string | null;
+            /** Stage */
+            stage: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "open" | "won" | "lost" | "dissolved";
+        };
+        /** CompanyDetail */
+        CompanyDetail: {
+            /**
+             * Calls
+             * @description The newest calls first, at most 20
+             */
+            calls: components["schemas"]["CompanyCall"][];
+            /** City */
+            city: string | null;
+            /**
+             * Deal
+             * @enum {string}
+             */
+            deal: "open" | "customer" | "none";
+            /** Deals */
+            deals: components["schemas"]["CompanyDeal"][];
+            /** Description */
+            description: string | null;
+            /** Domain */
+            domain: string | null;
+            /** Hubspot Url */
+            hubspot_url: string | null;
+            /** Industry */
+            industry: string | null;
+            /** Key */
+            key: string;
+            /** Last Talk */
+            last_talk: string | null;
+            /**
+             * Last Talk Note
+             * @description The newest call note, once calls are copied
+             */
+            last_talk_note: string | null;
+            /** @description Only with the Lead Finder tick */
+            lead: components["schemas"]["CompanyLead"] | null;
+            /** Lifecycle Stage */
+            lifecycle_stage: string | null;
+            /** Linkedin Staff */
+            linkedin_staff: number | null;
+            /** Name */
+            name: string;
+            /** Next Lease End */
+            next_lease_end: string | null;
+            /**
+             * Notes
+             * @description Saved notes under 30 days old, newest first
+             */
+            notes: components["schemas"]["CompanyNote"][];
+            /** Offices */
+            offices: components["schemas"]["CompanyOffice"][];
+            /** Owner */
+            owner: string | null;
+            /** People */
+            people: components["schemas"]["CompanyPerson"][];
+            /**
+             * People Status
+             * @description waiting: HubSpot can't give contacts and calls yet (its scopes)
+             * @enum {string}
+             */
+            people_status: "ready" | "waiting";
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "hubspot" | "lead";
+            /** Staff */
+            staff: number | null;
+            /** State */
+            state: string | null;
+            /** Website */
+            website: string | null;
+        };
         /** CompanyDoneData */
         CompanyDoneData: {
             /** Cost Usd */
@@ -1267,6 +1462,25 @@ export interface components {
              * @enum {string}
              */
             type: "company_done";
+        };
+        /** CompanyFacetValue */
+        CompanyFacetValue: {
+            /** Count */
+            count: number;
+            /** Value */
+            value: string;
+        };
+        /** CompanyFacets */
+        CompanyFacets: {
+            /** Cities */
+            cities: components["schemas"]["CompanyFacetValue"][];
+            /** Leads Shown */
+            leads_shown: boolean;
+            /**
+             * Owners
+             * @description Owners with the most companies first
+             */
+            owners: components["schemas"]["CompanyFacetValue"][];
         };
         /** CompanyFacts */
         CompanyFacts: {
@@ -1383,6 +1597,22 @@ export interface components {
              */
             type: "company_failed";
         };
+        /** CompanyHit */
+        CompanyHit: {
+            /** City */
+            city: string | null;
+            /** Industry */
+            industry: string | null;
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "hubspot" | "lead";
+        };
         /**
          * CompanyIn
          * @description A company a person names.
@@ -1403,6 +1633,172 @@ export interface components {
              * @example cultureamp.com
              */
             website: string | null;
+        };
+        /** CompanyLead */
+        CompanyLead: {
+            /** Best Sign */
+            best_sign: string | null;
+            /**
+             * Found At
+             * Format: date-time
+             */
+            found_at: string;
+            /**
+             * Lead Id
+             * Format: uuid
+             */
+            lead_id: string;
+            /** Link */
+            link: string;
+            /** Result */
+            result: string;
+            /** Result Label */
+            result_label: string;
+            /** Score */
+            score: number;
+            /** Score Checked */
+            score_checked: number | null;
+            /** Sign Date */
+            sign_date: string | null;
+            /** Status */
+            status: string;
+            /** Summary */
+            summary: string;
+            /**
+             * Title
+             * @description The project's name, like Lead Finder
+             */
+            title: string;
+        };
+        /** CompanyNote */
+        CompanyNote: {
+            /** Date */
+            date: string | null;
+            /**
+             * Found By
+             * @description The project that saved it, like lead_finder
+             */
+            found_by: string;
+            /**
+             * Text
+             * @description What a page said, in a summary (not a quote)
+             */
+            text: string;
+            /** Url */
+            url: string | null;
+        };
+        /** CompanyOffice */
+        CompanyOffice: {
+            /** City */
+            city: string | null;
+            /** Label */
+            label: string;
+            /** Lease End */
+            lease_end: string | null;
+            /** Level */
+            level: string | null;
+            /** Linkedin Staff */
+            linkedin_staff: number | null;
+            /** Moved In */
+            moved_in: string | null;
+            /** Office M2 */
+            office_m2: string | null;
+            /** Quality */
+            quality: string | null;
+            /** Street */
+            street: string | null;
+        };
+        /** CompanyPage */
+        CompanyPage: {
+            /** Items */
+            items: components["schemas"]["CompanyRow"][];
+            /**
+             * Leads Shown
+             * @description True when this person sees the Lead Finder's rows and fields (its tick)
+             */
+            leads_shown: boolean;
+            /** Total */
+            total: number;
+        };
+        /** CompanyPerson */
+        CompanyPerson: {
+            /**
+             * Id
+             * @description HubSpot's contact id
+             */
+            id: string;
+            /** Last Activity */
+            last_activity: string | null;
+            /** Name */
+            name: string;
+            /** Phone */
+            phone: string | null;
+            /** Title */
+            title: string | null;
+        };
+        /** CompanyRow */
+        CompanyRow: {
+            /** City */
+            city: string | null;
+            /**
+             * Deal
+             * @enum {string}
+             */
+            deal: "open" | "customer" | "none";
+            /** Domain */
+            domain: string | null;
+            /** Industry */
+            industry: string | null;
+            /**
+             * Key
+             * @description The HubSpot id, or lead:<id> for a lead not in HubSpot yet
+             */
+            key: string;
+            /**
+             * Last Talk
+             * @description When someone last talked to them, per HubSpot
+             */
+            last_talk: string | null;
+            /**
+             * Lead Result
+             * @description The Lead Finder's newest result. Only with the Lead Finder tick.
+             */
+            lead_result: string | null;
+            /**
+             * Lead Score
+             * @description Only with the Lead Finder tick
+             */
+            lead_score: number | null;
+            /** Name */
+            name: string;
+            /**
+             * Next Lease End
+             * @description The nearest lease end still to come
+             */
+            next_lease_end: string | null;
+            /**
+             * Owner
+             * @description The HubSpot owner's name
+             */
+            owner: string | null;
+            /**
+             * Source
+             * @description hubspot, or lead: found by the Lead Finder, not in HubSpot
+             * @enum {string}
+             */
+            source: "hubspot" | "lead";
+            /**
+             * Staff
+             * @description Staff, as HubSpot has it (the whole company)
+             */
+            staff: number | null;
+        };
+        /** CompanySearch */
+        CompanySearch: {
+            /** Companies */
+            companies: components["schemas"]["CompanyHit"][];
+            /** People */
+            people: components["schemas"]["PersonHit"][];
         };
         /** CompanySkippedData */
         CompanySkippedData: {
@@ -2849,6 +3245,19 @@ export interface components {
             label: string;
             /** Points */
             points: number;
+        };
+        /** PersonHit */
+        PersonHit: {
+            /** Company Key */
+            company_key: string | null;
+            /** Company Name */
+            company_name: string | null;
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Title */
+            title: string | null;
         };
         /** PersonIn */
         PersonIn: {
@@ -5884,6 +6293,497 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SessionPage"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_companies: {
+        parameters: {
+            query?: {
+                q?: string | null;
+                city?: string | null;
+                owner?: string | null;
+                deal?: ("open" | "customer" | "none") | null;
+                source?: ("hubspot" | "lead") | null;
+                sort?: "name" | "staff" | "lease" | "last_talk";
+                order?: ("asc" | "desc") | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyPage"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    company_facets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyFacets"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    search_companies: {
+        parameters: {
+            query: {
+                q: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanySearch"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_company: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A HubSpot company id, or lead:<id> for a lead not in HubSpot yet */
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyDetail"];
                 };
             };
             /** @description The request can't be understood */

@@ -112,7 +112,7 @@ class FakeManager:
         self.calls.append(("list_runs", filters))
         return RunPage(total=1, items=[make_run_out()])
 
-    async def summary(self, since: date | None = None) -> Any:
+    async def summary(self, since: date | None = None, *, apps: Any = None) -> Any:
         self.calls.append(("summary", since))
         return RunSummary(since=date(2026, 1, 1), days=[], total_cost_usd=D(0), total_runs=0)
 
@@ -198,6 +198,7 @@ async def test_the_list_route_passes_every_filter_on(
             "list_runs",
             {
                 "app": "lead_finder",
+                "apps": None,  # one project named: no list of projects
                 "mode": "discovery",
                 "status": ["done", "failed"],
                 "since": date(2026, 4, 5),
@@ -216,6 +217,7 @@ async def test_the_list_route_defaults(client: httpx.AsyncClient, manager: FakeM
             "list_runs",
             {
                 "app": None,
+                "apps": None,  # sign-in off: every project
                 "mode": None,
                 "status": None,
                 "since": None,

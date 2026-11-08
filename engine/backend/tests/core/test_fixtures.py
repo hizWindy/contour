@@ -24,11 +24,14 @@ from sqlalchemy.ext.asyncio import (
 )
 from sse_starlette.sse import AppStatus, EventSourceResponse
 
+from apps.companies.tables import Prep
 from apps.lead_finder.tables import Lead, Rival, SignalHireDetails
 from core.auth.models import AuditEntry, User, UserSession
 from core.config import get_settings
 from core.hubspot.models import (
+    HubSpotCall,
     HubSpotCompany,
+    HubSpotContact,
     HubSpotDeal,
     HubSpotOffice,
     HubSpotOwner,
@@ -109,6 +112,9 @@ async def fill_every_table(factory: async_sessionmaker[AsyncSession]) -> None:
                 ),
                 AuditEntry(event="sign_in", user_id=person.id),
                 HubSpotOffice(hubspot_company_id="1", label="Melbourne"),
+                HubSpotContact(hubspot_id="c1", hubspot_company_id="1", name="Pat Lee"),
+                HubSpotCall(hubspot_id="k1", hubspot_company_id="1", note="A call."),
+                Prep(company_key="1", company_name="Acme", made_by=person.id),
                 HubSpotDeal(hubspot_deal_id="9", hubspot_company_id="1", name="Acme fit-out"),
                 RunEvent(run_id=run.id, seq=1, type="run_started", data={}),
                 Lead(
@@ -175,7 +181,8 @@ async def test_every_test_table_is_listed_in_the_guard(engine: AsyncEngine) -> N
             await connection.execute(
                 text(
                     "SELECT table_schema || '.' || table_name FROM information_schema.tables "
-                    "WHERE table_schema IN ('core', 'lead_finder') AND table_type = 'BASE TABLE'"
+                    "WHERE table_schema IN ('core', 'lead_finder', 'companies') "
+                    "AND table_type = 'BASE TABLE'"
                 )
             )
         ).scalars()

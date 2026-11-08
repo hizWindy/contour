@@ -73,6 +73,7 @@ async def list_runs(
     session_factory: async_sessionmaker[AsyncSession],
     *,
     app: str | None = None,
+    apps: Sequence[str] | None = None,
     mode: str | None = None,
     status: Sequence[RunStatus] | None = None,
     since: date | None = None,
@@ -88,6 +89,8 @@ async def list_runs(
     filters: list[ColumnElement[bool]] = []
     if app is not None:
         filters.append(Run.app == app)
+    if apps is not None:
+        filters.append(Run.app.in_(list(apps)))
     if mode is not None:
         filters.append(Run.mode == mode)
     if status:
@@ -147,7 +150,10 @@ async def event_log(
 
 
 async def summary(
-    session_factory: async_sessionmaker[AsyncSession], since: date | None = None
+    session_factory: async_sessionmaker[AsyncSession],
+    since: date | None = None,
+    *,
+    apps: Sequence[str] | None = None,
 ) -> RunSummary:
     """Cost and run counts by day, oldest first, from `since` (default: 30 days ago). A day is
     the Australia/Melbourne date of the run's `created_at`. Days without a run are left out.
@@ -161,7 +167,7 @@ async def summary(
             since = today - timedelta(days=SUMMARY_DEFAULT_DAYS)
         found = await session.execute(
             select(day.label("day"), func.sum(Run.cost_usd), func.count())
-            .where(day >= since)
+            .where(day >= since, *([Run.app.in_(list(apps))] if apps is not None else []))
             .group_by(day)
             .order_by(day)
         )

@@ -7,8 +7,9 @@ Each account has a list of projects it may use (`core.users.apps`), like ["lead_
 - `require_app(name)` guards a whole project: `create_app` puts it on each project's router, so a
   route a project adds later is covered with no change here.
 - `AppAccessDep` is for the core routes that hold a project's data (runs, the search log,
-  memory): they check the project of the data they return. A list with no project named needs
-  every project, because it would show them all.
+  memory): they check the project of the data they return. A list with no project named shows
+  only the projects this person may use (`allowed`), and refuses someone who may use none. Since
+  PLAN-V10 there are two projects, so a Lead Finder account still sees its own runs and searches.
 
 A person without the project gets a 403 `app_not_allowed`, in plain words.
 """
@@ -24,7 +25,7 @@ from core.api.errors import Problem
 from core.api.signin import AuthSettingsDep, NowDep, maybe_auth
 from core.auth.sessions import AuthContext
 
-APP_TITLES = {"lead_finder": "the Lead Finder"}
+APP_TITLES = {"lead_finder": "the Lead Finder", "companies": "the Companies page"}
 
 
 def _title(app: str) -> str:
@@ -87,9 +88,19 @@ class AppAccess:
             raise not_allowed(app)
 
     def check_all(self, apps: Iterable[str] | None = None) -> None:
-        """For a list that names no project: it would show them all, so all are needed."""
+        """Refuses unless this person may use every one of `apps` (default: every project)."""
         for app in apps if apps is not None else self.every:
             self.check(app)
+
+    def allowed(self) -> list[str] | None:
+        """For a list that names no project: the projects it may show. None means all of them
+        (sign-in off, or an Admin). Refuses (403) someone who may use none."""
+        if self.open:
+            return None
+        mine = [app for app in self.every if can_use(self.auth, app)]
+        if not mine:
+            raise not_allowed(self.every[0] if self.every else "")
+        return mine
 
 
 async def app_access(request: Request, auth: SignedInDep) -> AppAccess:

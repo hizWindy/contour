@@ -14,6 +14,7 @@ from core.hubspot.needs import HubSpotNeeds
 
 if TYPE_CHECKING:
     # Only for the type. Importing it would load the Claude client into every migration.
+    from core.company_leads import CompanyLeads
     from core.runs.types import RunKind
     from core.schedules.jobs import JobSpec
 
@@ -37,6 +38,8 @@ class AppSpec:
     hubspot_written: Callable[[Any, Any], Awaitable[None]] | None = None
     # What it offers to start on a schedule (PLAN-V6 D1), like the Lead Finder's discovery run.
     jobs: "tuple[JobSpec, ...]" = ()
+    # The companies it found, for the Companies page (PLAN-V10 B2): core/company_leads.py.
+    company_leads: "CompanyLeads | None" = None
 
 
 def load_apps(names: Sequence[str]) -> list[AppSpec]:

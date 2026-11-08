@@ -255,3 +255,62 @@ class HubSpotWrite(Base):
     )
     applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class HubSpotContact(Base):
+    """A person at a company, copied from HubSpot (PLAN-V10 C1). Needs HubSpot's contacts scope.
+
+    The email stays in our copy for the team: it is never sent to Claude. A contact belongs to its
+    primary company; `hubspot_company_id` may name a company our copy doesn't have, so it is not a
+    foreign key.
+    """
+
+    __tablename__ = "hubspot_contacts"
+    __table_args__ = (
+        Index("ix_hubspot_contacts_company", "hubspot_company_id"),
+        Index("ix_hubspot_contacts_name", text("lower(name)")),
+        {"schema": CORE_SCHEMA},
+    )
+
+    hubspot_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    hubspot_company_id: Mapped[str | None] = mapped_column(String(32))
+    first_name: Mapped[str | None] = mapped_column(String(120))
+    last_name: Mapped[str | None] = mapped_column(String(120))
+    name: Mapped[str] = mapped_column(String(240))  # what the page shows, like "Jason Reeds"
+    job_title: Mapped[str | None] = mapped_column(String(200))
+    phone: Mapped[str | None] = mapped_column(String(64))
+    mobile: Mapped[str | None] = mapped_column(String(64))
+    email: Mapped[str | None] = mapped_column(String(254))  # never sent to Claude
+    last_activity: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    hubspot_url: Mapped[str | None] = mapped_column(Text)
+    hubspot_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    imported_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()")
+    )
+
+
+class HubSpotCall(Base):
+    """A logged call, copied from HubSpot (PLAN-V10 C1): who, when, how long, how it went, and the
+    note. The last 2 years only (TBC). Needs HubSpot's calls scope."""
+
+    __tablename__ = "hubspot_calls"
+    __table_args__ = (
+        Index("ix_hubspot_calls_company_called_at", "hubspot_company_id", text("called_at DESC")),
+        Index("ix_hubspot_calls_contact", "hubspot_contact_id"),
+        {"schema": CORE_SCHEMA},
+    )
+
+    hubspot_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    hubspot_company_id: Mapped[str | None] = mapped_column(String(32))
+    hubspot_contact_id: Mapped[str | None] = mapped_column(String(32))
+    called_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    duration_seconds: Mapped[int | None] = mapped_column(Integer)
+    outcome: Mapped[str | None] = mapped_column(String(64))  # like "Connected"
+    title: Mapped[str | None] = mapped_column(String(300))
+    note: Mapped[str | None] = mapped_column(Text)  # the call note, as written in HubSpot
+    owner: Mapped[str | None] = mapped_column(String(120))  # who made the call
+    owner_id: Mapped[str | None] = mapped_column(String(32))
+    hubspot_url: Mapped[str | None] = mapped_column(Text)
+    imported_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()")
+    )

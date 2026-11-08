@@ -1,6 +1,7 @@
 """Write and read the search log."""
 
 import uuid
+from collections.abc import Sequence
 from typing import Any
 
 from sqlalchemy import func, select
@@ -57,6 +58,7 @@ async def list_searches(
     session: AsyncSession,
     *,
     app: str | None = None,
+    apps: Sequence[str] | None = None,
     job_id: uuid.UUID | None = None,
     run_id: uuid.UUID | None = None,
     subject: str | None = None,
@@ -72,6 +74,8 @@ async def list_searches(
     statement = select(SearchLog)
     if app is not None:
         statement = statement.where(SearchLog.app == app)
+    if apps is not None:
+        statement = statement.where(SearchLog.app.in_(list(apps)))
     if job_id is not None:
         statement = statement.where(SearchLog.job_id == job_id)
     if run_id is not None:

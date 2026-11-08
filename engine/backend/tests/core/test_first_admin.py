@@ -32,7 +32,7 @@ def conninfo(database_url: str) -> Iterator[str]:
     settings = get_settings()
     info = server_conninfo(settings, settings.postgres_db)
     with psycopg.connect(info, autocommit=True) as connection:
-        connection.execute("TRUNCATE core.audit_log, core.sessions, core.users")
+        connection.execute("TRUNCATE companies.preps, core.audit_log, core.sessions, core.users")
     yield info
 
 

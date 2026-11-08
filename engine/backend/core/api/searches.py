@@ -74,13 +74,15 @@ async def get_searches(
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0, le=OFFSET_MAX)] = 0,
 ) -> SearchPage:
+    apps: list[str] | None = None
     if app is not None:
         access.check(app)
     else:
-        access.check_all()
+        apps = access.allowed()  # only the projects this person may use
     rows, total = await list_searches(
         session,
         app=app,
+        apps=apps,
         job_id=job_id,
         run_id=run_id,
         subject=subject,

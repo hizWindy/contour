@@ -3,6 +3,7 @@ route, the core routes that hold Lead Finder data, and the People tab."""
 
 import re
 import uuid
+from decimal import Decimal
 from typing import Any
 
 import pytest
@@ -12,7 +13,9 @@ from sqlalchemy import select
 from core.api.routes import api_routes
 from core.auth import admin
 from core.auth.models import AuditEntry, User
+from core.searches.models import SearchLog
 from tests.core.auth_world import FAST, GOOD, World, build_world, make_account, me, sign_in
+from tests.lead_finder.factories import make_run
 
 pytestmark = pytest.mark.integration
 LF = "/api/v1/lead-finder"
@@ -184,3 +187,42 @@ async def test_an_admin_cant_lock_themselves_out(world: World) -> None:
         assert off.status_code == 422
         missing = await client.patch(f"{PEOPLE}/{uuid.uuid4()}", json={"apps": []})
         assert missing.status_code == 404
+
+
+# --- Two projects (PLAN-V10): a list that names no project ---------------------------------------
+
+
+async def test_a_list_naming_no_project_shows_the_ones_this_person_may_use(
+    world: World, run_manager: Any
+) -> None:
+    """Since the Companies page came, a Lead Finder account must still see its own runs and
+    searches, and not the Companies page's. Someone with no tick still gets a 403."""
+    world.app.state.run_manager = run_manager
+    async with world.factory() as db:
+        db.add_all(
+            [
+                make_run(app="lead_finder", cost_usd=Decimal("1.50")),
+                SearchLog(app="lead_finder", step="extract", model="m", cost_usd=1, answer_ok=True),
+                SearchLog(app="companies", step="prep", model="m", cost_usd=1, answer_ok=True),
+            ]
+        )
+        await db.commit()
+    await person(world, "sam", apps=["lead_finder"])
+    await person(world, "mia", apps=["companies"])
+    await person(world, "nobody", apps=[])
+    async with world.browser() as client:
+        assert (await sign_in(client, login="sam")).status_code == 200
+        searches = (await client.get("/api/v1/searches")).json()
+        assert [item["app"] for item in searches["items"]] == ["lead_finder"]
+        assert (await client.get("/api/v1/runs")).json()["total"] == 1
+        summary = (await client.get("/api/v1/runs/summary?since=2000-01-01")).json()
+        assert Decimal(summary["total_cost_usd"]) == Decimal("1.5")
+    async with world.browser() as client:
+        assert (await sign_in(client, login="mia")).status_code == 200
+        searches = (await client.get("/api/v1/searches")).json()
+        assert [item["app"] for item in searches["items"]] == ["companies"]
+        assert (await client.get("/api/v1/runs")).json()["total"] == 0
+    async with world.browser() as client:
+        assert (await sign_in(client, login="nobody")).status_code == 200
+        for path in ("/api/v1/searches", "/api/v1/runs", "/api/v1/runs/summary"):
+            assert (await client.get(path)).status_code == 403, path

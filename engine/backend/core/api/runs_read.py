@@ -76,12 +76,20 @@ async def list_runs(
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0, le=OFFSET_MAX)] = 0,
 ) -> RunPage:
+    apps: list[str] | None = None
     if app is not None:
         access.check(app)
     else:
-        access.check_all()
+        apps = access.allowed()  # only the projects this person may use
     return await manager.list_runs(
-        app=app, mode=mode, status=status, since=since, until=until, limit=limit, offset=offset
+        app=app,
+        apps=apps,
+        mode=mode,
+        status=status,
+        since=since,
+        until=until,
+        limit=limit,
+        offset=offset,
     )
 
 
@@ -102,8 +110,8 @@ async def run_summary(
         Query(description="First day (Australia/Melbourne). Default: 30 days ago"),
     ] = None,
 ) -> RunSummary:
-    access.check_all()
-    return await manager.summary(since)
+    apps = access.allowed()  # first: the check comes before the run engine is asked
+    return await manager.summary(since, apps=apps)
 
 
 @router.get("/{run_id}", response_model=RunOut, summary="One run")
