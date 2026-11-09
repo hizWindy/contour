@@ -185,4 +185,11 @@ This plan tunes the Lead Finder to what Levi asked for on 9 Nov. Today it finds 
 
 Newest first.
 
+- 2026-11-10: **B1** (rules `f3d61463c62a`): `merger_or_takeover` reads "Merger or acquisition", and `big_new_contract` "Big new contract or project award that means a large increase in office staff". Same ids. Re-judge: no change (Pass 1, Director review 2, Watch 27, Drop 22), as expected, because a label doesn't change a result. It changes the extract prompt's version, though: Claude reads the labels.
+- 2026-11-10: **A1 tests:** backend 3,330 passed, 25 skipped (`RUN_GATES=1`, 10 min 46 s); website 913 passed.
+- 2026-11-10: **A1 baseline** (rules version `b67ae2652a99`, commit `f3d949b`):
+  - **Where the work is:** branch `plan-v11`, made in the `contour-v10` worktree instead of a new `contour-v11` one. That folder is the one the running preview serves, so Al-khair sees each change live (his ask, 10 Nov). The preview reads `leadfinder_v10`, a copy of the dev database from 9 Nov.
+  - **Re-judge** (free, 52 saved leads, the same on `leadfinder` and `leadfinder_v10`): Pass 1, Director review 2, Watch 27, Drop 22. 24 leads already differ from their saved result, from rule changes before this plan (mostly HubSpot open deals). Budget Direct is one of the 52: a Watch today, 29 of 77 checked.
+  - **Watchlist preview** at `staff_min` 100 (free, the 13,914 HubSpot companies in the copy): 1,481 Watch (993 likely, 488 unlikely: Melbourne 1,004, Perth 326, Adelaide 151), 594 Director, 1,165 left out for an open deal, 7,391 too small or big (2,630 with no staff number), 3,283 with no office in our cities.
+  - **Levi's Adelaide run of 6 Nov:** not in the laptop's databases (their newest run is 2 Nov). It ran on the live site, so its good leads and cost need a look at live Runs (Al-khair). **TBC**.
 - 2026-11-10: Plan written from the 9 Nov meeting and Levi's green light, as Al-khair reports it. Nothing built yet.

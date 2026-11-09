@@ -59,6 +59,16 @@ def test_rules_match_the_criteria_documents() -> None:
     assert criteria.never_suggest.dissolved_deal_wait_months == 12
 
 
+def test_two_signs_have_levis_9_nov_wording() -> None:
+    """PLAN-V11 B1: no "about 100 more office staff", and a merger counts even with an old office.
+    The ids stay, so old leads keep their sign and show the new wording."""
+    labels = {trigger.id: trigger.label for trigger in load_rules().criteria.triggers.main}
+    assert labels["merger_or_takeover"] == "Merger or acquisition"
+    assert labels["big_new_contract"] == (
+        "Big new contract or project award that means a large increase in office staff"
+    )
+
+
 def test_numbers_line_up_with_the_deal_criteria() -> None:
     criteria = load_rules().criteria
     smallest = (

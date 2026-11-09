@@ -118,10 +118,10 @@ triggers:
   main:
     - id: lease_ending
       label: Lease ending in 1 to 3 years, or a relocation
-    - id: merger_or_takeover
-      label: Merger or acquisition, where one company has an old office
-    - id: big_new_contract
-      label: Big new contract or project award, needing about 100 more office staff
+    - id: merger_or_takeover # PLAN-V11 B1, Levi 9 Nov: even with an old office, a merger can still lead to a move
+      label: Merger or acquisition
+    - id: big_new_contract # PLAN-V11 B1, Levi 9 Nov: "about 100 more office staff" was too specific
+      label: Big new contract or project award that means a large increase in office staff
     - id: fast_growth
       label: Fast or planned headcount growth, like many job ads, big funding or growth news
     - id: new_to_australia # PLAN-V9 B3, Levi 5 Nov. Its size comes from the staff or office it announces here
