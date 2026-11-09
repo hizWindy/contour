@@ -5366,12 +5366,24 @@
             "exclusiveMinimum": 0.0,
             "title": "Recent Move Years",
             "type": "integer"
+          },
+          "tenure_sign": {
+            "pattern": "^[a-z][a-z_]*$",
+            "title": "Tenure Sign",
+            "type": "string"
+          },
+          "tenure_years": {
+            "exclusiveMinimum": 0.0,
+            "title": "Tenure Years",
+            "type": "integer"
           }
         },
         "required": [
           "due_years",
           "recent_move_years",
-          "just_moved_months"
+          "just_moved_months",
+          "tenure_years",
+          "tenure_sign"
         ],
         "title": "OfficeAge",
         "type": "object"

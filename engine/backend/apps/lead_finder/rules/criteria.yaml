@@ -112,6 +112,11 @@ office_age:
   # A move or fitout in the last this many months makes a lead a Watch, even with a sign: the company
   # has probably just set up its office (Levi, 9 Nov: Budget Direct, PLAN-V11 B3). A Drop stays a Drop.
   just_moved_months: 12
+  # An old office (Levi, 9 Nov, PLAN-V11 C1): this many years or more at the same address, with no
+  # move or fitout known since, is a main sign of its own (tenure_sign). The code adds it from the
+  # office dates, never Claude, and it has no discovery search.
+  tenure_years: 8
+  tenure_sign: long_tenure
 
 triggers:
   window_years: 3
@@ -131,6 +136,8 @@ triggers:
       label: An overseas company opening its first or a much bigger office in an Australian city
     - id: hot_industry_growth # PLAN-V9 B4, Levi 2 Nov. Its searches name the industries (queries.yaml)
       label: Growing because its industry is booming, like the energy transition, defence or critical minerals
+    - id: long_tenure # PLAN-V11 C1, Levi 9 Nov. Added by the code from the office dates (office_age.tenure_years), so it has no search
+      label: At the same address for 8 or more years, with no known office project in that time
   other:
     - id: office_consolidation
       label: Merging several offices into one
@@ -305,6 +312,8 @@ tbc:
     note: Answered by the documents. A recent move or fitout means the last 3 years.
   - key: office_age.just_moved_months
     note: From Levi's 9 Nov example (Budget Direct had already set up its new Adelaide office when his run found it). The 12 months is our guess (PLAN-V11 B3).
+  - key: office_age.tenure_years
+    note: Levi, 9 Nov, a second search for companies 8+ years at the same address with no known office project (PLAN-V11 C1). Open with Levi, the 8 years, and whether an old office alone is a Pass (a main sign, as now) or a Director review.
   - key: triggers.consultant_window_months
     note: From the Profile and DEAL.md. Shown as text on the lead card. The tool can't see when a consultant is appointed.
   - key: triggers

@@ -132,13 +132,14 @@ def judge(
     checks.append(sized.check)
     checks.append(_office(facts, rules))
     checks += _local_and_healthy(facts)
-    triggers = _triggers(facts, rules, today)
+    history = office_history(facts, rules, today)
+    # The old office's sign comes from the office dates, not from Claude (PLAN-V11 C1)
+    triggers = _triggers(with_tenure_sign(facts, history, rules), rules, today)
     checks.append(
         RuleCheck(rule="Trigger", outcome="ok", detail=triggers[0].trigger.what_happened)
         if triggers
         else RuleCheck(rule="Trigger", outcome="unknown", detail="No sign of an office change yet")
     )
-    history = office_history(facts, rules, today)
     history_check = _history_check(facts, history, rules)
     if history_check is not None:  # left out when nothing is known, so a card isn't all "unknown"
         checks.append(history_check)
@@ -458,6 +459,41 @@ def _history_check(
         sentences.append("Due for a new fitout")
     outcome: Outcome = "flag" if history.recent else "ok"
     return RuleCheck(rule="Office history", outcome=outcome, detail=". ".join(sentences))
+
+
+def has_long_tenure(history: History, rules: LeadFinderRules) -> bool:
+    """An old office (Levi, 9 Nov, PLAN-V11 C1): at the same address for `office_age.tenure_years`
+    or more, with no move or fitout known since the move-in. A fitout before the move-in was part
+    of the move, so it doesn't count."""
+    age = rules.criteria.office_age
+    if history.since is None or history.years_at is None or history.years_at < age.tenure_years:
+        return False
+    return history.fitout is None or history.fitout <= history.since
+
+
+def with_tenure_sign(facts: CompanyFacts, history: History, rules: LeadFinderRules) -> CompanyFacts:
+    """The facts with the old office's sign added when the dates show one (PLAN-V11 C1). The code
+    adds it, never Claude, so a sign with that id from Claude is left out. The sign has no date:
+    the years at the address earn their own Timing points. Its link is the move-in's source."""
+    sign_id = rules.criteria.office_age.tenure_sign
+    others = [trigger for trigger in facts.triggers if trigger.id != sign_id]
+    if not has_long_tenure(history, rules):
+        if len(others) == len(facts.triggers):
+            return facts
+        return facts.model_copy(update={"triggers": others})
+    since = facts.office_since
+    years = int(history.years_at or 0)
+    sign = TriggerFound(
+        id=sign_id,
+        what_happened=(
+            f"At this address since {month_year(since.value)} ({years} years), "
+            "with no known office project since."
+        ),
+        date=None,
+        source_url=since.source_url or "",
+        label=since.label or "confirmed",
+    )
+    return facts.model_copy(update={"triggers": [*others, sign]})
 
 
 def _triggers(facts: CompanyFacts, rules: LeadFinderRules, today: date) -> list[TriggerScore]:

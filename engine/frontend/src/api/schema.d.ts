@@ -3331,6 +3331,10 @@ export interface components {
             just_moved_months: number;
             /** Recent Move Years */
             recent_move_years: number;
+            /** Tenure Sign */
+            tenure_sign: string;
+            /** Tenure Years */
+            tenure_years: number;
         };
         /** OptionCaps */
         OptionCaps: {

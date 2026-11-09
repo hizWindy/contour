@@ -3,8 +3,8 @@
 This plan tunes the Lead Finder to what Levi asked for on 9 Nov. Today it finds too few leads, and it finds some too late: Budget Direct in his Adelaide run of Friday 6 Nov had already set up its new office. We loosen four rules and add a search for companies in an old office. Everything else stays the same.
 
 - **Built by:** Al-khair Pama. **Signed off by:** Al-khair for the code. Levi gave the green light for these changes after the 9 Nov meeting (as Al-khair reports). He confirms what is marked **TBC** (to be confirmed).
-- **Last updated:** 2026-11-10 (B1 to B4 done, B5 built).
-- **Progress:** 4 of 14 steps done.
+- **Last updated:** 2026-11-10 (B1 to B5 done, C1 built).
+- **Progress:** 5 of 14 steps done.
 - **Sources:** the Monday meeting of 9 Nov (`minutes of meeting/Monday Meeting - 2026_11_09 05_00 PST - Notes by Gemini.pdf`, the transcript from 00:12:27 to 00:27:55), [Criteria_v2.md](../projects/leads/criteria/Criteria_v2.md), and the rules files in `engine/backend/apps/lead_finder/rules/`.
 - **Comes after:** [PLAN-V10.md](PLAN-V10.md) (the Companies page and call prep). This plan touches only the Lead Finder.
 
@@ -100,7 +100,7 @@ This plan tunes the Lead Finder to what Levi asked for on 9 Nov. Today it finds 
   - The discovery prompt (`prompts/discover.md`) prefers news about plans, and skips news about an office that is already open.
   - **Files:** `queries.yaml`, `prompts/discover.md`, tests.
   - **Done when:** every sign still has at least one search (the start-up check), and the tests pass.
-- [ ] **B5. Years at the address count more.**
+- [x] **B5. Years at the address count more.** Done 2026-11-10, `c118149`.
   - In `score`: `years_at_address` 5 → 7, and `no_recent_move` 4 → 2, so Timing still adds up to 15 (**TBC**: the numbers). `no_recent_move` can give up points because B3 now handles a recent move.
   - On the lead card, the Overview's Summary starts with the office line, like "At this address since 2017 (9 years)", or "Not known yet" (`lead/card/tab-overview.tsx`).
   - **Files:** `criteria.yaml`, `Criteria_v2.md` section 6, `tab-overview.tsx`, tests.
@@ -185,6 +185,9 @@ This plan tunes the Lead Finder to what Levi asked for on 9 Nov. Today it finds 
 
 Newest first.
 
+- 2026-11-10: **C1** (rules `bc8ee2f4a9a5`): a main sign `long_tenure`, "At the same address for 8 or more years, with no known office project in that time", named by `office_age.tenure_sign` with `office_age.tenure_years: 8`. `judge()` adds it from the office dates (the research's, or HubSpot's move-in year) when the company has been at its address 8+ years and no move or fitout is known since the move-in; a sign with that id from Claude is left out. It reads like "At this address since June 2017 (9 years), with no known office project since.", has no date (1 Timing point: the 7 for the years at the address count it), and its link is the move-in's source. Like the rivals' sign it has no search: it is left out of the searchable signs, the start-up check, the discovery defaults and the Start page's list, and Claude's extract prompt doesn't list it. The Rules page says where it comes from.
+  - **Re-judge:** no change: no saved lead has an office date 8+ years old.
+  - **How often HubSpot alone can give it** (free): of the 2,529 watchlist companies, 84 have a HubSpot move-in date for their city, 7 of them 8+ years ago. 314 have a lease end still to come. So the move-in year mostly has to come from the research (C2).
 - 2026-11-10: **B5** (rules `ac544231ffcb`): `score.years_at_address` 5 → 7 and `no_recent_move` 4 → 2, so Timing still adds up to 15 and the six parts to 100 (the start-up check). The lead card's Overview starts its Summary with the office line, like "At this address since 2017 (9 years). Last fitout May 2024.", or "Not known yet." (`officeLine` in `lead/card/words.ts`, counting years like the rules do, with a year alone read as 1 July). Re-judge: no change: the only saved lead with an office date (Euroz Hartleys) is a Drop, which scores 0.
 - 2026-11-10: **B4** (rules `d93cf648ef13`, discover prompt `2394b711082a`): the searches that found offices already opened now look for plans ("international company plans to open Australian office", "plans Australian headquarters", "plans to expand to", "defence contractor plans new office", "plans new engineering or manufacturing facility", "planned project facility"), and `fast_growth` has a new "{city} company plans to double staff {year}". The discover prompt prefers news about plans and skips a company whose new office is already open. Every sign still has a search (the start-up check). Re-judge: no change, as expected: searches don't change a result. Their effect shows in B6.
 - 2026-11-10: **B3** (rules `c1b824d8783c`): `office_age.just_moved_months: 12`. In `judge()`, a move or fitout in the last 12 months makes a Pass or a Director review a Watch, with the check "Just moved: Moved in June 2026, so probably not in the market yet" (or "Fitted out in ..."). A Drop stays a Drop, and a date still to come doesn't count. The lead's "why" sentence gives that reason first. The extract prompt (and the form's description) now says an office the news says has already opened is the move-in. The Rules page says it too.

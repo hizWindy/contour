@@ -49,7 +49,8 @@ def known_cities() -> list[str]:
 
 
 def known_trigger_ids() -> list[str]:
-    """The signs a run may search for. The rivals' sign is not one: it has no search."""
+    """The signs a run may search for. The rivals' sign and the old office's are not: they have
+    no search."""
     return [trigger.id for trigger in load_rules().criteria.searchable_triggers]
 
 
@@ -61,8 +62,11 @@ def default_cities() -> list[str]:
 
 
 def default_triggers() -> list[str]:
-    """The main triggers."""
-    return [trigger.id for trigger in load_rules().criteria.triggers.main]
+    """The main triggers a search can look for. The old office's sign is main but has no search:
+    the code adds it from the office dates (PLAN-V11 C1)."""
+    criteria = load_rules().criteria
+    searchable = {trigger.id for trigger in criteria.searchable_triggers}
+    return [trigger.id for trigger in criteria.triggers.main if trigger.id in searchable]
 
 
 # --- Typed values: a person typed them, so a bad one is an error and never repaired --------

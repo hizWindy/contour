@@ -164,6 +164,10 @@ export default function AdminRulesTab() {
           <p className="text-muted-foreground">
             An event counts for {criteria.triggers.recent_months} months.
           </p>
+          <p className="text-muted-foreground">
+            The old office&apos;s sign ({criteria.office_age.tenure_years}+ years at the same
+            address) comes from the office dates, never from a search.
+          </p>
         </Block>
         <Block title="Rivals of a booming company">
           {criteria.rivals.enabled ? (

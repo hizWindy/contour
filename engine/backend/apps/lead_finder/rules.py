@@ -137,11 +137,17 @@ class OfficeAge(Strict):
     recent_move_years: int = Field(gt=0)
     # A move or fitout this recent makes a lead a Watch, even with a sign (PLAN-V11 B3)
     just_moved_months: int = Field(gt=0)
+    # This many years at the same address with no move or fitout since is a sign of its own, the
+    # tenure sign: the code adds it from the office dates, never Claude (PLAN-V11 C1)
+    tenure_years: int = Field(gt=0)
+    tenure_sign: str = Field(pattern=r"^[a-z][a-z_]*$")
 
     @model_validator(mode="after")
     def check_months(self) -> Self:
         if self.just_moved_months > self.recent_move_years * 12:
             raise ValueError("office_age.just_moved_months must fit inside recent_move_years")
+        if self.tenure_years < self.due_years:
+            raise ValueError("office_age.tenure_years must not be below due_years")
         return self
 
 
@@ -380,10 +386,26 @@ class Criteria(Strict):
             raise ValueError(f"rivals.sign {self.rivals.sign!r} must be a weak trigger")
         return self
 
+    @model_validator(mode="after")
+    def check_tenure_sign(self) -> Self:
+        if self.office_age.tenure_sign not in {trigger.id for trigger in self.triggers.main}:
+            raise ValueError(
+                f"office_age.tenure_sign {self.office_age.tenure_sign!r} must be a main trigger"
+            )
+        return self
+
     @property
     def searchable_triggers(self) -> list[Item]:
-        """The signs a discovery search can look for: every sign but the rivals' own."""
-        return [trigger for trigger in self.triggers.every if trigger.id != self.rivals.sign]
+        """The signs a discovery search can look for: every sign but the rivals' own (it comes
+        from the rivals table) and the old office's (the code adds it from the office dates)."""
+        made_elsewhere = {self.rivals.sign, self.office_age.tenure_sign}
+        return [trigger for trigger in self.triggers.every if trigger.id not in made_elsewhere]
+
+    @property
+    def claude_triggers(self) -> list[Item]:
+        """The signs Claude may report: every sign but the old office's, which the code adds from
+        the office dates (PLAN-V11 C1)."""
+        return [t for t in self.triggers.every if t.id != self.office_age.tenure_sign]
 
     @model_validator(mode="after")
     def check_stages(self) -> Self:
@@ -548,7 +570,7 @@ class LeadFinderRules(Strict):
 
     @model_validator(mode="after")
     def check_together(self) -> Self:
-        # The rivals' sign has no search: it comes from the rivals table (PLAN-V9 B5).
+        # The rivals' sign (PLAN-V9 B5) and the old office's (PLAN-V11 C1) have no search.
         trigger_ids = {trigger.id for trigger in self.criteria.searchable_triggers}
         missing = sorted(i for i in trigger_ids if not self.queries.discovery.get(i))
         if missing:

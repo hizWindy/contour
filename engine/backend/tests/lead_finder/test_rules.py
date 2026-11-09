@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from apps.lead_finder.params import default_triggers, known_trigger_ids
 from apps.lead_finder.prompts import extract_prompt
 from apps.lead_finder.rules import RULE_FILES, RULES_DIR, load_rules, read_rules, rules_version
 
@@ -40,6 +41,7 @@ def test_rules_match_the_criteria_documents() -> None:
         "fast_growth",
         "new_to_australia",  # PLAN-V9 B3
         "hot_industry_growth",  # PLAN-V9 B4
+        "long_tenure",  # PLAN-V11 C1
     ]
     assert [t.id for t in criteria.triggers.other] == [
         "office_consolidation",
@@ -58,6 +60,8 @@ def test_rules_match_the_criteria_documents() -> None:
     assert criteria.triggers.consultant_window_months == 18
     assert (criteria.office_age.due_years, criteria.office_age.recent_move_years) == (5, 3)
     assert criteria.office_age.just_moved_months == 12  # PLAN-V11 B3
+    office_age = criteria.office_age
+    assert (office_age.tenure_years, office_age.tenure_sign) == (8, "long_tenure")  # PLAN-V11 C1
     assert criteria.never_suggest.dissolved_deal_wait_months == 12
 
 
@@ -65,6 +69,31 @@ def test_just_moved_longer_than_recent_stops_start_up(tmp_path: Path) -> None:
     rules_dir = copy_rules(tmp_path)
     edit(rules_dir / "criteria.yaml", "just_moved_months: 12", "just_moved_months: 40")
     with pytest.raises(ValidationError, match="just_moved_months must fit inside"):
+        read_rules(rules_dir)
+
+
+def test_the_old_office_sign_has_no_search_and_claude_is_not_asked_for_it() -> None:
+    """PLAN-V11 C1: the code adds it from the office dates, like the rivals' sign has no search."""
+    rules = load_rules()
+    assert "long_tenure" not in rules.queries.discovery
+    assert "long_tenure" not in {t.id for t in rules.criteria.searchable_triggers}
+    assert "long_tenure" not in known_trigger_ids()
+    assert "long_tenure" not in default_triggers()  # a discovery run never searches for it
+    assert "- long_tenure:" not in extract_prompt(rules).text
+    assert "- new_to_australia:" in extract_prompt(rules).text
+
+
+def test_the_old_office_sign_must_be_a_main_sign(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    edit(rules_dir / "criteria.yaml", "tenure_sign: long_tenure", "tenure_sign: culture_change")
+    with pytest.raises(ValidationError, match="tenure_sign 'culture_change' must be a main"):
+        read_rules(rules_dir)
+
+
+def test_an_old_office_younger_than_due_stops_start_up(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    edit(rules_dir / "criteria.yaml", "tenure_years: 8", "tenure_years: 3")
+    with pytest.raises(ValidationError, match="tenure_years must not be below due_years"):
         read_rules(rules_dir)
 
 

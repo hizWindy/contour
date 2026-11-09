@@ -12,6 +12,7 @@ from apps.lead_finder.scoring import (
     RuleCheck,
     ScoreCheck,
     ScorePart,
+    TriggerScore,
     Verdict,
     band_of,
     judge,
@@ -600,6 +601,56 @@ def test_just_moved_follows_the_rules_months() -> None:
     )
     assert rules.criteria.office_age.just_moved_months == 12
     assert verdict_under(shorter, office_since=fact("2026-06")).result == "pass"  # 4 months > 3
+
+
+# --- An old office: 8+ years at the same address (Levi, 9 Nov, PLAN-V11 C1) ----------------------
+
+
+def old_office(result: Verdict) -> TriggerScore | None:
+    found = [score for score in result.triggers if score.trigger.id == "long_tenure"]
+    return found[0] if found else None
+
+
+def test_9_years_with_no_fitout_gets_the_old_office_sign() -> None:
+    result = verdict(triggers=[], office_since=fact("2017-06"))  # 9.4 years, no other sign
+    sign = old_office(result)
+    assert sign is not None
+    assert sign.group == "main"
+    assert sign.trigger.what_happened == (
+        "At this address since June 2017 (9 years), with no known office project since."
+    )
+    assert (sign.trigger.date, sign.trigger.source_url) == (None, NEWS)  # the move-in's source
+    assert sign.timing_points == 1  # undated: the years at the address earn their own points
+    assert result.result == "pass"  # a main sign, alone enough (TBC with Levi: or a Director)
+    assert score_check(result, "years_at_address").earned == 7
+
+
+def test_9_years_with_a_fitout_in_2022_has_no_old_office_sign() -> None:
+    result = verdict(triggers=[], office_since=fact("2017-06"), last_fitout=fact("2022"))
+    assert old_office(result) is None
+    assert result.result == "watch"  # no sign of an office change at all
+
+
+def test_6_years_has_no_old_office_sign() -> None:
+    assert old_office(verdict(triggers=[], office_since=fact("2020-06"))) is None
+
+
+def test_a_fitout_before_the_move_in_was_part_of_the_move() -> None:
+    result = verdict(triggers=[], office_since=fact("2017-06"), last_fitout=fact("2017-03"))
+    assert old_office(result) is not None
+
+
+def test_claude_never_gives_the_old_office_sign() -> None:
+    claimed = trigger("long_tenure", None)  # only the code adds it, from the dates
+    assert old_office(verdict(triggers=[claimed])) is None
+    result = verdict(triggers=[claimed], office_since=fact("2017-06"))
+    assert [score.trigger.id for score in result.triggers] == ["long_tenure"]
+    assert result.triggers[0].trigger.what_happened.startswith("At this address since June 2017")
+
+
+def test_real_news_ranks_above_the_old_office_sign() -> None:
+    result = verdict(office_since=fact("2017-06"))  # with the sample's fresh lease sign
+    assert [score.trigger.id for score in result.triggers] == ["lease_ending", "long_tenure"]
 
 
 def test_unknown_size_with_a_trigger_needs_a_check() -> None:

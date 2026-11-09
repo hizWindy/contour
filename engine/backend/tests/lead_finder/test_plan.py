@@ -230,7 +230,7 @@ def caps_of(base: Settings, **override: Any) -> RunCaps:
 def params_of(cities: int, triggers: int) -> DiscoveryParams:
     return DiscoveryParams(
         cities=["Melbourne", "Adelaide", "Perth", "Sydney"][:cities],
-        triggers=[t.id for t in RULES.criteria.triggers.every][:triggers],
+        triggers=[t.id for t in RULES.criteria.searchable_triggers][:triggers],
     )
 
 

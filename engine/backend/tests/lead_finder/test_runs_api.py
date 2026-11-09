@@ -74,6 +74,9 @@ async def test_the_run_options_have_everything_the_start_page_draws(
         "new_to_australia",
         "hot_industry_growth",
     ]
+    # The rivals' sign and the old office's (PLAN-V11 C1) are made by the code, never searched for
+    offered = {t["id"] for t in body["triggers"]}
+    assert offered.isdisjoint({"rival_growth", "long_tenure"})
     assert body["since_days"] == {"choices": [7, 30], "default": 30}
     modes = {mode["mode"]: mode for mode in body["modes"]}
     assert modes["watchlist"]["needs_approval"] is True

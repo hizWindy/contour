@@ -50,6 +50,8 @@ def build_run_options(
     ]
     triggers = rules.criteria.triggers
     defaults = LeadFinderRunParams()
+    # The rivals' sign and the old office's are made by the code, never searched for
+    searchable = {item.id for item in rules.criteria.searchable_triggers}
     trigger_options = [
         TriggerOption(
             id=item.id, label=item.label, group=group, default=item.id in defaults.triggers
@@ -60,7 +62,7 @@ def build_run_options(
             ("weak", triggers.weak),
         )
         for item in items
-        if item.id != rules.criteria.rivals.sign  # found by the rivals step, never searched for
+        if item.id in searchable
     ]
     caps = make_caps(settings)
     return RunOptions(

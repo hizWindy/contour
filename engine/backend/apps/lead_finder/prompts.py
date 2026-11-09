@@ -43,7 +43,8 @@ def extract_prompt(rules: LeadFinderRules) -> Prompt:
     """The form-filling instructions, with the trigger, booster and industry lists filled in."""
     template, version = _read("extract")
     criteria = rules.criteria
-    triggers = "\n".join(f"- {t.id}: {t.label}" for t in criteria.triggers.every)
+    # The old office's sign isn't Claude's to find: the code adds it (PLAN-V11 C1)
+    triggers = "\n".join(f"- {t.id}: {t.label}" for t in criteria.claude_triggers)
     boosters = "\n".join(f"- {b.id}: {b.label}" for b in criteria.boosters)
     industries = criteria.industries
     groups = [*industries.director_review, *industries.check_office_size]

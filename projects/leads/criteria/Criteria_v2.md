@@ -68,7 +68,7 @@ It needs at least one trigger: a sign of an office change. No trigger yet → **
 
 | Group | Triggers |
 |---|---|
-| Main | Lease ending in 1 to 3 years, or a relocation. A merger or acquisition: even when one company has an old office, a merger can still lead to a move (Levi, 9 Nov). A big new contract or project award that means a large increase in office staff (Levi, 9 Nov: "about 100 more" was too specific). Fast or planned headcount growth, like many job ads, big funding or growth news. **New to Australia:** an overseas company opening its first or a much bigger office in an Australian city (Levi, 5 Nov). **Growing with a booming industry**, like the energy transition, defence or critical minerals (Levi, 2 Nov). Both new ones are **TBC** as main signs. |
+| Main | Lease ending in 1 to 3 years, or a relocation. A merger or acquisition: even when one company has an old office, a merger can still lead to a move (Levi, 9 Nov). A big new contract or project award that means a large increase in office staff (Levi, 9 Nov: "about 100 more" was too specific). Fast or planned headcount growth, like many job ads, big funding or growth news. **New to Australia:** an overseas company opening its first or a much bigger office in an Australian city (Levi, 5 Nov). **Growing with a booming industry**, like the energy transition, defence or critical minerals (Levi, 2 Nov). Both new ones are **TBC** as main signs. **An old office:** at the same address for 8 or more years, with no known office project in that time (Levi, 9 Nov, **TBC**). |
 | Other | Merging offices. Return to office. A restructure. A **new business unit**. A **leadership change that changes direction or strategy** (moved up from Weak). A **new engineering, project or manufacturing facility with a big office part**. An **underperforming workplace**, or a major business or industry change. |
 | Weak | Culture change. Pressure on talent, client experience or productivity, like a hiring push. **A rival of a booming company** (see below). |
 
@@ -84,6 +84,8 @@ Levi's brief gives an example website for mergers and acquisitions, but the link
 **Booming industries (TBC).** Each industry is one search in `queries.yaml`, so adding one is one line. Which kinds of mining is for Levi.
 
 **Rivals of a booming company (TBC).** When a lead in a tier 1 or tier 2 industry is a Pass or a Director review, one cheap web search names up to 5 Australian rivals with an office in the same city. The next run for that city researches up to 5 of them, with the weak sign, so real news still ranks first. Whether rivals with no news of their own are wanted is for Levi.
+
+**An old office (Levi, 9 Nov, TBC).** A company 8 or more years at the same address, with no move or fitout known since it moved in, has a main sign of its own. The tool adds it from the office dates (the research, or HubSpot's move-in year), never from a search, so a company found with no news can still pass. Real news still ranks first. It is the sign of the second search Levi asked for (right size and industry, 8+ years at the same address): the "Old offices" run on Start a run. Open with Levi: the 8 years, and whether an old office alone is a Pass or a Director review.
 
 **Plans, not openings (Levi, 9 Nov).** The discovery searches look for companies that plan to move, open, expand or grow, like "plans to open Australian office" or "plans to double staff". They skip news of an office that is already open: that company has probably chosen its fitout.
 
