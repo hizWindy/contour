@@ -7,8 +7,12 @@
  * and the four boxes show at once, and the rest fades in when it arrives (a hover or focus on the
  * row has usually loaded it already). Esc or the close button closes it, and focus goes back to
  * the row.
+ *
+ * On a phone (PLAN-V10 G1) it fills the screen. Its header stays at the top with the close button
+ * while the sections scroll, and "Prep a call" is a full-width button at the bottom, where a thumb
+ * reaches it.
  */
-import { ExternalLink, Maximize2, PhoneCall } from 'lucide-react'
+import { ExternalLink, Maximize2, PhoneCall, XIcon } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { useCompany } from '@/api/hooks'
@@ -17,6 +21,7 @@ import { ErrorState } from '@/components/error-state'
 import { Button } from '@/components/ui/button'
 import {
   Sheet,
+  SheetClose,
   SheetContent,
   SheetDescription,
   SheetHeader,
@@ -24,6 +29,8 @@ import {
 } from '@/components/ui/sheet'
 import { safeHref } from '@/lib/safe-href'
 import { melbourneDate } from '@/lib/format'
+import { PHONE, useMediaQuery } from '@/lib/use-media-query'
+import { cn } from '@/lib/utils'
 import { CompanyView, CompanyViewPending, QuickBoxes } from './company-view'
 import { NotInHubSpot } from './marks'
 import { companyPlace } from './words'
@@ -137,6 +144,13 @@ export function CompanyPanel({
   const row = rows?.find((item) => item.key === shown)
   const known = company.data ?? (row ? fromRow(row) : undefined)
   const today = melbourneDate()
+  const phone = useMediaQuery(PHONE)
+  const prepCompany =
+    onPrep && company.data
+      ? () => {
+          onPrep(company.data, null)
+        }
+      : undefined
   return (
     <Sheet
       open={companyKey !== null}
@@ -146,12 +160,17 @@ export function CompanyPanel({
     >
       <SheetContent
         side="right"
+        showCloseButton={!phone}
         // Full screen on a phone; wider on a laptop, where the sections need the room.
         className="w-full gap-0 overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-2xl"
         onCloseAutoFocus={(event) => {
-          // Back to the row it came from, so J and K carry on from there.
-          const button = shown
-            ? document.querySelector<HTMLElement>(`[data-row-id="${CSS.escape(shown)}"] button`)
+          // Back to the row it came from, so J and K carry on from there. On a phone the row is a
+          // card, which is the button itself.
+          const id = shown ? CSS.escape(shown) : null
+          const button = id
+            ? document.querySelector<HTMLElement>(
+                `[data-row-id="${id}"] button, button[data-row-id="${id}"]`,
+              )
             : null
           if (button) {
             event.preventDefault()
@@ -159,7 +178,27 @@ export function CompanyPanel({
           }
         }}
       >
-        <SheetHeader className="gap-3 pr-12">
+        <SheetHeader
+          className={cn(
+            'gap-3 pr-12',
+            // On a phone the header stays put while the sections scroll under it.
+            phone &&
+              'sticky top-0 z-10 border-b bg-popover pt-[max(1rem,env(safe-area-inset-top))]',
+          )}
+        >
+          {phone ? (
+            <SheetClose asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className="absolute top-[max(0.75rem,env(safe-area-inset-top))] right-3"
+              >
+                <XIcon aria-hidden="true" />
+                <span className="sr-only">Close</span>
+              </Button>
+            </SheetClose>
+          ) : null}
           <div className="flex flex-col gap-1">
             <SheetTitle>{known?.name ?? 'Company'}</SheetTitle>
             <SheetDescription>
@@ -169,13 +208,8 @@ export function CompanyPanel({
           {known ? (
             <CompanyActions
               company={known}
-              onPrep={
-                onPrep && company.data
-                  ? () => {
-                      onPrep(company.data, null)
-                    }
-                  : undefined
-              }
+              // On a phone "Prep a call" is the big button at the bottom instead.
+              onPrep={phone ? undefined : prepCompany}
               fullPage={{ onOpen: onOpenFullPage }}
             />
           ) : null}
@@ -209,6 +243,20 @@ export function CompanyPanel({
             <CompanyViewPending boxes={known === undefined} />
           )}
         </div>
+        {phone && onPrep ? (
+          <div className="sticky bottom-0 z-10 mt-auto border-t bg-popover p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            <Button
+              type="button"
+              size="lg"
+              className="w-full"
+              disabled={!prepCompany}
+              onClick={prepCompany}
+            >
+              <PhoneCall aria-hidden="true" />
+              Prep a call
+            </Button>
+          </div>
+        ) : null}
       </SheetContent>
     </Sheet>
   )

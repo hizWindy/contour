@@ -8,10 +8,12 @@
  * - A click on a row opens the company panel. J and K move through the rows, Enter opens the
  *   active one and Esc closes the panel. A pointer resting on a row, or focus moving to it, loads
  *   the company first, so the panel opens filled.
+ * - On a phone (PLAN-V10 G1) the list is cards (`company-cards.tsx`), the filters sit behind one
+ *   Filters button, and the prep box stays pinned to the top while the list scrolls.
  */
 import type { OnChangeFn, SortingState } from '@tanstack/react-table'
 import { Building2 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router'
 import { companyQueryOptions, useCompanies, useCompanyFacets } from '@/api/hooks'
@@ -21,8 +23,11 @@ import { EmptyState } from '@/components/empty-state'
 import { ErrorState } from '@/components/error-state'
 import { PageHeader } from '@/components/page-header'
 import { Button } from '@/components/ui/button'
+import { melbourneDate } from '@/lib/format'
+import { PHONE, REDUCED_MOTION, useMediaQuery } from '@/lib/use-media-query'
 import { sparing } from '@/shell/preload'
 import { companyColumns } from './columns'
+import { CompanyCards } from './company-cards'
 import { CompanyPanel } from './company-panel'
 import { FilterBar } from './filter-bar'
 import { HubSpotSync } from './hubspot-sync'
@@ -88,6 +93,10 @@ export default function CompaniesPage() {
   const [active, setActive] = useState<string | null>(null)
   const [prep, setPrep] = useState<PrepTarget | null>(null)
   const queryClient = useQueryClient()
+  // A phone gets cards instead of the table (PLAN-V10 G1).
+  const phone = useMediaQuery(PHONE)
+  const listTop = useRef<HTMLDivElement>(null)
+  const today = melbourneDate()
 
   const go = (next: CompaniesState): void => {
     setParams(writeCompanies(next), { replace: true, preventScrollReset: true })
@@ -155,7 +164,11 @@ export default function CompaniesPage() {
         icon={Building2}
         tone="companies"
         title="Companies"
-        description="Every client and prospect in HubSpot. Open one to see what we know, or prep a call before you ring."
+        description={
+          phone
+            ? undefined
+            : 'Every client and prospect in HubSpot. Open one to see what we know, or prep a call before you ring.'
+        }
         actions={<HubSpotSync />}
       />
       <PrepBox onPick={setPrep} />
@@ -182,6 +195,29 @@ export default function CompaniesPage() {
           context="The companies couldn't be loaded."
           onRetry={() => void companies.refetch()}
         />
+      ) : phone ? (
+        <div ref={listTop} className="scroll-mt-32">
+          <CompanyCards
+            rows={page?.items}
+            total={page?.total ?? 0}
+            pageIndex={state.page}
+            pageSize={PAGE_SIZE}
+            loading={companies.isFetching}
+            leadsShown={leadsShown}
+            activeKey={activeRow}
+            today={today}
+            onOpen={openCompany}
+            onIntent={startCompany}
+            onPageChange={(pageIndex) => {
+              go({ ...state, page: pageIndex })
+              listTop.current?.scrollIntoView({
+                block: 'start',
+                behavior: window.matchMedia(REDUCED_MOTION).matches ? 'auto' : 'smooth',
+              })
+            }}
+            empty={<Empty filtered={filtered} onClear={clearFilters} />}
+          />
+        </div>
       ) : (
         <div
           onFocusCapture={(event) => {

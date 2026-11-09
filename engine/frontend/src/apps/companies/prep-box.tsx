@@ -75,12 +75,13 @@ function TodayChips({ onPick }: { onPick: (target: PrepTarget) => void }) {
   const chips = today.data ?? []
   if (chips.length === 0) return null
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="text-caption text-muted-foreground">Today</span>
-      <ul className="flex flex-wrap items-center gap-2">
+    // On a phone the chips stay on one line, which scrolls sideways.
+    <div className="flex flex-wrap items-center gap-2 max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:[scrollbar-width:none]">
+      <span className="shrink-0 text-caption text-muted-foreground">Today</span>
+      <ul className="flex flex-wrap items-center gap-2 max-sm:flex-nowrap">
         {chips.map((chip) => (
           // Keyed by id, so a new chip fades in at the start of the row and the rest stay put.
-          <li key={chip.id} className="animate-in duration-150 fade-in-0">
+          <li key={chip.id} className="shrink-0 animate-in duration-150 fade-in-0">
             <button
               type="button"
               onClick={() => {
@@ -137,11 +138,13 @@ export function PrepBox({ onPick }: { onPick: (target: PrepTarget) => void }) {
   return (
     <section
       aria-labelledby="prep-box-title"
-      className="flex flex-col gap-3 rounded-lg border bg-card p-4 max-sm:sticky max-sm:top-0 max-sm:z-20"
+      // On a phone it stays pinned to the top while the list scrolls (below the notch), slimmer,
+      // and floats over the list with the soft shadow of things that float.
+      className="flex flex-col gap-3 rounded-lg border bg-card p-4 max-sm:sticky max-sm:top-[max(0.5rem,env(safe-area-inset-top))] max-sm:z-20 max-sm:gap-2 max-sm:p-2.5 max-sm:shadow-float"
     >
       <h2
         id="prep-box-title"
-        className="flex items-center gap-2 text-ui font-semibold text-foreground"
+        className="flex items-center gap-2 text-ui font-semibold text-foreground max-sm:sr-only"
       >
         <PhoneCall aria-hidden="true" className="size-4 text-muted-foreground" />
         Prep a call
@@ -186,7 +189,8 @@ export function PrepBox({ onPick }: { onPick: (target: PrepTarget) => void }) {
             }}
             className="absolute top-full right-0 left-0 z-30 mt-2 animate-in rounded-lg border bg-popover p-1 shadow-float duration-150 fade-in-0"
           >
-            <CommandList className="max-h-96">
+            {/* On a phone the keyboard takes half the screen, so the matches fit above it. */}
+            <CommandList className="max-h-96 max-sm:max-h-[45dvh]">
               {waiting ? (
                 <p role="status" className="px-3 py-3 text-ui text-muted-foreground">
                   Looking.

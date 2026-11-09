@@ -3,10 +3,14 @@
  * B4). A search (name, website, industry), the city, the owner, the deal and, for people with the
  * Lead Finder tick, where the company came from. The search settles 300 ms after the last key, so
  * one request goes out per pause.
+ *
+ * On a phone (PLAN-V10 G1), as on Results: the search and one "Filters" button, which says how
+ * many filters are in use and opens the rest in a sheet that rises from the bottom.
  */
-import { Search, X } from 'lucide-react'
+import { Search, SlidersHorizontal, X } from 'lucide-react'
 import { useEffect, useEffectEvent, useState, type ReactNode } from 'react'
 import type { CompanyFacets, DealState } from '@/api/types'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -16,9 +20,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useDebounced } from '@/hooks/useDebounced'
 import { formatNumber, pluralise } from '@/lib/format'
+import { PHONE, useMediaQuery } from '@/lib/use-media-query'
+import { cn } from '@/lib/utils'
 import { activeFilterCount, type CompanyFilters, type Source } from './params'
 
 const ANY = 'any'
@@ -49,7 +64,7 @@ function SearchBox({ value, onSettle }: { value: string; onSettle: (value: strin
     settle(settled)
   }, [settled])
   return (
-    <div className="relative w-72 max-sm:w-full">
+    <div className="relative w-72 max-sm:w-auto max-sm:min-w-0 max-sm:flex-1">
       <Search
         aria-hidden="true"
         className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
@@ -58,7 +73,9 @@ function SearchBox({ value, onSettle }: { value: string; onSettle: (value: strin
         type="search"
         aria-label="Filter companies by name, website or industry"
         placeholder="Filter companies"
-        className="h-8 pl-8 touch:h-11 touch:pl-9"
+        // 16px text on a touch screen or a phone, so an iPhone doesn't zoom in on focus (the
+        // base rule in index.css loses to the Input's own text size).
+        className="h-8 pl-8 touch:h-11 touch:pl-9 touch:text-body max-sm:text-body"
         value={text}
         maxLength={200}
         onChange={(event) => {
@@ -75,12 +92,15 @@ function Choice({
   value,
   options,
   onChange,
+  block,
 }: {
   label: string
   anyLabel: string
   value: string | null
   options: { value: string; label: string; count?: number }[]
   onChange: (value: string | null) => void
+  /** In the phone's Filters sheet the choice fills its row. */
+  block?: boolean
 }) {
   return (
     <Select
@@ -89,7 +109,11 @@ function Choice({
         onChange(next === ANY ? null : next)
       }}
     >
-      <SelectTrigger size="sm" aria-label={label} className="min-w-36 touch:h-11">
+      <SelectTrigger
+        size="sm"
+        aria-label={label}
+        className={cn('min-w-36 touch:h-11', block && 'w-full')}
+      >
         <SelectValue placeholder={anyLabel} />
       </SelectTrigger>
       <SelectContent>
@@ -146,6 +170,40 @@ export function FilterBar({
     owners.unshift({ value: filters.owner, label: filters.owner, count: 0 })
   }
   const active = activeFilterCount(filters)
+  const phone = useMediaQuery(PHONE)
+  const counted = (
+    <p className="text-caption text-muted-foreground" aria-live="polite">
+      {total === undefined
+        ? ' '
+        : active > 0
+          ? `${pluralise(total, 'company', 'companies')} match`
+          : `${pluralise(total, 'company', 'companies')}`}
+    </p>
+  )
+  if (phone) {
+    return (
+      <div role="search" aria-label="Filter companies" className="flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <SearchBox
+            value={filters.q}
+            onSettle={(q) => {
+              onChange({ q })
+            }}
+          />
+          <PhoneFilters
+            filters={filters}
+            cities={cities}
+            owners={owners}
+            leadsShown={leadsShown}
+            onChange={onChange}
+            onClear={onClear}
+            total={total}
+          />
+        </div>
+        {counted}
+      </div>
+    )
+  }
   return (
     <div role="search" aria-label="Filter companies" className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
@@ -213,13 +271,135 @@ export function FilterBar({
         ) : null}
         {trailing ? <div className="ml-auto flex items-center gap-2">{trailing}</div> : null}
       </div>
-      <p className="text-caption text-muted-foreground" aria-live="polite">
-        {total === undefined
-          ? ' '
-          : active > 0
-            ? `${pluralise(total, 'company', 'companies')} match`
-            : `${pluralise(total, 'company', 'companies')}`}
-      </p>
+      {counted}
     </div>
+  )
+}
+
+interface Option {
+  value: string
+  label: string
+  count?: number
+}
+
+/** One filter in the phone's sheet: its name above, the choice filling the row. */
+function SheetChoice(props: Parameters<typeof Choice>[0]) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-ui font-semibold text-foreground">{props.label}</span>
+      <Choice {...props} block />
+    </div>
+  )
+}
+
+/** On a phone: one "Filters" button, and every filter in a sheet that rises from the bottom. */
+function PhoneFilters({
+  filters,
+  cities,
+  owners,
+  leadsShown,
+  onChange,
+  onClear,
+  total,
+}: {
+  filters: CompanyFilters
+  cities: Option[]
+  owners: Option[]
+  leadsShown: boolean
+  onChange: (change: Partial<CompanyFilters>) => void
+  onClear: () => void
+  total: number | undefined
+}) {
+  const [open, setOpen] = useState(false)
+  const inSheet = [filters.city, filters.owner, filters.deal, filters.source].filter(
+    (value) => value !== null,
+  ).length
+  return (
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          // The number alone would read as "Filters 2", so the name says what it counts.
+          aria-label={inSheet > 0 ? `Filters, ${String(inSheet)} in use` : 'Filters'}
+        >
+          <SlidersHorizontal aria-hidden="true" />
+          Filters
+          {inSheet > 0 ? (
+            <Badge variant="outline" aria-hidden="true">
+              {inSheet}
+            </Badge>
+          ) : null}
+        </Button>
+      </SheetTrigger>
+      <SheetContent side="bottom" className="max-h-[85dvh] gap-0 overflow-y-auto rounded-t-lg">
+        <SheetHeader>
+          <SheetTitle>Filters</SheetTitle>
+          <SheetDescription>The list changes as you choose.</SheetDescription>
+        </SheetHeader>
+        <div className="flex flex-col gap-5 px-4 pb-4">
+          <SheetChoice
+            label="City"
+            anyLabel="Any city"
+            value={filters.city}
+            options={cities}
+            onChange={(city) => {
+              onChange({ city })
+            }}
+          />
+          <SheetChoice
+            label="Owner"
+            anyLabel="Any owner"
+            value={filters.owner}
+            options={owners}
+            onChange={(owner) => {
+              onChange({ owner })
+            }}
+          />
+          <SheetChoice
+            label="Deal"
+            anyLabel="Any deal"
+            value={filters.deal}
+            options={(Object.keys(DEAL_LABELS) as DealState[]).map((deal) => ({
+              value: deal,
+              label: DEAL_LABELS[deal],
+            }))}
+            onChange={(deal) => {
+              onChange({ deal: deal as DealState | null })
+            }}
+          />
+          {leadsShown ? (
+            <SheetChoice
+              label="Where it came from"
+              anyLabel="HubSpot and leads"
+              value={filters.source}
+              options={(Object.keys(SOURCE_LABELS) as Source[]).map((source) => ({
+                value: source,
+                label: SOURCE_LABELS[source],
+              }))}
+              onChange={(source) => {
+                onChange({ source: source as Source | null })
+              }}
+            />
+          ) : null}
+        </div>
+        <SheetFooter className="sticky bottom-0 mt-auto flex-row justify-between border-t bg-popover pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <Button type="button" variant="ghost" onClick={onClear}>
+            <X aria-hidden="true" />
+            Clear all
+          </Button>
+          <Button
+            type="button"
+            onClick={() => {
+              setOpen(false)
+            }}
+          >
+            {total === undefined
+              ? 'Show the companies'
+              : `Show ${pluralise(total, 'company', 'companies')}`}
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   )
 }

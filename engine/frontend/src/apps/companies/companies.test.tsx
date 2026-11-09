@@ -11,6 +11,7 @@ import type {
   PrepOut,
 } from '@/api/types'
 import { renderWithProviders } from '@/test/render'
+import { asPhone } from '@/test/screen'
 import CompaniesPage from './index'
 
 const API = '/api/v1/companies'
@@ -593,5 +594,64 @@ describe('the HubSpot sync button', () => {
     await waitFor(() => {
       expect(listReads()).toBeGreaterThan(before)
     })
+  })
+})
+
+describe('on a phone', () => {
+  it('lists the companies as cards, and a tap opens the panel with "Prep a call" at the bottom', async () => {
+    asPhone()
+    mockApi()
+    const { user } = renderCompanies()
+    const list = await screen.findByRole('list', { name: 'Companies' })
+    expect(screen.queryByRole('table', { name: 'Companies' })).not.toBeInTheDocument()
+    const card = within(list).getByRole('button', { name: 'ABC Logistics' })
+    expect(card).toHaveAccessibleDescription(/Open deal/)
+    expect(within(card).getByText('Next lease end')).toBeInTheDocument()
+    expect(within(card).getByText('Owner: Levi')).toBeInTheDocument()
+    expect(within(list).getByRole('button', { name: 'Zed Mining' })).toHaveTextContent('No owner')
+    expect(screen.getByText('1 to 2 of 2')).toBeInTheDocument()
+
+    await user.click(card)
+    const panel = await screen.findByRole('dialog', { name: 'ABC Logistics' })
+    expect(new URLSearchParams(screen.getByLabelText('Address').textContent).get('company')).toBe(
+      '101',
+    )
+    expect(within(panel).getByRole('button', { name: 'Close' })).toBeInTheDocument()
+    const prepButtons = within(panel).getAllByRole('button', { name: 'Prep a call' })
+    expect(prepButtons).toHaveLength(1)
+    await waitFor(() => {
+      expect(within(panel).getByRole('button', { name: 'Prep a call' })).toBeEnabled()
+    })
+  })
+
+  it('puts the filters behind one Filters button that says how many are in use', async () => {
+    asPhone()
+    mockApi()
+    const { user } = renderCompanies('?city=Perth')
+    await screen.findByRole('list', { name: 'Companies' })
+    expect(screen.queryByRole('combobox', { name: 'City' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Filters, 1 in use' }))
+    const sheet = await screen.findByRole('dialog', { name: 'Filters' })
+    expect(within(sheet).getByRole('combobox', { name: 'City' })).toHaveTextContent('Perth')
+    expect(within(sheet).getByRole('combobox', { name: 'Deal' })).toBeInTheDocument()
+    await user.click(within(sheet).getByRole('button', { name: 'Show 2 companies' }))
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Filters' })).not.toBeInTheDocument()
+    })
+  })
+
+  it('gives the prep card one big Call button, with the copy buttons under it', async () => {
+    asPhone()
+    mockApi({ prepStatus: 409 })
+    const { user } = renderCompanies()
+    await screen.findByRole('list', { name: 'Companies' })
+    await user.type(screen.getByRole('combobox', { name: /Who are you calling/ }), 'jas')
+    await user.click(await screen.findByRole('option', { name: /Jason Reeds/ }))
+    const modal = await screen.findByRole('dialog', { name: /Jason Reeds/ })
+    const call = await within(modal).findByRole('link', { name: 'Call +61 8 9000 1234' })
+    expect(call).toHaveAttribute('href', 'tel:+61890001234')
+    expect(within(modal).getByRole('button', { name: 'Copy number' })).toBeInTheDocument()
+    expect(within(modal).getByRole('button', { name: 'Copy script' })).toBeInTheDocument()
   })
 })

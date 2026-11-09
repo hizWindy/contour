@@ -43,6 +43,7 @@ import {
 import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatRelative, formatTime, melbourneDate } from '@/lib/format'
+import { PHONE, useMediaQuery } from '@/lib/use-media-query'
 import { cn } from '@/lib/utils'
 import { SourcesContext } from './guide-sources'
 import { BeforeYouDial, CallSide, SalesScript, SalesScriptPending } from './prep-card'
@@ -286,6 +287,7 @@ export function PrepModal({ target, onClose, onChangeTarget, onOpenCompany }: Pr
   const start = useStartPrep()
   const me = useMe()
   const today = melbourneDate()
+  const onPhone = useMediaQuery(PHONE)
 
   const key = shown ? targetKey(shown) : ''
   const off = offFor !== null && offFor === key
@@ -530,19 +532,47 @@ export function PrepModal({ target, onClose, onChangeTarget, onOpenCompany }: Pr
             )}
           </div>
         </SourcesContext.Provider>
-        {!picking ? (
-          <div className="flex flex-wrap items-center gap-2 border-t bg-popover p-4 max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]">
+        {!picking && onPhone ? (
+          // On a phone: one big Call button, where a thumb reaches it, and the rest under it.
+          <div className="flex flex-col gap-2 border-t bg-popover p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            {phone && tel ? (
+              <Button asChild size="lg" className="w-full">
+                <a href={tel}>
+                  <PhoneCall aria-hidden="true" />
+                  Call {phone}
+                </a>
+              </Button>
+            ) : (
+              <p className="py-1 text-center text-ui text-muted-foreground">No number on record</p>
+            )}
+            <div className="flex gap-2 *:flex-1">
+              {phone ? <CopyButton text={phone} label="Copy number" /> : null}
+              <CopyButton
+                text={guide ? guideText(guide, who) : ''}
+                label="Copy script"
+                disabled={!guide}
+              />
+              {facts.data?.prep_enabled && !off ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={start.isPending || checking}
+                  onClick={() => {
+                    ask(true)
+                  }}
+                >
+                  <RefreshCw aria-hidden="true" />
+                  Refresh
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        ) : !picking ? (
+          <div className="flex flex-wrap items-center gap-2 border-t bg-popover p-4">
             {phone && tel ? (
               <>
-                <Button asChild className="sm:hidden">
-                  <a href={tel}>
-                    <PhoneCall aria-hidden="true" />
-                    Call {phone}
-                  </a>
-                </Button>
-                <span className="text-body font-semibold tabular-nums select-all max-sm:hidden">
-                  {phone}
-                </span>
+                <span className="text-body font-semibold tabular-nums select-all">{phone}</span>
                 <CopyButton text={phone} label="Copy number" variant="default" />
               </>
             ) : (
