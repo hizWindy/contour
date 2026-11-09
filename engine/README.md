@@ -21,7 +21,7 @@ Then start the website. In `engine/frontend/`, install once with `npm ci`, then 
 
 ## Use the website
 
-- **Start a run:** pick the cities, areas, signs and how far back to look. The page shows the likely and the highest cost before you start. Three kinds of run: find new leads, the HubSpot watchlist, or companies you type in.
+- **Start a run:** pick the cities, areas, signs and how far back to look. The page shows the likely and the highest cost before you start. Four kinds of run: find new leads, old offices (the HubSpot watchlist in one city, researched for how long each company has been at its address, the most staff first), the HubSpot watchlist, or companies you type in.
 - **Runs:** watch a run live, stop it, or resume one that was cut off.
 - **Results:** every lead in a table, or as a list beside a map. Filter, sort and download a CSV. Click a lead to open its card in a side panel.
 - **A lead card:** the result rule by rule, the facts with their sources, HubSpot matches and look-alikes. Watch, reject or re-check it from there, or send it to HubSpot after a preview (writing is off until the key has write access).
@@ -29,7 +29,7 @@ Then start the website. In `engine/frontend/`, install once with `npm ci`, then 
 - **Companies:** every client and prospect in HubSpot, with what we know about each in a side panel. The prep box at the top ("Who are you calling?", or press /) opens the prep card for a person, or a cold call: quick info, then a sales script with guided questions, written at once from our HubSpot copy (free). Call prep's web check (news, "still there?") is off until an Admin switches on "Call prep is on" in Admin, Settings. "Sync with HubSpot" copies everything from HubSpot now (about 10 minutes, free). People and calls appear once HubSpot's key can read contacts.
 - **Schedules (in Admin):** the Lead Finder every 2 weeks (off until you switch it on, because each run costs money) and the daily HubSpot copy. Switch one on or off, change when it runs, or start it now.
 
-The HubSpot watchlist stays switched off until Levi approves sending HubSpot company names to Claude. Then set `HUBSPOT_NAMES_TO_CLAUDE_OK=true` in `engine/.env` and restart the backend.
+The HubSpot watchlist and the old offices run stay switched off until Levi approves sending HubSpot company names to Claude. Then set `HUBSPOT_NAMES_TO_CLAUDE_OK=true` in `engine/.env` and restart the backend.
 
 ## Signal Hire (company details, staff numbers and senior people)
 

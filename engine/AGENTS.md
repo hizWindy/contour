@@ -106,7 +106,7 @@ backend/
     lead_finder/       the first project
       app.py           tells the core this project's name, endpoints and rules
       api.py           the /api/v1/lead-finder endpoints (also api_leads.py, api_runs.py, api_watchlist.py)
-      runs.py          the four kinds of run: find new leads, watchlist, typed companies, test set
+      runs.py          the four kinds of run: find new leads, watchlist, typed companies, test set. A watchlist run's focus "tenure" is the Start page's "Old offices" (PLAN-V11 C2)
       jobs.py          the scheduled runs: one for each city (`lead_finder.discovery.melbourne` ...), off by default, and the check against the limits before one starts
       goal.py          the automatic runs' goal: each aims for its share of the good leads still needed this round (100 every 2 weeks, on the Settings page)
       run_email.py     the email when a scheduled run ends (PLAN-V9 C2), to LEAD_FINDER_NOTIFY_EMAILS

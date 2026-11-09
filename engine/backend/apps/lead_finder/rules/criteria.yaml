@@ -1,10 +1,11 @@
 # Lead Finder company criteria.
 # Source: projects/leads/criteria/Criteria_v2.md (a draft until Levi confirms it, 30 Oct 2026).
-# Version 1 is Criteria_v1.md. This file is version 2, built on the branch engine-criteria-v2.
+# Version 1 is Criteria_v1.md. This file is version 2, built on the branch engine-criteria-v2, with
+# Levi's 9 Nov changes (PLAN-V11, Criteria_v2.md section 1).
 # Edit this file when Levi changes a rule. The backend checks it at start-up and won't
 # start if it's wrong. Anything not confirmed is listed under "tbc" at the bottom.
 
-label: Draft version 2, 30 Oct 2026
+label: Draft version 2, 30 Oct 2026, with Levi's 9 Nov changes
 
 cities:
   pass: [Melbourne, Adelaide, Perth]

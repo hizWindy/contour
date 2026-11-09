@@ -1,6 +1,6 @@
 # Company criteria, version 2
 
-**Draft.** Levi to confirm. Last updated 2026-11-08. The engine now follows this version. It was built following [PLAN-V2.md](../../../plan/PLAN-V2.md), and [version 1](Criteria_v1.md) is the old one. Every number here is still **TBC** until Levi confirms it, and the engine reads them from `criteria.yaml`, so a change from Levi is an edit to that file.
+**Draft.** Levi to confirm. Last updated 2026-11-10 (Levi's 9 Nov changes, [PLAN-V11](../../../plan/PLAN-V11.md)). The engine now follows this version. It was built following [PLAN-V2.md](../../../plan/PLAN-V2.md), and [version 1](Criteria_v1.md) is the old one. Every number here is still **TBC** until Levi confirms it, and the engine reads them from `criteria.yaml`, so a change from Levi is an edit to that file.
 
 These rules decide which companies the research agent looks for, **before anyone calls them**. Everything new in this version is **TBC** (to be confirmed) until Levi checks it.
 
@@ -19,7 +19,7 @@ A company needs two things: it **fits** (section 2), and it **needs an office ch
 
 | # | Rule | Version 1 | Version 2 (all TBC) |
 |---|---|---|---|
-| 1 | Staff | 100 to 600 staff in that city, used when the office size isn't known | A hint, not a Drop: 75+ office staff (Profile) or 100+ in one office (brief). More than one office is a plus. A small company that will soon grow into range counts (Levi's email). |
+| 1 | Staff | 100 to 600 staff in that city, used when the office size isn't known | A hint, not a Drop: 75+ office staff (Profile) or 100+ in one office (brief), and 50+ since 9 Nov (below). More than one office is a plus. A small company that will soon grow into range counts (Levi's email). |
 | 2 | Industry | Site-heavy industries get a "check office size" flag | Judge the office, not the industry. A miner's corporate office counts. Industry tiers add points. |
 | 3 | Triggers | 4 main, 3 other, 2 weak | New: a new facility with a big office part, a new business unit, an underperforming workplace. A leadership change counts only when strategy changes. |
 | 4 | Timing | Within 3 years | Also: a consultant appointed within 18 months |
@@ -30,6 +30,18 @@ A company needs two things: it **fits** (section 2), and it **needs an office ch
 **No change:** the size range, Sydney (still a Director decision), the local team, healthy, the Director sectors, and never-suggest.
 
 An earlier draft of version 2 said Sydney Passes and the tenure is 7 to 8 years. Both came from Gemini's meeting summary. All three written sources say Sydney is case by case, and the brief says 5 to 8 years, so both are corrected here.
+
+### What changed on 9 and 10 Nov
+
+Levi said on 9 Nov that the tool finds too few leads, and some too late: Budget Direct, in his Adelaide run of 6 Nov, had already set up its new office. He gave the green light for these changes (as Al-khair reports). Built on 10 Nov ([PLAN-V11](../../../plan/PLAN-V11.md)). All **TBC**.
+
+| # | Rule | Before 9 Nov | Since 9 Nov |
+|---|---|---|---|
+| 1 | Staff | 75+ fits, 50 to 74 is a Watch. The HubSpot watchlist starts at 100. | 50+ fits, and the watchlist starts at 50 (section 2). |
+| 2 | Two signs | "A merger, where one company has an old office". "A big contract, needing about 100 more office staff". | "A merger or acquisition". "A big contract that means a large increase in office staff" (section 4). |
+| 3 | Too late | A move or fitout in the last 3 years lowers the rank. Some searches found offices already opened. | Also, one in the last 12 months makes a lead a Watch, even with a sign. The searches look for plans, not openings (section 4). |
+| 4 | Years at the address | 5 of Timing's 15 points | 7 points, and 2 for no recent move (was 4). The lead card says the years first (section 6). |
+| 5 | Old office | No such sign | A main sign: 8+ years at the same address with no known office project since. Its own run: "Old offices" on Start a run (section 4). |
 
 ## 2. Does it fit?
 
@@ -184,7 +196,7 @@ Levi sent 23 Gold customers from HubSpot on 29 Oct, all Active. They let us chec
 
 ### What the 5 Nov size rule says about the 52 leads we have (8 Nov)
 
-Levi asked for 75+ staff, or about 50 if growing (5 Nov). Before this, a small staff count was only a flag, and a flag never stopped a Pass. That's why a company of 28 staff showed as a Pass. `uv run lead-finder rejudge` (free, read only) on the 52 dev leads:
+Levi asked for 75+ staff, or about 50 if growing (5 Nov). Before this, a small staff count was only a flag, and a flag never stopped a Pass. That's why a company of 28 staff showed as a Pass. `uv run lead-finder rejudge` (free, read only) on the 52 dev leads (since 9 Nov, 50+ fits: the PLAN-V11 Log has the re-judge for each change):
 
 | Company | Staff (worked out) | Was | Now |
 |---|---|---|---|
@@ -223,11 +235,17 @@ The engine judged the 16 leads saved in the dev database again with the version 
 
 ## 12. Questions for Levi
 
-1. Is the Target Customer Profile approved: the industry tiers, the 75+ staff hint and the 100-point score? Should defence move to Tier 1, since 5 of the 23 Gold customers are defence or secure sites?
+1. Is the Target Customer Profile approved: the industry tiers and the 100-point score? (Its 75+ staff hint is now 50+, from Levi on 9 Nov.) Should defence move to Tier 1, since 5 of the 23 Gold customers are defence or secure sites?
 2. Can you fill in the **Importance** column in the brief? It sets how much each check counts.
 3. Should the ranked list be monthly, as the brief says, or weekly?
 4. May the tool check and fix HubSpot contacts (job 2)?
 5. Can you send the missing items: the ideal project overview, strategy documents (the Profile mentions a Communication Framework draft), and the example website for mergers and acquisitions? Is the list of 23 Gold customers the full client list?
+
+**Open from 9 Nov (PLAN-V11):**
+- Is a 50-staff company a lead when it isn't growing? 50 staff is about 500 m², half the 1,000 m² minimum.
+- The 12 months for "just moved", the Timing points (7 for the years at the address, 2 for no recent move), and the 8 years for an old office.
+- Is an old office alone a Pass, as now, or a Director review?
+- May the tool send HubSpot company names to Claude? The watchlist run and the Old offices run wait for it.
 
 **Still open:**
 - Using a headcount tool for company numbers only.

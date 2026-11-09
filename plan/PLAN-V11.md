@@ -3,8 +3,8 @@
 This plan tunes the Lead Finder to what Levi asked for on 9 Nov. Today it finds too few leads, and it finds some too late: Budget Direct in his Adelaide run of Friday 6 Nov had already set up its new office. We loosen four rules and add a search for companies in an old office. Everything else stays the same.
 
 - **Built by:** Al-khair Pama. **Signed off by:** Al-khair for the code. Levi gave the green light for these changes after the 9 Nov meeting (as Al-khair reports). He confirms what is marked **TBC** (to be confirmed).
-- **Last updated:** 2026-11-10 (B1 to B5, C1 and C2 done; C3 built, waiting for Al-khair's look).
-- **Progress:** 7 of 14 steps done.
+- **Last updated:** 2026-11-10 (B1 to B5, C1, C2 and D1 done; C3 built, waiting for Al-khair's look).
+- **Progress:** 8 of 14 steps done. Left: A1 (Levi's run of 6 Nov, on the live site), B6 and C4 (paid, on Al-khair's word; C4 also waits on Levi's OK on HubSpot names), C3 (Al-khair's look), D2 and D3.
 - **Sources:** the Monday meeting of 9 Nov (`minutes of meeting/Monday Meeting - 2026_11_09 05_00 PST - Notes by Gemini.pdf`, the transcript from 00:12:27 to 00:27:55), [Criteria_v2.md](../projects/leads/criteria/Criteria_v2.md), and the rules files in `engine/backend/apps/lead_finder/rules/`.
 - **Comes after:** [PLAN-V10.md](PLAN-V10.md) (the Companies page and call prep). This plan touches only the Lead Finder.
 
@@ -141,7 +141,7 @@ This plan tunes the Lead Finder to what Levi asked for on 9 Nov. Today it finds 
 
 ## Part D: Finish
 
-- [ ] **D1. Docs.**
+- [x] **D1. Docs.** Done 2026-11-10, the D1 commit (see the Log).
   - `Criteria_v2.md`: section 1 lists what changed on 9 and 10 Nov. Update the label in `criteria.yaml` to match.
   - Check [LEADS.md](../projects/leads/LEADS.md) for old numbers (75 staff, 100 more staff).
   - **Done when:** no doc says 75+ staff fits, or "about 100 more office staff".
@@ -184,6 +184,9 @@ This plan tunes the Lead Finder to what Levi asked for on 9 Nov. Today it finds 
 ## Log
 
 Newest first.
+
+- 2026-11-10: **D1** (rules `325ded8a6654`): `Criteria_v2.md` section 1 has "What changed on 9 and 10 Nov" (a table of the five changes, all TBC), section 12 lists the questions they leave for Levi, and its 75+ mentions now say 50+ since 9 Nov. The rules' label reads "Draft version 2, 30 Oct 2026, with Levi's 9 Nov changes". `LEADS.md` had none of the old numbers. The engine README and AGENTS name the new run. Left on purpose: `Criteria_v1.md` (version 1), the 24 Oct question list (`LEVI.md`), the sent email draft (`questions/EMAIL.md`), and the change table's "Before 9 Nov" column, which quotes the old wording.
+  - **Final re-judge** against the A1 baseline: Pass 1, Director review 3 (+1), Watch 26 (-1), Drop 22. The one move is Budget Direct (Watch to Director review, by B2). B3 and C1 can't show on the saved cards: only 1 of 52 has an office date.
 
 - 2026-11-10: **C3 built** (website): Start a run's second choice is "Old offices (lease and tenure)". It picks the city (the watchlist's cities, from the run options), the industries (optional: that city's HubSpot industries with their counts, from the free preview) and how many companies (10 by default, the most staff first). Under the choices: the free count, like "333 watchlist companies in Adelaide. Counting them is free: nothing goes to Claude." The cost card shows the estimate as for any run, and Start asks once more ("Start the old offices run?", with the companies, the city, that the names go to Claude, and the likely and highest cost) before it spends. Until Levi's OK on HubSpot names, Start stays off and says why, like the watchlist run. The Results page's pick list moved to `components/pick-list.tsx`, so both pages share it. Website tests: Start 18 (5 new), Results 42. On the live preview: Adelaide has 333 watchlist companies, most in IT and Services (25), Construction (21) and Individual & Family Services (18). **Left for C3:** Al-khair looks at it in the browser.
 
