@@ -43,6 +43,7 @@ export const OPTIONS: RunOptions = {
     { mode: 'company', title: 'Research companies by name', needs_approval: false, approved: true },
     { mode: 'testset', title: 'Run the test set', needs_approval: false, approved: true },
   ],
+  watchlist_cities: ['Melbourne', 'Adelaide', 'Perth'],
   companies_limit: { min: 1, max: 25 },
   caps: {
     run_cap_usd: '20.00',
@@ -56,7 +57,14 @@ export const OPTIONS: RunOptions = {
     triggers: ['lease_ending'],
     since_days: 30,
     caps: { run_cap_usd: null, max_companies: null },
-    watchlist: { include_unlikely: true, include_director: false, limit: null },
+    watchlist: {
+      include_unlikely: true,
+      include_director: false,
+      limit: null,
+      focus: 'growth',
+      city: null,
+      industries: [],
+    },
     companies: [],
     recheck: false,
   },

@@ -1,6 +1,37 @@
 import { describe, expect, it } from 'vitest'
-import { bodyOf, errorFor, estimateErrors, initialForm } from './form'
+import { bodyOf, errorFor, estimateErrors, initialForm, serverMode, tenureSummary } from './form'
 import { OPTIONS } from './test-options'
+
+describe('the old offices run (PLAN-V11 C3)', () => {
+  it('is a watchlist run on the server, in the first watchlist city, 10 at a time', () => {
+    const form = { ...initialForm(OPTIONS), mode: 'tenure' as const }
+    expect(form.tenureLimit).toBe('10')
+    expect(form.tenureCity).toBe('Melbourne')
+    expect(serverMode('tenure')).toBe('watchlist')
+    expect(serverMode('discovery')).toBe('discovery')
+    expect(bodyOf(form)).toEqual({
+      app: 'lead_finder',
+      mode: 'watchlist',
+      params: { watchlist: { focus: 'tenure', city: 'Melbourne', limit: 10 } },
+    })
+  })
+
+  it('leaves the limit out when "how many" is empty, and sends picked industries', () => {
+    const form = {
+      ...initialForm(OPTIONS),
+      mode: 'tenure' as const,
+      tenureCity: 'Perth',
+      tenureLimit: ' ',
+      tenureIndustries: ['Construction'],
+    }
+    expect(bodyOf(form).params).toEqual({
+      watchlist: { focus: 'tenure', city: 'Perth', industries: ['Construction'] },
+    })
+    expect(tenureSummary(form, 1)).toBe(
+      'It researches 1 company in Perth in Construction, the most staff first, and sends their names to Claude.',
+    )
+  })
+})
 
 describe('the Start form', () => {
   it('starts from the defaults the backend gives', () => {

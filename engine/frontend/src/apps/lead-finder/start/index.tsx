@@ -16,6 +16,16 @@ import { fieldErrorMap, newIdempotencyKey, toApiProblem } from '@/api/client'
 import { useCreateRun, useEstimateRun, useRunOptions } from '@/api/hooks'
 import type { RunCreate, RunOptions } from '@/api/types'
 import { CityMap } from '@/components/city-map'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { PendingForm } from '@/components/skeletons'
 import { ErrorState } from '@/components/error-state'
 import { Money } from '@/components/money'
@@ -43,16 +53,24 @@ import {
   errorFor,
   estimateErrors,
   initialForm,
+  serverMode,
+  tenureSummary,
   type Area,
   type CompanyRow,
   type Mode,
   type StartForm,
 } from './form'
+import { TenureChoices } from './tenure'
 
 const MODE_WORDS: Record<Mode, { title: string; about: string }> = {
   discovery: {
     title: 'Find new leads',
     about: 'Search the news for companies with a sign of an office change.',
+  },
+  tenure: {
+    title: 'Old offices (lease and tenure)',
+    about:
+      'Research HubSpot companies in one city for how long they have been at their address. 8 or more years with no office project since is a sign of its own.',
   },
   watchlist: {
     title: 'HubSpot watchlist',
@@ -104,8 +122,10 @@ function StartFormView({ options }: { options: RunOptions }) {
   const result = estimate.data
   const fromServer = createRun.error ? fieldErrorMap(toApiProblem(createRun.error)) : {}
   const errors = { ...estimateErrors(result), ...fromServer }
-  const mode = options.modes.find((item) => item.mode === form.mode)
+  const mode = options.modes.find((item) => item.mode === serverMode(form.mode))
   const settling = settledKey !== bodyKey || estimate.isFetching
+  // An old offices run asks once more before it spends (PLAN-V11 C3).
+  const [confirming, setConfirming] = useState(false)
 
   const reason: string | null =
     mode && mode.needs_approval && !mode.approved
@@ -121,6 +141,14 @@ function StartFormView({ options }: { options: RunOptions }) {
   // Under 1024px the cost card is far below the form (three screens on a phone), so the money and
   // the Start button follow you in a bar at the bottom of the screen instead.
   const barAtBottom = useMediaQuery(UNDER_LAPTOP)
+
+  const askThenStart = (): void => {
+    if (form.mode === 'tenure') {
+      setConfirming(true)
+      return
+    }
+    start()
+  }
 
   const start = (): void => {
     if (lastStart.current?.body !== bodyKey) {
@@ -255,6 +283,12 @@ function StartFormView({ options }: { options: RunOptions }) {
               </Field>
             </Section>
           </>
+        ) : null}
+
+        {form.mode === 'tenure' ? (
+          <Section title="Which old offices">
+            <TenureChoices options={options} form={form} update={update} errors={errors} />
+          </Section>
         ) : null}
 
         {form.mode === 'watchlist' ? (
@@ -485,7 +519,7 @@ function StartFormView({ options }: { options: RunOptions }) {
                 type="button"
                 size="lg"
                 disabled={reason !== null || settling || createRun.isPending}
-                onClick={start}
+                onClick={askThenStart}
               >
                 <Play aria-hidden="true" />
                 {createRun.isPending ? 'Starting.' : 'Start run'}
@@ -526,13 +560,44 @@ function StartFormView({ options }: { options: RunOptions }) {
             type="button"
             size="lg"
             disabled={reason !== null || settling || createRun.isPending}
-            onClick={start}
+            onClick={askThenStart}
           >
             <Play aria-hidden="true" />
             {createRun.isPending ? 'Starting.' : 'Start run'}
           </Button>
         </div>
       ) : null}
+
+      <AlertDialog open={confirming} onOpenChange={setConfirming}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Start the old offices run?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {result?.valid ? (
+                <>
+                  {tenureSummary(form, result.companies_expected)} It costs about{' '}
+                  {formatMoney(result.cost_usd_low)}, and at most{' '}
+                  {formatMoney(result.cost_usd_high)}. It stops at the run limit of{' '}
+                  {formatMoney(result.cap_usd)}.
+                </>
+              ) : (
+                'Working out what it would cost.'
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!result?.valid}
+              onClick={() => {
+                start()
+              }}
+            >
+              Start run
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

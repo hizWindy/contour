@@ -4,8 +4,15 @@
  */
 import type { RunCreate, RunEstimate, RunOptions } from '@/api/types'
 
-export type Mode = 'discovery' | 'watchlist' | 'company'
+/**
+ * What a person picks. `tenure` is "Old offices (lease and tenure)" (PLAN-V11 C3): a watchlist
+ * run that asks the office questions first, in one city, the most staff first.
+ */
+export type Mode = 'discovery' | 'tenure' | 'watchlist' | 'company'
 export type Area = 'cbd' | 'inner' | 'all'
+
+/** How many companies an old offices run researches unless the person says otherwise. */
+export const TENURE_LIMIT = '10'
 
 export interface CompanyRow {
   name: string
@@ -23,6 +30,9 @@ export interface StartForm {
   includeUnlikely: boolean
   includeDirector: boolean
   watchLimit: string
+  tenureCity: string
+  tenureIndustries: string[]
+  tenureLimit: string
   runCap: string
   maxCompanies: string
 }
@@ -41,9 +51,17 @@ export function initialForm(options: RunOptions): StartForm {
     includeUnlikely: defaults.watchlist.include_unlikely,
     includeDirector: defaults.watchlist.include_director,
     watchLimit: '',
+    tenureCity: options.watchlist_cities?.[0] ?? '',
+    tenureIndustries: [],
+    tenureLimit: TENURE_LIMIT,
     runCap: '',
     maxCompanies: '',
   }
+}
+
+/** The run's mode on the server: an old offices run is a watchlist run (PLAN-V11 C2). */
+export function serverMode(mode: Mode): Exclude<Mode, 'tenure'> {
+  return mode === 'tenure' ? 'watchlist' : mode
 }
 
 function clean(text: string): string | null {
@@ -75,6 +93,14 @@ export function bodyOf(form: StartForm): RunCreate {
       include_director: form.includeDirector,
       ...(limit !== null ? { limit: Number(limit) } : {}),
     }
+  } else if (form.mode === 'tenure') {
+    const limit = clean(form.tenureLimit)
+    params.watchlist = {
+      focus: 'tenure',
+      ...(clean(form.tenureCity) !== null ? { city: form.tenureCity } : {}),
+      ...(form.tenureIndustries.length > 0 ? { industries: form.tenureIndustries } : {}),
+      ...(limit !== null ? { limit: Number(limit) } : {}),
+    }
   } else {
     params.companies = form.companies
       .filter((row) => clean(row.name) !== null)
@@ -84,7 +110,15 @@ export function bodyOf(form: StartForm): RunCreate {
         ...(clean(row.website) !== null ? { website: row.website.trim() } : {}),
       }))
   }
-  return { app: 'lead_finder', mode: form.mode, params }
+  return { app: 'lead_finder', mode: serverMode(form.mode), params }
+}
+
+/** The old offices confirm's words: what the run will research, and who sees the names. */
+export function tenureSummary(form: StartForm, companies: number): string {
+  const many = `${String(companies)} ${companies === 1 ? 'company' : 'companies'}`
+  const industries =
+    form.tenureIndustries.length > 0 ? ` in ${form.tenureIndustries.join(', ')}` : ''
+  return `It researches ${many} in ${form.tenureCity}${industries}, the most staff first, and sends their names to Claude.`
 }
 
 /** The errors of an estimate by field (`cities`, `companies.0.name`), like `fieldErrorMap`. */

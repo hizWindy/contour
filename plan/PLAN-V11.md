@@ -3,8 +3,8 @@
 This plan tunes the Lead Finder to what Levi asked for on 9 Nov. Today it finds too few leads, and it finds some too late: Budget Direct in his Adelaide run of Friday 6 Nov had already set up its new office. We loosen four rules and add a search for companies in an old office. Everything else stays the same.
 
 - **Built by:** Al-khair Pama. **Signed off by:** Al-khair for the code. Levi gave the green light for these changes after the 9 Nov meeting (as Al-khair reports). He confirms what is marked **TBC** (to be confirmed).
-- **Last updated:** 2026-11-10 (B1 to B5 done, C1 built).
-- **Progress:** 5 of 14 steps done.
+- **Last updated:** 2026-11-10 (B1 to B5, C1 and C2 done; C3 built, waiting for Al-khair's look).
+- **Progress:** 7 of 14 steps done.
 - **Sources:** the Monday meeting of 9 Nov (`minutes of meeting/Monday Meeting - 2026_11_09 05_00 PST - Notes by Gemini.pdf`, the transcript from 00:12:27 to 00:27:55), [Criteria_v2.md](../projects/leads/criteria/Criteria_v2.md), and the rules files in `engine/backend/apps/lead_finder/rules/`.
 - **Comes after:** [PLAN-V10.md](PLAN-V10.md) (the Companies page and call prep). This plan touches only the Lead Finder.
 
@@ -113,7 +113,7 @@ This plan tunes the Lead Finder to what Levi asked for on 9 Nov. Today it finds 
 
 ## Part C: The lease and tenure search (Levi, 9 Nov)
 
-- [ ] **C1. A new sign: an old office.**
+- [x] **C1. A new sign: an old office.** Done 2026-11-10, `f11d17e`.
   - Id `long_tenure`, a main sign, labelled "At the same address for 8 or more years, with no known office project in that time".
   - Code adds it in `judge()` from the facts, not Claude. It applies when the company has been at its address for `office_age.tenure_years` (8) or more, and no move or fitout is known since then.
   - It has no discovery search. Like the rivals' sign, it is left out of the start-up check for searches, and Claude isn't asked to find it.
@@ -121,7 +121,7 @@ This plan tunes the Lead Finder to what Levi asked for on 9 Nov. Today it finds 
   - **TBC with Levi:** 8 years, and whether an old office alone is a Pass or a Director review.
   - **Files:** `criteria.yaml`, `rules.py`, `scoring.py`, `Criteria_v2.md` section 4, tests.
   - **Done when:** tests prove that 9 years with no fitout gets the sign, 9 years with a fitout in 2022 doesn't, and 6 years doesn't.
-- [ ] **C2. A lease and tenure run.**
+- [x] **C2. A lease and tenure run.** Done 2026-11-10, `dbae937` and the C3 commit (the cost on the start form).
   - Reuse the watchlist run (`mode="watchlist"` in `runs.py`). Its list is already right: HubSpot companies in our cities and staff range, with no open deal.
   - Add a `focus` choice: `growth` (today's research) or `tenure`. Tenure asks the office questions first: the current address, since when, and any move or fitout since. For example: "{company} {city} office address", "{company} moved office {city}", "{company} office fitout".
   - Choices: the city, the industries (optional), and how many companies (the most staff first).
@@ -184,6 +184,8 @@ This plan tunes the Lead Finder to what Levi asked for on 9 Nov. Today it finds 
 ## Log
 
 Newest first.
+
+- 2026-11-10: **C3 built** (website): Start a run's second choice is "Old offices (lease and tenure)". It picks the city (the watchlist's cities, from the run options), the industries (optional: that city's HubSpot industries with their counts, from the free preview) and how many companies (10 by default, the most staff first). Under the choices: the free count, like "333 watchlist companies in Adelaide. Counting them is free: nothing goes to Claude." The cost card shows the estimate as for any run, and Start asks once more ("Start the old offices run?", with the companies, the city, that the names go to Claude, and the likely and highest cost) before it spends. Until Levi's OK on HubSpot names, Start stays off and says why, like the watchlist run. The Results page's pick list moved to `components/pick-list.tsx`, so both pages share it. Website tests: Start 18 (5 new), Results 42. On the live preview: Adelaide has 333 watchlist companies, most in IT and Services (25), Construction (21) and Individual & Family Services (18). **Left for C3:** Al-khair looks at it in the browser.
 
 - 2026-11-10: **C2 backend**: the watchlist run takes `focus` (`growth`, today's research, or `tenure`), `city` (one of the watchlist's cities: Melbourne, Adelaide, Perth) and `industries` (HubSpot's names, matched like the rules). A tenure run asks the new `tenure` angle in place of `property` ("{company} {city} office address", "{company} moved office {city}", "{company} office fitout"), so a company costs the same as a growth research, and a missing move-in date is one of its gaps. It takes the most staff first, up to `limit`. The free preview (`GET /watchlist`) takes the same `city` and `industry`, and lists the industries in the city with their counts; the run options list the watchlist's cities. Tested with a fake Claude: a Perth tenure run of 2 researches Adenco and Aspect Engineering Solutions (the two biggest), asks the tenure angle and not property, and both get the old office's sign and Pass. Lead Finder tests: 1,516 passed. It still needs Levi's OK on HubSpot names to run for real (`hubspot_names_to_claude_ok`, off).
 

@@ -177,3 +177,141 @@ describe('the Start page', () => {
     expect(seen.starts[0]?.headers.get('idempotency-key')).toMatch(/^[0-9a-f-]{36}$/)
   })
 })
+
+describe('Old offices (lease and tenure), PLAN-V11 C3', () => {
+  const INDUSTRIES = [
+    { value: 'Information Technology & Services', count: 25 },
+    { value: 'Construction', count: 21 },
+  ]
+
+  /** Like `mockApi`, with Levi's OK on and the free watchlist preview answering. */
+  function mockTenureApi() {
+    const seen = {
+      estimates: [] as { mode: string; params: Record<string, unknown> }[],
+      starts: [] as { mode: string; params: Record<string, unknown> }[],
+      previews: [] as URLSearchParams[],
+    }
+    const options = {
+      ...OPTIONS,
+      modes: OPTIONS.modes.map((mode) =>
+        mode.mode === 'watchlist' ? { ...mode, approved: true } : mode,
+      ),
+    }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (request: Request) => {
+        const url = new URL(request.url)
+        if (url.pathname === '/api/v1/lead-finder/run-options') {
+          return Response.json(options)
+        }
+        if (url.pathname === '/api/v1/lead-finder/watchlist') {
+          seen.previews.push(url.searchParams)
+          const picked = url.searchParams.getAll('industry').length > 0
+          return Response.json({
+            total: picked ? 25 : 333,
+            items: [],
+            director: [],
+            staff_unknown: [],
+            counts: {},
+            industries: INDUSTRIES,
+          })
+        }
+        if (url.pathname === '/api/v1/runs/estimate') {
+          seen.estimates.push((await request.json()) as never)
+          return Response.json(estimate())
+        }
+        if (url.pathname === '/api/v1/runs' && request.method === 'POST') {
+          seen.starts.push((await request.json()) as never)
+          return Response.json({ id: RUN_ID, status: 'queued' }, { status: 201 })
+        }
+        return Response.json({ title: 'Not found', status: 404 }, { status: 404 })
+      }),
+    )
+    return seen
+  }
+
+  it('is the second choice, next to Find new leads', async () => {
+    mockTenureApi()
+    renderStart()
+    const kinds = await screen.findByRole('radiogroup', { name: 'Kind of run' })
+    expect(
+      within(kinds)
+        .getAllByRole('radio')
+        .map((radio) => radio.textContent),
+    ).toEqual([
+      'Find new leads',
+      'Old offices (lease and tenure)',
+      'HubSpot watchlist',
+      'Companies by name',
+    ])
+  })
+
+  it('picks a city and industries, with the free count of its watchlist companies', async () => {
+    const seen = mockTenureApi()
+    const { user } = renderStart()
+    await user.click(await screen.findByRole('radio', { name: 'Old offices (lease and tenure)' }))
+
+    const city = await screen.findByRole('radiogroup', { name: 'City' })
+    expect(within(city).getByRole('radio', { name: 'Melbourne' })).toBeChecked()
+    await user.click(within(city).getByRole('radio', { name: 'Adelaide' }))
+    expect(
+      await screen.findByText(
+        '333 watchlist companies in Adelaide. Counting them is free: nothing goes to Claude.',
+      ),
+    ).toBeInTheDocument()
+    expect(seen.previews.some((query) => query.get('city') === 'Adelaide')).toBe(true)
+
+    await user.click(screen.getByRole('button', { name: /Industries/ }))
+    await user.click(await screen.findByRole('option', { name: /Information Technology/ }))
+    expect(
+      await screen.findByText(
+        '25 watchlist companies in Adelaide in these industries. Counting them is free: nothing goes to Claude.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByLabelText('How many companies')).toHaveValue('10')
+    await waitFor(() => {
+      expect(seen.estimates.at(-1)).toEqual({
+        app: 'lead_finder',
+        mode: 'watchlist',
+        params: {
+          watchlist: {
+            focus: 'tenure',
+            city: 'Adelaide',
+            industries: ['Information Technology & Services'],
+            limit: 10,
+          },
+        },
+      })
+    })
+  })
+
+  it('asks before it spends, then starts the watchlist run that asks the office questions', async () => {
+    const seen = mockTenureApi()
+    const { user } = renderStart()
+    await user.click(await screen.findByRole('radio', { name: 'Old offices (lease and tenure)' }))
+    await screen.findByText(/333 watchlist companies in Melbourne/)
+    const start = screen.getByRole('button', { name: 'Start run' })
+    await waitFor(() => {
+      expect(start).toBeEnabled()
+    })
+
+    await user.click(start)
+    const confirm = await screen.findByRole('alertdialog', { name: 'Start the old offices run?' })
+    expect(
+      within(confirm).getByText(
+        'It researches 10 companies in Melbourne, the most staff first, and sends their names to Claude. It costs about US$4.40, and at most US$25.60. It stops at the run limit of US$20.00.',
+      ),
+    ).toBeInTheDocument()
+    expect(seen.starts).toHaveLength(0) // nothing is spent until the second yes
+
+    await user.click(within(confirm).getByRole('button', { name: 'Start run' }))
+    expect(await screen.findByText('The run page')).toBeInTheDocument()
+    expect(seen.starts).toEqual([
+      {
+        app: 'lead_finder',
+        mode: 'watchlist',
+        params: { watchlist: { focus: 'tenure', city: 'Melbourne', limit: 10 } },
+      },
+    ])
+  })
+})
