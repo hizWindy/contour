@@ -3,8 +3,8 @@
 This plan tunes the Lead Finder to what Levi asked for on 9 Nov. Today it finds too few leads, and it finds some too late: Budget Direct in his Adelaide run of Friday 6 Nov had already set up its new office. We loosen four rules and add a search for companies in an old office. Everything else stays the same.
 
 - **Built by:** Al-khair Pama. **Signed off by:** Al-khair for the code. Levi gave the green light for these changes after the 9 Nov meeting (as Al-khair reports). He confirms what is marked **TBC** (to be confirmed).
-- **Last updated:** 2026-11-10 (B1 done).
-- **Progress:** 1 of 14 steps done.
+- **Last updated:** 2026-11-10 (B1 to B3 done).
+- **Progress:** 3 of 14 steps done.
 - **Sources:** the Monday meeting of 9 Nov (`minutes of meeting/Monday Meeting - 2026_11_09 05_00 PST - Notes by Gemini.pdf`, the transcript from 00:12:27 to 00:27:55), [Criteria_v2.md](../projects/leads/criteria/Criteria_v2.md), and the rules files in `engine/backend/apps/lead_finder/rules/`.
 - **Comes after:** [PLAN-V10.md](PLAN-V10.md) (the Companies page and call prep). This plan touches only the Lead Finder.
 
@@ -76,7 +76,7 @@ This plan tunes the Lead Finder to what Levi asked for on 9 Nov. Today it finds 
   - Update the signs table in `Criteria_v2.md` section 4.
   - **Files:** `criteria.yaml`, `Criteria_v2.md`, tests that quote the old labels.
   - **Done when:** the tests pass, the Rules page shows the new wording, and the re-judge counts are in the Log.
-- [ ] **B2. 50+ staff fits.**
+- [x] **B2. 50+ staff fits.** Done 2026-11-10, `358ecc7`.
   - In `size`: `staff_hint_min` 75 → 50, and `staff_min` 100 → 50 (the watchlist starts here). `staff_floor` stays 50.
   - The "50 to 74 staff is a Watch, check the office size" band goes away, because the hint and the floor are now both 50. The rules check still holds: floor ≤ hint ≤ minimum.
   - No change: a known office under 1,000 m² is still judged on its size (800 to 1,000 m² goes to a Director). Under 50 staff is still a Drop unless the company is growing.
@@ -185,6 +185,8 @@ This plan tunes the Lead Finder to what Levi asked for on 9 Nov. Today it finds 
 
 Newest first.
 
+- 2026-11-10: **B3** (rules `c1b824d8783c`): `office_age.just_moved_months: 12`. In `judge()`, a move or fitout in the last 12 months makes a Pass or a Director review a Watch, with the check "Just moved: Moved in June 2026, so probably not in the market yet" (or "Fitted out in ..."). A Drop stays a Drop, and a date still to come doesn't count. The lead's "why" sentence gives that reason first. The extract prompt (and the form's description) now says an office the news says has already opened is the move-in. The Rules page says it too.
+  - **Re-judge:** no change (Pass 1, Director review 3, Watch 26, Drop 22). Only 1 of the 52 saved cards has a move-in or fitout date at all (Euroz Hartleys, 2023, more than 12 months ago), as the plan's risks expected. Budget Direct's card has none, because the old prompt didn't record its office opening. A new research will (B6).
 - 2026-11-10: **B2** (rules `ef4ca5b8909b`): `staff_min` and `staff_hint_min` are 50, like `staff_floor`, so 50+ staff fits and the Watch band for 50 to 74 staff is empty. The code keeps the band for when the rules open it again (tests use a copy of the rules with the 75 hint). The Rules page leaves the band out when the hint and the floor are equal, and now names the watchlist's minimum.
   - **Re-judge:** Pass 1, Director review 3 (+1), Watch 26 (-1), Drop 22. Budget Direct: Watch 29 of 77 to Director review 45 of 77 (50 staff in Adelaide, insurance is a Director industry). JOEST Australia (Watch 5 to 21 of 77) and Cuttable (Watch 0 to 16 of 70) stay a Watch, with no sign, but now earn the size points. Budget Direct's card has no move-in date: the old prompt didn't record "opened an Adelaide CBD office" as one, so B3 can't show on its saved card. A new research would (B6).
   - **Watchlist preview** at 50 staff: 2,529 Watch (was 1,481; likely 1,814, unlikely 715; Melbourne 1,783, Perth 413, Adelaide 333), 888 Director (was 594), 6,049 too small or big (was 7,391).

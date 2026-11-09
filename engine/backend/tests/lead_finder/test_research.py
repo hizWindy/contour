@@ -106,6 +106,15 @@ async def test_research_searches_three_angles_and_saves_everything(session: Asyn
     assert await count(session, MemoryItem, kind="company_profile") == 1
 
 
+async def test_a_company_that_just_moved_is_a_watch_and_says_why(session: AsyncSession) -> None:
+    """PLAN-V11 B3: it moved in 4 months ago, so it has probably just set up its office."""
+    card = await research(session, FakeClaude(facts=make_facts(office_since=fact("2026-06"))))
+    assert card.result == "watch"
+    assert card.why_it_fits.endswith(
+        "Result: Watch. Because: Moved in June 2026, so probably not in the market yet."
+    )
+
+
 async def test_researching_again_uses_memory_and_costs_less(session: AsyncSession) -> None:
     first = await research(session, FakeClaude())
     claude = FakeClaude()

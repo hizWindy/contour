@@ -56,7 +56,15 @@ def test_rules_match_the_criteria_documents() -> None:
     ]
     assert criteria.triggers.consultant_window_months == 18
     assert (criteria.office_age.due_years, criteria.office_age.recent_move_years) == (5, 3)
+    assert criteria.office_age.just_moved_months == 12  # PLAN-V11 B3
     assert criteria.never_suggest.dissolved_deal_wait_months == 12
+
+
+def test_just_moved_longer_than_recent_stops_start_up(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    edit(rules_dir / "criteria.yaml", "just_moved_months: 12", "just_moved_months: 40")
+    with pytest.raises(ValidationError, match="just_moved_months must fit inside"):
+        read_rules(rules_dir)
 
 
 def test_two_signs_have_levis_9_nov_wording() -> None:

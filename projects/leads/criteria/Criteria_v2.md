@@ -85,6 +85,8 @@ Levi's brief gives an example website for mergers and acquisitions, but the link
 
 **Rivals of a booming company (TBC).** When a lead in a tier 1 or tier 2 industry is a Pass or a Director review, one cheap web search names up to 5 Australian rivals with an office in the same city. The next run for that city researches up to 5 of them, with the weak sign, so real news still ranks first. Whether rivals with no news of their own are wanted is for Levi.
 
+**Just moved: a Watch (Levi, 9 Nov, TBC).** A company that moved or fitted out in the last 12 months is a **Watch**, even with a sign: it has probably just set up its office, so it isn't in the market yet. Example: Budget Direct, found in Levi's Adelaide run of 6 Nov, had already opened its new office. News that an office has already opened counts as the move-in date. A Drop stays a Drop. A move or fitout in the last 3 years still lowers the rank (section 6). The 12 months is our guess.
+
 **Not researched when tiny.** Before any paid search, HubSpot's and Signal Hire's staff numbers are read. When every one is under 50, and the company wasn't found with a growth sign, it is a Drop, "too small", with no Claude request.
 
 ## 5. Sent to a Director
@@ -136,7 +138,7 @@ New, from the Profile, and **TBC** with leadership. It replaces the boosters and
 |---|---|---|---|
 | **Pass** | Fits and has a trigger | Active prospect | Sales looks into the need and access |
 | **Director review** | Fits and has a trigger, but is on the Director list | Active prospect | A Director decides |
-| **Watch** | Fits, but no trigger yet | Target account | Re-checked by the tool. Sales builds a relationship (**TBC**: for example, a monthly list). |
+| **Watch** | Fits, but no trigger yet, or it moved or fitted out in the last 12 months (section 4) | Target account | Re-checked by the tool. Sales builds a relationship (**TBC**: for example, a monthly list). |
 | **Drop** | Fails a fit rule | Not a target | None |
 
 The third stage, **qualified deal**, comes after sales meets the client and checks the [deal criteria](DEAL.md). The tool doesn't decide it.

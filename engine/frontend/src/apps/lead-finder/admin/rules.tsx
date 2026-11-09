@@ -130,7 +130,9 @@ export default function AdminRulesTab() {
           </p>
           <p>
             More than {criteria.office_age.due_years} years at the same address is due. A move or
-            fitout in the last {criteria.office_age.recent_move_years} years is recent.
+            fitout in the last {criteria.office_age.recent_move_years} years is recent. One in the
+            last {criteria.office_age.just_moved_months} months makes a lead a Watch, because the
+            company has probably just set up its office.
           </p>
         </Block>
         <Block title="Results and stages">

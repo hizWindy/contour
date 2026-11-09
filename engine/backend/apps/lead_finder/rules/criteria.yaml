@@ -109,6 +109,9 @@ fit:
 office_age:
   due_years: 5 # more than this many years at the same address adds points (Levi's brief says 5 to 8)
   recent_move_years: 3 # a move or fitout in the last 3 years lowers the rank
+  # A move or fitout in the last this many months makes a lead a Watch, even with a sign: the company
+  # has probably just set up its office (Levi, 9 Nov: Budget Direct, PLAN-V11 B3). A Drop stays a Drop.
+  just_moved_months: 12
 
 triggers:
   window_years: 3
@@ -300,6 +303,8 @@ tbc:
     note: Levi's brief says 5 to 8 years at the same address. Gemini's meeting summary said 7 to 8, and the written sources win. We start at the low end, 5, because it adds points and never filters.
   - key: office_age.recent_move_years
     note: Answered by the documents. A recent move or fitout means the last 3 years.
+  - key: office_age.just_moved_months
+    note: From Levi's 9 Nov example (Budget Direct had already set up its new Adelaide office when his run found it). The 12 months is our guess (PLAN-V11 B3).
   - key: triggers.consultant_window_months
     note: From the Profile and DEAL.md. Shown as text on the lead card. The tool can't see when a consultant is appointed.
   - key: triggers

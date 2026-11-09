@@ -381,7 +381,7 @@ const RULES_V2 = {
       bands: { research_first: 75, investigate: 50 },
       band_basis: 'scaled',
     },
-    office_age: { due_years: 5, recent_move_years: 3 },
+    office_age: { due_years: 5, recent_move_years: 3, just_moved_months: 12 },
     stages: { pass: 'Active prospect', watch: 'Target account' },
     triggers: {
       main: [],
@@ -446,7 +446,7 @@ describe('Admin, Rules', () => {
             bands: { research_first: 75, investigate: 50 },
             band_basis: 'scaled',
           },
-          office_age: { due_years: 5, recent_move_years: 3 },
+          office_age: { due_years: 5, recent_move_years: 3, just_moved_months: 12 },
           stages: { pass: 'Active prospect', watch: 'Target account' },
           triggers: {
             main: [{ id: 'lease_ending', label: 'Lease ending in 1 to 3 years' }],
@@ -499,6 +499,7 @@ describe('Admin, Rules', () => {
     expect(screen.getByText('Pass: Active prospect')).toBeInTheDocument()
     expect(screen.getByText('Watch: Target account')).toBeInTheDocument()
     expect(screen.getByText(/More than 5 years at the same address is due/)).toBeInTheDocument()
+    expect(screen.getByText(/One in the last 12 months makes a lead a Watch/)).toBeInTheDocument()
   })
 
   it('shows no Watch band for size once the hint and the floor are both 50 (PLAN-V11 B2)', async () => {

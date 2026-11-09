@@ -76,6 +76,7 @@ from apps.lead_finder.sanitize import (
     safe_http_url,
 )
 from apps.lead_finder.scoring import (
+    JUST_MOVED,
     Band,
     RuleCheck,
     ScorePart,
@@ -1042,7 +1043,9 @@ def empty_facts(company: str, summary: str = "Nothing useful was found.") -> Com
 
 def _why(checks: list[RuleCheck], result: Result) -> str:
     parts = [f"{c.rule}: {c.detail}" for c in checks if c.rule in ("City", "Size", "Office")]
-    reasons = [c.detail for c in checks if c.outcome in ("fail", "director")]
+    # A company that just moved is a Watch whatever else it shows, so that reason comes first (B3)
+    moved = [c.detail for c in checks if c.rule == JUST_MOVED and result == "watch"]
+    reasons = [*moved, *(c.detail for c in checks if c.outcome in ("fail", "director"))]
     label = result.replace("_", " ").capitalize()
     because = f" Because: {'; '.join(reasons)}." if reasons and result != "pass" else ""
     return f"{'. '.join(parts)}. Result: {label}.{because}"

@@ -29,6 +29,9 @@ Band = Literal["research_first", "investigate", "nurture"]
 # "small" until the rules open that band again (PLAN-V11 B2).
 SizeBasis = Literal["confirmed", "estimated", "growing", "director", "small", "below", "none"]
 DAYS_PER_YEAR = 365.25
+DAYS_PER_MONTH = 30.44
+# The rule check of a company that moved or fitted out lately: it makes the lead a Watch (B3)
+JUST_MOVED = "Just moved"
 REASON_WORDS: dict[CandidateReason, str] = {
     "close_name": "close name",
     "name_in_deal": "name in a deal",
@@ -110,6 +113,14 @@ def parse_date(text: str | None) -> date | None:
         return None
 
 
+def month_year(text: str | None) -> str:
+    """'2026-03' or '2026-03-14' as 'March 2026', and '2026' as '2026'. As given if unreadable."""
+    when = parse_date(text)
+    if when is None or text is None:
+        return text or ""
+    return f"{when:%B %Y}" if re.match(r"^\s*\d{4}-\d", text) else str(when.year)
+
+
 def judge(
     facts: CompanyFacts, hubspot: HubSpotMatch, rules: LeadFinderRules, today: date
 ) -> Verdict:
@@ -128,7 +139,7 @@ def judge(
         else RuleCheck(rule="Trigger", outcome="unknown", detail="No sign of an office change yet")
     )
     history = office_history(facts, rules, today)
-    history_check = _history_check(history, rules)
+    history_check = _history_check(facts, history, rules)
     if history_check is not None:  # left out when nothing is known, so a card isn't all "unknown"
         checks.append(history_check)
 
@@ -139,6 +150,8 @@ def judge(
         result = "drop"
     elif not triggers:
         result = "watch"
+    elif history.just_moved:
+        result = "watch"  # it has probably just set up its office (PLAN-V11 B3), sign or not
     elif sized.basis == "small":
         result = "watch"  # between the floor and the hint, not growing: check the office size
     elif "director" in outcomes:
@@ -383,6 +396,9 @@ class History:
     years_at: float | None  # None when the move-in is not known
     due: bool | None  # more than `office_age.due_years` at this address
     recent: bool | None  # a move or fitout lately. None when neither date is known
+    # A move or fitout in the last `office_age.just_moved_months` (PLAN-V11 B3). A date still to
+    # come doesn't count. None when neither date is known.
+    just_moved: bool | None = None
 
 
 def office_history(facts: CompanyFacts, rules: LeadFinderRules, today: date) -> History:
@@ -391,22 +407,42 @@ def office_history(facts: CompanyFacts, rules: LeadFinderRules, today: date) -> 
     fitout = parse_date(facts.last_fitout.value)
     known = [day for day in (since, fitout) if day is not None]
     years_at = (today - since).days / DAYS_PER_YEAR if since else None
+    days_ago = (today - max(known)).days if known else None
     return History(
         since=since,
         fitout=fitout,
         years_at=years_at,
         due=None if years_at is None else years_at > age.due_years,
-        recent=(
-            (today - max(known)).days < age.recent_move_years * DAYS_PER_YEAR if known else None
+        recent=(None if days_ago is None else days_ago < age.recent_move_years * DAYS_PER_YEAR),
+        just_moved=(
+            None
+            if days_ago is None
+            else 0 <= days_ago < round(age.just_moved_months * DAYS_PER_MONTH)
         ),
     )
 
 
-def _history_check(history: History, rules: LeadFinderRules) -> RuleCheck | None:
-    """A note for the card, not a rule: a recent move or fitout makes a new project less likely.
-    None when neither date is known."""
+def _just_moved_words(facts: CompanyFacts, history: History) -> str:
+    """Like "Moved in March 2026, so probably not in the market yet" (PLAN-V11 B3)."""
+    moved = history.since is not None and (
+        history.fitout is None or history.since >= history.fitout
+    )
+    what, text = (
+        ("Moved", facts.office_since.value) if moved else ("Fitted out", facts.last_fitout.value)
+    )
+    return f"{what} in {month_year(text)}, so probably not in the market yet"
+
+
+def _history_check(
+    facts: CompanyFacts, history: History, rules: LeadFinderRules
+) -> RuleCheck | None:
+    """A note for the card: a recent move or fitout makes a new project less likely. A very recent
+    one is a rule (PLAN-V11 B3): the lead is a Watch, and the check says why. None when neither
+    date is known."""
     if history.recent is None:
         return None
+    if history.just_moved:
+        return RuleCheck(rule=JUST_MOVED, outcome="flag", detail=_just_moved_words(facts, history))
     sentences = []
     if history.since is not None and history.years_at is not None:
         since = f"At this address since {history.since.year} ({history.years_at:.1f} years)"

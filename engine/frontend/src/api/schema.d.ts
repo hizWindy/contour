@@ -1610,7 +1610,7 @@ export interface components {
             office_m2: components["schemas"]["Fact_int_"];
             /** @description true if the office matters to how the company works: growth, performance, culture, collaboration or talent. A head office or technical office counts, even for a miner or builder. false if it works mostly from warehouses, plants, sites or shops. Null if no note says. */
             office_matters: components["schemas"]["Fact_bool_"];
-            /** @description When the company moved into its current office in that city: YYYY or YYYY-MM. Null if no note says. */
+            /** @description When the company moved into its current office in that city: YYYY or YYYY-MM. A new office it has already moved into or opened counts, even from news. Null if no note says. */
             office_since: components["schemas"]["Fact_str_"];
             /**
              * Opening Line
@@ -3327,6 +3327,8 @@ export interface components {
         OfficeAge: {
             /** Due Years */
             due_years: number;
+            /** Just Moved Months */
+            just_moved_months: number;
             /** Recent Move Years */
             recent_move_years: number;
         };

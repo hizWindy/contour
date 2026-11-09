@@ -135,6 +135,14 @@ class Industries(Strict):
 class OfficeAge(Strict):
     due_years: int = Field(gt=0)
     recent_move_years: int = Field(gt=0)
+    # A move or fitout this recent makes a lead a Watch, even with a sign (PLAN-V11 B3)
+    just_moved_months: int = Field(gt=0)
+
+    @model_validator(mode="after")
+    def check_months(self) -> Self:
+        if self.just_moved_months > self.recent_move_years * 12:
+            raise ValueError("office_age.just_moved_months must fit inside recent_move_years")
+        return self
 
 
 class Fit(Strict):

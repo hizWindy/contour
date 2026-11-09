@@ -1007,7 +1007,7 @@
           },
           "office_since": {
             "$ref": "#/components/schemas/Fact_str_",
-            "description": "When the company moved into its current office in that city: YYYY or YYYY-MM. Null if no note says."
+            "description": "When the company moved into its current office in that city: YYYY or YYYY-MM. A new office it has already moved into or opened counts, even from news. Null if no note says."
           },
           "opening_line": {
             "anyOf": [
@@ -5357,6 +5357,11 @@
             "title": "Due Years",
             "type": "integer"
           },
+          "just_moved_months": {
+            "exclusiveMinimum": 0.0,
+            "title": "Just Moved Months",
+            "type": "integer"
+          },
           "recent_move_years": {
             "exclusiveMinimum": 0.0,
             "title": "Recent Move Years",
@@ -5365,7 +5370,8 @@
         },
         "required": [
           "due_years",
-          "recent_move_years"
+          "recent_move_years",
+          "just_moved_months"
         ],
         "title": "OfficeAge",
         "type": "object"

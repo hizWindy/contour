@@ -8,6 +8,7 @@ import pytest
 from apps.lead_finder.fields import BoosterFound, TriggerFound
 from apps.lead_finder.rules import LeadFinderRules, load_rules
 from apps.lead_finder.scoring import (
+    JUST_MOVED,
     RuleCheck,
     ScoreCheck,
     ScorePart,
@@ -522,9 +523,82 @@ def test_office_history_notes_how_long_and_whether_it_moved_lately(
         assert phrase in check.detail
 
 
-def test_office_history_never_changes_the_result() -> None:
+def test_a_move_more_than_12_months_ago_never_changes_the_result() -> None:
     recent = verdict(office_since=fact("2025-03"))
     assert (recent.result, recent.score) == (verdict().result, verdict().score)
+
+
+# --- A company that just moved (Levi, 9 Nov, PLAN-V11 B3) -------------------------------------
+
+
+def just_moved(result: Verdict) -> RuleCheck | None:
+    found = [check for check in result.checks if check.rule == JUST_MOVED]
+    return found[0] if found else None
+
+
+def test_a_sign_and_a_move_4_months_ago_is_a_watch() -> None:
+    assert verdict().result == "pass"  # the sample passes, with a lease sign
+    growing = [trigger("fast_growth", "2026-10")]  # a growth sign, like Budget Direct's
+    assert verdict(triggers=growing).result == "pass"
+    assert verdict(triggers=growing, office_since=fact("2026-06")).result == "watch"
+    result = verdict(office_since=fact("2026-06"))
+    assert result.result == "watch"
+    check = just_moved(result)
+    assert check is not None
+    assert (check.outcome, check.detail) == (
+        "flag",
+        "Moved in June 2026, so probably not in the market yet",
+    )
+    assert history_check(result) is None  # one check says it all
+    assert result.parts and result.band is not None  # a Watch keeps its score
+
+
+def test_a_move_14_months_ago_is_not_just_moved() -> None:
+    growing = [trigger("fast_growth", "2026-10")]
+    assert verdict(triggers=growing, office_since=fact("2025-08")).result == "pass"
+    result = verdict(office_since=fact("2025-08"))
+    assert (result.result, just_moved(result)) == ("pass", None)
+    check = history_check(result)
+    assert check is not None and check.outcome == "flag"  # still in the last 3 years: ranked lower
+
+
+def test_a_drop_stays_a_drop_when_it_just_moved() -> None:
+    result = verdict(office_since=fact("2026-06"), healthy=fact(False))
+    assert result.result == "drop"
+
+
+def test_a_fitout_4_months_ago_counts_too_and_says_so() -> None:
+    result = verdict(office_since=fact("2015"), last_fitout=fact("2026-06"))
+    assert result.result == "watch"
+    check = just_moved(result)
+    assert check is not None
+    assert check.detail == "Fitted out in June 2026, so probably not in the market yet"
+
+
+def test_a_director_review_that_just_moved_is_a_watch() -> None:
+    assert verdict(city=fact("Sydney")).result == "director_review"
+    assert verdict(city=fact("Sydney"), office_since=fact("2026-06")).result == "watch"
+
+
+def test_a_year_alone_counts_from_1_july() -> None:
+    check = just_moved(verdict(office_since=fact("2026")))  # 1 July 2026: under 4 months ago
+    assert check is not None
+    assert check.detail == "Moved in 2026, so probably not in the market yet"
+
+
+def test_a_move_still_to_come_is_not_just_moved() -> None:
+    result = verdict(office_since=fact("2027-03"))
+    assert (result.result, just_moved(result)) == ("pass", None)
+
+
+def test_just_moved_follows_the_rules_months() -> None:
+    rules = load_rules()
+    age = rules.criteria.office_age.model_copy(update={"just_moved_months": 3})
+    shorter = rules.model_copy(
+        update={"criteria": rules.criteria.model_copy(update={"office_age": age})}
+    )
+    assert rules.criteria.office_age.just_moved_months == 12
+    assert verdict_under(shorter, office_since=fact("2026-06")).result == "pass"  # 4 months > 3
 
 
 def test_unknown_size_with_a_trigger_needs_a_check() -> None:

@@ -13,7 +13,7 @@ What each fact means:
 - local_team_runs_project: true if an Australian head office or local leader runs property decisions, even when the owner is overseas.
 - healthy: false only if a note says the company is in administration, or cutting staff fast.
 - office_matters: true if the office matters to how the company works (growth, performance, culture, collaboration, talent). A head office or a technical office counts, even for a miner or a builder. false if the company works mostly from warehouses, plants, sites or shops. null if no note says.
-- office_since: when the company moved into its current office in that city, like "2016" or "2016-03". null if no note says.
+- office_since: when the company moved into its current office in that city, like "2016" or "2016-03". When a note, news included, says the company has already moved into or opened a new office in that city, that is its current office: give that date. A move or opening still to come is not office_since. null if no note says.
 - last_fitout: when that office last had a move, fitout or refit, like "2024-05". The move-in counts too. null if no note says.
 - expected_move: when an office change might happen, like "2027", only if a note points to it.
 - growth_plan: true only if a note says the company has raised big money or made a big announcement AND plans to hire a lot. Also true when an overseas company announces its first, or a much bigger, office in an Australian city, with the staff or office it plans there. false if a note says it has no such plan. null if no note says.

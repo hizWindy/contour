@@ -177,7 +177,8 @@ class CompanyFacts(BaseModel):
     )
     office_since: Fact[str] = Field(
         description="When the company moved into its current office in that city: YYYY or "
-        "YYYY-MM. Null if no note says."
+        "YYYY-MM. A new office it has already moved into or opened counts, even from news. "
+        "Null if no note says."
     )
     last_fitout: Fact[str] = Field(
         description="When that office last had a move, fitout or refit: YYYY-MM or YYYY. The "
