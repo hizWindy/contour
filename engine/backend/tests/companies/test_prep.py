@@ -22,7 +22,15 @@ from pydantic import BaseModel
 from sqlalchemy import select
 
 from apps.companies.jobs import SEARCH_AHEAD, search_ahead, start_search_ahead
-from apps.companies.prep import AnswerLine, AnswerObjection, AnswerPage, PrepAnswer, PrepRunner
+from apps.companies.prep import (
+    AnswerFollowUp,
+    AnswerLine,
+    AnswerObjection,
+    AnswerPage,
+    AnswerQuestion,
+    PrepAnswer,
+    PrepRunner,
+)
 from apps.companies.tables import Prep
 from core.api.deps import settings_dependency
 from core.claude.client import Reply, Source, WebTools
@@ -60,7 +68,21 @@ def an_answer(**changes: Any) -> PrepAnswer:
             ),
             line("A line that cites a page the search never returned.", "W9"),
         ],
-        "questions": [line("Are you planning to renew or move?", "F7")],
+        "questions": [
+            AnswerQuestion(
+                text="Are you planning to renew or move?",
+                sources=["F7"],
+                follow_ups=[
+                    AnswerFollowUp(if_they_say="Move", ask="Who is helping you look?"),
+                    AnswerFollowUp(if_they_say="Renew", ask="What would make the space work?"),
+                    AnswerFollowUp(
+                        if_they_say="A speech",
+                        ask="This follow-up goes on and on " + "and on " * 40 + "so it is dropped?",
+                    ),
+                ],
+            ),
+            AnswerQuestion(text="A question with no source?", sources=[], follow_ups=[]),
+        ],
         "if_they_say": [
             AnswerObjection(they_say="We're not ready yet.", answer=line("Fair enough.", "F7"))
         ],
@@ -262,7 +284,19 @@ async def test_a_prep_keeps_only_lines_with_a_real_source(
     assert prep["web_checked"] is True and prep["made_by"] == "Mia"
     script = prep["script"]
     assert [item["text"] for item in script["why_now"]] == ["The Perth lease ends within a year."]
-    assert script["dropped"] == 2  # no source, and a page the search never returned
+    # No source, a page the search never returned, and a question with no source.
+    assert script["dropped"] == 3
+    # Guided questions keep their follow-ups (PLAN-V10 F1), and a long one is left out.
+    assert script["questions"] == [
+        {
+            "text": "Are you planning to renew or move?",
+            "sources": ["F7"],
+            "follow_ups": [
+                {"if_they_say": "Move", "ask": "Who is helping you look?"},
+                {"if_they_say": "Renew", "ask": "What would make the space work?"},
+            ],
+        }
+    ]
     assert script["still_there"] == "yes"
     assert script["news"][0]["sources"] == ["W1"]
     web = [source for source in prep["sources"] if source["kind"] == "web"]

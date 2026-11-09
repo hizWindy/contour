@@ -2258,6 +2258,40 @@ export interface components {
             /** Rate Per M2 Aud */
             rate_per_m2_aud: string;
         };
+        /**
+         * FollowUp
+         * @description What to ask next, after one likely answer (PLAN-V10 F1).
+         */
+        FollowUp: {
+            /**
+             * Ask
+             * @description The question to ask next
+             */
+            ask: string;
+            /**
+             * If They Say
+             * @description A likely answer, in a few words, like 'We'll move'
+             */
+            if_they_say: string;
+        };
+        /**
+         * GuidedQuestion
+         * @description A question to ask on the call, with what to ask next for each likely answer.
+         */
+        GuidedQuestion: {
+            /**
+             * Follow Ups
+             * @description Empty for a prep made before 9 Nov
+             */
+            follow_ups: components["schemas"]["FollowUp"][];
+            /**
+             * Sources
+             * @description The ids of the sources this line rests on
+             */
+            sources: string[];
+            /** Text */
+            text: string;
+        };
         /** HealthOut */
         HealthOut: {
             /** Apps */
@@ -3667,7 +3701,7 @@ export interface components {
             /** Opener */
             opener: components["schemas"]["ScriptLine"][];
             /** Questions */
-            questions: components["schemas"]["ScriptLine"][];
+            questions: components["schemas"]["GuidedQuestion"][];
             /**
              * Still There
              * @enum {string}

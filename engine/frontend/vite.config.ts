@@ -1,8 +1,26 @@
+import { realpathSync } from 'node:fs'
 import { resolve } from 'node:path'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
-import type { ProxyOptions } from 'vite'
+import { searchForWorkspaceRoot, type ProxyOptions } from 'vite'
 import { defineConfig } from 'vitest/config'
+
+/**
+ * The files the dev server may hand out: this project, and wherever node_modules really is. In a
+ * git worktree, node_modules can be a link to the main folder's, and without this the dev server
+ * refuses the fonts (@fontsource) as "outside of Vite serving allow list", so pages fall back to
+ * another typeface.
+ */
+function serveAllow(): string[] {
+  const modules = resolve(import.meta.dirname, 'node_modules')
+  let real = modules
+  try {
+    real = realpathSync(modules)
+  } catch {
+    // No node_modules yet: the project folder is enough.
+  }
+  return [...new Set([searchForWorkspaceRoot(process.cwd()), real])]
+}
 
 /**
  * The dev server and the preview server both listen on 5173, because the backend only allows
@@ -103,6 +121,7 @@ export default defineConfig({
     strictPort: true,
     headers: securityHeaders,
     proxy: apiProxy,
+    fs: { allow: serveAllow() },
   },
   optimizeDeps: {
     // Pre-bundle, at start-up, the libraries that only the lazily loaded pages use. Without this,

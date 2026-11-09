@@ -245,13 +245,28 @@ class Objection(Out):
     answer: ScriptLine
 
 
+class FollowUp(Out):
+    """What to ask next, after one likely answer (PLAN-V10 F1)."""
+
+    if_they_say: str = Field(description="A likely answer, in a few words, like 'We'll move'")
+    ask: str = Field(description="The question to ask next")
+
+
+class GuidedQuestion(ScriptLine):
+    """A question to ask on the call, with what to ask next for each likely answer."""
+
+    follow_ups: list[FollowUp] = Field(
+        default_factory=list, description="Empty for a prep made before 9 Nov"
+    )
+
+
 class PrepScript(Out):
     still_there: StillThere
     still_there_note: ScriptLine | None
     news: list[ScriptLine]
     opener: list[ScriptLine]
     why_now: list[ScriptLine]
-    questions: list[ScriptLine]
+    questions: list[GuidedQuestion]
     if_they_say: list[Objection]
     goal: ScriptLine | None
     dropped: int = Field(description="Lines left out because they had no source")

@@ -25,6 +25,7 @@ import { sparing } from '@/shell/preload'
 import { companyColumns } from './columns'
 import { CompanyPanel } from './company-panel'
 import { FilterBar } from './filter-bar'
+import { HubSpotSync } from './hubspot-sync'
 import {
   activeFilterCount,
   FIRST_ORDER,
@@ -155,6 +156,7 @@ export default function CompaniesPage() {
         tone="companies"
         title="Companies"
         description="Every client and prospect in HubSpot. Open one to see what we know, or prep a call before you ring."
+        actions={<HubSpotSync />}
       />
       <PrepBox onPick={setPrep} />
       <FilterBar
@@ -225,6 +227,10 @@ export default function CompaniesPage() {
           setPrep(null)
         }}
         onChangeTarget={setPrep}
+        onOpenCompany={(key) => {
+          setPrep(null)
+          openCompany(key)
+        }}
       />
     </>
   )

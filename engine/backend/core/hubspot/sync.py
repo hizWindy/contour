@@ -12,7 +12,9 @@ How one sync goes:
    in the last `hubspot_full_sync_days`. A changes sync with more changes than HubSpot's search
    can page through (10,000) becomes a full one.
 3. **Read** (`read_hubspot`): owners, deal stages and field definitions, then the companies and
-   deals, a page of 100 at a time. Nothing is saved yet.
+   deals, a page of 100 at a time. Nothing is saved yet, except how far it has read: every
+   `PROGRESS_EVERY` records the row's `companies_read` and `deals_read` are updated, so the
+   website's "Sync with HubSpot" shows the sync moving (PLAN-V10 F2).
 4. **Save** (`save_snapshot`) everything in ONE transaction: owners, companies (an export row
    with the same id is replaced), their offices, and the deals whose company is in our copy. A
    full sync then removes the companies and deals HubSpot no longer has. If anything fails,
@@ -27,7 +29,7 @@ warnings, never with a record's values. Errors are saved in plain words.
 import asyncio
 import contextlib
 import logging
-from collections.abc import AsyncIterator, Callable, Collection, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Collection, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
@@ -82,10 +84,14 @@ PROFILES_FAILED = (
     "`uv run engine rebuild-profiles`. The reason is in the backend log."
 )
 
+PROGRESS_EVERY = 500  # records read between two saves of how far a sync has got
+
 ModeChoice = Literal["auto", "full", "changes"]
 Mode = Literal["full", "changes"]
 Trigger = Literal["command", "website", "startup", "schedule"]
 HubSpotSource = Callable[[], HubSpot | None]
+# Told how many companies and deals a sync has read so far.
+Progress = Callable[[int, int], Awaitable[None]]
 
 
 class SyncAlreadyRunning(Exception):
@@ -214,11 +220,40 @@ async def _choose(
 # --- 3. Read -----------------------------------------------------------------------------------
 
 
+class _Counter:
+    """Tells `progress` how far the read has got, every `PROGRESS_EVERY` records. A save that fails
+    only costs the progress on screen: it never stops the read."""
+
+    def __init__(self, snapshot: Snapshot, progress: Progress | None) -> None:
+        self._snapshot = snapshot
+        self._progress = progress
+        self._told = 0
+
+    async def tick(self, *, force: bool = False) -> None:
+        if self._progress is None:
+            return
+        read = self._snapshot.companies_read + self._snapshot.deals_read
+        if read == self._told or (not force and read - self._told < PROGRESS_EVERY):
+            return
+        self._told = read
+        try:
+            await self._progress(self._snapshot.companies_read, self._snapshot.deals_read)
+        except Exception:
+            log.warning("hubspot_sync_progress_not_saved", exc_info=True)
+
+
 async def read_hubspot(
-    hubspot: HubSpot, fields: FieldMap, *, mode: Mode, since: datetime | None
+    hubspot: HubSpot,
+    fields: FieldMap,
+    *,
+    mode: Mode,
+    since: datetime | None,
+    progress: Progress | None = None,
 ) -> Snapshot:
-    """Reads what the sync saves. Raises `TooManyChanges` for a changes sync that is too big."""
+    """Reads what the sync saves. Raises `TooManyChanges` for a changes sync that is too big.
+    `progress`, if given, hears how far it has read every `PROGRESS_EVERY` records."""
     snapshot = Snapshot()
+    counter = _Counter(snapshot, progress)
     account = await hubspot.account()
     active = await hubspot.owners()
     archived = await hubspot.owners(archived=True)
@@ -247,16 +282,21 @@ async def read_hubspot(
         async for record in _every(hubspot, "companies", company_properties):
             snapshot.companies_read += 1
             snapshot.companies.append(company_rows(record, fields, convert))
+            await counter.tick()
+        await counter.tick(force=True)
         async for record in _every(hubspot, "deals", deal_properties, links=("companies",)):
             snapshot.deals_read += 1
             if (row := deal_row(record, fields, convert)) is not None:
                 snapshot.deals.append(row)
+            await counter.tick()
     else:
         if since is None:
             raise ValueError("a changes sync needs the time to read changes from")
         async for record in _changed(hubspot, "companies", company_properties, since):
             snapshot.companies_read += 1
             snapshot.companies.append(company_rows(record, fields, convert))
+            await counter.tick()
+        await counter.tick(force=True)
         deals = [record async for record in _changed(hubspot, "deals", deal_properties, since)]
         snapshot.deals_read = len(deals)
         # A search answer has no links, so each deal's company is read in batches.
@@ -451,14 +491,23 @@ async def run(
     """Reads, saves and rebuilds profiles for a sync `begin` started, and ends its row."""
     fields = fields or load_field_map()
     mode = plan.mode
+
+    async def progress(companies: int, deals: int) -> None:
+        async with sessions() as session:
+            await _set(session, plan.id, companies_read=companies, deals_read=deals)
+
     try:
         try:
-            snapshot = await read_hubspot(hubspot, fields, mode=mode, since=plan.since)
+            snapshot = await read_hubspot(
+                hubspot, fields, mode=mode, since=plan.since, progress=progress
+            )
         except TooManyChanges:
             mode = "full"
             async with sessions() as session:
                 await _set(session, plan.id, mode="full", changed_since=None)
-            snapshot = await read_hubspot(hubspot, fields, mode="full", since=None)
+            snapshot = await read_hubspot(
+                hubspot, fields, mode="full", since=None, progress=progress
+            )
             snapshot.warnings.insert(0, "Too much had changed for a changes sync, so all was read.")
 
         async with sessions() as session:

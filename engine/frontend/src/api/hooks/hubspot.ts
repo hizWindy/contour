@@ -29,6 +29,22 @@ export function useRecheckHubSpot() {
   })
 }
 
+const SYNCS_POLL_MS = 2000
+
+/**
+ * The newest syncs, newest first. While one runs they are read again every 2 seconds, so its
+ * counts climb on screen. Reading them is free: it asks our database, not HubSpot.
+ */
+export function useHubSpotSyncs(limit = 10) {
+  return useQuery({
+    queryKey: [...queryKeys.hubspot.syncs(), limit],
+    queryFn: async ({ signal }) =>
+      unwrap(await api.GET('/hubspot/syncs', { params: { query: { limit } }, signal })),
+    refetchInterval: (query) =>
+      query.state.data?.some((sync) => sync.status === 'running') ? SYNCS_POLL_MS : false,
+  })
+}
+
 /** Starts a sync in the background. The status then shows it running. */
 export function useStartHubSpotSync() {
   const queryClient = useQueryClient()

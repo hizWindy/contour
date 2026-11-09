@@ -76,6 +76,10 @@ export default function CompanyPage() {
           setPrep(null)
         }}
         onChangeTarget={setPrep}
+        // This page is the company already: "Company info" brings it back into view.
+        onOpenCompany={() => {
+          setPrep(null)
+        }}
       />
     </>
   )

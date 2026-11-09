@@ -2710,6 +2710,59 @@
         "title": "Fitout",
         "type": "object"
       },
+      "FollowUp": {
+        "description": "What to ask next, after one likely answer (PLAN-V10 F1).",
+        "properties": {
+          "ask": {
+            "description": "The question to ask next",
+            "title": "Ask",
+            "type": "string"
+          },
+          "if_they_say": {
+            "description": "A likely answer, in a few words, like 'We'll move'",
+            "title": "If They Say",
+            "type": "string"
+          }
+        },
+        "required": [
+          "if_they_say",
+          "ask"
+        ],
+        "title": "FollowUp",
+        "type": "object"
+      },
+      "GuidedQuestion": {
+        "description": "A question to ask on the call, with what to ask next for each likely answer.",
+        "properties": {
+          "follow_ups": {
+            "description": "Empty for a prep made before 9 Nov",
+            "items": {
+              "$ref": "#/components/schemas/FollowUp"
+            },
+            "title": "Follow Ups",
+            "type": "array"
+          },
+          "sources": {
+            "description": "The ids of the sources this line rests on",
+            "items": {
+              "type": "string"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "sources",
+          "follow_ups"
+        ],
+        "title": "GuidedQuestion",
+        "type": "object"
+      },
       "HealthOut": {
         "properties": {
           "apps": {
@@ -6247,7 +6300,7 @@
           },
           "questions": {
             "items": {
-              "$ref": "#/components/schemas/ScriptLine"
+              "$ref": "#/components/schemas/GuidedQuestion"
             },
             "title": "Questions",
             "type": "array"

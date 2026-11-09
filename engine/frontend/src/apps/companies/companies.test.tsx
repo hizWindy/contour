@@ -5,6 +5,7 @@ import type {
   CompanyDetail,
   CompanyRow,
   CompanySearch,
+  HubSpotSync,
   PrepChip,
   PrepFacts,
   PrepOut,
@@ -186,7 +187,13 @@ function prep(changes: Partial<PrepOut> = {}): PrepOut {
       news: [{ text: 'ABC Logistics won a A$40M contract.', sources: ['W1'] }],
       opener: [{ text: 'Hi Jason, we spoke on 1 Oct about Perth.', sources: ['F11'] }],
       why_now: [{ text: 'The Perth lease ends in June 2027.', sources: ['F7'] }],
-      questions: [{ text: 'Are you planning to renew or move?', sources: ['F7'] }],
+      questions: [
+        {
+          text: 'Are you planning to renew or move?',
+          sources: ['F7'],
+          follow_ups: [{ if_they_say: 'Move', ask: 'Who is helping you look?' }],
+        },
+      ],
       if_they_say: [
         { they_say: "We're not ready yet.", answer: { text: 'Fair enough.', sources: ['F7'] } },
       ],
@@ -213,6 +220,31 @@ function prep(changes: Partial<PrepOut> = {}): PrepOut {
   }
 }
 
+function sync(changes: Partial<HubSpotSync> = {}): HubSpotSync {
+  return {
+    id: 2,
+    mode: 'full',
+    trigger: 'command',
+    status: 'done',
+    changed_since: null,
+    companies_read: 13913,
+    deals_read: 8943,
+    owners_read: 13,
+    companies_saved: 13913,
+    offices_saved: 22770,
+    deals_saved: 8041,
+    deals_skipped: 902,
+    companies_removed: 0,
+    deals_removed: 0,
+    profiles_rebuilt: 13913,
+    error: null,
+    warnings: [],
+    started_at: new Date(Date.now() - 5 * 3_600_000 - 546_000).toISOString(),
+    finished_at: new Date(Date.now() - 5 * 3_600_000).toISOString(),
+    ...changes,
+  }
+}
+
 interface Backend {
   rows: CompanyRow[]
   leadsShown: boolean
@@ -220,6 +252,9 @@ interface Backend {
   prep: PrepOut
   prepStatus: number
   chips: PrepChip[]
+  syncs: HubSpotSync[]
+  /** What GET /hubspot/syncs answers once a sync is started. */
+  afterStart: HubSpotSync[]
   requests: Request[]
 }
 
@@ -231,11 +266,18 @@ function mockApi(changes: Partial<Backend> = {}): Backend {
     prep: prep(),
     prepStatus: 202,
     chips: [],
+    syncs: [sync()],
+    afterStart: [],
     requests: [],
     ...changes,
   }
   const respond = (request: Request, url: URL): Response => {
     const path = url.pathname
+    if (path === '/api/v1/hubspot/syncs') return Response.json(backend.syncs)
+    if (path === '/api/v1/hubspot/sync' && request.method === 'POST') {
+      backend.syncs = backend.afterStart
+      return Response.json(backend.afterStart[0] ?? sync({ status: 'running' }), { status: 202 })
+    }
     if (path === API) {
       return Response.json({
         total: backend.rows.length,
@@ -379,6 +421,9 @@ describe('the prep box and the call prep', () => {
     expect(within(modal).getByText('Before you dial')).toBeInTheDocument()
     expect(await within(modal).findByText('Still there')).toBeInTheDocument()
     expect(within(modal).getByText('Are you planning to renew or move?')).toBeInTheDocument()
+    // Call prep's guided question opens with its follow-up.
+    expect(within(modal).getByText('Who is helping you look?')).toBeInTheDocument()
+    expect(within(modal).getByText('Written by call prep, with a web check.')).toBeInTheDocument()
     expect(
       within(modal).getByText('1 line was left out because it had no source.'),
     ).toBeInTheDocument()
@@ -393,10 +438,11 @@ describe('the prep box and the call prep', () => {
     await user.click(screen.getByRole('combobox', { name: /Who are you calling/ }))
     await user.type(screen.getByRole('combobox', { name: /Who are you calling/ }), 'abc')
     await user.click(await screen.findByRole('option', { name: /^ABC Logistics/ }))
-    const modal = await screen.findByRole('dialog', { name: 'ABC Logistics' })
-    expect(await within(modal).findByText('Who are you calling?')).toBeInTheDocument()
+    const modal = await screen.findByRole('dialog', { name: 'Who are you calling?' })
+    expect(await within(modal).findByText('People at ABC Logistics')).toBeInTheDocument()
     await user.click(within(modal).getByRole('button', { name: 'Prep a cold call' }))
-    await screen.findByRole('dialog', { name: /cold call/ })
+    const card = await screen.findByRole('dialog', { name: 'ABC Logistics' })
+    expect(within(card).getByText(/Cold call, no name yet/)).toBeInTheDocument()
     await waitFor(() => {
       const posted = backend.requests.find((request) => request.method === 'POST')
       expect(posted).toBeDefined()
@@ -404,16 +450,17 @@ describe('the prep box and the call prep', () => {
     expect(await screen.findByText('(08) 9000 0000')).toBeInTheDocument()
   })
 
-  it('shows the 3-step bar while searching, and says so once', async () => {
+  it('shows the 3-step bar while call prep checks the web, with the free script already there', async () => {
     mockApi({ prep: prep({ status: 'searching', stage: 2, script: null, sources: [] }) })
     const { user } = renderCompanies()
     await screen.findByText('ABC Logistics')
     await user.type(screen.getByRole('combobox', { name: /Who are you calling/ }), 'jas')
     await user.click(await screen.findByRole('option', { name: /Jason Reeds/ }))
     const modal = await screen.findByRole('dialog', { name: /Jason Reeds/ })
-    expect(await within(modal).findByRole('progressbar', { name: /Preparing/ })).toBeInTheDocument()
-    expect(within(modal).getAllByText('Searching.').length).toBeGreaterThan(0)
+    expect(await within(modal).findByRole('progressbar', { name: /Call prep/ })).toBeInTheDocument()
+    expect(within(modal).getByText(/Call prep is checking the web/)).toBeInTheDocument()
     expect(within(modal).getByText('Web check')).toBeInTheDocument()
+    expect(await within(modal).findByText('Written from our HubSpot copy.')).toBeInTheDocument()
   })
 
   it('says a failed prep in plain words, and a searched-ahead one with its time', async () => {
@@ -439,17 +486,52 @@ describe('the prep box and the call prep', () => {
     await screen.findByText('ABC Logistics')
     await user.type(screen.getByRole('combobox', { name: /Who are you calling/ }), 'jas')
     await user.click(await screen.findByRole('option', { name: /Jason Reeds/ }))
-    expect(await screen.findByText(/Ready\. Searched ahead at/)).toBeInTheDocument()
+    expect(await screen.findByText(/Call prep searched ahead at/)).toBeInTheDocument()
   })
 
-  it('while call prep is off, the facts still show', async () => {
+  it('while call prep is off, the card still has a sales script and guided questions', async () => {
     mockApi({ prepStatus: 409 })
     const { user } = renderCompanies()
     await screen.findByText('ABC Logistics')
     await user.type(screen.getByRole('combobox', { name: /Who are you calling/ }), 'jas')
     await user.click(await screen.findByRole('option', { name: /Jason Reeds/ }))
-    expect(await screen.findByText(/Call scripts are switched off/)).toBeInTheDocument()
-    expect(screen.getByText('Lease ends next year. Call back in March.')).toBeInTheDocument()
+    const modal = await screen.findByRole('dialog', { name: /Jason Reeds/ })
+    expect(await within(modal).findByText(/Call prep is off/)).toBeInTheDocument()
+    expect(within(modal).getByText('Lease ends next year. Call back in March.')).toBeInTheDocument()
+    expect(await within(modal).findByText('Sales script')).toBeInTheDocument()
+    expect(within(modal).getByText('Written from our HubSpot copy.')).toBeInTheDocument()
+    expect(within(modal).getByText('I wanted to follow up on Perth fit-out.')).toBeInTheDocument()
+    expect(within(modal).queryByRole('button', { name: 'Refresh' })).not.toBeInTheDocument()
+
+    // The guided questions: the first is open; ticking it opens the next one.
+    const questions = within(modal).getAllByRole('button', { expanded: true })
+    expect(questions).toHaveLength(1)
+    expect(within(modal).getByText('Tick each one as you ask it.')).toBeInTheDocument()
+    const first = within(modal).getAllByRole('checkbox', { name: /^Asked: / })[0]
+    if (!first) throw new Error('no question')
+    await user.click(first)
+    expect(within(modal).getByText(/^1 of \d asked\.$/)).toBeInTheDocument()
+    const open = within(modal).getAllByRole('button', { expanded: true })
+    expect(open).toHaveLength(1)
+    expect(open[0]).not.toBe(questions[0])
+    expect(
+      within(modal).getAllByText('Who else is involved in decisions about the office?'),
+    ).toHaveLength(1)
+  })
+
+  it('"Company info" closes the card and opens the company panel', async () => {
+    mockApi({ prepStatus: 409 })
+    const { user } = renderCompanies()
+    await screen.findByText('ABC Logistics')
+    await user.type(screen.getByRole('combobox', { name: /Who are you calling/ }), 'jas')
+    await user.click(await screen.findByRole('option', { name: /Jason Reeds/ }))
+    const modal = await screen.findByRole('dialog', { name: /Jason Reeds/ })
+    await user.click(await within(modal).findByRole('button', { name: 'Company info' }))
+    await waitFor(() => {
+      expect(new URLSearchParams(screen.getByLabelText('Address').textContent).get('company')).toBe(
+        '101',
+      )
+    })
   })
 
   it('copies the number and says "Copied"', async () => {
@@ -466,6 +548,50 @@ describe('the prep box and the call prep', () => {
     expect(await within(modal).findByText('Copied')).toBeInTheDocument()
     await act(async () => {
       await Promise.resolve()
+    })
+  })
+})
+
+describe('the HubSpot sync button', () => {
+  it('says when our copy was updated, follows a full sync, and refreshes the list after', async () => {
+    const running = sync({
+      id: 5,
+      status: 'running',
+      trigger: 'website',
+      companies_read: 4200,
+      deals_read: 0,
+      companies_saved: 0,
+      deals_saved: 0,
+      started_at: new Date().toISOString(),
+      finished_at: null,
+    })
+    const backend = mockApi({ afterStart: [running, sync()] })
+    const { user } = renderCompanies()
+    expect(await screen.findByText(/HubSpot copy updated 5 hours ago/)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Sync with HubSpot' }))
+    await waitFor(() => {
+      const posted = backend.requests.find((request) => request.url.includes('/hubspot/sync?'))
+      expect(posted && new URL(posted.url).searchParams.get('mode')).toBe('full')
+    })
+    expect(await screen.findByText('Reading companies: 4,200 of about 13,913.')).toBeInTheDocument()
+    expect(screen.getByRole('progressbar', { name: 'HubSpot sync' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Syncing' })).toBeDisabled()
+
+    // It finishes: the next look says what was copied, and the list is read again.
+    const listReads = (): number =>
+      backend.requests.filter((request) => new URL(request.url).pathname === API).length
+    const before = listReads()
+    backend.syncs = [
+      sync({ id: 5, trigger: 'website', companies_saved: 13916, deals_saved: 8050 }),
+      sync(),
+    ]
+    expect(
+      await screen.findByText('HubSpot copy updated', {}, { timeout: 5000 }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('13,916 companies and 8,050 deals copied.')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(listReads()).toBeGreaterThan(before)
     })
   })
 })

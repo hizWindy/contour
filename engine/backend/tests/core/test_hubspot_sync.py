@@ -45,9 +45,9 @@ class CountingEmbedder:
         return [[0.01 * (i % 7 + 1)] * 384 for i in range(len(texts))]
 
 
-def contour() -> FakeHubSpot:
+def contour(fake: FakeHubSpot | None = None) -> FakeHubSpot:
     """Three companies, three deals and two owners, as Contour's HubSpot has them."""
-    fake = FakeHubSpot(page_size=2)  # small pages, so paging is used
+    fake = fake or FakeHubSpot(page_size=2)  # small pages, so paging is used
     fake.owners_active = [Owner("11", "Pat Lee", False)]
     fake.owners_archived = [Owner("12", "Sam Old", True)]
     fake.add_company(
@@ -126,6 +126,54 @@ async def test_the_first_sync_reads_everything_and_saves_it_like_an_export(
         select(func.count()).select_from(MemoryItem).where(MemoryItem.app == "hubspot")
     )
     assert profiles == 3 and len(embedder.texts) == 3
+
+
+class WatchingHubSpot(FakeHubSpot):
+    """Reads the sync's row before each page, to see the progress saved so far."""
+
+    def __init__(self, sessions: async_sessionmaker[AsyncSession]) -> None:
+        super().__init__(page_size=2)
+        self.sessions = sessions
+        self.seen: list[tuple[int, int]] = []
+
+    async def list_objects(self, object_type, **kwargs):  # type: ignore[no-untyped-def]
+        async with self.sessions() as session:
+            row = await session.scalar(select(HubSpotSync).order_by(HubSpotSync.id.desc()).limit(1))
+            if row is not None:
+                self.seen.append((row.companies_read, row.deals_read))
+        return await super().list_objects(object_type, **kwargs)
+
+
+async def test_a_sync_saves_how_far_it_has_read_as_it_goes(
+    session_factory: async_sessionmaker[AsyncSession], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """PLAN-V10 F2: the website's "Sync with HubSpot" shows the counts climb."""
+    monkeypatch.setattr("core.hubspot.sync.PROGRESS_EVERY", 1)
+    watching = WatchingHubSpot(session_factory)
+    out = await sync(session_factory, contour(watching))
+
+    assert out.status == "done"
+    assert (out.companies_read, out.deals_read) == (3, 3)
+    # Before each page: nothing yet, 2 companies, all 3, then 3 companies and 2 deals.
+    assert watching.seen[:4] == [(0, 0), (2, 0), (3, 0), (3, 2)]
+
+
+async def test_a_progress_save_that_fails_never_stops_the_sync(
+    session_factory: async_sessionmaker[AsyncSession], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def broken(session: AsyncSession, sync_id: int, **values: object) -> None:
+        if set(values) == {"companies_read", "deals_read"}:
+            raise RuntimeError("the database blinked")
+        await real_set(session, sync_id, **values)  # type: ignore[arg-type]
+
+    from core.hubspot import sync as module
+
+    real_set = module._set
+    monkeypatch.setattr(module, "PROGRESS_EVERY", 1)
+    monkeypatch.setattr(module, "_set", broken)
+    out = await sync(session_factory, contour())
+
+    assert (out.status, out.companies_saved, out.deals_saved) == ("done", 3, 2)
 
 
 async def test_an_export_row_is_replaced_by_the_api_one_with_the_same_id(

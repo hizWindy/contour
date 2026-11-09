@@ -45,6 +45,8 @@ from apps.companies.facts import (
     facts_for_claude,
 )
 from apps.companies.schemas import (
+    FollowUp,
+    GuidedQuestion,
     Objection,
     PrepOut,
     PrepPerson,
@@ -63,8 +65,10 @@ from core.searches.service import log_reply
 log = logging.getLogger(__name__)
 
 APP = "companies"
-PROMPT_VERSION = "prep-1"
+PROMPT_VERSION = "prep-2"  # prep-2 (9 Nov): guided questions with follow-ups
 LINE_CHARS = 400
+FOLLOW_UP_CHARS = 200
+MAX_FOLLOW_UPS = 3
 EM_DASH = chr(0x2014)  # the website shows no em dashes (DESIGN.md)
 EN_DASH = chr(0x2013)
 STUCK_MINUTES = 5  # a prep still "searching" after this, with no task behind it, has failed
@@ -84,6 +88,17 @@ class AnswerLine(BaseModel):
 class AnswerObjection(BaseModel):
     they_say: str = Field(description="Likely pushback, in their words, like 'We're not ready.'")
     answer: AnswerLine
+
+
+class AnswerFollowUp(BaseModel):
+    if_they_say: str = Field(description="A likely answer, in a few words, like 'We'll move'.")
+    ask: str = Field(description="What to ask next. Only a question: no new facts.")
+
+
+class AnswerQuestion(AnswerLine):
+    follow_ups: list[AnswerFollowUp] = Field(
+        description="1 or 2 likely answers, each with what to ask next."
+    )
 
 
 class AnswerPage(BaseModel):
@@ -106,7 +121,9 @@ class PrepAnswer(BaseModel):
     news: list[AnswerLine] = Field(description="Up to 3 news items from the last 90 days.")
     opener: list[AnswerLine] = Field(description="What to say first: 1 or 2 lines.")
     why_now: list[AnswerLine] = Field(description="Why this call matters now: 1 to 3 lines.")
-    questions: list[AnswerLine] = Field(description="3 to 5 questions made from the facts.")
+    questions: list[AnswerQuestion] = Field(
+        description="3 to 5 guided questions made from the facts, in the order to ask them."
+    )
     if_they_say: list[AnswerObjection] = Field(description="2 or 3 likely pushbacks, answered.")
     goal: AnswerLine = Field(description="The next step to ask for, like a site visit.")
     pages: list[AnswerPage] = Field(description="Every web page you cite. Empty if none.")
@@ -129,6 +146,9 @@ removed before anyone sees it.
 - The opener is what the caller says first. Use the last call or the news when there is one.
 - Questions come from the facts, never generic. Example: a lease ending in 16 months gives \
 "Are you planning to renew or move?".
+- Each question has 1 or 2 follow-ups: a likely answer in a few words, and what to ask next. \
+Example: "Move" gives "Have you started looking? Who is helping you?". A follow-up only asks: it \
+never states a fact.
 - If they say: likely pushback, and a short, honest answer.
 - Goal: the next step to ask for, like a site visit or a meeting.
 - When names are hidden, the company is written {company} and the person {person}. Keep those \
@@ -284,10 +304,25 @@ def check_answer(
             objections.append(
                 Objection(they_say=_clean(item.they_say, pack, names_ok=names_ok), answer=checked)
             )
+
+    def follow_ups(item: AnswerQuestion) -> list[FollowUp]:
+        kept: list[FollowUp] = []
+        for follow in item.follow_ups:
+            said = _clean(follow.if_they_say, pack, names_ok=names_ok)
+            ask = _clean(follow.ask, pack, names_ok=names_ok)
+            # A follow-up only asks. A long one is a speech, not a question, so it is left out.
+            if said and ask and len(said) + len(ask) <= FOLLOW_UP_CHARS:
+                kept.append(FollowUp(if_they_say=said, ask=ask))
+        return kept[:MAX_FOLLOW_UPS]
+
     news = lines(answer.news, 3)
     opener = lines(answer.opener, 2)
     why_now = lines(answer.why_now, 3)
-    questions = lines(answer.questions, 5)
+    questions = [
+        GuidedQuestion(text=checked.text, sources=checked.sources, follow_ups=follow_ups(item))
+        for item in answer.questions
+        if (checked := line(item)) is not None
+    ][:5]
     goal = line(answer.goal)
     script = PrepScript(
         still_there=still,
