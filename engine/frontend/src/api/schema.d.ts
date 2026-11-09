@@ -878,7 +878,7 @@ export interface paths {
         };
         /**
          * Preview the HubSpot watchlist
-         * @description The HubSpot companies a watchlist run would research, with the counts of how the rest were left out. Local only: nothing goes to Claude.
+         * @description The HubSpot companies a watchlist run would research, with the counts of how the rest were left out. Local only: nothing goes to Claude. `city` and `industry` narrow the lists like a lease and tenure run's choices do; `counts` stays the whole copy.
          */
         get: operations["get_watchlist"];
         put?: never;
@@ -4445,6 +4445,11 @@ export interface components {
             since_days: components["schemas"]["SinceDaysOption"];
             /** Triggers */
             triggers: components["schemas"]["TriggerOption"][];
+            /**
+             * Watchlist Cities
+             * @description The cities the HubSpot watchlist counts staff in, for a watchlist run's `city` (the lease and tenure run picks one, PLAN-V11 C3)
+             */
+            watchlist_cities?: string[];
         };
         /**
          * RunOut
@@ -5903,9 +5908,22 @@ export interface components {
         };
         /**
          * WatchlistOptions
-         * @description Which HubSpot companies the watchlist run researches.
+         * @description Which HubSpot companies the watchlist run researches, and what it asks first.
          */
         WatchlistOptions: {
+            /**
+             * City
+             * @description Only the companies whose biggest office is in this city: one of the watchlist's cities (Melbourne, Adelaide, Perth). Missing: every city.
+             * @example Adelaide
+             */
+            city: string | null;
+            /**
+             * Focus
+             * @description growth: today's research, signs of growth and change. tenure: the lease and tenure run (Old offices on the Start page, PLAN-V11 C2). It asks the office questions first (the address, since when, any move or fitout since), and takes the most staff first.
+             * @default growth
+             * @enum {string}
+             */
+            focus: "growth" | "tenure";
             /**
              * Include Director
              * @description Also research the Director review list (hospitals, law firms...)
@@ -5919,6 +5937,14 @@ export interface components {
              */
             include_unlikely: boolean;
             /**
+             * Industries
+             * @description Only the companies in these HubSpot industries, as HubSpot names them. Case, punctuation, '&' and 'and' don't matter. Empty: every industry.
+             * @example [
+             *       "Information Technology & Services"
+             *     ]
+             */
+            industries: string[];
+            /**
              * Limit
              * @description Research only the first N. Missing: as many as the run limits allow.
              */
@@ -5926,12 +5952,18 @@ export interface components {
         };
         /** WatchlistOut */
         WatchlistOut: {
+            /** @description The whole HubSpot copy, whatever the city or industry */
             counts: components["schemas"]["WatchCounts"];
             /**
              * Director
              * @description The Director review list
              */
             director: components["schemas"]["WatchItem"][];
+            /**
+             * Industries
+             * @description The HubSpot industries of the listed companies in the city (before the industry choice), the most first. The Start page's lease and tenure run offers them.
+             */
+            industries?: components["schemas"]["FacetValue"][];
             /**
              * Items
              * @description The watch list, most likely first
@@ -11531,6 +11563,10 @@ export interface operations {
                 /** @description Include the Director review list in `items` */
                 include_director?: boolean;
                 limit?: number;
+                /** @description Only companies whose biggest office is in this city */
+                city?: string | null;
+                /** @description Only companies in these HubSpot industries. Repeat it for more. */
+                industry?: string[] | null;
             };
             header?: never;
             path?: never;

@@ -225,6 +225,7 @@ async def research_one(run: RunCtx, task: CompanyTask) -> dict[str, Any]:
                 blocked_domains=tuple(run.rules.criteria.source_domains.blocked),
                 company_cap_usd=ctx.caps.company_cap_usd,
                 signalhire_credits=run.signalhire_credits,
+                focus=task.get("focus", "growth"),  # tenure: the lease and tenure run (C2)
             )
             request = ResearchRequest(
                 company=name,

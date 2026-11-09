@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Annotated, Any, NotRequired, TypedDict
 
-from apps.lead_finder.context import CreditMeter, Origin, Signal
+from apps.lead_finder.context import CreditMeter, Focus, Origin, Signal
 from apps.lead_finder.rules import LeadFinderRules
 from core.runs.schemas import CapKind, CapReachedData
 from core.runs.types import RunContext
@@ -35,6 +35,8 @@ class CompanyTask(TypedDict):
     # An automatic run's goal in good leads (`goal.py`): research stops once the run has this many.
     # Missing or None: no goal (a run a person started).
     goal: NotRequired[int | None]
+    # What the research asks first (PLAN-V11 C2). Missing: growth, today's research.
+    focus: NotRequired[Focus]
 
 
 class SliceTask(TypedDict):

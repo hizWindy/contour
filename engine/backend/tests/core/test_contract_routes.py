@@ -402,7 +402,8 @@ def test_the_watchlist_and_test_routes_have_their_final_shapes(schema: dict[str,
     assert paths[f"{LF}/tests/run"]["post"]["responses"]["201"]
     assert paths[f"{LF}/leads/{{lead_id}}/recheck"]["post"]["responses"]["201"]
     names = {p["name"] for p in paths[f"{LF}/watchlist"]["get"]["parameters"]}
-    assert names == {"include_unlikely", "include_director", "limit"}
+    # city and industry: the lease and tenure run's choices (PLAN-V11 C2)
+    assert names == {"include_unlikely", "include_director", "limit", "city", "industry"}
     assert {p["name"] for p in paths[f"{LF}/tests"]["get"]["parameters"]} == {"limit", "offset"}
 
 

@@ -131,6 +131,14 @@ ANGLE_NOTES = {
         Note(claim="Acme is run from its Melbourne head office.", url=SITE, published=None),
     ],
     "money": [Note(claim="Acme won a $50M contract.", url=ASX, published="2026-09-20")],
+    # PLAN-V11 C2: the lease and tenure run's office questions
+    "tenure": [
+        Note(
+            claim="Acme has been at 101 Collins Street since 2016, with no refit since.",
+            url=NEWS,
+            published="2026-10-01",
+        )
+    ],
     "gaps": [Note(claim="Acme's office is 2,500 m².", url=NEWS, published="2026-10-01")],
 }
 

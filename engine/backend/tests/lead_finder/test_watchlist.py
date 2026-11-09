@@ -14,7 +14,7 @@ from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.lead_finder.rules import LeadFinderRules, load_rules
-from apps.lead_finder.schemas import WatchCounts
+from apps.lead_finder.schemas import FacetValue, WatchCounts, WatchItem
 from apps.lead_finder.watchlist import (
     PLACEHOLDER_NAME,
     HubSpotRow,
@@ -22,9 +22,12 @@ from apps.lead_finder.watchlist import (
     WatchOffice,
     WatchResult,
     build_watchlist,
+    industry_counts,
     load_watchlist,
     load_watchlist_rows,
     metro_city,
+    most_staff_first,
+    narrow,
     rows_from_export,
     watchlist_out,
 )
@@ -874,3 +877,93 @@ def test_todays_rules_add_the_export_companies_of_50_to_99_staff(export: HubSpot
         "The Playford Hotel",
         "Total Support Services",
     ]
+
+
+# --- One city, some industries: the lease and tenure run (PLAN-V11 C2) ----------------------
+
+
+def watch_item(hubspot_id: str, city: str, industry: str | None, staff: int | None) -> WatchItem:
+    return WatchItem(
+        hubspot_id=hubspot_id,
+        name=f"Company {hubspot_id}",
+        city=city,
+        industry=industry,
+        office_based="likely",
+        linkedin_staff=staff,
+        estimated_staff=None if staff is None else staff * 2,
+        owner=None,
+        last_dissolved=None,
+        note=None,
+    )
+
+
+ITEMS = [
+    watch_item("1", "Melbourne", "Information Technology And Services", 60),
+    watch_item("2", "Adelaide", "Information Technology & Services", 300),
+    watch_item("3", "Adelaide", "Retail", 120),
+    watch_item("4", "Adelaide", None, 90),
+    watch_item("5", "Adelaide", "Retail", 120),
+]
+
+
+def test_narrow_keeps_one_city_and_some_industries() -> None:
+    assert [i.hubspot_id for i in narrow(ITEMS)] == ["1", "2", "3", "4", "5"]
+    assert [i.hubspot_id for i in narrow(ITEMS, city="Adelaide")] == ["2", "3", "4", "5"]
+    # HubSpot's "&" and the export's "And" are the same industry, as in the rules
+    it = narrow(ITEMS, industries=["information technology and services"])
+    assert [i.hubspot_id for i in it] == ["1", "2"]
+    both = narrow(ITEMS, city="Adelaide", industries=["Information Technology & Services"])
+    assert [i.hubspot_id for i in both] == ["2"]
+
+
+def test_most_staff_first_then_the_newest_record() -> None:
+    assert [i.hubspot_id for i in most_staff_first(ITEMS)] == ["2", "5", "3", "4", "1"]
+
+
+def test_industry_counts_go_most_first_and_leave_out_the_unknown() -> None:
+    assert industry_counts(narrow(ITEMS, city="Adelaide")) == [
+        FacetValue(value="Retail", count=2),
+        FacetValue(value="Information Technology & Services", count=1),
+    ]
+
+
+def test_the_preview_narrows_its_lists_but_counts_the_whole_copy(export: HubSpotExport) -> None:
+    result = build_watchlist(rows_from_export(export), TODAYS_RULES, include_director=True)
+    whole = watchlist_out(result)
+    adelaide = watchlist_out(result, city="Adelaide")
+    assert (whole.total, adelaide.total) == (52, 3)
+    assert {item.city for item in [*adelaide.items, *adelaide.director]} == {"Adelaide"}
+    assert adelaide.counts == whole.counts  # always the whole copy
+    # The Watch list and the Director list in Adelaide, the most first, then by name
+    assert [(f.value, f.count) for f in adelaide.industries] == [
+        ("Hospital Health Care", 2),
+        ("Hospitality", 2),
+        ("Information Technology And Services", 1),
+    ]
+    hotels = watchlist_out(result, city="Adelaide", industries=["Hospitality"])
+    assert [item.name for item in hotels.items] == [
+        "The Playford Hotel",
+        "Hotel Grand Chancellor Adelaide",
+    ]
+    assert (hotels.total, hotels.director) == (2, [])
+    assert hotels.industries == adelaide.industries  # offered before the industry choice
+
+
+@pytest.mark.integration
+async def test_the_route_takes_a_city_and_industries(
+    session: AsyncSession, db_client: httpx.AsyncClient, export: HubSpotExport
+) -> None:
+    await save_export(session, export)
+    params = {"city": "adelaide", "industry": ["Hospitality", "Information Technology & Services"]}
+    body = (await db_client.get(WATCHLIST, params=params)).json()
+    # The route sorts with the 25 Oct rules here (100+ staff), so the hotels are too small, and
+    # HubSpot's "&" matches the export's "And"
+    assert [item["name"] for item in body["items"]] == ["Synechron Australia"]
+    perth = (await db_client.get(WATCHLIST, params={"city": "Perth"})).json()
+    assert {item["city"] for item in perth["items"]} == {"Perth"}
+    assert perth["counts"] == GOLDEN_COUNTS.model_dump()
+    assert sum(f["count"] for f in perth["industries"]) <= perth["total"] + len(perth["director"])
+    for bad in ({"city": "Sydney"}, {"industry": ["  "]}):
+        response = await db_client.get(WATCHLIST, params=bad)
+        assert response.status_code == 422
+        assert response.json()["code"] == "bad_choice"

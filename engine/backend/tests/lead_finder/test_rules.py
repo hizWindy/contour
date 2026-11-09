@@ -137,8 +137,15 @@ def test_discovery_searches_look_for_plans_not_openings() -> None:
     assert "{city} company plans to double staff {year}" in discovery["fast_growth"]
 
 
-def test_watchlist_searches_from_three_angles() -> None:
-    assert set(load_rules().queries.company) == {"property", "people", "money"}
+def test_watchlist_searches_from_three_angles_and_the_tenure_questions() -> None:
+    """A lease and tenure run asks the tenure angle in place of property (PLAN-V11 C2)."""
+    company = load_rules().queries.company
+    assert set(company) == {"property", "people", "money", "tenure"}
+    assert company["tenure"] == [
+        "{company} {city} office address",
+        "{company} moved office {city}",
+        "{company} office fitout",
+    ]
 
 
 def test_unconfirmed_rules_are_listed() -> None:

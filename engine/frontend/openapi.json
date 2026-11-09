@@ -6726,7 +6726,8 @@
               "enum": [
                 "property",
                 "people",
-                "money"
+                "money",
+                "tenure"
               ]
             },
             "title": "Company",
@@ -7897,6 +7898,14 @@
               "$ref": "#/components/schemas/TriggerOption"
             },
             "title": "Triggers",
+            "type": "array"
+          },
+          "watchlist_cities": {
+            "description": "The cities the HubSpot watchlist counts staff in, for a watchlist run's `city` (the lease and tenure run picks one, PLAN-V11 C3)",
+            "items": {
+              "type": "string"
+            },
+            "title": "Watchlist Cities",
             "type": "array"
           }
         },
@@ -11191,8 +11200,34 @@
       },
       "WatchlistOptions": {
         "additionalProperties": false,
-        "description": "Which HubSpot companies the watchlist run researches.",
+        "description": "Which HubSpot companies the watchlist run researches, and what it asks first.",
         "properties": {
+          "city": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only the companies whose biggest office is in this city: one of the watchlist's cities (Melbourne, Adelaide, Perth). Missing: every city.",
+            "examples": [
+              "Adelaide"
+            ],
+            "title": "City"
+          },
+          "focus": {
+            "default": "growth",
+            "description": "growth: today's research, signs of growth and change. tenure: the lease and tenure run (Old offices on the Start page, PLAN-V11 C2). It asks the office questions first (the address, since when, any move or fitout since), and takes the most staff first.",
+            "enum": [
+              "growth",
+              "tenure"
+            ],
+            "title": "Focus",
+            "type": "string"
+          },
           "include_director": {
             "default": false,
             "description": "Also research the Director review list (hospitals, law firms...)",
@@ -11204,6 +11239,20 @@
             "description": "Include companies in industries that rarely work in an office",
             "title": "Include Unlikely",
             "type": "boolean"
+          },
+          "industries": {
+            "description": "Only the companies in these HubSpot industries, as HubSpot names them. Case, punctuation, '&' and 'and' don't matter. Empty: every industry.",
+            "examples": [
+              [
+                "Information Technology & Services"
+              ]
+            ],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Industries",
+            "type": "array"
           },
           "limit": {
             "anyOf": [
@@ -11223,7 +11272,10 @@
         "required": [
           "include_unlikely",
           "include_director",
-          "limit"
+          "limit",
+          "focus",
+          "city",
+          "industries"
         ],
         "title": "WatchlistOptions",
         "type": "object"
@@ -11231,7 +11283,8 @@
       "WatchlistOut": {
         "properties": {
           "counts": {
-            "$ref": "#/components/schemas/WatchCounts"
+            "$ref": "#/components/schemas/WatchCounts",
+            "description": "The whole HubSpot copy, whatever the city or industry"
           },
           "director": {
             "description": "The Director review list",
@@ -11239,6 +11292,14 @@
               "$ref": "#/components/schemas/WatchItem"
             },
             "title": "Director",
+            "type": "array"
+          },
+          "industries": {
+            "description": "The HubSpot industries of the listed companies in the city (before the industry choice), the most first. The Start page's lease and tenure run offers them.",
+            "items": {
+              "$ref": "#/components/schemas/FacetValue"
+            },
+            "title": "Industries",
             "type": "array"
           },
           "items": {
@@ -19852,7 +19913,7 @@
     },
     "/lead-finder/watchlist": {
       "get": {
-        "description": "The HubSpot companies a watchlist run would research, with the counts of how the rest were left out. Local only: nothing goes to Claude.",
+        "description": "The HubSpot companies a watchlist run would research, with the counts of how the rest were left out. Local only: nothing goes to Claude. `city` and `industry` narrow the lists like a lease and tenure run's choices do; `counts` stays the whole copy.",
         "operationId": "get_watchlist",
         "parameters": [
           {
@@ -19889,6 +19950,46 @@
               "minimum": 1,
               "title": "Limit",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Only companies whose biggest office is in this city",
+            "in": "query",
+            "name": "city",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 60,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only companies whose biggest office is in this city",
+              "title": "City"
+            }
+          },
+          {
+            "description": "Only companies in these HubSpot industries. Repeat it for more.",
+            "in": "query",
+            "name": "industry",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only companies in these HubSpot industries. Repeat it for more.",
+              "title": "Industry"
             }
           }
         ],

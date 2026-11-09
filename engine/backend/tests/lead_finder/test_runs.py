@@ -37,7 +37,7 @@ from tests.core.runs_fakes import (
 )
 from tests.lead_finder.conftest import APP, MakeLeadFinderManager, lf_settings
 from tests.lead_finder.factories import add_all, make_lead
-from tests.lead_finder.samples import FakeClaude, sample_scenario
+from tests.lead_finder.samples import FakeClaude, fact, make_facts, sample_scenario
 
 pytestmark = pytest.mark.integration
 D = Decimal
@@ -349,6 +349,42 @@ async def test_a_watchlist_run_skips_the_dissolved_deal_and_keeps_the_watch_orde
     # The first three of the watch list, most likely first (EXPORT.md section 8).
     researched = [e["name"] for e in of_type(events, "company_started")]
     assert sorted(researched) == sorted(["Synechron Australia", "SME Powered Services", "JAM TV"])
+
+
+@pytest.mark.skipif(not EXPORT.exists(), reason="the HubSpot export is not in the repo")
+async def test_a_lease_and_tenure_run_asks_the_office_questions_and_finds_old_offices(
+    make_lf_manager: MakeLeadFinderManager,
+    session_factory: async_sessionmaker[AsyncSession],
+    session: AsyncSession,
+) -> None:
+    """PLAN-V11 C2: one city, the most staff first, the office questions in place of the property
+    angle, and a move-in 8+ years ago with no project since gives the old office's sign (C1)."""
+    await save_export(session, read_export(EXPORT))
+    old_office = make_facts(triggers=[], office_since=fact("2016"))  # no news at all
+    claude = FakeClaude(facts=old_office)
+    manager = make_lf_manager(claude, settings=lf_settings(hubspot_names_to_claude_ok=True))
+    params = {"watchlist": {"focus": "tenure", "city": "Perth", "limit": 2}}
+
+    estimate = await manager.estimate(RunCreate(app=APP, mode="watchlist", params=params))
+    assert (estimate.valid, estimate.blocked, estimate.companies_expected) == (True, None, 2)
+    assert estimate.cost_usd_low > 0  # the start form shows it (C3)
+    every_perth = {"watchlist": {"focus": "tenure", "city": "Perth"}}
+    perth = await manager.estimate(RunCreate(app=APP, mode="watchlist", params=every_perth))
+    assert perth.companies_expected == 20  # Perth's share of the export's 52 at 50+ staff
+
+    run_id = await start(manager, "watchlist", params)
+    row = await finished(manager, session_factory, run_id)
+    assert row.status == "done"
+    events = await stored_json(session_factory, run_id)
+    researched = [e["name"] for e in of_type(events, "company_started")]
+    # The two biggest in Perth (182 and 158 estimated staff), not the most likely first.
+    assert sorted(researched) == ["Adenco", "Aspect Engineering Solutions"]
+    searched = {call for call in claude.calls if call.startswith("search:")}
+    assert "search:tenure" in searched and "search:property" not in searched
+    leads = await leads_of(session_factory, run_id)
+    assert len(leads) == 2
+    assert {lead.trigger_id for lead in leads} == {"long_tenure"}
+    assert {lead.result for lead in leads} == {"pass"}
 
 
 # --- Stop, caps, failures, crash and resume ------------------------------------------------------

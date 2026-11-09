@@ -81,6 +81,8 @@ async def test_the_run_options_have_everything_the_start_page_draws(
     modes = {mode["mode"]: mode for mode in body["modes"]}
     assert modes["watchlist"]["needs_approval"] is True
     assert modes["watchlist"]["approved"] is False  # no OK from Levi in the test settings
+    assert body["watchlist_cities"] == ["Melbourne", "Adelaide", "Perth"]  # PLAN-V11 C3
+    assert body["defaults"]["watchlist"]["focus"] == "growth"
     assert modes["discovery"]["approved"] is True
     assert body["companies_limit"] == {"min": 1, "max": 25}
     assert body["defaults"]["cities"] == ["Melbourne"]

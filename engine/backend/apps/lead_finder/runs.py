@@ -19,19 +19,22 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.lead_finder import prompts
+from apps.lead_finder.context import Focus
 from apps.lead_finder.params import (
     CompanyParams,
     DiscoveryParams,
     TestsetParams,
+    WatchlistOptions,
     WatchlistParams,
 )
 from apps.lead_finder.rules import load_rules
 from apps.lead_finder.run_email import run_finished
+from apps.lead_finder.schemas import WatchItem
 from apps.lead_finder.steps.discover import MAX_CANDIDATES
 from apps.lead_finder.steps.plan import check_discovery_size, make_slices
 from apps.lead_finder.steps.state import CompanyTask
 from apps.lead_finder.testing import load_testset
-from apps.lead_finder.watchlist import load_watchlist
+from apps.lead_finder.watchlist import load_watchlist, most_staff_first
 from core.api.errors import Problem
 from core.config import Settings
 from core.hubspot.models import HubSpotCompany
@@ -100,8 +103,9 @@ def _task(
     hubspot_id: str | None = None,
     is_test: bool = False,
     recheck: bool = False,
+    focus: Focus = "growth",
 ) -> CompanyTask:
-    return CompanyTask(
+    task = CompanyTask(
         name=name,
         city=city,
         website=website,
@@ -112,22 +116,35 @@ def _task(
         signals=[],
         today=today,
     )
+    if focus != "growth":
+        task["focus"] = focus
+    return task
+
+
+async def chosen_watchlist(session: AsyncSession, options: WatchlistOptions) -> list[WatchItem]:
+    """The companies a watchlist run researches, in order: the watch list, most likely first,
+    then the Director list when asked, in the chosen city and industries (PLAN-V11 C2). A lease
+    and tenure run takes the most staff first. At most `limit`. Local only: no Claude."""
+    found = await load_watchlist(
+        session,
+        load_rules(),
+        include_unlikely=options.include_unlikely,
+        include_director=options.include_director,
+        city=options.city,
+        industries=options.industries,
+    )
+    items = [*found.items, *found.director]
+    if options.focus == "tenure":
+        items = most_staff_first(items)
+    return items if options.limit is None else items[: options.limit]
 
 
 async def watchlist_tasks(ctx: RunContext[WatchlistParams], today: str) -> list[CompanyTask]:
-    """The watchlist, most likely first (then the Director list when asked), up to `limit`.
-    Only the name, the city and the domain go to Claude."""
+    """The chosen watchlist companies (`chosen_watchlist`). Only the name, the city and the domain
+    go to Claude."""
     options = ctx.params.watchlist
     async with ctx.session() as session:
-        found = await load_watchlist(
-            session,
-            load_rules(),
-            include_unlikely=options.include_unlikely,
-            include_director=options.include_director,
-        )
-        items = [*found.items, *found.director]
-        if options.limit is not None:
-            items = items[: options.limit]
+        items = await chosen_watchlist(session, options)
         ids = [item.hubspot_id for item in items]
         domains = dict(
             (
@@ -146,6 +163,7 @@ async def watchlist_tasks(ctx: RunContext[WatchlistParams], today: str) -> list[
             today,
             origin="hubspot",
             hubspot_id=item.hubspot_id,
+            focus=options.focus,
         )
         for item in items
     ]
@@ -236,22 +254,19 @@ async def estimate_discovery(ctx: EstimateContext[DiscoveryParams]) -> RunEstima
 async def estimate_watchlist(ctx: EstimateContext[WatchlistParams]) -> RunEstimate:
     options = ctx.params.watchlist
     async with ctx.session() as session:
-        found = await load_watchlist(
-            session,
-            load_rules(),
-            include_unlikely=options.include_unlikely,
-            include_director=options.include_director,
-        )
-    companies = len(found.items) + len(found.director)
-    if options.limit is not None:
-        companies = min(companies, options.limit)
+        companies = len(await chosen_watchlist(session, options))
     blocked = (
         None
         if ctx.settings.hubspot_names_to_claude_ok
         else Blocked(code=NOT_APPROVED_CODE, message=NOT_APPROVED_DETAIL)
     )
-    warnings = [] if companies else ["The watchlist is empty. Upload a HubSpot export first."]
-    return _estimate(ctx, companies, blocked=blocked, warnings=warnings)
+    narrowed = options.city is not None or bool(options.industries)
+    empty = (
+        "No watchlist company fits these choices."
+        if narrowed
+        else "The watchlist is empty. Upload a HubSpot export first."
+    )
+    return _estimate(ctx, companies, blocked=blocked, warnings=[] if companies else [empty])
 
 
 async def estimate_company(ctx: EstimateContext[CompanyParams]) -> RunEstimate:

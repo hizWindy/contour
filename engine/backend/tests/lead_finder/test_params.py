@@ -308,6 +308,34 @@ def test_the_watchlist_limit_is_between_1_and_200() -> None:
         )
 
 
+# --- The lease and tenure run's choices (PLAN-V11 C2) ------------------------------------------
+
+
+def test_a_watchlist_run_is_a_growth_run_unless_it_asks_for_tenure() -> None:
+    assert WatchlistOptions().focus == "growth"
+    assert WatchlistOptions(focus="tenure").focus == "tenure"
+    assert first_error(WatchlistOptions, {"focus": "lease"})["loc"] == ("focus",)
+
+
+def test_the_city_is_one_of_the_watchlists_cities_spelt_like_the_rules() -> None:
+    assert WatchlistOptions().city is None
+    assert WatchlistOptions(city=" adelaide ").city == "Adelaide"
+    for bad in ("Sydney", "Brisbane", "Nowhere"):  # Sydney goes to a Director, uncounted here
+        error = first_error(WatchlistOptions, {"city": bad})
+        assert (error["loc"], error["type"]) == (("city",), "city")
+        assert "Choose from: Melbourne, Adelaide, Perth" in error["msg"]
+
+
+def test_industries_are_tidied_and_listed_once() -> None:
+    options = WatchlistOptions(industries=["  Information   Technology & Services ", "Retail"])
+    assert options.industries == ["Information Technology & Services", "Retail"]
+    twice = ["Hospital & Health Care", "hospital and health care"]  # the same, as the rules see it
+    assert first_error(WatchlistOptions, {"industries": twice})["type"] == "industry"
+    for bad in (["  "], ["&"], ["x" * 121]):
+        assert first_error(WatchlistOptions, {"industries": bad})["type"] == "industry"
+    assert first_error(WatchlistOptions, {"industries": ["a"] * 21})["type"] == "too_long"
+
+
 def test_the_testset_needs_nothing() -> None:
     assert TestsetParams().caps == RunCapsIn(run_cap_usd=None, max_companies=None)
 

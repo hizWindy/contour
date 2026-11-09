@@ -3,7 +3,9 @@
 The steps, in order:
 1. Memory first: reuse fresh notes about this company, so we don't pay to find them again. Then
    Signal Hire's details for the company, when it is switched on: Claude gets them as hints.
-2. Search: one Claude request per angle (property, people, money) that memory didn't cover.
+2. Search: one Claude request per angle (property, people, money) that memory didn't cover. A
+   lease and tenure run (`ResearchContext.focus`, PLAN-V11 C2) asks the tenure angle's office
+   questions in place of property, and a missing move-in date is one of its gaps in step 4.
 3. Fill the answer form from the notes, then check every fact's source.
    Before any Claude request, the staff numbers HubSpot and Signal Hire already have are read
    (PLAN-V9 B2). When every one of them is under `size.staff_floor` and the company wasn't found
@@ -117,8 +119,12 @@ from core.signalhire.client import SignalHire, get_signalhire
 from core.signalhire.details import SignalHireCompany
 
 APP = "lead_finder"
-SearchAngle = Literal["property", "people", "money"]
+SearchAngle = Literal["property", "people", "money", "tenure"]
 ANGLES: tuple[SearchAngle, ...] = ("property", "people", "money")
+# The lease and tenure run (PLAN-V11 C2) asks the office questions in place of the property angle,
+# so a company costs the same as a growth research.
+TENURE_ANGLES: tuple[SearchAngle, ...] = ("tenure", "people", "money")
+TENURE_GAP = "when it moved into its current office in that city, and any move or fitout since"
 ANGLE_FOCUS = {
     "property": "its offices: where they are, how big (m² or floors), who owns the building, "
     "the lease and when it ends, and any move, new office, refit or merging of offices",
@@ -129,6 +135,9 @@ ANGLE_FOCUS = {
     "money": "its business: big new contracts, takeovers and mergers, fast growth, money "
     "raised and any plan to hire or grow (with the office size it says it will need), profit, "
     "and any administration",
+    "tenure": "its office in that city: the street address it is at now, when it moved in there "
+    "(the year, and the month if a page says), and any move, fitout or refit there since. Also "
+    "the lease and when it ends, and how big the office is",
 }
 FORM_FAILED_SUMMARY = (
     "The facts are missing: Claude couldn't fill in the answer form. Re-check this lead."
@@ -381,17 +390,23 @@ async def research_company(
         await _save(session, embedder, job, card, hubspot, key, place, metro, profile_text)
         return card
 
-    # 2. Search the angles memory didn't cover
+    # 2. Search the angles memory didn't cover. A lease and tenure run asks the office questions
+    # first, in place of the property angle (PLAN-V11 C2).
+    tenure = context.focus == "tenure"
     try:
-        todo = [angle for angle in ANGLES if angle not in covered]
+        angles = TENURE_ANGLES if tenure else ANGLES
+        todo = [angle for angle in angles if angle not in covered]
         await _search(job, claude, [(a, _angle_prompt(a, job)) for a in todo])
 
         # 3. Fill the form, and check the sources
         prompt = extract_prompt(rules)
         facts, dropped = await _fill_form(job, claude, prompt)
 
-        # 4. Gap check: one more targeted search, then stop
+        # 4. Gap check: one more targeted search, then stop. For a tenure run, a missing move-in
+        # date is a gap too: the old office's sign needs it.
         missing = missing_facts(facts)
+        if tenure and facts.office_since.value is None:
+            missing.append(TENURE_GAP)
         if missing and job.notes:
             before = len(job.notes)
             await _search(job, claude, [("gaps", _gap_prompt(missing, job))])

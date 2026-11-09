@@ -79,6 +79,7 @@ def build_run_options(
             )
             for kind in RUN_KINDS
         ],
+        watchlist_cities=list(rules.watchlist.count_cities),
         companies_limit=CompaniesLimit(min=COMPANIES_MIN, max=COMPANIES_MAX),
         caps=OptionCaps(
             run_cap_usd=caps.run_cap_usd,

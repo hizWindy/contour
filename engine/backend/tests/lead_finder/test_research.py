@@ -106,6 +106,27 @@ async def test_research_searches_three_angles_and_saves_everything(session: Asyn
     assert await count(session, MemoryItem, kind="company_profile") == 1
 
 
+async def test_a_tenure_research_asks_the_office_questions_in_place_of_property(
+    session: AsyncSession,
+) -> None:
+    """PLAN-V11 C2: same cost as a growth research. No move-in date found is a gap to search."""
+    claude = FakeClaude()  # the Acme sample has no move-in date
+    await research(session, claude, context=ResearchContext(focus="tenure"))
+    searches = sorted(call for call in claude.calls if call.startswith("search:"))
+    assert searches == ["search:gaps", "search:money", "search:people", "search:tenure"]
+    tenure = next(r for r in claude.requests if r.step == "search:tenure")
+    assert "Angle: tenure. Find facts about its office in that city" in tenure.prompt
+    assert "- Acme Software Melbourne office address" in tenure.prompt
+    gaps = next(r for r in claude.requests if r.step == "search:gaps")
+    assert "when it moved into its current office in that city" in gaps.prompt
+
+
+async def test_a_growth_research_keeps_the_property_angle(session: AsyncSession) -> None:
+    claude = FakeClaude()
+    await research(session, claude, context=ResearchContext(focus="growth"))
+    assert "search:property" in claude.calls and "search:tenure" not in claude.calls
+
+
 async def test_a_company_that_just_moved_is_a_watch_and_says_why(session: AsyncSession) -> None:
     """PLAN-V11 B3: it moved in 4 months ago, so it has probably just set up its office."""
     card = await research(session, FakeClaude(facts=make_facts(office_since=fact("2026-06"))))

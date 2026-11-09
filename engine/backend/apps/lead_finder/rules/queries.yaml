@@ -68,7 +68,9 @@ discovery:
   hiring_push:
     - "{city} company hiring push {year}"
 
-# Watchlist: each company is searched from three angles.
+# Watchlist: each company is searched from three angles: property, people and money. A lease and
+# tenure run (Old offices on Start a run, PLAN-V11 C2) asks the tenure angle's office questions in
+# place of the property angle: the address, since when, and any move or fitout since.
 company:
   property:
     - "{company} {city} office lease"
@@ -81,3 +83,7 @@ company:
     - "{company} contract win"
     - "{company} acquisition merger"
     - "{company} annual report lease commitments"
+  tenure:
+    - "{company} {city} office address"
+    - "{company} moved office {city}"
+    - "{company} office fitout"

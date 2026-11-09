@@ -23,7 +23,8 @@ from urllib.parse import urlsplit
 from pydantic import ConfigDict, Field, ValidationInfo, field_validator
 from pydantic_core import PydanticCustomError
 
-from apps.lead_finder.rules import load_rules
+from apps.lead_finder.context import Focus
+from apps.lead_finder.rules import industry_name_key, load_rules
 from apps.lead_finder.sanitize import clean_city, clean_company_name, clean_domain, normalize
 from core.api.models import OutModel
 from core.hubspot.matching import clean_name
@@ -35,6 +36,8 @@ SinceDays = Literal[7, 14, 30]
 COMPANIES_MIN = 1
 COMPANIES_MAX = 25
 WATCHLIST_LIMIT_MAX = 200
+WATCHLIST_INDUSTRIES_MAX = 20  # a lease and tenure run's industries (PLAN-V11 C2)
+INDUSTRY_MAX_CHARS = 120
 PLACE_MAX_CHARS = 60
 NAME_MESSAGE = (
     "Use 2 to 80 characters and at most 8 words: letters, digits, spaces and & ' . , - ( ) /"
@@ -167,8 +170,13 @@ class CompanyIn(Strict):
         return clean_typed_domain(value)
 
 
+def watchlist_cities() -> list[str]:
+    """The cities the watchlist counts staff in (`count_cities` in watchlist.yaml)."""
+    return list(load_rules().watchlist.count_cities)
+
+
 class WatchlistOptions(Strict):
-    """Which HubSpot companies the watchlist run researches."""
+    """Which HubSpot companies the watchlist run researches, and what it asks first."""
 
     include_unlikely: bool = Field(
         True, description="Include companies in industries that rarely work in an office"
@@ -182,6 +190,67 @@ class WatchlistOptions(Strict):
         le=WATCHLIST_LIMIT_MAX,
         description="Research only the first N. Missing: as many as the run limits allow.",
     )
+    focus: Focus = Field(
+        "growth",
+        description=(
+            "growth: today's research, signs of growth and change. tenure: the lease and tenure "
+            "run (Old offices on the Start page, PLAN-V11 C2). It asks the office questions first "
+            "(the address, since when, any move or fitout since), and takes the most staff first."
+        ),
+    )
+    city: str | None = Field(
+        None,
+        max_length=PLACE_MAX_CHARS,
+        description=(
+            "Only the companies whose biggest office is in this city: one of the watchlist's "
+            "cities (Melbourne, Adelaide, Perth). Missing: every city."
+        ),
+        examples=["Adelaide"],
+    )
+    industries: list[str] = Field(
+        default_factory=list,
+        max_length=WATCHLIST_INDUSTRIES_MAX,
+        description=(
+            "Only the companies in these HubSpot industries, as HubSpot names them. Case, "
+            "punctuation, '&' and 'and' don't matter. Empty: every industry."
+        ),
+        examples=[["Information Technology & Services"]],
+    )
+
+    @field_validator("city")
+    @classmethod
+    def _city(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        known = watchlist_cities()
+        match = clean_city(value, known)
+        if match is None:
+            raise PydanticCustomError(
+                "city",
+                "Unknown city {city}. Choose from: {known}",
+                {"city": value[:60], "known": ", ".join(known)},
+            )
+        return match
+
+    @field_validator("industries")
+    @classmethod
+    def _industries(cls, value: list[str]) -> list[str]:
+        cleaned: list[str] = []
+        seen: set[str] = set()
+        for name in value:
+            text = " ".join(name.split())
+            key = industry_name_key(text)
+            if not key or len(text) > INDUSTRY_MAX_CHARS:
+                raise PydanticCustomError(
+                    "industry", "Each industry needs 1 to {most} characters", {"most": 120}
+                )
+            if key in seen:
+                raise PydanticCustomError(
+                    "industry", "List each industry once ({name} is there twice)", {"name": text}
+                )
+            seen.add(key)
+            cleaned.append(text)
+        return cleaned
 
 
 class _Caps(Strict):

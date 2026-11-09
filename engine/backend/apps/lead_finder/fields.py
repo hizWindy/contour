@@ -17,7 +17,7 @@ from pydantic import (
 )
 
 Label = Literal["confirmed", "estimated", "guessed"]
-Angle = Literal["property", "people", "money", "gaps"]
+Angle = Literal["property", "people", "money", "tenure", "gaps"]
 
 
 def _empty_is_unknown(value: Any) -> Any:

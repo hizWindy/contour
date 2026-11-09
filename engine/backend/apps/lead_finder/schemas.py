@@ -121,6 +121,13 @@ class RunOptions(BaseModel):
     triggers: list[TriggerOption]
     since_days: SinceDaysOption
     modes: list[ModeOption]
+    watchlist_cities: list[str] = Field(
+        default_factory=list,
+        description=(
+            "The cities the HubSpot watchlist counts staff in, for a watchlist run's `city` "
+            "(the lease and tenure run picks one, PLAN-V11 C3)"
+        ),
+    )
     companies_limit: CompaniesLimit
     caps: OptionCaps
     defaults: LeadFinderRunParams = Field(
@@ -415,7 +422,14 @@ class WatchlistOut(BaseModel):
     items: list[WatchItem] = Field(description="The watch list, most likely first")
     director: list[WatchItem] = Field(description="The Director review list")
     staff_unknown: list[WatchItem] = Field(description="Dropped for no staff number")
-    counts: WatchCounts
+    counts: WatchCounts = Field(description="The whole HubSpot copy, whatever the city or industry")
+    industries: list[FacetValue] = Field(
+        default_factory=list,
+        description=(
+            "The HubSpot industries of the listed companies in the city (before the industry "
+            "choice), the most first. The Start page's lease and tenure run offers them."
+        ),
+    )
 
 
 # --- The test set ---------------------------------------------------------------------------

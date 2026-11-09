@@ -20,7 +20,8 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 RULES_DIR = Path(__file__).resolve().parent / "rules"
 RULE_FILES = ("criteria", "queries", "hubspot_map", "watchlist")
 PLACEHOLDERS = {"city", "area", "company", "year", "month_year"}
-ANGLES = {"property", "people", "money"}
+# The search angles for one company. tenure is the lease and tenure run's office questions (C2).
+ANGLES = {"property", "people", "money", "tenure"}
 
 
 class Strict(BaseModel):
@@ -431,12 +432,12 @@ class Criteria(Strict):
 class Queries(Strict):
     areas: dict[str, dict[Literal["cbd", "inner"], list[str]]]
     discovery: dict[str, list[str]]
-    company: dict[Literal["property", "people", "money"], list[str]]
+    company: dict[Literal["property", "people", "money", "tenure"], list[str]]
 
     @model_validator(mode="after")
     def check_templates(self) -> Self:
         if set(self.company) != ANGLES:
-            raise ValueError("company templates need the property, people and money angles")
+            raise ValueError("company templates need the property, people, money and tenure angles")
         templates = [t for group in self.discovery.values() for t in group]
         templates += [t for group in self.company.values() for t in group]
         for template in templates:

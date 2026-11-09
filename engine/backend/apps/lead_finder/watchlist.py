@@ -40,7 +40,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.lead_finder.rules import LeadFinderRules, industry_name_key
-from apps.lead_finder.schemas import OfficeBased, WatchCounts, WatchItem, WatchlistOut
+from apps.lead_finder.schemas import FacetValue, OfficeBased, WatchCounts, WatchItem, WatchlistOut
 from apps.lead_finder.scoring import city_of
 from core.hubspot.importer import HubSpotExport, state_from_postcode
 from core.hubspot.models import HubSpotCompany, HubSpotDeal, HubSpotOffice
@@ -384,18 +384,70 @@ def _item(
     )
 
 
+# --- One city, some industries (the lease and tenure run, PLAN-V11 C2) --------------------
+
+
+def narrow(
+    items: Iterable[WatchItem], *, city: str | None = None, industries: Iterable[str] = ()
+) -> list[WatchItem]:
+    """The companies whose biggest office is in `city`, and whose HubSpot industry is one of
+    `industries`. Industry names match like the rules' (case, punctuation, '&' and 'and' don't
+    matter). No city, or no industries: that part keeps everyone."""
+    keys = {industry_name_key(name) for name in industries}
+    return [
+        item
+        for item in items
+        if (city is None or item.city == city)
+        and (not keys or industry_name_key(item.industry or "") in keys)
+    ]
+
+
+def most_staff_first(items: Iterable[WatchItem]) -> list[WatchItem]:
+    """The biggest companies first (estimated staff), then the newest HubSpot record."""
+    return sorted(
+        items,
+        key=lambda item: (
+            -(item.estimated_staff or 0),
+            -_id_number(item.hubspot_id),
+            item.hubspot_id,
+        ),
+    )
+
+
+def industry_counts(items: Iterable[WatchItem]) -> list[FacetValue]:
+    """How many companies each HubSpot industry has, the most first. No industry: left out."""
+    counts: dict[str, int] = defaultdict(int)
+    for item in items:
+        if item.industry:
+            counts[item.industry] += 1
+    ranked = sorted(counts.items(), key=lambda pair: (-pair[1], pair[0].casefold()))
+    return [FacetValue(value=name, count=count) for name, count in ranked]
+
+
 # --- For the route ----------------------------------------------------------------------
 
 
-def watchlist_out(result: WatchResult, *, limit: int | None = None) -> WatchlistOut:
-    """The answer of GET /watchlist. `total` is the size of the list before `limit`."""
-    items = result.items if limit is None else result.items[:limit]
+def watchlist_out(
+    result: WatchResult,
+    *,
+    limit: int | None = None,
+    city: str | None = None,
+    industries: Iterable[str] = (),
+) -> WatchlistOut:
+    """The answer of GET /watchlist. `total` is the size of the list before `limit`. With a city or
+    industries, the lists keep those companies only, and `industries` counts the industries in the
+    city before the industry choice, so a picker can offer them. `counts` is the whole copy."""
+    in_city = narrow(result.items, city=city)
+    director_in_city = narrow(result.director, city=city)
+    chosen = list(industries)
+    items = narrow(in_city, industries=chosen)
     return WatchlistOut(
-        total=len(result.items),
-        items=items,
-        director=result.director,
-        staff_unknown=result.staff_unknown,
+        total=len(items),
+        items=items if limit is None else items[:limit],
+        director=narrow(director_in_city, industries=chosen),
+        staff_unknown=narrow(result.staff_unknown, city=city, industries=chosen),
         counts=result.counts,
+        industries=industry_counts([*in_city, *director_in_city]),
     )
 
 
@@ -406,13 +458,15 @@ async def load_watchlist(
     include_unlikely: bool = True,
     include_director: bool = False,
     limit: int | None = None,
+    city: str | None = None,
+    industries: Iterable[str] = (),
 ) -> WatchlistOut:
     """Reads the local HubSpot copy and returns the preview. Nothing goes to Claude."""
     rows = await load_watchlist_rows(session)
     result = build_watchlist(
         rows, rules, include_unlikely=include_unlikely, include_director=include_director
     )
-    return watchlist_out(result, limit=limit)
+    return watchlist_out(result, limit=limit, city=city, industries=industries)
 
 
 __all__ = [
@@ -421,9 +475,12 @@ __all__ = [
     "WatchOffice",
     "WatchResult",
     "build_watchlist",
+    "industry_counts",
     "load_watchlist",
     "load_watchlist_rows",
     "metro_city",
+    "most_staff_first",
+    "narrow",
     "rows_from_export",
     "watchlist_out",
 ]

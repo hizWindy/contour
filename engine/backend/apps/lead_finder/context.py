@@ -18,6 +18,9 @@ from typing import Any, Literal
 from core.claude.client import Reply
 
 Origin = Literal["typed", "web", "hubspot"]  # where the company name came from
+# What the research looks for first. growth: signs of growth and change (property, people and
+# money). tenure: the office questions first, for the lease and tenure run (PLAN-V11 C2).
+Focus = Literal["growth", "tenure"]
 OnReply = Callable[[Reply[Any]], None]  # called as each Claude reply arrives
 
 
@@ -75,3 +78,4 @@ class ResearchContext:
     # The run's Signal Hire credits, shared by its companies. None: a research on its own gets
     # a meter of its own, set by the settings.
     signalhire_credits: CreditMeter | None = None
+    focus: Focus = "growth"  # tenure: the lease and tenure run asks the office questions first
