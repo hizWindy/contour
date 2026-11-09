@@ -119,6 +119,8 @@ New, from the Profile, and **TBC** with leadership. It replaces the boosters and
 | Integrated strategic fit | 15 | Talks about culture, hybrid work or green ratings (NABERS, Green Star). Hires firms directly. Industry tier (**TBC**). | Partly |
 | Competitive opportunity | 10 | Not in a competitor's case studies from the last 5 years. No known fitout contractor relationship. | Partly |
 
+**Timing (Levi, 9 Nov, TBC).** Levi asked to check how long a company has been at its office once it shows a sign. So of Timing's 15 points: up to 6 for how recent the trigger is (or a lease ending 1 to 3 years out), 7 for more than 5 years at the same address (was 5), and 2 for no move or fitout in the last 3 years (was 4, because a move in the last 12 months now makes a lead a Watch, section 4). The lead card's Overview starts with the office line, like "At this address since 2017 (9 years)".
+
 **What the score means (Profile):** 75 to 100 means research first. 50 to 74 means investigate. Under 50 means nurture.
 
 **Our proposal (TBC):** the tool can only partly see 40 of the 100 points. So it shows the points it could check, and marks the rest "not known yet", like "48 of 60 checked". Sales fills in the rest after the first call.

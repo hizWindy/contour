@@ -105,10 +105,11 @@ def test_checks_the_tool_cannot_judge_are_not_known_yet() -> None:
 def test_the_years_at_the_address_and_a_quiet_office_earn_timing_points() -> None:
     base = verdict()
     due = verdict(office_since=fact("2015"))
-    assert score_check(due, "years_at_address").earned == 5
-    assert score_check(due, "no_recent_move").earned == 4
-    assert part_of(due, "timing").earned == 6 + 5 + 4
-    assert due.score_checked == base.score_checked + 5 + 4  # both checks are now known
+    # Years at the address 7 (was 5), no recent move 2 (was 4): Levi, 9 Nov (PLAN-V11 B5)
+    assert score_check(due, "years_at_address").earned == 7
+    assert score_check(due, "no_recent_move").earned == 2
+    assert part_of(due, "timing").earned == 6 + 7 + 2 == 15
+    assert due.score_checked == base.score_checked + 7 + 2  # both checks are now known
     # Moved in last year: known, but it earns nothing for years or a quiet office.
     moved = verdict(office_since=fact("2026-02"))
     assert (

@@ -284,8 +284,11 @@ describe('the lead page', () => {
     )
     const { container, user } = renderLead()
 
-    // The Overview tab is open first.
+    // The Overview tab is open first. Its Summary starts with the office line (PLAN-V11 B5).
     expect(await screen.findByText('Talking points')).toBeInTheDocument()
+    expect(
+      screen.getByText(/^At this address since 2016 \(\d+ years\)\. Last fitout May 2024\.$/),
+    ).toBeInTheDocument()
     expect(screen.getByText('Lease ends March 2028')).toBeInTheDocument()
     expect(screen.getByText(TAG)).toBeInTheDocument() // as text, never as a tag
     expect(container.querySelector('b')).toBeNull()

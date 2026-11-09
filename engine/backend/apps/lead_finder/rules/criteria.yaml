@@ -235,8 +235,8 @@ score:
     - { within_days: 365, points: 2 }
   undated: 1
   lease_in_best_window: 6 # a lease ending 1 to 3 years out
-  years_at_address: 5 # more than office_age.due_years at the same address
-  no_recent_move: 4 # no move or fitout in the last office_age.recent_move_years
+  years_at_address: 7 # more than office_age.due_years at the same address. Was 5 (Levi, 9 Nov: check how long it has been at its office, PLAN-V11 B5)
+  no_recent_move: 2 # no move or fitout in the last office_age.recent_move_years. Was 4: B3 now makes a very recent move a Watch
   access: { contact_role: 5, hubspot_contact: 5, customer_link: 5 }
   fit: { buys_strategy: 8, tier_1: 7, tier_2: 4 }
   competition: { no_rival_in_place: 6, no_contractor_relationship: 4 }
@@ -320,6 +320,6 @@ tbc:
   - key: source_domains
     note: First draft. The test set will show which sites matter.
   - key: score
-    note: The six parts are the Profile's, which leadership hasn't approved. The checks inside them and all their points are our proposal, until Levi fills in the Importance column. Three checks can't be judged yet (a contact in HubSpot, a link to a current customer, no known contractor relationship).
+    note: The six parts are the Profile's, which leadership hasn't approved. The checks inside them and all their points are our proposal, until Levi fills in the Importance column. Three checks can't be judged yet (a contact in HubSpot, a link to a current customer, no known contractor relationship). On 9 Nov Levi asked to weigh the years at the address more, so Timing is now 6 for the trigger's timing, 7 for the years at the address (was 5) and 2 for no recent move (was 4). Those numbers are TBC (PLAN-V11 B5).
   - key: score.band_basis
     note: Our proposal. With scaled, 48 of 60 checked counts as 80 for the band. Raw would use 48.
