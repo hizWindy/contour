@@ -3,8 +3,8 @@
 This plan builds the second project after the Lead Finder. A new Companies page lists every company we know. Clicking a company shows what we know about the client. Prep gives a salesperson a short call script before they ring someone.
 
 - **Built by:** Al-khair Pama. **Signed off by:** Al-khair for the code and the look. Levi confirms what is marked **TBC** (to be confirmed).
-- **Last updated:** 2026-11-09 (built on `plan-v10`: 11 steps done; the rest wait on screenshots, Levi or Al-khair's word).
-- **Progress:** 11 of 18 steps done. Open: A2, B4, C2, D4, E1, E3, E4.
+- **Last updated:** 2026-11-09 (Part F added and built: the prep card's sales script and guided questions, and "Sync with HubSpot"; the rest wait on screenshots, Levi or Al-khair's word).
+- **Progress:** 13 of 20 steps done. Open: A2, B4, C2, D4, E1, E3, E4.
 - **Sources:** [projects/prep/PREP.md](../projects/prep/PREP.md), and the meeting notes of 2 Nov and 5 Nov in `minutes of meeting/`.
 - **The look to copy:** the clickable prototype, with made-up data: https://claude.ai/artifact/XLy7eG12m19r3Ne8uK5MTC (private). Where it differs from `engine/DESIGN.md`, DESIGN.md wins (see "Fix these from the prototype").
 - **Comes after:** [PLAN-V9.md](PLAN-V9.md). It reuses the Lead Finder tick on each account (PLAN-V9 E1).
@@ -83,6 +83,9 @@ The prototype breaks 4 house rules. The build must not copy them.
 | Waiting for a prep | The bar fills one step at a time. | One step per stage |
 | A new "Today" chip | It fades in at the start of the row. | 150 ms |
 | Copy | The button reads "Copied" for 2 seconds. | At once |
+| "Who are you calling?" becomes the card | The modal widens. | 250 ms |
+| A guided question is ticked | It dims, folds its follow-ups, and the next one opens. | 150 ms dim, 250 ms fold |
+| A HubSpot sync runs | The bar fills as the counts climb. Nothing loops. | A new count every 2 seconds |
 
 - **One curve for everything:** `cubic-bezier(0.4, 0, 0.2, 1)`.
 - **Reduced motion:** if the computer asks for it, all of the above turns off and things appear at once.
@@ -271,6 +274,21 @@ The prototype breaks 4 house rules. The build must not copy them.
     3. switch on `prep_enabled`, then search ahead.
   - **Done when:** the team can prep a call on the live site.
 
+## Part F: The prep card's script, and syncing from the page (added 9 Nov)
+
+Al-khair, 9 Nov, after comparing the build with the prototype: the company panel is everything we know about a client; the prep card is quick info, with a sales script and guided questions on it. And a button on the page that fetches everything from HubSpot.
+
+- [x] **F1. The prep card: quick info, a sales script and guided questions.** (2026-11-09, `0ee5558`)
+  - "Before you dial" is 4 tiles, as in the prototype. Beside the script: the last time we talked, quick facts, and "Company info", which opens the panel.
+  - The script is written in the browser from our HubSpot copy (`playbook.ts`), so it is free, ready at once, and there while call prep is off. Its wording is **TBC** with Levi.
+  - Guided questions: why each is asked, and what to ask next for each likely answer. Tick one as you ask it, and the next one opens. Ticks aren't saved.
+  - Call prep's own script gets follow-ups too (prompt `prep-2`). A follow-up only asks: it never states a fact.
+  - **Done when:** with call prep off, every card has a script and guided questions, and the tests pass.
+- [x] **F2. "Sync with HubSpot" on the Companies page.** (2026-11-09, `0ee5558`)
+  - A full sync (about 10 minutes, free), beside "HubSpot copy updated ...". One sync at a time, for everyone.
+  - The sync saves how far it has read every 500 records, so the bar fills. When it finishes, the list refreshes and a toast says what was copied.
+  - **Done when:** a test follows a sync from the button to the toast, and the sync tests pass.
+
 ## Waiting on
 
 - **Levi:**
@@ -283,6 +301,7 @@ The prototype breaks 4 house rules. The build must not copy them.
 - **Al-khair:**
   - sending the email to Levi (drafted in [EMAIL.md](../projects/prep/EMAIL.md));
   - the screenshots and the look (E1), in a browser on his laptop;
+  - restarting the preview's backend (a few seconds), so F2's progress counts and call prep's follow-ups load;
   - the spend for E3;
   - switching on `prep_enabled` and search ahead;
   - merging, pushing and deploying.
@@ -308,6 +327,8 @@ The prototype breaks 4 house rules. The build must not copy them.
 ## Log
 
 Newest first.
+
+- 2026-11-09: **Part F added and built (F1, F2),** after Al-khair compared the build with the prototype. The preview runs the branch on a copy of the dev database (`leadfinder_v10`, at 0014), so `leadfinder` stays at 0013 for master. The website shows F1 live. The backend needs a restart (a few seconds, on Al-khair's word) to load F2's progress counts and the follow-ups in call prep's script. Checks: Companies backend tests 52 and sync tests 13 pass; website 63 files and 910 tests pass, lint and types clean. Also fixed: the branch's website couldn't load its fonts (the worktree links to the main folder's packages), so the preview showed a fallback typeface.
 
 - 2026-11-09: **What is left, and why.** A2: the email is drafted in [EMAIL.md](../projects/prep/EMAIL.md), to send on Al-khair's word. B4, C2 and D4: built and tested by keyboard, but not yet looked at on a phone or in dark mode, because no browser could be driven here (the Chrome extension isn't connected, and Playwright isn't installed: installing it downloads a browser, which needs Al-khair's OK). E1 needs those screenshots and Al-khair's sign-off. E3: every check passes (below); the 10 paid preps wait on his word. E4: the docs are done ([PREP.md](../projects/prep/PREP.md), `engine/README.md`, `engine/AGENTS.md`); merging, pushing, deploying, the ticks and switching on wait on his word.
 - 2026-11-09: **Checks after the build.** Backend `RUN_GATES=1`: 3,323 passed, 25 skipped, with the known timing test left out. Website: lint and types clean, 62 files and 900 tests pass (with the People tab's Companies tick), the build works (the Companies page's code is 14 kB, 5 kB zipped). The contrast, design-lint and icon tests pass with the new colour.

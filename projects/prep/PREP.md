@@ -2,7 +2,7 @@
 
 Last updated: 2026-11-09. **TBC** means to be confirmed.
 
-**Status (9 Nov):** built and tested on the branch `plan-v10` ([PLAN-V10](../../plan/PLAN-V10.md)), not merged or switched on yet. What works now, from our HubSpot copy: the Companies page, the company panel, the prep box and the call prep modal. Call scripts stay off until Al-khair switches them on. People and call history wait for HubSpot access to contacts. The questions for Levi are in [EMAIL.md](EMAIL.md).
+**Status (9 Nov):** built and tested on the branch `plan-v10` ([PLAN-V10](../../plan/PLAN-V10.md)), not merged or switched on yet. What works now, from our HubSpot copy: the Companies page, the company panel, the prep box, "Sync with HubSpot", and the prep card with a sales script and guided questions (free, written from the copy). Call prep's web check (news, "still there?") stays off until Al-khair switches it on. People and call history wait for HubSpot access to contacts. The questions for Levi are in [EMAIL.md](EMAIL.md).
 
 Call prep tells a salesperson what they need to know before they ring someone. They type a person or a company, and get a short call script. It is the second project after the Lead Finder (Levi, 2 Nov meeting).
 
@@ -70,27 +70,34 @@ Vitera         Adelaide   Marcus   12 Sep
 └─────────────────────────────────────────────────────────┘
 ```
 
-**Prep** opens the call script in a modal over the page. Close it with ✕, Esc or a click outside.
+**Prep** opens the prep card in a modal over the page: quick info, then a sales script with guided questions (9 Nov, Al-khair). Close it with ✕, Esc or a click outside.
 
 ```
-┌ Jason Reeds · Head of Property · Vitera ───────────── ✕ ┐
-│ BEFORE YOU DIAL                                         │
-│ Still there · Last talk 12 Sep · $40M contract          │
-│ 1 OPENER    "Hi Jason, it's Tom from Contour. We spoke  │
-│             on 12 Sep about your Adelaide lease."       │
-│ 2 WHY NOW   $40M contract · lease ends Mar 2028         │
-│ 3 QUESTIONS TO ASK                                      │
-│ 4 IF THEY SAY   "We're not ready yet" -> the answer     │
-│ 5 GOAL      Book a meeting in January with the board    │
-│ Side: last time we talked · quick facts                 │
-│ +61 412 555 018  [Copy number]  [Copy script]           │
+┌ [JR] Jason Reeds ──────────────────────────────────── ✕ ┐
+│      Head of Property · Vitera (opens the company)      │
+│      Ready from our HubSpot copy.                       │
+│ Before you dial                                         │
+│ [Still there?] [Last talk 12 Sep] [News] [Connections]  │
+│ Sales script                    │ Last time we talked   │
+│ 1 Opener: "Hi Jason, it's Tom   │ the call note         │
+│   from Contour. We spoke on ... │ Quick facts           │
+│ 2 Why now: lease ends Mar 2028  │ [Company info]        │
+│ 3 Guided questions (1 of 4)     │                       │
+│   [x] Renew, or move?           │                       │
+│   [ ] Is Mar 2027 still the plan?                       │
+│       If they say "Delayed", ask: what changed?         │
+│ 4 If they say: "Not ready yet" -> the answer            │
+│ 5 Goal: book a site visit                               │
+│ +61 412 555 018 [Copy number]   [Copy script] [Refresh] │
 └─────────────────────────────────────────────────────────┘
 ```
 
 Rules for the screen:
 
 - **"Before you dial" first, in one line.** These are Levi's 4 questions. On a rushed call, that is all they read.
-- **Fast, then complete.** HubSpot facts show at once from our copy. Companies searched ahead are ready at once. For the rest, grey placeholder lines show for a few seconds while the web check and the script are done.
+- **Fast, then complete.** The sales script and guided questions are written at once from our HubSpot copy (`playbook.ts`): free, and there even while call prep is off. With call prep on, its web check adds news and "still there?", and its own script fades in when ready (a few seconds; at once for a company searched ahead). The free script's wording is ours, from the prototype and Levi's questions (**TBC** with Levi).
+- **Guided questions.** Each says why it is asked, and what to ask next for each likely answer ("If they say 'Move', ask: who is helping you look?"). Tick one as you ask it, and the next one opens. The ticks aren't saved.
+- **Sync with HubSpot.** A button on the Companies page copies everything from HubSpot now (about 10 minutes, free), instead of waiting for the 6:00 sync. Its bar fills as it reads, and the list refreshes when it is done.
 - **Company only:** if they type just a company, the modal asks "Who are you calling?" and lists its people. "Prep a cold call" gives a script for the switchboard.
 - **Recent chips** reopen today's preps without a new search.
 - **Phone:** the prep box sticks to the top. The panel and the modal fill the screen. The number and "Copy number" stay at the bottom of the script.
