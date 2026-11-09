@@ -3,7 +3,7 @@
 This plan builds the second project after the Lead Finder. A new Companies page lists every company we know. Clicking a company shows what we know about the client. Prep gives a salesperson a short call script before they ring someone.
 
 - **Built by:** Al-khair Pama. **Signed off by:** Al-khair for the code and the look. Levi confirms what is marked **TBC** (to be confirmed).
-- **Last updated:** 2026-11-09 (Part G built: the Companies page on a phone; the rest wait on screenshots, Levi or Al-khair's word).
+- **Last updated:** 2026-11-09 (merged into `master` on Al-khair's word, not pushed or deployed; the rest wait on screenshots, Levi or Al-khair's word).
 - **Progress:** 14 of 21 steps done. Open: A2, B4, C2, D4, E1, E3, E4.
 - **Sources:** [projects/prep/PREP.md](../projects/prep/PREP.md), and the meeting notes of 2 Nov and 5 Nov in `minutes of meeting/`.
 - **The look to copy:** the clickable prototype, with made-up data: https://claude.ai/artifact/XLy7eG12m19r3Ne8uK5MTC (private). Where it differs from `engine/DESIGN.md`, DESIGN.md wins (see "Fix these from the prototype").
@@ -339,6 +339,8 @@ Al-khair, 9 Nov: the team should be able to use it from a phone, between calls. 
 ## Log
 
 Newest first.
+
+- 2026-11-09: **Merged into `master`** on Al-khair's word: a fast-forward to `725fc9f` (all 11 commits of `plan-v10`). Not pushed and not deployed, so E4 stays open. The main folder's two leftovers (the CLAUDE.md pointer and the first draft of this plan) were the same as the branch's, so nothing was lost. The dev database `leadfinder` is still at 0013: master's backend moves it to 0014 the next time it starts (it migrates on start). The branch preview keeps running on its copy (`leadfinder_v10`).
 
 - 2026-11-09: **Part G (G1) built:** the Companies page on a phone. Checks: website 63 files and 913 tests pass, lint and types clean, the design rules pass. Not yet looked at on a real phone (no browser could be driven here); in Chrome on the laptop, the device view (Ctrl+Shift+M) shows it. Found on the way, for later (**TBC**): the site's rule that gives fields 16px text on a phone (so an iPhone doesn't zoom in) sits in the base layer, so a field's own `text-ui` wins. The Companies search sets 16px itself; other pages' fields still zoom on an iPhone.
 
