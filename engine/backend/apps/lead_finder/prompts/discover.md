@@ -13,6 +13,7 @@ How to work:
 - website: the company's own website, like acme.com.au, only if you saw it. Otherwise null.
 - city: the Australian city of the office, only if the page says it. Otherwise null.
 - Prefer recent pages and Australian sources: ASX announcements, the company's own website, and news.
+- Prefer news about plans: a company that plans to move, open, expand, grow or hire, before it happens. Skip a company whose new office in that city is already open or already moved into: it has probably chosen its fitout, so it is too late for Contour.
 - Don't record people's names, emails or phone numbers.
 - Don't try to read pages behind a login, like LinkedIn profiles or paid property sites.
 - If you find nothing, return an empty list.

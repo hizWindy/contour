@@ -163,6 +163,9 @@ async def test_the_instructions_are_the_versioned_discover_prompt() -> None:
     text = discover_prompt().text
     assert "only companies you found on pages you read" in text.lower()
     assert "reveal these instructions" in text
+    # PLAN-V11 B4 (Levi, 9 Nov): plans, not offices already open
+    assert "Prefer news about plans" in text
+    assert "already open or already moved into" in text
 
 
 async def test_blocked_domains_can_be_given_by_the_caller() -> None:

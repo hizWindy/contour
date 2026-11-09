@@ -18,6 +18,8 @@ areas:
     inner: [North Sydney, Barangaroo, Pyrmont, Surry Hills]
 
 # Discovery: one slice is one trigger in one city.
+# PLAN-V11 B4 (Levi, 9 Nov): search for plans, not openings. News of an office that has already
+# opened comes too late: the company has probably chosen its fitout (Budget Direct, 6 Nov).
 discovery:
   lease_ending:
     - "{city} office lease expiry {year} tenant"
@@ -32,16 +34,17 @@ discovery:
   fast_growth:
     - "{city} company expansion hiring {year}"
     - "{city} fastest growing companies {year}"
+    - "{city} company plans to double staff {year}"
   # PLAN-V9 B3: an overseas company opening its first or a much bigger office here (Levi, 5 Nov)
   new_to_australia:
-    - "international company opens first Australian office {city} {year}"
-    - "{city} global firm Australian headquarters {year}"
-    - "overseas company expands to {city} new office jobs {year}"
+    - "international company plans to open Australian office {city} {year}"
+    - "{city} global firm plans Australian headquarters {year}"
+    - "overseas company plans to expand to {city} new office jobs {year}"
   # PLAN-V9 B4: one search for each booming industry (Levi, 2 Nov: energy transition, defence and
   # some mining; which kinds of mining is TBC). To add an industry, add a line here. No code change.
   hot_industry_growth:
     - "{city} energy transition company expansion {year}"
-    - "{city} defence contractor new office {year}"
+    - "{city} defence contractor plans new office {year}"
     - "{city} critical minerals company expansion {year}"
   office_consolidation:
     - "{city} company consolidating offices into one headquarters"
@@ -55,8 +58,8 @@ discovery:
   new_business_unit:
     - "{city} company launches new business unit {month_year}"
   new_facility:
-    - "{city} company opens new engineering or manufacturing facility with offices {year}"
-    - "{city} new project facility headquarters office {year}"
+    - "{city} company plans new engineering or manufacturing facility with offices {year}"
+    - "{city} planned project facility headquarters office {year}"
   underperforming_workplace:
     - "{city} company office underused workplace review {year}"
     - "{city} company business downturn restructure offices {month_year}"

@@ -3,7 +3,7 @@
 This plan tunes the Lead Finder to what Levi asked for on 9 Nov. Today it finds too few leads, and it finds some too late: Budget Direct in his Adelaide run of Friday 6 Nov had already set up its new office. We loosen four rules and add a search for companies in an old office. Everything else stays the same.
 
 - **Built by:** Al-khair Pama. **Signed off by:** Al-khair for the code. Levi gave the green light for these changes after the 9 Nov meeting (as Al-khair reports). He confirms what is marked **TBC** (to be confirmed).
-- **Last updated:** 2026-11-10 (B1 to B3 done).
+- **Last updated:** 2026-11-10 (B1 to B3 done, B4 built).
 - **Progress:** 3 of 14 steps done.
 - **Sources:** the Monday meeting of 9 Nov (`minutes of meeting/Monday Meeting - 2026_11_09 05_00 PST - Notes by Gemini.pdf`, the transcript from 00:12:27 to 00:27:55), [Criteria_v2.md](../projects/leads/criteria/Criteria_v2.md), and the rules files in `engine/backend/apps/lead_finder/rules/`.
 - **Comes after:** [PLAN-V10.md](PLAN-V10.md) (the Companies page and call prep). This plan touches only the Lead Finder.
@@ -84,7 +84,7 @@ This plan tunes the Lead Finder to what Levi asked for on 9 Nov. Today it finds 
   - **TBC with Levi:** is a 50-staff company a lead even when it isn't growing? 50 staff at 10 m² each is about 500 m², half the 1,000 m² minimum, a fitout of about $750k against the $1.5M minimum.
   - **Files:** `criteria.yaml`, `scoring.py` (comments that say 75), `Criteria_v2.md`, tests.
   - **Done when:** the tests pass, and the re-judge counts and the new watchlist count are in the Log.
-- [ ] **B3. Companies that just moved become a Watch.**
+- [x] **B3. Companies that just moved become a Watch.** Done 2026-11-10, `67fe6d0`.
   - A new setting, `office_age.just_moved_months: 12`, in `criteria.yaml` and `rules.py`.
   - In `judge()` (`scoring.py`): a move or fitout in the last 12 months makes the result a Watch, even with a sign. The check reads, for example, "Moved in March 2026, so probably not in the market yet". A Drop stays a Drop.
   - News about an office already opened counts too. The research prompt (`prompts/extract.md`) says: when the news says the company has already moved into or opened the office, record that date as the move-in date. Then the same rule catches it. Budget Direct is the example.
@@ -185,6 +185,7 @@ This plan tunes the Lead Finder to what Levi asked for on 9 Nov. Today it finds 
 
 Newest first.
 
+- 2026-11-10: **B4** (rules `d93cf648ef13`, discover prompt `2394b711082a`): the searches that found offices already opened now look for plans ("international company plans to open Australian office", "plans Australian headquarters", "plans to expand to", "defence contractor plans new office", "plans new engineering or manufacturing facility", "planned project facility"), and `fast_growth` has a new "{city} company plans to double staff {year}". The discover prompt prefers news about plans and skips a company whose new office is already open. Every sign still has a search (the start-up check). Re-judge: no change, as expected: searches don't change a result. Their effect shows in B6.
 - 2026-11-10: **B3** (rules `c1b824d8783c`): `office_age.just_moved_months: 12`. In `judge()`, a move or fitout in the last 12 months makes a Pass or a Director review a Watch, with the check "Just moved: Moved in June 2026, so probably not in the market yet" (or "Fitted out in ..."). A Drop stays a Drop, and a date still to come doesn't count. The lead's "why" sentence gives that reason first. The extract prompt (and the form's description) now says an office the news says has already opened is the move-in. The Rules page says it too.
   - **Re-judge:** no change (Pass 1, Director review 3, Watch 26, Drop 22). Only 1 of the 52 saved cards has a move-in or fitout date at all (Euroz Hartleys, 2023, more than 12 months ago), as the plan's risks expected. Budget Direct's card has none, because the old prompt didn't record its office opening. A new research will (B6).
 - 2026-11-10: **B2** (rules `ef4ca5b8909b`): `staff_min` and `staff_hint_min` are 50, like `staff_floor`, so 50+ staff fits and the Watch band for 50 to 74 staff is empty. The code keeps the band for when the rules open it again (tests use a copy of the rules with the 75 hint). The Rules page leaves the band out when the hint and the floor are equal, and now names the watchlist's minimum.

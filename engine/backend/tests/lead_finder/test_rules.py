@@ -1,5 +1,6 @@
 """The rules files load, match the criteria documents, and stop the backend when they're wrong."""
 
+import re
 import shutil
 from pathlib import Path
 
@@ -95,6 +96,16 @@ def test_every_trigger_has_search_templates() -> None:
     # The rivals' sign has no search: it comes from the rivals table (PLAN-V9 B5).
     assert rules.criteria.rivals.sign == "rival_growth"
     assert "rival_growth" not in rules.queries.discovery
+
+
+def test_discovery_searches_look_for_plans_not_openings() -> None:
+    """PLAN-V11 B4 (Levi, 9 Nov): news of an office that has already opened comes too late."""
+    discovery = load_rules().queries.discovery
+    every = [template for templates in discovery.values() for template in templates]
+    assert [template for template in every if re.search(r"\bopens\b", template)] == []
+    assert all("plans" in template for template in discovery["new_to_australia"])
+    assert "{city} defence contractor plans new office {year}" in discovery["hot_industry_growth"]
+    assert "{city} company plans to double staff {year}" in discovery["fast_growth"]
 
 
 def test_watchlist_searches_from_three_angles() -> None:
