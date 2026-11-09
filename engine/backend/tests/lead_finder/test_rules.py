@@ -27,7 +27,7 @@ def test_rules_match_the_criteria_documents() -> None:
     assert criteria.cities.pass_ == ["Melbourne", "Adelaide", "Perth"]
     assert criteria.cities.director_review == ["Sydney"]
     size = criteria.size
-    assert (size.staff_min, size.staff_hint_min, size.staff_max) == (100, 75, 600)
+    assert (size.staff_min, size.staff_hint_min, size.staff_max) == (50, 50, 600)  # PLAN-V11 B2
     assert size.grow_into_range_months == 24
     assert (size.office_m2_min, size.office_m2_max) == (1000, 6000)
     assert size.director_band_m2 == (800, 1000)
@@ -71,12 +71,13 @@ def test_two_signs_have_levis_9_nov_wording() -> None:
 
 def test_numbers_line_up_with_the_deal_criteria() -> None:
     criteria = load_rules().criteria
-    smallest = (
-        criteria.size.staff_min
-        * criteria.size.m2_per_staff
-        * float(criteria.fitout.rate_per_m2_aud)
-    )
-    assert smallest == 1_500_000  # 100 staff x 10 m2 x $1,500 = $1.5M, the bottom of the range
+    rate = float(criteria.fitout.rate_per_m2_aud)
+    # The smallest office in range, 1,000 m2 x $1,500, is the bottom of the deal range: $1.5M.
+    assert criteria.size.office_m2_min * rate == 1_500_000
+    # Since 9 Nov, 50 staff fit (PLAN-V11 B2): 50 x 10 m2 x $1,500 is about $750k, half the
+    # bottom of the range. Whether that is a lead when it isn't growing is TBC with Levi.
+    smallest = criteria.size.staff_min * criteria.size.m2_per_staff * rate
+    assert smallest == 750_000
 
 
 def test_every_trigger_has_search_templates() -> None:
@@ -114,24 +115,25 @@ def test_version_changes_when_a_rule_changes(tmp_path: Path) -> None:
 
 def test_impossible_size_stops_start_up(tmp_path: Path) -> None:
     rules_dir = copy_rules(tmp_path)
-    edit(rules_dir / "criteria.yaml", "staff_min: 100", "staff_min: 700")
+    edit(rules_dir / "criteria.yaml", "staff_min: 50", "staff_min: 700")
     with pytest.raises(ValidationError, match="staff_min must be below staff_max"):
         read_rules(rules_dir)
 
 
 def test_a_staff_hint_above_the_minimum_stops_start_up(tmp_path: Path) -> None:
     rules_dir = copy_rules(tmp_path)
-    edit(rules_dir / "criteria.yaml", "staff_hint_min: 75", "staff_hint_min: 150")
+    edit(rules_dir / "criteria.yaml", "staff_hint_min: 50", "staff_hint_min: 150")
     with pytest.raises(ValidationError, match="staff_hint_min must not be above staff_min"):
         read_rules(rules_dir)
 
 
-def test_the_staff_floor_is_50_and_marked_tbc() -> None:
-    """Levi, 5 Nov: 75+ staff, or about 50 if growing (PLAN-V9 B1). Both wait on his team."""
+def test_the_staff_floor_and_hint_are_both_50_and_marked_tbc() -> None:
+    """Levi, 5 Nov: 75+ staff, or about 50 if growing (PLAN-V9 B1). 9 Nov: 50+ staff fits
+    (PLAN-V11 B2), so the hint and the floor are both 50. They wait on his team."""
     criteria = load_rules().criteria
-    assert (criteria.size.staff_floor, criteria.size.staff_hint_min) == (50, 75)
+    assert (criteria.size.staff_floor, criteria.size.staff_hint_min) == (50, 50)
     tbc = {note.key for note in criteria.tbc}
-    assert {"size.staff_floor", "size.staff_hint_min"} <= tbc
+    assert {"size.staff_floor", "size.staff_hint_min", "size.staff_min"} <= tbc
 
 
 def test_a_staff_floor_above_the_hint_stops_start_up(tmp_path: Path) -> None:

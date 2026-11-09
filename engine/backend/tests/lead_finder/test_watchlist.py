@@ -37,7 +37,17 @@ from core.hubspot.service import save_export
 RESEARCH_DIR = BACKEND_DIR.parents[1] / "projects" / "leads" / "research"
 EXPORT_XLSX = RESEARCH_DIR / "COMPANIES.xlsx"
 EXPORT_MD = RESEARCH_DIR / "EXPORT.md"
-RULES = load_rules()
+# EXPORT.md sorted the 25 Oct export with the rules of that day: 100+ staff. Levi lowered the
+# minimum to 50 on 9 Nov (PLAN-V11 B2). This file keeps 100, so the golden test still matches the
+# document and the made-up rows keep their limits. The tests at the end check today's 50.
+TODAYS_RULES = load_rules()
+RULES = TODAYS_RULES.model_copy(
+    update={
+        "criteria": TODAYS_RULES.criteria.model_copy(
+            update={"size": TODAYS_RULES.criteria.size.model_copy(update={"staff_min": 100})}
+        )
+    }
+)
 
 # --- The golden test: the real export against EXPORT.md ---------------------------------
 
@@ -749,7 +759,11 @@ async def test_the_loader_on_an_empty_database_gives_an_empty_answer(
 
 
 @pytest.fixture
-async def db_client(session: AsyncSession) -> AsyncIterator[httpx.AsyncClient]:
+async def db_client(
+    session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> AsyncIterator[httpx.AsyncClient]:
+    # The route sorts the export with the 25 Oct rules too (100+ staff), so it matches EXPORT.md.
+    monkeypatch.setattr("apps.lead_finder.api_watchlist.load_rules", lambda: RULES)
     app: FastAPI = create_app()
 
     async def real_session() -> AsyncIterator[AsyncSession]:
@@ -824,3 +838,39 @@ async def test_the_route_needs_no_claude_and_no_approval(
     response = await db_client.get(WATCHLIST)  # an empty database, no Claude key set up
     assert response.status_code == 200
     assert response.json()["counts"]["companies"] == 0
+
+
+# --- Today's minimum: 50 staff (Levi, 9 Nov, PLAN-V11 B2) -------------------------------------
+
+
+def test_todays_rules_list_companies_from_50_staff() -> None:
+    assert TODAYS_RULES.criteria.size.staff_min == 50
+    result = build(
+        company("1", "Exactly 50", offices=(office(staff=25),)),  # LinkedIn 25 x 2
+        company("2", "Just under", offices=(office(staff=24),)),
+        rules=TODAYS_RULES,
+    )
+    assert [item.name for item in result.items] == ["Exactly 50"]
+    assert result.counts.dropped_small == 1
+
+
+def test_todays_rules_add_the_export_companies_of_50_to_99_staff(export: HubSpotExport) -> None:
+    """The 25 Oct export at 50+ staff: 5 more on the Watch list and 4 more for a Director."""
+    result = build_watchlist(rows_from_export(export), TODAYS_RULES, include_director=True)
+    assert result.counts == GOLDEN_COUNTS.model_copy(
+        update={"watch": 52, "likely": 13, "unlikely": 39, "director": 19, "dropped_small": 12}
+    )
+    added = sorted(
+        item.name for item in [*result.items, *result.director] if (item.estimated_staff or 0) < 100
+    )
+    assert added == [
+        "Baker Bleu",
+        "Froebel Australia",
+        "Hotel Grand Chancellor Adelaide",
+        "Online Lead Management",
+        "PeopleKind Group",
+        "StepChange",
+        "The Conversation Australia + NZ",
+        "The Playford Hotel",
+        "Total Support Services",
+    ]

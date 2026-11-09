@@ -15,8 +15,8 @@ cities:
   no_city_director_signs: [new_to_australia]
 
 size:
-  staff_min: 100 # the brief's "100+ in one office". The HubSpot watchlist lists companies from here
-  staff_hint_min: 75 # the Profile's "75+ office staff" (Levi, 5 Nov). A size worked out from staff between staff_floor and this is a Watch with a "check office size" flag
+  staff_min: 50 # Levi, 9 Nov: 50+ staff fits (PLAN-V11 B2; was 100, the brief's "100+ in one office"). The HubSpot watchlist lists companies from here
+  staff_hint_min: 50 # Levi, 9 Nov: 50+ staff fits (PLAN-V11 B2; was 75, the Profile's "75+ office staff"). A size worked out from staff between staff_floor and this is a Watch with a "check office size" flag. With both at 50 there is no such band
   staff_floor: 50 # Levi, 5 Nov: "about 50 if growing". A size worked out from staff under this is a Drop, "too small", unless the company is growing (PLAN-V9 B1)
   # The discovery signs that mean a company is growing. A company found with one of these is never
   # stopped before research for being small (PLAN-V9 B2): its size comes from what it plans.
@@ -253,13 +253,15 @@ stages:
 
 tbc:
   - key: size.staff_counted_in
-    note: Question 6. Does 100+ staff mean in that city, or across the whole company?
+    note: Question 6. Does 50+ staff mean in that city, or across the whole company?
   - key: size.m2_per_staff
     note: Question 8. Is 10 m² per person right?
+  - key: size.staff_min
+    note: Levi, 9 Nov, 50+ staff fits (PLAN-V11 B2). It was 100, from his brief. The HubSpot watchlist starts here, so it lists more companies.
   - key: size.staff_hint_min
-    note: Levi said 75+ on 5 Nov (his brief said 100+ in one office). Between staff_floor and this a size worked out from staff is a Watch with a flag, not a Pass (PLAN-V9 B1). Levi's team confirms the number.
+    note: Levi, 9 Nov, 50+ staff fits (PLAN-V11 B2). It was 75+ (5 Nov), and 100+ in one office in his brief. With staff_floor also 50, a size worked out from staff is no longer a Watch for being small. Open with Levi, is a 50-staff company a lead even when it isn't growing? 50 staff at 10 m² is about 500 m², half the 1,000 m² minimum, a fitout of about $750k against the $1.5M minimum.
   - key: size.staff_floor
-    note: Levi said about 50 if growing (5 Nov). Under 50 staff, worked out from staff, is a Drop unless the company is growing. Levi's team confirms the number (PLAN-V9 A3).
+    note: Levi said about 50 if growing (5 Nov), and 50+ fits (9 Nov). Under 50 staff, worked out from staff, is a Drop unless the company is growing. Levi's team confirms the number (PLAN-V9 A3).
   - key: size.growth_signs
     note: Our proposal (PLAN-V9 B2). A company found with one of these signs is researched even when HubSpot and Signal Hire say it is small.
   - key: size.staff_sources

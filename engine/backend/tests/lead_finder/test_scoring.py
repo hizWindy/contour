@@ -6,7 +6,7 @@ from typing import Any
 import pytest
 
 from apps.lead_finder.fields import BoosterFound, TriggerFound
-from apps.lead_finder.rules import load_rules
+from apps.lead_finder.rules import LeadFinderRules, load_rules
 from apps.lead_finder.scoring import (
     RuleCheck,
     ScoreCheck,
@@ -31,6 +31,23 @@ def trigger(id: str, when: str | None, url: str = NEWS) -> TriggerFound:
 
 def verdict(hubspot: HubSpotMatch = NEW, **changes: object):  # type: ignore[no-untyped-def]
     return judge(make_facts(**changes), hubspot, load_rules(), TODAY)
+
+
+def with_size(**changes: object) -> LeadFinderRules:
+    """The rules with some size numbers changed, like the 75-staff hint of 5 Nov."""
+    rules = load_rules()
+    size = rules.criteria.size.model_copy(update=changes)
+    criteria = rules.criteria.model_copy(update={"size": size})
+    return rules.model_copy(update={"criteria": criteria})
+
+
+def verdict_under(rules: LeadFinderRules, **changes: object) -> Verdict:
+    return judge(make_facts(**changes), NEW, rules, TODAY)
+
+
+# Before 9 Nov: 75+ staff fit, and 50 to 74 was a Watch (PLAN-V9 B1). The code keeps that band
+# for when the rules open it again; since 9 Nov the hint and the floor are both 50 (PLAN-V11 B2).
+HINT_75 = with_size(staff_hint_min=75, staff_min=100)
 
 
 def test_a_good_lead_passes_with_its_score() -> None:
@@ -123,7 +140,7 @@ def test_the_industry_tier_is_not_known_when_the_industry_is_not() -> None:
         ({"office_m2": fact(2500, label="estimated")}, 16),
         ({"office_m2": fact(None), "staff_in_city": fact(100)}, 16),  # worked out from staff
         ({"office_m2": fact(900)}, 10),  # just under the minimum: a Director decides
-        ({"office_m2": fact(None), "staff_in_city": fact(60)}, 0),  # 50 to 74: a Watch, a flag
+        ({"office_m2": fact(None), "staff_in_city": fact(60)}, 16),  # 50+ fits since 9 Nov
     ],
 )
 def test_the_size_check_follows_what_the_size_rests_on(
@@ -194,8 +211,8 @@ def size_check(result: Verdict) -> RuleCheck:
     [
         (4, "drop", "fail"),  # under the floor (50): too small (PLAN-V9 B1)
         (49, "drop", "fail"),
-        (50, "watch", "flag"),  # 50 to 74: a Watch, check the office size
-        (74, "watch", "flag"),
+        (50, "pass", "ok"),  # 50+ fits (Levi, 9 Nov, PLAN-V11 B2): no Watch band any more
+        (74, "pass", "ok"),
         (75, "pass", "ok"),
         (99, "pass", "ok"),
         (100, "pass", "ok"),
@@ -213,16 +230,37 @@ def test_staff_numbers_set_the_result_when_the_office_size_is_unknown(
     assert result.office_m2_estimated
 
 
+@pytest.mark.parametrize(
+    ("staff", "expected", "outcome"),
+    [(49, "drop", "fail"), (50, "watch", "flag"), (74, "watch", "flag"), (75, "pass", "ok")],
+)
+def test_a_band_between_the_floor_and_the_hint_is_a_watch(
+    staff: int, expected: str, outcome: str
+) -> None:
+    """The 5 Nov rules (hint 75): 50 to 74 staff is a Watch with a "check office size" flag."""
+    result = verdict_under(HINT_75, office_m2=fact(None), staff_in_city=fact(staff))
+    assert (result.result, size_check(result).outcome) == (expected, outcome)
+
+
 def test_the_size_words_say_why() -> None:
     small = size_check(verdict(office_m2=fact(None), staff_in_city=fact(12)))
     assert small.detail == "120 m² (estimated: 12 staff x 10 m²): under 50 staff, too small"
-    watch = size_check(verdict(office_m2=fact(None), staff_in_city=fact(60)))
+    fits = size_check(verdict(office_m2=fact(None), staff_in_city=fact(60)))
+    assert fits.detail == "600 m² (estimated: 60 staff x 10 m²): at the staff hint (50+)"
+    watch = size_check(verdict_under(HINT_75, office_m2=fact(None), staff_in_city=fact(60)))
     assert watch.detail.endswith("under 75 staff, so a Watch. Check the office size")
 
 
 def test_a_watch_by_size_stays_a_watch_in_sydney() -> None:
-    result = verdict(office_m2=fact(None), staff_in_city=fact(60), city=fact("Sydney"))
+    result = verdict_under(
+        HINT_75, office_m2=fact(None), staff_in_city=fact(60), city=fact("Sydney")
+    )
     assert result.result == "watch"
+
+
+def test_60_staff_in_sydney_go_to_a_director_since_9_nov() -> None:
+    result = verdict(office_m2=fact(None), staff_in_city=fact(60), city=fact("Sydney"))
+    assert result.result == "director_review"
 
 
 def test_a_known_office_keeps_todays_rule_whatever_the_staff() -> None:

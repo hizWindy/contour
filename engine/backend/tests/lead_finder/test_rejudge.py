@@ -77,7 +77,7 @@ def test_the_old_industry_check_is_compared_with_the_office_check() -> None:
 def test_a_dropped_small_company_may_no_longer_be_dropped() -> None:
     card = version_1_card(office_m2=fact(None), staff_in_city=fact(60))
     item = rejudge("Small Co", "drop", 0, card, RULES, TODAY)
-    assert item.now.result == "watch"  # 50 to 74 staff: a Watch with a flag (PLAN-V9 B1)
+    assert item.now.result == "pass"  # 50+ staff fits (Levi, 9 Nov, PLAN-V11 B2)
     assert item.now.band is not None
 
 

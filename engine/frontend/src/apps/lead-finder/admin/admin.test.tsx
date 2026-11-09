@@ -501,6 +501,26 @@ describe('Admin, Rules', () => {
     expect(screen.getByText(/More than 5 years at the same address is due/)).toBeInTheDocument()
   })
 
+  it('shows no Watch band for size once the hint and the floor are both 50 (PLAN-V11 B2)', async () => {
+    mockApi({
+      '/api/v1/lead-finder/rules': {
+        ...RULES_V2,
+        criteria: {
+          ...RULES_V2.criteria,
+          size: { ...RULES_V2.criteria.size, staff_min: 50, staff_hint_min: 50, staff_floor: 50 },
+        },
+      },
+    })
+    renderWithProviders(<AdminRulesTab />)
+    expect(
+      await screen.findByText(/50\s*\+ fits;\s*under 50 is a Drop, too small/),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/is a Watch with a/)).not.toBeInTheDocument()
+    expect(
+      screen.getByText('The HubSpot watchlist lists companies with 50+ staff in the city.'),
+    ).toBeInTheDocument()
+  })
+
   it('shows which source is main for which data', async () => {
     mockApi({
       '/api/v1/lead-finder/rules': RULES_V2,

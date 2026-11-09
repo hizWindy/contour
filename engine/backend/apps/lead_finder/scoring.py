@@ -25,7 +25,8 @@ Outcome = Literal["ok", "fail", "director", "unknown", "flag"]
 Group = Literal["main", "other", "weak"]
 Band = Literal["research_first", "investigate", "nurture"]
 # "small": worked out from staff between staff_floor and staff_hint_min. The lead is a Watch at
-# best, with a "check office size" flag (PLAN-V9 B1).
+# best, with a "check office size" flag (PLAN-V9 B1). Since 9 Nov both are 50, so no lead is
+# "small" until the rules open that band again (PLAN-V11 B2).
 SizeBasis = Literal["confirmed", "estimated", "growing", "director", "small", "below", "none"]
 DAYS_PER_YEAR = 365.25
 REASON_WORDS: dict[CandidateReason, str] = {
@@ -139,7 +140,7 @@ def judge(
     elif not triggers:
         result = "watch"
     elif sized.basis == "small":
-        result = "watch"  # 50 to 74 staff, not growing: a person checks the office size first
+        result = "watch"  # between the floor and the hint, not growing: check the office size
     elif "director" in outcomes:
         result = "director_review"
     elif unknown_core:
@@ -253,10 +254,11 @@ def _city(facts: CompanyFacts, rules: LeadFinderRules) -> RuleCheck:
 
 def _size(facts: CompanyFacts, rules: LeadFinderRules, today: date) -> SizeJudgement:
     """The size rule. A known office size is judged against the range. A size worked out from
-    staff follows the staff numbers (PLAN-V9 B1, Levi 5 Nov): `staff_hint_min` (75) or more is
-    fine; from `staff_floor` (50) up to it is a Watch with a "check office size" flag; under the
-    floor is a Drop, "too small". A small company that will soon need an office in range still
-    fits (`_growing`), whatever its staff today."""
+    staff follows the staff numbers (PLAN-V9 B1): `staff_hint_min` or more is fine; from
+    `staff_floor` up to it is a Watch with a "check office size" flag; under the floor is a Drop,
+    "too small". Since Levi's 9 Nov meeting both are 50, so 50+ staff fits and the Watch band is
+    empty (PLAN-V11 B2). A small company that will soon need an office in range still fits
+    (`_growing`), whatever its staff today."""
     size = rules.criteria.size
     staff = facts.staff_in_city.value
     if staff is not None and facts.staff_from_linkedin:

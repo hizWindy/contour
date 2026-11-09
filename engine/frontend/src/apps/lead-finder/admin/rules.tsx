@@ -67,10 +67,19 @@ export default function AdminRulesTab() {
           </p>
           <p>
             When the office size isn&apos;t known, the staff in the city decide:{' '}
-            {criteria.size.staff_hint_min}+ fits; {criteria.size.staff_floor} to{' '}
-            {criteria.size.staff_hint_min - 1} is a Watch with a &quot;check office size&quot; flag;
+            {criteria.size.staff_hint_min}+ fits;{' '}
+            {/* Since 9 Nov the hint and the floor are both 50, so there is no Watch band. */}
+            {criteria.size.staff_hint_min > criteria.size.staff_floor ? (
+              <>
+                {criteria.size.staff_floor} to {criteria.size.staff_hint_min - 1} is a Watch with a
+                &quot;check office size&quot; flag;{' '}
+              </>
+            ) : null}
             under {criteria.size.staff_floor} is a Drop, too small. Over{' '}
             {formatNumber(criteria.size.staff_max)} staff goes to a Director.
+          </p>
+          <p>
+            The HubSpot watchlist lists companies with {criteria.size.staff_min}+ staff in the city.
           </p>
           <p>
             A small company that will need an office in range within{' '}
