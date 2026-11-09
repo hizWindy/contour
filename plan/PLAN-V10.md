@@ -3,8 +3,8 @@
 This plan builds the second project after the Lead Finder. A new Companies page lists every company we know. Clicking a company shows what we know about the client. Prep gives a salesperson a short call script before they ring someone.
 
 - **Built by:** Al-khair Pama. **Signed off by:** Al-khair for the code and the look. Levi confirms what is marked **TBC** (to be confirmed).
-- **Last updated:** 2026-11-09 (Part F added and built: the prep card's sales script and guided questions, and "Sync with HubSpot"; the rest wait on screenshots, Levi or Al-khair's word).
-- **Progress:** 13 of 20 steps done. Open: A2, B4, C2, D4, E1, E3, E4.
+- **Last updated:** 2026-11-09 (Part G built: the Companies page on a phone; the rest wait on screenshots, Levi or Al-khair's word).
+- **Progress:** 14 of 21 steps done. Open: A2, B4, C2, D4, E1, E3, E4.
 - **Sources:** [projects/prep/PREP.md](../projects/prep/PREP.md), and the meeting notes of 2 Nov and 5 Nov in `minutes of meeting/`.
 - **The look to copy:** the clickable prototype, with made-up data: https://claude.ai/artifact/XLy7eG12m19r3Ne8uK5MTC (private). Where it differs from `engine/DESIGN.md`, DESIGN.md wins (see "Fix these from the prototype").
 - **Comes after:** [PLAN-V9.md](PLAN-V9.md). It reuses the Lead Finder tick on each account (PLAN-V9 E1).
@@ -289,6 +289,18 @@ Al-khair, 9 Nov, after comparing the build with the prototype: the company panel
   - The sync saves how far it has read every 500 records, so the bar fills. When it finishes, the list refreshes and a toast says what was copied.
   - **Done when:** a test follows a sync from the button to the toast, and the sync tests pass.
 
+## Part G: The Companies page on a phone (added 9 Nov)
+
+Al-khair, 9 Nov: the team should be able to use it from a phone, between calls. Under 640px wide (DESIGN.md "Phone"):
+
+- [x] **G1. Companies on a phone.** (2026-11-09, `66b9b71`)
+  - **The list** is one card per company instead of the table (which showed only the name and the deal): name and deal, place, next lease end and last talk (Ochre when they need attention), owner. A tap opens the panel; the touch starts loading the company, so it opens filled. Previous and Next under the list scroll back to its first card.
+  - **The filters** sit behind one "Filters" button that counts them and opens a sheet from the bottom, as on Results.
+  - **The prep box** stays pinned to the top while the list scrolls, slimmer, with today's chips on one line that scrolls sideways.
+  - **The company panel and the full page** keep the header and the close button at the top; "Prep a call" is a full-width button at the bottom, where a thumb reaches it.
+  - **The prep card's bottom bar:** one big "Call" button, then Copy number, Copy script and Refresh.
+  - **Done when:** tests show the cards, the Filters sheet, the panel's bottom button and the card's Call button on a phone. Looking at it on a real phone is part of E1.
+
 ## Waiting on
 
 - **Levi:**
@@ -327,6 +339,8 @@ Al-khair, 9 Nov, after comparing the build with the prototype: the company panel
 ## Log
 
 Newest first.
+
+- 2026-11-09: **Part G (G1) built:** the Companies page on a phone. Checks: website 63 files and 913 tests pass, lint and types clean, the design rules pass. Not yet looked at on a real phone (no browser could be driven here); in Chrome on the laptop, the device view (Ctrl+Shift+M) shows it. Found on the way, for later (**TBC**): the site's rule that gives fields 16px text on a phone (so an iPhone doesn't zoom in) sits in the base layer, so a field's own `text-ui` wins. The Companies search sets 16px itself; other pages' fields still zoom on an iPhone.
 
 - 2026-11-09: **Part F added and built (F1, F2),** after Al-khair compared the build with the prototype. The preview runs the branch on a copy of the dev database (`leadfinder_v10`, at 0014), so `leadfinder` stays at 0013 for master. The website shows F1 live. The backend needs a restart (a few seconds, on Al-khair's word) to load F2's progress counts and the follow-ups in call prep's script. Checks: Companies backend tests 52 and sync tests 13 pass; website 63 files and 910 tests pass, lint and types clean. Also fixed: the branch's website couldn't load its fonts (the worktree links to the main folder's packages), so the preview showed a fallback typeface.
 

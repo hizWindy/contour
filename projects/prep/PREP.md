@@ -100,7 +100,7 @@ Rules for the screen:
 - **Sync with HubSpot.** A button on the Companies page copies everything from HubSpot now (about 10 minutes, free), instead of waiting for the 6:00 sync. Its bar fills as it reads, and the list refreshes when it is done.
 - **Company only:** if they type just a company, the modal asks "Who are you calling?" and lists its people. "Prep a cold call" gives a script for the switchboard.
 - **Recent chips** reopen today's preps without a new search.
-- **Phone:** the prep box sticks to the top. The panel and the modal fill the screen. The number and "Copy number" stay at the bottom of the script.
+- **Phone:** the list is one card per company, and the filters sit behind one "Filters" button. The prep box sticks to the top. The panel and the prep card fill the screen, with the main action as a big button at the bottom: "Prep a call" on the panel, "Call" on the card.
 
 ## Proposed, not decided
 
