@@ -67,6 +67,9 @@ EDITABLE_KEYS: Final[list[str]] = [
     "model_discover",
     "model_search",
     "model_extract",
+    # Why now on the lead card (PLAN-V12 C2)
+    "why_now_enabled",
+    "model_why",
     "claude_effort",
     "claude_concurrency",
     "memory_fresh_days",
@@ -310,6 +313,12 @@ class Settings(BaseSettings):
     model_discover: ClaudeModel | None = None
     model_search: ClaudeModel | None = None
     model_extract: ClaudeModel | None = None
+    model_why: ClaudeModel | None = None  # the lead card's Why now (PLAN-V12 C2)
+
+    # --- Why now on the lead card (PLAN-V12 C2). Off until Al-khair switches it on (E2). ---
+    # One short Claude request per lead that isn't a Drop, with no web search, paid from the
+    # company's own cap: about US$0.04 to US$0.08 a lead on Opus 5.5 (TBC: E1 measures it).
+    why_now_enabled: StrictBool = False
 
     # --- Signal Hire: company headcount, counts only (core/signalhire). None turns it off. ---
     signalhire_api_key: SecretStr | None = None
@@ -743,12 +752,13 @@ class Settings(BaseSettings):
         # mypy reads a possible "conninfo" key in params as the first argument.
         return make_conninfo(**params)  # type: ignore[arg-type]
 
-    def model_for(self, step: Literal["discover", "search", "extract"]) -> str:
+    def model_for(self, step: Literal["discover", "search", "extract", "why"]) -> str:
         """The model for one kind of step: its own setting, or claude_model."""
         own: str | None = {
             "discover": self.model_discover,
             "search": self.model_search,
             "extract": self.model_extract,
+            "why": self.model_why,
         }[step]
         return own or self.claude_model
 

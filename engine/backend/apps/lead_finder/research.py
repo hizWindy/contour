@@ -13,8 +13,11 @@ The steps, in order:
 4. Gap check: if the city, size or a trigger is missing, one more targeted search. Then stop.
 5. Match HubSpot. Signal Hire's checked name, website and industry are applied first. HubSpot,
    Signal Hire and the research each give a staff number, and the first source in
-   `size.staff_sources` wins (the others stay on the card). Apply the rules and the score, and
-   save the card, the log and the memory.
+   `size.staff_sources` wins (the others stay on the card). Apply the rules and the score.
+6. Why now (PLAN-V12, while `why_now_enabled` is on): for a Pass, a Watch or a Director review,
+   one short Claude request with no web search writes why to call now (apps/lead_finder/why.py).
+   It comes after the judging, so it never changes the result or the score. Then save the card,
+   the log and the memory.
 
 A run calls this for many companies at once and passes a `ResearchContext`: the run id, where
 the company came from, the HubSpot id the watchlist already knows, the run's company cap and
@@ -67,7 +70,7 @@ from apps.lead_finder.params import (
     clean_typed_city,
     clean_typed_domain,
 )
-from apps.lead_finder.prompts import Prompt, extract_prompt, research_prompt, versions
+from apps.lead_finder.prompts import Prompt, extract_prompt, research_prompt, versions, why_prompt
 from apps.lead_finder.rules import LeadFinderRules, Result
 from apps.lead_finder.sanitize import (
     clean_company_name,
@@ -99,6 +102,7 @@ from apps.lead_finder.sourcing import (
     people_source,
 )
 from apps.lead_finder.tables import LIMITS, Lead, clip, company_key
+from apps.lead_finder.why import WhyNow, WhySkipped, why_skip, write_why_now
 from core.claude.budget import Budget, BudgetSpent
 from core.claude.client import Claude, ClaudeError, ClaudeUnavailable, Reply, WebTools
 from core.config import Settings
@@ -285,6 +289,18 @@ class LeadCard(BaseModel):
     rules_version: str
     prompt_version: str
     created_at: datetime
+    why_now: WhyNow | None = Field(
+        default=None,
+        description="Why call now (PLAN-V12): Claude's reason, likely next step and questions, "
+        "checked by code, and the When, Size, confidence and Missing lines code wrote. Empty when "
+        "it wasn't written: why_now_skipped says why, and a card made before it has neither.",
+    )
+    why_now_skipped: WhySkipped | None = Field(
+        default=None,
+        description="Why there is no Why now: switched_off, drop, no_facts (the form failed), "
+        "budget (the company's money ran out) or failed. Empty when there is one, or for a card "
+        "made before it.",
+    )
 
 
 @dataclass
@@ -310,6 +326,7 @@ class Job:
     today: date
     notes: list[FoundNote] = field(default_factory=list)
     replies: list[tuple[str, Reply[Any]]] = field(default_factory=list)
+    logged: int = 0  # how many of the replies are in the search log already
     problems: list[str] = field(default_factory=list)
     form_failed: bool = False  # the last form fill failed, so every fact is unknown
     lookup: CompanyLookup | None = None  # Signal Hire's details, read before the search
@@ -329,8 +346,9 @@ class Job:
     def blocked(self) -> tuple[str, ...]:
         return self.context.blocked_domains or tuple(self.rules.criteria.source_domains.blocked)
 
-    def model(self, step: Literal["search", "extract"]) -> str:
-        chosen = self.context.models.search if step == "search" else self.context.models.extract
+    def model(self, step: Literal["search", "extract", "why"]) -> str:
+        models = self.context.models
+        chosen = {"search": models.search, "extract": models.extract, "why": models.why}[step]
         return chosen or self.settings.model_for(step)
 
 
@@ -387,6 +405,7 @@ async def research_company(
         card, hubspot, place, metro, profile_text = await _judge_and_card(
             session, embedder, job, facts, [], covered, now, signalhire
         )
+        card = await _why_now(session, job, claude, card)  # a Drop: says why, asks nothing
         await _save(session, embedder, job, card, hubspot, key, place, metro, profile_text)
         return card
 
@@ -419,10 +438,12 @@ async def research_company(
         await _save_notes(session, embedder, job)
         await session.commit()
 
-    # 5. HubSpot, rules, score, save
+    # 5. HubSpot, rules, score. 6. Why now (PLAN-V12): after the judging, so it never changes the
+    # result or the score. Then save.
     card, hubspot, place, metro, profile_text = await _judge_and_card(
         session, embedder, job, facts, dropped, covered, now, signalhire
     )
+    card = await _why_now(session, job, claude, card)
     await _save(session, embedder, job, card, hubspot, key, place, metro, profile_text)
     return card
 
@@ -439,11 +460,11 @@ async def refill_lead(
     """Fills the answer form again for a saved lead, from the notes memory keeps, and judges it
     again (PLAN-V4 B5: the leads whose form failed from 30 Oct to 2 Nov).
 
-    No web search: one Claude request, the form, about US$0.25. The lead keeps its id, run,
-    origin, status and note; its card and the columns copied from it are replaced, and its
-    company profile in memory too. The request is logged without a run, so a finished run's
-    cost doesn't change. None when there is no such lead, its name can't be used, or memory has
-    no fresh notes about it (`memory_fresh_days`).
+    No web search: one Claude request, the form, about US$0.25, and the Why now again while it
+    is switched on (PLAN-V12). The lead keeps its id, run, origin, status and note; its card and
+    the columns copied from it are replaced, and its company profile in memory too. The requests
+    are logged without a run, so a finished run's cost doesn't change. None when there is no such
+    lead, its name can't be used, or memory has no fresh notes about it (`memory_fresh_days`).
     """
     lead = await session.get(Lead, lead_id)
     if lead is None:
@@ -489,6 +510,7 @@ async def refill_lead(
     card, hubspot, place, metro, profile_text = await _judge_and_card(
         session, embedder, job, facts, dropped, covered, now, None
     )
+    card = await _why_now(session, job, claude, card)  # written again, from the new facts
     card = card.model_copy(
         update={
             "created_at": old.created_at,
@@ -533,6 +555,90 @@ async def refill_lead(
     )
     await session.commit()
     log.info("lead_refilled", extra={"lead_id": str(lead_id), "result": card.result})
+    return card
+
+
+async def why_now_for_lead(
+    session: AsyncSession,
+    claude: Claude,
+    rules: LeadFinderRules,
+    settings: Settings,
+    lead_id: uuid.UUID,
+    today: date | None = None,
+) -> LeadCard | None:
+    """Writes the Why now for a saved lead, from its card and its notes (PLAN-V12 C3).
+
+    No web search and no new facts: one Claude request (two if the answer misses the form once),
+    paid from a company cap of its own, with the same checks as in a research. It never changes
+    the result or the score: the saved card's are kept. The card gets the Why now and its cost
+    goes up by what it cost; the request is logged without a run, so a finished run's cost
+    doesn't change. A Drop, or a card whose form failed, gets nothing, costs nothing and isn't
+    saved. A failed try keeps an earlier Why now, with a line in the problems. None when there is
+    no such lead.
+    """
+    lead = await session.get(Lead, lead_id)
+    if lead is None:
+        return None
+    card = LeadCard.model_validate(lead.card)
+    company = lead.company
+    await session.rollback()  # no connection waits on Claude
+    skipped = why_skip(card)
+    if skipped is not None:
+        return card.model_copy(update={"why_now_skipped": skipped})
+    now = datetime.now(UTC)
+    outcome = await write_why_now(
+        card,
+        claude=claude,
+        budget=Budget(
+            settings.company_cap_usd,
+            settings.company_max_searches,
+            request_reserve_usd=settings.request_reserve_usd,
+        ),
+        model=settings.model_for("why"),
+        rules=rules,
+        today=today or now.date(),
+        now=now,
+    )
+    for number, reply in enumerate(outcome.replies):
+        log_reply(
+            session,
+            reply,
+            app=APP,
+            step="why" if number == 0 else "why:retry",
+            job_id=lead_id,
+            run_id=None,
+            subject=company,
+            prompt_version=why_prompt().version,
+        )
+    spent = sum((reply.cost_usd for reply in outcome.replies), Decimal(0))
+    research = card.research.model_copy(
+        update={
+            "cost_usd": card.research.cost_usd + spent,
+            "claude_requests": card.research.claude_requests + len(outcome.replies),
+        }
+    )
+    kept = outcome.why_now is None and card.why_now is not None  # a failed try keeps the old one
+    card = card.model_copy(
+        update={
+            "why_now": card.why_now if kept else outcome.why_now,
+            "why_now_skipped": card.why_now_skipped if kept else outcome.skipped,
+            "problems": [
+                *(line for line in card.problems if not line.startswith("Why now")),
+                *outcome.problems,
+            ],
+            "research": research,
+        }
+    )
+    await session.execute(
+        update(Lead)
+        .where(Lead.id == lead_id)
+        .values(card=card.model_dump(mode="json"), cost_usd=research.cost_usd)
+    )
+    await session.commit()
+    log.info(
+        "why_now_written",
+        extra={"lead_id": str(lead_id), "written": outcome.why_now is not None, "cost": str(spent)},
+    )
     return card
 
 
@@ -658,6 +764,45 @@ async def _judge_and_card(
         created_at=now,
     )
     return card, hubspot, place, metro, profile_text
+
+
+async def _why_now(session: AsyncSession, job: Job, claude: Claude, card: LeadCard) -> LeadCard:
+    """Step 6, the Why now (PLAN-V12 C2): after the judging and before the save, so it never
+    changes the result or the score. Only for a Pass, a Watch or a Director review whose form was
+    filled, and only while `why_now_enabled` is on. It is paid from the company's own budget, and
+    its reply is logged and counted like every other (the run's live totals, the daily limit).
+    Whatever goes wrong is a line in the card's problems: the lead is still saved."""
+    skipped = why_skip(card)
+    if skipped is None and not job.settings.why_now_enabled:
+        skipped = "switched_off"
+    if skipped is not None:
+        return card.model_copy(update={"why_now": None, "why_now_skipped": skipped})
+    await session.commit()  # no connection waits on Claude
+    outcome = await write_why_now(
+        card,
+        claude=claude,
+        budget=job.budget,
+        model=job.model("why"),
+        rules=job.rules,
+        today=job.today,
+        now=datetime.now(UTC),
+        on_reply=job.context.on_reply,
+    )
+    for number, reply in enumerate(outcome.replies):
+        job.replies.append(("why" if number == 0 else "why:retry", reply))
+    job.problems.extend(outcome.problems)
+    _log_replies(session, job)  # the save commits them
+    research = card.research.model_copy(
+        update={"cost_usd": job.budget.spent_usd, "claude_requests": len(job.replies)}
+    )
+    return card.model_copy(
+        update={
+            "why_now": outcome.why_now,
+            "why_now_skipped": outcome.skipped,
+            "problems": list(job.problems),
+            "research": research,
+        }
+    )
 
 
 # --- Steps ---------------------------------------------------------------------------------
@@ -1066,8 +1211,17 @@ def _why(checks: list[RuleCheck], result: Result) -> str:
     return f"{'. '.join(parts)}. Result: {label}.{because}"
 
 
+def _prompt_version(step: str, rules: LeadFinderRules) -> str:
+    if step.startswith("search"):
+        return research_prompt().version
+    if step.startswith("why"):
+        return why_prompt().version
+    return extract_prompt(rules).version
+
+
 def _log_replies(session: AsyncSession, job: Job) -> None:
-    for step, reply in job.replies:
+    """Adds the replies not yet in the search log to the session. The caller commits."""
+    for step, reply in job.replies[job.logged :]:
         log_reply(
             session,
             reply,
@@ -1076,12 +1230,9 @@ def _log_replies(session: AsyncSession, job: Job) -> None:
             job_id=job.id,
             run_id=job.context.run_id,
             subject=job.company,
-            prompt_version=(
-                research_prompt().version
-                if step.startswith("search")
-                else extract_prompt(job.rules).version
-            ),
+            prompt_version=_prompt_version(step, job.rules),
         )
+    job.logged = len(job.replies)
 
 
 async def _save_notes(session: AsyncSession, embedder: Embedder, job: Job) -> None:

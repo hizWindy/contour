@@ -118,6 +118,10 @@ office_age:
   # office dates, never Claude, and it has no discovery search.
   tenure_years: 8
   tenure_sign: long_tenure
+  # The lead card's "Why now" (PLAN-V12 B1) guesses when a lease may end from the move-in year: the
+  # move-in year plus 5 to 7 years. Always marked "estimated", with its working. It never changes a
+  # result or a score.
+  lease_guess_years: [5, 7]
 
 triggers:
   window_years: 3
@@ -315,6 +319,8 @@ tbc:
     note: From Levi's 9 Nov example (Budget Direct had already set up its new Adelaide office when his run found it). The 12 months is our guess (PLAN-V11 B3).
   - key: office_age.tenure_years
     note: Levi, 9 Nov, a second search for companies 8+ years at the same address with no known office project (PLAN-V11 C1). Open with Levi, the 8 years, and whether an old office alone is a Pass (a main sign, as now) or a Director review.
+  - key: office_age.lease_guess_years
+    note: Our proposal (PLAN-V12 B1). Office leases often run 5, 7 or 10 years, with options, so the guess is often wrong. It shows only on the lead card's Why now, marked estimated, and never changes a result or a score. Levi to confirm 5 to 7.
   - key: triggers.consultant_window_months
     note: From the Profile and DEAL.md. Shown as text on the lead card. The tool can't see when a consultant is appointed.
   - key: triggers

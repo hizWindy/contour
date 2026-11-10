@@ -221,6 +221,7 @@ async def research_one(run: RunCtx, task: CompanyTask) -> dict[str, Any]:
                     discover=settings.model_for("discover"),
                     search=settings.model_for("search"),
                     extract=settings.model_for("extract"),
+                    why=settings.model_for("why"),
                 ),
                 blocked_domains=tuple(run.rules.criteria.source_domains.blocked),
                 company_cap_usd=ctx.caps.company_cap_usd,

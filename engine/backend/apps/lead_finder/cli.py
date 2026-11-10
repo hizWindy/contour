@@ -7,8 +7,12 @@ Run it from engine/backend:
     uv run lead-finder headcount "Culture Amp" --city Melbourne --yes
     uv run lead-finder forms
     uv run lead-finder refill --yes
+    uv run lead-finder why-now --lead <id> --lead <id> --yes
 The first two spend money on Claude. Every request is in the search log. `rejudge` is free: it
 judges the saved leads again with the current rules, from their cards, and saves nothing.
+`why-now` writes the lead card's Why now for saved leads, from their cards and notes: no web
+search, one short Claude request a lead (PLAN-V12 C3). Without `--yes` it lists the leads and the
+estimated cost, and spends nothing.
 `headcount` reads Signal Hire's numbers for one company (1 company credit, plus 2 searches from
 the daily quota). It needs SIGNALHIRE_API_KEY in engine/.env, and uses no database.
 `forms` checks that every answer form Claude gets is under Anthropic's limits for strict forms
@@ -22,6 +26,7 @@ import asyncio
 import sys
 import uuid
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 from typing import Literal
@@ -38,11 +43,13 @@ from apps.lead_finder.research import (
     ResearchRequest,
     refill_lead,
     research_company,
+    why_now_for_lead,
 )
 from apps.lead_finder.rules import load_rules
 from apps.lead_finder.sources import FACT_FIELDS
 from apps.lead_finder.sourcing import SOURCE_NAMES
 from apps.lead_finder.testing import load_testset
+from apps.lead_finder.why import WhyNowAnswer, estimate_usd, facts_sheet, why_input, why_skip
 from core.claude.client import ClaudeError, close_claude, configure_claude, get_claude
 from core.claude.forms import OPTIONAL_FIELDS_LIMIT, UNION_FIELDS_LIMIT, form_size
 from core.cli import DATABASE_DOWN, migrate
@@ -71,6 +78,7 @@ def describe(card: LeadCard) -> str:
         for person in card.facts.decision_makers
     ]
     lines.append(f"  Opening line: {card.opening_line or '-'}")
+    lines += why_lines(card)
     lines.append(f"  Unknown: {', '.join(unknown_facts(card)) or 'nothing'}")
     lines += [f"  From Signal Hire: {note}" for note in card.from_signalhire]
     for entry in card.fact_sources:
@@ -90,6 +98,27 @@ def describe(card: LeadCard) -> str:
     )
     lines.append(f"  Lead id: {card.id}")
     return "\n".join(lines)
+
+
+def why_lines(card: LeadCard) -> list[str]:
+    """The card's Why now (PLAN-V12), or why it has none."""
+    why = card.why_now
+    if why is None:
+        reason = card.why_now_skipped or "an older lead"
+        return [f"  Why now: not written ({reason.replace('_', ' ')})"]
+    lines = [f"  Why now ({why.confidence} confidence): {why.reason or '(removed by the check)'}"]
+    if why.likely_next:
+        lines.append(f"  Likely next: {why.likely_next}")
+    lines += [
+        f"  When: {why.when.text}",
+        f"  Size: {why.size.text}",
+        f"  Missing: {'; '.join(why.missing) or 'nothing key'}",
+    ]
+    lines += [f'  Ask: "{question}"' for question in why.ask]
+    lines += [f"  Why now link: {link}" for link in why.links]
+    lines += [f"  Why now check removed: {item}" for item in why.dropped]
+    lines.append(f"  Why now cost: US${why.cost_usd:.4f} ({why.model})")
+    return lines
 
 
 async def _research(requests: list[ResearchRequest]) -> list[LeadCard]:
@@ -174,10 +203,11 @@ def _headcount(args: argparse.Namespace) -> int:
 
 
 # The answer forms Claude gets, with the kind of step that sends each one.
-FORMS: dict[str, tuple[Literal["search", "extract", "discover"], type[BaseModel]]] = {
+FORMS: dict[str, tuple[Literal["search", "extract", "discover", "why"], type[BaseModel]]] = {
     "search notes": ("search", AngleNotes),
     "company facts": ("extract", CompanyFacts),
     "discovery": ("discover", Candidates),
+    "why now": ("why", WhyNowAnswer),
 }
 FORM_CHECK_SYSTEM = (
     "This request only checks that an answer form is accepted. Fill in the form for a made-up "
@@ -298,6 +328,119 @@ def _refill_command(args: argparse.Namespace) -> int:
     return 0
 
 
+@dataclass(frozen=True)
+class WhyNowItem:
+    """A saved lead the `why-now` command was asked about, and what it will do with it."""
+
+    lead_id: uuid.UUID
+    company: str
+    result: str
+    action: str  # "write", "write again", or why it is skipped
+    estimate_usd: Decimal  # 0 for a lead that is skipped
+    cost_before: Decimal  # the lead's cost so far
+
+
+WHY_SKIP_WORDS = {
+    "drop": "skip: a Drop",
+    "no_facts": "skip: its form failed, so it has no facts (refill it first)",
+}
+
+
+async def _why_now_leads(
+    lead_ids: list[uuid.UUID], run_id: uuid.UUID | None
+) -> tuple[list[WhyNowItem], list[uuid.UUID]]:
+    """The leads asked for (by id, or every lead of a run), oldest first, each with what the
+    command will do and its estimated cost. Also the ids no lead has. Reads only."""
+    from sqlalchemy import select
+
+    from apps.lead_finder.tables import Lead
+    from core.db.engine import get_engine, get_sessionmaker
+
+    settings, rules = get_settings(), load_rules()
+    model = settings.model_for("why")
+    today = datetime.now(ZoneInfo("Australia/Melbourne")).date()
+    query = select(Lead.id, Lead.company, Lead.card).order_by(Lead.created_at)
+    query = query.where(Lead.run_id == run_id if run_id is not None else Lead.id.in_(lead_ids))
+    try:
+        async with get_sessionmaker()() as session:
+            rows = (await session.execute(query)).all()
+    finally:
+        await get_engine().dispose()
+    items: list[WhyNowItem] = []
+    for lead_id, company, raw in rows:
+        card = LeadCard.model_validate(raw)
+        cost = card.research.cost_usd
+        skipped = why_skip(card)
+        if skipped is not None:
+            words = WHY_SKIP_WORDS.get(skipped, f"skip: {skipped}")
+            items.append(WhyNowItem(lead_id, company, card.result, words, Decimal(0), cost))
+            continue
+        sheet = facts_sheet(card.facts, card, rules, today, people=len(card.signalhire_people))
+        estimate = estimate_usd(why_input(card, sheet, rules, today), model)
+        action = "write again" if card.why_now is not None else "write"
+        items.append(WhyNowItem(lead_id, company, card.result, action, estimate, cost))
+    found = {item.lead_id for item in items}
+    return items, [lead_id for lead_id in lead_ids if lead_id not in found]
+
+
+async def _write_why_now(items: list[WhyNowItem]) -> Decimal:
+    """Writes each lead's Why now, one at a time. Prints each, returns what they cost."""
+    from core.db.engine import get_engine, get_sessionmaker
+
+    settings, rules = get_settings(), load_rules()
+    configure_claude(settings)
+    claude = get_claude()
+    spent = Decimal(0)
+    try:
+        for item in items:
+            async with get_sessionmaker()() as session:
+                card = await why_now_for_lead(session, claude, rules, settings, item.lead_id)
+            if card is None:
+                print(f"{item.company}: no such lead any more", flush=True)
+                continue
+            cost = card.research.cost_usd - item.cost_before
+            spent += cost
+            print(f"{item.company} (US${cost:.4f})", flush=True)
+            print("\n".join(why_lines(card)), flush=True)
+            problems = [line for line in card.problems if line.startswith("Why now")]
+            print("".join(f"  Problem: {line}\n" for line in problems), flush=True)
+    finally:
+        await close_claude()
+        await get_engine().dispose()
+    return spent
+
+
+def _why_now_command(args: argparse.Namespace) -> int:
+    """Lists the leads and the estimated cost; `--yes` writes their Why now (PLAN-V12 C3)."""
+    lead_ids: list[uuid.UUID] = args.lead or []
+    if not lead_ids and args.run is None:
+        print("Name at least one lead (--lead <id>), or a run (--run <id>).", file=sys.stderr)
+        return 1
+    found = asyncio.run(_why_now_leads(lead_ids, args.run), loop_factory=loop_factory())
+    items, unknown = found
+    for lead_id in unknown:
+        print(f"{lead_id}: no such lead")
+    model = get_settings().model_for("why")
+    print(f"{'Company':<30} {'Result':<16} {'About US$':>9}  What happens")
+    for item in items:
+        print(f"{item.company[:30]:<30} {item.result:<16} {item.estimate_usd:>9.3f}  {item.action}")
+    todo = [item for item in items if item.estimate_usd > 0]
+    if not todo:
+        print("Nothing to write.")
+        return 1 if unknown else 0
+    total = sum((item.estimate_usd for item in todo), Decimal(0))
+    if not args.yes:
+        print(
+            f"Writing the Why now for {len(todo)} lead(s) with {model} costs about "
+            f"US${total:.2f} in all (an estimate: the real cost goes in the search log). "
+            "No web search. Add --yes to go ahead."
+        )
+        return 1
+    spent = asyncio.run(_write_why_now(todo), loop_factory=loop_factory())
+    print(f"Spent US${spent:.4f} on {len(todo)} lead(s), about US${total:.2f} estimated.")
+    return 0
+
+
 def _table(cards: list[LeadCard], label: str) -> None:
     print(f"{label}\n{'Company':<20} {'Result':<16} {'Score':>5} {'Unknown':>7} {'Cost US$':>9}")
     for card in cards:
@@ -359,6 +502,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--yes it only shows what would change.",
     )
     relabel_cmd.add_argument("--yes", action="store_true", help="Save the new labels.")
+    why_now = commands.add_parser(
+        "why-now",
+        help="Write the lead card's Why now for saved leads, from their cards and notes (one "
+        "short Claude request a lead, no web search). Without --yes it shows the leads and the "
+        "estimated cost.",
+    )
+    why_now.add_argument(
+        "--lead", action="append", type=uuid.UUID, help="A lead's id. Give it more than once."
+    )
+    why_now.add_argument("--run", type=uuid.UUID, help="Every lead of this run.")
+    why_now.add_argument("--yes", action="store_true", help="Confirm the spend.")
     args = parser.parse_args(argv)
 
     try:
@@ -372,6 +526,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         migrate()
         if args.command == "refill":
             return _refill_command(args)
+        if args.command == "why-now":
+            return _why_now_command(args)
         if args.command == "relabel":
             print(asyncio.run(_relabel(write=args.yes), loop_factory=loop_factory()))
             return 0

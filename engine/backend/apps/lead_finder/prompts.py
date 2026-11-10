@@ -39,6 +39,14 @@ def discover_prompt() -> Prompt:
     return Prompt("discover", text, version)
 
 
+@lru_cache
+def why_prompt() -> Prompt:
+    """The Why now instructions (PLAN-V12 C1). They hold no lists from the rules, so the version is
+    the file's. Each Why now keeps it, so a card shows which wording wrote it."""
+    text, version = _read("why")
+    return Prompt("why", text, version)
+
+
 def extract_prompt(rules: LeadFinderRules) -> Prompt:
     """The form-filling instructions, with the trigger, booster and industry lists filled in."""
     template, version = _read("extract")
@@ -60,10 +68,11 @@ def extract_prompt(rules: LeadFinderRules) -> Prompt:
 
 
 def versions(rules: LeadFinderRules) -> str:
-    """The versions a saved lead shows: the two prompts that make a lead."""
+    """The versions a saved lead shows: the two prompts that make a lead. The lead's column holds
+    64 characters, so a Why now keeps its own prompt's version on itself (PLAN-V12 C1)."""
     return f"research {research_prompt().version}, extract {extract_prompt(rules).version}"
 
 
 def run_versions(rules: LeadFinderRules) -> str:
-    """The versions a run shows: research, extract and discover (at most 128 characters)."""
-    return f"{versions(rules)}, discover {discover_prompt().version}"
+    """The versions a run shows: research, extract, discover and why (at most 128 characters)."""
+    return f"{versions(rules)}, discover {discover_prompt().version}, why {why_prompt().version}"

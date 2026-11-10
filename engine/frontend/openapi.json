@@ -3445,6 +3445,36 @@
           "why_it_fits": {
             "title": "Why It Fits",
             "type": "string"
+          },
+          "why_now": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WhyNow"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why call now (PLAN-V12): Claude's reason, likely next step and questions, checked by code, and the When, Size, confidence and Missing lines code wrote. Empty when it wasn't written: why_now_skipped says why, and a card made before it has neither."
+          },
+          "why_now_skipped": {
+            "anyOf": [
+              {
+                "enum": [
+                  "switched_off",
+                  "drop",
+                  "no_facts",
+                  "budget",
+                  "failed"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why there is no Why now: switched_off, drop, no_facts (the form failed), budget (the company's money ran out) or failed. Empty when there is one, or for a card made before it.",
+            "title": "Why Now Skipped"
           }
         },
         "required": [
@@ -3479,7 +3509,9 @@
           "research",
           "rules_version",
           "prompt_version",
-          "created_at"
+          "created_at",
+          "why_now",
+          "why_now_skipped"
         ],
         "title": "LeadCard",
         "type": "object"
@@ -3834,6 +3866,36 @@
           "why_it_fits": {
             "title": "Why It Fits",
             "type": "string"
+          },
+          "why_now": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WhyNow"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why call now (PLAN-V12): Claude's reason, likely next step and questions, checked by code, and the When, Size, confidence and Missing lines code wrote. Empty when it wasn't written: why_now_skipped says why, and a card made before it has neither."
+          },
+          "why_now_skipped": {
+            "anyOf": [
+              {
+                "enum": [
+                  "switched_off",
+                  "drop",
+                  "no_facts",
+                  "budget",
+                  "failed"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why there is no Why now: switched_off, drop, no_facts (the form failed), budget (the company's money ran out) or failed. Empty when there is one, or for a card made before it.",
+            "title": "Why Now Skipped"
           }
         },
         "required": [
@@ -3869,6 +3931,8 @@
           "rules_version",
           "prompt_version",
           "created_at",
+          "why_now",
+          "why_now_skipped",
           "status",
           "reject_reason",
           "reject_note",
@@ -5362,6 +5426,24 @@
             "title": "Just Moved Months",
             "type": "integer"
           },
+          "lease_guess_years": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "maximum": 15.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "maximum": 15.0,
+                "minimum": 1.0,
+                "type": "integer"
+              }
+            ],
+            "title": "Lease Guess Years",
+            "type": "array"
+          },
           "recent_move_years": {
             "exclusiveMinimum": 0.0,
             "title": "Recent Move Years",
@@ -5383,7 +5465,8 @@
           "recent_move_years",
           "just_moved_months",
           "tenure_years",
-          "tenure_sign"
+          "tenure_sign",
+          "lease_guess_years"
         ],
         "title": "OfficeAge",
         "type": "object"
@@ -9865,6 +9948,53 @@
         "title": "Size",
         "type": "object"
       },
+      "SizeLine": {
+        "description": "How big the job is: the office size and the fitout value the score used, with the working.",
+        "properties": {
+          "basis": {
+            "description": "research: the research's own figure. staff: worked out from the staff. growth: the office it says it will need. other: an estimate. none: not known.",
+            "enum": [
+              "research",
+              "staff",
+              "growth",
+              "other",
+              "none"
+            ],
+            "title": "Basis",
+            "type": "string"
+          },
+          "estimated": {
+            "description": "True unless the research found the size, confirmed",
+            "title": "Estimated",
+            "type": "boolean"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The page the size rests on, if any",
+            "title": "Source Url"
+          },
+          "text": {
+            "description": "The line, like 'About 1,200 m², about $1.8M fitout (...)'",
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "estimated",
+          "source_url",
+          "basis"
+        ],
+        "title": "SizeLine",
+        "type": "object"
+      },
       "SizePoints": {
         "additionalProperties": false,
         "properties": {
@@ -11385,6 +11515,178 @@
           "tbc"
         ],
         "title": "WatchlistRules",
+        "type": "object"
+      },
+      "WhenLine": {
+        "description": "When the company might move: the best date the facts give, how far away it is, and how long\nthe company has been at its address.",
+        "properties": {
+          "basis": {
+            "description": "lease: a lease end from a source. move: an office change a note points to. estimate: the move-in year plus a usual lease. none: no date known.",
+            "enum": [
+              "lease",
+              "move",
+              "estimate",
+              "none"
+            ],
+            "title": "Basis",
+            "type": "string"
+          },
+          "estimated": {
+            "description": "True when the date is worked out, or its source only estimates it. The text says 'estimated' and shows the working.",
+            "title": "Estimated",
+            "type": "boolean"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The page the date rests on, if any",
+            "title": "Source Url"
+          },
+          "text": {
+            "description": "The line, like 'Lease ends March 2028 (confirmed). ...'",
+            "title": "Text",
+            "type": "string"
+          },
+          "window": {
+            "anyOf": [
+              {
+                "enum": [
+                  "past",
+                  "soon",
+                  "best",
+                  "later"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How far away the date is: soon (under the best window), best, later or past. Empty when no date is known.",
+            "title": "Window"
+          }
+        },
+        "required": [
+          "text",
+          "estimated",
+          "source_url",
+          "basis",
+          "window"
+        ],
+        "title": "WhenLine",
+        "type": "object"
+      },
+      "WhyNow": {
+        "description": "The Why now section of a lead card: Claude's reason, next step and questions, checked by\ncode, and the lines code wrote from the facts.",
+        "properties": {
+          "ask": {
+            "description": "1 or 2 questions for the call, to fill the biggest gap",
+            "items": {
+              "type": "string"
+            },
+            "title": "Ask",
+            "type": "array"
+          },
+          "confidence": {
+            "description": "How sure we are, set by code: high, medium or low. Low is a thin lead.",
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ],
+            "title": "Confidence",
+            "type": "string"
+          },
+          "cost_usd": {
+            "description": "What writing it cost, in US dollars",
+            "title": "Cost Usd",
+            "type": "string"
+          },
+          "dropped": {
+            "description": "What the code check removed from Claude's answer, and why",
+            "items": {
+              "type": "string"
+            },
+            "title": "Dropped",
+            "type": "array"
+          },
+          "likely_next": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What probably happens next, in one sentence. Empty when the notes don't support one.",
+            "title": "Likely Next"
+          },
+          "links": {
+            "description": "The note links Claude relied on, all from the card",
+            "items": {
+              "type": "string"
+            },
+            "title": "Links",
+            "type": "array"
+          },
+          "missing": {
+            "description": "Key facts not found, in plain words",
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing",
+            "type": "array"
+          },
+          "model": {
+            "description": "The Claude model that wrote it",
+            "title": "Model",
+            "type": "string"
+          },
+          "prompt_version": {
+            "description": "The wording of the instructions it was written with",
+            "title": "Prompt Version",
+            "type": "string"
+          },
+          "reason": {
+            "description": "Why this company, why now, in 1 or 2 sentences. Empty when the code check removed every sentence (see dropped).",
+            "title": "Reason",
+            "type": "string"
+          },
+          "size": {
+            "$ref": "#/components/schemas/SizeLine"
+          },
+          "when": {
+            "$ref": "#/components/schemas/WhenLine"
+          },
+          "written_at": {
+            "format": "date-time",
+            "title": "Written At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "likely_next",
+          "ask",
+          "links",
+          "when",
+          "size",
+          "confidence",
+          "missing",
+          "dropped",
+          "model",
+          "prompt_version",
+          "cost_usd",
+          "written_at"
+        ],
+        "title": "WhyNow",
         "type": "object"
       },
       "WriteOut": {

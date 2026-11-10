@@ -45,9 +45,10 @@ CHOICE_KEYS = {
     "model_search",
     "model_extract",
     "model_prep",
+    "model_why",
     "claude_effort",
 }
-BOOL_KEYS = {"prep_enabled"}  # a switch has no min or max
+BOOL_KEYS = {"prep_enabled", "why_now_enabled"}  # a switch has no min or max
 NOT_NUMBERS = CHOICE_KEYS | BOOL_KEYS
 
 

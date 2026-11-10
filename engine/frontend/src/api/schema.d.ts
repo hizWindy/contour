@@ -2563,6 +2563,13 @@ export interface components {
             triggers: components["schemas"]["TriggerScore"][];
             /** Why It Fits */
             why_it_fits: string;
+            /** @description Why call now (PLAN-V12): Claude's reason, likely next step and questions, checked by code, and the When, Size, confidence and Missing lines code wrote. Empty when it wasn't written: why_now_skipped says why, and a card made before it has neither. */
+            why_now: components["schemas"]["WhyNow"] | null;
+            /**
+             * Why Now Skipped
+             * @description Why there is no Why now: switched_off, drop, no_facts (the form failed), budget (the company's money ran out) or failed. Empty when there is one, or for a card made before it.
+             */
+            why_now_skipped: ("switched_off" | "drop" | "no_facts" | "budget" | "failed") | null;
         };
         /**
          * LeadDetail
@@ -2722,6 +2729,13 @@ export interface components {
             useful: boolean | null;
             /** Why It Fits */
             why_it_fits: string;
+            /** @description Why call now (PLAN-V12): Claude's reason, likely next step and questions, checked by code, and the When, Size, confidence and Missing lines code wrote. Empty when it wasn't written: why_now_skipped says why, and a card made before it has neither. */
+            why_now: components["schemas"]["WhyNow"] | null;
+            /**
+             * Why Now Skipped
+             * @description Why there is no Why now: switched_off, drop, no_facts (the form failed), budget (the company's money ran out) or failed. Empty when there is one, or for a card made before it.
+             */
+            why_now_skipped: ("switched_off" | "drop" | "no_facts" | "budget" | "failed") | null;
         };
         /**
          * LeadFacets
@@ -3329,6 +3343,11 @@ export interface components {
             due_years: number;
             /** Just Moved Months */
             just_moved_months: number;
+            /** Lease Guess Years */
+            lease_guess_years: [
+                number,
+                number
+            ];
             /** Recent Move Years */
             recent_move_years: number;
             /** Tenure Sign */
@@ -5310,6 +5329,33 @@ export interface components {
             /** Staff Sources */
             staff_sources: ("hubspot" | "headcount_tool" | "linkedin" | "web_research")[];
         };
+        /**
+         * SizeLine
+         * @description How big the job is: the office size and the fitout value the score used, with the working.
+         */
+        SizeLine: {
+            /**
+             * Basis
+             * @description research: the research's own figure. staff: worked out from the staff. growth: the office it says it will need. other: an estimate. none: not known.
+             * @enum {string}
+             */
+            basis: "research" | "staff" | "growth" | "other" | "none";
+            /**
+             * Estimated
+             * @description True unless the research found the size, confirmed
+             */
+            estimated: boolean;
+            /**
+             * Source Url
+             * @description The page the size rests on, if any
+             */
+            source_url: string | null;
+            /**
+             * Text
+             * @description The line, like 'About 1,200 m², about $1.8M fitout (...)'
+             */
+            text: string;
+        };
         /** SizePoints */
         SizePoints: {
             /** Confirmed In Range */
@@ -5998,6 +6044,104 @@ export interface components {
             staff: components["schemas"]["WatchStaff"];
             /** Tbc */
             tbc: components["schemas"]["TbcNote"][];
+        };
+        /**
+         * WhenLine
+         * @description When the company might move: the best date the facts give, how far away it is, and how long
+         *     the company has been at its address.
+         */
+        WhenLine: {
+            /**
+             * Basis
+             * @description lease: a lease end from a source. move: an office change a note points to. estimate: the move-in year plus a usual lease. none: no date known.
+             * @enum {string}
+             */
+            basis: "lease" | "move" | "estimate" | "none";
+            /**
+             * Estimated
+             * @description True when the date is worked out, or its source only estimates it. The text says 'estimated' and shows the working.
+             */
+            estimated: boolean;
+            /**
+             * Source Url
+             * @description The page the date rests on, if any
+             */
+            source_url: string | null;
+            /**
+             * Text
+             * @description The line, like 'Lease ends March 2028 (confirmed). ...'
+             */
+            text: string;
+            /**
+             * Window
+             * @description How far away the date is: soon (under the best window), best, later or past. Empty when no date is known.
+             */
+            window: ("past" | "soon" | "best" | "later") | null;
+        };
+        /**
+         * WhyNow
+         * @description The Why now section of a lead card: Claude's reason, next step and questions, checked by
+         *     code, and the lines code wrote from the facts.
+         */
+        WhyNow: {
+            /**
+             * Ask
+             * @description 1 or 2 questions for the call, to fill the biggest gap
+             */
+            ask: string[];
+            /**
+             * Confidence
+             * @description How sure we are, set by code: high, medium or low. Low is a thin lead.
+             * @enum {string}
+             */
+            confidence: "high" | "medium" | "low";
+            /**
+             * Cost Usd
+             * @description What writing it cost, in US dollars
+             */
+            cost_usd: string;
+            /**
+             * Dropped
+             * @description What the code check removed from Claude's answer, and why
+             */
+            dropped: string[];
+            /**
+             * Likely Next
+             * @description What probably happens next, in one sentence. Empty when the notes don't support one.
+             */
+            likely_next: string | null;
+            /**
+             * Links
+             * @description The note links Claude relied on, all from the card
+             */
+            links: string[];
+            /**
+             * Missing
+             * @description Key facts not found, in plain words
+             */
+            missing: string[];
+            /**
+             * Model
+             * @description The Claude model that wrote it
+             */
+            model: string;
+            /**
+             * Prompt Version
+             * @description The wording of the instructions it was written with
+             */
+            prompt_version: string;
+            /**
+             * Reason
+             * @description Why this company, why now, in 1 or 2 sentences. Empty when the code check removed every sentence (see dropped).
+             */
+            reason: string;
+            size: components["schemas"]["SizeLine"];
+            when: components["schemas"]["WhenLine"];
+            /**
+             * Written At
+             * Format: date-time
+             */
+            written_at: string;
         };
         /** WriteOut */
         WriteOut: {

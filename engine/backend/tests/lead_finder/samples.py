@@ -7,7 +7,8 @@ three kinds of request the Lead Finder makes:
 
 - a search angle of one company (form `AngleNotes`): notes with links;
 - the answer form of one company (form `CompanyFacts`);
-- discovery of one slice (form `Candidates`): the companies of a `(trigger_id, city)` scenario.
+- discovery of one slice (form `Candidates`): the companies of a `(trigger_id, city)` scenario;
+- the Why now of one lead (form `WhyNowAnswer`, PLAN-V12): `why_answer`, or a sample.
 
 The company a request is about is read from the line `Company ...: <value>` of its prompt. The
 value is plain text (`Company: Acme Software`) or a JSON string
@@ -18,6 +19,7 @@ What each request costs (fixed, so a test can add the numbers up):
     search angle   US$0.10 + US$0.01 for each web search it makes (2 searches, so US$0.12)
     extract        US$0.04
     discover       US$0.08 + US$0.01 for each web search it makes (3 searches, so US$0.11)
+    why            US$0.03, no web search
 
 A request makes `min(2, web.max_searches)` searches for an angle and `min(3, web.max_searches)` for
 discovery, like the API that enforces `max_uses`. The three base costs are fields, so a test can
@@ -47,6 +49,7 @@ from apps.lead_finder.fields import (
 from apps.lead_finder.rivals import RivalCandidate, RivalCandidates
 from apps.lead_finder.rules import LeadFinderRules
 from apps.lead_finder.signalhire_company import build_details
+from apps.lead_finder.why import WhyNowAnswer
 from core.claude.client import ClaudeError, ClaudeUnavailable, Reply, Source, WebTools
 from core.claude.pricing import Usage
 from core.signalhire.client import (
@@ -68,6 +71,18 @@ SEARCH_COST = Decimal("0.10")  # a search angle, before its web searches
 EXTRACT_COST = Decimal("0.04")
 DISCOVER_COST = Decimal("0.08")  # a discovery request, before its web searches
 WEB_SEARCH_COST = Decimal("0.01")  # each web search
+WHY_COST = Decimal("0.03")  # a Why now (PLAN-V12): no web search
+
+
+def sample_why(company: str | None) -> WhyNowAnswer:
+    """A Why now as Claude would write it for the Acme sample, under the company's own name."""
+    name = company or "The company"
+    return WhyNowAnswer(
+        reason=f"{name}'s lease ends in March 2028, so it may be looking for a new office now.",
+        likely_next="It may ask fitout firms for ideas before it signs a new lease.",
+        ask=["Who is leading the search for the next office?"],
+        links=[NEWS],
+    )
 
 
 def fact(value: Any, url: str | None = NEWS, label: str = "confirmed") -> Fact[Any]:
@@ -294,10 +309,12 @@ class FakeClaude:
       it instead of sleeping;
     - `crash_on`: names whose requests raise `SimulatedCrash`;
     - `crash_after_extracts`: once this many answer forms have been returned, every later
-      request raises `SimulatedCrash`.
+      request raises `SimulatedCrash`;
+    - Why now (PLAN-V12): `why_answer` is the answer (else `sample_why`), `why_off_form` makes
+      that many Why now answers miss the form first, and `why_error` makes the Why now raise.
 
-    The record: `calls` (`"search:property"`, `"extract"`, `"discover"`, the old list of text)
-    and `requests` (a `Call` for each request, with the company, model, effort and prompt).
+    The record: `calls` (`"search:property"`, `"extract"`, `"discover"`, `"why"`, the old list of
+    text) and `requests` (a `Call` for each request, with the company, model, effort and prompt).
     """
 
     facts: CompanyFacts | None = None
@@ -317,6 +334,10 @@ class FakeClaude:
     search_cost: Decimal = SEARCH_COST
     extract_cost: Decimal = EXTRACT_COST
     discover_cost: Decimal = DISCOVER_COST
+    why_answer: WhyNowAnswer | None = None  # PLAN-V12: else `sample_why` for the company
+    why_off_form: int = 0  # this many Why now answers miss the form before one fits
+    why_error: ClaudeError | None = None  # only the Why now raises this
+    why_cost: Decimal = WHY_COST
     calls: list[str] = field(default_factory=list)
     requests: list[Call] = field(default_factory=list)
     _holds: dict[str, asyncio.Event] = field(default_factory=dict, init=False, repr=False)
@@ -324,6 +345,7 @@ class FakeClaude:
     _reached: dict[str, asyncio.Event] = field(default_factory=dict, init=False, repr=False)
     _order: dict[str, int] = field(default_factory=dict, init=False, repr=False)
     _extracts: int = field(default=0, init=False, repr=False)
+    _whys: int = field(default=0, init=False, repr=False)
 
     # --- For tests ---
 
@@ -378,6 +400,8 @@ class FakeClaude:
             raise self.error
         if self.extract_error is not None and step == "extract":
             raise self.extract_error
+        if self.why_error is not None and step == "why":
+            raise self.why_error
         gate = self._holds.get(key) or self._holds_nth.get(index)
         if gate is not None:
             await gate.wait()
@@ -385,16 +409,23 @@ class FakeClaude:
             await asyncio.sleep(self.delay_seconds)
 
         parsed: Any
+        missed = False
         if form is Candidates:
             parsed, sources, queries, usage, cost = self._discover(prompt, web)
         elif form is RivalCandidates:
             parsed, sources, queries, usage, cost = self._rivals(company)
         elif form is AngleNotes:
             parsed, sources, queries, usage, cost = self._angle(prompt, company, web)
+        elif form is WhyNowAnswer:
+            parsed = self.why_answer or sample_why(company)
+            sources, queries = (), ()
+            usage, cost = Usage(input_tokens=3_000, output_tokens=400), self.why_cost
+            self._whys += 1
+            missed = self._whys <= self.why_off_form
         else:
             parsed, sources, queries, usage, cost = self._extract(company)
             self._extracts += 1
-        if self.off_form:
+        if self.off_form or missed:
             parsed, text = None, "this is not the form"
         else:
             text = parsed.model_dump_json()
@@ -417,6 +448,8 @@ class FakeClaude:
             return "rivals"
         if form is AngleNotes:
             return f"search:{FakeClaude._angle_name(prompt)}"
+        if form is WhyNowAnswer:
+            return "why"
         return "extract"
 
     @staticmethod

@@ -62,6 +62,7 @@ class StepModels:
     discover: str | None = None
     search: str | None = None
     extract: str | None = None
+    why: str | None = None  # the Why now on the lead card (PLAN-V12 C2)
 
 
 @dataclass(frozen=True)

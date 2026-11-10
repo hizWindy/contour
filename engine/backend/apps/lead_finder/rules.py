@@ -12,10 +12,10 @@ import string
 from decimal import Decimal
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 
 RULES_DIR = Path(__file__).resolve().parent / "rules"
 RULE_FILES = ("criteria", "queries", "hubspot_map", "watchlist")
@@ -28,6 +28,10 @@ class Strict(BaseModel):
     """Unknown keys are an error, so a typo in a rules file stops the backend from starting."""
 
     model_config = ConfigDict(extra="forbid", frozen=True, populate_by_name=True)
+
+
+# A whole number of years from 1 to 15, for the lease guess (a 5.5 or a "5" is an error)
+GuessYears = Annotated[StrictInt, Field(ge=1, le=15)]
 
 
 # --- criteria.yaml ----------------------------------------------------------------------
@@ -142,6 +146,9 @@ class OfficeAge(Strict):
     # tenure sign: the code adds it from the office dates, never Claude (PLAN-V11 C1)
     tenure_years: int = Field(gt=0)
     tenure_sign: str = Field(pattern=r"^[a-z][a-z_]*$")
+    # The lead card's Why now guesses a lease end as the move-in year plus this many years, from
+    # the first to the second (PLAN-V12 B1). It never changes a result or a score.
+    lease_guess_years: tuple[GuessYears, GuessYears]
 
     @model_validator(mode="after")
     def check_months(self) -> Self:
@@ -149,6 +156,9 @@ class OfficeAge(Strict):
             raise ValueError("office_age.just_moved_months must fit inside recent_move_years")
         if self.tenure_years < self.due_years:
             raise ValueError("office_age.tenure_years must not be below due_years")
+        low, high = self.lease_guess_years
+        if low > high:
+            raise ValueError("office_age.lease_guess_years: the first must not be above the second")
         return self
 
 

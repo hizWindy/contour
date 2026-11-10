@@ -147,6 +147,16 @@ TEXT: dict[str, tuple[str, str]] = {
         "Model for filling the form",
         "Turns the notes into the answer form. Empty means the main model.",
     ),
+    "why_now_enabled": (
+        "Why now is on",
+        "Writes a Why now on each lead that isn't a Drop: why call, why now, and the questions "
+        "to ask. One short Claude request a lead, no web search, about US$0.04 to US$0.08 (TBC). "
+        "Off: the card says it wasn't written.",
+    ),
+    "model_why": (
+        "Model for Why now",
+        "Writes the Why now on the lead card. Empty means the main model.",
+    ),
     "claude_effort": (
         "Claude effort",
         "How hard Claude thinks. Higher costs more.",
