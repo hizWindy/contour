@@ -1,7 +1,10 @@
 /**
- * The Overview tab: the office line (how long at this address, PLAN-V11 B5), the summary, the
- * opening line and the talking points, then who to talk to
- * (the role, the people public pages name, the senior people Signal Hire has) and past fitout firms.
+ * The Overview tab: Why now first (PLAN-V12 D1), then the summary, the opening line and the
+ * talking points, then who to talk to (the role, the people public pages name, the senior people
+ * Signal Hire has) and past fitout firms.
+ *
+ * Why now's When line holds the years at the address. A lead without a Why now keeps the office
+ * line (PLAN-V11 B5) at the top of its Summary instead, so the office is never shown twice.
  *
  * Every text came from a web page or from Claude, so all of it is plain text, and every link goes
  * through `SourceLink`.
@@ -10,6 +13,7 @@ import type { LeadDetail } from '@/api/types'
 import { SourceLink } from '@/components/source-link'
 import { melbourneDate } from '@/lib/format'
 import { Section, ShowFirst } from './parts'
+import { WhyNowSection } from './why-now'
 import { officeLine, peopleFirst, type DecisionMaker } from './words'
 
 /**
@@ -81,12 +85,16 @@ export function OverviewTab({ lead }: { lead: LeadDetail }) {
     )
   return (
     <>
+      <WhyNowSection lead={lead} />
       <Section title="Summary">
-        {/* The years at the address weigh more in the score since 9 Nov, so they come first. */}
-        <p className="max-w-prose text-body">
-          <span className="font-semibold">Office: </span>
-          {officeLine(lead, melbourneDate())}
-        </p>
+        {/* The years at the address weigh more in the score since 9 Nov, so they come first.
+            Why now's When line says them when there is one. */}
+        {lead.why_now ? null : (
+          <p className="max-w-prose text-body">
+            <span className="font-semibold">Office: </span>
+            {officeLine(lead, melbourneDate())}
+          </p>
+        )}
         <p className="max-w-prose text-body">{lead.summary}</p>
         {lead.opening_line ? (
           <div className="flex flex-col gap-1">

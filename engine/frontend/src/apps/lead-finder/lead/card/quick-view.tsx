@@ -1,8 +1,9 @@
 /**
  * The top of the lead card (PLAN-V6, F1): what a person needs to decide, without scrolling on a
  * laptop. The result with its stage and where the company came from; the score as a bar with its
- * band; one line on why it fits; the best sign with its date and page; staff and office size, each
- * with its source; the HubSpot label with the owner; the first person to talk to; and the actions.
+ * band; one line on why to call now (the Why now's reason, PLAN-V12 D1), or else why it fits; the
+ * best sign with its date and page; staff and office size, each with its source; the HubSpot
+ * label with the owner; the first person to talk to; and the actions.
  *
  * The name is the page's title (or the side panel's), so it is not repeated here. The details are
  * in the tabs below.
@@ -104,6 +105,7 @@ export function QuickView({ lead }: { lead: LeadDetail }) {
         : null
   const best = bestTrigger(lead)
   const person = firstPerson(lead)
+  const reason = lead.why_now?.reason ? lead.why_now.reason : null // PLAN-V12 D1
   return (
     <section aria-label="Quick view" className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -131,9 +133,10 @@ export function QuickView({ lead }: { lead: LeadDetail }) {
       ) : null}
 
       <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
-        <Item label="Why it fits" wide>
-          <span className="line-clamp-2 max-w-prose" title={lead.why_it_fits}>
-            {lead.why_it_fits}
+        {/* Why now's reason says why to call, so it takes the line when there is one. */}
+        <Item label={reason ? 'Why now' : 'Why it fits'} wide>
+          <span className="line-clamp-2 max-w-prose" title={reason ?? lead.why_it_fits}>
+            {reason ?? lead.why_it_fits}
           </span>
         </Item>
         <Item label="Best sign" wide>

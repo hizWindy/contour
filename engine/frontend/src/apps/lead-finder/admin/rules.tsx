@@ -134,6 +134,15 @@ export default function AdminRulesTab() {
             last {criteria.office_age.just_moved_months} months makes a lead a Watch, because the
             company has probably just set up its office.
           </p>
+          {/* A backend older than PLAN-V12 sends no lease guess: say nothing then. */}
+          {criteria.office_age.lease_guess_years ? (
+            <p className="text-muted-foreground">
+              The lead card&apos;s Why now guesses that a lease may end{' '}
+              {criteria.office_age.lease_guess_years[0]} to{' '}
+              {criteria.office_age.lease_guess_years[1]} years after the move-in. It is marked
+              estimated, and never changes a result or a score.
+            </p>
+          ) : null}
         </Block>
         <Block title="Results and stages">
           <ul className="list-disc pl-5">

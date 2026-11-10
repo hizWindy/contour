@@ -5,7 +5,7 @@
 import { ChevronDown } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
@@ -13,15 +13,19 @@ export function Section({
   title,
   children,
   className,
+  aside,
 }: {
   title: string
   children: ReactNode
   className?: string
+  /** A few quiet words at the right of the title, like "Medium confidence". */
+  aside?: ReactNode
 }) {
   return (
     <Card className={className}>
       <CardHeader>
         <CardTitle className="text-section font-semibold">{title}</CardTitle>
+        {aside ? <CardAction className="text-ui text-muted-foreground">{aside}</CardAction> : null}
       </CardHeader>
       <CardContent className="flex flex-col gap-3 text-ui">{children}</CardContent>
     </Card>

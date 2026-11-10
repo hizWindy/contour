@@ -11,6 +11,30 @@ export type FactSource = Schemas['FactSource']
 export type SourceName = FactSource['used']
 export type DecisionMaker = Schemas['DecisionMaker']
 export type TriggerScore = LeadDetail['triggers'][number]
+export type WhyNow = Schemas['WhyNow']
+export type WhySkipped = NonNullable<LeadDetail['why_now_skipped']>
+
+/** How sure the Why now is (PLAN-V12 B3), in words. Code sets it from the facts' labels. */
+export const CONFIDENCE_WORDS: Record<WhyNow['confidence'], string> = {
+  high: 'High confidence',
+  medium: 'Medium confidence',
+  low: 'Low confidence',
+}
+
+/** Why a card has no Why now, as the end of "Not written for this lead: ...". */
+export const WHY_SKIPPED_WORDS: Record<WhySkipped, string> = {
+  switched_off: 'Why now was switched off when it was researched.',
+  drop: 'it is a Drop.',
+  no_facts: "its facts are missing, because Claude couldn't fill in the answer form.",
+  budget: 'the money for this company ran out first.',
+  failed: "Claude's answer couldn't be used. The Research tab lists the problem.",
+}
+
+/** Why this lead has no Why now. A card from before it has no reason saved: an older lead. */
+export function whyNotWritten(lead: LeadDetail): string {
+  const skipped = lead.why_now_skipped
+  return skipped ? WHY_SKIPPED_WORDS[skipped] : 'it was researched before Why now existed.'
+}
 
 export const BAND_WORDS: Record<string, string> = {
   research_first: 'Research first',

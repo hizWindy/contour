@@ -6,7 +6,7 @@ import type { LeadDetail } from '@/api/types'
 import { renderWithProviders } from '@/test/render'
 import LeadPage from './index'
 import { makeWrite } from '@/components/hubspot/test-write'
-import { fact, HOSTILE, LEAD_ID, makeLead } from './test-lead'
+import { fact, HOSTILE, LEAD_ID, makeLead, WHY_NOW } from './test-lead'
 
 type Wrapped = (request: Request) => Promise<Response | undefined> | Response | undefined
 
@@ -156,6 +156,19 @@ describe('the lead page', () => {
     // The details wait in the tabs: the facts table is not on the first screen.
     expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.queryByRole('table', { name: /Facts about/ })).toBeNull()
+    // No Why now yet: the quick view keeps "Why it fits" (PLAN-V12 D1)
+    expect(within(quick).getByText('Why it fits')).toBeInTheDocument()
+  })
+
+  it("puts Why now's reason at the top of the card in place of why it fits", async () => {
+    mockApi(makeLead({ why_now: WHY_NOW }))
+    renderLead()
+
+    const quick = await screen.findByRole('region', { name: 'Quick view' })
+    expect(within(quick).getByText('Why now')).toBeInTheDocument()
+    expect(within(quick).getByText(WHY_NOW.reason)).toBeInTheDocument()
+    expect(within(quick).queryByText('Why it fits')).toBeNull()
+    expect(within(quick).queryByText(/^City: Melbourne\. Size/)).toBeNull()
   })
 
   it('moves between the tabs with the arrow keys', async () => {

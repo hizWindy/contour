@@ -387,6 +387,7 @@ const RULES_V2 = {
       just_moved_months: 12,
       tenure_years: 8,
       tenure_sign: 'long_tenure',
+      lease_guess_years: [5, 7],
     },
     stages: { pass: 'Active prospect', watch: 'Target account' },
     triggers: {
@@ -458,6 +459,7 @@ describe('Admin, Rules', () => {
             just_moved_months: 12,
             tenure_years: 8,
             tenure_sign: 'long_tenure',
+            lease_guess_years: [5, 7],
           },
           stages: { pass: 'Active prospect', watch: 'Target account' },
           triggers: {
@@ -514,6 +516,10 @@ describe('Admin, Rules', () => {
     expect(screen.getByText(/One in the last 12 months makes a lead a Watch/)).toBeInTheDocument()
     expect(
       screen.getByText(/old office's sign \(8\+ years at the same address\) comes from the office/),
+    ).toBeInTheDocument()
+    // PLAN-V12 B1: the lease guess on the lead card's Why now
+    expect(
+      screen.getByText(/Why now guesses that a lease may end 5 to 7 years after the move-in/),
     ).toBeInTheDocument()
   })
 

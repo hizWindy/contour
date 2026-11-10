@@ -13,6 +13,35 @@ export function fact<T>(value: T, label: 'confirmed' | 'estimated' | null = 'con
   }
 }
 
+/** A Why now as the backend writes it (PLAN-V12), with a hostile question and a bad link. */
+export const WHY_NOW: NonNullable<LeadDetail['why_now']> = {
+  reason:
+    "Acme's Collins Street lease ends in March 2028, so it may be choosing its next office now.",
+  likely_next: 'It will likely ask fitout firms for ideas before it signs a new lease.',
+  ask: ['Who is leading the search for the next office?', HOSTILE],
+  links: ['https://www.afr.com/property/acme-moves', 'javascript:alert(1)'],
+  when: {
+    text: 'Lease ends March 2028 (confirmed). 1 to 3 years away: the best window.',
+    estimated: false,
+    source_url: 'https://www.afr.com/property/acme-moves',
+    basis: 'lease',
+    window: 'best',
+  },
+  size: {
+    text: 'About 1,200 m², about $1.8M fitout (estimated: 120 staff x 10 m² x $1,500 per m²).',
+    estimated: true,
+    source_url: null,
+    basis: 'staff',
+  },
+  confidence: 'medium',
+  missing: ['No office size found', 'No decision maker named'],
+  dropped: [],
+  model: 'claude-opus-5-5',
+  prompt_version: 'abc123def456',
+  cost_usd: '0.041200',
+  written_at: '2026-11-10T04:00:00Z',
+}
+
 const SCORE_PARTS: LeadDetail['score_parts'] = [
   {
     id: 'trigger',
@@ -178,6 +207,8 @@ export function makeLead(changes: Partial<LeadDetail> = {}): LeadDetail {
     rules_version: 'r1',
     prompt_version: 'p1',
     created_at: '2026-10-26T04:00:00Z',
+    why_now: null,
+    why_now_skipped: null,
     status: 'new',
     reject_reason: null,
     reject_note: null,
