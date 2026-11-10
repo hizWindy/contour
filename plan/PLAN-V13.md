@@ -127,15 +127,15 @@ The site must look made with care, not generated. Every step's "Done when" inclu
 
 ## Track 1: the backend, then Admin (account 1)
 
-**Progress:** 0 of 10 steps done.
+**Progress:** 5 of 10 steps done (T1-1 to T1-5). T1-6 built, waiting for a look.
 
 ### Part A: the backend (starts at once, needs no design)
 
-- [ ] **T1-1. Own copy and a baseline.**
+- [x] **T1-1. Own copy and a baseline.** Done 2026-11-11 (counts in the Log).
   - The worktree, the `leadfinder_v13a` database and the ports (see "How to work this plan").
   - Run the backend and website tests once with `heavy.sh`, and note the counts.
   - **Done when:** the counts are in the Track 1 Log.
-- [ ] **T1-2. Health checks.**
+- [x] **T1-2. Health checks.** Done 2026-11-11 (748831d; the HubSpot probes made parallel in e62d888).
   - A new `core/health/` module with one check per system. Each check is free, has a 5-second limit, and runs at the same time as the others:
     - **Database:** it answers, pgvector is on, and the migration matches the code.
     - **Claude:** the key is set and Anthropic answers a free request (the model list). It never spends money.
@@ -148,7 +148,7 @@ The site must look made with care, not generated. Every step's "Done when" inclu
   - Each check gives a state (OK, Problem or Off), one plain sentence, the time it took and when it ran. Example: "HubSpot: OK. Last sync 6:02 am, 13,913 companies."
   - **Files:** `core/health/`, `core/api/health.py`, `core/api/app.py` (the middleware), tests.
   - **Done when:** tests prove each check's three states with fakes, a slow check stops at 5 seconds without holding up the others, nothing calls a paid Claude request, and staff and viewers get 403.
-- [ ] **T1-3. One control for the city schedules, and a round budget.**
+- [x] **T1-3. One control for the city schedules, and a round budget.** Done 2026-11-11 (4c2f79c). The US$150 starting budget is still **TBC**.
   - `GET` and `PUT /api/v1/schedules/lead-finder`: one set of choices for all city schedules:
     - on or off;
     - the cities (Melbourne, Adelaide, Perth, Sydney);
@@ -164,7 +164,7 @@ The site must look made with care, not generated. Every step's "Done when" inclu
   - The daily HubSpot copy stays a schedule of its own.
   - **Files:** `core/api/schedules.py`, `core/schedules/`, `apps/lead_finder/jobs.py`, `apps/lead_finder/goal.py`, `core/config.py`, `core/prefs/service.py`, tests. No migration is expected. If one is needed, it is Track 1's.
   - **Done when:** tests prove that picking 2 cities turns the other 2 off, the days come out one apart for weeks and for days, Adelaide gets US$110 after Melbourne spent US$40 of US$150, and a spent round stops the next city with its reason.
-- [ ] **T1-4. The admin's name and role.**
+- [x] **T1-4. The admin's name and role.** Done 2026-11-11 (4e4f16a, a9bc64d). The server's account at go-live is still **TBC**.
   - The role word for `admin` becomes "System admin" everywhere it shows. Staff stays "Staff", and viewer stays "Viewer".
   - Al-khair's account name becomes "Al-khair M. Pama" in both track databases (the People tab, or the `engine` command if the tab can't change a name). On the server, at go-live (**TBC**).
   - **Files:** the role words in `src/shell/` and `admin/people.tsx`, tests.
@@ -172,11 +172,11 @@ The site must look made with care, not generated. Every step's "Done when" inclu
 
 ### Part B: Admin pages (after the foundation)
 
-- [ ] **T1-5. Take in the foundation.**
+- [x] **T1-5. Take in the foundation.** Done 2026-11-11 (5f4ad32).
   - Wait for the `v13-foundation` tag (Track 2, T2-5). If it isn't there, stop and say "Waiting for the foundation (T2-5)".
   - `git merge v13-foundation`, then run the website tests with `heavy.sh`.
   - **Done when:** the merge is in and the tests pass.
-- [ ] **T1-6. The Admin frame and the Health tab.**
+- [ ] **T1-6. The Admin frame and the Health tab.** Built 2026-11-11 (e62d888), waiting for a look.
   - **Admin opens on Health.** The tabs: Health, Runs and cost, Schedules, Search log, Memory, HubSpot, People, Settings. The selected tab's underline slides (the motion kit's tab indicator).
   - **Each tab's purpose is one short line** (in `src/shell/nav.ts`), like "Is everything working?".
   - **Health page:**
@@ -221,7 +221,13 @@ The site must look made with care, not generated. Every step's "Done when" inclu
 
 Newest first.
 
-- (empty)
+- 2026-11-11: **T1-6 built, waiting for a look** (e62d888). Admin opens on Health. The tabs: Health, Runs and cost, Schedules, Search log, Memory, HubSpot, People, Settings, each with one short purpose line (`shell/nav.ts`, "Is everything working?"), and the accent underline slides between them (`TabIndicator`; the focus ring is drawn inside the tab, because the row scrolls sideways and would clip it). **Health:** one row per system with an icon and a word (OK neutral, Problem in the error colour, Off outlined), the sentence, what to do next, and how long the check took; problems first; the check time is said once, beside "Check again" (all rows come from one pass, so a time on every row only repeated it); the API as a small table, errors first, then the slowest, 8 rows and "Show all". **The menu's foot** shows the name and role ("Al-khair M. Pama, System admin") and opens the account menu; the top bar keeps the account button on a phone only. **Browser check** (preview: backend 8011 on `leadfinder_v13a`, keys in the process only, `HUBSPOT_SYNC_MAX_AGE_HOURS=0`, sign-in on with a temporary account "Browser Check", removed after; website 5181; headless Chrome over the DevTools protocol, Track 2's script): 1440, 1280 and 390 wide, light and dark, reduced motion, **no console errors**. Six shots in `plan/shots/v13-t1/t1-6-*.png`. **What the live checks found:** Database OK (pgvector 0.8.7, migration 0014), Claude OK (US$13.47 spent in 24 hours), Signal Hire OK (1,160 credits), Email off (it goes to the log, and `LEAD_FINDER_NOTIFY_EMAILS` is empty), Schedules off, and **HubSpot a problem: 5 of 6 read permissions, `crm.objects.contacts.read` is missing** (the Companies page reads people and calls with it). The first HubSpot check took 6 seconds, over the 5-second limit, because its 8 probes ran one after another; they now run at the same time (`core/hubspot/check.py`, about a second; the HubSpot tab gains too).
+- 2026-11-11: **T1-5 done** (5f4ad32). `git merge v13-foundation` went in with no conflict (no backend file in it). Website tests with `heavy.sh` on the merged tree: **993 passed** (Track 2's 990 and T1-4's 3), lint and types clean.
+- 2026-11-11: **Full check of Part A** (`heavy.sh`, RUN_GATES=1). Backend **3,513 passed, 25 skipped, 1 failed**: `test_tables.py::test_the_search_log_time_index_is_there_when_only_the_search_log_is_imported`, which starts a fresh Python with a 120-second limit and **passes alone** (1.4 s); the laptop was low on memory then. Ruff, format and mypy clean. Prettier flags `admin/schedules.tsx` (T1-7 rewrites it) and `src/modules.ts` (neither track's file), both from the base branch. Claude Code stopped this check once for low memory; its test run went on and finished by itself.
+- 2026-11-11: **T1-4 done** (4e4f16a, a9bc64d). The website's word for the `admin` role is "System admin" (`shell/roles.ts`, used by the account menu and the People tab; Staff and Viewer stay). The People tab can't change a name, so `engine rename --user <login> --name "..."` does (logged as `account_changed`). Both track databases now name the account **Al-khair M. Pama**. The backend's own messages ("Only an Admin can do this.") are unchanged.
+- 2026-11-11: **T1-3 done** (4c2f79c). `GET` and `PUT /api/v1/schedules/lead-finder`. Four calls made here: (1) **the route lives in the Lead Finder** (`apps/lead_finder/api_round.py`, mounted at `/schedules/lead-finder` through a new `AppSpec.schedule_router`), not in `core/api/schedules.py`, because the core never imports a project; (2) **while the round is off**, the picked cities and the first day are kept in one row of the settings table (`lead_finder_round`, never read as a setting), so no migration; (3) **the round now begins at the first picked city's time**, not "the last 7 days": every week, 7 days would count last week's cities (with no city on, it is still 7 days); (4) **a round must end before the next starts**: 4 cities need every 4 days or more. The look-back follows how often (7, 14 or 30 days). A save that changes only the budget keeps each next time; any other change plans the next round from now. The budget is the setting `lead_finder_round_cap_usd` (US$150, under `hard_scheduled_run_cap_usd`), saved with the plan in one transaction. Before a city starts, its cap becomes the smaller of `scheduled_run_cap_usd` and what is left, saved with the run as its own lower cap. When nothing is left: "This round's budget (US$150) is spent. Next round: 30 Nov." When a little is left but too little for its searches, it says so. Tests: 31 pure and 10 on the database, with the plan's four cases.
+- 2026-11-11: **T1-2 done** (748831d). `core/health/` (`checks.py`, `run.py`, `traffic.py`) and `GET /api/v1/health/details`, for Admins, kept 60 seconds (`refresh=true` checks again). Signal Hire has a free balance call, `GET /api/v1/credits`, so its row says "Key works. The account has N credits." instead of "Key set, not checked" (the docs don't say in so many words that it is free, **TBC**). The Claude check only asks for the model list: a test records every request and finds only `GET /v1/models`. The API counter is a pure ASGI middleware: one bucket a minute per endpoint, by the path in the code (FastAPI 0.162 keeps included routers nested, so the full path comes from `api_routes`). 35 tests.
+- 2026-11-11: **T1-1 done.** S0 first (on Al-khair's go signal): `plan-v13` from `plan-v12` (9ff4fc6). Worktree `../contour-v13-t1` on `plan-v13-track1`, `npm ci`, database `leadfinder_v13a` as a `pg_dump` and `pg_restore` copy of `leadfinder_v10` (at 0014), its own `engine/.env` with the database lines only. Baseline with `heavy.sh`: backend **3,430 passed, 28 skipped, 1 failed** (`test_companies_speed.py`, a timing test that **passes alone**, 3.6 s; Track 2 was running too), website **933 passed**.
 
 ## Track 2: the foundation, then Lead Finder and Companies (account 2)
 
