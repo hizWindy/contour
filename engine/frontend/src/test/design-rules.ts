@@ -104,7 +104,7 @@ export const DESIGN_RULES: DesignRule[] = [
   },
   {
     id: 'gradients',
-    message: 'No gradients. One accent, Navy.',
+    message: 'No gradients. Flat fills from the tokens only.',
     pattern: /gradient|\bbg-(?:linear|radial|conic)\b/i,
     bad: ['bg-gradient-to-r', 'linear-gradient(red, blue)', 'bg-linear-to-b', 'bg-radial'],
     good: ['bg-card', 'bg-primary/90'],

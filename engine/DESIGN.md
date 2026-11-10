@@ -26,7 +26,8 @@ Taken from Contour's website (checked 25 Oct 2026). Contour should confirm them 
 |---|---|---|---|
 | Light surface | Stone | `#E5E8DB` | The sidebar and hover. Lighter steps: `#F4F5EF` for the page, `#FBFBF8` for cards and inputs. |
 | Dark surface | Ink | `#26231B` | All text, and the dark-mode background. `#5C584E` for quieter text. |
-| Accent | Navy | `#233A56` | Only primary buttons, selected rows, the focus ring and live progress |
+| Action | Navy | `#233A56` | Only primary buttons and selected rows |
+| Accent | Cobalt | `#2F5BD8` | What is selected, live or highlighted (see "The accent" below) |
 | Neutral | Sand | `#BBA087` | Chart neutrals and the Watch badge. Never text. |
 
 | State | Name | Hex | Used for |
@@ -37,16 +38,32 @@ Taken from Contour's website (checked 25 Oct 2026). Contour should confirm them 
 
 Olive and Terracotta come from Contour's site. Ochre is a muted step of Contour's orange.
 
+**The accent** (PLAN-V13, 11 Nov 2026; Al-khair picked Cobalt from three)
+
+Cobalt is a bright step of Navy, so it reads as the same family, and it lifts the warm Stone surfaces. It is `--accent-strong` (`#2F5BD8` light, `#80A4F8` dark), its tint `--accent-soft` (`#E1E8FA`, `#243556`) and the text on that tint `--accent-ink` (`#1E3F9E`, `#B9CCFA`).
+
+| Where it goes | How |
+|---|---|
+| The selected menu item | The tint, the ink, and a 2px `--accent-strong` bar at the left edge |
+| The selected tab or segment | A 2px underline, or the tint behind the segment, that slides from the old one to the new |
+| A switch that is on, and a picked chip | The track in `--accent-strong`; the chip in the tint and ink with a tick |
+| The focus ring | `--ring` is the accent: 2px with a 2px gap |
+| Progress | `--progress` is the accent. The bar fills, and the live dot is still |
+| Links in text | `text-link` (`--link` is the accent). Underlined on hover, as before |
+| A chart's one highlighted bar or line | `--chart-1` is the accent; the other bars are muted (`--border`) |
+
+Where it never goes: a button fill (Navy keeps the main buttons), body text, a result or a status (Olive, Ochre, Sand and Terracotta keep those), a selected row (`--selected` stays a Navy tint), a project tile (Eucalyptus and Heath keep those), or a large area.
+
 **Rules**
-- Surfaces do most of the work. Navy appears only where you act, or where something is live.
-- Navy, Sand and the state colours are fills, never body text. A badge puts a dark step of its colour on a light tint of the same colour.
+- Surfaces do most of the work. Navy appears only where you act. The accent appears only where something is selected, live or highlighted.
+- Navy, the accent's strong step, Sand and the state colours are fills, never body text. A badge puts a dark step of its colour on a light tint of the same colour. The one exception: `--accent-strong` is link text, and it passes 4.5:1 on the page and on cards in both modes (5.3:1 light, 6.4:1 dark).
 - Text is Ink on Stone, or Stone on Ink. All text passes 4.5:1 contrast: Ink on the page is about 14:1, quieter text about 6.5:1, and light text on Navy about 11:1.
 - Form field borders use `#8F937F`, which passes 3:1, so fields are easy to see. Plain dividers can be lighter.
-- One accent, Navy. No gradients.
+- Two colours with jobs, Navy and the accent, and nothing else coloured but results. No gradients.
 - **Project colour:** each project may have one quiet tint, so a page shows which project it belongs to. The Lead Finder is Eucalyptus (`--lead` `#3E6E66`, tile `--lead-soft` `#E0ECE8` with `--lead-ink` `#2A4E47`). It goes only on the project's icon tiles (Home card, page titles), its icon in the menu and on its Home card. Never on buttons, text, links or status: Navy and the result colours keep those jobs. The Companies page (PLAN-V10) is Heath, a muted plum (`--companies` `#6E5470`, tile `--companies-soft` `#ECE4EC` with `--companies-ink` `#4E3A50`; **TBC**).
 - **The sign-in page** (PLAN-V6) has a Navy brand panel with Contour's cream wordmark and fine contour lines. There Navy is the brand, not an action, so the panel stays Navy in dark mode too (`--brand`). In the form, Navy is still only the "Sign in" button.
 - **The sign-in avatar** is an illustration of a person in a suit and glasses, in its own `--avatar-*` tokens. It is never text and never the only sign of a state.
-- **Dark mode** is a choice. The site opens in light colours. The Ctrl+K menu switches to dark, or to follow your computer's setting, and the browser remembers it. In dark mode, Ink becomes the background and Stone the text. Navy steps up to `#8EA5C3`, so it stays visible.
+- **Dark mode** is a choice. The site opens in light colours. The Ctrl+K menu switches to dark, or to follow your computer's setting, and the browser remembers it. In dark mode, Ink becomes the background and Stone the text. Navy steps up to `#8EA5C3` and the accent to `#80A4F8`, so they stay visible.
 
 **Results and labels**
 
@@ -116,15 +133,24 @@ Sizes are in rem, so browser zoom works. Nothing is smaller than 13px. Sentence 
 | Charts | Chart, built on Recharts |
 | Map and list split | Resizable |
 | Hints | Tooltip, Kbd |
+| A choice of one from a few (how often, a chart's range) | `Segmented` from the motion kit |
+| A choice of some from a few (cities, weekdays) | `ChipGroup` from the motion kit |
 
 ## Motion
 
-- **One curve:** `cubic-bezier(0.4, 0, 0.2, 1)`. 150ms for small changes like hover, 250ms for panels and dialogs.
-- **Leaving is quicker than arriving** (PLAN-V10, 9 Nov): a panel or dialog that closes fades (and a panel slides) out in 150ms, so closing feels instant. The call prep modal also rises 8px as it fades in, and a new person in it cross-fades in 150ms while the modal keeps its size.
-- **Hover** changes the border, background or opacity. Never the size or the shadow.
+Smooth and quick, like a well-made phone app (PLAN-V13, 11 Nov 2026). Motion shows where something went, and never decorates.
+
+- **Springs with no bounce** move panels, tabs and indicators. A very small bounce (0.1) is only for toggles and chips. The motion kit (`src/components/motion/`, built on the `motion` package) holds them: `snappy` (250ms, an indicator or a chip), `smooth` (400ms, a panel arriving or content revealing), `soft` (350ms, bounce 0.1, a toggle or a tick). `tokens.css` carries the same curves as CSS `linear()` for a shadcn part that only needs a transition.
+- **Leaving is quicker than arriving:** anything that closes goes in 150ms on the one curve, so closing feels instant. A sheet slides out, a dialog fades out, a chip's tick fades.
+- **Only `transform` and `opacity` move.** Nothing animates its height, a shadow, a blur, or a colour over a big area. A colour change on a small part (a switch's track, a chip's border) uses the one curve, `cubic-bezier(0.4, 0, 0.2, 1)`, at 150ms, and a dialog's fade 250ms.
+- **The indicator slides:** the selected tab's underline, the segmented control's highlight and the selected menu item move from the old place to the new (`TabIndicator`, `Segmented`; `layoutId` in Motion).
+- **A press feels physical:** a button, a chip or a tile shrinks to 0.98 while it is held (`usePress`, through Motion's `whileTap`, never a CSS `active:scale` class). It springs back on release. Hover still never grows or moves anything: it changes the border, background or opacity.
+- **Content reveals once:** a card or a list fades and rises 4px when it first shows (`Reveal`), at most 8 items one after another, 40ms apart. A number that changes rolls to its new value in table digits (`RollingNumber`).
+- **A live run** shows a filling progress bar and a still dot. Nothing pulses, spins or loops, ever.
+- **Speed budget:** no animation in a table of more than 50 rows. Motion loads through `LazyMotion` with `domAnimation` at the app's root (`MotionRoot`), so pages that don't move pay nothing. No dropped frames at 4x CPU slowdown in Chrome's performance panel on the Schedules control, a tab switch and the Companies table.
+- **Reduced motion:** if your computer asks for it, everything changes at once. `MotionConfig` follows the setting, and the base CSS turns transitions off.
 - **Loading:** content fades in. No shimmer and no bouncing dots, so shadcn's Skeleton is used without its pulse. A page that is loading shows the shape of what is coming (the rows of a table, a card, a detail page, the menu and top bar of the app), still and grey, and only after 200 ms, so a quick answer never flashes grey blocks (`src/components/skeletons.tsx`, `src/shell/shell-skeleton.tsx`). The skeleton keeps the real content's size, so nothing jumps when it arrives, and a screen reader hears one line ("Loading the leads.") in a hidden status, never the grey blocks. A click on a page whose code is still on its way dims the page you are leaving after 200 ms (`aria-busy`, 150ms), the way a table dims while its next page loads.
-- **A live run** shows a filling progress bar and a static dot. Nothing pulses or loops.
-- **Reduced motion:** if your computer asks for it, motion turns off.
+- **The call prep modal** (PLAN-V10) rises 8px as it fades in, and a new person in it cross-fades in 150ms while the modal keeps its size.
 - **Second exception, waiting for an OK (TBC):** the sign-in avatar reacts to the form. Its eyes follow the login as it is typed (150ms), it shakes its head once after a wrong try (0.6s) and waves once after a sign-out (1.8s). Nothing loops, and reduced motion keeps it still (the face still changes).
 - **One exception, waiting for an OK (TBC):** the sign-in page's contour lines draw once, over 1.6s, when the page opens. They never loop, and reduced motion turns them off.
 
@@ -144,7 +170,7 @@ Sizes are in rem, so browser zoom works. Nothing is smaller than 13px. Sentence 
 ## Accessibility (WCAG 2.2 AA)
 
 - Text contrast is at least 4.5:1, in light and dark mode.
-- A visible 2px Navy focus ring, with a 2px gap, on everything you can tab to.
+- A visible 2px focus ring in the accent, with a 2px gap, on everything you can tab to.
 - Everything works by keyboard. Ctrl+K opens the command menu, J and K move through results, Enter opens one, and Esc closes it.
 - Status is never shown by colour alone. Every badge has an icon and a word.
 - Click targets are at least 24 × 24px, and buttons are 36px tall (44px on a touch screen).
@@ -156,22 +182,25 @@ Sizes are in rem, so browser zoom works. Nothing is smaller than 13px. Sentence 
 - Pills: fully round buttons or badges.
 - Sparkle icons, emoji, robot mascots, and words like "magic" or "AI-powered".
 - shadcn's default look shipped as is: grey on white, the default font, untouched.
-- Hover that grows or adds a shadow. Bouncing, pulsing or looping animation. Shimmer.
+- Hover that grows, moves or adds a shadow. Pulsing or looping animation. Shimmer. A bounce, except the very small one a toggle or a chip gets from the motion kit's `soft` spring.
+- Glow, blur and glass, even on the dashboards the references use them on. Sparkle icons and AI-assistant blobs.
 - A wall of big vanity numbers. Every number on screen helps a decision.
 - Centred body text. Text is left-aligned, and numbers are right-aligned.
-- A third typeface, or Navy as body text.
+- A third typeface, or Navy or the accent as body text.
+- The accent on a button fill, a result, a status, a selected row or a large area.
 - Colour as the only signal.
 - Lorem ipsum, or made-up data on real screens.
 
 ## Check before showing any screen
 
 1. Only our tokens: the colours, Titillium Web, the 10px radius and 8-point spacing.
-2. Navy only on primary actions, selection, focus and progress.
+2. Navy only on primary buttons and selected rows. The accent only on what is selected, live or highlighted, and never as a fill for a button, a result or a large area.
 3. Every status has an icon and a word.
 4. The focus ring shows, and the screen works by keyboard.
 5. Text contrast is 4.5:1 or more, in light and dark mode.
-6. Motion uses the one curve, and nothing loops.
-7. No banned item, and no em dash anywhere, including tooltips and page titles.
+6. Motion: springs from the kit, only `transform` and `opacity` move, leaving is 150ms, nothing loops, and with reduced motion everything changes at once. No animation in a table of more than 50 rows.
+7. Checked at 1440px, 1280px and 390px, in light and dark.
+8. No banned item, and no em dash anywhere, including tooltips and page titles.
 
 ## Tokens for shadcn
 
@@ -188,10 +217,12 @@ Phase 0 sets these as CSS variables (shadcn stores them in OKLCH). In shadcn, `-
 | `--muted-foreground` | `#5C584E` | `#B9BCAE` |
 | `--border` | `#D3D7C6` | `#4A463B` |
 | `--input` | `#8F937F` | `#7F7A6D` |
-| `--ring` | `#233A56` | `#8EA5C3` |
+| `--accent-strong`, `--accent-soft`, `--accent-ink` (the accent, Cobalt) | `#2F5BD8`, `#E1E8FA`, `#1E3F9E` | `#80A4F8`, `#243556`, `#B9CCFA` |
+| `--ring`, `--link`, `--progress`, `--chart-1` | `--accent-strong` | Same |
 | `--destructive` | `#B4412D` | `#D98471` |
-| `--chart-1` to `--chart-5` | Navy, Olive, Sand, Ochre, Terracotta | Lighter steps of the same |
+| `--chart-1` to `--chart-5` | The accent, Olive, Sand, Ochre, Terracotta | Lighter steps of the same |
 | `--sidebar` | `#E5E8DB` | `#1E1B15` |
+| `--sidebar-selected`, `--sidebar-selected-foreground` (the selected menu item) | `--accent-soft`, `--accent-ink` | Same |
 | `--lead`, `--lead-soft`, `--lead-ink` (Lead Finder colour) | `#3E6E66`, `#E0ECE8`, `#2A4E47` | `#86B8AD`, `#263A35`, `#B5D9CF` |
 | `--companies`, `--companies-soft`, `--companies-ink` (Companies colour) | `#6E5470`, `#ECE4EC`, `#4E3A50` | `#C2A8C4`, `#3A2E3B`, `#E2CFE3` |
 | `--brand` (sign-in panel) | `#233A56` | `#1F344E` |

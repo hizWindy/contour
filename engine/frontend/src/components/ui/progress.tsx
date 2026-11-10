@@ -4,8 +4,8 @@ import { Progress as ProgressPrimitive } from "radix-ui"
 import { cn } from "@/lib/utils"
 
 /*
-  A filling bar. Navy marks progress that is live. The track has a small radius on purpose: a bar
-  this thin with a bigger radius would read as a pill. Nothing pulses or loops.
+  A filling bar. The accent marks progress that is live. The track has a small radius on purpose:
+  a bar this thin with a bigger radius would read as a pill. Nothing pulses or loops.
 */
 function Progress({
   className,
@@ -24,7 +24,7 @@ function Progress({
     >
       <ProgressPrimitive.Indicator
         data-slot="progress-indicator"
-        className="size-full flex-1 bg-primary transition-transform duration-250"
+        className="size-full flex-1 bg-progress transition-transform duration-250"
         style={{ transform: `translateX(-${100 - (value || 0)}%)` }}
       />
     </ProgressPrimitive.Root>

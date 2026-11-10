@@ -4,16 +4,17 @@ import { Toggle as TogglePrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
 
-/* A pressed toggle shows the selected tint, so it is not told apart by colour alone: the
-   label and aria-pressed carry the state too. */
+/* A pressed toggle is a picked chip: the accent's tint and ink, and in the outline look the
+   accent border too. It is not told apart by colour alone: the label and aria-pressed carry the
+   state as well. */
 const toggleVariants = cva(
-  "group/toggle inline-flex items-center justify-center gap-2 rounded-lg text-ui whitespace-nowrap transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive data-[state=on]:bg-selected data-[state=on]:text-selected-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/toggle inline-flex items-center justify-center gap-2 rounded-lg text-ui whitespace-nowrap transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive data-[state=on]:bg-accent-soft data-[state=on]:text-accent-ink [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
         default: "border border-transparent bg-transparent",
         outline:
-          "border border-input bg-transparent data-[state=on]:border-primary",
+          "border border-input bg-transparent data-[state=on]:border-accent-strong",
       },
       size: {
         default: "h-9 min-w-9 px-3 touch:h-11 touch:min-w-11",

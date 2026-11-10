@@ -69,6 +69,13 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
+  /* The site's accent (Cobalt), not shadcn's hover background: bg-accent-soft, text-accent-ink,
+     border-accent-strong, and text-link for a text link. */
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-ink: var(--accent-ink);
+  --color-link: var(--link);
+  --color-progress: var(--progress);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-destructive-soft: var(--destructive-soft);
@@ -112,6 +119,8 @@
   --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
   --color-sidebar-accent: var(--sidebar-accent);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-selected: var(--sidebar-selected);
+  --color-sidebar-selected-foreground: var(--sidebar-selected-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
@@ -165,9 +174,14 @@
   --shadow-*: initial;
   --shadow-float: var(--elevation-float);
 
-  /* One curve. The default transition uses it, at 150ms. Use duration-250 for panels. */
+  /* One curve for colour and opacity. The default transition uses it, at 150ms. Use duration-250
+     for dialogs. What moves uses a spring: ease-spring-soft with duration-(--duration-soft) for
+     a toggle's thumb, and the motion kit (components/motion) for everything bigger. */
   --ease-*: initial;
   --ease-standard: var(--ease);
+  --ease-spring-snappy: var(--spring-snappy);
+  --ease-spring-smooth: var(--spring-smooth);
+  --ease-spring-soft: var(--spring-soft);
   --default-transition-duration: var(--duration-fast);
   --default-transition-timing-function: var(--ease);
 }
@@ -227,7 +241,7 @@
     }
   }
 
-  /* A visible 2px Navy ring with a 2px gap on everything you can tab to. */
+  /* A visible 2px ring in the accent, with a 2px gap, on everything you can tab to. */
   :focus-visible {
     outline: var(--focus-width) solid var(--ring);
     outline-offset: var(--focus-offset);

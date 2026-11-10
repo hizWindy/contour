@@ -144,11 +144,19 @@ describe('tokens match "Tokens for shadcn" in DESIGN.md', () => {
     ['border', '#D3D7C6', '#4A463B'],
     // DESIGN.md still lists #8F937F here. #8A8E79 is the step that reaches 3:1 on the page as well.
     ['input', '#8A8E79', '#7F7A6D'],
-    ['ring', '#233A56', '#8EA5C3'],
+    // The accent (PLAN-V13, Cobalt): the focus ring, progress, links and the highlighted chart bar.
+    ['accent-strong', '#2F5BD8', '#80A4F8'],
+    ['accent-soft', '#E1E8FA', '#243556'],
+    ['accent-ink', '#1E3F9E', '#B9CCFA'],
+    ['ring', '#2F5BD8', '#80A4F8'],
+    ['link', '#2F5BD8', '#80A4F8'],
+    ['progress', '#2F5BD8', '#80A4F8'],
+    ['sidebar-selected', '#E1E8FA', '#243556'],
+    ['sidebar-selected-foreground', '#1E3F9E', '#B9CCFA'],
     ['destructive', '#B4412D', '#D98471'],
     ['sidebar', '#E5E8DB', '#1E1B15'],
-    // Palette: Navy, Olive, Sand, Ochre, Terracotta (light). Lighter steps in dark.
-    ['chart-1', '#233A56', '#8EA5C3'],
+    // Palette: the accent, Olive, Sand, Ochre, Terracotta (light). Lighter steps in dark.
+    ['chart-1', '#2F5BD8', '#80A4F8'],
     ['chart-2', '#5F693A', '#A3AE74'],
     ['chart-3', '#BBA087', '#CDB59B'],
     ['chart-4', '#A8742A', '#D9A25A'],
@@ -185,6 +193,27 @@ describe('tokens match "Tokens for shadcn" in DESIGN.md', () => {
     expect(declarations.get('ease')).toBe('cubic-bezier(0.4, 0, 0.2, 1)')
     expect(declarations.get('duration-fast')).toBe('150ms')
     expect(declarations.get('duration-slow')).toBe('250ms')
+    // The springs (PLAN-V13): CSS linear() curves that start at 0 and end at 1, and the four
+    // durations DESIGN.md names. Leaving (150ms) is quicker than arriving.
+    for (const name of ['spring-snappy', 'spring-smooth', 'spring-soft']) {
+      expect(declarations.get(name), name).toMatch(/^linear\(0, .*, 1\)$/)
+    }
+    // No bounce: the curve never goes past 1. A small bounce: it does, by less than 2%.
+    const peak = (name: string) =>
+      Math.max(
+        ...(declarations.get(name) ?? '')
+          .replace(/^linear\(|\)$/g, '')
+          .split(', ')
+          .map(Number),
+      )
+    expect(peak('spring-snappy')).toBe(1)
+    expect(peak('spring-smooth')).toBe(1)
+    expect(peak('spring-soft')).toBeGreaterThan(1)
+    expect(peak('spring-soft')).toBeLessThan(1.02)
+    expect(declarations.get('duration-snappy')).toBe('250ms')
+    expect(declarations.get('duration-smooth')).toBe('400ms')
+    expect(declarations.get('duration-soft')).toBe('350ms')
+    expect(declarations.get('duration-exit')).toBe('150ms')
     expect(declarations.get('control-height')).toBe('2.25rem')
     expect(declarations.get('target-min')).toBe('1.5rem')
     expect(declarations.get('row-height')).toBe('3rem')
@@ -254,6 +283,20 @@ describe('text contrast is at least 4.5:1 in light and dark mode', () => {
     ['foreground', 'review-soft'],
     ['foreground', 'watch-soft'],
     ['foreground', 'destructive-soft'],
+    // The accent (PLAN-V13): link text on the page and cards; the selected menu item, tab or
+    // chip (ink on the tint, and ink on a card for a tab's text); body text on the tint
+    ['link', 'background'],
+    ['link', 'card'],
+    ['link', 'popover'],
+    ['accent-strong', 'background'],
+    ['accent-strong', 'card'],
+    ['accent-ink', 'accent-soft'],
+    ['accent-ink', 'card'],
+    ['accent-ink', 'background'],
+    ['foreground', 'accent-soft'],
+    ['sidebar-selected-foreground', 'sidebar-selected'],
+    ['sidebar-foreground', 'sidebar-selected'],
+    ['muted-foreground', 'accent-soft'],
   ]
 
   for (const mode of MODES) {
@@ -297,10 +340,29 @@ describe('form borders and other control parts are at least 3:1', () => {
       }
     })
 
-    it(`${mode}: Navy progress and the selected marker (--primary) on the card`, () => {
+    it(`${mode}: the selected row's marker (--primary) on the card`, () => {
       const value = ratio(resolveToken('primary', mode), resolveToken('card', mode))
 
       expect(value).toBeGreaterThanOrEqual(3)
+    })
+
+    it(`${mode}: the accent as progress, a switch that is on, a tab underline and the menu bar`, () => {
+      // Progress and the tab underline sit on cards and the page; a switch's track on the page,
+      // a card or a popover; the selected menu item's 2px bar on its tint and on the sidebar.
+      for (const [token, surface] of [
+        ['progress', 'card'],
+        ['progress', 'background'],
+        ['accent-strong', 'background'],
+        ['accent-strong', 'card'],
+        ['accent-strong', 'popover'],
+        ['accent-strong', 'sidebar'],
+        ['accent-strong', 'accent-soft'],
+        ['accent-strong', 'sidebar-selected'],
+      ]) {
+        const value = ratio(resolveToken(token, mode), resolveToken(surface, mode))
+
+        expect(value, `${token} on ${surface} is ${value.toFixed(2)}:1`).toBeGreaterThanOrEqual(3)
+      }
     })
 
     it(`${mode}: result fills for icons and map pins on the card`, () => {
