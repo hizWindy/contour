@@ -85,4 +85,38 @@ describe('Admin, Settings', () => {
       expect(calls.some((call) => call.method === 'DELETE')).toBe(true)
     })
   })
+
+  it('shows one group at a time, each setting with one line, and says once when changes apply', async () => {
+    const model = {
+      ...SETTING,
+      key: 'claude_model',
+      label: 'Main Claude model',
+      description: 'Used for every step that has no model of its own. A longer second sentence.',
+      type: 'choice',
+      choices: ['claude-opus-5-5', 'claude-sonnet-5-5'],
+      min: null,
+      max: null,
+      default: 'claude-opus-5-5',
+      value: 'claude-opus-5-5',
+    }
+    mockApi({
+      '/api/v1/settings': { ...settingsOut(), fields: [...settingsOut().fields, model] },
+    })
+    const { user } = renderWithProviders(<AdminSettingsTab />)
+    expect(await screen.findByText(/Applies from the next run\./)).toBeInTheDocument()
+    expect(screen.getByRole('list', { name: 'Money' })).toBeInTheDocument()
+    expect(screen.queryByText('Main Claude model')).toBeNull()
+
+    await user.click(screen.getByRole('radio', { name: 'Claude' }))
+    expect(screen.getByRole('list', { name: 'Claude' })).toBeInTheDocument()
+    expect(
+      screen.getByText('Used for every step that has no model of its own.'),
+    ).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Show the details' }))
+    expect(
+      screen.getByText(
+        'Used for every step that has no model of its own. A longer second sentence.',
+      ),
+    ).toBeInTheDocument()
+  })
 })
