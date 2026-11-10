@@ -144,7 +144,7 @@ function SettingRow({
       ? ` From ${String(field.min)} to ${String(field.max)}.`
       : ''
   return (
-    <li className="grid grid-cols-1 gap-x-6 gap-y-2 border-b py-3 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_14rem] sm:items-center">
+    <li className="grid grid-cols-1 gap-x-4 gap-y-2 border-b py-2.5 sm:grid-cols-[minmax(0,1fr)_10rem] sm:items-center">
       <div className="flex min-w-0 flex-col gap-0.5">
         <label htmlFor={id} className="text-ui font-semibold">
           {field.label}
@@ -258,7 +258,11 @@ export default function AdminSettingsTab() {
               />
             </div>
           ) : null}
-          <ul aria-label={GROUPS.find((item) => item.value === open)?.label ?? 'Settings'}>
+          {/* Two columns from a laptop up, so a group fits on one screen. */}
+          <ul
+            aria-label={GROUPS.find((item) => item.value === open)?.label ?? 'Settings'}
+            className="grid lg:grid-cols-2 lg:gap-x-10"
+          >
             {shownFields.map((field) => (
               <SettingRow
                 key={field.key}
