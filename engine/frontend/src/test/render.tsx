@@ -79,6 +79,7 @@ import userEvent, {
 import type { ReactElement, ReactNode } from 'react'
 import { MemoryRouter, type InitialEntry } from 'react-router'
 import { vi } from 'vitest'
+import { MotionRoot } from '@/components/motion'
 import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
@@ -138,8 +139,8 @@ export interface RenderWithProvidersResult extends RenderResult {
 
 /**
  * Renders a component the way the app does: with a QueryClient (retries off), a memory router
- * (unless `withRouter` is false), the tooltip provider that shadcn parts need, and the toast
- * host. See the top of this file for the options and for fake timers.
+ * (unless `withRouter` is false), the motion kit's root, the tooltip provider that shadcn parts
+ * need, and the toast host. See the top of this file for the options and for fake timers.
  */
 export function renderWithProviders(
   ui: ReactElement,
@@ -157,9 +158,11 @@ export function renderWithProviders(
       </TooltipProvider>
     )
     return (
-      <QueryClientProvider client={queryClient}>
-        {withRouter ? <MemoryRouter initialEntries={entries}>{inner}</MemoryRouter> : inner}
-      </QueryClientProvider>
+      <MotionRoot>
+        <QueryClientProvider client={queryClient}>
+          {withRouter ? <MemoryRouter initialEntries={entries}>{inner}</MemoryRouter> : inner}
+        </QueryClientProvider>
+      </MotionRoot>
     )
   }
 

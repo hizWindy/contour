@@ -1,5 +1,5 @@
 /**
- * Admin, Test set: run the 10 public test companies, and compare the scores over time. A change
+ * Test set: run the 10 public test companies, and compare the scores over time (a Lead Finder page). A change
  * to a prompt or a rule stays only if the test set score holds.
  */
 import { createColumnHelper } from '@tanstack/react-table'

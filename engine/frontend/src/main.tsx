@@ -12,6 +12,7 @@ import './styles/index.css'
 import { meQueryOptions } from './api/hooks'
 import { createQueryClient } from './api/query'
 import { App } from './App'
+import { MotionRoot } from './components/motion'
 import { createAppRouter, routes } from './router'
 import { preloadOnIntent } from './shell/intent'
 import { prefetchOnNavigation } from './shell/prefetch'
@@ -34,9 +35,12 @@ prefetchOnNavigation(router, queryClient)
 // Every page waits for "who is signed in", so that goes out first too, not after the page's code.
 void queryClient.prefetchQuery(meQueryOptions())
 
+// MotionRoot loads the motion kit's features once, for every page (PLAN-V13 T2-4).
 createRoot(root).render(
   <StrictMode>
-    <App queryClient={queryClient} router={router} />
+    <MotionRoot>
+      <App queryClient={queryClient} router={router} />
+    </MotionRoot>
   </StrictMode>,
 )
 

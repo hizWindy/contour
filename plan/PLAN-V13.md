@@ -225,15 +225,15 @@ Newest first.
 
 ## Track 2: the foundation, then Lead Finder and Companies (account 2)
 
-**Progress:** 0 of 9 steps done.
+**Progress:** 2 of 9 steps done (T2-1, T2-5). T2-2, T2-3 and T2-4 are built and wait for Al-khair's look.
 
 ### Part A: the foundation (starts at once)
 
-- [ ] **T2-1. Own copy and a baseline.**
+- [x] **T2-1. Own copy and a baseline.** (2026-11-11)
   - The worktree, the `leadfinder_v13b` database and the ports (see "How to work this plan").
   - Run the website tests once with `heavy.sh`, and note the count.
   - **Done when:** the count is in the Track 2 Log.
-- [ ] **T2-2. The accent and the motion, as a prototype.** Al-khair picks before any code changes.
+- [ ] **T2-2. The accent and the motion, as a prototype.** Al-khair picks before any code changes. **Built 2026-11-11, waiting for the pick:** https://claude.ai/artifact/HedDQgAprAGRzb1QhLEVxV
   - A clickable HTML page (an Artifact, private). It shows the Schedules control and the Companies table in each accent, light and dark, with made-up data marked as made up.
   - **Three accents**, each starting point checked for contrast (4.5:1 for text, 3:1 for the focus ring):
     - **A. Cobalt** (from about `#2F5BD8`), a bright step of Contour's Navy. **Recommended:** it lifts the warm Stone colours, it doesn't look like a warning or a result, and it reads as the same family as the site.
@@ -242,7 +242,7 @@ Newest first.
   - **Where the accent goes:** the selected menu item (a soft tint, accent text and a 2px bar), the selected tab or segment, switches that are on, picked chips, the focus ring, progress bars, links, and the one bar or line a chart highlights. Navy keeps the main buttons. Results keep their own colours.
   - **The motion demo:** the segmented control, the chips, the tab underline, a side sheet, a number that rolls to its new value, and a button press. A switch shows the same thing with reduced motion.
   - **Done when:** Al-khair replies `accent A`, `B` or `C`, and the choice is in the Log. Until then, the track waits.
-- [ ] **T2-3. The tokens and `DESIGN.md`.**
+- [ ] **T2-3. The tokens and `DESIGN.md`.** **Built 2026-11-11, waiting for a look** (the browser check comes with T2-4, one backend start for both).
   - The picked accent as tokens in `src/styles/tokens.css`, light and dark: `--accent-strong`, `--accent-soft` (the tint) and `--accent-ink` (text on the tint). Also `--ring`, `--chart-1` and the progress colour. shadcn's own `--accent` keeps its meaning (hover backgrounds).
   - **`DESIGN.md`:**
     - Colour: the accent, where it goes, and where it never goes;
@@ -250,7 +250,7 @@ Newest first.
     - Banned: springs with a small bounce are no longer banned for toggles and chips. Loops, glow, gradients and blur stay banned;
     - the "Check before showing any screen" list, updated.
   - **Done when:** every token passes its contrast check in light and dark, and the existing pages still look right.
-- [ ] **T2-4. The motion kit.**
+- [ ] **T2-4. The motion kit.** **Built 2026-11-11, waiting for a look** (the browser check and the 4x CPU frame check come with it).
   - `src/components/motion/`, built on `motion` 14.5.0 (already installed):
     - `MotionRoot`: `LazyMotion` with `domAnimation`, and `MotionConfig` that follows reduced motion. It goes at the app's root;
     - `springs.ts`: `snappy` (0.25s, no bounce), `smooth` (0.4s, no bounce), `soft` (0.35s, bounce 0.1, toggles and chips only), and `exit` (150ms);
@@ -262,7 +262,7 @@ Newest first.
     - `usePress`: the 0.98 press.
   - **Files:** `src/components/motion/`, `src/main.tsx` (the root), tests.
   - **Done when:** each part has tests (keyboard, reduced motion, screen reader labels), the main bundle grows by no more than 10 KB gzipped (**TBC**), and there are no dropped frames at 4x CPU slowdown.
-- [ ] **T2-5. Seams for the tracks, then the tag.**
+- [x] **T2-5. Seams for the tracks, then the tag.** (2026-11-11, tag `v13-foundation`)
   - Move the views out of `admin/`: `admin/rules.tsx` to `rules/view.tsx`, and `admin/tests.tsx` to `test-set/view.tsx`.
   - Split `admin/admin.test.tsx` into one test file per page. Then Track 1 and Track 2 never edit the same test file.
   - Commit, tag `v13-foundation`, and add a line to the Track 2 Log: "Foundation ready".
@@ -304,7 +304,11 @@ Newest first.
 
 Newest first.
 
-- (empty)
+- 2026-11-11: **Foundation ready.** **T2-5 done:** `admin/rules.tsx` is now `rules/view.tsx` and `admin/tests.tsx` is `test-set/view.tsx` (their pages import `./view`; the old `/admin/rules` and `/admin/tests` addresses still redirect). `admin/admin.test.tsx` is split into one file per page: `admin/settings.test.tsx`, `admin/hubspot.test.tsx`, `admin/memory.test.tsx`, `admin/searches.test.tsx`, `admin/runs.test.tsx`, `rules/view.test.tsx` and `test-set/view.test.tsx`, with the shared fake API in `src/test/mock-api.ts` (`mockApi`, `Call`, `TEST_RUN_ID`). Full check: website 72 files, **990 tests passed**, lint, types and build clean. Tag `v13-foundation` on the commit. **For Track 1:** `git merge v13-foundation` (T1-5); then the accent classes (`bg-accent-soft`, `text-accent-ink`, `border-accent-strong`, `text-link`), the kit (`import { Segmented, ChipGroup, TabIndicator, Reveal, RollingNumber, usePress } from '@/components/motion'`) and `mockApi` from `@/test/mock-api` are there. The Admin tabs can take `<TabIndicator active={isActive} group="admin" />` inside each `NavLink` (make the link `relative`).
+- 2026-11-11: **T2-4 built, waiting for a look.** `src/components/motion/`: `MotionRoot` (`LazyMotion` + `MotionConfig reducedMotion="user"`, at the app's root in `main.tsx` and around every test render in `test/render.tsx`), `springs.ts` (`snappy` 0.25s, `smooth` 0.4s, `soft` 0.35s bounce 0.1, `exit` 150ms, `INSTANT`), `Segmented` (a radio group, the highlight slides with `layoutId`), `ChipGroup` (`many` with `aria-pressed`, or `one` as a radio group; a tick on the soft spring; the press), `TabIndicator` (the sliding underline; a shadcn `TabsTrigger` hides its own underline when it holds one), `Reveal` (fade and rise 4px, at most 8 staggered 40ms apart), `RollingNumber` (digit columns on the smooth spring, the plain text for a screen reader), `usePress` (`whileTap` 0.98), `useStill` and `useTransition` (reduced motion = INSTANT, read from the media query on every render so tests can switch it), `roving.ts` (arrows, Home, End, disabled items skipped). 24 tests in `motion.test.tsx`. **The features load late:** `layoutId` needs `domMax`, which is about 20 kB gzipped, so `MotionRoot` loads it through `LazyMotion` from `features.ts` as a file of its own after the first screen. Build, gzipped: the main file went from 48.3 kB to 37.4 kB (the error page split out too), the sign-in page's file from 73.5 kB to 47.7 kB (it no longer carries its own copy of motion), and the new `features-animation` file is 19.6 kB. So the 10 kB budget holds for the main file; the features file is extra and arrives in the background (**TBC** with Al-khair). `tokens.css` wraps the spring curves over several lines after prettier, so the contrast test strips spaces first. `lib/utils.ts` knows the `ease-spring-*` classes. The design lint reads comments too, so no comment names a banned class. Not touched: `src/shell/`, `src/apps/` (except the T2-5 moves), the backend. Pre-existing prettier warnings on `admin/schedules.tsx` and `src/modules.ts` come from the base branch and are left alone (Track 1's and shared).
+- 2026-11-11: **Accent A (Cobalt) picked by Al-khair.** **T2-3 built, waiting for a look.** `tokens.css`: `--accent-strong` `#2F5BD8` / `#80A4F8` (dark), `--accent-soft` `#E1E8FA` / `#243556`, `--accent-ink` `#1E3F9E` / `#B9CCFA`; `--ring`, `--link`, `--progress` and `--chart-1` are the accent; `--sidebar-selected` and `--sidebar-selected-foreground` for the selected menu item; the springs as CSS `linear()` curves (`--spring-snappy`, `--spring-smooth`, `--spring-soft`) with `--duration-snappy` 250ms, `--duration-smooth` 400ms, `--duration-soft` 350ms, `--duration-exit` 150ms. `index.css` wires them (`bg-accent-soft`, `text-accent-ink`, `border-accent-strong`, `text-link`, `bg-progress`, `ease-spring-*`). Shared shadcn parts moved onto them, keeping every prop: the switch (track on = accent, thumb on the soft spring), the tabs' line underline, progress, a pressed toggle (tint, ink and accent border = a picked chip), and the sidebar's active item (tint, ink and a 2px bar). `--selected` (rows) stays a Navy tint. `DESIGN.md`: the accent table (where it goes, where it never goes), Motion rewritten from "The design bar", Banned and the check list updated, the token table. `contrast.test.ts`: 33 new checks (link text 4.5:1 on page, card and popover; ink on tint; the accent 3:1 on page, card, popover, sidebar and its own tint; the spring curves start at 0, end at 1, and only `soft` passes 1, by under 2%). Website 966 tests, lint and types clean. Not touched: `src/shell/`, `src/apps/`, the backend.
+- 2026-11-11: **T2-2 built, waiting for the pick.** The prototype is a private Artifact: https://claude.ai/artifact/HedDQgAprAGRzb1QhLEVxV. A top bar switches the accent (A, B, C), light or dark, and reduced motion. It shows the eight places the accent goes (menu with the foot "Al-khair M. Pama, System admin", tabs, stat tabs, switch, chips, focus ring, links, progress, chart), a live contrast table, the T1-7 Schedules control (cities, how often, first day, time, round budget, a preview line, Save only after a change, the money confirm), the T2-8 Companies table (name first, HubSpot's order, Source, row actions), and the motion kit (sliding indicators, a rolling number, a side sheet, the 0.98 press). Springs are CSS `linear()` curves made from the same damping maths Motion uses. All data is made up and says so. Contrast (light / dark, text needs 4.5:1, rings 3:1): **A** link on page 5.31 / 6.41, ink on tint 7.58 / 7.61; **B** 4.90 / 7.47, 7.38 / 8.12; **C** 5.74 / 7.43, 7.63 / 7.83. Contour's own orange hex is not in the repo, so B starts from `#AD4F14` (**TBC**). No code changed. Track 2 stops here until `accent A`, `B` or `C`.
+- 2026-11-11: **T2-1 done.** Worktree `../contour-v13-t2` on branch `plan-v13-track2` from `plan-v13` (9ff4fc6). `npm ci` in its `engine/frontend`. Database `leadfinder_v13b` made in the Docker Postgres as a `pg_dump` and `pg_restore` copy of `leadfinder_v10` (13,915 HubSpot companies). Baseline with `heavy.sh`: website 65 files, **933 tests passed** (31 s). No backend started. The `inspirations/` folder is not committed; it is read from the main folder.
 
 ## Merge (`merge v13`, on Al-khair's word)
 
