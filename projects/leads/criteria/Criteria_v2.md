@@ -1,6 +1,6 @@
 # Company criteria, version 2
 
-**Draft.** Levi to confirm. Last updated 2026-11-10 (Levi's 9 Nov changes, [PLAN-V11](../../../plan/PLAN-V11.md)). The engine now follows this version. It was built following [PLAN-V2.md](../../../plan/PLAN-V2.md), and [version 1](Criteria_v1.md) is the old one. Every number here is still **TBC** until Levi confirms it, and the engine reads them from `criteria.yaml`, so a change from Levi is an edit to that file.
+**Draft.** Levi to confirm. Last updated 2026-11-10 (Levi's 9 Nov changes, [PLAN-V11](../../../plan/PLAN-V11.md), and the lead card's Why now, [PLAN-V12](../../../plan/PLAN-V12.md)). The engine now follows this version. It was built following [PLAN-V2.md](../../../plan/PLAN-V2.md), and [version 1](Criteria_v1.md) is the old one. Every number here is still **TBC** until Levi confirms it, and the engine reads them from `criteria.yaml`, so a change from Levi is an edit to that file.
 
 These rules decide which companies the research agent looks for, **before anyone calls them**. Everything new in this version is **TBC** (to be confirmed) until Levi checks it.
 
@@ -170,6 +170,10 @@ These are not rules. This is what sales sees. Levi said decision makers and talk
 - **Talking points (new, TBC):** 2 or 3 short points tied to the trigger. Example: "Lease ends March 2028". Today the card has one opening line.
 - **Office history (new, TBC):** years at the current address, and the last move or fitout date.
 - **Links (new, TBC):** past design and fitout contractors, and links to current customers, if known.
+- **Why now (new, 10 Nov, TBC):** a short reason to call, first on the card ([PLAN-V12](../../../plan/PLAN-V12.md)). Claude writes why this company and why now, what likely happens next, and 1 or 2 questions for the call. Code writes the rest from the facts: when they might move, how big the job is, what is missing, and how sure we are (High, Medium or Low). It never changes the result or the score.
+  - **The lease guess:** with no lease end in the sources, the card guesses one as the move-in year plus **5 to 7 years** (`office_age.lease_guess_years`, **TBC**). Example: moved in 2022, so a lease may end 2027 to 2029. It is always marked "estimated". Leases also run 10 years, or have options, so the guess is often wrong.
+  - **A thin lead:** Low means the best sign is only guessed, the size isn't known, or both are only estimated. The card says to check the sources before calling. The lead isn't dropped.
+  - It costs one short Claude request per lead that isn't a Drop: about US$0.04 to US$0.08 (**TBC**). It is off until Al-khair switches it on.
 
 ## 10. What Levi's brief asks the tool to do
 
@@ -246,6 +250,10 @@ The engine judged the 16 leads saved in the dev database again with the version 
 - The 12 months for "just moved", the Timing points (7 for the years at the address, 2 for no recent move), and the 8 years for an old office.
 - Is an old office alone a Pass, as now, or a Director review?
 - May the tool send HubSpot company names to Claude? The watchlist run and the Old offices run wait for it.
+
+**Open from 10 Nov (PLAN-V12, the lead card's Why now):**
+- Is 5 to 7 years after the move-in a fair guess for when a lease ends?
+- Does Why now help you and the team decide who to call first?
 
 **Still open:**
 - Using a headcount tool for company numbers only.

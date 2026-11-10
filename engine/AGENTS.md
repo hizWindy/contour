@@ -121,7 +121,8 @@ backend/
       sourcing.py      which source wins for each fact (staff, name, website, industry, offices, people), what the others said, and the flags (pure code)
       rules.py         checks the rules files
       rules/           criteria.yaml, queries.yaml, hubspot_map.yaml
-      research.py      researches one company: memory, Signal Hire's details, the too-small check before any Claude request (PLAN-V9 B2), search, form, gap check, then HubSpot and Signal Hire next to the research's own numbers, save
+      research.py      researches one company: memory, Signal Hire's details, the too-small check before any Claude request (PLAN-V9 B2), search, form, gap check, then HubSpot and Signal Hire next to the research's own numbers, Why now, save
+      why.py           the lead card's Why now (PLAN-V12): the When, Size, confidence and Missing lines (pure code, free), then one short Claude request for the reason and the questions, checked by code. Off until `why_now_enabled`; `lead-finder why-now` writes it for saved leads
       fields.py        the answer forms Claude fills in
       sources.py       the source check (pure code)
       scoring.py       the rules and the score (pure code)

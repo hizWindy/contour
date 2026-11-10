@@ -5,7 +5,7 @@ Contour's first AI project. In meetings it is called **"Trigger events."**
 - **Priority:** number 1. Levi Young made it the key priority on 2026-10-23. Meeting prep is on hold until this runs.
 - **Built by:** Al-khair Pama (AI Engineer)
 - **Signed off by:** Levi Young
-- **Last updated:** 2026-10-25. Anything marked **TBC** is not confirmed yet.
+- **Last updated:** 2026-11-10 (the card's Why now, PLAN-V12). Anything marked **TBC** is not confirmed yet.
 
 ## Files in this folder
 
@@ -112,12 +112,19 @@ The exact weights are **TBC** with Levi. Our proposal, out of 100, is in `engine
 One card per company. A made-up example:
 
 > **ABC Logistics, Perth**
+> - **Why now** (Medium confidence): it won a $200M contract last week and is hiring 120 office staff, so its Perth office may soon be too small. *(link to source)*
+>   - **When:** lease may end 2027 to 2029 (estimated: moved in 2022, plus a 5 to 7 year lease).
+>   - **Size:** about 3,000 m², about $4.5M fitout (estimated: 300 staff x 10 m² x $1,500 per m²).
+>   - **Missing:** no lease end found; staff count from LinkedIn only.
+>   - **Ask:** "Where will the 120 new staff sit?"
 > - **What happened:** won a $200M contract last week. Hiring 120 office staff. *(link to source)*
 > - **Why it fits:** about 300 staff, Perth, logistics. Result: **Pass**.
 > - **Who to contact:** Head of Property or CFO
 > - **Suggested opening line:** "Congratulations on the new contract. Teams growing this fast often outgrow their office within a year."
 > - **In HubSpot:** not yet. New company.
 > - **[Approve]  [Reject]**
+
+**Why now** ([PLAN-V12](../../plan/PLAN-V12.md), 10 Nov) comes first on the card. Claude writes the reason, the likely next step and the questions, from the facts and notes the research already saved. Code writes When, Size, Missing and how sure we are. A number Claude wasn't given is removed. It never changes the result or the score. It costs about US$0.04 to US$0.08 a lead (**TBC**), and it is off until Al-khair switches it on. Until then, the card shows why it fits.
 
 ---
 
