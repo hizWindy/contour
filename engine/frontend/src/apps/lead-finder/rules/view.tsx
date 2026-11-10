@@ -8,7 +8,7 @@
  * Levi" lists every TBC rule, beside the rules on a laptop and under them on a phone.
  */
 import { Check, Minus } from 'lucide-react'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { useRules } from '@/api/hooks'
 import { ErrorState } from '@/components/error-state'
 import { Reveal, Segmented } from '@/components/motion'
@@ -200,19 +200,19 @@ export default function RulesView() {
   return <RulesLoaded rules={rules.data} />
 }
 
-function RulesLoaded({ rules }: { rules: Rules }) {
-  const { criteria: c, watchlist, version } = rules
-  const tbc = tbcByKey(rules)
-  const waiting = [...c.tbc, ...watchlist.tbc]
+/**
+ * The segmented control that jumps to a section, and follows the section in view while the
+ * page scrolls. It owns that state, so a jump re-renders this bar and nothing else: the eight
+ * sections and the "Waiting on Levi" list stay as they are (the speed budget, T2-9).
+ */
+function JumpBar({ main }: { main: RefObject<HTMLDivElement | null> }) {
   const [section, setSection] = useState<SectionId>('cities')
-  const main = useRef<HTMLDivElement>(null)
 
   function jump(id: SectionId) {
     setSection(id)
     document.getElementById(`rules-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
-  // The segmented control follows the section in view while the page scrolls.
   useEffect(() => {
     const root = main.current
     if (!root || typeof IntersectionObserver === 'undefined') return
@@ -226,7 +226,24 @@ function RulesLoaded({ rules }: { rules: Rules }) {
     )
     root.querySelectorAll('[data-section]').forEach((node) => observer.observe(node))
     return () => observer.disconnect()
-  }, [])
+  }, [main])
+
+  return (
+    <Segmented
+      aria-label="Jump to a section"
+      options={SECTIONS}
+      value={section}
+      onChange={jump}
+      size="sm"
+    />
+  )
+}
+
+function RulesLoaded({ rules }: { rules: Rules }) {
+  const { criteria: c, watchlist, version } = rules
+  const tbc = tbcByKey(rules)
+  const waiting = [...c.tbc, ...watchlist.tbc]
+  const main = useRef<HTMLDivElement>(null)
 
   const signLabel = (id: string) =>
     [...c.triggers.main, ...c.triggers.other, ...c.triggers.weak].find((t) => t.id === id)?.label ??
@@ -236,13 +253,7 @@ function RulesLoaded({ rules }: { rules: Rules }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="sticky top-0 z-10 -mx-4 flex flex-wrap items-center gap-x-4 gap-y-2 bg-background px-4 py-2 sm:mx-0 sm:px-0">
-        <Segmented
-          aria-label="Jump to a section"
-          options={SECTIONS}
-          value={section}
-          onChange={jump}
-          size="sm"
-        />
+        <JumpBar main={main} />
         <p className="text-caption text-muted-foreground">
           Version <span className="font-semibold text-foreground">{version}</span>. {c.label}.
         </p>
