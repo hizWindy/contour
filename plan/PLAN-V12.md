@@ -3,8 +3,8 @@
 This plan adds a "Why now" section to every lead card. Claude turns the facts the research already found into a reason to call: why this company, why now, when they might move, how big the job is, and how sure we are. It finds no new companies. It changes no result and no score.
 
 - **Built by:** Al-khair Pama. **Signed off by:** Al-khair for the code. On 10 Nov Al-khair agreed to pay a small extra cost per lead for better information. Levi hasn't seen this idea yet (**TBC**, to be confirmed).
-- **Last updated:** 2026-11-10 (A1 to C3 built and committed on branch `plan-v12`; D1 built, waiting for Al-khair's look).
-- **Progress:** 7 of 11 steps done (A1, B1 to B3, C1 to C3). Not merged, not pushed. Next: D1 (a backend restart, then Al-khair looks), E1 (paid, his word).
+- **Last updated:** 2026-11-11 (the backend on the laptop now runs this code; D1 built, waiting for Al-khair's look).
+- **Progress:** 7 of 11 steps done (A1, B1 to B3, C1 to C3). Not merged, not pushed. Next: E1 (paid, his word), then D1 (Al-khair looks at the cards E1 writes).
 - **Sources:** the chat of 10 Nov (Al-khair and Claude), and the code in `engine/backend/apps/lead_finder/` (`research.py`, `scoring.py`, `fields.py`, `prompts/extract.md`).
 - **Comes after:** [PLAN-V11.md](PLAN-V11.md) Part B. Both plans change the lead card's Overview tab and read the office dates, so this one builds on top of it.
 
@@ -219,6 +219,7 @@ All of Part B goes in a new file, `apps/lead_finder/why.py`, as pure functions: 
 
 Newest first.
 
+- 2026-11-11: **The backend on the laptop restarted with this code** (on Al-khair's ask). Its auto-reload had picked up no change since 2:22 AM on 10 Nov, so until then it served the code from before this plan. Checked: it started with no errors, it serves Why now and rules `011969a620aa` (with `lease_guess_years` 5 to 7), a lead without one says "Not written for this lead", and the copy database stayed at migration 0014. E1 not run yet (the safety check blocks the paid run without Al-khair's own words).
 - 2026-11-10: **D1 built** (`a8a3bc7`, website) and **E3 docs** (`e40ce4f`).
   - **The card:** "Why now" is the first section on the Overview. It shows the reason and the likely next step with their note links, then When (with the years at the address), Size, Missing and the questions to ask. How sure we are sits next to the title, and Low adds "Thin lead: check the sources before you call". The quick view's "Why it fits" becomes "Why now" when there is a reason. A lead without one says "Not written for this lead" and why, and keeps the office line in its Summary. The Rules page states the 5 to 7 year guess.
   - **Checks:** website 933 passed (924 before), lint clean, types and build pass. Prettier flags 4 files from earlier plans (`companies.ts`, `schedules.tsx`, `plan-v9.test.tsx`, `modules.ts`), none from this one.

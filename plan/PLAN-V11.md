@@ -102,7 +102,7 @@ This plan tunes the Lead Finder to what Levi asked for on 9 Nov. Today it finds 
   - **Done when:** every sign still has at least one search (the start-up check), and the tests pass.
 - [x] **B5. Years at the address count more.** Done 2026-11-10, `c118149`.
   - In `score`: `years_at_address` 5 → 7, and `no_recent_move` 4 → 2, so Timing still adds up to 15 (**TBC**: the numbers). `no_recent_move` can give up points because B3 now handles a recent move.
-  - On the lead card, the Overview's Summary starts with the office line, like "At this address since 2017 (9 years)", or "Not known yet" (`lead/card/tab-overview.tsx`).
+  - On the lead card, the Overview's Summary starts with the office line, like "At this address since 2017 (9 years)", or "Not known yet" (`lead/card/tab-overview.tsx`). PLAN-V12's "Why now" section takes this line over when a lead has a Why now.
   - **Files:** `criteria.yaml`, `Criteria_v2.md` section 6, `tab-overview.tsx`, tests.
   - **Done when:** the rules check passes (the parts add up to 100), the card shows the line first, and the re-judge counts are in the Log.
 - [ ] **B6. Check the effect.** On Al-khair's word, because it costs money:
@@ -176,7 +176,7 @@ This plan tunes the Lead Finder to what Levi asked for on 9 Nov. Today it finds 
 
 ## Not in this plan
 
-- **Our own ideas, until Levi says yes:** past clients due again, "outgrown its office", an estimated lease end from the move-in year, a building that forces a move, and approvals counted per sign.
+- **Our own ideas, until Levi says yes:** past clients due again, "outgrown its office", a building that forces a move, and approvals counted per sign. An estimated lease end from the move-in year is now in [PLAN-V12.md](PLAN-V12.md), shown on the card only.
 - **Levi's LinkedIn Sales Navigator list** of growing companies. No scraping. Whether he can export it is **TBC**.
 - **The redesign** of Rules, Test set and Admin (Schedules as one control, the spend chart, Search log, Memory, Settings). A later plan.
 - **More companies per run,** or a new goal.
