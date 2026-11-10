@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import { Route, Routes } from 'react-router'
 import { describe, expect, it } from 'vitest'
 import { mockApi, TEST_RUN_ID } from '@/test/mock-api'
@@ -43,7 +43,7 @@ describe('Admin, Search log', () => {
       </Routes>,
       { route: `/admin/searches?run_id=${TEST_RUN_ID}` },
     )
-    expect(await screen.findByText(/Showing the requests of run 0f3c9a2e/)).toBeInTheDocument()
+    expect(await screen.findByText(/Run 0f3c9a2e only./)).toBeInTheDocument()
     expect(calls[0]?.search).toContain(`run_id=${TEST_RUN_ID}`)
     await user.click(await screen.findByText('search:property'))
     // The details open in a side panel, so they never sit below a long table.
@@ -54,5 +54,17 @@ describe('Admin, Search log', () => {
       'rel',
       'noopener noreferrer nofollow',
     )
+  })
+
+  it('filters by step and by company in one row', async () => {
+    const calls = mockApi({ '/api/v1/searches': { total: 0, items: [] } })
+    const { user } = renderWithProviders(<AdminSearchesTab />)
+    const filters = await screen.findByRole('search', { name: 'Filter the search log' })
+    await user.click(within(filters).getByRole('radio', { name: 'Research' }))
+    await user.type(within(filters).getByLabelText('Company'), 'Acme')
+    await waitFor(() => {
+      const last = new URLSearchParams(calls.at(-1)?.search)
+      expect([last.get('step'), last.get('subject')]).toEqual(['search', 'Acme'])
+    })
   })
 })

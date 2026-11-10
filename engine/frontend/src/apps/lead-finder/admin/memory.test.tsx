@@ -27,6 +27,10 @@ describe('Admin, Memory', () => {
     await user.click(screen.getByRole('button', { name: 'Search' }))
     expect(await screen.findByText("Acme's lease ends in 2028.")).toBeInTheDocument()
     expect(screen.getByText('83% close')).toBeInTheDocument()
+    // A short list: one row each, with its source.
+    const row = screen.getByRole('listitem')
+    expect(row).toHaveTextContent('Acme Software')
+    expect(row.querySelector('a')).toHaveAttribute('href', 'https://www.afr.com/a')
     expect(new URLSearchParams(calls.at(-1)?.search).get('q')).toBe('lease 2028')
   })
 })
