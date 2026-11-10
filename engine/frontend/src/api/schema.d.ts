@@ -314,6 +314,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/health/details": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every system's health, for Admin's Health tab
+         * @description One check for each system: the database, Claude, HubSpot, Signal Hire, email, the schedules and the API. Each is free (no paid Claude request, no email sent), runs at the same time as the others and stops at 5 seconds. The answer is kept for 60 seconds; `refresh=true` checks again now. For Admins only.
+         */
+        get: operations["health_details"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/hubspot/import": {
         parameters: {
             query?: never;
@@ -1250,6 +1270,24 @@ export interface components {
             /** Hubspot Contact */
             hubspot_contact: number;
         };
+        /** ApiTrafficOut */
+        ApiTrafficOut: {
+            /**
+             * Endpoints
+             * @description Each endpoint with requests: errors first, then the slowest
+             */
+            endpoints: components["schemas"]["EndpointTrafficOut"][];
+            /** Errors */
+            errors: number;
+            /** Requests */
+            requests: number;
+            /**
+             * Since
+             * Format: date-time
+             * @description The start of the counts: an hour ago, or when the backend started
+             */
+            since: string;
+        };
         /** AreaOption */
         AreaOption: {
             /**
@@ -2080,6 +2118,38 @@ export interface components {
              */
             source_url: string;
         };
+        /** EndpointTrafficOut */
+        EndpointTrafficOut: {
+            /**
+             * Average Ms
+             * @description The average time to start the answer
+             */
+            average_ms: number;
+            /**
+             * Errors
+             * @description Answers of 500 and above: faults
+             */
+            errors: number;
+            /**
+             * Method
+             * @example GET
+             */
+            method: string;
+            /**
+             * Path
+             * @example /api/v1/runs/{run_id}
+             */
+            path: string;
+            /**
+             * Refused
+             * @description Answers of 400 to 499: not allowed, or not valid
+             */
+            refused: number;
+            /** Requests */
+            requests: number;
+            /** Slowest Ms */
+            slowest_ms: number;
+        };
         /**
          * EventLog
          * @description A page of a run's events, oldest first.
@@ -2291,6 +2361,26 @@ export interface components {
             sources: string[];
             /** Text */
             text: string;
+        };
+        /** HealthDetails */
+        HealthDetails: {
+            /** @description Empty when this backend doesn't count */
+            api: components["schemas"]["ApiTrafficOut"] | null;
+            /**
+             * Checked At
+             * Format: date-time
+             */
+            checked_at: string;
+            /** Checks */
+            checks: components["schemas"]["SystemCheckOut"][];
+            /**
+             * Fresh Until
+             * Format: date-time
+             * @description Until then, the same answer is sent again
+             */
+            fresh_until: string;
+            /** Schedules */
+            schedules: components["schemas"]["ScheduleCheckOut"][];
         };
         /** HealthOut */
         HealthOut: {
@@ -4670,6 +4760,36 @@ export interface components {
             /** Runs */
             runs: number;
         };
+        /** ScheduleCheckOut */
+        ScheduleCheckOut: {
+            /** Enabled */
+            enabled: boolean;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Job */
+            job: string;
+            /** Last Run At */
+            last_run_at: string | null;
+            /** Last Status */
+            last_status: ("starting" | "started" | "skipped" | "failed") | null;
+            /** Name */
+            name: string;
+            /** Next Run At */
+            next_run_at: string | null;
+            /**
+             * Note
+             * @description Why it is a problem, in plain words
+             */
+            note: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "ok" | "problem" | "off";
+        };
         /**
          * ScheduleEdit
          * @description Any of these. What isn't sent stays as it is.
@@ -5573,6 +5693,46 @@ export interface components {
             trigger: "command" | "website" | "startup" | "schedule";
             /** Warnings */
             warnings: string[];
+        };
+        /** SystemCheckOut */
+        SystemCheckOut: {
+            /**
+             * Checked At
+             * Format: date-time
+             */
+            checked_at: string;
+            /**
+             * Id
+             * @enum {string}
+             */
+            id: "database" | "claude" | "hubspot" | "signalhire" | "email" | "schedules" | "api";
+            /**
+             * Name
+             * @example HubSpot
+             */
+            name: string;
+            /**
+             * Next Step
+             * @description What to do about it. Set for a problem or off
+             */
+            next_step: string | null;
+            /**
+             * Sentence
+             * @description What the check found, in one plain sentence
+             * @example Last sync 6:02 am, 13,913 companies.
+             */
+            sentence: string;
+            /**
+             * State
+             * @description ok, problem, or off (not set up here)
+             * @enum {string}
+             */
+            state: "ok" | "problem" | "off";
+            /**
+             * Took Ms
+             * @description How long the check took, in milliseconds
+             */
+            took_ms: number;
         };
         /** TbcNote */
         TbcNote: {
@@ -8024,6 +8184,128 @@ export interface operations {
                 };
             };
             /** @description The database or pgvector isn't ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    health_details: {
+        parameters: {
+            query?: {
+                /** @description Check again now */
+                refresh?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HealthDetails"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
             503: {
                 headers: {
                     [name: string]: unknown;

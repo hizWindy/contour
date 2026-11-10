@@ -19,6 +19,7 @@ from core.api.security import ProblemCORSMiddleware, add_security_layers
 from core.apps import load_apps
 from core.config import get_settings
 from core.db.engine import get_engine
+from core.health.traffic import ApiTraffic, TrafficMiddleware
 from core.hubspot import connection as hubspot_connection
 from core.logs import setup_logging
 from core.runs import lifecycle
@@ -139,6 +140,9 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     add_security_layers(app, settings)  # after CORS, so the host check and origin guard are outside
+    # Outermost: counts each API request's status and time for the Health tab (PLAN-V13 T1-2).
+    app.state.api_traffic = ApiTraffic()
+    app.add_middleware(TrafficMiddleware, traffic=app.state.api_traffic)
     add_error_handlers(app)
 
     api = APIRouter(prefix=API_PREFIX, responses=PROBLEM_RESPONSES)

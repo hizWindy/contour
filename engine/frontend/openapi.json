@@ -28,6 +28,40 @@
         "title": "AccessPoints",
         "type": "object"
       },
+      "ApiTrafficOut": {
+        "properties": {
+          "endpoints": {
+            "description": "Each endpoint with requests: errors first, then the slowest",
+            "items": {
+              "$ref": "#/components/schemas/EndpointTrafficOut"
+            },
+            "title": "Endpoints",
+            "type": "array"
+          },
+          "errors": {
+            "title": "Errors",
+            "type": "integer"
+          },
+          "requests": {
+            "title": "Requests",
+            "type": "integer"
+          },
+          "since": {
+            "description": "The start of the counts: an hour ago, or when the backend started",
+            "format": "date-time",
+            "title": "Since",
+            "type": "string"
+          }
+        },
+        "required": [
+          "since",
+          "requests",
+          "errors",
+          "endpoints"
+        ],
+        "title": "ApiTrafficOut",
+        "type": "object"
+      },
       "AreaOption": {
         "properties": {
           "id": {
@@ -2284,6 +2318,58 @@
         "title": "DecisionMaker",
         "type": "object"
       },
+      "EndpointTrafficOut": {
+        "properties": {
+          "average_ms": {
+            "description": "The average time to start the answer",
+            "title": "Average Ms",
+            "type": "integer"
+          },
+          "errors": {
+            "description": "Answers of 500 and above: faults",
+            "title": "Errors",
+            "type": "integer"
+          },
+          "method": {
+            "examples": [
+              "GET"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "path": {
+            "examples": [
+              "/api/v1/runs/{run_id}"
+            ],
+            "title": "Path",
+            "type": "string"
+          },
+          "refused": {
+            "description": "Answers of 400 to 499: not allowed, or not valid",
+            "title": "Refused",
+            "type": "integer"
+          },
+          "requests": {
+            "title": "Requests",
+            "type": "integer"
+          },
+          "slowest_ms": {
+            "title": "Slowest Ms",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "method",
+          "path",
+          "requests",
+          "errors",
+          "refused",
+          "average_ms",
+          "slowest_ms"
+        ],
+        "title": "EndpointTrafficOut",
+        "type": "object"
+      },
       "EventLog": {
         "description": "A page of a run's events, oldest first.",
         "properties": {
@@ -2761,6 +2847,55 @@
           "follow_ups"
         ],
         "title": "GuidedQuestion",
+        "type": "object"
+      },
+      "HealthDetails": {
+        "properties": {
+          "api": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ApiTrafficOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Empty when this backend doesn't count"
+          },
+          "checked_at": {
+            "format": "date-time",
+            "title": "Checked At",
+            "type": "string"
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/SystemCheckOut"
+            },
+            "title": "Checks",
+            "type": "array"
+          },
+          "fresh_until": {
+            "description": "Until then, the same answer is sent again",
+            "format": "date-time",
+            "title": "Fresh Until",
+            "type": "string"
+          },
+          "schedules": {
+            "items": {
+              "$ref": "#/components/schemas/ScheduleCheckOut"
+            },
+            "title": "Schedules",
+            "type": "array"
+          }
+        },
+        "required": [
+          "checked_at",
+          "fresh_until",
+          "checks",
+          "schedules",
+          "api"
+        ],
+        "title": "HealthDetails",
         "type": "object"
       },
       "HealthOut": {
@@ -8409,6 +8544,102 @@
         "title": "RunSummaryDay",
         "type": "object"
       },
+      "ScheduleCheckOut": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "job": {
+            "title": "Job",
+            "type": "string"
+          },
+          "last_run_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Run At"
+          },
+          "last_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "starting",
+                  "started",
+                  "skipped",
+                  "failed"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Status"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "next_run_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Run At"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it is a problem, in plain words",
+            "title": "Note"
+          },
+          "state": {
+            "enum": [
+              "ok",
+              "problem",
+              "off"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "job",
+          "name",
+          "enabled",
+          "state",
+          "next_run_at",
+          "last_run_at",
+          "last_status",
+          "note"
+        ],
+        "title": "ScheduleCheckOut",
+        "type": "object"
+      },
       "ScheduleEdit": {
         "additionalProperties": false,
         "description": "Any of these. What isn't sent stays as it is.",
@@ -10490,6 +10721,81 @@
           "finished_at"
         ],
         "title": "SyncOut",
+        "type": "object"
+      },
+      "SystemCheckOut": {
+        "properties": {
+          "checked_at": {
+            "format": "date-time",
+            "title": "Checked At",
+            "type": "string"
+          },
+          "id": {
+            "enum": [
+              "database",
+              "claude",
+              "hubspot",
+              "signalhire",
+              "email",
+              "schedules",
+              "api"
+            ],
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "examples": [
+              "HubSpot"
+            ],
+            "title": "Name",
+            "type": "string"
+          },
+          "next_step": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What to do about it. Set for a problem or off",
+            "title": "Next Step"
+          },
+          "sentence": {
+            "description": "What the check found, in one plain sentence",
+            "examples": [
+              "Last sync 6:02 am, 13,913 companies."
+            ],
+            "title": "Sentence",
+            "type": "string"
+          },
+          "state": {
+            "description": "ok, problem, or off (not set up here)",
+            "enum": [
+              "ok",
+              "problem",
+              "off"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "took_ms": {
+            "description": "How long the check took, in milliseconds",
+            "title": "Took Ms",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "state",
+          "sentence",
+          "next_step",
+          "took_ms",
+          "checked_at"
+        ],
+        "title": "SystemCheckOut",
         "type": "object"
       },
       "TbcNote": {
@@ -14257,6 +14563,157 @@
           }
         },
         "summary": "Check the backend and the database",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/health/details": {
+      "get": {
+        "description": "One check for each system: the database, Claude, HubSpot, Signal Hire, email, the schedules and the API. Each is free (no paid Claude request, no email sent), runs at the same time as the others and stops at 5 seconds. The answer is kept for 60 seconds; `refresh=true` checks again now. For Admins only.",
+        "operationId": "health_details",
+        "parameters": [
+          {
+            "description": "Check again now",
+            "in": "query",
+            "name": "refresh",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Check again now",
+              "title": "Refresh",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthDetails"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Every system's health, for Admin's Health tab",
         "tags": [
           "health"
         ]
