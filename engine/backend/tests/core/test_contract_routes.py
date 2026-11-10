@@ -82,6 +82,8 @@ ROUTES = [
     ("PATCH", f"{API}/settings"),
     ("DELETE", f"{API}/settings/{{key}}"),
     ("GET", f"{API}/schedules"),
+    ("GET", f"{API}/schedules/lead-finder"),  # the city schedules as one (PLAN-V13 T1-3)
+    ("PUT", f"{API}/schedules/lead-finder"),
     ("PATCH", f"{API}/schedules/{{schedule_id}}"),
     ("POST", f"{API}/schedules/{{schedule_id}}/run"),
     ("POST", f"{API}/hubspot/import"),

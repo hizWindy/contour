@@ -1162,6 +1162,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schedules/lead-finder": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The city schedules as one plan, the round so far and its budget */
+        get: operations["get_lead_finder_round"];
+        /**
+         * Save the city schedules as one plan, and the round's budget
+         * @description Changes the four city schedules in one transaction. Picked cities are on, one day apart in the order Melbourne, Adelaide, Perth, Sydney, from the first day (`weekday`, 0 Monday to 6 Sunday) at `at` (24-hour, Melbourne time). The others are off. A round must end before the next starts, so `every` in days is at least the number of cities. `budget_usd` is the most a whole round may spend (the setting `lead_finder_round_cap_usd`). Saving the same times again keeps each schedule's next run. Switching it on spends money, so it needs the Admin role.
+         */
+        put: operations["put_lead_finder_round"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/schedules/{schedule_id}": {
         parameters: {
             query?: never;
@@ -4244,6 +4265,205 @@ export interface components {
             sign: string;
             /** Tiers */
             tiers: ("tier_1" | "tier_2")[];
+        };
+        /** RoundCityOut */
+        RoundCityOut: {
+            /**
+             * City
+             * @enum {string}
+             */
+            city: "Melbourne" | "Adelaide" | "Perth" | "Sydney";
+            /**
+             * Day
+             * @description Its day of the week, for a round in weeks
+             */
+            day: string | null;
+            /** Enabled */
+            enabled: boolean;
+            /**
+             * Last Error
+             * @description Why its last start didn't happen
+             */
+            last_error: string | null;
+            last_run: components["schemas"]["RoundRunOut"] | null;
+            /** Last Run At */
+            last_run_at: string | null;
+            /** Last Status */
+            last_status: ("starting" | "started" | "skipped" | "failed") | null;
+            /** Next Run At */
+            next_run_at: string | null;
+            /** Picked */
+            picked: boolean;
+            /**
+             * Schedule Id
+             * @description Empty until the scheduler made it
+             */
+            schedule_id: string | null;
+        };
+        /**
+         * RoundIn
+         * @description The whole plan. Every field is needed: the page always sends what it shows.
+         */
+        RoundIn: {
+            /**
+             * At
+             * @description The time of day, 24-hour, Melbourne time
+             * @example 07:00
+             */
+            at: string;
+            /**
+             * Budget Usd
+             * @description The most a whole round may spend
+             */
+            budget_usd: number | string;
+            /**
+             * Cities
+             * @description The cities to search, in any order
+             */
+            cities: ("Melbourne" | "Adelaide" | "Perth" | "Sydney")[];
+            /**
+             * Enabled
+             * @description On or off, for the whole round. On spends money
+             */
+            enabled: boolean;
+            /**
+             * Every
+             * @description Every how many days or weeks
+             */
+            every: number;
+            /**
+             * Unit
+             * @enum {string}
+             */
+            unit: "days" | "weeks";
+            /**
+             * Weekday
+             * @description The first day: 0 Monday to 6 Sunday
+             */
+            weekday: number;
+        };
+        /** RoundOut */
+        RoundOut: {
+            /**
+             * At
+             * @example 07:00
+             */
+            at: string;
+            /**
+             * Budget Max Usd
+             * @description The highest budget allowed (the ceiling)
+             */
+            budget_max_usd: string;
+            /**
+             * Budget Usd
+             * @description The most a whole round may spend
+             */
+            budget_usd: string;
+            /**
+             * Cities
+             * @description The picked cities, in the fixed order
+             */
+            cities: ("Melbourne" | "Adelaide" | "Perth" | "Sydney")[];
+            /**
+             * City Plan
+             * @description The four cities, in the fixed order
+             */
+            city_plan: components["schemas"]["RoundCityOut"][];
+            /** Enabled */
+            enabled: boolean;
+            /** Every */
+            every: number;
+            /**
+             * Note
+             * @description Why the next city won't start, when the budget is spent
+             */
+            note: string | null;
+            round: components["schemas"]["RoundSoFarOut"];
+            /**
+             * Run Cap Usd
+             * @description The most one automatic run may spend
+             */
+            run_cap_usd: string;
+            /**
+             * Summary
+             * @description The plan in a sentence
+             * @example Next round: Mon 16 Nov, 7:00 am. Melbourne Mon, Adelaide Tue, Perth Wed, Sydney Thu. Up to US$150.
+             */
+            summary: string;
+            /**
+             * Timezone
+             * @example Australia/Melbourne
+             */
+            timezone: string;
+            /**
+             * Unit
+             * @enum {string}
+             */
+            unit: "days" | "weeks";
+            /**
+             * Weekday
+             * @description The first day: 0 Monday to 6 Sunday
+             */
+            weekday: number;
+            /**
+             * When
+             * @example Every 2 weeks from Monday at 7:00 am
+             */
+            when: string;
+        };
+        /**
+         * RoundRunOut
+         * @description A city's newest automatic run.
+         */
+        RoundRunOut: {
+            /** Cost Usd */
+            cost_usd: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Good Leads
+             * @description Pass and Director review leads
+             */
+            good_leads: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Status */
+            status: string;
+        };
+        /** RoundSoFarOut */
+        RoundSoFarOut: {
+            /**
+             * Goal
+             * @description The good leads a round aims for (Settings)
+             */
+            goal: number;
+            /** Good Leads */
+            good_leads: number;
+            /**
+             * Left Usd
+             * @description What is left of the round's budget
+             */
+            left_usd: string;
+            /**
+             * Next Round At
+             * @description When the next one begins, while it is on
+             */
+            next_round_at: string | null;
+            /** Runs */
+            runs: number;
+            /** Spent Usd */
+            spent_usd: string;
+            /**
+             * Started At
+             * @description When this round began
+             */
+            started_at: string | null;
         };
         /** RuleCheck */
         RuleCheck: {
@@ -13865,6 +14085,248 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScheduleList"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_lead_finder_round: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoundOut"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    put_lead_finder_round: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoundIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoundOut"];
                 };
             };
             /** @description The request can't be understood */

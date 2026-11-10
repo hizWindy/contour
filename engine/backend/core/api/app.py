@@ -154,6 +154,14 @@ def create_app() -> FastAPI:
     api.include_router(runs_read.router)  # before runs: the estimate and summary paths come first
     api.include_router(runs.router)
     api.include_router(settings_routes.router)
+    for spec in specs:
+        if spec.schedule_router is not None:  # a project's own schedule controls (PLAN-V13 T1-3)
+            api.include_router(
+                spec.schedule_router,
+                prefix=f"{schedule_routes.router.prefix}{spec.route_prefix}",
+                tags=["schedules"],
+                dependencies=[Depends(require_app(spec.name))],
+            )
     api.include_router(schedule_routes.router)
     for spec in specs:
         # Only the people with the project ticked (and Admins) may use it (PLAN-V9 E1).
