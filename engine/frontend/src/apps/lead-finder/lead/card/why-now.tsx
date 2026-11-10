@@ -96,10 +96,9 @@ export function WhyNowSection({ lead }: { lead: LeadDetail }) {
         <Row label="Ask">
           {why.ask.length > 0 ? (
             <ul className="flex flex-col gap-1">
+              {/* Plain type: the serif voice is for quotes from sources (engine/DESIGN.md) */}
               {why.ask.map((question) => (
-                <li key={question} className="font-serif">
-                  &ldquo;{question}&rdquo;
-                </li>
+                <li key={question}>&ldquo;{question}&rdquo;</li>
               ))}
             </ul>
           ) : (

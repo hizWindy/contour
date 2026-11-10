@@ -41,6 +41,7 @@ from apps.lead_finder.rejudge import Rejudged, rejudge, table
 from apps.lead_finder.research import (
     LeadCard,
     ResearchRequest,
+    hubspot_name_may_go,
     refill_lead,
     research_company,
     why_now_for_lead,
@@ -359,7 +360,7 @@ async def _why_now_leads(
     settings, rules = get_settings(), load_rules()
     model = settings.model_for("why")
     today = datetime.now(ZoneInfo("Australia/Melbourne")).date()
-    query = select(Lead.id, Lead.company, Lead.card).order_by(Lead.created_at)
+    query = select(Lead.id, Lead.company, Lead.origin, Lead.card).order_by(Lead.created_at)
     query = query.where(Lead.run_id == run_id if run_id is not None else Lead.id.in_(lead_ids))
     try:
         async with get_sessionmaker()() as session:
@@ -367,12 +368,14 @@ async def _why_now_leads(
     finally:
         await get_engine().dispose()
     items: list[WhyNowItem] = []
-    for lead_id, company, raw in rows:
+    for lead_id, company, origin, raw in rows:
         card = LeadCard.model_validate(raw)
         cost = card.research.cost_usd
         skipped = why_skip(card)
-        if skipped is not None:
-            words = WHY_SKIP_WORDS.get(skipped, f"skip: {skipped}")
+        words = WHY_SKIP_WORDS.get(skipped, f"skip: {skipped}") if skipped else None
+        if not hubspot_name_may_go(origin, settings):
+            words = "skip: its name came from HubSpot, and HubSpot names may not go to Claude yet"
+        if words is not None:
             items.append(WhyNowItem(lead_id, company, card.result, words, Decimal(0), cost))
             continue
         sheet = facts_sheet(card.facts, card, rules, today, people=len(card.signalhire_people))

@@ -19,6 +19,7 @@ count) is left out of what Claude reads (`claude_view`). The card's own lines st
 code writes them.
 """
 
+import logging
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -57,6 +58,9 @@ Window = Literal["past", "soon", "best", "later"]
 SizeBasis = Literal["research", "staff", "growth", "other", "none"]
 # Why a card has no Why now. A card made before PLAN-V12 has none of these: it is an older lead.
 WhySkipped = Literal["switched_off", "drop", "no_facts", "budget", "failed"]
+# A fault in our own code around the request: the paid research it follows is still saved
+FAULT = "Why now couldn't be written: a fault in our own code (the backend log has it)."
+log = logging.getLogger(__name__)
 WRITES_FOR: tuple[Result, ...] = ("pass", "watch", "director_review")
 
 NOT_KNOWN = "Not known yet."
@@ -851,15 +855,22 @@ async def write_why_now(
 ) -> WhyOutcome:
     """Writes the Why now for one judged lead (C2). One Claude request, no web search, paid from
     the company's own budget (checked first, like every other step). A failed form is retried
-    once. Nothing here raises a cap or a Claude error: the lead is saved either way, with a line
-    in its problems. A cancel still stops it."""
+    once. Nothing here raises a cap, a Claude error or a fault in our own code: the lead is
+    saved either way, with a line in its problems, and every reply comes back to be logged. A
+    cancel still stops it."""
     skipped = why_skip(card)
     if skipped is not None:
         return WhyOutcome(None, skipped)
-    sheet = facts_sheet(card.facts, card, rules, today, people=len(card.signalhire_people))
-    prompt = why_input(card, sheet, rules, today)
-    system: Prompt = why_prompt()
     outcome = WhyOutcome(None, None)
+    try:
+        sheet = facts_sheet(card.facts, card, rules, today, people=len(card.signalhire_people))
+        prompt = why_input(card, sheet, rules, today)
+    except Exception:  # nothing is spent yet, and the research it follows must be kept
+        log.exception("why_now_input_failed")
+        outcome.skipped = "failed"
+        outcome.problems.append(FAULT)
+        return outcome
+    system: Prompt = why_prompt()
     answer: WhyNowAnswer | None = None
     spent = Decimal(0)
     answered_by = model
@@ -890,20 +901,25 @@ async def write_why_now(
         return outcome
     names = [person.name for person in card.facts.decision_makers]
     names += [person.name for person in card.signalhire_people]
-    checked = check_answer(answer, prompt, [note.url for note in card.notes], names)
-    outcome.why_now = WhyNow(
-        reason=checked.reason,
-        likely_next=checked.likely_next,
-        ask=checked.ask,
-        links=checked.links,
-        when=sheet.when,
-        size=sheet.size,
-        confidence=sheet.confidence,
-        missing=sheet.missing,
-        dropped=checked.dropped,
-        model=answered_by,
-        prompt_version=system.version,
-        cost_usd=spent,
-        written_at=now,
-    )
+    try:
+        checked = check_answer(answer, prompt, [note.url for note in card.notes], names)
+        outcome.why_now = WhyNow(
+            reason=checked.reason,
+            likely_next=checked.likely_next,
+            ask=checked.ask,
+            links=checked.links,
+            when=sheet.when,
+            size=sheet.size,
+            confidence=sheet.confidence,
+            missing=sheet.missing,
+            dropped=checked.dropped,
+            model=answered_by,
+            prompt_version=system.version,
+            cost_usd=spent,
+            written_at=now,
+        )
+    except Exception:  # the reply is paid for: it is still logged, and the lead still saved
+        log.exception("why_now_check_failed")
+        outcome.skipped = "failed"
+        outcome.problems.append(FAULT)
     return outcome

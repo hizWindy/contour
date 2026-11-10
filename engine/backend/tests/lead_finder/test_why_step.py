@@ -8,10 +8,11 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.lead_finder import cli
+from apps.lead_finder import why as why_module
 from apps.lead_finder.research import (
     LeadCard,
     ResearchRequest,
@@ -282,3 +283,35 @@ async def test_the_command_shows_each_lead_and_its_cost_then_writes(
     shown = capsys.readouterr().out
     assert "Why now (high confidence): Acme Software's lease ends in March 2028" in shown
     assert "  When: Lease ends March 2028 (confirmed)." in shown
+
+
+async def test_a_watchlist_lead_waits_for_the_ok_on_hubspot_names(session: AsyncSession) -> None:
+    """A name that came from HubSpot reaches Claude only as it does today: with Levi's OK."""
+    saved = await research(session, FakeClaude(), settings=get_settings())
+    await session.execute(update(Lead).where(Lead.id == saved.id).values(origin="hubspot"))
+    await session.commit()
+
+    claude = FakeClaude()
+    closed = get_settings().model_copy(update={"hubspot_names_to_claude_ok": False})
+    card = await why_now_for_lead(session, claude, load_rules(), closed, saved.id, TODAY)
+    assert card is not None and card.why_now is None
+    assert claude.calls == []  # nothing went to Claude, nothing was paid
+
+    opened = get_settings().model_copy(update={"hubspot_names_to_claude_ok": True})
+    card = await why_now_for_lead(session, claude, load_rules(), opened, saved.id, TODAY)
+    assert card is not None and card.why_now is not None
+    assert claude.calls == ["why"]
+
+
+async def test_a_fault_in_our_own_check_still_saves_the_lead_and_its_cost(
+    session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def broken(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("a bug in the check")
+
+    monkeypatch.setattr(why_module, "check_answer", broken)
+    card = await research(session, FakeClaude())
+    assert (card.why_now, card.why_now_skipped) == (None, "failed")
+    assert why_module.FAULT in card.problems
+    assert await session.scalar(select(Lead)) is not None  # the paid research is kept
+    assert [row.cost_usd for row in await why_rows(session)] == [WHY_COST]  # and logged

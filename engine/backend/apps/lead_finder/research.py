@@ -558,6 +558,12 @@ async def refill_lead(
     return card
 
 
+def hubspot_name_may_go(origin: str, settings: Settings) -> bool:
+    """A company name from HubSpot (a watchlist lead) goes to Claude only with Levi's OK, as in a
+    run (steps/company.py). Every other name may."""
+    return origin != "hubspot" or settings.hubspot_names_to_claude_ok
+
+
 async def why_now_for_lead(
     session: AsyncSession,
     claude: Claude,
@@ -573,15 +579,18 @@ async def why_now_for_lead(
     the result or the score: the saved card's are kept. The card gets the Why now and its cost
     goes up by what it cost; the request is logged without a run, so a finished run's cost
     doesn't change. A Drop, or a card whose form failed, gets nothing, costs nothing and isn't
-    saved. A failed try keeps an earlier Why now, with a line in the problems. None when there is
-    no such lead.
+    saved. So does a lead whose name came from HubSpot, while HubSpot names may not go to Claude
+    (`hubspot_names_to_claude_ok`, Levi's OK): it is returned as it is. A failed try keeps an
+    earlier Why now, with a line in the problems. None when there is no such lead.
     """
     lead = await session.get(Lead, lead_id)
     if lead is None:
         return None
     card = LeadCard.model_validate(lead.card)
-    company = lead.company
+    company, origin = lead.company, lead.origin
     await session.rollback()  # no connection waits on Claude
+    if not hubspot_name_may_go(origin, settings):
+        return card
     skipped = why_skip(card)
     if skipped is not None:
         return card.model_copy(update={"why_now_skipped": skipped})
