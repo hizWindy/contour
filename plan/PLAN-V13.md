@@ -225,11 +225,11 @@ Newest first.
 
 ## Track 2: the foundation, then Lead Finder and Companies (account 2)
 
-**Progress:** 0 of 9 steps done.
+**Progress:** 1 of 9 steps done.
 
 ### Part A: the foundation (starts at once)
 
-- [ ] **T2-1. Own copy and a baseline.**
+- [x] **T2-1. Own copy and a baseline.** (2026-11-11)
   - The worktree, the `leadfinder_v13b` database and the ports (see "How to work this plan").
   - Run the website tests once with `heavy.sh`, and note the count.
   - **Done when:** the count is in the Track 2 Log.
@@ -304,7 +304,7 @@ Newest first.
 
 Newest first.
 
-- (empty)
+- 2026-11-11: **T2-1 done.** Worktree `../contour-v13-t2` on branch `plan-v13-track2` from `plan-v13` (9ff4fc6). `npm ci` in its `engine/frontend`. Database `leadfinder_v13b` made in the Docker Postgres as a `pg_dump` and `pg_restore` copy of `leadfinder_v10` (13,915 HubSpot companies). Baseline with `heavy.sh`: website 65 files, **933 tests passed** (31 s). No backend started. The `inspirations/` folder is not committed; it is read from the main folder.
 
 ## Merge (`merge v13`, on Al-khair's word)
 
