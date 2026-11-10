@@ -170,7 +170,12 @@ function useFillHeight(enabled: boolean, reserve: number) {
 }
 
 /** The classes that hide a column below a screen width (see `meta.hideBelow`). */
-const HIDE_BELOW = { sm: 'max-sm:hidden', md: 'max-md:hidden' } as const
+const HIDE_BELOW = {
+  sm: 'max-sm:hidden',
+  md: 'max-md:hidden',
+  lg: 'max-lg:hidden',
+  xl: 'max-xl:hidden',
+} as const
 
 /** A cell that must stay put while the table scrolls: opaque, with the row's tint on top. */
 const STICKY_CELL =
