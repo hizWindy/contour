@@ -24,7 +24,7 @@ describe('the account menu in the top bar', () => {
     expect(account).toHaveAttribute('aria-expanded', 'true')
     expect(within(menu).getByText('Al-khair Pama')).toBeInTheDocument()
     expect(within(menu).getByText('al@example.test')).toBeInTheDocument()
-    expect(within(menu).getByText('Admin')).toBeInTheDocument()
+    expect(within(menu).getByText('System admin')).toBeInTheDocument()
     expect(within(menu).getByRole('menuitem', { name: 'Sign out' })).toBeInTheDocument()
   })
 

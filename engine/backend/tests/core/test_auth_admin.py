@@ -542,3 +542,46 @@ def test_clean_ip_and_browser_names() -> None:
     assert clean.user_agent("  \x00 ") is None
     assert clean.user_agent("Mozilla/5.0\x00 (X11)") == "Mozilla/5.0 (X11)"
     assert clean.user_agent("x" * 1000) == "x" * 300
+
+
+# --- rename (PLAN-V13 T1-4) -----------------------------------------------------------------------
+
+
+def test_rename_changes_the_name_and_logs_it(
+    conninfo: str, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert run(monkeypatch, GOOD, GOOD, argv=CREATE)[0] == 0
+    capsys.readouterr()
+    code, asked = run(
+        monkeypatch, argv=["rename", "--user", "alkhair", "--name", "  Al-khair   M. Pama "]
+    )
+    assert (code, asked) == (0, [])  # no password is asked
+    assert (
+        capsys.readouterr().out.strip() == "al.khair@example.test is now called Al-khair M. Pama."
+    )
+    assert [r["name"] for r in rows(conninfo, "SELECT name FROM core.users")] == [
+        "Al-khair M. Pama"
+    ]
+    log = rows(conninfo, "SELECT event, details FROM core.audit_log ORDER BY id")
+    assert [(r["event"], r["details"]) for r in log][-1] == (
+        "account_changed",
+        {"by": "command", "fields": ["name"]},
+    )
+
+
+def test_rename_refuses_an_empty_name_and_an_unknown_account(
+    conninfo: str, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert run(monkeypatch, GOOD, GOOD, argv=CREATE)[0] == 0
+    capsys.readouterr()
+    assert run(monkeypatch, argv=["rename", "--user", "alkhair", "--name", "   "])[0] == 1
+    assert "Give a name" in capsys.readouterr().err
+    assert run(monkeypatch, argv=["rename", "--user", "nobody", "--name", "Bo"])[0] == 1
+    assert "No account has that email or username." in capsys.readouterr().err
+    assert [r["name"] for r in rows(conninfo, "SELECT name FROM core.users")] == ["Al Khair"]
+
+
+def test_clean_name_trims_and_limits() -> None:
+    assert admin.clean_name(" Al-khair \t M.  Pama ") == "Al-khair M. Pama"
+    with pytest.raises(ValueError, match="120 characters"):
+        admin.clean_name("x" * 121)

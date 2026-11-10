@@ -28,6 +28,7 @@ import {
 import { formatRelative } from '@/lib/format'
 import { toastProblem } from '@/lib/problems'
 import { MODULES } from '@/modules'
+import { ROLE_NAMES, roleName } from '@/shell/roles'
 
 const LEAD_FINDER = 'lead_finder'
 
@@ -52,15 +53,11 @@ const PROJECTS: readonly Project[] = MODULES.flatMap((module) =>
     : [],
 )
 const ROLES = [
-  { id: 'staff', label: 'Staff' },
-  { id: 'admin', label: 'Admin' },
-  { id: 'viewer', label: 'Viewer' },
+  { id: 'staff', label: ROLE_NAMES.staff },
+  { id: 'admin', label: ROLE_NAMES.admin },
+  { id: 'viewer', label: ROLE_NAMES.viewer },
 ] as const
 type Role = (typeof ROLES)[number]['id']
-
-function roleLabel(role: string): string {
-  return ROLES.find((item) => item.id === role)?.label ?? role
-}
 
 function ProjectTick({ person, project }: { person: Person; project: Project }) {
   const change = useChangePerson()
@@ -105,7 +102,7 @@ function ProjectTicks({ person, self }: { person: Person; self: boolean }) {
       ))}
       {person.role === 'admin' ? (
         <span className="text-caption text-muted-foreground">
-          {self ? '(you are an Admin)' : '(an Admin has every project)'}
+          {self ? '(you are a System admin)' : '(a System admin has every project)'}
         </span>
       ) : null}
     </div>
@@ -118,7 +115,7 @@ function PersonRow({ person, self }: { person: Person; self: boolean }) {
       <div className="flex min-w-0 flex-col gap-0.5">
         <span className="flex flex-wrap items-center gap-2">
           <span className="font-semibold">{person.name}</span>
-          <Badge variant="outline">{roleLabel(person.role)}</Badge>
+          <Badge variant="outline">{roleName(person.role)}</Badge>
           {!person.active ? <Badge variant="outline">Can&apos;t sign in</Badge> : null}
           {self ? <span className="text-caption text-muted-foreground">You</span> : null}
         </span>

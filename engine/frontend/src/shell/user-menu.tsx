@@ -6,7 +6,7 @@
  * sign-in guard then shows the login page with "You signed out."
  */
 import { ChevronDown, LogOut } from 'lucide-react'
-import { useLogout, useMe, type SignedInUser } from '@/api/hooks'
+import { useLogout, useMe } from '@/api/hooks'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -17,12 +17,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
-
-const ROLE_NAMES: Record<SignedInUser['role'], string> = {
-  admin: 'Admin',
-  staff: 'Staff',
-  viewer: 'Viewer',
-}
+import { ROLE_NAMES } from './roles'
 
 /** The first letter of the first two words: "Sample Admin" gives "SA", "Al-khair" gives "A". */
 function initialsOf(name: string): string {
