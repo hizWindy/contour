@@ -62,14 +62,17 @@ describe('the role words', () => {
         return Promise.resolve(Response.json({ title: 'Not found', status: 404 }, { status: 404 }))
       }),
     )
-    renderWithProviders(<AdminPeopleTab />)
-    const rows = within(await screen.findByRole('list', { name: 'People' })).getAllByRole(
-      'listitem',
-    )
+    const { user } = renderWithProviders(<AdminPeopleTab />)
+    const table = await screen.findByRole('table', { name: 'People' })
+    const rows = within(table).getAllByRole('row').slice(1)
     expect(within(rows[0]).getByText('Al-khair M. Pama')).toBeInTheDocument()
     expect(within(rows[0]).getByText('System admin')).toBeInTheDocument()
-    expect(within(rows[0]).getByText('(a System admin has every project)')).toBeInTheDocument()
+    expect(within(rows[0]).getByText('Every project')).toBeInTheDocument()
     expect(within(rows[1]).getByText('Staff')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Edit Al-khair M. Pama' }))
+    expect(
+      within(await screen.findByRole('dialog')).getByText('(a System admin has every project)'),
+    ).toBeInTheDocument()
     expect(screen.queryByText(/^Admin$/)).toBeNull()
   })
 })
