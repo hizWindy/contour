@@ -11,6 +11,7 @@ import { LEAD_FINDER } from './module'
 import { costPerGoodLead, goodLeads } from './good-leads-data'
 import AdminPeopleTab from './admin/people'
 import AdminRunsTab from './admin/runs'
+import { RunsTable } from './run/runs-table'
 import ResultsPage from './results'
 
 interface Call {
@@ -108,7 +109,8 @@ describe('good leads (PLAN-V9 D2)', () => {
         ],
       },
     })
-    renderWithProviders(<AdminRunsTab />)
+    // The full list is the Runs page's (Admin shows the newest runs, PLAN-V13 T1-8).
+    renderWithProviders(<RunsTable />)
     const table = await screen.findByRole('table', { name: 'Runs' })
     await within(table).findByText('no good leads yet')
     expect(within(table).getByText('US$1.20')).toBeInTheDocument()
