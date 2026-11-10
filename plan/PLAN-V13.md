@@ -233,7 +233,7 @@ Newest first.
   - The worktree, the `leadfinder_v13b` database and the ports (see "How to work this plan").
   - Run the website tests once with `heavy.sh`, and note the count.
   - **Done when:** the count is in the Track 2 Log.
-- [ ] **T2-2. The accent and the motion, as a prototype.** Al-khair picks before any code changes.
+- [ ] **T2-2. The accent and the motion, as a prototype.** Al-khair picks before any code changes. **Built 2026-11-11, waiting for the pick:** https://claude.ai/artifact/HedDQgAprAGRzb1QhLEVxV
   - A clickable HTML page (an Artifact, private). It shows the Schedules control and the Companies table in each accent, light and dark, with made-up data marked as made up.
   - **Three accents**, each starting point checked for contrast (4.5:1 for text, 3:1 for the focus ring):
     - **A. Cobalt** (from about `#2F5BD8`), a bright step of Contour's Navy. **Recommended:** it lifts the warm Stone colours, it doesn't look like a warning or a result, and it reads as the same family as the site.
@@ -304,6 +304,7 @@ Newest first.
 
 Newest first.
 
+- 2026-11-11: **T2-2 built, waiting for the pick.** The prototype is a private Artifact: https://claude.ai/artifact/HedDQgAprAGRzb1QhLEVxV. A top bar switches the accent (A, B, C), light or dark, and reduced motion. It shows the eight places the accent goes (menu with the foot "Al-khair M. Pama, System admin", tabs, stat tabs, switch, chips, focus ring, links, progress, chart), a live contrast table, the T1-7 Schedules control (cities, how often, first day, time, round budget, a preview line, Save only after a change, the money confirm), the T2-8 Companies table (name first, HubSpot's order, Source, row actions), and the motion kit (sliding indicators, a rolling number, a side sheet, the 0.98 press). Springs are CSS `linear()` curves made from the same damping maths Motion uses. All data is made up and says so. Contrast (light / dark, text needs 4.5:1, rings 3:1): **A** link on page 5.31 / 6.41, ink on tint 7.58 / 7.61; **B** 4.90 / 7.47, 7.38 / 8.12; **C** 5.74 / 7.43, 7.63 / 7.83. Contour's own orange hex is not in the repo, so B starts from `#AD4F14` (**TBC**). No code changed. Track 2 stops here until `accent A`, `B` or `C`.
 - 2026-11-11: **T2-1 done.** Worktree `../contour-v13-t2` on branch `plan-v13-track2` from `plan-v13` (9ff4fc6). `npm ci` in its `engine/frontend`. Database `leadfinder_v13b` made in the Docker Postgres as a `pg_dump` and `pg_restore` copy of `leadfinder_v10` (13,915 HubSpot companies). Baseline with `heavy.sh`: website 65 files, **933 tests passed** (31 s). No backend started. The `inspirations/` folder is not committed; it is read from the main folder.
 
 ## Merge (`merge v13`, on Al-khair's word)
