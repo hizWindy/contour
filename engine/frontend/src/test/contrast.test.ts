@@ -195,15 +195,17 @@ describe('tokens match "Tokens for shadcn" in DESIGN.md', () => {
     expect(declarations.get('duration-slow')).toBe('250ms')
     // The springs (PLAN-V13): CSS linear() curves that start at 0 and end at 1, and the four
     // durations DESIGN.md names. Leaving (150ms) is quicker than arriving.
+    // Prettier wraps a long value over several lines, so the spaces come out first.
+    const curve = (name: string) => (declarations.get(name) ?? '').replace(/\s+/g, '')
     for (const name of ['spring-snappy', 'spring-smooth', 'spring-soft']) {
-      expect(declarations.get(name), name).toMatch(/^linear\(0, .*, 1\)$/)
+      expect(curve(name), name).toMatch(/^linear\(0,.*,1\)$/)
     }
     // No bounce: the curve never goes past 1. A small bounce: it does, by less than 2%.
     const peak = (name: string) =>
       Math.max(
-        ...(declarations.get(name) ?? '')
+        ...curve(name)
           .replace(/^linear\(|\)$/g, '')
-          .split(', ')
+          .split(',')
           .map(Number),
       )
     expect(peak('spring-snappy')).toBe(1)

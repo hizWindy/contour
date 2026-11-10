@@ -248,7 +248,7 @@ export const DESIGN_RULES: DesignRule[] = [
   {
     id: 'hover-translate-active-scale',
     message:
-      'Hover and press never move or resize a part. Change the border, background or opacity.',
+      'Hover never moves or resizes a part: change the border, background or opacity. A press is usePress from the motion kit, not an active:scale class.',
     // Same shape as `hover-size-or-shadow`: an optional group name, and any variants in between.
     pattern: /hover(?:\/[\w-]+)?:(?:[^\s:]+:)*-?translate|active(?:\/[\w-]+)?:(?:[^\s:]+:)*-?scale/,
     bad: [
