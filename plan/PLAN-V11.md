@@ -3,8 +3,8 @@
 This plan tunes the Lead Finder to what Levi asked for on 9 Nov. Today it finds too few leads, and it finds some too late: Budget Direct in his Adelaide run of Friday 6 Nov had already set up its new office. We loosen four rules and add a search for companies in an old office. Everything else stays the same.
 
 - **Built by:** Al-khair Pama. **Signed off by:** Al-khair for the code. Levi gave the green light for these changes after the 9 Nov meeting (as Al-khair reports). He confirms what is marked **TBC** (to be confirmed).
-- **Last updated:** 2026-11-10 (B1 to B5, C1, C2 and D1 done; C3 built, waiting for Al-khair's look).
-- **Progress:** 8 of 14 steps done. Left: A1 (Levi's run of 6 Nov, on the live site), B6 and C4 (paid, on Al-khair's word; C4 also waits on Levi's OK on HubSpot names), C3 (Al-khair's look), D2 and D3.
+- **Last updated:** 2026-11-11 (merged into `master` with PLAN-V12, not pushed; C3 built, waiting for Al-khair's look).
+- **Progress:** 8 of 14 steps done. Merged into `master` on 11 Nov with PLAN-V12, not pushed. Left: A1 (Levi's run of 6 Nov, on the live site), B6 and C4 (paid, on Al-khair's word; C4 also waits on Levi's OK on HubSpot names), C3 (Al-khair's look), D2 and D3.
 - **Sources:** the Monday meeting of 9 Nov (`minutes of meeting/Monday Meeting - 2026_11_09 05_00 PST - Notes by Gemini.pdf`, the transcript from 00:12:27 to 00:27:55), [Criteria_v2.md](../projects/leads/criteria/Criteria_v2.md), and the rules files in `engine/backend/apps/lead_finder/rules/`.
 - **Comes after:** [PLAN-V10.md](PLAN-V10.md) (the Companies page and call prep). This plan touches only the Lead Finder.
 
@@ -145,7 +145,7 @@ This plan tunes the Lead Finder to what Levi asked for on 9 Nov. Today it finds 
   - `Criteria_v2.md`: section 1 lists what changed on 9 and 10 Nov. Update the label in `criteria.yaml` to match.
   - Check [LEADS.md](../projects/leads/LEADS.md) for old numbers (75 staff, 100 more staff).
   - **Done when:** no doc says 75+ staff fits, or "about 100 more office staff".
-- [ ] **D2. Tell Levi, then merge.**
+- [ ] **D2. Tell Levi, then merge.** Merged into `master` 2026-11-11 (a fast-forward to `079b448`, with PLAN-V12), not pushed. Left: the email to Levi.
   - A short email, written with `/plain` and sent on Al-khair's word: what changed, the B6 numbers, and the TBC questions (see "Waiting on").
   - Merge, push and deploy only on Al-khair's word.
   - **Done when:** the email is sent, and the branch is merged.
@@ -164,7 +164,7 @@ This plan tunes the Lead Finder to what Levi asked for on 9 Nov. Today it finds 
 - **Al-khair:**
   - the spend for B6 and C4;
   - showing Levi the results;
-  - merging, pushing and deploying.
+  - pushing and deploying (merged into `master` on 11 Nov).
 
 ## Risks
 
@@ -185,6 +185,7 @@ This plan tunes the Lead Finder to what Levi asked for on 9 Nov. Today it finds 
 
 Newest first.
 
+- 2026-11-11: **Merged into `master`** with PLAN-V12, by a fast-forward to `079b448` (Al-khair's word). Not pushed, not deployed. Before the merge, two lines edited in the main folder's untracked copy of this plan were brought in. Tests on `master` after the merge: backend 3,434 passed, 25 skipped (`RUN_GATES=1`, 6 min 47 s). Website: lint, types, 933 tests and the build pass.
 - 2026-11-10: **D1** (rules `325ded8a6654`): `Criteria_v2.md` section 1 has "What changed on 9 and 10 Nov" (a table of the five changes, all TBC), section 12 lists the questions they leave for Levi, and its 75+ mentions now say 50+ since 9 Nov. The rules' label reads "Draft version 2, 30 Oct 2026, with Levi's 9 Nov changes". `LEADS.md` had none of the old numbers. The engine README and AGENTS name the new run. Left on purpose: `Criteria_v1.md` (version 1), the 24 Oct question list (`LEVI.md`), the sent email draft (`questions/EMAIL.md`), and the change table's "Before 9 Nov" column, which quotes the old wording.
   - **Final re-judge** against the A1 baseline: Pass 1, Director review 3 (+1), Watch 26 (-1), Drop 22. The one move is Budget Direct (Watch to Director review, by B2). B3 and C1 can't show on the saved cards: only 1 of 52 has an office date.
 

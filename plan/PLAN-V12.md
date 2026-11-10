@@ -3,8 +3,8 @@
 This plan adds a "Why now" section to every lead card. Claude turns the facts the research already found into a reason to call: why this company, why now, when they might move, how big the job is, and how sure we are. It finds no new companies. It changes no result and no score.
 
 - **Built by:** Al-khair Pama. **Signed off by:** Al-khair for the code. On 10 Nov Al-khair agreed to pay a small extra cost per lead for better information. Levi hasn't seen this idea yet (**TBC**, to be confirmed).
-- **Last updated:** 2026-11-11 (the backend on the laptop now runs this code; D1 built, waiting for Al-khair's look).
-- **Progress:** 7 of 11 steps done (A1, B1 to B3, C1 to C3). Not merged, not pushed. Next: E1 (paid, his word), then D1 (Al-khair looks at the cards E1 writes).
+- **Last updated:** 2026-11-11 (merged into `master` with PLAN-V11, not pushed; the backend on the laptop runs this code; D1 built, waiting for Al-khair's look).
+- **Progress:** 7 of 11 steps done (A1, B1 to B3, C1 to C3). Merged into `master` on 11 Nov, not pushed. Next: E1 (paid, his word), then D1 (Al-khair looks at the cards E1 writes).
 - **Sources:** the chat of 10 Nov (Al-khair and Claude), and the code in `engine/backend/apps/lead_finder/` (`research.py`, `scoring.py`, `fields.py`, `prompts/extract.md`).
 - **Comes after:** [PLAN-V11.md](PLAN-V11.md) Part B. Both plans change the lead card's Overview tab and read the office dates, so this one builds on top of it.
 
@@ -181,7 +181,7 @@ All of Part B goes in a new file, `apps/lead_finder/why.py`, as pure functions: 
   - Turn on `why_now_enabled` on the Settings page.
   - After the next city run, check that every Pass, Watch and Director review has a Why now, and that the run cost rose by about the expected amount.
   - **Done when:** the run's numbers are in the Log.
-- [ ] **E3. Docs, Levi, merge.** Docs done 2026-11-10 (`e40ce4f`). Left: the email to Levi after E1, and the merge, both on Al-khair's word.
+- [ ] **E3. Docs, Levi, merge.** Docs done 2026-11-10 (`e40ce4f`). Merged into `master` 2026-11-11 (a fast-forward to `079b448`, with PLAN-V11), not pushed. Left: the email to Levi after E1, on Al-khair's word.
   - [LEADS.md](../projects/leads/LEADS.md): the lead card section. [Criteria_v2.md](../projects/leads/criteria/Criteria_v2.md): `lease_guess_years` (**TBC**). `engine/AGENTS.md`: `why.py` in the map.
   - A short email to Levi, written with `/plain` and sent on Al-khair's word: 2 or 3 real Why now examples, the cost per lead, and the TBC questions. It can go with the PLAN-V11 D2 email.
   - Merge, push and deploy only on Al-khair's word.
@@ -196,7 +196,7 @@ All of Part B goes in a new file, `apps/lead_finder/why.py`, as pure functions: 
 - **Al-khair:**
   - the spend for E1;
   - switching it on (E2);
-  - merging, pushing and deploying.
+  - pushing and deploying (merged into `master` on 11 Nov).
 
 ## Risks
 
@@ -219,6 +219,9 @@ All of Part B goes in a new file, `apps/lead_finder/why.py`, as pure functions: 
 
 Newest first.
 
+- 2026-11-11: **Merged into `master`** with PLAN-V11, by a fast-forward to `079b448` (Al-khair's word). Not pushed, not deployed.
+  - **Before the merge:** the main folder's untracked copies of PLAN-V11 and PLAN-V12, and its older `CLAUDE.md` line, were cleared (backups kept). Its uncommitted PLAN-V13 work was left as it was: `plan/PLAN-V13.md`, the PLAN-V13 sentence in `CLAUDE.md`, an edit to `PLAN-V1.md`, `inspirations/` and a meeting PDF.
+  - **Tests on `master`:** backend 3,434 passed, 25 skipped (`RUN_GATES=1`, 6 min 47 s). That is 2 more than on 10 Nov: the two guard tests from `6034fb0`. Website: lint, types, 933 tests and the build pass.
 - 2026-11-11: **The backend on the laptop restarted with this code** (on Al-khair's ask). Its auto-reload had picked up no change since 2:22 AM on 10 Nov, so until then it served the code from before this plan. Checked: it started with no errors, it serves Why now and rules `011969a620aa` (with `lease_guess_years` 5 to 7), a lead without one says "Not written for this lead", and the copy database stayed at migration 0014. E1 not run yet (the safety check blocks the paid run without Al-khair's own words).
 - 2026-11-10: **D1 built** (`a8a3bc7`, website) and **E3 docs** (`e40ce4f`).
   - **The card:** "Why now" is the first section on the Overview. It shows the reason and the likely next step with their note links, then When (with the years at the address), Size, Missing and the questions to ask. How sure we are sits next to the title, and Low adds "Thin lead: check the sources before you call". The quick view's "Why it fits" becomes "Why now" when there is a reason. A lead without one says "Not written for this lead" and why, and keeps the office line in its Summary. The Rules page states the 5 to 7 year guess.
