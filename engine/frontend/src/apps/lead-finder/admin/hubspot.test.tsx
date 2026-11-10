@@ -96,6 +96,9 @@ describe('Admin, HubSpot', () => {
       },
     })
     const { user } = renderWithProviders(<AdminHubSpotTab />)
+    await user.click(
+      await screen.findByRole('button', { name: 'More: the watchlist and the export backup' }),
+    )
     expect(await screen.findByText('Synechron Australia')).toBeInTheDocument()
     expect(screen.getByText(/47 to watch \(11 likely/)).toBeInTheDocument()
     // The export upload is the backup now, folded away until opened.
@@ -140,7 +143,8 @@ describe('Admin, HubSpot', () => {
     const { user } = renderWithProviders(<AdminHubSpotTab />)
     expect(await screen.findByText('Yes, account 1234567')).toBeInTheDocument()
     expect(screen.getByText(/Off \(HUBSPOT_WRITE_ENABLED\)/)).toBeInTheDocument()
-    const permissions = screen.getByRole('list', { name: 'Permissions' })
+    await user.click(screen.getByRole('button', { name: /of \d+ permissions/ }))
+    const permissions = await screen.findByRole('list', { name: 'Permissions' })
     expect(permissions).toHaveTextContent('Yes: Read companies')
     expect(permissions).toHaveTextContent('No: Add and update companies')
     expect(
