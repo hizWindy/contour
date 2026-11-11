@@ -4,9 +4,12 @@ The calls to the outside are fakes that count their calls: Claude's model list, 
 balance and HubSpot's permission check. The database and the migrations are the real ones.
 """
 
+import asyncio
+import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -17,8 +20,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from core.config import Settings
 from core.health.checks import Probes
 from core.hubspot.check import PROBES, ConnectionCheck, ScopeOut
+from core.runs.models import Run
 from core.signalhire.client import SignalHireUnavailable
-from tests.core.auth_world import World, make_account, sign_in
+from tests.core.auth_world import START, World, make_account, sign_in
 
 pytestmark = pytest.mark.integration
 
@@ -32,11 +36,13 @@ class Calls:
     signalhire: int = 0
     hubspot: list[bool] = field(default_factory=list)
     signalhire_refuses: bool = False
+    claude_seconds: float = 0.0  # how long the fake model list takes
 
 
 def probes(calls: Calls) -> Probes:
     async def claude(key: str) -> None:
         calls.claude.append(key)
+        await asyncio.sleep(calls.claude_seconds)
 
     async def credits(settings: Settings) -> int:
         calls.signalhire += 1
@@ -112,6 +118,7 @@ async def test_an_admin_gets_every_system(setup: Setup) -> None:
         "hubspot",
         "signalhire",
         "email",
+        "runs",
         "schedules",
         "api",
     ]
@@ -129,6 +136,11 @@ async def test_an_admin_gets_every_system(setup: Setup) -> None:
     assert (found["schedules"]["state"], found["schedules"]["sentence"]) == (
         "off",
         "Every schedule is off.",
+    )
+    # The test app has no run engine (its start-up code doesn't run here): a real problem.
+    assert (found["runs"]["state"], found["runs"]["sentence"]) == (
+        "problem",
+        "The run engine didn't start in this backend, so runs can't start or be read.",
     )
     assert found["api"]["state"] == "ok"
     for item in body["checks"]:
@@ -161,3 +173,58 @@ async def test_the_answer_is_kept_for_a_minute_unless_asked_again(setup: Setup) 
     counted = {(item["method"], item["path"]): item for item in fresh["api"]["endpoints"]}
     assert counted[("GET", URL)]["requests"] >= 2
     assert counted[("GET", URL)]["errors"] == 0
+
+
+async def test_check_again_pressed_while_a_check_is_going_checks_once(setup: Setup) -> None:
+    """Several presses, or two Admins at once: HubSpot, Claude and Signal Hire are asked once."""
+    await signed_in_as(setup, "admin")
+    setup.calls.claude_seconds = 0.5
+    first, second = await asyncio.gather(
+        setup.client.get(URL, params={"refresh": "true"}),
+        setup.client.get(URL, params={"refresh": "true"}),
+    )
+    assert (first.status_code, second.status_code) == (200, 200)
+    assert first.json() == second.json()
+    assert (len(setup.calls.claude), setup.calls.signalhire, setup.calls.hubspot) == (1, 1, [True])
+
+
+async def add_run(setup: Setup, status: str, stopped_hours_ago: float, resumes: int = 0) -> Run:
+    run = Run(
+        app="lead_finder",
+        mode="discovery",
+        status=status,
+        counts={"resumes": resumes},
+        finished_at=START - timedelta(hours=stopped_hours_ago),
+    )
+    async with setup.factory() as db:
+        db.add(run)
+        await db.commit()
+    return run
+
+
+async def test_the_runs_row_names_a_run_a_restart_cut_off(setup: Setup) -> None:
+    await signed_in_as(setup, "admin")
+    state = setup.world.app.state
+    state.run_manager = SimpleNamespace(active_run_ids=[uuid.uuid4()])
+    state.run_engine_ready_at = START - timedelta(hours=3)  # 5:00 pm in Melbourne
+    cut = await add_run(setup, "interrupted", 1)  # 7:00 pm
+    await add_run(setup, "interrupted", 2, resumes=3)  # Resume can't take it further
+    await add_run(setup, "interrupted", 30)  # more than a day ago: left be
+    await add_run(setup, "done", 1)
+    body = (await setup.client.get(URL)).json()
+    runs = next(item for item in body["checks"] if item["id"] == "runs")
+    assert (runs["state"], runs["sentence"]) == (
+        "problem",
+        f"Ready since 5:00 pm. 1 run going. A restart cut off run {str(cut.id)[:8]} "
+        "(discovery, stopped 7:00 pm).",
+    )
+    assert runs["next_step"].startswith("Open it on the Runs page and press Resume")
+    async with setup.factory() as db:
+        await db.execute(
+            text("UPDATE core.runs SET status = 'done' WHERE id = :id"), {"id": cut.id}
+        )
+        await db.commit()
+    again = (await setup.client.get(URL, params={"refresh": "true"})).json()
+    runs = next(item for item in again["checks"] if item["id"] == "runs")
+    assert (runs["state"], runs["sentence"]) == ("ok", "Ready since 5:00 pm. 1 run going.")
+    del state.run_manager

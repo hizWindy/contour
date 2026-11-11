@@ -1,8 +1,8 @@
 /**
  * Admin, Health (PLAN-V13 T1-6): is everything working? One row for each system the platform leans
- * on (the database, Claude, HubSpot, Signal Hire, email, the schedules and the API), problems first,
- * each with what to do next. Below, the API's last hour as a small table: errors first, then the
- * slowest endpoints.
+ * on (the database, Claude, HubSpot, Signal Hire, email, the runs, the schedules and the API),
+ * problems first, each with what to do next. Below, the API's last hour as a small table: failed
+ * first, then "not ready" (503, said on purpose and not a failure), then the slowest endpoints.
  *
  * Every check is free (the backend asks Claude for its model list, never for an answer), and the
  * backend keeps the answer for a minute, so opening the tab again doesn't check again. "Check
@@ -36,7 +36,7 @@ import {
 import { formatNumber, formatTime, pluralise } from '@/lib/format'
 import { toastProblem } from '@/lib/problems'
 import { cn } from '@/lib/utils'
-import { API_ROWS, STATES, sortChecks } from './health-states'
+import { API_ROWS, STATES, apiSummary, sortChecks } from './health-states'
 
 function StateBadge({ state }: { state: HealthState }) {
   const { label, icon: Icon, variant } = STATES[state]
@@ -135,6 +135,7 @@ function ApiCard({ details }: { details: HealthDetails }) {
     return null
   }
   const shown: EndpointTraffic[] = all ? api.endpoints : api.endpoints.slice(0, API_ROWS)
+  const notReady = api.unavailable > 0
   return (
     <Card>
       <CardHeader>
@@ -142,9 +143,8 @@ function ApiCard({ details }: { details: HealthDetails }) {
           API, since {formatTime(api.since)}
         </CardTitle>
         <CardDescription>
-          {formatNumber(api.requests)} {api.requests === 1 ? 'request' : 'requests'},{' '}
-          {api.errors === 0 ? 'no errors' : pluralise(api.errors, 'error')}. Errors first, then the
-          slowest. Counted in memory, so a restart starts again.
+          {apiSummary(api)} Failed first, then not ready, then the slowest. Counted in memory, so a
+          restart starts again.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
@@ -156,7 +156,8 @@ function ApiCard({ details }: { details: HealthDetails }) {
               <TableRow>
                 <TableHead>Endpoint</TableHead>
                 <TableHead className="text-right">Requests</TableHead>
-                <TableHead className="text-right">Errors</TableHead>
+                <TableHead className="text-right">Failed</TableHead>
+                {notReady ? <TableHead className="text-right">Not ready</TableHead> : null}
                 <TableHead className="text-right">Slowest</TableHead>
               </TableRow>
             </TableHeader>
@@ -179,6 +180,11 @@ function ApiCard({ details }: { details: HealthDetails }) {
                         ? 'font-semibold text-destructive-ink'
                         : 'text-muted-foreground',
                     )}
+                    title={
+                      row.last_error_at
+                        ? `The last answered ${String(row.last_error_status ?? 'an error')} at ${formatTime(row.last_error_at)}`
+                        : undefined
+                    }
                   >
                     {row.errors > 0 ? (
                       <span className="inline-flex items-center gap-1">
@@ -189,6 +195,11 @@ function ApiCard({ details }: { details: HealthDetails }) {
                       '0'
                     )}
                   </TableCell>
+                  {notReady ? (
+                    <TableCell className="text-right tabular-nums text-muted-foreground">
+                      {formatNumber(row.unavailable)}
+                    </TableCell>
+                  ) : null}
                   <TableCell className="text-right tabular-nums">{took(row.slowest_ms)}</TableCell>
                 </TableRow>
               ))}

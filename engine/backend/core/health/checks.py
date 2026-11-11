@@ -10,6 +10,7 @@ Times in a sentence are Melbourne time, like "6:02 am", or "8 Nov, 6:02 am" when
 import asyncio
 import functools
 import logging
+import uuid
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -20,15 +21,19 @@ from zoneinfo import ZoneInfo
 import anthropic
 import httpx2
 from fastapi import FastAPI
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.exc import DBAPIError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from core.config import BACKEND_DIR, Settings
 from core.health.run import Check, Finding
-from core.health.traffic import ApiTraffic, Traffic
+from core.health.traffic import ApiTraffic, EndpointTraffic, Traffic
 from core.hubspot.check import ConnectionCheck
 from core.hubspot.sync import SyncOut
+from core.runs.lifecycle import EngineState, engine_state
+from core.runs.manager import MAX_RESUMES
+from core.runs.models import Run
+from core.runs.schemas import RunCounts
 from core.schedules.calc import DEFAULT_ZONE
 from core.schedules.models import Schedule
 from core.signalhire.client import SignalHireError, get_signalhire
@@ -66,6 +71,12 @@ def usd(amount: Decimal) -> str:
 
 def plural(count: int, word: str, many: str | None = None) -> str:
     return f"{count:,} {word if count == 1 else (many or word + 's')}"
+
+
+def between_text(first: datetime, last: datetime, now: datetime) -> str:
+    """ "at 2:02 pm" when both fall in the same minute, else "between 2:02 pm and 2:03 pm"."""
+    start, end = when_text(first, now), when_text(last, now)
+    return f"at {start}" if start == end else f"between {start} and {end}"
 
 
 # --- What the checks are given ----------------------------------------------------------------
@@ -287,7 +298,8 @@ def hubspot_finding(
         return Finding(
             "problem",
             f"{have} of {len(reads)} read permissions. Missing: {', '.join(missing)}.",
-            "Add them to the key in HubSpot (Settings, Integrations, Private apps).",
+            f"Add {'it' if len(missing) == 1 else 'them'} to the key in HubSpot (Settings, "
+            "Integrations, Private apps).",
         )
     if any(scope.state == "unknown" for scope in reads):
         return Finding(
@@ -503,10 +515,148 @@ async def check_schedules(ctx: Context) -> Finding:
     return schedules_finding(rows, ctx.now, loop_running)
 
 
+# --- Runs -------------------------------------------------------------------------------------
+
+TAKE_OVER_SLOW = timedelta(minutes=10)  # a deploy's hand-over takes a minute or two
+CUT_OFF_SHOWN = timedelta(hours=24)  # a run a restart cut off is shown for a day, then left be
+
+
+@dataclass(frozen=True)
+class CutOff:
+    """A run a restart cut off (`interrupted`) that Resume can still continue."""
+
+    id: uuid.UUID
+    mode: str
+    stopped_at: datetime | None
+
+
+def _run_words(run: CutOff, now: datetime) -> str:
+    stopped = f", stopped {when_text(run.stopped_at, now)}" if run.stopped_at else ""
+    return f"run {str(run.id)[:8]} ({run.mode.replace('_', ' ')}{stopped})"
+
+
+def runs_finding(
+    engine: EngineState, going: int, cut_off: Sequence[CutOff], now: datetime
+) -> Finding:
+    """Can runs start in this backend, and did a restart cut one off that waits for Resume?"""
+    if engine.mode == "waiting":
+        since = engine.since or now
+        if now - since < TAKE_OVER_SLOW:
+            return Finding(
+                "ok",
+                f"Starting: since {when_text(since, now)} this backend waits for the one before "
+                "it to stop, as it does after a deploy. Runs work again by themselves within a "
+                "few minutes.",
+            )
+        return Finding(
+            "problem",
+            f"Runs can't start or be read: since {when_text(since, now)} this backend has "
+            "waited for the one before it to stop.",
+            "Check the deploy on DigitalOcean (the app's Activity tab). If it has finished and "
+            "this stays, restart the backend.",
+        )
+    if engine.mode == "stopping":
+        return Finding(
+            "problem",
+            "This backend is stopping, so runs can't start here.",
+            "It comes back by itself after a restart or a deploy. Check again in a minute.",
+        )
+    if engine.mode == "off":
+        return Finding(
+            "problem",
+            "The run engine didn't start in this backend, so runs can't start or be read.",
+            "The database was out of reach when the backend started. Once the Database row is "
+            "OK, restart the backend.",
+        )
+    ready = "Ready"
+    if engine.since is not None:
+        ready += f" since {when_text(engine.since, now)}"
+        if engine.took_over:
+            ready += ", when this backend took over from the one before it"
+    going_words = f"{plural(going, 'run')} going" if going else "No run going"
+    if cut_off:
+        more = f" and {plural(len(cut_off) - 1, 'other')}" if len(cut_off) > 1 else ""
+        return Finding(
+            "problem",
+            f"{ready}. {going_words}. A restart cut off {_run_words(cut_off[0], now)}{more}.",
+            "Open it on the Runs page and press Resume: nothing resumes by itself. If it isn't "
+            "needed, leave it; it drops off here a day after it stopped.",
+        )
+    return Finding("ok", f"{ready}. {going_words}.")
+
+
+async def check_runs(ctx: Context) -> Finding:
+    engine = engine_state(ctx.app)
+    if engine.mode != "ready":
+        return runs_finding(engine, 0, [], ctx.now)
+    going = len(ctx.app.state.run_manager.active_run_ids)
+    async with ctx.sessions() as session:
+        rows = (
+            await session.execute(
+                select(Run.id, Run.mode, Run.counts, Run.finished_at)
+                .where(Run.status == "interrupted", Run.finished_at >= ctx.now - CUT_OFF_SHOWN)
+                .order_by(Run.finished_at.desc())
+                .limit(20)
+            )
+        ).all()
+    cut_off = [
+        CutOff(row.id, row.mode, row.finished_at)
+        for row in rows
+        if RunCounts.model_validate(row.counts or {}).resumes < MAX_RESUMES
+    ]
+    return runs_finding(engine, going, cut_off, ctx.now)
+
+
 # --- API --------------------------------------------------------------------------------------
 
 
-def api_finding(traffic: Traffic, now: datetime) -> Finding:
+def _moment(value: float | None) -> datetime | None:
+    return None if value is None else datetime.fromtimestamp(value, tz=UTC)
+
+
+def _log_hint(worst: EndpointTraffic, last: datetime | None, now: datetime, server: bool) -> str:
+    """Where to read about a failed request: the log names the path and the cause."""
+    where = "on DigitalOcean, the app's Runtime Logs" if server else "the backend's terminal"
+    near = f" near {when_text(last, now)}" if last else ""
+    if worst.last_error_status == 500:
+        return f'Search the backend log ({where}) for "Unexpected error"{near}.'
+    return f"Look in the backend log ({where}){near}."
+
+
+def _not_ready_words(traffic: Traffic, engine: EngineState | None, now: datetime) -> str:
+    """Why the backend answered 503 to some requests: on purpose, while a part wasn't ready."""
+    first = _moment(traffic.first_unavailable_at)
+    last = _moment(traffic.last_unavailable_at)
+    when = f" {between_text(first, last, now)}" if first is not None and last is not None else ""
+    count = f"{traffic.unavailable:,} of them"
+    if engine is not None and engine.mode == "waiting":
+        return (
+            f'The backend answered "not ready yet" to {count}{when}, while it waits to take '
+            "over the runs (see Runs)."
+        )
+    if (
+        engine is not None
+        and engine.took_over
+        and engine.since is not None
+        and last is not None
+        and last <= engine.since
+    ):
+        return (
+            f'The backend answered "not ready yet" to {count}{when}, while it took over the '
+            "runs from the one before it."
+        )
+    return (
+        f'The backend answered "not available" to {count}{when}, while a part it needs was out '
+        "of reach. The other rows say if one still is."
+    )
+
+
+def api_finding(
+    traffic: Traffic, now: datetime, engine: EngineState | None = None, *, server: bool = False
+) -> Finding:
+    """A problem only for real failures (500 and up, but not 503). A 503 is the backend saying
+    on purpose that a part isn't ready (the run engine during a deploy, a database that is
+    down): told in the sentence, never a problem here. The other rows cover those parts."""
     started = datetime.fromtimestamp(traffic.since, tz=UTC)
     span = (
         "in the last hour"
@@ -514,31 +664,39 @@ def api_finding(traffic: Traffic, now: datetime) -> Finding:
         else f"since {when_text(started, now)}"
     )
     if traffic.errors:
-        worst = traffic.endpoints[0]
+        failed = [item for item in traffic.endpoints if item.errors]
+        worst = failed[0]
+        where = (
+            f"all on {worst.method} {worst.path}"
+            if len(failed) == 1
+            else f"on {plural(len(failed), 'endpoint')}, most on {worst.method} {worst.path}"
+        )
+        last = _moment(worst.last_error_at)
+        about = [f"error {worst.last_error_status}"] if worst.last_error_status else []
+        if last is not None:
+            about.append(f"the last at {when_text(last, now)}")
+        tail = f" ({', '.join(about)})" if about else ""
         return Finding(
             "problem",
-            f"{plural(traffic.errors, 'error')} {span}, {worst.errors:,} on {worst.method} "
-            f"{worst.path}.",
-            SEE_THE_LOG,
+            f"{plural(traffic.errors, 'request')} failed {span}, {where}{tail}.",
+            _log_hint(worst, last, now, server),
             traffic,
         )
     if not traffic.endpoints:
         return Finding("ok", f"No requests {span}.", None, traffic)
-    slowest = max(traffic.endpoints, key=lambda item: item.slowest_ms)
-    return Finding(
-        "ok",
-        f"{plural(traffic.requests, 'request')} {span}, no errors. Slowest: {slowest.method} "
-        f"{slowest.path}, {slowest.slowest_ms:,} ms.",
-        None,
-        traffic,
-    )
+    sentence = f"{plural(traffic.requests, 'request')} {span}, none failed."
+    if traffic.unavailable:
+        sentence += " " + _not_ready_words(traffic, engine, now)
+    return Finding("ok", sentence, None, traffic)
 
 
 async def check_api(ctx: Context) -> Finding:
     traffic: ApiTraffic | None = getattr(ctx.app.state, "api_traffic", None)
     if traffic is None:
         return Finding("off", "This backend doesn't count its requests.", None, None)
-    return api_finding(traffic.snapshot(), ctx.now)
+    return api_finding(
+        traffic.snapshot(), ctx.now, engine_state(ctx.app), server=ctx.settings.server_mode
+    )
 
 
 # --- All of them ------------------------------------------------------------------------------
@@ -552,6 +710,7 @@ def all_checks(ctx: Context) -> list[Check]:
         Check("hubspot", "HubSpot", lambda: check_hubspot(ctx)),
         Check("signalhire", "Signal Hire", lambda: check_signalhire(ctx)),
         Check("email", "Email", lambda: check_email(ctx)),
+        Check("runs", "Runs", lambda: check_runs(ctx)),
         Check("schedules", "Schedules", lambda: check_schedules(ctx)),
         Check("api", "API", lambda: check_api(ctx)),
     ]

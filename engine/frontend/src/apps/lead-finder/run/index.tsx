@@ -55,6 +55,18 @@ const CONNECTION_WORDS: Record<RunConnection, string> = {
   closed: 'Not live',
 }
 
+/**
+ * The live line's words. While the backend answers 503 on purpose (a deploy's new backend takes
+ * over the runs: "Runs are restarting"), it says why, in the backend's own words, instead of a
+ * bare "Reconnecting". The page keeps trying by itself either way.
+ */
+function connectionWords(connection: RunConnection, error: ApiProblem | null): string {
+  if (connection === 'reconnecting' && error?.status === 503) {
+    return `Reconnecting. ${error.title}.`
+  }
+  return CONNECTION_WORDS[connection]
+}
+
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col gap-1">
@@ -296,7 +308,7 @@ function RunView({ runId, run }: { runId: string; run: Run }) {
                   aria-hidden="true"
                   className={cn('size-4', connection === 'live' && 'text-primary')}
                 />
-                {ended ? 'Finished' : CONNECTION_WORDS[connection]}
+                {ended ? 'Finished' : connectionWords(connection, events.error)}
               </p>
               <RunCostSplit runId={runId} researched={counts.researched} />
             </CardContent>

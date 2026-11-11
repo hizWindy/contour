@@ -3,7 +3,8 @@
  * from the page so the page file exports only the page.
  */
 import { CircleCheck, CircleMinus, TriangleAlert, type LucideIcon } from 'lucide-react'
-import type { HealthState, SystemCheck } from '@/api/types'
+import type { ApiTraffic, HealthState, SystemCheck } from '@/api/types'
+import { formatNumber, pluralise } from '@/lib/format'
 
 /** How each state looks: an icon and a word, so colour is never the only signal. */
 export const STATES: Record<
@@ -24,4 +25,19 @@ export function sortChecks(checks: readonly SystemCheck[]): SystemCheck[] {
     .map((check, index) => ({ check, index }))
     .sort((a, b) => STATES[a.check.state].order - STATES[b.check.state].order || a.index - b.index)
     .map(({ check }) => check)
+}
+
+/**
+ * The API card's first line: the requests, how many failed, and how many the backend answered
+ * "not ready" (503) on purpose, like the run engine during a deploy. A 503 isn't a failure.
+ */
+export function apiSummary(api: ApiTraffic): string {
+  const parts = [
+    pluralise(api.requests, 'request'),
+    api.errors === 0 ? 'none failed' : `${formatNumber(api.errors)} failed`,
+  ]
+  if (api.unavailable > 0) {
+    parts.push(`${formatNumber(api.unavailable)} not ready (503)`)
+  }
+  return `${parts.join(', ')}.`
 }

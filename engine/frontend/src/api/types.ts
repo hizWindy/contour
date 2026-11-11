@@ -82,6 +82,7 @@ export type HealthDetails = Schemas['HealthDetails']
 export type SystemCheck = Schemas['SystemCheckOut']
 export type HealthState = SystemCheck['state']
 export type EndpointTraffic = Schemas['EndpointTrafficOut']
+export type ApiTraffic = Schemas['ApiTrafficOut']
 
 // Companies (PLAN-V10)
 export type CompanyRow = Schemas['CompanyRow']

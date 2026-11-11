@@ -4,7 +4,8 @@
   a session (and the platform's own check) may ask. Unchanged.
 - `GET /api/v1/health/details` (PLAN-V13 T1-2): every system's check, for Admin's Health tab. For
   Admins only. The answer is kept for `FRESH_SECONDS` (60), so a page refresh doesn't check again;
-  `refresh=true` checks again now. Every check is free (see `core.health`).
+  `refresh=true` checks again now, unless a check finished while this request waited for it (then
+  that answer is fresh enough). Every check is free (see `core.health`).
 """
 
 import asyncio
@@ -26,14 +27,16 @@ from core.config import get_settings
 from core.db.engine import get_sessionmaker
 from core.health.checks import Context, Probes, ScheduleState, all_checks
 from core.health.run import Result, run_checks
-from core.health.traffic import Traffic
+from core.health.traffic import EndpointTraffic, Traffic
 
 router = APIRouter(tags=["health"])
 
 FRESH_SECONDS = 60.0
 
 HealthState = Literal["ok", "problem", "off"]
-SystemId = Literal["database", "claude", "hubspot", "signalhire", "email", "schedules", "api"]
+SystemId = Literal[
+    "database", "claude", "hubspot", "signalhire", "email", "runs", "schedules", "api"
+]
 
 
 class HealthOut(BaseModel):
@@ -100,10 +103,20 @@ class EndpointTrafficOut(OutModel):
     method: str = Field(examples=["GET"])
     path: str = Field(examples=["/api/v1/runs/{run_id}"])
     requests: int
-    errors: int = Field(description="Answers of 500 and above: faults")
+    errors: int = Field(
+        description="Failed: answers of 500 and above except 503, and requests that crashed"
+    )
+    unavailable: int = Field(
+        description=(
+            "Answers of 503: the backend said on purpose that a part wasn't ready or was out of "
+            "reach (like the run engine during a deploy). Not faults"
+        )
+    )
     refused: int = Field(description="Answers of 400 to 499: not allowed, or not valid")
     average_ms: int = Field(description="The average time to start the answer")
     slowest_ms: int
+    last_error_at: datetime | None = Field(description="When the last failed one was")
+    last_error_status: int | None = Field(description="What the last failed one answered")
 
 
 class ApiTrafficOut(OutModel):
@@ -111,9 +124,10 @@ class ApiTrafficOut(OutModel):
         description="The start of the counts: an hour ago, or when the backend started"
     )
     requests: int
-    errors: int
+    errors: int = Field(description="Failed requests (see the endpoints' `errors`)")
+    unavailable: int = Field(description="Answers of 503 (see the endpoints' `unavailable`)")
     endpoints: list[EndpointTrafficOut] = Field(
-        description="Each endpoint with requests: errors first, then the slowest"
+        description="Each endpoint with requests: failed first, then 503s, then the slowest"
     )
 
 
@@ -148,6 +162,25 @@ def _schedules_out(results: list[Result]) -> list[ScheduleCheckOut]:
     return []
 
 
+def _endpoint_out(item: EndpointTraffic) -> EndpointTrafficOut:
+    return EndpointTrafficOut(
+        method=item.method,
+        path=item.path,
+        requests=item.requests,
+        errors=item.errors,
+        unavailable=item.unavailable,
+        refused=item.refused,
+        average_ms=item.average_ms,
+        slowest_ms=item.slowest_ms,
+        last_error_at=(
+            None
+            if item.last_error_at is None
+            else datetime.fromtimestamp(item.last_error_at, tz=UTC)
+        ),
+        last_error_status=item.last_error_status,
+    )
+
+
 def _api_out(results: list[Result]) -> ApiTrafficOut | None:
     for result in results:
         if result.id == "api" and isinstance(result.finding.data, Traffic):
@@ -156,9 +189,8 @@ def _api_out(results: list[Result]) -> ApiTrafficOut | None:
                 since=datetime.fromtimestamp(traffic.since, tz=UTC),
                 requests=traffic.requests,
                 errors=traffic.errors,
-                endpoints=[
-                    EndpointTrafficOut.model_validate(item.__dict__) for item in traffic.endpoints
-                ],
+                unavailable=traffic.unavailable,
+                endpoints=[_endpoint_out(item) for item in traffic.endpoints],
             )
     return None
 
@@ -177,13 +209,26 @@ def _lock(app: FastAPI) -> asyncio.Lock:
     return lock
 
 
+def _checks_done(app: FastAPI) -> int:
+    """How many checks this backend has finished. A count, not a time: Windows' clock moves in
+    steps of about 15 ms, so two moments can't be told apart by time alone."""
+    return int(getattr(app.state, "health_checks_done", 0))
+
+
 async def health_details_of(app: FastAPI, now: datetime, *, refresh: bool) -> HealthDetails:
     """The checks, or the answer kept from less than a minute ago. One check at a time: a second
-    request waits for the first and gets its answer."""
+    request waits for the first and gets its answer, even when it asked to check again (that
+    answer was made after it asked). So "Check again" pressed several times, or by two Admins at
+    once, checks once, and HubSpot, Claude and Signal Hire are asked once."""
+    done_before = _checks_done(app)  # a check that ends after this point is fresh for us
     async with _lock(app):
         kept: tuple[HealthDetails, float] | None = getattr(app.state, "health_details", None)
-        if kept is not None and not refresh and time.monotonic() - kept[1] < FRESH_SECONDS:
-            return kept[0]
+        if kept is not None:
+            details, made = kept
+            ended_while_waiting = _checks_done(app) > done_before
+            fresh = time.monotonic() - made < FRESH_SECONDS
+            if ended_while_waiting or (fresh and not refresh):
+                return details
         sessions = getattr(app.state, "session_factory", None) or get_sessionmaker()
         context = Context(
             app=app,
@@ -202,6 +247,7 @@ async def health_details_of(app: FastAPI, now: datetime, *, refresh: bool) -> He
             api=_api_out(results),
         )
         app.state.health_details = (details, time.monotonic())
+        app.state.health_checks_done = _checks_done(app) + 1
         return details
 
 
@@ -210,10 +256,11 @@ async def health_details_of(app: FastAPI, now: datetime, *, refresh: bool) -> He
     response_model=HealthDetails,
     summary="Every system's health, for Admin's Health tab",
     description=(
-        "One check for each system: the database, Claude, HubSpot, Signal Hire, email, the "
-        "schedules and the API. Each is free (no paid Claude request, no email sent), runs at the "
-        "same time as the others and stops at 5 seconds. The answer is kept for 60 seconds; "
-        "`refresh=true` checks again now. For Admins only."
+        "One check for each system: the database, Claude, HubSpot, Signal Hire, email, the runs, "
+        "the schedules and the API. Each is free (no paid Claude request, no email sent), runs at "
+        "the same time as the others and stops at 5 seconds. The answer is kept for 60 seconds; "
+        "`refresh=true` checks again now, unless a check finished while the request waited. For "
+        "Admins only."
     ),
 )
 async def health_details(

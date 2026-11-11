@@ -31,7 +31,7 @@
       "ApiTrafficOut": {
         "properties": {
           "endpoints": {
-            "description": "Each endpoint with requests: errors first, then the slowest",
+            "description": "Each endpoint with requests: failed first, then 503s, then the slowest",
             "items": {
               "$ref": "#/components/schemas/EndpointTrafficOut"
             },
@@ -39,6 +39,7 @@
             "type": "array"
           },
           "errors": {
+            "description": "Failed requests (see the endpoints' `errors`)",
             "title": "Errors",
             "type": "integer"
           },
@@ -51,12 +52,18 @@
             "format": "date-time",
             "title": "Since",
             "type": "string"
+          },
+          "unavailable": {
+            "description": "Answers of 503 (see the endpoints' `unavailable`)",
+            "title": "Unavailable",
+            "type": "integer"
           }
         },
         "required": [
           "since",
           "requests",
           "errors",
+          "unavailable",
           "endpoints"
         ],
         "title": "ApiTrafficOut",
@@ -2326,9 +2333,34 @@
             "type": "integer"
           },
           "errors": {
-            "description": "Answers of 500 and above: faults",
+            "description": "Failed: answers of 500 and above except 503, and requests that crashed",
             "title": "Errors",
             "type": "integer"
+          },
+          "last_error_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the last failed one was",
+            "title": "Last Error At"
+          },
+          "last_error_status": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the last failed one answered",
+            "title": "Last Error Status"
           },
           "method": {
             "examples": [
@@ -2356,6 +2388,11 @@
           "slowest_ms": {
             "title": "Slowest Ms",
             "type": "integer"
+          },
+          "unavailable": {
+            "description": "Answers of 503: the backend said on purpose that a part wasn't ready or was out of reach (like the run engine during a deploy). Not faults",
+            "title": "Unavailable",
+            "type": "integer"
           }
         },
         "required": [
@@ -2363,9 +2400,12 @@
           "path",
           "requests",
           "errors",
+          "unavailable",
           "refused",
           "average_ms",
-          "slowest_ms"
+          "slowest_ms",
+          "last_error_at",
+          "last_error_status"
         ],
         "title": "EndpointTrafficOut",
         "type": "object"
@@ -11167,6 +11207,7 @@
               "hubspot",
               "signalhire",
               "email",
+              "runs",
               "schedules",
               "api"
             ],
@@ -15000,7 +15041,7 @@
     },
     "/health/details": {
       "get": {
-        "description": "One check for each system: the database, Claude, HubSpot, Signal Hire, email, the schedules and the API. Each is free (no paid Claude request, no email sent), runs at the same time as the others and stops at 5 seconds. The answer is kept for 60 seconds; `refresh=true` checks again now. For Admins only.",
+        "description": "One check for each system: the database, Claude, HubSpot, Signal Hire, email, the runs, the schedules and the API. Each is free (no paid Claude request, no email sent), runs at the same time as the others and stops at 5 seconds. The answer is kept for 60 seconds; `refresh=true` checks again now, unless a check finished while the request waited. For Admins only.",
         "operationId": "health_details",
         "parameters": [
           {

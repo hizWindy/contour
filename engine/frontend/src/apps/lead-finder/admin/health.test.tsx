@@ -31,9 +31,12 @@ function endpoint(path: string, extra: Partial<EndpointTraffic> = {}): EndpointT
     path,
     requests: 10,
     errors: 0,
+    unavailable: 0,
     refused: 0,
     average_ms: 20,
     slowest_ms: 80,
+    last_error_at: null,
+    last_error_status: null,
     ...extra,
   }
 }
@@ -62,8 +65,14 @@ function details(extra: Partial<HealthDetails> = {}): HealthDetails {
       since: '2026-11-10T18:02:00Z',
       requests: 312,
       errors: 2,
+      unavailable: 0,
       endpoints: [
-        endpoint('/api/v1/runs/{run_id}', { errors: 2, requests: 40 }),
+        endpoint('/api/v1/runs/{run_id}', {
+          errors: 2,
+          requests: 40,
+          last_error_at: AT,
+          last_error_status: 500,
+        }),
         endpoint('/api/v1/companies', { slowest_ms: 840 }),
         ...Array.from({ length: 8 }, (_, index) => endpoint(`/api/v1/other/${String(index)}`)),
       ],
@@ -118,16 +127,50 @@ describe('Admin, Health', () => {
     })
   })
 
-  it('shows the API as a small table, errors first, and the rest behind "Show all"', async () => {
+  it('shows the API as a small table, failed first, and the rest behind "Show all"', async () => {
     mockApi({ '/api/v1/health/details': details() })
     const { user } = renderWithProviders(<AdminHealthTab />)
     const table = await screen.findByRole('table', { name: 'API endpoints' })
+    expect(screen.getByText(/^312 requests, 2 failed\. Failed first/)).toBeInTheDocument()
+    expect(within(table).queryByRole('columnheader', { name: 'Not ready' })).toBeNull()
     const rows = within(table).getAllByRole('row').slice(1)
     expect(rows).toHaveLength(8)
     expect(rows[0]).toHaveTextContent('/api/v1/runs/{run_id}')
-    expect(rows[0]).toHaveTextContent('2')
+    expect(within(rows[0]).getByText('2').closest('td')).toHaveAttribute(
+      'title',
+      'The last answered 500 at 6:02 am',
+    )
     await user.click(screen.getByRole('button', { name: 'Show all 10' }))
     expect(within(table).getAllByRole('row').slice(1)).toHaveLength(10)
+  })
+
+  it('counts "not ready" (503) apart: said plainly, never a failure', async () => {
+    mockApi({
+      '/api/v1/health/details': details({
+        api: {
+          since: '2026-11-10T18:02:00Z',
+          requests: 312,
+          errors: 0,
+          unavailable: 5,
+          endpoints: [
+            endpoint('/api/v1/runs/{run_id}', { requests: 9, unavailable: 5 }),
+            endpoint('/api/v1/companies'),
+          ],
+        },
+      }),
+    })
+    renderWithProviders(<AdminHealthTab />)
+    const table = await screen.findByRole('table', { name: 'API endpoints' })
+    expect(
+      screen.getByText(/^312 requests, none failed, 5 not ready \(503\)\./),
+    ).toBeInTheDocument()
+    expect(within(table).getByRole('columnheader', { name: 'Not ready' })).toBeInTheDocument()
+    const first = within(table).getAllByRole('row')[1]
+    expect(
+      within(first)
+        .getAllByRole('cell')
+        .map((cell) => cell.textContent),
+    ).toEqual(['GET /api/v1/runs/{run_id}', '9', '0', '5', '80 ms'])
   })
 
   it('says plainly when the checks are not open to this person', async () => {

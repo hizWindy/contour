@@ -20,7 +20,9 @@ log = logging.getLogger(__name__)
 TIMEOUT_SECONDS = 5.0
 
 State = Literal["ok", "problem", "off"]
-SystemId = Literal["database", "claude", "hubspot", "signalhire", "email", "schedules", "api"]
+SystemId = Literal[
+    "database", "claude", "hubspot", "signalhire", "email", "runs", "schedules", "api"
+]
 
 CHECK_FAILED = "The check itself failed."
 SEE_THE_LOG = "The details are in the backend log."

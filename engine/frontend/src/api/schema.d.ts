@@ -323,7 +323,7 @@ export interface paths {
         };
         /**
          * Every system's health, for Admin's Health tab
-         * @description One check for each system: the database, Claude, HubSpot, Signal Hire, email, the schedules and the API. Each is free (no paid Claude request, no email sent), runs at the same time as the others and stops at 5 seconds. The answer is kept for 60 seconds; `refresh=true` checks again now. For Admins only.
+         * @description One check for each system: the database, Claude, HubSpot, Signal Hire, email, the runs, the schedules and the API. Each is free (no paid Claude request, no email sent), runs at the same time as the others and stops at 5 seconds. The answer is kept for 60 seconds; `refresh=true` checks again now, unless a check finished while the request waited. For Admins only.
          */
         get: operations["health_details"];
         put?: never;
@@ -1295,10 +1295,13 @@ export interface components {
         ApiTrafficOut: {
             /**
              * Endpoints
-             * @description Each endpoint with requests: errors first, then the slowest
+             * @description Each endpoint with requests: failed first, then 503s, then the slowest
              */
             endpoints: components["schemas"]["EndpointTrafficOut"][];
-            /** Errors */
+            /**
+             * Errors
+             * @description Failed requests (see the endpoints' `errors`)
+             */
             errors: number;
             /** Requests */
             requests: number;
@@ -1308,6 +1311,11 @@ export interface components {
              * @description The start of the counts: an hour ago, or when the backend started
              */
             since: string;
+            /**
+             * Unavailable
+             * @description Answers of 503 (see the endpoints' `unavailable`)
+             */
+            unavailable: number;
         };
         /** AreaOption */
         AreaOption: {
@@ -2148,9 +2156,19 @@ export interface components {
             average_ms: number;
             /**
              * Errors
-             * @description Answers of 500 and above: faults
+             * @description Failed: answers of 500 and above except 503, and requests that crashed
              */
             errors: number;
+            /**
+             * Last Error At
+             * @description When the last failed one was
+             */
+            last_error_at: string | null;
+            /**
+             * Last Error Status
+             * @description What the last failed one answered
+             */
+            last_error_status: number | null;
             /**
              * Method
              * @example GET
@@ -2170,6 +2188,11 @@ export interface components {
             requests: number;
             /** Slowest Ms */
             slowest_ms: number;
+            /**
+             * Unavailable
+             * @description Answers of 503: the backend said on purpose that a part wasn't ready or was out of reach (like the run engine during a deploy). Not faults
+             */
+            unavailable: number;
         };
         /**
          * EventLog
@@ -5925,7 +5948,7 @@ export interface components {
              * Id
              * @enum {string}
              */
-            id: "database" | "claude" | "hubspot" | "signalhire" | "email" | "schedules" | "api";
+            id: "database" | "claude" | "hubspot" | "signalhire" | "email" | "runs" | "schedules" | "api";
             /**
              * Name
              * @example HubSpot

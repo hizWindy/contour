@@ -6,6 +6,7 @@ Hire only for its credit balance.
 """
 
 import asyncio
+import logging
 import time
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -16,12 +17,13 @@ from typing import Any, cast
 import anthropic
 import httpx2
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from starlette.testclient import TestClient
 
 from core.config import Settings
 from core.health import checks
 from core.health.checks import (
+    CutOff,
     Migrations,
     api_finding,
     claude_error_finding,
@@ -30,6 +32,7 @@ from core.health.checks import (
     database_finding,
     email_finding,
     hubspot_finding,
+    runs_finding,
     schedules_finding,
     signalhire_finding,
 )
@@ -37,6 +40,7 @@ from core.health.run import Check, Finding, run_checks
 from core.health.traffic import ApiTraffic, TrafficMiddleware
 from core.hubspot.check import PROBES, ConnectionCheck, ScopeOut
 from core.hubspot.sync import SyncOut
+from core.runs.lifecycle import EngineState
 from core.schedules.models import Schedule
 from core.signalhire.client import HttpSignalHire, SignalHireUnavailable
 
@@ -286,6 +290,7 @@ def test_hubspot_problems() -> None:
     missing = hubspot_finding(connection(crm_objects_deals_read="no"), good, good, 5, NOW, DAY2)
     assert missing.state == "problem"
     assert missing.sentence == "5 of 6 read permissions. Missing: Read deals and their stages."
+    assert (missing.next_step or "").startswith("Add it to the key in HubSpot")
     failed = hubspot_finding(connection(), sync("failed", None), good, 5, NOW, DAY2)
     assert failed.state == "problem" and failed.sentence.startswith("The last sync failed")
     never = hubspot_finding(connection(), None, None, 0, NOW, DAY2)
@@ -436,7 +441,17 @@ class FakeTime:
         return self.now
 
 
-def test_the_counter_keeps_one_hour_errors_first_then_the_slowest() -> None:
+def clock_at(moment: datetime) -> FakeTime:
+    fake = FakeTime()
+    fake.now = moment.timestamp()
+    return fake
+
+
+# 2:01 pm in Melbourne on 11 Nov 2026: the new backend of a deploy starts.
+DEPLOY = datetime(2026, 11, 11, 3, 1, tzinfo=UTC)
+
+
+def test_the_counter_keeps_one_hour_failed_first_then_503s_then_the_slowest() -> None:
     fake = FakeTime()
     traffic = ApiTraffic(clock=fake)
     traffic.record("GET", "/api/v1/old", 200, 5000)
@@ -444,36 +459,146 @@ def test_the_counter_keeps_one_hour_errors_first_then_the_slowest() -> None:
     traffic.record("GET", "/api/v1/runs", 200, 40)
     traffic.record("GET", "/api/v1/runs", 200, 60)
     traffic.record("GET", "/api/v1/companies", 200, 900)
+    traffic.record("GET", "/api/v1/runs/{run_id}", 503, 5)
     traffic.record("POST", "/api/v1/runs", 500, 10)
     traffic.record("POST", "/api/v1/runs", 422, 10)
     snapshot = traffic.snapshot()
     assert [(item.method, item.path) for item in snapshot.endpoints] == [
         ("POST", "/api/v1/runs"),
+        ("GET", "/api/v1/runs/{run_id}"),
         ("GET", "/api/v1/companies"),
         ("GET", "/api/v1/runs"),
     ]
-    runs = snapshot.endpoints[2]
+    runs = snapshot.endpoints[3]
     assert (runs.requests, runs.errors, runs.average_ms, runs.slowest_ms) == (2, 0, 50, 60)
     post = snapshot.endpoints[0]
-    assert (post.requests, post.errors, post.refused) == (2, 1, 1)
-    assert (snapshot.requests, snapshot.errors) == (5, 1)
+    assert (post.requests, post.errors, post.refused, post.unavailable) == (2, 1, 1, 0)
+    assert (post.last_error_status, post.last_error_at) == (500, fake.now)
+    # A 503 is the backend saying "not ready yet" on purpose: counted apart, never a failure.
+    one = snapshot.endpoints[1]
+    assert (one.errors, one.unavailable, one.first_unavailable_at) == (0, 1, fake.now)
+    assert (snapshot.requests, snapshot.errors, snapshot.unavailable) == (6, 1, 1)
 
 
-def test_api_finding_ok_and_problem() -> None:
-    fake = FakeTime()
+def test_api_finding_says_what_failed_where_and_when_and_where_to_read_more() -> None:
+    fake = clock_at(DEPLOY)
     traffic = ApiTraffic(clock=fake)
-    fake.now += 2 * 3600
     traffic.record("GET", "/api/v1/companies", 200, 840)
-    ok = api_finding(traffic.snapshot(), NOW)
-    assert ok.state == "ok"
-    assert (
-        ok.sentence
-        == "1 request in the last hour, no errors. Slowest: GET /api/v1/companies, 840 ms."
-    )
+    ok = api_finding(traffic.snapshot(), DEPLOY)
+    assert (ok.state, ok.sentence) == ("ok", "1 request since 2:01 pm, none failed.")
+    fake.now += 60
     traffic.record("GET", "/api/v1/runs/{run_id}", 500, 10)
-    bad = api_finding(traffic.snapshot(), NOW)
+    fake.now += 60
+    traffic.record("GET", "/api/v1/runs/{run_id}", 500, 10)
+    now = DEPLOY + timedelta(minutes=5)
+    bad = api_finding(traffic.snapshot(), now)
     assert bad.state == "problem"
-    assert bad.sentence == "1 error in the last hour, 1 on GET /api/v1/runs/{run_id}."
+    assert bad.sentence == (
+        "2 requests failed since 2:01 pm, all on GET /api/v1/runs/{run_id} "
+        "(error 500, the last at 2:03 pm)."
+    )
+    assert bad.next_step == (
+        'Search the backend log (the backend\'s terminal) for "Unexpected error" near 2:03 pm.'
+    )
+    traffic.record("POST", "/api/v1/lead-finder/research", 502, 30_000)
+    worse = api_finding(traffic.snapshot(), now, server=True)
+    assert worse.sentence == (
+        "3 requests failed since 2:01 pm, on 2 endpoints, most on GET /api/v1/runs/{run_id} "
+        "(error 500, the last at 2:03 pm)."
+    )
+    assert worse.next_step == (
+        "Search the backend log (on DigitalOcean, the app's Runtime Logs) for "
+        '"Unexpected error" near 2:03 pm.'
+    )
+    fake.now += 3600  # an hour on: the failures are gone, and so is the problem
+    later = api_finding(traffic.snapshot(), now + timedelta(hours=1))
+    assert later.state == "ok"
+
+
+def test_a_503_is_said_plainly_and_is_never_a_problem() -> None:
+    """The deploy of 11 Nov 2026: an open run page asked every 15 seconds, and the new backend
+    answered 503 for two minutes while it waited to take over the runs. Planned, not a fault."""
+    fake = clock_at(DEPLOY)
+    traffic = ApiTraffic(clock=fake)
+    traffic.record("GET", "/api/v1/auth/me", 200, 12)
+    fake.now += 60  # 2:02 pm
+    for _ in range(4):
+        traffic.record("GET", "/api/v1/runs/{run_id}", 503, 3)
+        fake.now += 15
+    traffic.record("GET", "/api/v1/runs/{run_id}", 503, 3)  # 2:03 pm
+    snapshot = traffic.snapshot()
+    now = DEPLOY + timedelta(minutes=25)
+    start = '6 requests since 2:01 pm, none failed. The backend answered "not ready yet" to 5 of'
+
+    waiting = api_finding(snapshot, now, EngineState("waiting", DEPLOY))
+    assert (waiting.state, waiting.next_step) == ("ok", None)
+    assert waiting.sentence == (
+        f"{start} them between 2:02 pm and 2:03 pm, while it waits to take over the runs "
+        "(see Runs)."
+    )
+    taken = EngineState("ready", DEPLOY + timedelta(minutes=2, seconds=56), took_over=True)
+    ready = api_finding(snapshot, now, taken)
+    assert ready.state == "ok"
+    assert ready.sentence == (
+        f"{start} them between 2:02 pm and 2:03 pm, while it took over the runs from the one "
+        "before it."
+    )
+    # A 503 at any other time: a part it needs was out of reach (the database, say). The other
+    # rows say which; this one still isn't a problem.
+    fake.now = (DEPLOY + timedelta(minutes=9)).timestamp()
+    traffic.record("GET", "/api/v1/companies", 503, 3)
+    other = api_finding(traffic.snapshot(), now, taken)
+    assert other.state == "ok"
+    assert other.sentence.endswith(
+        'The backend answered "not available" to 6 of them between 2:02 pm and 2:10 pm, while '
+        "a part it needs was out of reach. The other rows say if one still is."
+    )
+
+
+def test_runs_finding_tells_ready_waiting_off_and_a_run_a_restart_cut_off() -> None:
+    soon = DEPLOY + timedelta(minutes=1)
+    waiting = runs_finding(EngineState("waiting", DEPLOY), 0, [], soon)
+    assert waiting.state == "ok"  # planned, and it passes by itself
+    assert waiting.sentence == (
+        "Starting: since 2:01 pm this backend waits for the one before it to stop, as it does "
+        "after a deploy. Runs work again by themselves within a few minutes."
+    )
+    stuck = runs_finding(EngineState("waiting", DEPLOY), 0, [], DEPLOY + timedelta(minutes=12))
+    assert stuck.state == "problem"
+    assert stuck.sentence == (
+        "Runs can't start or be read: since 2:01 pm this backend has waited for the one before "
+        "it to stop."
+    )
+    off = runs_finding(EngineState("off"), 0, [], soon)
+    assert (off.state, off.sentence) == (
+        "problem",
+        "The run engine didn't start in this backend, so runs can't start or be read.",
+    )
+    assert runs_finding(EngineState("stopping"), 0, [], soon).state == "problem"
+
+    now = DEPLOY + timedelta(minutes=25)  # 2:26 pm
+    taken_at = DEPLOY + timedelta(minutes=2, seconds=56)
+    taken = EngineState("ready", taken_at, took_over=True)
+    going = runs_finding(taken, 1, [], now)
+    assert (going.state, going.sentence) == (
+        "ok",
+        "Ready since 2:03 pm, when this backend took over from the one before it. 1 run going.",
+    )
+    yesterday = runs_finding(EngineState("ready", DEPLOY - timedelta(days=1)), 0, [], now)
+    assert yesterday.sentence == "Ready since 10 Nov, 2:01 pm. No run going."
+
+    cut = CutOff(uuid.UUID("fe4051fc-ee51-4081-852e-9d53b5ef6091"), "discovery", taken_at)
+    flagged = runs_finding(taken, 0, [cut], now)
+    assert flagged.state == "problem"
+    assert flagged.sentence == (
+        "Ready since 2:03 pm, when this backend took over from the one before it. No run going. "
+        "A restart cut off run fe4051fc (discovery, stopped 2:03 pm)."
+    )
+    assert (flagged.next_step or "").startswith(
+        "Open it on the Runs page and press Resume: nothing resumes by itself."
+    )
+    two = runs_finding(taken, 0, [cut, CutOff(uuid.uuid4(), "watchlist", None)], now)
+    assert two.sentence.endswith("(discovery, stopped 2:03 pm) and 1 other.")
 
 
 def test_the_middleware_counts_each_endpoint_by_its_path_in_the_code() -> None:
@@ -488,6 +613,10 @@ def test_the_middleware_counts_each_endpoint_by_its_path_in_the_code() -> None:
     async def broken() -> None:
         raise RuntimeError("boom")
 
+    @app.get("/api/v1/starting")
+    async def starting() -> None:
+        raise HTTPException(503, "Not ready yet")
+
     app.add_middleware(TrafficMiddleware, traffic=traffic)
     with TestClient(app, raise_server_exceptions=False) as client:
         assert client.get("/api/v1/things/1").status_code == 200
@@ -495,8 +624,40 @@ def test_the_middleware_counts_each_endpoint_by_its_path_in_the_code() -> None:
         assert client.get("/api/v1/things/x").status_code == 422
         assert client.get("/api/v1/nowhere").status_code == 404  # no endpoint: not counted
         assert client.get("/api/v1/broken").status_code == 500
+        assert client.get("/api/v1/starting").status_code == 503
     counted = {(item.method, item.path): item for item in traffic.snapshot().endpoints}
-    assert set(counted) == {("GET", "/api/v1/things/{thing_id}"), ("GET", "/api/v1/broken")}
+    assert set(counted) == {
+        ("GET", "/api/v1/things/{thing_id}"),
+        ("GET", "/api/v1/broken"),
+        ("GET", "/api/v1/starting"),
+    }
     things = counted[("GET", "/api/v1/things/{thing_id}")]
     assert (things.requests, things.refused, things.errors) == (3, 1, 0)
-    assert counted[("GET", "/api/v1/broken")].errors == 1
+    assert (
+        counted[("GET", "/api/v1/broken")].errors,
+        counted[("GET", "/api/v1/broken")].last_error_status,
+    ) == (1, 500)
+    starting_count = counted[("GET", "/api/v1/starting")]
+    assert (starting_count.errors, starting_count.unavailable) == (0, 1)
+
+
+def test_counting_never_gets_in_the_way_of_a_request(caplog: pytest.LogCaptureFixture) -> None:
+    class Broken(ApiTraffic):
+        def record(self, method: str, path: str, status: int, ms: float) -> None:
+            raise RuntimeError("the counter broke")
+
+    app = FastAPI()
+
+    @app.get("/api/v1/things")
+    async def things() -> dict[str, int]:
+        return {"count": 1}
+
+    app.add_middleware(TrafficMiddleware, traffic=Broken())
+    with (
+        caplog.at_level(logging.WARNING, logger="core.health.traffic"),
+        TestClient(app) as client,
+    ):
+        assert client.get("/api/v1/things").json() == {"count": 1}
+        assert client.get("/api/v1/things").json() == {"count": 1}
+    said = [record for record in caplog.records if record.name == "core.health.traffic"]
+    assert [record.getMessage() for record in said] == ["api_traffic_count_failed"]  # once

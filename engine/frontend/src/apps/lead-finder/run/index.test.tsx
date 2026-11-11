@@ -149,6 +149,46 @@ describe('the run page', () => {
     expect(screen.getByText('Live')).toBeInTheDocument()
   })
 
+  it('says why it is reconnecting while a deploy hands the runs to the new backend', async () => {
+    let restarting = false // the old backend stops: the stream breaks, the next ask is a 503
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((request: Request) => {
+        if (new URL(request.url).pathname === `/api/v1/runs/${RUN_ID}`) {
+          return Promise.resolve(
+            !restarting
+              ? Response.json(run())
+              : Response.json(
+                  {
+                    title: 'Runs are restarting',
+                    detail: 'The backend was just restarted (a deploy).',
+                    status: 503,
+                    code: 'runs_not_ready',
+                  },
+                  { status: 503 },
+                ),
+          )
+        }
+        return Promise.resolve(Response.json({ title: 'Not found', status: 404 }, { status: 404 }))
+      }),
+    )
+    renderRun()
+    await waitFor(() => {
+      expect(FakeEventSource.instances.length).toBeGreaterThan(0)
+    })
+    act(() => {
+      FakeEventSource.last().emitOpen()
+    })
+    expect(await screen.findByText('Live')).toBeInTheDocument()
+    restarting = true
+    act(() => {
+      FakeEventSource.last().emitError()
+    })
+    expect(
+      await screen.findByText('Reconnecting. Runs are restarting.', {}, { timeout: 4000 }),
+    ).toBeInTheDocument()
+  })
+
   it('stops a run and says so until it has stopped', async () => {
     const seen = mockApi(() => run())
     const { user } = renderRun()

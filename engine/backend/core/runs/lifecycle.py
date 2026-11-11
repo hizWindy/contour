@@ -20,6 +20,10 @@ backend off the same database, marks the runs the last process left going as `in
 closes the checkpoint pool and releases the lock. It is safe to call when `startup` failed part
 way. The lifespan calls it before the engine is disposed.
 
+`engine_state` says which of these the engine is in (ready, waiting, off or stopping) and since
+when, for Admin's Health tab, and `not_ready` turns it into the 503 the run routes answer, in plain
+words: during a deploy "Runs are restarting", not a fault.
+
 The lock lives on its own connection (autocommit), held for the life of the process. If that
 connection is lost, Postgres lets the lock go; the backend does not notice. TBC: watch it.
 """
@@ -28,7 +32,9 @@ import asyncio
 import contextlib
 import logging
 from collections.abc import Awaitable, Callable
-from typing import Any, cast
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import Any, Literal, cast
 
 import psycopg
 from fastapi import FastAPI
@@ -178,6 +184,7 @@ async def startup(app: FastAPI) -> None:
         if not get_settings().server_mode:
             raise RuntimeError(ANOTHER_BACKEND)
         app.state.run_engine_waiting = True  # the lifespan then calls take_over_later
+        app.state.run_engine_waiting_since = datetime.now(UTC)
         log.warning(WAITING_FOR_LOCK)
         return
     await _start_engine(app, manager)
@@ -193,6 +200,7 @@ async def _start_engine(app: FastAPI, manager: RunManager) -> bool:
         _runs_off(error)
         return False
     app.state.run_manager = manager
+    app.state.run_engine_ready_at = datetime.now(UTC)
     log.info("run_engine_ready", extra={"recovered": recovered})
     return True
 
@@ -200,6 +208,67 @@ async def _start_engine(app: FastAPI, manager: RunManager) -> bool:
 def waiting(app: FastAPI) -> bool:
     """True when this backend started without the run engine because another one holds it."""
     return bool(getattr(app.state, "run_engine_waiting", False))
+
+
+EngineMode = Literal["ready", "waiting", "off", "stopping"]
+
+
+@dataclass(frozen=True)
+class EngineState:
+    """What the run engine is doing in this backend.
+
+    - `ready`: runs can start. `since` is when it became ready; `took_over` is True when it waited
+      for the backend before it first (a deploy on App Platform).
+    - `waiting`: another backend holds it (during a deploy, the old one). `since` is when the wait
+      began. Runs answer 503 until it takes over, by itself.
+    - `off`: it didn't start (the database was out of reach). Only a restart brings it back.
+    - `stopping`: this backend is shutting down.
+    """
+
+    mode: EngineMode
+    since: datetime | None = None
+    took_over: bool = False
+
+
+def engine_state(app: FastAPI) -> EngineState:
+    """Read from `app.state`, which `startup`, `take_over_later` and `shutdown` keep."""
+    state = app.state
+    if getattr(state, "run_manager", None) is not None:
+        return EngineState(
+            "ready",
+            getattr(state, "run_engine_ready_at", None),
+            bool(getattr(state, "run_engine_took_over", False)),
+        )
+    if getattr(state, "run_engine_stopping", False):
+        return EngineState("stopping")
+    if waiting(app):
+        return EngineState("waiting", getattr(state, "run_engine_waiting_since", None))
+    return EngineState("off")
+
+
+def not_ready(app: FastAPI) -> Problem:
+    """The 503 a run route answers without the run engine, saying why in plain words. The code
+    stays `runs_not_ready` in every case, so the website can tell it apart."""
+    mode = engine_state(app).mode
+    if mode == "waiting":
+        title, detail = (
+            "Runs are restarting",
+            "The backend was just restarted (a deploy) and takes over the runs from the one "
+            "before it within a few minutes. Try again then. An open run page carries on by "
+            "itself.",
+        )
+    elif mode == "stopping":
+        title, detail = (
+            "The backend is stopping",
+            "It is restarting or being updated. Try again in a minute.",
+        )
+    else:
+        title, detail = (
+            "Runs aren't ready",
+            "The run engine didn't start in this backend: the database was out of reach when it "
+            "started. Restart the backend once the database answers.",
+        )
+    return Problem(503, title, detail, code="runs_not_ready")
 
 
 def take_over_later(
@@ -227,6 +296,7 @@ def take_over_later(
             raise
         app.state.run_engine_waiting = False
         if await _start_engine(app, manager):
+            app.state.run_engine_took_over = True
             log.info("run_engine_taken_over")
             await then(app)
 
@@ -258,6 +328,7 @@ async def shutdown(app: FastAPI) -> None:
     manager: RunManager | None = getattr(app.state, "run_manager", None)
     if manager is None:
         return
+    app.state.run_engine_stopping = True
     with contextlib.suppress(AttributeError):
         del app.state.run_manager  # new requests get a 503 from now on
     await manager.shutdown()

@@ -11,6 +11,7 @@ from core.config import Settings
 from core.db.engine import get_session
 from core.memory.embedder import Embedder, get_embedder
 from core.prefs.service import effective_settings
+from core.runs import lifecycle
 from core.runs.manager import RunManager
 
 
@@ -27,15 +28,12 @@ def claude_dependency() -> Claude:
 
 
 def run_manager_dependency(request: Request) -> RunManager:
-    """The run manager, which the app's start-up code puts in `app.state.run_manager`."""
+    """The run manager, which the app's start-up code puts in `app.state.run_manager`. Without
+    it, a 503 `runs_not_ready` that says why: restarting after a deploy, stopping, or not started
+    (`lifecycle.not_ready`)."""
     manager: RunManager | None = getattr(request.app.state, "run_manager", None)
     if manager is None:
-        raise Problem(
-            503,
-            "Runs aren't ready",
-            "The run engine hasn't started. Check the backend log.",
-            code="runs_not_ready",
-        )
+        raise lifecycle.not_ready(request.app)
     return manager
 
 

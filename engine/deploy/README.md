@@ -231,7 +231,7 @@ This is what was done on 6 Nov, in this order. Do it the same way for a second a
 
 ### Updates and the one-backend lock
 
-A deploy starts the new backend while the old one still runs, and stops the old one once the new one is up. The engine allows one run engine for each database, so in server mode the new backend starts **without** it and waits. Meanwhile the website and sign-in work, and a run started in those seconds answers "not ready, try again". Every 5 seconds it tries the lock again. Once the old one has stopped and let it go, it takes over the runs, the scheduler and the HubSpot copy (log: `run_engine_taken_over`). A run that was going in the old backend is marked **interrupted**: open it and press Resume.
+A deploy starts the new backend while the old one still runs, and stops the old one once the new one is up. The engine allows one run engine for each database, so in server mode the new backend starts **without** it and waits. Meanwhile the website and sign-in work, and the run pages answer "Runs are restarting" (an open run page says "Reconnecting. Runs are restarting." and carries on by itself). Admin, Health shows Runs as "Starting" and counts those answers as "not ready", not as failed requests: they are planned. Every 5 seconds it tries the lock again. Once the old one has stopped and let it go, it takes over the runs, the scheduler and the HubSpot copy (log: `run_engine_taken_over`). A run that was going in the old backend is marked **interrupted**: open it and press Resume.
 
 Before this change (6 Nov) the new backend quit with `Another backend is already running on this database`, and no update could finish. On a laptop a second backend still refuses to start.
 
@@ -245,7 +245,7 @@ curl -s -X POST https://contour-hq-mxeqw.ondigitalocean.app/api/v1/auth/login -H
 
 Then sign in in the browser and open `https://contour-hq-mxeqw.ondigitalocean.app/api/v1/auth/log`. The newest `sign_in_failed` must show **your own public address**, not `203.0.113.50`. If it shows `203.0.113.50`, the front door does not replace that header: anyone could write their own address, and the limit on wrong tries from one address would mean nothing. Don't put real data in, and go to PLAN-V8 B2.
 
-2. **The update.** The deploy finishes with the backend healthy, and the backend's log says `run_engine_taken_over` a little after the old one stops.
+2. **The update.** The deploy finishes with the backend healthy, and the backend's log says `run_engine_taken_over` a little after the old one stops. Admin, Health: Runs says "Ready since ..., when this backend took over", and the API row has no failed requests. If Runs names a run a restart cut off, open it and press Resume.
 3. **Healthy.** The file uses a TCP check on the port, because the backend answers only to its own public host name, and what host name App Platform's check sends is not known.
 
 ### Day to day

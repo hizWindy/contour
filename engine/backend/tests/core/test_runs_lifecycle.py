@@ -180,6 +180,13 @@ async def test_in_server_mode_a_second_backend_waits_then_takes_over_when_the_fi
     assert WAITING_FOR_LOCK in caplog.text
     assert lifecycle.waiting(app)
     assert not hasattr(app.state, "run_manager")  # the run routes answer 503 meanwhile
+    assert lifecycle.engine_state(app).mode == "waiting"
+    meanwhile = lifecycle.not_ready(app)  # what the run routes say: planned, not a fault
+    assert (meanwhile.status, meanwhile.code, meanwhile.title) == (
+        503,
+        "runs_not_ready",
+        "Runs are restarting",
+    )
 
     lifecycle.take_over_later(app, background_work, every=0.05)
     await asyncio.sleep(0.3)
@@ -192,12 +199,16 @@ async def test_in_server_mode_a_second_backend_waits_then_takes_over_when_the_fi
 
     assert isinstance(app.state.run_manager, RunManager)
     assert not lifecycle.waiting(app)
+    taken = lifecycle.engine_state(app)
+    assert (taken.mode, taken.took_over, taken.since is not None) == ("ready", True, True)
     row = await run_row(session_factory, cut_off)
     assert (row.status, row.stop_reason) == ("interrupted", BACKEND_STOPPED)
     assert not await other_backend.acquire()  # this backend holds it now
 
     await lifecycle.stop_waiting(app)  # the wait is over: nothing to stop
     await lifecycle.shutdown(app)
+    assert lifecycle.engine_state(app).mode == "stopping"
+    assert lifecycle.not_ready(app).title == "The backend is stopping"
     assert await other_backend.acquire()  # let go at the end, as before
 
 
@@ -240,6 +251,8 @@ async def test_a_database_that_is_down_turns_runs_off_without_stopping_the_app(
     with caplog.at_level(logging.ERROR, logger="core.runs.lifecycle"):
         await lifecycle.startup(app)
     assert not hasattr(app.state, "run_manager")
+    assert lifecycle.engine_state(app).mode == "off"
+    assert lifecycle.not_ready(app).title == "Runs aren't ready"
     (record,) = [r for r in caplog.records if r.name == "core.runs.lifecycle"]
     assert "runs are turned off" in record.getMessage()
     # Refused, or (on Windows) timed out: both are connection errors, named by type only.
