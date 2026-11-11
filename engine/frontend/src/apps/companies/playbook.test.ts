@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { PrepScript } from '@/api/types'
-import { detail, JASON, TODAY } from './guide-fixtures'
+import { detail, JASON, stage, TODAY } from './guide-fixtures'
 import {
   buildGuide,
   guideFromPrep,
@@ -14,21 +14,37 @@ import {
 const texts = (lines: { text: string }[]): string[] => lines.map((line) => line.text)
 
 const TIME_ASK = 'Do you have two minutes, or is there a better time?'
-const AFTER_NO = 'After a second no, thank them and let it go.'
+/** The end of every tone line in the default tone: the preset's advice, then the rule after a no. */
+const AFTER_NO =
+  'Keep it friendly: a short greeting and plain words. After a second no, thank them and let it go.'
 
 /** A returning client, a company with a lease date and a cold call: the three cases of T3-2. */
 const RETURNING = (): CallGuide =>
   buildGuide({ company: detail(), person: JASON, caller: 'Mia Wong', today: TODAY })
 const LEASE_ONLY = (): CallGuide =>
   buildGuide({
-    company: detail({ deals: [], calls: [], deal: 'none' }),
+    company: detail({
+      deals: [],
+      calls: [],
+      deal: 'none',
+      last_talk: null,
+      relationship: stage('cold'),
+    }),
     person: JASON,
     caller: 'Mia',
     today: TODAY,
   })
 const COLD = (): CallGuide =>
   buildGuide({
-    company: detail({ deals: [], calls: [], deal: 'none', offices: [], next_lease_end: null }),
+    company: detail({
+      deals: [],
+      calls: [],
+      deal: 'none',
+      offices: [],
+      next_lease_end: null,
+      last_talk: null,
+      relationship: stage('cold'),
+    }),
     person: null,
     caller: 'Mia',
     today: TODAY,
@@ -85,14 +101,15 @@ describe('the free call script', () => {
     )
   })
 
-  it('writes a cold call for the switchboard, with a placeholder for a caller nobody named', () => {
+  it('asks the switchboard for the last contact, with a placeholder for a caller nobody named', () => {
     const guide = buildGuide({ company: detail(), person: null, caller: null, today: TODAY })
 
     expect(texts(guide.opener)).toEqual([
-      "Hi, it's [your name] from Contour. We design and build offices. Could I speak to whoever looks after your office space?",
+      "Hi, it's [your name] from Contour. Could I speak to Jason Reeds? We spoke in October.",
       "When you're put through: I wanted to follow up on Perth fit-out.",
       `Then: ${TIME_ASK}`,
     ])
+    expect(guide.opener[0]?.why).toBe('HubSpot call, 1 Oct 2026')
     expect(guide.goal?.text).toBe(
       'Get the name of the person who looks after the office, and a good time to call them.',
     )
@@ -115,6 +132,7 @@ describe('the free call script', () => {
       lifecycle_stage: 'Customer',
       deals: [],
       calls: [],
+      relationship: stage('customer'),
       offices: [
         {
           label: 'Melbourne',
@@ -131,8 +149,9 @@ describe('the free call script', () => {
     })
     const guide = buildGuide({ company, person: JASON, caller: 'Mia', today: TODAY })
 
+    // A customer: no intro, just who is calling, then the check-in.
     expect(texts(guide.opener)).toEqual([
-      "Hi Jason, it's Mia from Contour. We design and build offices.",
+      "Hi Jason, it's Mia from Contour.",
       'I wanted to check in on how the Melbourne office is working for the team.',
       TIME_ASK,
     ])
@@ -207,6 +226,7 @@ describe('the free call script', () => {
       linkedin_staff: 150,
       last_talk: '2025-11-01',
       calls: [],
+      relationship: stage('contacted', { since: '2025-11-01' }),
     })
     const guide = buildGuide({ company, person: JASON, caller: 'Mia', today: TODAY })
 
@@ -237,7 +257,7 @@ describe('the free call script', () => {
     const text = guideText(guide, 'Jason Reeds, Head of Operations, ABC Logistics')
 
     expect(text).toContain(
-      `Call: Jason Reeds, Head of Operations, ABC Logistics\nTone: Warm. You have spoken before, so pick up where you left off. ${AFTER_NO}`,
+      `Call: Jason Reeds, Head of Operations, ABC Logistics\nTone: Warm. There is a deal in progress, so pick up where it stands. ${AFTER_NO}`,
     )
     expect(text).toContain('3. Guided questions')
     expect(text).toContain('   If "On track": What do you need from us before then?')
@@ -336,10 +356,10 @@ describe('the script technique (PLAN-V14)', () => {
 
   it('the tone is warm for a returning client and light for a cold call', () => {
     expect(RETURNING().tone).toMatchObject({
-      text: `Warm. You have spoken before, so pick up where you left off. ${AFTER_NO}`,
-      why: 'HubSpot call, 1 Oct 2026',
+      text: `Warm. There is a deal in progress, so pick up where it stands. ${AFTER_NO}`,
+      why: 'HubSpot: deal',
     })
-    const light = `Light. A cold call: keep it short and friendly, and listen more than you talk. ${AFTER_NO}`
+    const light = `Light. A cold call: keep it short, and listen more than you talk. ${AFTER_NO}`
     expect(LEASE_ONLY().tone).toMatchObject({ text: light, why: null })
     expect(COLD().tone).toMatchObject({ text: light, why: null })
     // An open deal is a returning client, even through the switchboard.
@@ -376,6 +396,237 @@ describe('the script technique (PLAN-V14)', () => {
   it("gives Claude's script the same tone line", () => {
     const input = { company: detail(), person: JASON, caller: 'Mia', today: TODAY }
     expect(guideTone(input)).toEqual(buildGuide(input).tone)
+  })
+})
+
+describe('the relationship stage (PLAN-V15)', () => {
+  const WON = {
+    name: 'Perth fit-out',
+    stage: 'Ordered - Contract Signed',
+    state: 'won' as const,
+    pipeline: null,
+    amount_aud: null,
+    close_date: '2023-05-01',
+    owner: 'Levi',
+    next_step: null,
+    hubspot_url: null,
+  }
+  const LOST = { ...WON, stage: 'Closed lost', state: 'lost' as const, close_date: '2025-06-01' }
+  const SARAH_CALL = {
+    id: '302',
+    called_at: '2026-03-03T01:00:00Z',
+    person: 'Sarah Lee',
+    owner: 'Levi',
+    minutes: 4,
+    outcome: 'Connected',
+    note: null,
+    hubspot_url: null,
+  }
+  const at = (changes: Parameters<typeof detail>[0], person = JASON as typeof JASON | null) =>
+    buildGuide({ company: detail(changes), person, caller: 'Mia', today: TODAY })
+
+  const STAGES = {
+    open_deal: () => at({ calls: [] }),
+    customer: () => at({ deals: [WON], calls: [], relationship: stage('customer') }),
+    past_customer: () =>
+      at({ deals: [WON], calls: [], last_talk: null, relationship: stage('past_customer') }),
+    lost_deal: () => at({ deals: [LOST], calls: [], relationship: stage('lost_deal') }),
+    contacted: () => at({ deals: [], calls: [SARAH_CALL], relationship: stage('contacted') }),
+    cold: () => at({ deals: [], calls: [], last_talk: null, relationship: stage('cold') }),
+  }
+
+  it('opens each stage its own way, and only a cold call says what Contour does', () => {
+    const hellos = Object.fromEntries(
+      Object.entries(STAGES).map(([name, make]) => [name, texts(make().opener).slice(0, 2)]),
+    )
+    expect(hellos).toEqual({
+      open_deal: ["Hi Jason, it's Mia from Contour.", 'I wanted to follow up on Perth fit-out.'],
+      customer: [
+        "Hi Jason, it's Mia from Contour.",
+        'Your Perth lease ends in Jun 2027, so I wanted to check in early.',
+      ],
+      past_customer: [
+        "Hi Jason, it's Mia from Contour. We did your Perth fit-out in 2023.",
+        'Your Perth lease ends in Jun 2027, so I wanted to check in early.',
+      ],
+      lost_deal: [
+        "Hi Jason, it's Mia from Contour.",
+        "Last time, the timing wasn't right for Perth fit-out, so I wanted to see what's changed.",
+      ],
+      contacted: [
+        "Hi Jason, it's Mia from Contour. We spoke with Sarah Lee on 3 Mar.",
+        'Your Perth lease ends in Jun 2027, so I wanted to check in early.',
+      ],
+      cold: [
+        "Hi Jason, it's Mia from Contour. We design and build offices.",
+        'Your Perth lease ends in Jun 2027, so I wanted to check in early.',
+      ],
+    })
+    for (const [name, make] of Object.entries(STAGES)) {
+      const said = allLines(make()).map((item) => item.text)
+      const intro = said.some((text) => text.includes('We design and build offices'))
+      expect(intro, name).toBe(name === 'cold')
+    }
+  })
+
+  it('keeps the source of a remembered talk or deal', () => {
+    expect(STAGES.past_customer().opener[0]).toMatchObject({
+      why: 'HubSpot: deal',
+      icon: 'customer',
+    })
+    expect(STAGES.contacted().opener[0]?.why).toBe('HubSpot call, 3 Mar 2026')
+    // Contacted with no call on record: the stage's own date and source.
+    const talk = at({ deals: [], calls: [], relationship: stage('contacted') })
+    expect(talk.opener[0]).toMatchObject({
+      text: "Hi Jason, it's Mia from Contour. We were last in touch in October.",
+      why: 'HubSpot: last contacted',
+    })
+  })
+
+  it('gives a lost deal as the first reason why now', () => {
+    expect(STAGES.lost_deal().whyNow[0]).toMatchObject({
+      text: 'Lost deal: Perth fit-out, closed 1 Jun 2025.',
+      why: 'HubSpot deal',
+    })
+  })
+
+  it("a switchboard call that isn't cold asks for the last contact by name", () => {
+    const switchboard = (changes: Parameters<typeof detail>[0]) =>
+      texts(at(changes, null).opener)[0]
+    expect(switchboard({ deals: [], calls: [SARAH_CALL], relationship: stage('contacted') })).toBe(
+      "Hi, it's Mia from Contour. Could I speak to Sarah Lee? We spoke in March.",
+    )
+    // A call last year says the year.
+    const lastYear = { ...SARAH_CALL, called_at: '2025-12-02T01:00:00Z' }
+    expect(switchboard({ deals: [], calls: [lastYear], relationship: stage('contacted') })).toBe(
+      "Hi, it's Mia from Contour. Could I speak to Sarah Lee? We spoke in December 2025.",
+    )
+    // No call: the contact HubSpot was last in touch with.
+    const people = [
+      { id: 'c1', name: 'Tom Ng', title: null, phone: null, last_activity: '2026-02-10T00:00:00Z' },
+      { id: 'c2', name: 'Ann Lo', title: null, phone: null, last_activity: '2026-07-01T00:00:00Z' },
+    ]
+    expect(switchboard({ deals: [WON], calls: [], people, relationship: stage('customer') })).toBe(
+      "Hi, it's Mia from Contour. Could I speak to Ann Lo? We were in touch in July.",
+    )
+    // Nobody named, and not cold: no intro either.
+    expect(switchboard({ deals: [LOST], calls: [], relationship: stage('lost_deal') })).toBe(
+      "Hi, it's Mia from Contour. Could I speak to whoever looks after your office space?",
+    )
+    // Cold: today's intro.
+    expect(switchboard({ deals: [], calls: [SARAH_CALL], relationship: stage('cold') })).toBe(
+      "Hi, it's Mia from Contour. We design and build offices. Could I speak to whoever looks after your office space?",
+    )
+  })
+
+  it('a direct call to someone we spoke to still says when', () => {
+    const voicemail = { ...SARAH_CALL, person: 'Jason Reeds', outcome: 'Left voicemail' }
+    expect(texts(at({ calls: [voicemail] }).opener)[0]).toBe(
+      "Hi Jason, it's Mia from Contour. We left you a message on 3 Mar.",
+    )
+  })
+
+  it('sets the tone line by the stage', () => {
+    const tones = Object.fromEntries(
+      Object.entries(STAGES).map(([name, make]) => [name, make().tone?.text.split('.')[0]]),
+    )
+    expect(tones).toEqual({
+      open_deal: 'Warm',
+      customer: 'Warm',
+      past_customer: 'Warm',
+      lost_deal: 'Warm and patient',
+      contacted: 'Warm',
+      cold: 'Light',
+    })
+    expect(STAGES.past_customer().tone?.text).toContain('They were a client')
+    expect(STAGES.contacted().tone?.why).toBe('HubSpot: last contacted')
+  })
+
+  it('writes a cold script when the backend sends no stage', () => {
+    const { relationship: _gone, ...old } = detail()
+    const guide = buildGuide({ company: old, person: JASON, caller: 'Mia', today: TODAY })
+    expect(texts(guide.opener)[0]).toBe(
+      "Hi Jason, it's Mia from Contour. We design and build offices.",
+    )
+  })
+})
+
+describe('the tone presets (PLAN-V15)', () => {
+  const written = (tone: 'friendly' | 'direct' | 'consultative' | 'formal', person = true) =>
+    buildGuide({
+      company: detail({ calls: [] }),
+      person: person ? JASON : null,
+      caller: 'Mia Wong',
+      today: TODAY,
+      tone,
+    })
+
+  it('changes the greeting, the time ask, the pushback and the close', () => {
+    const words = (tone: Parameters<typeof written>[0]) => {
+      const guide = written(tone)
+      return {
+        hello: guide.opener[0]?.text,
+        time: guide.opener[2]?.text,
+        pushback: guide.ifTheySay[0]?.answer.text.split('.')[0],
+        goal: guide.goal?.text,
+      }
+    }
+    expect(words('friendly')).toEqual({
+      hello: "Hi Jason, it's Mia from Contour.",
+      time: TIME_ASK,
+      pushback: "Sounds like the timing isn't right yet",
+      goal: 'Site visit.',
+    })
+    expect(words('direct')).toEqual({
+      hello: "Jason, it's Mia from Contour.",
+      time: 'Have you got two minutes?',
+      pushback: "Understood, the timing isn't right yet",
+      goal: 'Site visit. Ask for a day and time before you hang up.',
+    })
+    expect(words('consultative')).toEqual({
+      hello: "Hi Jason, it's Mia from Contour.",
+      time: 'Is now a good time for a few questions, or is there a better time?',
+      pushback: "It sounds like the timing isn't right yet",
+      goal: 'Site visit. Ask what they would want to get out of it.',
+    })
+    expect(words('formal')).toEqual({
+      hello: 'Good morning Jason Reeds, my name is Mia Wong, from Contour Commercial Interiors.',
+      time: 'Would you have two minutes to speak now, or would another time suit you better?',
+      pushback: "I understand that the timing isn't right yet",
+      goal: 'Site visit. Offer to confirm it in writing.',
+    })
+  })
+
+  it('greets the switchboard in the tone too, and the tone line gives its advice', () => {
+    expect(written('formal', false).opener[0]?.text).toBe(
+      'Good morning, my name is Mia Wong, from Contour Commercial Interiors. Could I speak to whoever looks after your office space?',
+    )
+    expect(written('direct', false).opener[0]?.text).toBe(
+      "It's Mia from Contour. Could I speak to whoever looks after your office space?",
+    )
+    expect(written('direct').tone?.text).toBe(
+      'Warm. There is a deal in progress, so pick up where it stands. Keep it direct: short sentences, the reason first, no small talk. After a second no, thank them and let it go.',
+    )
+    // The switchboard's goal is the same in every tone: a name and a time.
+    expect(written('formal', false).goal?.text).toBe(written('friendly', false).goal?.text)
+  })
+
+  it("uses Claude's own tone line when the script has one", () => {
+    const script = {
+      still_there: 'unknown',
+      still_there_note: null,
+      news: [],
+      opener: [],
+      why_now: [],
+      questions: [],
+      if_they_say: [],
+      goal: null,
+      dropped: 0,
+      tone_line: 'Direct and warm: they are a client, so get to the point.',
+    } as unknown as PrepScript
+    expect(guideFromPrep(script, new Map()).tone?.text).toBe(
+      'Direct and warm: they are a client, so get to the point.',
+    )
   })
 })
 

@@ -66,6 +66,8 @@ ROUTES = [
     ("DELETE", f"{API}/companies/script-edits"),
     ("GET", f"{API}/companies/script-style"),
     ("PUT", f"{API}/companies/script-style/mine"),
+    ("PUT", f"{API}/companies/script-style/tone"),
+    ("PUT", f"{API}/companies/script-style/team-tone"),
     ("POST", f"{API}/companies/script-style/team"),
     ("POST", f"{API}/companies/script-style/team/{{note_id}}/approve"),
     ("POST", f"{API}/companies/script-style/team/{{note_id}}/reject"),

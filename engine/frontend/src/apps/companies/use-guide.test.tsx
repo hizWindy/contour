@@ -90,6 +90,8 @@ describe('the guide the card shows and copies', () => {
     await waitFor(() => {
       expect(copied()).toContain('5. Goal of the call\n- Get a site visit booked.')
     })
-    expect(copied()).toContain('Tone: Warm. You have spoken before, so pick up where you left off.')
+    expect(copied()).toContain(
+      'Tone: Warm. There is a deal in progress, so pick up where it stands.',
+    )
   })
 })

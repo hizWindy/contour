@@ -754,6 +754,10 @@
             "title": "People Status",
             "type": "string"
           },
+          "relationship": {
+            "$ref": "#/components/schemas/Relationship",
+            "description": "Where we stand: open deal, customer, past customer, lost deal, contacted before, or cold (PLAN-V15). The API always sends it"
+          },
           "source": {
             "enum": [
               "hubspot",
@@ -6231,6 +6235,19 @@
             "title": "Company Name",
             "type": "string"
           },
+          "copy_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the last HubSpot sync finished, so the card can say an old copy is old (PLAN-V15). None before the first sync",
+            "title": "Copy At"
+          },
           "deal": {
             "enum": [
               "open",
@@ -6505,6 +6522,26 @@
             "title": "Stage",
             "type": "integer"
           },
+          "stage_used": {
+            "anyOf": [
+              {
+                "enum": [
+                  "open_deal",
+                  "customer",
+                  "past_customer",
+                  "lost_deal",
+                  "contacted",
+                  "cold"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The relationship stage it was written for. None before 12 Nov",
+            "title": "Stage Used"
+          },
           "status": {
             "enum": [
               "searching",
@@ -6517,6 +6554,24 @@
           "style_used": {
             "$ref": "#/components/schemas/StyleUsed",
             "description": "The style notes the script was written with. None for a prep before 11 Nov or one made with no notes"
+          },
+          "tone_used": {
+            "anyOf": [
+              {
+                "enum": [
+                  "friendly",
+                  "direct",
+                  "consultative",
+                  "formal"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The tone it was written in (PLAN-V15). None for a prep before 12 Nov. When it differs from mine, the card offers Research again; a tone change spends nothing",
+            "title": "Tone Used"
           },
           "trigger": {
             "enum": [
@@ -6648,6 +6703,18 @@
                 "type": "null"
               }
             ]
+          },
+          "tone_line": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Claude's own line on how to sound, in the chosen tone (PLAN-V15). Advice, not said aloud. None for a prep made before 12 Nov",
+            "title": "Tone Line"
           },
           "why_now": {
             "items": {
@@ -7162,6 +7229,54 @@
           "reasons"
         ],
         "title": "RejectReasonCounts",
+        "type": "object"
+      },
+      "Relationship": {
+        "description": "Where we stand with the company (PLAN-V15 T3-3). Both call scripts open from it.",
+        "properties": {
+          "reason": {
+            "description": "One plain sentence, like 'Open deal: Perth fitout, at Proposal.'",
+            "title": "Reason",
+            "type": "string"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The date the stage rests on: the last talk, or the won or lost deal's close date. None when there is none, as for an open deal or a cold call",
+            "title": "Since"
+          },
+          "source": {
+            "description": "Where it shows, like 'HubSpot deal' or 'HubSpot call, 3 Mar 2026'",
+            "title": "Source",
+            "type": "string"
+          },
+          "stage": {
+            "enum": [
+              "open_deal",
+              "customer",
+              "past_customer",
+              "lost_deal",
+              "contacted",
+              "cold"
+            ],
+            "title": "Stage",
+            "type": "string"
+          }
+        },
+        "required": [
+          "stage",
+          "since",
+          "reason",
+          "source"
+        ],
+        "title": "Relationship",
         "type": "object"
       },
       "ResearchCost": {
@@ -9966,6 +10081,10 @@
             "default": 8,
             "title": "Team Max Notes",
             "type": "integer"
+          },
+          "tone": {
+            "$ref": "#/components/schemas/ToneView",
+            "description": "The tone presets (PLAN-V15). The API always sends it"
           }
         },
         "required": [
@@ -11678,6 +11797,25 @@
         "title": "TbcNote",
         "type": "object"
       },
+      "TeamToneIn": {
+        "properties": {
+          "tone": {
+            "enum": [
+              "friendly",
+              "direct",
+              "consultative",
+              "formal"
+            ],
+            "title": "Tone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tone"
+        ],
+        "title": "TeamToneIn",
+        "type": "object"
+      },
       "TestItem": {
         "description": "One company of a test run.",
         "properties": {
@@ -11919,6 +12057,112 @@
           "prompt_versions"
         ],
         "title": "TestSummary",
+        "type": "object"
+      },
+      "ToneChoice": {
+        "properties": {
+          "key": {
+            "enum": [
+              "friendly",
+              "direct",
+              "consultative",
+              "formal"
+            ],
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "description": "Its name on screen, like Direct",
+            "title": "Label",
+            "type": "string"
+          },
+          "line": {
+            "description": "What it means, like 'Short sentences, the reason first.'",
+            "title": "Line",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "line"
+        ],
+        "title": "ToneChoice",
+        "type": "object"
+      },
+      "ToneIn": {
+        "properties": {
+          "tone": {
+            "anyOf": [
+              {
+                "enum": [
+                  "friendly",
+                  "direct",
+                  "consultative",
+                  "formal"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "My tone, or None to follow the team's default",
+            "title": "Tone"
+          }
+        },
+        "required": [
+          "tone"
+        ],
+        "title": "ToneIn",
+        "type": "object"
+      },
+      "ToneView": {
+        "description": "The tone presets (PLAN-V15 T3-5): mine, the team's default, and the four to pick from.",
+        "properties": {
+          "choices": {
+            "items": {
+              "$ref": "#/components/schemas/ToneChoice"
+            },
+            "title": "Choices",
+            "type": "array"
+          },
+          "mine": {
+            "anyOf": [
+              {
+                "enum": [
+                  "friendly",
+                  "direct",
+                  "consultative",
+                  "formal"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "My own tone, or None to follow the team",
+            "title": "Mine"
+          },
+          "team": {
+            "description": "The team's default: Friendly until an Admin picks another",
+            "enum": [
+              "friendly",
+              "direct",
+              "consultative",
+              "formal"
+            ],
+            "title": "Team",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mine",
+          "team",
+          "choices"
+        ],
+        "title": "ToneView",
         "type": "object"
       },
       "TriggerFacet": {
@@ -15770,6 +16014,153 @@
         ]
       }
     },
+    "/companies/script-style/team-tone": {
+      "put": {
+        "description": "Admins only. The tone for everyone who hasn't picked their own. 403 `admin_only`.",
+        "operationId": "save_team_tone",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeamToneIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScriptStyleOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Save the team's tone",
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
     "/companies/script-style/team/{note_id}": {
       "delete": {
         "description": "Admins only. The note leaves everyone's next scripts.",
@@ -16212,6 +16603,153 @@
           }
         ],
         "summary": "Reject a team note",
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/script-style/tone": {
+      "put": {
+        "description": "My tone preset: friendly, direct, consultative or formal, or null to follow the team's default. It goes into my next scripts. It never starts a prep: a ready one is still reused, and the card offers Research again.",
+        "operationId": "save_my_tone",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToneIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScriptStyleOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Save my tone",
         "tags": [
           "Companies"
         ]

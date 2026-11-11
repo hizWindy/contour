@@ -18,6 +18,7 @@ DayOrNone = date | None
 SortKey = Literal["name", "staff", "lease", "last_talk"]
 SortOrder = Literal["asc", "desc"]
 PeopleStatus = Literal["ready", "waiting"]
+ToneKey = Literal["friendly", "direct", "consultative", "formal"]  # the tone presets (PLAN-V15)
 
 
 class Out(BaseModel):
@@ -144,7 +145,35 @@ class CompanyLead(Out):
     link: str
 
 
+RelationshipStage = Literal[
+    "open_deal", "customer", "past_customer", "lost_deal", "contacted", "cold"
+]
+
+
+class Relationship(Out):
+    """Where we stand with the company (PLAN-V15 T3-3). Both call scripts open from it."""
+
+    stage: RelationshipStage
+    since: DayOrNone = Field(
+        description=(
+            "The date the stage rests on: the last talk, or the won or lost deal's close date. "
+            "None when there is none, as for an open deal or a cold call"
+        )
+    )
+    reason: str = Field(
+        description="One plain sentence, like 'Open deal: Perth fitout, at Proposal.'"
+    )
+    source: str = Field(
+        description="Where it shows, like 'HubSpot deal' or 'HubSpot call, 3 Mar 2026'"
+    )
+
+
 class CompanyDetail(Out):
+    model_config = ConfigDict(
+        json_schema_serialization_defaults_required=True,
+        json_schema_extra=optional_in_types("relationship"),
+    )
+
     key: str
     source: Source
     name: str
@@ -172,6 +201,10 @@ class CompanyDetail(Out):
         description="waiting: HubSpot can't give contacts and calls yet (its scopes)"
     )
     lead: CompanyLead | None = Field(description="Only with the Lead Finder tick")
+    relationship: Relationship = Field(
+        description="Where we stand: open deal, customer, past customer, lost deal, contacted "
+        "before, or cold (PLAN-V15). The API always sends it"
+    )
 
 
 # --- The prep box ------------------------------------------------------------------------------
@@ -230,6 +263,11 @@ class PrepPerson(Out):
 class PrepFacts(Out):
     """Everything we already know, each fact with its source. Free: no Claude request."""
 
+    model_config = ConfigDict(
+        json_schema_serialization_defaults_required=True,
+        json_schema_extra=optional_in_types("copy_at"),
+    )
+
     company_key: str
     company_name: str
     city: str | None
@@ -253,6 +291,11 @@ class PrepFacts(Out):
     prep_cap_usd: Decimal = Field(
         Decimal("0.25"),
         description="The most one prep may cost: what 'Research again' costs at most (PLAN-V14)",
+    )
+    copy_at: datetime | None = Field(
+        None,
+        description="When the last HubSpot sync finished, so the card can say an old copy is old "
+        "(PLAN-V15). None before the first sync",
     )
 
 
@@ -299,6 +342,11 @@ class NewsLine(ScriptLine):
 
 
 class PrepScript(Out):
+    model_config = ConfigDict(
+        json_schema_serialization_defaults_required=True,
+        json_schema_extra=optional_in_types("tone_line"),
+    )
+
     still_there: StillThere
     still_there_note: ScriptLine | None
     news: list[NewsLine] = Field(description="Newest first, with undated items last")
@@ -308,6 +356,11 @@ class PrepScript(Out):
     if_they_say: list[Objection]
     goal: ScriptLine | None
     dropped: int = Field(description="Lines left out because they had no source")
+    tone_line: str | None = Field(
+        None,
+        description="Claude's own line on how to sound, in the chosen tone (PLAN-V15). Advice, "
+        "not said aloud. None for a prep made before 12 Nov",
+    )
 
 
 class StyleUsed(Out):
@@ -320,7 +373,7 @@ class StyleUsed(Out):
 class PrepOut(Out):
     model_config = ConfigDict(
         json_schema_serialization_defaults_required=True,
-        json_schema_extra=optional_in_types("style_used"),
+        json_schema_extra=optional_in_types("style_used", "tone_used", "stage_used"),
     )
 
     id: uuid.UUID
@@ -343,6 +396,14 @@ class PrepOut(Out):
         default_factory=StyleUsed,
         description="The style notes the script was written with. None for a prep before 11 Nov "
         "or one made with no notes",
+    )
+    tone_used: ToneKey | None = Field(
+        None,
+        description="The tone it was written in (PLAN-V15). None for a prep before 12 Nov. When "
+        "it differs from mine, the card offers Research again; a tone change spends nothing",
+    )
+    stage_used: RelationshipStage | None = Field(
+        None, description="The relationship stage it was written for. None before 12 Nov"
     )
 
 
@@ -402,8 +463,35 @@ class StyleNoteOut(Out):
     created_at: datetime
 
 
+class ToneChoice(Out):
+    key: ToneKey
+    label: str = Field(description="Its name on screen, like Direct")
+    line: str = Field(description="What it means, like 'Short sentences, the reason first.'")
+
+
+class ToneView(Out):
+    """The tone presets (PLAN-V15 T3-5): mine, the team's default, and the four to pick from."""
+
+    mine: ToneKey | None = Field(description="My own tone, or None to follow the team")
+    team: ToneKey = Field(description="The team's default: Friendly until an Admin picks another")
+    choices: list[ToneChoice]
+
+
+class ToneIn(BaseModel):
+    tone: ToneKey | None = Field(description="My tone, or None to follow the team's default")
+
+
+class TeamToneIn(BaseModel):
+    tone: ToneKey
+
+
 class ScriptStyleOut(Out):
     """My style and the team's: what the next script is written with."""
+
+    model_config = ConfigDict(
+        json_schema_serialization_defaults_required=True,
+        json_schema_extra=optional_in_types("tone"),
+    )
 
     mine: str = Field(description="Your style, or an empty string")
     mine_updated_at: datetime | None
@@ -418,6 +506,7 @@ class ScriptStyleOut(Out):
     mine_max_chars: int = MINE_MAX_CHARS
     team_max_chars: int = TEAM_MAX_CHARS
     team_max_notes: int = TEAM_MAX_NOTES
+    tone: ToneView = Field(description="The tone presets (PLAN-V15). The API always sends it")
 
 
 class StyleMineIn(BaseModel):

@@ -13,6 +13,7 @@
  */
 import { CircleCheck, CircleDashed, RefreshCw } from 'lucide-react'
 import { useId } from 'react'
+import type { ToneKey } from '@/api/hooks/script'
 import type { PrepOut, StyleUsed } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
@@ -20,6 +21,7 @@ import { formatRelative, formatTime } from '@/lib/format'
 import { formatMoney } from '@/lib/money'
 import { cn } from '@/lib/utils'
 import type { CallGuide } from './playbook'
+import { copyWords, toneHint } from './style-words'
 
 /** The id of the title, for the section's `aria-labelledby`. */
 export const SCRIPT_TITLE_ID = 'sales-script'
@@ -92,6 +94,10 @@ export interface ScriptHeaderProps {
   stage: number
   /** The last try failed: the request was refused, or the prep failed. */
   failed: boolean
+  /** The tone my scripts use now (PLAN-V15), or null before the style loads. */
+  toneNow?: ToneKey | null
+  /** When the last HubSpot sync finished (`copy_at`), or null when not known. */
+  copyAt?: string | null
   onResearch: () => void
 }
 
@@ -112,6 +118,8 @@ function statusWords({ madeFrom, prep, running }: ScriptHeaderProps): string {
 export function ScriptHeader(props: ScriptHeaderProps) {
   const { enabled, running, stage, failed, onResearch } = props
   const hint = useId()
+  const tone = props.madeFrom === 'claude' ? toneHint(props.prep?.tone_used, props.toneNow) : null
+  const copy = copyWords(props.copyAt)
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -122,6 +130,8 @@ export function ScriptHeader(props: ScriptHeaderProps) {
           <p role="status" className="text-caption text-muted-foreground">
             {statusWords(props)}
           </p>
+          {copy ? <p className="basis-full text-caption text-foreground">{copy}</p> : null}
+          {tone ? <p className="basis-full text-caption text-foreground">{tone}</p> : null}
         </div>
         <div className="flex shrink-0 flex-col gap-1 sm:w-64 sm:items-end">
           <Button

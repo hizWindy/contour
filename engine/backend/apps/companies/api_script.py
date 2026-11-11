@@ -5,6 +5,8 @@
 - `PUT /script-style/mine`: my style (an empty text clears it).
 - `POST /script-style/team`: suggest a team note (an Admin's own is active at once, TBC).
 - `POST /script-style/team/{id}/approve` and `/reject`, `DELETE /script-style/team/{id}`: Admins.
+- `PUT /script-style/tone`: my tone preset, or none to follow the team (PLAN-V15 T3-5).
+- `PUT /script-style/team-tone`: the team's default tone. Admins.
 
 Each change to a style answers with the whole style, so the website shows it at once. The routes
 sit before `/{key}` in the Companies router, so `script-style` is never read as a company key.
@@ -15,7 +17,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Path, Query, Response
 
-from apps.companies import script_notes, store
+from apps.companies import script_notes, store, tones
 from apps.companies.schemas import (
     SLOT_PATTERN,
     ScriptEditIn,
@@ -23,6 +25,8 @@ from apps.companies.schemas import (
     ScriptStyleOut,
     StyleMineIn,
     StyleNoteIn,
+    TeamToneIn,
+    ToneIn,
 )
 from core.api.access import SignedInDep
 from core.api.deps import SessionDep
@@ -39,8 +43,8 @@ NoteId = Annotated[uuid.UUID, Path()]
 def _company_not_found() -> Problem:
     return Problem(
         404,
-        "Company not found",
-        "There is no company with that key here.",
+        "We can't find that company",
+        "It may have been removed, or it isn't open to your account.",
         code="company_not_found",
     )
 
@@ -131,6 +135,38 @@ async def save_my_style(
     body: StyleMineIn, session: SessionDep, auth: SignedInDep, now: NowDep
 ) -> ScriptStyleOut:
     return await script_notes.save_mine(session, auth, body.text, now)
+
+
+@router.put(
+    "/script-style/tone",
+    response_model=ScriptStyleOut,
+    summary="Save my tone",
+    description=(
+        "My tone preset: friendly, direct, consultative or formal, or null to follow the team's "
+        "default. It goes into my next scripts. It never starts a prep: a ready one is still "
+        "reused, and the card offers Research again."
+    ),
+)
+async def save_my_tone(
+    body: ToneIn, session: SessionDep, auth: SignedInDep, now: NowDep
+) -> ScriptStyleOut:
+    await tones.save_mine(session, script_notes.user_of(auth), body.tone, now)
+    return await script_notes.style_view(session, auth)
+
+
+@router.put(
+    "/script-style/team-tone",
+    response_model=ScriptStyleOut,
+    summary="Save the team's tone",
+    description="Admins only. The tone for everyone who hasn't picked their own. 403 `admin_only`.",
+)
+async def save_team_tone(
+    body: TeamToneIn, session: SessionDep, auth: SignedInDep, now: NowDep
+) -> ScriptStyleOut:
+    if not script_notes.can_decide(auth):
+        raise script_notes.admins_only()
+    await tones.save_team(session, body.tone, now)
+    return await script_notes.style_view(session, auth)
 
 
 @router.post(

@@ -8,7 +8,7 @@
  * sheet; after a style change it says "Not used yet" until a new script is made. T3-6: each
  * editable line has a pencil (`line-editor.tsx`), and the first save offers "Make it my style".
  */
-import { CornerDownRight, Flag, MessageCircle } from 'lucide-react'
+import { CornerDownRight, Flag, Info, MessageCircle } from 'lucide-react'
 import { useMemo, useState, type ReactNode } from 'react'
 import { Pending, SkeletonLines } from '@/components/skeletons'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -112,6 +112,12 @@ export function SalesScript({ guide }: { guide: CallGuide }) {
             setChangedOn(draft)
           }}
         />
+        {guide.notices?.map((notice) => (
+          <p key={notice} role="status" className="flex items-start gap-2 text-ui text-foreground">
+            <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+            <span className="min-w-0">{notice}</span>
+          </p>
+        ))}
         {guide.tone ? (
           <p className="flex items-start gap-2 text-ui text-muted-foreground">
             <MessageCircle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />

@@ -1,8 +1,11 @@
 """Tells the core about the Companies page (PLAN-V10): its name, endpoints, schema and HubSpot
 needs. Its rows from other projects come through their `company_leads` hook."""
 
+from fastapi import FastAPI
+
 from apps.companies.api import router
 from apps.companies.jobs import JOBS
+from apps.companies.prep import PrepRunner
 from core.apps import AppSpec
 from core.hubspot.needs import HubSpotNeeds
 
@@ -20,6 +23,15 @@ HUBSPOT_NEEDS = HubSpotNeeds(
         "people and their logged calls for the People list, Call history and call prep."
     ),
 )
+
+
+async def stop_preps(app: FastAPI) -> None:
+    """Stops the preps running in this backend when it shuts down, and logs their spend (PLAN-V15
+    T3-7). For `AppSpec.on_shutdown`, which comes with Track 1's T1-6: PLAN-V15 M1 adds
+    `on_shutdown=stop_preps` below."""
+    runner: PrepRunner | None = getattr(app.state, "prep_runner", None)
+    if runner is not None:
+        await runner.stop()
 
 
 def check_rules() -> None:

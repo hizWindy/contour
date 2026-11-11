@@ -13,7 +13,13 @@
  * what fixing it is worth (SPIN), then who else decides; each pushback answer names the feeling,
  * agrees with what is fair and asks one question; a tone line says warm for a returning client
  * and light for a cold call. A feeling is only ever a question. The wording is TBC with Levi.
+ *
+ * PLAN-V15 T3-4: the opener and the tone follow the company's relationship stage, which the
+ * backend works out (`company.relationship`), so the free script and Claude's agree. Only a cold
+ * call says what Contour does. A switchboard call that isn't cold asks for the last contact by name.
  */
+import type { Relationship, RelationshipStage } from '@/api/hooks/companies'
+import { TONE_DEFAULT, type ToneKey } from '@/api/hooks/script'
 import type {
   CompanyCall,
   CompanyDeal,
@@ -93,16 +99,80 @@ export interface CallGuide {
   dropped: number
   /** The call its line edits are saved for (set by `useGuide`). Absent: the lines can't be edited. */
   call?: ScriptCall
+  /** One-line notes above the script (PLAN-V15 T3-7), like "Your own lines couldn't be loaded". */
+  notices?: string[]
 }
 
 export interface GuideInput {
   company: CompanyDetail
   /** The person being called, or null for a cold call to the switchboard. */
   person: { name: string; title: string | null } | null
-  /** The caller's first name, or null when nobody is signed in. */
+  /** The caller's name, or null when nobody is signed in. */
   caller: string | null
   /** Today in Melbourne, as YYYY-MM-DD. */
   today: string
+  /** The tone to write in (PLAN-V15 T3-6): mine, else the team's. Friendly when absent. */
+  tone?: ToneKey
+}
+
+export const TONE_LABELS: Record<ToneKey, string> = {
+  friendly: 'Friendly',
+  direct: 'Direct',
+  consultative: 'Consultative',
+  formal: 'Formal',
+}
+
+/** The words that change with the tone preset (PLAN-V15 T3-6). The wording is TBC with Levi. */
+interface ToneWords {
+  /** The hello to the person: their first and full name, the caller's first and full name. */
+  hello: (first: string, full: string, me: string, meFull: string) => string
+  /** The hello to the switchboard. */
+  board: (me: string, meFull: string) => string
+  /** Asking for time: asking first lowers the pressure of the call. */
+  timeAsk: string
+  /** How a pushback answer names the feeling, like "Sounds like". */
+  sounds: string
+  /** Added to the goal: how to close the call. */
+  close: string
+  /** The tone line's advice for this preset. */
+  advice: string
+}
+
+const TONE_WORDS: Record<ToneKey, ToneWords> = {
+  friendly: {
+    hello: (first, _full, me) => `Hi ${first}, it's ${me} from Contour.`,
+    board: (me) => `Hi, it's ${me} from Contour.`,
+    timeAsk: 'Do you have two minutes, or is there a better time?',
+    sounds: 'Sounds like',
+    close: '',
+    advice: 'Keep it friendly: a short greeting and plain words.',
+  },
+  direct: {
+    hello: (first, _full, me) => `${first}, it's ${me} from Contour.`,
+    board: (me) => `It's ${me} from Contour.`,
+    timeAsk: 'Have you got two minutes?',
+    sounds: 'Understood,',
+    close: ' Ask for a day and time before you hang up.',
+    advice: 'Keep it direct: short sentences, the reason first, no small talk.',
+  },
+  consultative: {
+    hello: (first, _full, me) => `Hi ${first}, it's ${me} from Contour.`,
+    board: (me) => `Hi, it's ${me} from Contour.`,
+    timeAsk: 'Is now a good time for a few questions, or is there a better time?',
+    sounds: 'It sounds like',
+    close: ' Ask what they would want to get out of it.',
+    advice: 'Keep it consultative: questions first, and be curious about their workplace.',
+  },
+  formal: {
+    hello: (_first, full, _me, meFull) =>
+      `Good morning ${full}, my name is ${meFull}, from Contour Commercial Interiors.`,
+    board: (_me, meFull) =>
+      `Good morning, my name is ${meFull}, from Contour Commercial Interiors.`,
+    timeAsk: 'Would you have two minutes to speak now, or would another time suit you better?',
+    sounds: 'I understand that',
+    close: ' Offer to confirm it in writing.',
+    advice: 'Keep it formal: full names and titles, and no slang.',
+  },
 }
 
 /** A lease ending this soon is a reason to call. */
@@ -218,12 +288,36 @@ function openDeal(company: CompanyDetail): CompanyDeal | null {
   return company.deals.find((deal) => deal.state === 'open') ?? null
 }
 
-function isCustomer(company: CompanyDetail): boolean {
-  return (
-    company.deal === 'customer' ||
-    company.lifecycle_stage?.toLowerCase() === 'customer' ||
-    company.deals.some((deal) => deal.state === 'won')
-  )
+/** The deal in this state with the latest close date (undated ones last). */
+function newestDeal(company: CompanyDetail, state: CompanyDeal['state']): CompanyDeal | null {
+  const found = company.deals.filter((deal) => deal.state === state)
+  found.sort((a, b) => (b.close_date ?? '').localeCompare(a.close_date ?? ''))
+  return found[0] ?? null
+}
+
+/** A backend from before PLAN-V15 sends no stage: the script is written as for a cold call. */
+const NO_RELATIONSHIP: Relationship = { stage: 'cold', since: null, reason: '', source: '' }
+
+const FULL_MONTHS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+]
+
+/** "March", or "March 2025" when it isn't this year. */
+function monthWords(date: string, today: string): string {
+  const { year, month } = dateParts(date)
+  const name = FULL_MONTHS[month - 1] ?? ''
+  return year === dateParts(today).year ? name : `${name} ${String(year)}`
 }
 
 /** The newest call with this person, else the newest call with the company. */
@@ -265,8 +359,6 @@ function question(
 const STANDARD = 'A standard question'
 /** The reason to call when no fact gives one. */
 const NO_REASON = "I'm calling to see what's ahead for your office over the next year or two."
-/** Asking for time first lowers the pressure of the call. */
-const TIME_ASK = 'Do you have two minutes, or is there a better time?'
 const AFTER_NO = 'After a second no, thank them and let it go.'
 
 /** Everything the rules look at, worked out once. */
@@ -274,9 +366,18 @@ interface Known {
   company: CompanyDetail
   person: GuideInput['person']
   me: string
+  /** The caller's full name, for the Formal tone. */
+  meFull: string
+  /** The words of the tone preset. */
+  words: ToneWords
   today: string
+  /** Where we stand, from the backend (PLAN-V15 T3-3). */
+  relationship: Relationship
+  stage: RelationshipStage
   lease: Lease | null
+  /** The open deal, when the stage is an open deal. */
   deal: CompanyDeal | null
+  /** A customer or a past customer. */
   customer: boolean
   call: CompanyCall | null
   callDay: string | null
@@ -290,14 +391,20 @@ function know(input: GuideInput): Known {
   const call = lastCall(input.company, input.person)
   const callDay = call?.called_at ? call.called_at.slice(0, 10) : null
   const theirCall = Boolean(input.person && call && callDay && call.person === input.person.name)
+  const relationship = input.company.relationship ?? NO_RELATIONSHIP
+  const stage = relationship.stage
   return {
     company: input.company,
     person: input.person,
     me: input.caller?.trim() ? firstName(input.caller) : YOUR_NAME,
+    meFull: input.caller?.trim() ? input.caller.trim() : YOUR_NAME,
+    words: TONE_WORDS[input.tone ?? TONE_DEFAULT],
     today: input.today,
+    relationship,
+    stage,
     lease: nearestLease(input.company, input.today),
-    deal: openDeal(input.company),
-    customer: isCustomer(input.company),
+    deal: stage === 'open_deal' ? openDeal(input.company) : null,
+    customer: stage === 'customer' || stage === 'past_customer',
     call,
     callDay,
     theirCall,
@@ -305,35 +412,54 @@ function know(input: GuideInput): Known {
   }
 }
 
-/** Warm for a returning client (a customer, someone we've spoken to, an open deal), else light. */
+/** The stage's part of the tone line: warm for a returning client, light for a cold call. */
+function stageTone(known: Known): GuideLine {
+  const { stage, relationship } = known
+  const source = relationship.source || null
+  switch (stage) {
+    case 'open_deal':
+      return line(
+        'Warm. There is a deal in progress, so pick up where it stands.',
+        'HubSpot: deal',
+        'deal',
+      )
+    case 'customer':
+      return line(
+        'Warm. They are a client, so catch up before the questions.',
+        'A Contour customer',
+        'customer',
+      )
+    case 'past_customer':
+      return line(
+        'Warm. They were a client, so remind them of the work and catch up.',
+        'A past Contour customer',
+        'customer',
+      )
+    case 'lost_deal':
+      return line(
+        "Warm and patient. The last deal didn't go ahead, so ask what has changed first.",
+        source,
+        'deal',
+      )
+    case 'contacted':
+      return line(
+        'Warm. You have been in touch before, so pick up where you left off.',
+        source,
+        'call',
+      )
+    default:
+      return line(
+        'Light. A cold call: keep it short, and listen more than you talk.',
+        null,
+        'standard',
+      )
+  }
+}
+
+/** How to sound: the stage first, then the tone preset's advice (PLAN-V15). */
 function tone(known: Known): GuideLine {
-  const { customer, spoke, callDay, deal } = known
-  if (customer) {
-    return line(
-      `Warm. They are a client, so catch up before the questions. ${AFTER_NO}`,
-      'A Contour customer',
-      'customer',
-    )
-  }
-  if (spoke && callDay) {
-    return line(
-      `Warm. You have spoken before, so pick up where you left off. ${AFTER_NO}`,
-      `HubSpot call, ${fullDay(callDay)}`,
-      'call',
-    )
-  }
-  if (deal) {
-    return line(
-      `Warm. There is a deal in progress, so pick up where it stands. ${AFTER_NO}`,
-      'HubSpot: deal',
-      'deal',
-    )
-  }
-  return line(
-    `Light. A cold call: keep it short and friendly, and listen more than you talk. ${AFTER_NO}`,
-    null,
-    'standard',
-  )
+  const base = stageTone(known)
+  return { ...base, text: `${base.text} ${known.words.advice} ${AFTER_NO}` }
 }
 
 function leaseWhy(lease: Lease): string {
@@ -342,9 +468,19 @@ function leaseWhy(lease: Lease): string {
 
 /** One sentence that gives the reason for the call, for the opener. */
 function hook(known: Known): GuideLine | null {
-  const { deal, lease, customer, company } = known
+  const { deal, lease, customer, company, stage } = known
   if (deal) {
     return line(`I wanted to follow up on ${deal.name}.`, 'HubSpot: deal', 'deal')
+  }
+  if (stage === 'lost_deal') {
+    const lost = newestDeal(company, 'lost')
+    return line(
+      lost
+        ? `Last time, the timing wasn't right for ${lost.name}, so I wanted to see what's changed.`
+        : "Last time, the timing wasn't right, so I wanted to see what's changed.",
+      'HubSpot: deal',
+      'deal',
+    )
   }
   if (lease && lease.months <= LEASE_REASON_MONTHS) {
     return line(
@@ -365,52 +501,106 @@ function hook(known: Known): GuideLine | null {
   return null
 }
 
-/** Who, then why, then ask for two minutes. */
+/** The person we last spoke with, for a switchboard call that isn't cold. */
+function lastContact(known: Known): { name: string; said: string; why: string } | null {
+  const { company, today } = known
+  const call = company.calls.find((item) => item.called_at && item.person)
+  if (call?.called_at && call.person) {
+    const day = call.called_at.slice(0, 10)
+    return {
+      name: call.person,
+      said: `We spoke in ${monthWords(day, today)}.`,
+      why: `HubSpot call, ${fullDay(day)}`,
+    }
+  }
+  const people = company.people.filter((item) => item.last_activity)
+  people.sort((a, b) => (b.last_activity ?? '').localeCompare(a.last_activity ?? ''))
+  const person = people[0]
+  if (person?.last_activity) {
+    return {
+      name: person.name,
+      said: `We were in touch in ${monthWords(person.last_activity.slice(0, 10), today)}.`,
+      why: 'HubSpot contact',
+    }
+  }
+  return null
+}
+
+/** What the hello adds after "it's Mia from Contour.", by the stage. Null: nothing to add. */
+function remember(known: Known): GuideLine | null {
+  const { stage, company, call, callDay, theirCall, spoke, relationship, today } = known
+  if (stage === 'past_customer') {
+    const won = newestDeal(company, 'won')
+    if (!won) return null
+    const year = won.close_date ? ` in ${won.close_date.slice(0, 4)}` : ''
+    return line(`We did your ${won.name}${year}.`, 'HubSpot: deal', 'customer')
+  }
+  if (theirCall && callDay && spoke) {
+    return line(`We spoke on ${dayMonth(callDay)}.`, `HubSpot call, ${fullDay(callDay)}`, 'call')
+  }
+  if (theirCall && callDay && call?.outcome && VOICEMAIL.test(call.outcome)) {
+    return line(
+      `We left you a message on ${dayMonth(callDay)}.`,
+      `HubSpot call, ${fullDay(callDay)}`,
+      'call',
+    )
+  }
+  if (stage !== 'contacted') return null
+  if (call?.person && callDay) {
+    return line(
+      `We spoke with ${call.person} on ${dayMonth(callDay)}.`,
+      `HubSpot call, ${fullDay(callDay)}`,
+      'call',
+    )
+  }
+  if (!relationship.since) return null
+  return line(
+    `We were last in touch in ${monthWords(relationship.since, today)}.`,
+    relationship.source || null,
+    'call',
+  )
+}
+
+/** Who, then why, then ask for two minutes. Only a cold call says what Contour does. */
 function opener(known: Known): GuideLine[] {
-  const { person, me, call, callDay, theirCall, spoke } = known
+  const { person, me, meFull, stage, words } = known
   const reason = hook(known)
   if (!person) {
+    const contact = stage === 'cold' ? null : lastContact(known)
+    const board = words.board(me, meFull)
+    const what = stage === 'cold' ? ' We design and build offices.' : ''
+    const ask = contact
+      ? line(`${board} Could I speak to ${contact.name}? ${contact.said}`, contact.why, 'call')
+      : line(
+          `${board}${what} Could I speak to whoever looks after your office space?`,
+          null,
+          'standard',
+        )
     return [
-      line(
-        `Hi, it's ${me} from Contour. We design and build offices. Could I speak to whoever looks after your office space?`,
-        null,
-        'standard',
-      ),
+      ask,
       line(
         `When you're put through: ${reason ? reason.text : NO_REASON}`,
         reason?.why ?? null,
         reason?.icon ?? 'standard',
       ),
-      line(`Then: ${TIME_ASK}`, null, 'standard'),
+      line(`Then: ${words.timeAsk}`, null, 'standard'),
     ]
   }
-  const first = firstName(person.name)
+  const hi = words.hello(firstName(person.name), person.name, me, meFull)
+  const memory = remember(known)
   let hello: GuideLine
-  if (spoke && callDay) {
-    hello = line(
-      `Hi ${first}, it's ${me} from Contour. We spoke on ${dayMonth(callDay)}.`,
-      `HubSpot call, ${fullDay(callDay)}`,
-      'call',
-    )
-  } else if (theirCall && callDay && call?.outcome && VOICEMAIL.test(call.outcome)) {
-    hello = line(
-      `Hi ${first}, it's ${me} from Contour. We left you a message on ${dayMonth(callDay)}.`,
-      `HubSpot call, ${fullDay(callDay)}`,
-      'call',
-    )
-  } else {
-    hello = line(
-      `Hi ${first}, it's ${me} from Contour. We design and build offices.`,
-      null,
-      'standard',
-    )
-  }
-  return [hello, reason ?? line(NO_REASON, null, 'standard'), line(TIME_ASK, null, 'standard')]
+  if (stage === 'cold') hello = line(`${hi} We design and build offices.`, null, 'standard')
+  else if (memory) hello = line(`${hi} ${memory.text}`, memory.why, memory.icon)
+  else hello = line(hi, null, 'standard')
+  return [hello, reason ?? line(NO_REASON, null, 'standard'), line(words.timeAsk, null, 'standard')]
 }
 
 function whyNow(known: Known): GuideLine[] {
-  const { company, lease, deal, today } = known
+  const { company, lease, deal, today, stage, relationship } = known
   const reasons: GuideLine[] = []
+  if (stage === 'lost_deal' && relationship.reason) {
+    reasons.push(line(relationship.reason, relationship.source || null, 'deal'))
+  }
   if (lease && lease.months <= LEASE_REASON_MONTHS) {
     reasons.push(
       line(
@@ -499,9 +689,9 @@ function theme(known: Known): Theme {
 
 /** Situation questions, in the order they are asked, and the one the theme needs. */
 function situation(known: Known, about: Theme): GuideQuestion[] {
-  const { company, lease, deal, callDay, theirCall, today } = known
+  const { company, lease, deal, callDay, theirCall, today, stage } = known
   const spokeQ =
-    theirCall && callDay
+    theirCall && callDay && stage !== 'cold'
       ? question(
           `Last time we spoke was on ${dayMonth(callDay)}. What has changed since then?`,
           `HubSpot call, ${fullDay(callDay)}`,
@@ -763,13 +953,11 @@ function questions(known: Known): GuideQuestion[] {
   return [...situation(known, about), ...spin(known, about), decision(known)]
 }
 
-/** Pushback in three beats: name the feeling, agree with what is fair, ask one question. */
-function beats(feeling: string, fair: string, ask: string): string {
-  return `Sounds like ${feeling}. ${fair} ${ask}`
-}
-
 function objections(known: Known): GuideObjection[] {
-  const { person, lease, customer, company, today } = known
+  const { person, lease, customer, company, today, words } = known
+  /** Pushback in three beats: name the feeling, agree with what is fair, ask one question. */
+  const beats = (feeling: string, fair: string, ask: string): string =>
+    `${words.sounds} ${feeling}. ${fair} ${ask}`
   if (!person) {
     return [
       {
@@ -867,7 +1055,15 @@ function objections(known: Known): GuideObjection[] {
   return out.slice(0, MAX_OBJECTIONS)
 }
 
+/** The goal, then how to close in the tone's words. The switchboard's goal has no close. */
 function goal(known: Known): GuideLine {
+  const aim = goalLine(known)
+  return known.person && known.words.close
+    ? { ...aim, text: `${aim.text}${known.words.close}` }
+    : aim
+}
+
+function goalLine(known: Known): GuideLine {
   const { person, deal, customer, lease } = known
   if (!person) {
     return line(
@@ -933,7 +1129,11 @@ function fromLine(item: ScriptLine, labels: ReadonlyMap<string, string>): GuideL
 export function guideFromPrep(script: PrepScript, labels: ReadonlyMap<string, string>): CallGuide {
   return {
     madeFrom: 'claude',
-    tone: null,
+    // Claude's own tone line (PLAN-V15). A prep from before 12 Nov has none: the card adds the
+    // free script's.
+    tone: script.tone_line
+      ? { text: script.tone_line, why: null, sources: [], icon: 'standard' }
+      : null,
     opener: script.opener.map((item) => fromLine(item, labels)),
     whyNow: script.why_now.map((item) => fromLine(item, labels)),
     questions: script.questions.map((item) => ({

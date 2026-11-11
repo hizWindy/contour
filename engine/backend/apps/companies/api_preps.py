@@ -16,15 +16,16 @@ from typing import Annotated
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Path, Query, Request, Response
-from sqlalchemy import or_, select
+from sqlalchemy import Select, or_, select
+from sqlalchemy.exc import IntegrityError
 
 from apps.companies import store
 from apps.companies.deps import LeadsDep
-from apps.companies.facts import build_facts, facts_out
+from apps.companies.facts import build_facts, copy_finished_at, facts_out
 from apps.companies.prep import (
-    STUCK_MINUTES,
     PrepContext,
     PrepRunner,
+    fail_stuck,
     is_stuck,
     prep_out,
 )
@@ -62,8 +63,8 @@ Key = Annotated[str, Path(min_length=1, max_length=64)]
 def company_not_found() -> Problem:
     return Problem(
         404,
-        "Company not found",
-        "There is no such company, or it isn't open to your account.",
+        "We can't find that company",
+        "It may have been removed, or it isn't open to your account.",
         code="company_not_found",
     )
 
@@ -71,8 +72,8 @@ def company_not_found() -> Problem:
 def prep_not_found() -> Problem:
     return Problem(
         404,
-        "Prep not found",
-        "There is no such call prep, or it isn't open to your account.",
+        "We can't find that call prep",
+        "It may have been removed, or it isn't open to your account.",
         code="prep_not_found",
     )
 
@@ -81,9 +82,18 @@ def prep_off() -> Problem:
     return Problem(
         409,
         "Call prep is off",
-        "Call scripts are switched off. An Admin switches them on in Admin, Settings. The facts "
-        "from HubSpot still show.",
+        "Call scripts are switched off. An admin can switch them on in Admin, Settings. The "
+        "facts from HubSpot still show.",
         code="prep_off",
+    )
+
+
+def prep_running() -> Problem:
+    return Problem(
+        409,
+        "Someone is preparing this call",
+        "Someone else is preparing a script for this call right now. Try again in a minute.",
+        code="prep_running",
     )
 
 
@@ -160,10 +170,31 @@ async def get_prep(
     if prep is None or not may_see(prep, leads):
         raise prep_not_found()
     if is_stuck(prep, runner, datetime.now(UTC)):
-        prep.status = "failed"
-        prep.error = "This prep stopped when the server restarted. Press Research again."
-        prep.finished_at = datetime.now(UTC)
+        fail_stuck(prep, datetime.now(UTC))
         await session.commit()
+    return await _out(session, prep)
+
+
+async def _searching(
+    session: SessionDep, call: Select[Prep], runner: PrepRunner, now: datetime
+) -> Prep | None:
+    """The prep searching for this call, if any (the unique index allows one). One that a restart
+    left searching is marked failed first, so a new one can start."""
+    prep = await session.scalar(
+        call.where(Prep.status == "searching").order_by(Prep.created_at.desc()).limit(1)
+    )
+    if prep is not None and is_stuck(prep, runner, now):
+        fail_stuck(prep, now)
+        await session.commit()
+        return None
+    return prep
+
+
+async def _join(session: SessionDep, prep: Prep, leads: list[CompanyLeads]) -> PrepOut:
+    """The prep already searching for this call. One made with the Lead Finder's facts stays with
+    its tick: anyone else is asked to try again."""
+    if not may_see(prep, leads):
+        raise prep_running()
     return await _out(session, prep)
 
 
@@ -193,10 +224,11 @@ async def start_prep(
         raise company_not_found()
     contact_id = None if body.cold else body.contact_id
     now = datetime.now(UTC)
-    same = select(Prep).where(
+    call = select(Prep).where(
         Prep.company_key == body.company_key,
         Prep.contact_id == contact_id if contact_id else Prep.contact_id.is_(None),
     )
+    same = call
     if not leads:  # without the Lead Finder tick, only preps made without its facts
         same = same.where(
             or_(
@@ -216,16 +248,10 @@ async def start_prep(
         if ready is not None:
             response.status_code = 200
             return await _out(session, ready, reused=True)
-    running = await session.scalar(
-        same.where(
-            Prep.status == "searching",
-            Prep.created_at >= now - timedelta(minutes=STUCK_MINUTES),
-        )
-        .order_by(Prep.created_at.desc())
-        .limit(1)
-    )
-    if running is not None and runner.running(running.id):
-        return await _out(session, running)
+    # One already running for this call comes back, even from another backend during a deploy.
+    running = await _searching(session, call, runner, now)
+    if running is not None:
+        return await _join(session, running, leads)
     if not settings.prep_enabled:
         raise prep_off()
     pack = await build_facts(session, body.company_key, contact_id, leads, now)
@@ -235,8 +261,8 @@ async def start_prep(
     if contact_id is not None and person is None:
         raise Problem(
             404,
-            "Person not found",
-            "That person isn't at this company in the HubSpot copy.",
+            "We can't find that person",
+            "They aren't at this company in our HubSpot copy any more.",
             code="person_not_found",
         )
     prep = Prep(
@@ -253,7 +279,15 @@ async def start_prep(
         made_by=auth.user.id if auth is not None else None,
     )
     session.add(prep)
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError:
+        # Another start for the same call won the race: the unique index allows one searching.
+        await session.rollback()
+        running = await _searching(session, call, runner, now)
+        if running is None:
+            raise prep_running() from None
+        return await _join(session, running, leads)
     runner.start(prep.id, context_for(settings, leads))
     return await _out(session, prep)
 
@@ -285,4 +319,5 @@ async def get_facts(
         names_ok=settings.hubspot_names_to_claude_ok,
         people_ready=pack.company.people_status == "ready",
         prep_cap_usd=settings.prep_cap_usd,
+        copy_at=await copy_finished_at(session),
     )

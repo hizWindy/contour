@@ -36,13 +36,16 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Literal
 
+import anthropic
 from pydantic import BaseModel, Field
 from sqlalchemy import select
+from sqlalchemy import text as sql_text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from apps.companies.facts import (
     COMPANY_MARK,
     PERSON_MARK,
+    STAGE_WORDS,
     FactsPack,
     build_facts,
     claude_text,
@@ -60,11 +63,13 @@ from apps.companies.schemas import (
     PrepSource,
     ScriptLine,
     StyleUsed,
+    ToneKey,
 )
 from apps.companies.script_notes import StyleNotes, notes_for_prompt
 from apps.companies.tables import Prep
+from apps.companies.tones import TONE_DEFAULT, TONE_PRESETS, tone_for, tone_words
 from core.claude.budget import Budget, BudgetSpent
-from core.claude.client import Claude, ClaudeError, Reply, WebTools
+from core.claude.client import Claude, ClaudeError, ClaudeUnavailable, Reply, WebTools
 from core.company_leads import CompanyLeads
 from core.memory.embedder import Embedder
 from core.memory.service import Note, remember_many
@@ -75,14 +80,36 @@ log = logging.getLogger(__name__)
 APP = "companies"
 # prep-2 (9 Nov): guided questions with follow-ups. prep-3 (11 Nov): news with no age limit.
 # prep-4 (11 Nov): the call technique and the style notes (PLAN-V14 T1-4).
-PROMPT_VERSION = "prep-4"
+# prep-5 (12 Nov): the relationship stage sets the opener (PLAN-V15 T3-3), and the tone preset
+# starts the style notes, with Claude's own tone line in the answer (T3-5).
+PROMPT_VERSION = "prep-5"
 LINE_CHARS = 400
 FOLLOW_UP_CHARS = 200
 MAX_FOLLOW_UPS = 3
 EM_DASH = chr(0x2014)  # the website shows no em dashes (DESIGN.md)
 EN_DASH = chr(0x2013)
 STUCK_MINUTES = 5  # a prep still "searching" after this, with no task behind it, has failed
+# Why a prep failed, in plain words (PLAN-V15 "Words for errors"): what happened, then one thing
+# to do. The card adds that its script is from our HubSpot copy, and a "Try again" button.
+STUCK_ERROR = "Contour restarted while this prep was running. Try again."
+STOPPED = "Contour stopped while this prep was running. Try again."
+INCOMPLETE = "Claude's answer came back incomplete. Try again."
+SERVER_FAULT = "Something went wrong on our side while writing the script. Try again."
+DAILY_LIMIT = (
+    "Call prep has reached today's limit. It starts again tomorrow. An admin can raise the limit."
+)
+CLAUDE_BUSY = "Claude is busy right now. Try again in a minute."
+UNREACHABLE = "Our server can't reach Claude. Try again in a few minutes."
+CLAUDE_SETUP = "Claude isn't set up correctly. An admin needs to check the Claude key."
+TOO_SLOW = "Claude took too long to answer. Nothing was lost. Try again."
+CLAUDE_ERROR = "Claude couldn't write the script. Try again in a minute."
 MAX_NEWS = 3
+# One web check per company at a time (PLAN-V15 T3-2): a second prep for the same company waits
+# for the first one's check, then writes from its notes. A Postgres advisory lock key, used with
+# the company (the keys in use are listed in core/prefs/service.py).
+WEB_CHECK_LOCK = 7_244_502
+WEB_WAIT_SECONDS = 120.0
+WEB_WAIT_POLL_SECONDS = 2.0
 
 # --- The answer form ---------------------------------------------------------------------------
 # No field may be null: Anthropic limits "null or a value" fields in strict forms (forms.py).
@@ -140,6 +167,10 @@ class PrepAnswer(BaseModel):
     if_they_say: list[AnswerObjection] = Field(description="2 or 3 likely pushbacks, answered.")
     goal: AnswerLine = Field(description="The next step to ask for, like a site visit.")
     pages: list[AnswerPage] = Field(description="Every web page you cite. Empty if none.")
+    tone_line: str = Field(
+        description="One short line for the caller on how to sound on this call, in the chosen "
+        "tone. Advice, never said aloud, with no facts."
+    )
 
 
 SYSTEM = """You prepare a salesperson at Contour for one phone call. Contour designs and builds \
@@ -170,21 +201,30 @@ never states a fact.
 marks exactly as they are.
 
 How to run the call (Contour's call technique):
-- Opener: say who you are and why you are calling, then ask for time, like "Do you have two \
+- The relationship stage (a fact in the pack) sets the opener. If the stage isn't cold, don't say \
+who Contour is or what we do. Open from the relationship: an open deal follows up on that deal and \
+aims at its next step; a customer gets a check-in; a past customer gets a short reminder of the \
+work we did; a lost deal asks what has changed since; contacted before names the last talk. Only \
+a cold call says who you are and that Contour designs and builds offices.
+- Opener: the hello and the reason for the call, then ask for time, like "Do you have two \
 minutes?". Keep the ask for time in the same line as the reason, so the line keeps its source.
+- On a switchboard call that isn't cold, ask for the person we last spoke with, by name, and say \
+when we spoke.
 - Order the questions: their situation, then the problem, then what the problem costs them, then \
 what fixing it would be worth. Example: a lease ending in 16 months gives "When does the lease \
 end?" first, and "What happens if it ends before the new space is ready?" third.
 - If they say: answer in three beats. Name the feeling, agree with what is fair, then ask one \
 question. Example: "We're not ready yet." gets "Sounds like the timing is tight. That's fair. What \
 would need to be true for it to be worth a look?".
-- Tone: warm for a client we have talked to before, light and brief for a cold call.
+- Tone: the style notes start with the tone to write in. Follow it for wording, within these \
+rules. In tone_line, give the caller one short line on how to sound on this call, like "Warm and \
+brief: they are a client, so catch up first." It is advice, never said aloud, and holds no facts.
 - Name a feeling only as a question or an offer, never as a fact about the person. "Has this been \
 hanging over the team?" is fine. "They are stressed" is a guess, so it is not.
 - After a no, don't push twice. Then the goal is a later call, not a meeting.
 
-The prompt may end with style notes from the team and the caller. Follow them for wording and \
-order only."""
+The prompt ends with style notes: the tone, then notes from the team and the caller. Follow them \
+for wording and order only."""
 
 # Said before the style notes (PLAN-V14 T1-4). A note is the team's or the caller's own words, so it
 # may try to steer: it only ever changes wording and order.
@@ -214,12 +254,13 @@ def _web_tools(searches: int) -> WebTools:
     return WebTools(max_searches=searches, max_fetches=searches)
 
 
-def _style_block(style: StyleNotes, pack: FactsPack, *, names_ok: bool) -> str:
-    """The style notes, after the facts: the team's, then the caller's own. Empty with no notes.
-    Names are hidden in them as in the facts, and contact details are blanked."""
-    if style.empty:
-        return ""
-    parts = [f"Style notes. {STYLE_RULE}"]
+def _style_block(
+    style: StyleNotes, pack: FactsPack, *, names_ok: bool, tone: ToneKey = TONE_DEFAULT
+) -> str:
+    """The style notes, after the facts: the tone first (PLAN-V15 T3-5), then the team's notes,
+    then the caller's own. Names are hidden in them as in the facts, and contact details are
+    blanked. The last one wins on wording: rules, stage, tone, Team style, Your style."""
+    parts = [f"Style notes. {STYLE_RULE}", f"Tone: {tone_words(tone)}"]
     if style.team:
         notes = "\n".join(f"- {claude_text(note, pack, names_ok=names_ok)}" for note in style.team)
         parts.append(f"Team style:\n{notes}")
@@ -229,7 +270,12 @@ def _style_block(style: StyleNotes, pack: FactsPack, *, names_ok: bool) -> str:
 
 
 def _prompt(
-    pack: FactsPack, context: PrepContext, *, web: bool, style: StyleNotes | None = None
+    pack: FactsPack,
+    context: PrepContext,
+    *,
+    web: bool,
+    style: StyleNotes | None = None,
+    tone: ToneKey = TONE_DEFAULT,
 ) -> str:
     company = pack.company
     person = pack.person
@@ -257,11 +303,21 @@ def _prompt(
         else "Do not search the web. Write from the facts pack only. Leave pages empty, and set "
         "still_there to unknown."
     )
+    stage = pack.company.relationship.stage
+    where_we_stand = (
+        f"Relationship stage: {STAGE_WORDS[stage]}"
+        + (f" ({pack.stage_fact}). " if pack.stage_fact else ". ")
+        + (
+            "A cold call: say who you are and what Contour does."
+            if stage == "cold"
+            else "Don't introduce Contour or say what we do: open from the relationship."
+        )
+    )
     return (
-        f"{claude_text(who, pack, names_ok=names)}\n\n{task}\n\n"
+        f"{claude_text(who, pack, names_ok=names)}\n{where_we_stand}\n\n{task}\n\n"
         f"Today is {day(datetime.now(UTC))}.\n\n"
         f"Facts pack:\n{facts_for_claude(pack, names_ok=names)}"
-        f"{_style_block(style or StyleNotes(), pack, names_ok=names)}"
+        f"{_style_block(style or StyleNotes(), pack, names_ok=names, tone=tone)}"
     )
 
 
@@ -405,6 +461,8 @@ def check_answer(
         if (checked := line(item)) is not None
     ][:5]
     goal = line(answer.goal)
+    # The tone line is advice for the caller, not a claim, so it needs no source.
+    tone_line = _clean(answer.tone_line, pack, names_ok=names_ok) or None
     script = PrepScript(
         still_there=still,
         still_there_note=note if still in ("yes", "no") else None,
@@ -415,6 +473,7 @@ def check_answer(
         if_they_say=objections,
         goal=goal,
         dropped=dropped,
+        tone_line=tone_line,
     )
     sources: list[PrepSource] = []
     for source_id in used:
@@ -444,6 +503,7 @@ def check_answer(
 
 
 def prep_out(prep: Prep, *, made_by: str | None, reused: bool = False) -> PrepOut:
+    facts = prep.facts or {}
     person = (
         PrepPerson(id=prep.contact_id or "", name=prep.person_name, title=prep.person_title)
         if prep.person_name
@@ -466,7 +526,9 @@ def prep_out(prep: Prep, *, made_by: str | None, reused: bool = False) -> PrepOu
         made_by=made_by,
         created_at=prep.created_at,
         finished_at=prep.finished_at,
-        style_used=StyleUsed.model_validate((prep.facts or {}).get("style_used") or {}),
+        style_used=StyleUsed.model_validate(facts.get("style_used") or {}),
+        tone_used=tone if (tone := facts.get("tone_used")) in TONE_PRESETS else None,
+        stage_used=stage if (stage := facts.get("stage_used")) in STAGE_WORDS else None,
     )
 
 
@@ -493,6 +555,45 @@ async def web_check_fresh(
     return found is not None
 
 
+async def web_check_running(session: AsyncSession, prep: Prep, now: datetime) -> bool:
+    """True when another prep for this company is doing its web check right now."""
+    found = await session.scalar(
+        select(Prep.id)
+        .where(
+            Prep.company_key == prep.company_key,
+            Prep.id != prep.id,
+            Prep.status == "searching",
+            Prep.facts["web"].astext == "true",
+            Prep.created_at >= now - timedelta(minutes=STUCK_MINUTES),
+        )
+        .limit(1)
+    )
+    return found is not None
+
+
+async def take_web_check(session: AsyncSession, prep: Prep, *, days: int) -> bool:
+    """True when this prep may search the web: no fresh check for the company, and no other prep
+    doing one now. If another is, it waits for it (up to WEB_WAIT_SECONDS) and then writes from
+    its notes. The choice is saved on the prep (`facts.web`) under a lock, so two preps that start
+    together never both pay for the web check."""
+    deadline = asyncio.get_running_loop().time() + WEB_WAIT_SECONDS
+    lock = sql_text("SELECT pg_advisory_xact_lock(CAST(:space AS integer), hashtext(:key))")
+    while True:
+        await session.execute(lock, {"space": WEB_CHECK_LOCK, "key": prep.company_key})
+        now = datetime.now(UTC)
+        if await web_check_fresh(session, prep.company_key, days=days, now=now):
+            await session.commit()  # lets the lock go
+            return False
+        if not await web_check_running(session, prep, now):
+            prep.facts = {**(prep.facts or {}), "web": True}
+            await session.commit()
+            return True
+        await session.commit()
+        if asyncio.get_running_loop().time() >= deadline:
+            return False
+        await asyncio.sleep(WEB_WAIT_POLL_SECONDS)
+
+
 class PrepRunner:
     """Runs preps in the background, one task each, and knows which are running."""
 
@@ -507,10 +608,13 @@ class PrepRunner:
         self._claude = claude
         self._embedder = embedder
         self._tasks: dict[uuid.UUID, asyncio.Task[None]] = {}
+        # Every prep `run` is working on, including the morning search ahead's, which it awaits
+        # itself rather than through `start`.
+        self._busy: set[uuid.UUID] = set()
 
     def running(self, prep_id: uuid.UUID) -> bool:
         task = self._tasks.get(prep_id)
-        return task is not None and not task.done()
+        return (task is not None and not task.done()) or prep_id in self._busy
 
     def start(self, prep_id: uuid.UUID, context: PrepContext) -> None:
         task = asyncio.create_task(self.run(prep_id, context), name=f"prep-{prep_id}")
@@ -522,38 +626,71 @@ class PrepRunner:
         while self._tasks:
             await asyncio.gather(*list(self._tasks.values()), return_exceptions=True)
 
+    async def stop(self, *, wait_seconds: float = 5.0) -> list[uuid.UUID]:
+        """Stops every prep this runner started, for a clean shutdown (PLAN-V15 T3-7). Each is
+        failed in plain words ("Contour stopped while this prep was running. Try again."), and
+        what it had spent is logged, so a deploy never hides call prep's spending. A Claude
+        request cut off mid-way may still be billed (TBC): only what was recorded is logged."""
+        running = list(self._tasks.items())
+        for _, task in running:
+            task.cancel()
+        if running:
+            await asyncio.wait([task for _, task in running], timeout=wait_seconds)
+        stopped = [prep_id for prep_id, _ in running]
+        if stopped:
+            async with self.sessions() as session:
+                for prep_id in stopped:
+                    prep = await session.get(Prep, prep_id)
+                    log.info(
+                        "prep_stopped",
+                        extra={
+                            "prep_id": str(prep_id),
+                            "spent_usd": str(prep.cost_usd) if prep is not None else "0",
+                            "web_searches": prep.web_searches if prep is not None else 0,
+                        },
+                    )
+        return stopped
+
     async def run(self, prep_id: uuid.UUID, context: PrepContext) -> None:
         """Runs one prep to the end. It never raises: a problem fails the prep in plain words."""
+        self._busy.add(prep_id)
         try:
             await self._run(prep_id, context)
         except asyncio.CancelledError:
             with contextlib.suppress(Exception):
-                await asyncio.shield(
-                    self._fail(prep_id, "The server stopped while this prep was running.")
-                )
+                await asyncio.shield(self._fail(prep_id, STOPPED, code="stopped"))
             raise
+        except _Plain as error:
+            await self._fail(prep_id, error.detail, code=error.code)
         except BudgetSpent as error:
-            if isinstance(error, ClaudeError):  # the daily limit: its own plain words
-                await self._fail(prep_id, f"{error.title}. {error.detail}")
+            if isinstance(error, ClaudeError):  # the daily limit for all Claude spending
+                log.info("prep_failed", extra={"prep_id": str(prep_id), "why": str(error)})
+                await self._fail(prep_id, DAILY_LIMIT, code="daily_limit")
             else:
                 await self._fail(
                     prep_id,
-                    f"This prep stopped at its US${context.cap_usd:.2f} cap, so no script was "
-                    "written. Press Research again, or ask an Admin to raise the cap.",
+                    f"This prep reached its US${context.cap_usd:.2f} cap before the script was "
+                    "written. Try again, or ask an admin to raise the cap.",
+                    code="cap",
                 )
         except ClaudeError as error:
-            await self._fail(prep_id, f"{error.title}. {error.detail}")
+            # The technical words go to the log; the card gets plain ones.
+            log.warning("prep_failed", extra={"prep_id": str(prep_id), "why": str(error)})
+            code, words = claude_words(error)
+            await self._fail(prep_id, words, code=code)
         except Exception:
             log.exception("prep_failed", extra={"prep_id": str(prep_id)})
-            await self._fail(
-                prep_id,
-                "Something went wrong while writing the script. Press Research again.",
-            )
+            await self._fail(prep_id, SERVER_FAULT, code="server")
+        finally:
+            self._busy.discard(prep_id)
 
-    async def _fail(self, prep_id: uuid.UUID, why: str) -> None:
+    async def _fail(self, prep_id: uuid.UUID, why: str, *, code: str) -> None:
+        """Fails the prep in plain words. `code` (kept in its facts) says why, for code that reads
+        it, like the morning search ahead stopping at the daily limit."""
         async with self.sessions() as session:
             prep = await session.get(Prep, prep_id)
             if prep is not None and prep.status == "searching":
+                prep.facts = {**(prep.facts or {}), "error_code": code}
                 prep.status = "failed"
                 prep.error = why
                 prep.finished_at = datetime.now(UTC)
@@ -606,35 +743,41 @@ class PrepRunner:
         return reply
 
     async def _run(self, prep_id: uuid.UUID, context: PrepContext) -> None:
-        now = datetime.now(UTC)
         async with self.sessions() as session:
             prep = await session.get(Prep, prep_id)
             if prep is None or prep.status != "searching":
                 return
+            # First, whether this prep searches the web: it may wait for another prep's check of
+            # the same company, so the facts are read after it, with that check's notes in them.
+            web = context.names_ok and await take_web_check(session, prep, days=context.reuse_days)
+            now = datetime.now(UTC)
             pack = await build_facts(session, prep.company_key, prep.contact_id, context.hooks, now)
             if pack is None:
-                raise _Plain("This company is no longer in the HubSpot copy or the Lead Finder.")
-            # The team's style notes, and the asker's own. The morning search ahead has no asker.
-            style = await notes_for_prompt(
-                session, prep.made_by, with_mine=context.trigger == "person"
-            )
+                raise _Plain(
+                    "This company is no longer in the HubSpot copy or the Lead Finder.",
+                    code="company_gone",
+                )
+            # The team's style notes and tone, and the asker's own. The morning search ahead has
+            # no asker, so it gets the team's.
+            asker = context.trigger == "person"
+            style = await notes_for_prompt(session, prep.made_by, with_mine=asker)
+            tone = await tone_for(session, prep.made_by, with_mine=asker)
             prep.stage = 1  # the facts are in
             prep.facts = {
                 "count": len(pack.facts),
                 "leads_used": pack.leads_used,
                 "names_ok": context.names_ok,
+                "web": web,
                 "style_used": {"mine": style.mine is not None, "team_notes": len(style.team)},
+                "stage_used": pack.company.relationship.stage,
+                "tone_used": tone,
             }
-            fresh = await web_check_fresh(
-                session, prep.company_key, days=context.reuse_days, now=now
-            )
-            web = context.names_ok and not fresh
             prep.stage = 2  # the web check (or the smaller request) is running
             await session.commit()
 
             budget = Budget(cap_usd=context.cap_usd, max_searches=context.max_searches)
             subject = pack.company.name if context.names_ok else None
-            prompt = _prompt(pack, context, web=web, style=style)
+            prompt = _prompt(pack, context, web=web, style=style, tone=tone)
             reply = await self._ask(
                 session, prep, budget, prompt=prompt, web=web, context=context, subject=subject
             )
@@ -651,9 +794,7 @@ class PrepRunner:
                     subject=subject,
                 )
             if reply.parsed is None:
-                raise _Plain(
-                    "Claude's answer didn't fit the call script form. Press Research again."
-                )
+                raise _Plain(INCOMPLETE, code="incomplete")
             prep.stage = 3  # the script is being checked
             checked = check_answer(
                 reply.parsed,
@@ -695,11 +836,32 @@ class PrepRunner:
             log.warning("prep_notes_not_saved", exc_info=True)
 
 
-class _Plain(ClaudeError):
+class _Plain(Exception):
     """A prep that can't go on, with the reason in plain words."""
 
-    def __init__(self, detail: str) -> None:
-        super().__init__("No script", detail)
+    def __init__(self, detail: str, *, code: str) -> None:
+        super().__init__(detail)
+        self.detail = detail
+        self.code = code
+
+
+def claude_words(error: ClaudeError) -> tuple[str, str]:
+    """A Claude error as call prep says it (PLAN-V15 "Words for errors"), and its code. Read from
+    what went wrong, not from the error's own words, which may name a setting or a file."""
+    cause = error.__cause__
+    if isinstance(error, ClaudeUnavailable):
+        if isinstance(cause, anthropic.APIConnectionError) and not isinstance(
+            cause, anthropic.APITimeoutError
+        ):
+            return "unreachable", UNREACHABLE
+        return "claude_setup", CLAUDE_SETUP
+    if isinstance(cause, anthropic.APITimeoutError):
+        return "timeout", TOO_SLOW
+    if isinstance(cause, anthropic.RateLimitError) or (
+        isinstance(cause, anthropic.APIStatusError) and cause.status_code in (503, 529)
+    ):
+        return "claude_busy", CLAUDE_BUSY
+    return "claude_error", CLAUDE_ERROR
 
 
 def made_by_name(names: dict[uuid.UUID, str], prep: Prep) -> str | None:
@@ -712,3 +874,10 @@ def is_stuck(prep: Prep, runner: PrepRunner, now: datetime) -> bool:
         and not runner.running(prep.id)
         and prep.created_at < now - timedelta(minutes=STUCK_MINUTES)
     )
+
+
+def fail_stuck(prep: Prep, now: datetime) -> None:
+    """Marks a prep left searching by a restart as failed. The caller commits."""
+    prep.status = "failed"
+    prep.error = STUCK_ERROR
+    prep.finished_at = now

@@ -95,8 +95,9 @@ export function scriptStyleQueryOptions() {
   })
 }
 
-export function useScriptStyle() {
-  return useQuery(scriptStyleQueryOptions())
+/** `enabled` false asks for nothing yet (the card's "Who are you calling?" is open). */
+export function useScriptStyle(enabled = true) {
+  return useQuery({ ...scriptStyleQueryOptions(), enabled })
 }
 
 /** Every style change answers with the whole style: it goes straight into the cache. */
@@ -136,6 +137,32 @@ export function useDecideTeamNote() {
             params: { path: { note_id: id } },
           }),
     ),
+  )
+}
+
+// --- Tone presets (PLAN-V15 T3-6) ---------------------------------------------------------------
+
+export type ToneView = NonNullable<ScriptStyleOut['tone']>
+export type ToneKey = ToneView['team']
+export const TONE_DEFAULT: ToneKey = 'friendly'
+
+/** The tone my scripts are written in: mine, else the team's, else Friendly while it loads. */
+export function toneInUse(style: Pick<ScriptStyleOut, 'tone'> | undefined): ToneKey {
+  const tone = style?.tone
+  return tone ? (tone.mine ?? tone.team) : TONE_DEFAULT
+}
+
+/** Saves my tone. Null follows the team's default again. It never starts a prep. */
+export function useSaveMyTone() {
+  return useStyleChange(async (tone: ToneKey | null) =>
+    unwrap(await api.PUT('/companies/script-style/tone', { body: { tone } })),
+  )
+}
+
+/** Admins: the team's default tone, for everyone who hasn't picked their own. */
+export function useSaveTeamTone() {
+  return useStyleChange(async (tone: ToneKey) =>
+    unwrap(await api.PUT('/companies/script-style/team-tone', { body: { tone } })),
   )
 }
 
