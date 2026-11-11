@@ -549,7 +549,7 @@ async def test_reject_without_a_reason_is_a_422_on_the_reason_field(
     response = await client.patch(f"{BASE}/{lead.id}", json={"status": "rejected"})
     assert response.status_code == 422
     assert "body.reject_reason" in field_errors(response)
-    assert response.json()["title"] == "The request isn't valid"
+    assert response.json()["title"] == "Some fields need a fix"
     blank = await client.patch(
         f"{BASE}/{lead.id}", json={"status": "rejected", "reject_reason": "   "}
     )

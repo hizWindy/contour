@@ -177,7 +177,7 @@ async def test_a_missing_key_is_a_clear_error(monkeypatch: pytest.MonkeyPatch) -
     sdk = anthropic.AsyncAnthropic(
         api_key=None, http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(never))
     )
-    with pytest.raises(ClaudeUnavailable, match="No Claude API key"):
+    with pytest.raises(ClaudeUnavailable, match="set up yet"):
         await AnthropicClaude(client=sdk).ask(system="x", prompt="y", form=Answer)
 
 

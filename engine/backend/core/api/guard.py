@@ -50,7 +50,10 @@ PUBLIC = frozenset(
         ("POST", f"{API_PREFIX}/auth/login"),
     }
 )
-DATABASE_DOWN = ("The database can't be reached", "Start it with: docker compose up -d")
+DATABASE_DOWN = (
+    "Contour can't reach its database",
+    "Try again in a minute. If it keeps happening, tell an admin.",
+)
 
 
 def sign_in_settings(app: FastAPI) -> Settings:

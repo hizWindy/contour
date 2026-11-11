@@ -57,11 +57,19 @@ class DailyLimitReached(BudgetSpent, ClaudeError):
 
     def __init__(self, *, cap: Decimal, spent: Decimal, held: Decimal, needed: Decimal) -> None:
         super().__init__(
-            "Claude's daily limit is reached",
-            f"US${spent:.2f} was spent in the last 24 hours, and US${held:.2f} is held for "
-            f"requests in progress. One more request holds US${needed:.2f}, and the limit is "
-            f"US${cap:.2f}. Wait for older spending to leave the 24 hours, or raise "
-            "DAILY_CAP_USD in engine/.env and restart.",
+            "Today's Claude limit is reached",
+            "Nothing was sent. It frees up as older spending passes 24 hours. An admin can raise "
+            "the limit.",
+        )
+        # The numbers are for an admin: they go to the log, not the screen (PLAN-V15 T1-6).
+        log.warning(
+            "claude_daily_limit_reached",
+            extra={
+                "spent_usd": str(spent),
+                "held_usd": str(held),
+                "needed_usd": str(needed),
+                "cap_usd": str(cap),
+            },
         )
         self.cap = cap
         self.spent = spent
@@ -242,9 +250,8 @@ class DailyCap:
             # The reason (the driver's text) stays out of the message: it can name the server.
             log.warning("daily_limit_unreadable", extra={"error": type(error).__name__})
             raise ClaudeUnavailable(
-                "Can't check the daily limit",
-                "The database didn't answer, so the daily Claude limit can't be checked and "
-                "nothing was sent. Try again when the database is back.",
+                "Can't check today's Claude limit",
+                "Nothing was sent. Try again in a minute.",
             ) from error
         if number < self._applied:
             return  # a refresh that began later has already been applied

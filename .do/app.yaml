@@ -59,6 +59,21 @@ services:
       period_seconds: 15
       timeout_seconds: 5
       failure_threshold: 5
+    # Emails (to the DigitalOcean account) when the backend is short of CPU or memory, or keeps
+    # restarting (PLAN-V15 T1-6). Who gets them is the account's setting (TBC).
+    alerts:
+      - rule: CPU_UTILIZATION
+        operator: GREATER_THAN
+        value: 80
+        window: FIVE_MINUTES
+      - rule: MEM_UTILIZATION
+        operator: GREATER_THAN
+        value: 80
+        window: FIVE_MINUTES
+      - rule: RESTART_COUNT
+        operator: GREATER_THAN
+        value: 2
+        window: FIVE_MINUTES
 
 static_sites:
   - name: web
@@ -160,10 +175,13 @@ envs:
   - key: EMBEDDING_THREADS
     value: "1"
     scope: RUN_TIME
-  # The backend opens at most 15 connections with these (the cluster's plan allows 22).
+  # The backend opens at most 9 connections with these: 4 for requests, 4 for run checkpoints and
+  # 1 for the one-backend lock. During a deploy the old and the new backend both run, with the
+  # migration step: 9 + 9 + 1 = 19, under the 22 the cluster's plan allows (PLAN-V15 T1-6). When
+  # all 4 are busy, a request waits up to 10 s, then gets a 503 `busy` and the website retries.
   - key: DB_POOL_SIZE
-    value: "6"
+    value: "4"
     scope: RUN_TIME
   - key: DB_MAX_OVERFLOW
-    value: "4"
+    value: "0"
     scope: RUN_TIME

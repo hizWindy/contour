@@ -119,7 +119,7 @@ def test_the_models_describe_the_body() -> None:
     assert body.type == "about:blank"
     assert body.detail is None
     problem_422 = ValidationProblem(
-        title="The request isn't valid",
+        title="Some fields need a fix",
         status=422,
         errors=[FieldError(field="body.params.cities", message="Field required")],
     )

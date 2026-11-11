@@ -251,6 +251,9 @@ async def rebuild_profiles(
     are deleted in the same transaction, so there are never duplicates. Commits.
     """
     # The lock comes first, so a second rebuild waits and then reads the data the first left.
+    # A rebuild is long and may wait for another one: it lifts the app's limits for itself.
+    await session.execute(text("SET LOCAL statement_timeout = '10min'"))
+    await session.execute(text("SET LOCAL lock_timeout = 0"))
     if wait:
         await session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": REBUILD_LOCK})
     elif not await session.scalar(

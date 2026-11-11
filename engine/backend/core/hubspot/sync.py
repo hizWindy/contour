@@ -43,7 +43,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import BindParameter, all_, any_, bindparam, delete, func, select, update
+from sqlalchemy import BindParameter, all_, any_, bindparam, delete, func, select, text, update
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
@@ -92,8 +92,9 @@ SOURCE = "api"
 HEARTBEAT_SECONDS = 10.0  # a running sync writes heartbeat_at this often, and looks for a Stop
 STALE_AFTER = timedelta(minutes=2)  # a running row with no heartbeat for this long is left over
 CANCEL_WAIT_SECONDS = 5.0  # how long a Stop waits for the sync to end
+SAVE_TIMEOUT = "10min"  # the save's own statement limit (the app's is 30 s, PLAN-V15 T1-6)
 OVERLAP = timedelta(minutes=10)  # a changes sync reads a little before the last one started
-SYNC_ERROR = "The sync stopped on an error. The reason is in the backend log."
+SYNC_ERROR = "The sync stopped on an error. Try again. If it happens again, tell an admin."
 INTERRUPTED = "The backend stopped while this sync ran."
 CANCELLED_BEFORE_SAVE = "Stopped. Our copy didn't change."
 CANCELLED_AFTER_SAVE = (
@@ -101,8 +102,7 @@ CANCELLED_AFTER_SAVE = (
 )
 AFTER_SAVE: tuple[str, ...] = ("people", "profiles")  # the phases after the save has committed
 PROFILES_FAILED = (
-    "The data was saved, but the company profiles weren't rebuilt. Run "
-    "`uv run engine rebuild-profiles`. The reason is in the backend log."
+    "The data was saved, but the company profiles weren't rebuilt. The next sync rebuilds them."
 )
 
 PROGRESS_EVERY = 500  # records read between two saves of how far a sync has got
@@ -612,6 +612,8 @@ async def run(
 
         await _note(sessions, plan.id, phase="saving")
         async with sessions() as session:
+            # One transaction for all ~14,000 companies: longer than a request's limit.
+            await session.execute(text(f"SET LOCAL statement_timeout = '{SAVE_TIMEOUT}'"))
             stored = await save_snapshot(
                 session, snapshot, full=mode == "full", started_at=plan.started_at
             )

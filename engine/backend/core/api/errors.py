@@ -15,11 +15,15 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from pydantic_core import to_jsonable_python
+from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from core.api.request_id import current_request_id
 
 PROBLEM_JSON = "application/problem+json"
+DEFAULT_RETRY_AFTER_SECONDS = 10  # a 503 that names no wait of its own
+BUSY_RETRY_AFTER_SECONDS = 5
+FIELDS_TITLE = "Some fields need a fix"
 log = logging.getLogger(__name__)
 
 
@@ -131,11 +135,15 @@ def problem(
     request_id = current_request_id()
     if request_id is not None and "request_id" not in body:
         body["request_id"] = request_id
+    sent = dict(headers) if headers else {}
+    if status == 503 and not any(name.lower() == "retry-after" for name in sent):
+        # Every 503 says when to try again, so the website can wait and retry by itself.
+        sent["Retry-After"] = str(DEFAULT_RETRY_AFTER_SECONDS)
     return JSONResponse(
         to_jsonable_python(body),
         status_code=status,
         media_type=PROBLEM_JSON,
-        headers=dict(headers) if headers else None,
+        headers=sent or None,
     )
 
 
@@ -159,9 +167,7 @@ async def _invalid_request(request: Request, exc: Exception) -> JSONResponse:
         {"field": ".".join(str(part) for part in error["loc"]), "message": error["msg"]}
         for error in exc.errors()
     ]
-    return problem(
-        422, "The request isn't valid", "Check the fields listed in errors.", errors=errors
-    )
+    return problem(422, FIELDS_TITLE, "Look at the fields listed.", errors=errors)
 
 
 SERVER_FAULT = "Something went wrong on our side"
@@ -179,8 +185,22 @@ async def _unexpected(request: Request, exc: Exception) -> JSONResponse:
     return problem(500, SERVER_FAULT, server_fault_detail(current_request_id()))
 
 
+async def _pool_timeout(request: Request, exc: Exception) -> JSONResponse:
+    """Every database connection was busy for `db_pool_timeout` seconds: the backend is busy, not
+    broken. A 503 `busy`, so the website waits and tries again (PLAN-V15 T1-6)."""
+    log.warning("database_pool_busy", extra={"path": request.url.path})
+    return problem(
+        503,
+        "Contour is busy",
+        "Try again in a few seconds.",
+        code="busy",
+        headers={"Retry-After": str(BUSY_RETRY_AFTER_SECONDS)},
+    )
+
+
 def add_error_handlers(app: FastAPI) -> None:
     app.add_exception_handler(Problem, _problem)
+    app.add_exception_handler(SQLAlchemyTimeoutError, _pool_timeout)
     app.add_exception_handler(StarletteHTTPException, _http_error)
     app.add_exception_handler(RequestValidationError, _invalid_request)
     app.add_exception_handler(Exception, _unexpected)

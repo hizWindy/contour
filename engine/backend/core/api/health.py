@@ -59,10 +59,12 @@ async def health(request: Request, session: SessionDep) -> HealthOut:
         )
     except (DBAPIError, OSError) as error:
         raise Problem(
-            503, "The database can't be reached", "Start it with: docker compose up -d"
+            503,
+            "Contour can't reach its database",
+            "Try again in a minute. If it keeps happening, tell an admin.",
         ) from error
     if version is None:
-        raise Problem(503, "pgvector isn't turned on", "Run: uv run engine migrate")
+        raise Problem(503, "The database isn't ready", "An admin needs to run the database update.")
     return HealthOut(
         status="ok",
         database="ok",

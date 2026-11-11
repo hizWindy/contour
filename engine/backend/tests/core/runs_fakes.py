@@ -264,7 +264,7 @@ def fake_kinds(state: FakeState) -> dict[KindKey, RunKind[Any]]:
         if params.too_big:
             raise Problem(
                 422,
-                "The request isn't valid",
+                "Some fields need a fix",
                 "Too big for the settings.",
                 code="discovery_too_large",
                 errors=[{"field": "body.params.units", "message": "too many"}],

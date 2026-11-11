@@ -124,8 +124,8 @@ class HubSpotWritesOff(HubSpotError):
     def __init__(self) -> None:
         super().__init__(
             "Waiting for write access",
-            "Writing to HubSpot is switched off. It needs the write scopes on the key and "
-            "HUBSPOT_WRITE_ENABLED=true in engine/.env, then a restart.",
+            "Writing to HubSpot is switched off. An admin needs to give the key write "
+            "access and switch writing on.",
         )
 
 
@@ -539,7 +539,7 @@ def _problem(response: httpx2.Response, *, write: bool) -> HubSpotError:
     if status == 401:
         return HubSpotUnavailable(
             "HubSpot refused the key",
-            "Check HUBSPOT_SERVICE_KEY in engine/.env. The key may have been deleted, or its "
+            "An admin needs to check the HubSpot key. It may have been deleted, or its "
             "creator removed from HubSpot.",
         )
     if status == 403 and category == "MISSING_SCOPES":

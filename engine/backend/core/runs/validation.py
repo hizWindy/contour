@@ -68,8 +68,8 @@ def invalid_params(errors: Sequence[FieldError]) -> Problem:
     """The 422 for a list of field errors (what `parse_params` raises)."""
     return Problem(
         422,
-        "The request isn't valid",
-        "Check the fields listed in errors.",
+        "Some fields need a fix",
+        "Look at the fields listed.",
         errors=[error.model_dump() for error in errors],
     )
 

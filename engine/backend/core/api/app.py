@@ -1,5 +1,6 @@
 """The FastAPI app. Swagger is at /docs. All endpoints sit under /api/v1."""
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -30,6 +31,7 @@ from core.runtime import disable_tracing
 from core.schedules import runtime as schedules
 
 API_PREFIX = "/api/v1"
+log = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -41,6 +43,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     it and takes it over in the background once the other one stops (PLAN-V8 B3).
     """
     try:
+        # A lost lock (the database restarted) stops the scheduler, and taking it back starts
+        # the background work again (PLAN-V15 T1-6).
+        lifecycle.when_engine_is_lost(app, stop=schedules.shut_down, restart=start_background_work)
         await lifecycle.startup(app)
         if lifecycle.waiting(app):
             lifecycle.take_over_later(app, then=start_background_work)
@@ -51,12 +56,24 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     finally:
         try:
             await loop_lag.stop_watch(app)
+            await stop_apps(app)
             await lifecycle.stop_waiting(app)
             await schedules.shut_down(app)
             await hubspot_connection.shut_down(app)
             await lifecycle.shutdown(app)
         finally:
             await get_engine().dispose()
+
+
+async def stop_apps(app: FastAPI) -> None:
+    """Each project's own `on_shutdown` (PLAN-V15 T1-6). One that fails never stops the rest."""
+    for spec in getattr(app.state, "apps", ()):
+        if spec.on_shutdown is None:
+            continue
+        try:
+            await spec.on_shutdown(app)
+        except Exception:
+            log.exception("app_shutdown_failed", extra={"app": spec.name})
 
 
 async def start_background_work(app: FastAPI) -> None:

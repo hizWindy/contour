@@ -161,7 +161,7 @@ async def test_a_record_hubspot_does_not_have_is_none() -> None:
 async def test_a_refused_key_says_to_check_the_key_and_never_repeats_it() -> None:
     with pytest.raises(HubSpotUnavailable) as caught:
         await make(lambda request: answer(401, {"message": KEY})).account()
-    assert "HUBSPOT_SERVICE_KEY" in caught.value.detail
+    assert "the HubSpot key" in caught.value.detail  # plain words (PLAN-V15 T1-6)
     assert KEY not in str(caught.value)
 
 

@@ -209,8 +209,8 @@ def _resend_error(status: int) -> EmailError:
     if status in (401, 403):
         return EmailNotSetUp(
             "The email key was refused",
-            f"Resend answered {status}. Check EMAIL_API_KEY, and that EMAIL_FROM's domain is "
-            "checked in Resend.",
+            f"Resend answered {status}. An admin needs to check the email key, and that the "
+            "sender's domain is checked in Resend.",
         )
     if status == 422:
         return EmailError(
@@ -234,9 +234,9 @@ def get_sender(settings: Settings | None = None) -> EmailSender:
     secret = settings.email_api_key
     key = secret.get_secret_value().strip() if secret is not None else ""
     if not key:
-        raise EmailNotSetUp("Email isn't set up", "EMAIL_API_KEY is empty in engine/.env.")
+        raise EmailNotSetUp("Email isn't set up", "An admin needs to add the email key.")
     if not settings.email_from:
-        raise EmailNotSetUp("Email isn't set up", "EMAIL_FROM is empty in engine/.env.")
+        raise EmailNotSetUp("Email isn't set up", "An admin needs to set the sender address.")
     return ResendSender(key, settings.email_from)
 
 

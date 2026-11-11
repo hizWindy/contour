@@ -815,8 +815,8 @@ def _text_or_none(value: str | None) -> str | None:
 def _invalid(field: str, message: str) -> Problem:
     return Problem(
         422,
-        "The request isn't valid",
-        "Check the fields listed in errors.",
+        "Some fields need a fix",
+        "Look at the fields listed.",
         errors=[{"field": f"body.{field}", "message": message}],
     )
 

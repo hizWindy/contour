@@ -8,7 +8,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, FastAPI
 
 from core.hubspot.needs import HubSpotNeeds
 
@@ -43,6 +43,9 @@ class AppSpec:
     # Its own controls for its schedules (PLAN-V13 T1-3), mounted at /schedules<route_prefix>,
     # like the Lead Finder's one control for its city schedules at /schedules/lead-finder.
     schedule_router: APIRouter | None = None
+    # PLAN-V15 T1-6: called once when the backend stops, before the database pool closes, so
+    # a project can stop its own background work cleanly (call prep: its running preps).
+    on_shutdown: Callable[[FastAPI], Awaitable[None]] | None = None
 
 
 def load_apps(names: Sequence[str]) -> list[AppSpec]:

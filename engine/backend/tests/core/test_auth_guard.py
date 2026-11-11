@@ -341,7 +341,7 @@ async def test_a_cookie_while_the_database_is_down_is_a_503_not_a_500_and_not_a_
         response = await client.get(f"{LF}/rules", headers={"Cookie": "contour_session=abc"})
         assert response.status_code == 503
         assert response.headers["content-type"].startswith(PROBLEM)
-        assert response.json()["title"] == "The database can't be reached"
+        assert response.json()["title"] == "Contour can't reach its database"
         assert "connection refused" not in response.text  # nothing about the failure leaks
         # No cookie: the guard never needed the database, so the answer is the plain 401.
         assert is_sign_in_needed(await client.get(f"{LF}/rules"))

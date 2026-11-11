@@ -42,7 +42,7 @@ from core.hubspot.writer import (
 KEY_MISSING = Problem(
     503,
     "HubSpot isn't connected",
-    "Set HUBSPOT_SERVICE_KEY in engine/.env, then restart the backend.",
+    "An admin needs to add the HubSpot key.",
     code="hubspot_key_missing",
 )
 
@@ -231,8 +231,7 @@ async def import_export(
         raise Problem(
             503,
             "The companies were loaded, but their profiles weren't built",
-            "Run the rebuild again from the Admin page, or with: uv run engine rebuild-profiles. "
-            "The reason is in the backend log.",
+            "Press Rebuild profiles on the Admin page.",
         ) from error
     return result.model_copy(update={"profiles_rebuilt": rebuilt})
 

@@ -102,8 +102,8 @@ def _known_apps(request: Request, apps: list[str]) -> None:
     if unknown:
         raise Problem(
             422,
-            "The request isn't valid",
-            "Check the fields listed in errors.",
+            "Some fields need a fix",
+            "Look at the fields listed.",
             errors=[{"field": "body.apps", "message": f"No such project: {', '.join(unknown)}"}],
         )
 
@@ -111,8 +111,8 @@ def _known_apps(request: Request, apps: list[str]) -> None:
 def _invalid(field: str, message: str) -> Problem:
     return Problem(
         422,
-        "The request isn't valid",
-        "Check the fields listed in errors.",
+        "Some fields need a fix",
+        "Look at the fields listed.",
         errors=[{"field": f"body.{field}", "message": message}],
     )
 

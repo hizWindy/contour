@@ -174,7 +174,7 @@ async def test_a_company_name_is_searched_as_one_phrase_never_as_operators() -> 
 @pytest.mark.parametrize(
     ("status", "kind", "words"),
     [
-        (401, SignalHireUnavailable, "SIGNALHIRE_API_KEY"),
+        (401, SignalHireUnavailable, "the Signal Hire key"),
         (402, SignalHireOutOfQuota, "quota"),
         (403, SignalHireCompanyApiOff, "Company API"),
         (422, SignalHireError, "refused"),
