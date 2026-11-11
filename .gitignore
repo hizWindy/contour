@@ -1,0 +1,17 @@
+# Contour's internal files. Kept on this laptop, not on GitHub.
+
+# Meeting notes
+minutes of meeting/
+
+# Levi's sales documents (deal criteria, customer profile, summaries)
+documents/
+
+# Company lists exported from HubSpot or research
+projects/**/*.xlsx
+projects/**/*.csv
+
+# Screenshots of the website. They show real HubSpot clients.
+plan/shots/
+
+# Design references from other websites
+inspirations/
