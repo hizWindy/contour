@@ -430,13 +430,13 @@ Newest first.
 
 ## Track 3: call prep (session 3)
 
-**Progress:** 0 of 8 steps done.
+**Progress:** 3 of 8 steps done.
 
-- [ ] **T3-1. Own copy and a baseline.**
+- [x] **T3-1. Own copy and a baseline.** Done 2026-11-12 (no commit: setup only).
   - The worktree, the `leadfinder_v15c` database and the ports.
   - Run the `tests/companies` backend tests and the website tests once with `heavy.sh`, and note the counts.
   - **Done when:** the counts are in the Track 3 Log.
-- [ ] **T3-2. Call prep races, and migration `0017`.**
+- [x] **T3-2. Call prep races, and migration `0017`.** Done 2026-11-12 (da3307d).
   - **Migration `0017_call_prep`** (its `down_revision` is `0015_script_notes` in this branch; M1 changes it):
     - A unique index on `companies.preps` (`company_key`, `contact_id`) where `status = 'searching'`.
     - **Before the index,** the migration marks every "searching" prep older than 5 minutes as failed, and keeps only the newest searching one for each call. Otherwise the index could fail on the live database during the deploy.
@@ -450,7 +450,7 @@ Newest first.
   - **Team notes:** the 8-note limit holds even when two Admins add one at once (a lock while counting).
   - **Files:** `apps/companies/api_preps.py`, `prep.py`, `script_notes.py`, `tables.py`, the migration, tests.
   - **Done when:** tests that start two of each at once prove one prep, one web check, no 500 and at most 8 notes, and the migration runs up and down.
-- [ ] **T3-3. The relationship stage.**
+- [x] **T3-3. The relationship stage.** Done 2026-11-12 (cad6a91). The optional paid check is not done (waits on Al-khair's word).
   - **A new `apps/companies/relationship.py`** works out one stage from our copy: deals (state, stage, close date), HubSpot's lifecycle stage, the company's Last talk, logged calls with anyone there, and contacts' last activity. The first match wins:
 
     | Stage | When | Opener |
@@ -542,7 +542,9 @@ Newest first.
 
 Newest first.
 
-- (empty)
+- 2026-11-12: **T3-3 done** (cad6a91). `apps/companies/relationship.py` works out the stage from the company panel's pieces (deals, lifecycle stage, Last talk, calls, contacts' last activity). A **talk** is the newest of the three; "in the last 12 months" counts the day 12 months ago itself. `since` is the date the stage rests on (the last talk, or the won or lost deal's close date; none for an open deal or cold). A lost deal with no close date doesn't count, nor does a dissolved one. A lead not in HubSpot is cold, with source "Lead Finder". `CompanyDetail.relationship` is optional in the website's types (old test data still type-checks) but always sent. The facts pack ends with the lifecycle stage and the stage, so the other facts keep their ids. Prompt `prep-5`: the system rule, plus one line per prep ("Don't introduce Contour..." for every stage but cold). A prep keeps `stage_used` in its facts. 18 new tests in `test_relationship.py`. `tests/companies`: **87 passed** (the speed test left out). `engine openapi` and `npm run types` ran. **Found, not fixed (TBC):** with names off, only the company's and the called person's names are hidden; a colleague's name in a call line ("Call ... with Sarah Lee") still goes to Claude. Existing behaviour, outside this plan.
+- 2026-11-12: **T3-2 done** (da3307d). Migration `0017_call_prep` (after `0015_script_notes` here) locks `companies.preps` against writes for its few statements, fails every searching prep over 5 minutes old and all but the newest searching one for each call, then adds `ux_preps_searching` on (`company_key`, `coalesce(contact_id, '')`) where searching. `companies.script_prefs` has a `scope` column (`mine` or `team`) beside the user, because with sign-in off a person's own tone also has no user; the team row has no user (a check). A start for a call already searching gets that prep back (also from another backend during a deploy); if both starts got past the check, the second one's save hits the index and it gets the first one's prep. A prep made with the Lead Finder's facts stays with its tick: anyone else gets 409 `prep_running`. **One web check:** a prep claims it under an advisory lock (7_244_502 with `hashtext(company_key)`) by saving `facts.web`; a second prep for the company waits for it (up to 120 s), then reads the facts, with the first one's notes in them. The runner now knows the morning search ahead's preps too. **First saves:** `INSERT ... ON CONFLICT DO UPDATE` for line edits and Your style. **Team notes:** an advisory lock (7_244_501) while counting. The morning search ahead skips a call someone started a moment ago. 8 new tests in `test_races.py`, including 0017 up and down on a scratch database. Ran with the prep, notes, migration and fixture tests: **93 passed**. Sent Track 1 the two lock keys; they're listed in `core/prefs/service.py` on `plan-v15-track1`.
+- 2026-11-12: **T3-1 done.** Worktree `../contour-v15-t3` on `plan-v15-track3` from `plan-v15` (9ff63aa). `npm ci`, and `COMPANIES.xlsx` copied in. Database `leadfinder_v15c`, a copy of `leadfinder_v14a` (at 0015, 13,915 companies); the HNSW index `ix_memory_embedding` failed in the restore (no shared memory) and was built again with `max_parallel_maintenance_workers=0`. `engine/.env` holds the `POSTGRES_*` lines only: Track 1 found that `API_PORT` or `CORS_ORIGINS` in it makes 8 backend tests fail, so they go in as environment variables when a backend starts. Baseline with `heavy.sh`: `tests/companies` **62 passed, 1 failed** (the speed test, which fails while the laptop is busy); website **83 files, 1,117 tests passed**. The first website run crashed (Node ran out of memory: about 1.6 GB free with three sessions), so website runs use `--maxWorkers=2`.
 
 ## Merge and deploy
 
