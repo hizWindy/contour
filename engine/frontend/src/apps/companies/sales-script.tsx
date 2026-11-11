@@ -1,0 +1,166 @@
+/**
+ * The sales script (PLAN-V10 F1), in the order of the call: 1 Opener (what to say), 2 Why now,
+ * 3 Guided questions, 4 If they say, 5 Goal of the call. Moved out of `prep-card.tsx` by PLAN-V14
+ * T2-2, with no change. Its title and "Written from ..." line are in `script-header.tsx`.
+ */
+import { CornerDownRight, Flag } from 'lucide-react'
+import type { ReactNode } from 'react'
+import { Pending, SkeletonLines } from '@/components/skeletons'
+import { Skeleton } from '@/components/ui/skeleton'
+import { formatNumber } from '@/lib/format'
+import { GuideIconMark, GuideText, GuideWhy } from './guide-parts'
+import { GuidedQuestions } from './guided-questions'
+import type { CallGuide } from './playbook'
+
+function Step({
+  n,
+  title,
+  aside,
+  children,
+}: {
+  n: number
+  title: string
+  aside?: ReactNode
+  children: ReactNode
+}) {
+  return (
+    <li className="grid grid-cols-[1.5rem_minmax(0,1fr)] gap-x-3 gap-y-2">
+      <span
+        aria-hidden="true"
+        className="flex size-6 items-center justify-center rounded-md bg-foreground text-caption font-semibold text-background tabular-nums"
+      >
+        {n}
+      </span>
+      <div className="flex min-w-0 flex-col gap-2">
+        <div className="flex min-h-6 flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <h4 className="text-ui font-semibold text-foreground">
+            <span className="sr-only">{n}. </span>
+            {title}
+          </h4>
+          {aside}
+        </div>
+        {children}
+      </div>
+    </li>
+  )
+}
+
+/** A quiet line for "nothing here". The card's side uses it too. */
+export function Quiet({ children }: { children: ReactNode }) {
+  return <p className="text-ui text-muted-foreground">{children}</p>
+}
+
+/** The script: opener, why now, guided questions, if they say and the goal. */
+export function SalesScript({ guide }: { guide: CallGuide }) {
+  return (
+    <div className="flex flex-col gap-4">
+      <ol aria-label="The call, step by step" className="flex flex-col gap-6">
+        <Step n={1} title="Opener">
+          <div className="flex flex-col gap-1.5 rounded-lg border bg-background p-3">
+            <span className="text-caption font-semibold text-muted-foreground">Say</span>
+            {guide.opener.length === 0 ? (
+              <Quiet>Nothing sure enough to say first.</Quiet>
+            ) : (
+              guide.opener.map((item) => (
+                <p key={item.text} className="text-body">
+                  <GuideText line={item} />
+                </p>
+              ))
+            )}
+          </div>
+        </Step>
+        <Step n={2} title="Why now">
+          {guide.whyNow.length === 0 ? (
+            <Quiet>No new reason found. This is a check-in call.</Quiet>
+          ) : (
+            <ul className="flex flex-col gap-3">
+              {guide.whyNow.map((item) => (
+                <li key={item.text} className="flex items-start gap-2.5">
+                  <GuideIconMark
+                    icon={item.icon}
+                    className="mt-1 size-4 shrink-0 text-muted-foreground"
+                  />
+                  <div className="flex min-w-0 flex-col gap-0.5">
+                    <p className="text-body">
+                      <GuideText line={item} />
+                    </p>
+                    {item.why ? (
+                      <p className="truncate text-caption text-muted-foreground">{item.why}</p>
+                    ) : null}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Step>
+        <Step n={3} title="Guided questions">
+          <GuidedQuestions questions={guide.questions} />
+        </Step>
+        <Step n={4} title="If they say">
+          {guide.ifTheySay.length === 0 ? (
+            <Quiet>No likely pushback with a source.</Quiet>
+          ) : (
+            <dl className="flex flex-col gap-3">
+              {guide.ifTheySay.map((item) => (
+                <div key={item.theySay} className="flex flex-col gap-1">
+                  <dt className="text-body font-semibold">"{item.theySay}"</dt>
+                  <dd className="flex items-start gap-2 text-body">
+                    <CornerDownRight
+                      aria-hidden="true"
+                      className="mt-1 size-4 shrink-0 text-muted-foreground"
+                    />
+                    <span className="min-w-0">
+                      <GuideText line={item.answer} />
+                    </span>
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          )}
+        </Step>
+        <Step n={5} title="Goal of the call">
+          {guide.goal ? (
+            <div className="flex flex-col gap-1">
+              <p className="flex items-start gap-2.5 rounded-lg border bg-background p-3 text-body font-semibold">
+                <Flag aria-hidden="true" className="mt-1 size-4 shrink-0 text-foreground" />
+                <span className="min-w-0">
+                  <GuideText line={guide.goal} />
+                </span>
+              </p>
+              <GuideWhy line={guide.goal} />
+            </div>
+          ) : (
+            <Quiet>No goal with a source.</Quiet>
+          )}
+        </Step>
+      </ol>
+      {guide.dropped > 0 ? (
+        <p className="text-caption text-muted-foreground">
+          {guide.dropped === 1
+            ? '1 line was left out because it had no source.'
+            : `${formatNumber(guide.dropped)} lines were left out because they had no source.`}
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
+/** The script's shape while the company loads: still grey lines, after 200 ms. */
+export function SalesScriptPending() {
+  return (
+    <Pending label="Writing the call script.">
+      <div className="flex flex-col gap-6">
+        <Skeleton className="h-5 w-32" />
+        {[2, 3, 4, 2, 1].map((lines, index) => (
+          <div key={index} className="grid grid-cols-[1.5rem_1fr] gap-3">
+            <Skeleton className="size-6" />
+            <div className="flex flex-col gap-2">
+              <Skeleton className="h-4 w-28" />
+              <SkeletonLines count={lines} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </Pending>
+  )
+}
