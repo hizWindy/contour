@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { CompanyDetail, PrepScript } from '@/api/types'
+import type { PrepScript } from '@/api/types'
+import { detail, JASON, TODAY } from './guide-fixtures'
 import {
   buildGuide,
   guideFromPrep,
@@ -9,75 +10,6 @@ import {
   type CallGuide,
   type GuideLine,
 } from './playbook'
-
-const TODAY = '2026-11-09'
-const JASON = { name: 'Jason Reeds', title: 'Head of Operations' }
-
-function detail(changes: Partial<CompanyDetail> = {}): CompanyDetail {
-  return {
-    key: '101',
-    source: 'hubspot',
-    name: 'ABC Logistics',
-    domain: 'abclogistics.com.au',
-    website: null,
-    city: 'Perth',
-    state: 'WA',
-    industry: 'Logistics',
-    staff: 300,
-    linkedin_staff: 280,
-    description: null,
-    owner: 'Levi',
-    lifecycle_stage: 'Opportunity',
-    last_talk: '2026-10-01',
-    last_talk_note: null,
-    next_lease_end: '2027-06-30',
-    deal: 'open',
-    hubspot_url: null,
-    offices: [
-      {
-        label: 'Perth',
-        city: 'Perth',
-        street: null,
-        level: null,
-        lease_end: '2027-06-30',
-        moved_in: null,
-        office_m2: null,
-        linkedin_staff: null,
-        quality: null,
-      },
-    ],
-    deals: [
-      {
-        name: 'Perth fit-out',
-        stage: 'Qualified Deal',
-        state: 'open',
-        pipeline: null,
-        amount_aud: '1500000',
-        close_date: '2027-03-01',
-        owner: 'Levi',
-        next_step: 'Site visit',
-        hubspot_url: null,
-      },
-    ],
-    notes: [],
-    people: [],
-    calls: [
-      {
-        id: '301',
-        called_at: '2026-10-01T01:00:00Z',
-        person: 'Jason Reeds',
-        owner: 'Levi',
-        minutes: 7,
-        outcome: 'Connected',
-        note: 'Lease ends next year.',
-        hubspot_url: null,
-      },
-    ],
-    people_status: 'ready',
-    lead: null,
-    ...changes,
-  }
-}
 
 const texts = (lines: { text: string }[]): string[] => lines.map((line) => line.text)
 

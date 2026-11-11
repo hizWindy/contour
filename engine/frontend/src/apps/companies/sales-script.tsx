@@ -2,8 +2,11 @@
  * The sales script (PLAN-V10 F1), in the order of the call: 1 Opener (what to say), 2 Why now,
  * 3 Guided questions, 4 If they say, 5 Goal of the call. Moved out of `prep-card.tsx` by PLAN-V14
  * T2-2, with no change. Its title and "Written from ..." line are in `script-header.tsx`.
+ *
+ * PLAN-V14 T3-4: the tone line sits above the steps, and lines are keyed by their slot, because a
+ * person's edit may repeat another line's words.
  */
-import { CornerDownRight, Flag } from 'lucide-react'
+import { CornerDownRight, Flag, MessageCircle } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Pending, SkeletonLines } from '@/components/skeletons'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -11,6 +14,7 @@ import { formatNumber } from '@/lib/format'
 import { GuideIconMark, GuideText, GuideWhy } from './guide-parts'
 import { GuidedQuestions } from './guided-questions'
 import type { CallGuide } from './playbook'
+import { lineSlot } from './script-layers'
 
 function Step({
   n,
@@ -54,6 +58,15 @@ export function Quiet({ children }: { children: ReactNode }) {
 export function SalesScript({ guide }: { guide: CallGuide }) {
   return (
     <div className="flex flex-col gap-4">
+      {guide.tone ? (
+        <p className="flex items-start gap-2 text-ui text-muted-foreground">
+          <MessageCircle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+          <span className="min-w-0">
+            <span className="font-semibold text-foreground">Tone: </span>
+            {guide.tone.text}
+          </span>
+        </p>
+      ) : null}
       <ol aria-label="The call, step by step" className="flex flex-col gap-6">
         <Step n={1} title="Opener">
           <div className="flex flex-col gap-1.5 rounded-lg border bg-background p-3">
@@ -61,8 +74,8 @@ export function SalesScript({ guide }: { guide: CallGuide }) {
             {guide.opener.length === 0 ? (
               <Quiet>Nothing sure enough to say first.</Quiet>
             ) : (
-              guide.opener.map((item) => (
-                <p key={item.text} className="text-body">
+              guide.opener.map((item, index) => (
+                <p key={lineSlot('opener', index, item)} className="text-body">
                   <GuideText line={item} />
                 </p>
               ))
@@ -74,8 +87,8 @@ export function SalesScript({ guide }: { guide: CallGuide }) {
             <Quiet>No new reason found. This is a check-in call.</Quiet>
           ) : (
             <ul className="flex flex-col gap-3">
-              {guide.whyNow.map((item) => (
-                <li key={item.text} className="flex items-start gap-2.5">
+              {guide.whyNow.map((item, index) => (
+                <li key={lineSlot('why_now', index, item)} className="flex items-start gap-2.5">
                   <GuideIconMark
                     icon={item.icon}
                     className="mt-1 size-4 shrink-0 text-muted-foreground"
@@ -101,9 +114,15 @@ export function SalesScript({ guide }: { guide: CallGuide }) {
             <Quiet>No likely pushback with a source.</Quiet>
           ) : (
             <dl className="flex flex-col gap-3">
-              {guide.ifTheySay.map((item) => (
-                <div key={item.theySay} className="flex flex-col gap-1">
-                  <dt className="text-body font-semibold">"{item.theySay}"</dt>
+              {guide.ifTheySay.map((item, index) => (
+                <div
+                  key={lineSlot('if_they_say', index, item.answer)}
+                  className="flex flex-col gap-1"
+                >
+                  {/* Past the draft's end, a person's answer has no pushback left to answer. */}
+                  <dt className="text-body font-semibold">
+                    {item.theySay ? `"${item.theySay}"` : 'Your own answer'}
+                  </dt>
                   <dd className="flex items-start gap-2 text-body">
                     <CornerDownRight
                       aria-hidden="true"

@@ -14,6 +14,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { cn } from '@/lib/utils'
 import { GuideWhy } from './guide-parts'
 import type { GuideQuestion } from './playbook'
+import { lineSlot } from './script-layers'
 
 function FollowUps({ id, question, open }: { id: string; question: GuideQuestion; open: boolean }) {
   return (
@@ -144,7 +145,7 @@ export function GuidedQuestions({ questions }: { questions: GuideQuestion[] }) {
       <ol className="flex flex-col gap-1">
         {questions.map((question, index) => (
           <QuestionRow
-            key={question.text}
+            key={lineSlot('question', index, question)}
             question={question}
             index={index}
             asked={asked.has(index)}
