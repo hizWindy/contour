@@ -419,8 +419,10 @@ describe('the prep box and the call prep', () => {
     expect(option).toBeInTheDocument()
     await user.keyboard('{Enter}')
     const modal = await screen.findByRole('dialog', { name: /Jason Reeds/ })
-    expect(within(modal).getByText('Before you dial')).toBeInTheDocument()
-    expect(await within(modal).findByText('Still there')).toBeInTheDocument()
+    // Still there?, Last talk and News sit in the card's header, out of the scroll.
+    const answers = within(modal).getByRole('list', { name: 'Before you dial' })
+    expect(answers.closest('.overflow-y-auto')).toBeNull()
+    expect(await within(answers).findByText('Still there')).toBeInTheDocument()
     expect(within(modal).getByText('Are you planning to renew or move?')).toBeInTheDocument()
     // Call prep's guided question opens with its follow-up.
     expect(within(modal).getByText('Who is helping you look?')).toBeInTheDocument()

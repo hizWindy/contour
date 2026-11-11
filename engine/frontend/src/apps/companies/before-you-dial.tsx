@@ -1,6 +1,13 @@
 /**
- * "Before you dial" (PLAN-V10 F1): Levi's 4 questions, in 4 tiles. On a rushed call that is all
- * anyone reads. Moved out of `prep-card.tsx` by PLAN-V14 T2-2, with no change.
+ * "Before you dial" (PLAN-V10 F1, moved into the card's header by PLAN-V14 T2-3): Still there?,
+ * Last talk and News, in one row under the person's name. On a rushed call that is all anyone
+ * reads, so it stays in view while the script scrolls.
+ *
+ * - Each answer shows its value first (one line, two for News) and a small detail line under it.
+ *   A press opens it in full, with its sources, in a small popover.
+ * - **On a phone** the three stack as short rows of one line each, so nothing scrolls sideways.
+ * - **Connections** waits for Levi's customer list (PREP.md, **TBC**). Its answer is here, ready,
+ *   and shows with `connections`.
  *
  * Colour only where something needs attention: Ochre for no talk in 6 months or nobody named,
  * Terracotta for a person who has left. Every status has an icon and words.
@@ -19,6 +26,7 @@ import {
 } from 'lucide-react'
 import type { ReactNode } from 'react'
 import type { CompanyDetail, PrepFacts, PrepScript } from '@/api/types'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatDate } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -34,43 +42,125 @@ const ICON_TONES: Record<Tone, string> = {
   alert: 'text-destructive',
 }
 
-interface TileProps {
+interface Answer {
   label: string
   icon: LucideIcon
   tone?: Tone
-  value: ReactNode
-  sub?: ReactNode
+  /** The answer in a few words. */
+  value: string
+  /** The small line under it. */
+  detail?: string
+  /** The sources of the value, or of the detail. Shown as still marks; the popover links them. */
+  sources?: { value?: string[]; detail?: string[] }
+  /** The value and the detail in full, with their source marks, for the popover. */
+  full?: { value?: ReactNode; detail?: ReactNode }
+  /** Call prep is still looking. */
   loading?: boolean
+  /** News gets two lines for its value. */
+  lines?: 1 | 2
 }
 
-function Tile({ label, icon: Icon, tone = 'quiet', value, sub, loading }: TileProps) {
+/**
+ * A line's source ids (W1, F3) as still marks, inside the button. The popover has the real ones,
+ * with their labels and links. Hidden from screen readers, which hear them in the popover.
+ */
+function Marks({ ids }: { ids: string[] | undefined }) {
+  if (!ids?.length) return null
   return (
-    <div
-      className={cn(
-        'flex min-w-0 flex-col gap-1.5 rounded-lg border p-3 transition-colors',
-        tone === 'alert' ? 'border-destructive bg-destructive-soft' : 'bg-card',
-      )}
-    >
-      <dt className="text-caption text-muted-foreground">{label}</dt>
-      <dd className="flex min-w-0 flex-col gap-1">
-        {loading ? (
-          <span className="flex flex-col gap-1.5" aria-hidden="true">
-            <Skeleton className="h-4 w-4/5" />
-            <Skeleton className="h-3 w-1/2" />
+    <span aria-hidden="true">
+      {ids.map((id) => (
+        <span
+          key={id}
+          className="ml-1 inline-flex h-5 items-center rounded-sm border border-input px-1 align-middle text-caption leading-none font-semibold text-muted-foreground tabular-nums"
+        >
+          {id}
+        </span>
+      ))}
+    </span>
+  )
+}
+
+/** One answer: a button that opens it in full. While call prep looks, a still grey line. */
+function AnswerItem({ answer }: { answer: Answer }) {
+  const {
+    label,
+    icon: Icon,
+    tone = 'quiet',
+    value,
+    detail,
+    sources,
+    full,
+    loading,
+    lines = 1,
+  } = answer
+  const box =
+    'flex w-full min-w-0 rounded-lg border p-2.5 text-left max-sm:min-h-11 max-sm:items-center max-sm:gap-3 sm:flex-col sm:gap-1 sm:p-3'
+  if (loading) {
+    return (
+      <div className={cn(box, 'bg-card')}>
+        <span className="text-caption text-muted-foreground max-sm:w-20 max-sm:shrink-0">
+          {label}
+        </span>
+        <span className="flex min-w-0 flex-1 flex-col gap-1.5 sm:w-full" aria-hidden="true">
+          <Skeleton className="h-4 w-4/5" />
+          <Skeleton className="h-3 w-1/2 max-sm:hidden" />
+        </span>
+        <span className="sr-only">Call prep is checking.</span>
+      </div>
+    )
+  }
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            box,
+            'animate-in transition-colors duration-150 fade-in-0',
+            tone === 'alert'
+              ? 'border-destructive bg-destructive-soft hover:bg-destructive-soft/70'
+              : 'bg-card hover:bg-muted',
+          )}
+        >
+          <span className="text-caption text-muted-foreground max-sm:w-20 max-sm:shrink-0">
+            {label}
           </span>
-        ) : (
-          <span className="flex animate-in flex-col gap-1 duration-150 fade-in-0">
-            <span className="flex min-w-0 items-start gap-1.5 text-ui font-semibold">
+          <span className="flex min-w-0 flex-1 gap-x-1.5 max-sm:items-center sm:w-full sm:flex-col sm:gap-y-1">
+            <span className="flex min-w-0 items-start gap-1.5 text-ui font-semibold max-sm:shrink-0 max-sm:max-w-full">
               <Icon aria-hidden="true" className={cn('mt-0.5 size-4 shrink-0', ICON_TONES[tone])} />
-              <span className="line-clamp-2 min-w-0">{value}</span>
+              <span
+                className={cn(
+                  'min-w-0 max-sm:truncate',
+                  lines === 2 ? 'sm:line-clamp-2' : 'sm:line-clamp-1',
+                )}
+              >
+                {value}
+                <Marks ids={sources?.value} />
+              </span>
             </span>
-            {sub ? (
-              <span className="line-clamp-2 text-caption text-muted-foreground">{sub}</span>
+            {detail ? (
+              <span className="min-w-0 truncate text-caption text-muted-foreground">
+                <span aria-hidden="true" className="sm:hidden">
+                  ·{' '}
+                </span>
+                {detail}
+                <Marks ids={sources?.detail} />
+              </span>
             ) : null}
           </span>
-        )}
-      </dd>
-    </div>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-80 max-w-[calc(100vw-2rem)] gap-1.5">
+        <p className="text-caption text-muted-foreground">{label}</p>
+        <p className="flex items-start gap-1.5 font-semibold">
+          <Icon aria-hidden="true" className={cn('mt-0.5 size-4 shrink-0', ICON_TONES[tone])} />
+          <span className="min-w-0">{full?.value ?? value}</span>
+        </p>
+        {full?.detail || detail ? (
+          <p className="text-caption text-muted-foreground">{full?.detail ?? detail}</p>
+        ) : null}
+      </PopoverContent>
+    </Popover>
   )
 }
 
@@ -83,52 +173,82 @@ export interface BeforeYouDialProps {
   checking: boolean
   person: { id: string; name: string } | null
   today: string
+  /** Show Connections. Off until Levi's customer list is loaded (PREP.md, TBC). */
+  connections?: boolean
 }
 
-function stillTile({ facts, script, checking, person, company }: BeforeYouDialProps): TileProps {
+function stillAnswer({ facts, script, checking, person, company }: BeforeYouDialProps): Answer {
   if (!person) {
     return {
       label: 'Who',
       icon: Users,
       tone: 'attention',
       value: 'Nobody named',
-      sub: 'Ask the switchboard for whoever looks after the office.',
+      detail: 'Ask for whoever looks after the office.',
+      full: { detail: 'Ask the switchboard for whoever looks after the office.' },
     }
   }
   if (script && script.still_there !== 'not_checked') {
-    const note = script.still_there_note ? (
-      <GuideText line={{ ...script.still_there_note, why: null, icon: 'web' }} />
-    ) : null
+    const note = script.still_there_note
+    const fromNote = note
+      ? {
+          detail: note.text,
+          sources: { detail: note.sources },
+          full: { detail: <GuideText line={{ ...note, why: null, icon: 'web' }} /> },
+        }
+      : {}
     if (script.still_there === 'yes') {
-      return { label: 'Still there?', icon: CircleCheck, value: STILL_WORDS.yes, sub: note }
+      return { label: 'Still there?', icon: CircleCheck, value: STILL_WORDS.yes, ...fromNote }
     }
     if (script.still_there === 'no') {
-      return { label: 'Still there?', icon: UserX, tone: 'alert', value: STILL_WORDS.no, sub: note }
+      return {
+        label: 'Still there?',
+        icon: UserX,
+        tone: 'alert',
+        value: STILL_WORDS.no,
+        ...fromNote,
+      }
     }
     return {
       label: 'Still there?',
       icon: CircleHelp,
       value: STILL_WORDS.unknown,
-      sub: 'The web check found nothing sure.',
+      detail: 'The web check found nothing sure.',
     }
   }
   if (checking) return { label: 'Still there?', icon: CircleDashed, value: '', loading: true }
   const activity = company?.people.find((item) => item.id === person.id)?.last_activity
+  if (activity) {
+    return {
+      label: 'Still there?',
+      icon: CircleDashed,
+      value: STILL_WORDS.not_checked,
+      detail: `Last HubSpot activity ${formatDate(activity)}.`,
+    }
+  }
+  if (facts?.names_ok === false) {
+    return {
+      label: 'Still there?',
+      icon: CircleDashed,
+      value: STILL_WORDS.not_checked,
+      detail: "Names don't go to Claude yet.",
+      full: { detail: "Names don't go to Claude yet, so there is no web check." },
+    }
+  }
   return {
     label: 'Still there?',
     icon: CircleDashed,
     value: STILL_WORDS.not_checked,
-    sub: activity
-      ? `Last HubSpot activity ${formatDate(activity)}.`
-      : facts?.names_ok === false
-        ? "Names don't go to Claude yet, so there is no web check."
-        : facts?.prep_enabled
-          ? 'Call prep checks this on the web.'
-          : 'Call prep is off, so there is no web check.',
+    detail: facts?.prep_enabled ? 'Call prep checks the web.' : 'Call prep is off.',
+    full: {
+      detail: facts?.prep_enabled
+        ? 'Call prep checks this on the web.'
+        : 'Call prep is off, so there is no web check.',
+    },
   }
 }
 
-function talkTile({ company, facts, today }: BeforeYouDialProps): TileProps {
+function talkAnswer({ company, facts, today }: BeforeYouDialProps): Answer {
   const date = facts?.last_call?.called_at?.slice(0, 10) ?? company?.last_talk ?? null
   if (!date) {
     return {
@@ -136,7 +256,7 @@ function talkTile({ company, facts, today }: BeforeYouDialProps): TileProps {
       icon: History,
       tone: 'attention',
       value: 'None on record',
-      sub: company?.source === 'lead' ? 'Not in HubSpot yet.' : 'No call logged in HubSpot.',
+      detail: company?.source === 'lead' ? 'Not in HubSpot yet.' : 'No call logged in HubSpot.',
     }
   }
   const stale = talkStale(date, today)
@@ -146,17 +266,20 @@ function talkTile({ company, facts, today }: BeforeYouDialProps): TileProps {
     icon: stale ? History : MessageSquare,
     tone: stale ? 'attention' : 'quiet',
     value: formatDate(date),
-    sub: `${agoWords(date, today)}${owner ? ` · ${owner}` : ''}`,
+    detail: `${agoWords(date, today)}${owner ? ` · ${owner}` : ''}`,
   }
 }
 
-function newsTile({ company, facts, script, checking }: BeforeYouDialProps): TileProps {
+function newsAnswer({ company, facts, script, checking }: BeforeYouDialProps): Answer {
   const news = script?.news[0]
   if (news) {
     return {
       label: 'News',
       icon: Newspaper,
-      value: <GuideText line={{ ...news, why: null, icon: 'news' }} />,
+      value: news.text,
+      lines: 2,
+      sources: { value: news.sources },
+      full: { value: <GuideText line={{ ...news, why: null, icon: 'news' }} /> },
     }
   }
   if (script) {
@@ -164,7 +287,7 @@ function newsTile({ company, facts, script, checking }: BeforeYouDialProps): Til
       label: 'News',
       icon: Newspaper,
       value: 'Nothing new',
-      sub: 'None found in the last 90 days.',
+      detail: 'None found in the last 90 days.',
     }
   }
   if (checking) return { label: 'News', icon: Newspaper, value: '', loading: true }
@@ -174,37 +297,47 @@ function newsTile({ company, facts, script, checking }: BeforeYouDialProps): Til
       label: 'News',
       icon: Newspaper,
       value: note.text,
-      sub: `Saved research${note.date ? `, ${formatDate(note.date)}` : ''}.`,
+      lines: 2,
+      detail: `Saved research${note.date ? `, ${formatDate(note.date)}` : ''}.`,
     }
   }
   return {
     label: 'News',
     icon: Newspaper,
     value: 'Not checked',
-    sub: facts?.prep_enabled
-      ? 'Call prep looks for news.'
-      : 'Call prep is off, so there is no web check.',
+    detail: facts?.prep_enabled ? 'Call prep looks for news.' : 'Call prep is off.',
+    full: {
+      detail: facts?.prep_enabled
+        ? 'Call prep looks for news.'
+        : 'Call prep is off, so there is no web check.',
+    },
   }
 }
 
-/** Levi's 4 questions, in 4 tiles. */
+const CONNECTIONS: Answer = {
+  label: 'Connections',
+  icon: Link2,
+  value: 'Not checked yet',
+  detail: 'Waiting for the customer list.',
+}
+
+/** Still there?, Last talk and News: Levi's questions, in the card's header. */
 export function BeforeYouDial(props: BeforeYouDialProps) {
+  const answers = [stillAnswer(props), talkAnswer(props), newsAnswer(props)]
+  if (props.connections) answers.push(CONNECTIONS)
   return (
-    <section aria-labelledby="before-you-dial" className="flex flex-col gap-3">
-      <h3 id="before-you-dial" className="text-ui font-semibold text-foreground">
-        Before you dial
-      </h3>
-      <dl className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-        <Tile {...stillTile(props)} />
-        <Tile {...talkTile(props)} />
-        <Tile {...newsTile(props)} />
-        <Tile
-          label="Connections"
-          icon={Link2}
-          value="Not checked yet"
-          sub="Waiting for the customer list."
-        />
-      </dl>
-    </section>
+    <ul
+      aria-label="Before you dial"
+      className={cn(
+        'grid grid-cols-1 gap-2',
+        props.connections ? 'sm:grid-cols-2 lg:grid-cols-4' : 'sm:grid-cols-3',
+      )}
+    >
+      {answers.map((answer) => (
+        <li key={answer.label} className="flex min-w-0">
+          <AnswerItem answer={answer} />
+        </li>
+      ))}
+    </ul>
   )
 }

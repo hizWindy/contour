@@ -2,8 +2,10 @@
  * The prep card (PLAN-V10 D4 and F1): what to know and say on one call, in a modal over the page.
  * The company panel is everything we know about a client; this card is quick info and a script.
  *
- * - **At once:** "Before you dial" (Levi's 4 questions), the sales script and the guided questions
- *   are written here from what we already know (`playbook.ts`). Free, and ready as the card opens.
+ * - **At once:** the sales script and the guided questions are written here from what we already
+ *   know (`playbook.ts`). Free, and ready as the card opens.
+ * - **In the header,** under the person's name: Still there?, Last talk and News (PLAN-V14 T2-3,
+ *   `before-you-dial.tsx`). The header doesn't scroll, so they stay in view.
  * - **Then complete:** with call prep switched on, Claude checks the web for news and "still
  *   there?" and writes its own script. It cross-fades in when it is ready. Its lines show their
  *   sources (F for a fact we had, W for a web page found).
@@ -461,6 +463,21 @@ export function PrepModal({ target, onClose, onChangeTarget, onOpenCompany }: Pr
               ) : null}
             </div>
           </div>
+          {picking ? null : (
+            // Under the person's name, and out of the scroll, so it stays in view.
+            <SourcesContext.Provider value={sources}>
+              <div className="-mr-9 max-sm:-mr-10 sm:pl-13">
+                <BeforeYouDial
+                  company={company.data}
+                  facts={facts.data}
+                  script={claude}
+                  checking={checking}
+                  person={person}
+                  today={today}
+                />
+              </div>
+            </SourcesContext.Provider>
+          )}
           {checking ? <Searching stage={prep.data?.stage ?? 0} /> : null}
         </DialogHeader>
         <SourcesContext.Provider value={sources}>
@@ -485,14 +502,6 @@ export function PrepModal({ target, onClose, onChangeTarget, onOpenCompany }: Pr
               />
             ) : (
               <div className="flex flex-col gap-6">
-                <BeforeYouDial
-                  company={company.data}
-                  facts={facts.data}
-                  script={claude}
-                  checking={checking}
-                  person={person}
-                  today={today}
-                />
                 {problem ? (
                   <ErrorState
                     error={start.error}
@@ -513,7 +522,7 @@ export function PrepModal({ target, onClose, onChangeTarget, onOpenCompany }: Pr
                     </span>
                   </div>
                 ) : null}
-                <div className="grid grid-cols-1 gap-6 border-t pt-6 lg:grid-cols-[minmax(0,1fr)_19rem]">
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_19rem]">
                   {guide ? (
                     <section
                       key={guide.madeFrom}
