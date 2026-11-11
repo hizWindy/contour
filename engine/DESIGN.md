@@ -50,7 +50,7 @@ Cobalt is a bright step of Navy, so it reads as the same family, and it lifts th
 | The focus ring | `--ring` is the accent: 2px with a 2px gap |
 | Progress | `--progress` is the accent. The bar fills, and the live dot is still |
 | Links in text | `text-link` (`--link` is the accent). Underlined on hover, as before |
-| A chart's one highlighted bar or line | `--chart-1` is the accent; the other bars are muted (`--border`) |
+| A chart's one highlighted bar or line | `--chart-1` is the accent; the other bars are the muted ink (`--muted-foreground`) at 70% opacity, which keeps them 3:1 on the card in light and dark. Not `--border`: it is 1.4:1 on the card, too faint (found in PLAN-V13 T1-8). A `--chart-muted` token would say this once (**TBC**) |
 
 Where it never goes: a button fill (Navy keeps the main buttons), body text, a result or a status (Olive, Ochre, Sand and Terracotta keep those), a selected row (`--selected` stays a Navy tint), a project tile (Eucalyptus and Heath keep those), or a large area.
 
@@ -145,7 +145,7 @@ Smooth and quick, like a well-made phone app (PLAN-V13, 11 Nov 2026). Motion sho
 - **Only `transform` and `opacity` move.** Nothing animates its height, a shadow, a blur, or a colour over a big area. A colour change on a small part (a switch's track, a chip's border) uses the one curve, `cubic-bezier(0.4, 0, 0.2, 1)`, at 150ms, and a dialog's fade 250ms.
 - **The indicator slides:** the selected tab's underline, the segmented control's highlight and the selected menu item move from the old place to the new (`TabIndicator`, `Segmented`; `layoutId` in Motion).
 - **A press feels physical:** a button, a chip or a tile shrinks to 0.98 while it is held (`usePress`, through Motion's `whileTap`, never a CSS `active:scale` class). It springs back on release. Hover still never grows or moves anything: it changes the border, background or opacity.
-- **Content reveals once:** a card or a list fades and rises 4px when it first shows (`Reveal`), at most 8 items one after another, 40ms apart. A number that changes rolls to its new value in table digits (`RollingNumber`).
+- **Content reveals once:** a card or a list fades and rises 4px when it first shows (`Reveal`), at most 8 items one after another, 40ms apart. A number that changes rolls to its new value in table digits (`RollingNumber`). A chart's bars grow once from the baseline when the page opens, as a `scaleY` transform (never an animated height), and not at all with reduced motion (Admin's Runs and cost, PLAN-V13 T1-8).
 - **A live run** shows a filling progress bar and a still dot. Nothing pulses, spins or loops, ever.
 - **Speed budget:** no animation in a table of more than 50 rows. Motion's features load through `LazyMotion` at the app's root (`MotionRoot`), late and in a file of their own: the first screen draws without them, and they arrive right after, so the main file stays small. Pages use the small `m.*` components and bring no features of their own. No dropped frames at 4x CPU slowdown in Chrome's performance panel on the Schedules control, a tab switch and the Companies table.
 - **Reduced motion:** if your computer asks for it, everything changes at once. `MotionConfig` follows the setting, and the base CSS turns transitions off.
@@ -170,7 +170,7 @@ Smooth and quick, like a well-made phone app (PLAN-V13, 11 Nov 2026). Motion sho
 ## Accessibility (WCAG 2.2 AA)
 
 - Text contrast is at least 4.5:1, in light and dark mode.
-- A visible 2px focus ring in the accent, with a 2px gap, on everything you can tab to.
+- A visible 2px focus ring in the accent, with a 2px gap, on everything you can tab to. In a row that scrolls sideways (the Admin tabs on a phone), the ring is drawn inside the tab, so the row's edge never clips it (PLAN-V13 T1-6).
 - Everything works by keyboard. Ctrl+K opens the command menu, J and K move through results, Enter opens one, and Esc closes it.
 - Status is never shown by colour alone. Every badge has an icon and a word.
 - Click targets are at least 24 × 24px, and buttons are 36px tall (44px on a touch screen).

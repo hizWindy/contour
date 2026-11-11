@@ -3,7 +3,7 @@
 This plan gives the website an accent colour and smooth, iOS-like motion. It redesigns Admin (with a new Health tab and one control for the city schedules), the Lead Finder's Rules and Test set pages, and the Companies table. Two Claude accounts build it at the same time, in two tracks that never touch the same files.
 
 - **Built by:** Al-khair Pama. **Signed off by:** Al-khair, for the code and for every design. **TBC** means to be confirmed.
-- **Last updated:** 2026-11-11 (written, nothing built yet).
+- **Last updated:** 2026-11-11 (M1 done: both tracks joined on `plan-v13` and merged into `master`, on Al-khair's word).
 - **Progress:** each track keeps its own count, at the top of its part.
 - **Sources:** Al-khair's asks of 11 Nov, the references in `inspirations/` (8 dashboards), [motion.dev](https://motion.dev/), [Framer's animation lessons](https://www.framer.com/academy/topics/animations) and [Framer's components](https://www.framer.com/marketplace/components/), and [engine/DESIGN.md](../engine/DESIGN.md).
 - **Comes after:** [PLAN-V12.md](PLAN-V12.md). It builds on the `plan-v12` branch, which holds PLAN-V11 and PLAN-V12 too. On 11 Nov both were merged into `master` (8e69375), not pushed, so `plan-v12` and `master` are the same commit.
@@ -327,7 +327,7 @@ Newest first.
 
 ## Merge (`merge v13`, on Al-khair's word)
 
-- [ ] **M1. Join the tracks.**
+- [x] **M1. Join the tracks.** Done 2026-11-11 (5d180d6, 6e45c77 and the check commit after them), then merged into `master` on Al-khair's word. See the Log.
   - In the main repo on this laptop: merge `plan-v13-track1` into `plan-v13`, then `plan-v13-track2`.
   - Run `engine openapi` and `npm run types` again, instead of fixing generated files by hand.
   - Run all the tests, lint, types and build with `heavy.sh`, and check the whole site in the browser once. Code can merge with no conflict and still break, and these catch it.
@@ -364,4 +364,5 @@ Newest first.
 
 Newest first.
 
+- 2026-11-11: **M1 done, on Al-khair's word ("merge the 2 track and then merge it to the main").** `plan-v13-track1` (7de6410) then `plan-v13-track2` (b1c91ee) merged into `plan-v13` with no conflict (5d180d6, 6e45c77): the only file both touched was this plan. `engine openapi` and `npm run types` changed nothing. Checks on the merged code with `heavy.sh`: website 76 files, **1,015 tests passed**, lint, types and build clean (Prettier flags only `src/modules.ts`, as before this plan). Backend **3,513 passed, 25 skipped, 1 failed** in the full run: `test_runs_manager.py::test_cancel_mid_run_keeps_what_finished_and_marks_it_cancelled`, a timing test that **passed alone** (1.4 s), the same pattern as both tracks' full runs on this laptop. **Browser:** the whole site once on a preview of the merged code (backend 8012 on `leadfinder_v13b`, website 5183; headless Chrome over the DevTools protocol): Home, Results, a lead card, Rules, Test set, Companies, Start and all eight Admin tabs at 1440, plus dark, 390 and reduced motion samples, **23 shots, no console errors**; nine kept in `plan/shots/v13-m1/`. Health's live checks take a few seconds, so its shot waited 12 s. **DESIGN.md** now carries Track 1's notes: a chart's muted bars are the muted ink at 70% (not `--border`, 1.4:1 on the card; a `--chart-muted` token **TBC**), bars grow once as a `scaleY` transform, and the focus ring is drawn inside a tab in a row that scrolls sideways. **Open after the merge:** Al-khair's looks at T1-6 to T1-9 and T2-3, T2-4, T2-6 to T2-8 (merged on his word before the looks); Track 1's 4x CPU frame check (T1-10); the `hubspot_url` on `CompanyRow` (Track 2's request); the Admin tabs' Navy underline was replaced by `TabIndicator` in T1-6, so that note is closed. The merged preview (8012, 5183) runs for a look; stop it and drop `leadfinder_v13a` and `leadfinder_v13b` when done. Nothing pushed.
 - 2026-11-11: Plan written from Al-khair's asks of 11 Nov and the references in `inspirations/`. Nothing built yet.
