@@ -45,10 +45,14 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { formatRelative, formatTime, melbourneDate } from '@/lib/format'
 import { PHONE, useMediaQuery } from '@/lib/use-media-query'
 import { cn } from '@/lib/utils'
+import { BeforeYouDial } from './before-you-dial'
 import { SourcesContext } from './guide-sources'
-import { BeforeYouDial, CallSide, SalesScript, SalesScriptPending } from './prep-card'
+import { CallSide } from './prep-card'
 import type { PrepTarget } from './prep-box'
-import { buildGuide, guideFromPrep, guideText } from './playbook'
+import { guideText } from './playbook'
+import { SalesScript, SalesScriptPending } from './sales-script'
+import { SCRIPT_TITLE_ID, ScriptHeader } from './script-header'
+import { useGuide } from './use-guide'
 import { WAITING_FOR_PEOPLE } from './words'
 
 const COPIED_MS = 2000
@@ -351,16 +355,17 @@ export function PrepModal({ target, onClose, onChangeTarget, onOpenCompany }: Pr
     () => new Map([...sources.values()].map((source) => [source.id, source.label])),
     [sources],
   )
-  const guide = useMemo(() => {
-    if (claude) return guideFromPrep(claude, labels)
-    if (!company.data || picking) return null
-    return buildGuide({
-      company: company.data,
-      person: person ? { name: person.name, title: person.title ?? null } : null,
-      caller,
-      today,
-    })
-  }, [claude, labels, company.data, picking, person, caller, today])
+  const guide = useGuide({
+    script: claude,
+    labels,
+    company: company.data,
+    picking,
+    person,
+    caller,
+    today,
+    companyKey,
+    contactId,
+  })
 
   const checking = !off && prep.data?.status === 'searching'
   const companyName =
@@ -510,9 +515,14 @@ export function PrepModal({ target, onClose, onChangeTarget, onOpenCompany }: Pr
                 ) : null}
                 <div className="grid grid-cols-1 gap-6 border-t pt-6 lg:grid-cols-[minmax(0,1fr)_19rem]">
                   {guide ? (
-                    <div key={guide.madeFrom} className="min-w-0 animate-in duration-150 fade-in-0">
+                    <section
+                      key={guide.madeFrom}
+                      aria-labelledby={SCRIPT_TITLE_ID}
+                      className="flex min-w-0 animate-in flex-col gap-4 duration-150 fade-in-0"
+                    >
+                      <ScriptHeader madeFrom={guide.madeFrom} />
                       <SalesScript guide={guide} />
-                    </div>
+                    </section>
                   ) : company.error ? (
                     <ErrorState
                       error={company.error}
