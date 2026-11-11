@@ -18,6 +18,7 @@ DayOrNone = date | None
 SortKey = Literal["name", "staff", "lease", "last_talk"]
 SortOrder = Literal["asc", "desc"]
 PeopleStatus = Literal["ready", "waiting"]
+ToneKey = Literal["friendly", "direct", "consultative", "formal"]  # the tone presets (PLAN-V15)
 
 
 class Out(BaseModel):
@@ -331,6 +332,11 @@ class NewsLine(ScriptLine):
 
 
 class PrepScript(Out):
+    model_config = ConfigDict(
+        json_schema_serialization_defaults_required=True,
+        json_schema_extra=optional_in_types("tone_line"),
+    )
+
     still_there: StillThere
     still_there_note: ScriptLine | None
     news: list[NewsLine] = Field(description="Newest first, with undated items last")
@@ -340,6 +346,11 @@ class PrepScript(Out):
     if_they_say: list[Objection]
     goal: ScriptLine | None
     dropped: int = Field(description="Lines left out because they had no source")
+    tone_line: str | None = Field(
+        None,
+        description="Claude's own line on how to sound, in the chosen tone (PLAN-V15). Advice, "
+        "not said aloud. None for a prep made before 12 Nov",
+    )
 
 
 class StyleUsed(Out):
@@ -352,7 +363,7 @@ class StyleUsed(Out):
 class PrepOut(Out):
     model_config = ConfigDict(
         json_schema_serialization_defaults_required=True,
-        json_schema_extra=optional_in_types("style_used"),
+        json_schema_extra=optional_in_types("style_used", "tone_used", "stage_used"),
     )
 
     id: uuid.UUID
@@ -375,6 +386,14 @@ class PrepOut(Out):
         default_factory=StyleUsed,
         description="The style notes the script was written with. None for a prep before 11 Nov "
         "or one made with no notes",
+    )
+    tone_used: ToneKey | None = Field(
+        None,
+        description="The tone it was written in (PLAN-V15). None for a prep before 12 Nov. When "
+        "it differs from mine, the card offers Research again; a tone change spends nothing",
+    )
+    stage_used: RelationshipStage | None = Field(
+        None, description="The relationship stage it was written for. None before 12 Nov"
     )
 
 
@@ -434,8 +453,35 @@ class StyleNoteOut(Out):
     created_at: datetime
 
 
+class ToneChoice(Out):
+    key: ToneKey
+    label: str = Field(description="Its name on screen, like Direct")
+    line: str = Field(description="What it means, like 'Short sentences, the reason first.'")
+
+
+class ToneView(Out):
+    """The tone presets (PLAN-V15 T3-5): mine, the team's default, and the four to pick from."""
+
+    mine: ToneKey | None = Field(description="My own tone, or None to follow the team")
+    team: ToneKey = Field(description="The team's default: Friendly until an Admin picks another")
+    choices: list[ToneChoice]
+
+
+class ToneIn(BaseModel):
+    tone: ToneKey | None = Field(description="My tone, or None to follow the team's default")
+
+
+class TeamToneIn(BaseModel):
+    tone: ToneKey
+
+
 class ScriptStyleOut(Out):
     """My style and the team's: what the next script is written with."""
+
+    model_config = ConfigDict(
+        json_schema_serialization_defaults_required=True,
+        json_schema_extra=optional_in_types("tone"),
+    )
 
     mine: str = Field(description="Your style, or an empty string")
     mine_updated_at: datetime | None
@@ -450,6 +496,7 @@ class ScriptStyleOut(Out):
     mine_max_chars: int = MINE_MAX_CHARS
     team_max_chars: int = TEAM_MAX_CHARS
     team_max_notes: int = TEAM_MAX_NOTES
+    tone: ToneView = Field(description="The tone presets (PLAN-V15). The API always sends it")
 
 
 class StyleMineIn(BaseModel):

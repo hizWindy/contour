@@ -325,6 +325,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/script-style/team-tone": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save the team's tone
+         * @description Admins only. The tone for everyone who hasn't picked their own. 403 `admin_only`.
+         */
+        put: operations["save_team_tone"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/script-style/team/{note_id}": {
         parameters: {
             query?: never;
@@ -379,6 +399,26 @@ export interface paths {
          * @description Admins only. The note stays visible to the one who suggested it, as rejected.
          */
         post: operations["reject_team_note"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/script-style/tone": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save my tone
+         * @description My tone preset: friendly, direct, consultative or formal, or null to follow the team's default. It goes into my next scripts. It never starts a prep: a ready one is still reused, and the card offers Research again.
+         */
+        put: operations["save_my_tone"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3995,12 +4035,22 @@ export interface components {
              */
             stage: number;
             /**
+             * Stage Used
+             * @description The relationship stage it was written for. None before 12 Nov
+             */
+            stage_used?: ("open_deal" | "customer" | "past_customer" | "lost_deal" | "contacted" | "cold") | null;
+            /**
              * Status
              * @enum {string}
              */
             status: "searching" | "ready" | "failed";
             /** @description The style notes the script was written with. None for a prep before 11 Nov or one made with no notes */
             style_used?: components["schemas"]["StyleUsed"];
+            /**
+             * Tone Used
+             * @description The tone it was written in (PLAN-V15). None for a prep before 12 Nov. When it differs from mine, the card offers Research again; a tone change spends nothing
+             */
+            tone_used?: ("friendly" | "direct" | "consultative" | "formal") | null;
             /**
              * Trigger
              * @enum {string}
@@ -4046,6 +4096,11 @@ export interface components {
              */
             still_there: "yes" | "no" | "unknown" | "not_checked";
             still_there_note: components["schemas"]["ScriptLine"] | null;
+            /**
+             * Tone Line
+             * @description Claude's own line on how to sound, in the chosen tone (PLAN-V15). Advice, not said aloud. None for a prep made before 12 Nov
+             */
+            tone_line?: string | null;
             /** Why Now */
             why_now: components["schemas"]["ScriptLine"][];
         };
@@ -5620,6 +5675,8 @@ export interface components {
              * @default 8
              */
             team_max_notes: number;
+            /** @description The tone presets (PLAN-V15). The API always sends it */
+            tone?: components["schemas"]["ToneView"];
         };
         /** SearchOut */
         SearchOut: {
@@ -6327,6 +6384,14 @@ export interface components {
             /** Note */
             note: string;
         };
+        /** TeamToneIn */
+        TeamToneIn: {
+            /**
+             * Tone
+             * @enum {string}
+             */
+            tone: "friendly" | "direct" | "consultative" | "formal";
+        };
         /**
          * TestItem
          * @description One company of a test run.
@@ -6418,6 +6483,51 @@ export interface components {
             status: "queued" | "running" | "done" | "failed" | "cancelled" | "interrupted";
             /** Total Cost Usd */
             total_cost_usd: string;
+        };
+        /** ToneChoice */
+        ToneChoice: {
+            /**
+             * Key
+             * @enum {string}
+             */
+            key: "friendly" | "direct" | "consultative" | "formal";
+            /**
+             * Label
+             * @description Its name on screen, like Direct
+             */
+            label: string;
+            /**
+             * Line
+             * @description What it means, like 'Short sentences, the reason first.'
+             */
+            line: string;
+        };
+        /** ToneIn */
+        ToneIn: {
+            /**
+             * Tone
+             * @description My tone, or None to follow the team's default
+             */
+            tone: ("friendly" | "direct" | "consultative" | "formal") | null;
+        };
+        /**
+         * ToneView
+         * @description The tone presets (PLAN-V15 T3-5): mine, the team's default, and the four to pick from.
+         */
+        ToneView: {
+            /** Choices */
+            choices: components["schemas"]["ToneChoice"][];
+            /**
+             * Mine
+             * @description My own tone, or None to follow the team
+             */
+            mine: ("friendly" | "direct" | "consultative" | "formal") | null;
+            /**
+             * Team
+             * @description The team's default: Friendly until an Admin picks another
+             * @enum {string}
+             */
+            team: "friendly" | "direct" | "consultative" | "formal";
         };
         /** TriggerFacet */
         TriggerFacet: {
@@ -9037,6 +9147,129 @@ export interface operations {
             };
         };
     };
+    save_team_tone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TeamToneIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScriptStyleOut"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     retire_team_note: {
         parameters: {
             query?: never;
@@ -9289,6 +9522,129 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScriptStyleOut"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    save_my_tone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ToneIn"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

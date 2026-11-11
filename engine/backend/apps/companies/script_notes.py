@@ -28,6 +28,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
+from apps.companies import tones
 from apps.companies.facts import scrub
 from apps.companies.schemas import (
     TEAM_MAX_NOTES,
@@ -222,6 +223,7 @@ async def style_view(session: AsyncSession, auth: AuthContext | None) -> ScriptS
         team=[_note_out(note, names) for note in team],
         suggestions=[_note_out(note, names) for note in waiting],
         can_decide=deciding,
+        tone=await tones.tone_view(session, user),
     )
 
 
@@ -313,7 +315,7 @@ async def suggest(
     return await style_view(session, auth)
 
 
-def _admins_only() -> Problem:
+def admins_only() -> Problem:
     return Problem(403, "Admins only", "Only an Admin can do this.", code="admin_only")
 
 
@@ -339,7 +341,7 @@ async def decide(
     now: datetime,
 ) -> ScriptStyleOut:
     if not can_decide(auth):
-        raise _admins_only()
+        raise admins_only()
     note = await _team_note(session, note_id)
     if note.status != "suggested":
         raise Problem(
@@ -359,7 +361,7 @@ async def retire(
     session: AsyncSession, auth: AuthContext | None, note_id: uuid.UUID, now: datetime
 ) -> ScriptStyleOut:
     if not can_decide(auth):
-        raise _admins_only()
+        raise admins_only()
     note = await _team_note(session, note_id)
     if note.status != "active":
         raise Problem(

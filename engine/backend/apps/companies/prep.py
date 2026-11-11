@@ -62,9 +62,11 @@ from apps.companies.schemas import (
     PrepSource,
     ScriptLine,
     StyleUsed,
+    ToneKey,
 )
 from apps.companies.script_notes import StyleNotes, notes_for_prompt
 from apps.companies.tables import Prep
+from apps.companies.tones import TONE_DEFAULT, TONE_PRESETS, tone_for, tone_words
 from core.claude.budget import Budget, BudgetSpent
 from core.claude.client import Claude, ClaudeError, Reply, WebTools
 from core.company_leads import CompanyLeads
@@ -77,7 +79,8 @@ log = logging.getLogger(__name__)
 APP = "companies"
 # prep-2 (9 Nov): guided questions with follow-ups. prep-3 (11 Nov): news with no age limit.
 # prep-4 (11 Nov): the call technique and the style notes (PLAN-V14 T1-4).
-# prep-5 (12 Nov): the relationship stage sets the opener (PLAN-V15 T3-3).
+# prep-5 (12 Nov): the relationship stage sets the opener (PLAN-V15 T3-3), and the tone preset
+# starts the style notes, with Claude's own tone line in the answer (T3-5).
 PROMPT_VERSION = "prep-5"
 LINE_CHARS = 400
 FOLLOW_UP_CHARS = 200
@@ -150,6 +153,10 @@ class PrepAnswer(BaseModel):
     if_they_say: list[AnswerObjection] = Field(description="2 or 3 likely pushbacks, answered.")
     goal: AnswerLine = Field(description="The next step to ask for, like a site visit.")
     pages: list[AnswerPage] = Field(description="Every web page you cite. Empty if none.")
+    tone_line: str = Field(
+        description="One short line for the caller on how to sound on this call, in the chosen "
+        "tone. Advice, never said aloud, with no facts."
+    )
 
 
 SYSTEM = """You prepare a salesperson at Contour for one phone call. Contour designs and builds \
@@ -195,13 +202,15 @@ end?" first, and "What happens if it ends before the new space is ready?" third.
 - If they say: answer in three beats. Name the feeling, agree with what is fair, then ask one \
 question. Example: "We're not ready yet." gets "Sounds like the timing is tight. That's fair. What \
 would need to be true for it to be worth a look?".
-- Tone: warm for a client we have talked to before, light and brief for a cold call.
+- Tone: the style notes start with the tone to write in. Follow it for wording, within these \
+rules. In tone_line, give the caller one short line on how to sound on this call, like "Warm and \
+brief: they are a client, so catch up first." It is advice, never said aloud, and holds no facts.
 - Name a feeling only as a question or an offer, never as a fact about the person. "Has this been \
 hanging over the team?" is fine. "They are stressed" is a guess, so it is not.
 - After a no, don't push twice. Then the goal is a later call, not a meeting.
 
-The prompt may end with style notes from the team and the caller. Follow them for wording and \
-order only."""
+The prompt ends with style notes: the tone, then notes from the team and the caller. Follow them \
+for wording and order only."""
 
 # Said before the style notes (PLAN-V14 T1-4). A note is the team's or the caller's own words, so it
 # may try to steer: it only ever changes wording and order.
@@ -231,12 +240,13 @@ def _web_tools(searches: int) -> WebTools:
     return WebTools(max_searches=searches, max_fetches=searches)
 
 
-def _style_block(style: StyleNotes, pack: FactsPack, *, names_ok: bool) -> str:
-    """The style notes, after the facts: the team's, then the caller's own. Empty with no notes.
-    Names are hidden in them as in the facts, and contact details are blanked."""
-    if style.empty:
-        return ""
-    parts = [f"Style notes. {STYLE_RULE}"]
+def _style_block(
+    style: StyleNotes, pack: FactsPack, *, names_ok: bool, tone: ToneKey = TONE_DEFAULT
+) -> str:
+    """The style notes, after the facts: the tone first (PLAN-V15 T3-5), then the team's notes,
+    then the caller's own. Names are hidden in them as in the facts, and contact details are
+    blanked. The last one wins on wording: rules, stage, tone, Team style, Your style."""
+    parts = [f"Style notes. {STYLE_RULE}", f"Tone: {tone_words(tone)}"]
     if style.team:
         notes = "\n".join(f"- {claude_text(note, pack, names_ok=names_ok)}" for note in style.team)
         parts.append(f"Team style:\n{notes}")
@@ -246,7 +256,12 @@ def _style_block(style: StyleNotes, pack: FactsPack, *, names_ok: bool) -> str:
 
 
 def _prompt(
-    pack: FactsPack, context: PrepContext, *, web: bool, style: StyleNotes | None = None
+    pack: FactsPack,
+    context: PrepContext,
+    *,
+    web: bool,
+    style: StyleNotes | None = None,
+    tone: ToneKey = TONE_DEFAULT,
 ) -> str:
     company = pack.company
     person = pack.person
@@ -288,7 +303,7 @@ def _prompt(
         f"{claude_text(who, pack, names_ok=names)}\n{where_we_stand}\n\n{task}\n\n"
         f"Today is {day(datetime.now(UTC))}.\n\n"
         f"Facts pack:\n{facts_for_claude(pack, names_ok=names)}"
-        f"{_style_block(style or StyleNotes(), pack, names_ok=names)}"
+        f"{_style_block(style or StyleNotes(), pack, names_ok=names, tone=tone)}"
     )
 
 
@@ -432,6 +447,8 @@ def check_answer(
         if (checked := line(item)) is not None
     ][:5]
     goal = line(answer.goal)
+    # The tone line is advice for the caller, not a claim, so it needs no source.
+    tone_line = _clean(answer.tone_line, pack, names_ok=names_ok) or None
     script = PrepScript(
         still_there=still,
         still_there_note=note if still in ("yes", "no") else None,
@@ -442,6 +459,7 @@ def check_answer(
         if_they_say=objections,
         goal=goal,
         dropped=dropped,
+        tone_line=tone_line,
     )
     sources: list[PrepSource] = []
     for source_id in used:
@@ -471,6 +489,7 @@ def check_answer(
 
 
 def prep_out(prep: Prep, *, made_by: str | None, reused: bool = False) -> PrepOut:
+    facts = prep.facts or {}
     person = (
         PrepPerson(id=prep.contact_id or "", name=prep.person_name, title=prep.person_title)
         if prep.person_name
@@ -493,7 +512,9 @@ def prep_out(prep: Prep, *, made_by: str | None, reused: bool = False) -> PrepOu
         made_by=made_by,
         created_at=prep.created_at,
         finished_at=prep.finished_at,
-        style_used=StyleUsed.model_validate((prep.facts or {}).get("style_used") or {}),
+        style_used=StyleUsed.model_validate(facts.get("style_used") or {}),
+        tone_used=tone if (tone := facts.get("tone_used")) in TONE_PRESETS else None,
+        stage_used=stage if (stage := facts.get("stage_used")) in STAGE_WORDS else None,
     )
 
 
@@ -689,10 +710,11 @@ class PrepRunner:
             pack = await build_facts(session, prep.company_key, prep.contact_id, context.hooks, now)
             if pack is None:
                 raise _Plain("This company is no longer in the HubSpot copy or the Lead Finder.")
-            # The team's style notes, and the asker's own. The morning search ahead has no asker.
-            style = await notes_for_prompt(
-                session, prep.made_by, with_mine=context.trigger == "person"
-            )
+            # The team's style notes and tone, and the asker's own. The morning search ahead has
+            # no asker, so it gets the team's.
+            asker = context.trigger == "person"
+            style = await notes_for_prompt(session, prep.made_by, with_mine=asker)
+            tone = await tone_for(session, prep.made_by, with_mine=asker)
             prep.stage = 1  # the facts are in
             prep.facts = {
                 "count": len(pack.facts),
@@ -701,13 +723,14 @@ class PrepRunner:
                 "web": web,
                 "style_used": {"mine": style.mine is not None, "team_notes": len(style.team)},
                 "stage_used": pack.company.relationship.stage,
+                "tone_used": tone,
             }
             prep.stage = 2  # the web check (or the smaller request) is running
             await session.commit()
 
             budget = Budget(cap_usd=context.cap_usd, max_searches=context.max_searches)
             subject = pack.company.name if context.names_ok else None
-            prompt = _prompt(pack, context, web=web, style=style)
+            prompt = _prompt(pack, context, web=web, style=style, tone=tone)
             reply = await self._ask(
                 session, prep, budget, prompt=prompt, web=web, context=context, subject=subject
             )

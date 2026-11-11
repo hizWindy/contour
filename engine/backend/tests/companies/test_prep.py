@@ -89,6 +89,7 @@ def an_answer(**changes: Any) -> PrepAnswer:
             AnswerObjection(they_say="We're not ready yet.", answer=line("Fair enough.", "F7"))
         ],
         "goal": line("Book a site visit in Perth.", "F7"),
+        "tone_line": "Warm and brief: you spoke on 1 Oct, so pick up from there.",
         "pages": [
             AnswerPage(
                 id="W1",
@@ -378,12 +379,15 @@ async def test_the_prompt_holds_the_call_technique(
         "Do you have two minutes?",
         "their situation, then the problem, then what the problem costs them",
         "Name the feeling, agree with what is fair, then ask one question",
-        "warm for a client we have talked to before",
+        "the style notes start with the tone to write in",
         "only as a question or an offer",
         "don't push twice",
     ):
         assert words in system, words
-    assert "Style notes" not in claude.asked[0]["prompt"]  # no notes yet, so no style block
+    # No notes yet: the style block holds the tone only, Friendly until someone picks another.
+    block = claude.asked[0]["prompt"].split("Style notes.")[1]
+    assert "Tone: Friendly: warm, a short greeting, plain words." in block
+    assert "Team style" not in block and "own style" not in block
     assert set(PrepAnswer.model_fields) == {
         "still_there",
         "still_there_note",
@@ -394,6 +398,7 @@ async def test_the_prompt_holds_the_call_technique(
         "if_they_say",
         "goal",
         "pages",
+        "tone_line",
     }
 
 
