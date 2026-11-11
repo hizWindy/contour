@@ -65,15 +65,16 @@ export interface ConnectionSnapshot {
   state: ConnectionState
   /** When the next automatic check runs (ms since 1970), while one is waiting. */
   nextCheckAt: number | null
+  /** A full error page says it already, so the bar hides. */
+  fullPage: boolean
 }
-
-const ONLINE: ConnectionSnapshot = { state: 'online', nextCheckAt: null }
 
 /** The store. Made by `connectionOf`, one per query client. */
 export class Connection {
-  private snapshot: ConnectionSnapshot = ONLINE
+  private snapshot: ConnectionSnapshot = { state: 'online', nextCheckAt: null, fullPage: false }
   private readonly listeners = new Set<() => void>()
   private checking: Promise<boolean> | null = null
+  private pages = 0
   private readonly onBack: () => void
 
   constructor(onBack: () => void) {
@@ -89,18 +90,39 @@ export class Connection {
     }
   }
 
-  /** Moves to `state`. Back to `online` from anything else runs the failed reads again. */
-  set(state: ConnectionState, nextCheckAt: number | null = null): void {
-    const was = this.snapshot
-    if (was.state === state && was.nextCheckAt === nextCheckAt) {
-      return
-    }
-    this.snapshot = state === 'online' ? ONLINE : { state, nextCheckAt }
+  private publish(snapshot: ConnectionSnapshot): void {
+    this.snapshot = snapshot
     for (const listener of this.listeners) {
       listener()
     }
+  }
+
+  /** Moves to `state`. Back to `online` from anything else runs the failed reads again. */
+  set(state: ConnectionState, nextCheckAt: number | null = null): void {
+    const was = this.snapshot
+    const at = state === 'online' ? null : nextCheckAt
+    if (was.state === state && was.nextCheckAt === at) {
+      return
+    }
+    this.publish({ ...was, state, nextCheckAt: at })
     if (was.state !== 'online' && state === 'online') {
       this.onBack()
+    }
+  }
+
+  /**
+   * A full error page is on screen (T2-4), so the thin bar keeps quiet instead of saying the same
+   * thing twice. Returns the release, for when the page goes.
+   */
+  claimPage(): () => void {
+    this.pages += 1
+    this.publish({ ...this.snapshot, fullPage: true })
+    let released = false
+    return () => {
+      if (released) return
+      released = true
+      this.pages -= 1
+      this.publish({ ...this.snapshot, fullPage: this.pages > 0 })
     }
   }
 
@@ -182,16 +204,18 @@ export function useConnection(): ConnectionSnapshot {
 }
 
 /**
- * The state, plus the automatic checks. Used once, by the connection bar (T2-4):
+ * The state, plus the automatic checks. One part runs them at a time: the connection bar inside
+ * the app frame, or a full error page shown without the frame (`active` is false for the others):
  * - the browser going offline sets `offline`; coming back online checks the server at once;
  * - while `updating` or `unreachable`, the server is checked every 10 seconds;
  * - back to `online`, the failed reads run again (`Connection.set`).
  */
-export function useConnectionWatch(): ConnectionSnapshot & { checkNow: () => void } {
+export function useConnectionWatch(active = true): ConnectionSnapshot & { checkNow: () => void } {
   const connection = connectionOf(useQueryClient())
   const snapshot = useSyncExternalStore(connection.subscribe, connection.get, connection.get)
 
   useEffect(() => {
+    if (!active) return
     if (!onlineManager.isOnline()) {
       connection.set('offline')
     }
@@ -202,11 +226,11 @@ export function useConnectionWatch(): ConnectionSnapshot & { checkNow: () => voi
         connection.set('offline')
       }
     })
-  }, [connection])
+  }, [connection, active])
 
   const { state } = snapshot
   useEffect(() => {
-    if (state !== 'updating' && state !== 'unreachable') {
+    if (!active || (state !== 'updating' && state !== 'unreachable')) {
       return
     }
     let timer: ReturnType<typeof setTimeout> | undefined
@@ -227,7 +251,7 @@ export function useConnectionWatch(): ConnectionSnapshot & { checkNow: () => voi
       stopped = true
       clearTimeout(timer)
     }
-  }, [connection, state])
+  }, [connection, state, active])
 
   return {
     ...snapshot,

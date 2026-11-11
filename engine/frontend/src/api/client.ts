@@ -87,6 +87,11 @@ export function isApiProblem(value: unknown): value is ApiProblem {
   return value instanceof ApiProblem
 }
 
+/** A 403 or a 404: the thing isn't there for this person. A detail page shows a full page then. */
+export function isMissing(value: unknown): boolean {
+  return value instanceof ApiProblem && (value.status === 403 || value.status === 404)
+}
+
 /** True for the error fetch throws when a request is cancelled (a component left the page). */
 export function isAbort(value: unknown): boolean {
   // Not `instanceof DOMException`: the page and Node have different DOMException classes.

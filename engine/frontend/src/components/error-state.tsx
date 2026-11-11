@@ -1,13 +1,14 @@
 import { QueryClientContext, type QueryClient } from '@tanstack/react-query'
-import { Copy, TriangleAlert } from 'lucide-react'
-import { useContext, useEffect, useState } from 'react'
+import { CloudOff, TriangleAlert } from 'lucide-react'
+import { useContext } from 'react'
 import { Link, useInRouterContext } from 'react-router'
-import { toApiProblem, type ApiProblem } from '@/api/client'
-import { runFailedReadsAgain } from '@/api/connection'
+import { toApiProblem } from '@/api/client'
+import { problemKind, runFailedReadsAgain } from '@/api/connection'
+import { SupportDetails } from '@/components/support-details'
 import { Button } from '@/components/ui/button'
 import { humanise } from '@/lib/format'
 import { problemHint } from '@/lib/problems'
-import { supportLines, supportText } from '@/lib/support'
+import { browser } from '@/lib/reload'
 import { cn } from '@/lib/utils'
 
 export interface ErrorStateProps {
@@ -37,56 +38,8 @@ function retryFailedReads(client: QueryClient | undefined): void {
   if (client) {
     runFailedReadsAgain(client)
   } else {
-    window.location.reload()
+    browser.reload()
   }
-}
-
-/** The folded "Details for support" part, with a Copy button for all of it. */
-function SupportDetails({ problem }: { problem: ApiProblem }) {
-  const lines = supportLines(problem)
-  const [copied, setCopied] = useState(false)
-  useEffect(() => {
-    if (!copied) return
-    const timer = setTimeout(() => {
-      setCopied(false)
-    }, 2000)
-    return () => {
-      clearTimeout(timer)
-    }
-  }, [copied])
-  const text = supportText(lines)
-  return (
-    <details data-slot="support-details" className="mt-2 text-caption">
-      <summary className="w-fit cursor-pointer rounded-sm font-semibold underline-offset-4 hover:underline touch:py-2.5">
-        Details for support
-      </summary>
-      <dl className="mt-2 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1">
-        {lines.map(([label, value]) => (
-          <div key={label} className="contents">
-            <dt className="font-semibold">{label}</dt>
-            <dd className="break-all tabular-nums">{value}</dd>
-          </div>
-        ))}
-      </dl>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="mt-2"
-        onClick={() => {
-          void navigator.clipboard.writeText(text).then(
-            () => {
-              setCopied(true)
-            },
-            () => undefined,
-          )
-        }}
-      >
-        <Copy aria-hidden="true" />
-        <span aria-live="polite">{copied ? 'Copied' : 'Copy the details'}</span>
-      </Button>
-    </details>
-  )
 }
 
 /**
@@ -95,6 +48,10 @@ function SupportDetails({ problem }: { problem: ApiProblem }) {
  * is always there. The technical part (status, code, request id, time, page) is folded away under
  * "Details for support", with a Copy button, for whoever helps. It never shows a stack trace or
  * text the backend did not mean for a person.
+ *
+ * When the connection itself is the problem (offline, the server out of reach, or updating), the
+ * bar at the top of the app says so once (T2-4). Each card then shows a quiet line instead of a
+ * red box, so an outage doesn't turn the whole page red.
  */
 export function ErrorState({ error, context, onRetry, retryLabel, className }: ErrorStateProps) {
   const problem = toApiProblem(error)
@@ -106,6 +63,32 @@ export function ErrorState({ error, context, onRetry, retryLabel, className }: E
     (() => {
       retryFailedReads(queryClient)
     })
+  const kind = problemKind(problem)
+  if (kind === 'offline' || kind === 'unreachable' || kind === 'updating') {
+    return (
+      <div
+        role="status"
+        data-slot="error-state"
+        data-code={problem.code ?? undefined}
+        className={cn(
+          'flex items-start gap-3 rounded-lg border bg-card p-4 text-ui text-muted-foreground',
+          className,
+        )}
+      >
+        <CloudOff aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <p className="font-semibold text-foreground">{problem.title}</p>
+          {context ? <p>{context}</p> : null}
+          <p>The bar at the top shows when the connection is back.</p>
+          <div className="mt-2">
+            <Button type="button" variant="outline" size="sm" onClick={retry}>
+              {retryLabel ?? 'Try again'}
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
   return (
     <div
       role="alert"
@@ -146,7 +129,7 @@ export function ErrorState({ error, context, onRetry, retryLabel, className }: E
             {retryLabel ?? 'Try again'}
           </Button>
         </div>
-        <SupportDetails problem={problem} />
+        <SupportDetails problem={problem} className="mt-2" />
       </div>
     </div>
   )

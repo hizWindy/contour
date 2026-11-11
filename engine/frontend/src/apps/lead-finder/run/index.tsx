@@ -338,7 +338,7 @@ function RunView({ runId, run }: { runId: string; run: Run }) {
 
 export default function RunPage() {
   const { runId = '' } = useParams()
-  const run = useRun(runId)
+  const run = useRun(runId, { missingIsPage: true })
   if (run.error) {
     return (
       <>

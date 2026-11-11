@@ -106,10 +106,10 @@ describe('the words on screen (PLAN-V15 T2-3)', () => {
   it('reads the app', () => {
     expect(files.length).toBeGreaterThan(100)
     expect(files).toContain('api/words.ts')
-    expect(files).toContain('components/error-state.tsx')
+    expect(files).toContain('components/support-details.tsx')
     const words = textsOf('api/words.ts').map(({ text }) => text)
     expect(words).toContain("You're offline")
-    expect(textsOf('components/error-state.tsx').map(({ text }) => text.trim())).toContain(
+    expect(textsOf('components/support-details.tsx').map(({ text }) => text.trim())).toContain(
       'Details for support',
     )
   })

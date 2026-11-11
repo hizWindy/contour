@@ -175,6 +175,21 @@ Smooth and quick, like a well-made phone app (PLAN-V13, 11 Nov 2026). Motion sho
 - Empty states use the serif voice: "No leads yet. Start a run to see companies here."
 - No em dashes, no hype, and no "AI-powered".
 
+## Errors and the connection
+
+PLAN-V15 (12 Nov 2026). The words for every case are in `src/api/words.ts` ("Words for errors" in the plan): what happened, what it means for you, and what to do.
+
+- **Never on screen:** a command, a settings file, a local address, a setting's own name or a code file's name. A test reads every string in the app and checks this (`src/test/screen-words.test.ts`). Those go to the backend's log, under the request id.
+- **The error box** (`ErrorState`): the title, the next step, the wrong fields of a form in plain words ("Name: Fill this in."), Try again (always), then "Details for support" folded away: the status, the code, the request id, the time and the page, with "Copy the details".
+- **The connection bar:** one thin line at the top of the page area while the connection isn't fine, instead of a red box in every card. Ochre for "You're offline" and "Contour can't reach its server", Cobalt for "Contour is updating". It checks every 10 seconds with a countdown and "Try now" (offline waits for the browser). When the server is back, the bar goes and the failed reads run again by themselves. A card whose read failed for the connection shows a quiet grey line pointing at the bar, not a red box.
+- **Full error pages** (`src/shell/error-pages/`), for when a page has nothing to show: a card with an icon, the title as the page's `h1`, one or two sentences, the buttons, and the details for support where there is a request id. Inside the frame the menu stays; when even "who is signed in" can't be answered, the card fills the screen.
+  - **Connection lost:** Try again, and it comes back by itself.
+  - **Updating:** "Back in about a minute", with a countdown and "Try now".
+  - **Something went wrong** (a 500): the code to send to an admin.
+  - **No access** (403) and **Not found** (404): "Go to Home".
+  - **New version:** a page whose code is gone after a deploy reloads once by itself ("Contour was updated. Reloading…"). If that didn't help, the same title with a Reload button.
+- Nothing spins: the countdown is the only thing that moves.
+
 ## Accessibility (WCAG 2.2 AA)
 
 - Text contrast is at least 4.5:1, in light and dark mode.

@@ -5,7 +5,7 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query'
-import { api, unwrap, type ApiProblem } from '../client'
+import { api, isMissing, unwrap, type ApiProblem } from '../client'
 import { queryKeys } from '../query'
 import type { QueryOf, Run, RunCreate } from '../types'
 
@@ -22,6 +22,8 @@ export interface UseRunOptions {
   enabled?: boolean
   /** Poll this often, in milliseconds. `false` (the default) does not poll. */
   refetchInterval?: number | false
+  /** The run's own page: a 403 or 404 shows the full error page (PLAN-V15 T2-4). */
+  missingIsPage?: boolean
 }
 
 export function useRun(runId: string | undefined, options: UseRunOptions = {}) {
@@ -29,6 +31,7 @@ export function useRun(runId: string | undefined, options: UseRunOptions = {}) {
     ...runQueryOptions(runId ?? ''),
     enabled: runId !== undefined && runId !== '' && (options.enabled ?? true),
     refetchInterval: options.refetchInterval ?? false,
+    throwOnError: options.missingIsPage ? isMissing : false,
   })
 }
 

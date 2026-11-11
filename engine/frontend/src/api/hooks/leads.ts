@@ -7,7 +7,7 @@ import {
   type QueryClient,
 } from '@tanstack/react-query'
 import { melbourneDate } from '@/lib/format'
-import { api, unwrap, type ApiProblem } from '../client'
+import { api, isMissing, unwrap, type ApiProblem } from '../client'
 import { CACHE_TIMES, queryKeys } from '../query'
 import type { LeadDetail, LeadPatch, QueryOf, Run } from '../types'
 
@@ -104,10 +104,19 @@ export function leadQueryOptions(leadId: string) {
   })
 }
 
-export function useLead(leadId: string | undefined) {
+export interface UseLeadOptions {
+  /**
+   * The lead's own page: a 403 or 404 shows the full No access or Not found page (the route's
+   * error page, PLAN-V15 T2-4) instead of a box. The Results side panel leaves this off.
+   */
+  missingIsPage?: boolean
+}
+
+export function useLead(leadId: string | undefined, options: UseLeadOptions = {}) {
   return useQuery({
     ...leadQueryOptions(leadId ?? ''),
     enabled: leadId !== undefined && leadId !== '',
+    throwOnError: options.missingIsPage ? isMissing : false,
   })
 }
 
