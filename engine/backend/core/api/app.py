@@ -6,6 +6,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, FastAPI
 from fastapi.routing import APIRoute
+from starlette.types import ASGIApp
 
 from core.api import auth as auth_routes
 from core.api import health, hubspot, memory, people, runs, runs_read, searches
@@ -14,11 +15,13 @@ from core.api import settings as settings_routes
 from core.api.access import require_app
 from core.api.errors import PROBLEM_RESPONSES, add_error_handlers
 from core.api.guard import SessionGuard, document_sign_in
+from core.api.request_id import RequestIdMiddleware, install_log_ids
 from core.api.routes import api_routes
 from core.api.security import ProblemCORSMiddleware, add_security_layers
 from core.apps import load_apps
 from core.config import get_settings
 from core.db.engine import get_engine
+from core.health import loop_lag
 from core.health.traffic import ApiTraffic, TrafficMiddleware
 from core.hubspot import connection as hubspot_connection
 from core.logs import setup_logging
@@ -43,9 +46,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             lifecycle.take_over_later(app, then=start_background_work)
         else:
             await start_background_work(app)
+        loop_lag.start_watch(app)  # logs `loop_lag` when heavy work blocks the loop (PLAN-V15)
         yield
     finally:
         try:
+            await loop_lag.stop_watch(app)
             await lifecycle.stop_waiting(app)
             await schedules.shut_down(app)
             await hubspot_connection.shut_down(app)
@@ -85,6 +90,12 @@ def document_problems(schema: dict[str, Any]) -> None:
 
 
 class EngineApp(FastAPI):
+    def build_middleware_stack(self) -> ASGIApp:
+        """The whole stack, wrapped in the request id (PLAN-V15 T1-2). Outside Starlette's own
+        error layer, so even a 500 carries the `X-Request-ID` header, and every log line of
+        the request (the crash's too) carries its id."""
+        return RequestIdMiddleware(super().build_middleware_stack())
+
     def openapi(self) -> dict[str, Any]:
         built_before = self.openapi_schema is not None
         schema = super().openapi()
@@ -108,6 +119,7 @@ def _check_operation_ids(app: FastAPI) -> None:
 def create_app() -> FastAPI:
     disable_tracing()  # first: prompts and answers must never reach LangSmith
     setup_logging()
+    install_log_ids()  # every log line of a request carries its id (PLAN-V15 T1-2)
     settings = get_settings()
     specs = load_apps(settings.apps)
     for spec in specs:

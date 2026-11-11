@@ -32,6 +32,7 @@ from tests.core.auth_world import (
     sign_in,
     token_in,
 )
+from tests.core.problems import without_id
 
 PREFIX = "/api/v1"
 LF = f"{PREFIX}/lead-finder"
@@ -109,7 +110,7 @@ async def test_every_route_without_a_session_is_a_401_except_the_two_public_ones
                 else:
                     refused.append((method, route.path))
                     assert is_sign_in_needed(response), (method, route.path, response.text)
-                    assert response.json() == {
+                    assert without_id(response) == {
                         "type": "about:blank",
                         "title": "Sign in needed",
                         "status": 401,

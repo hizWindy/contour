@@ -120,7 +120,7 @@ Every track uses these words, so the site speaks with one voice. The rule: say w
 | `engine/frontend/src/` except `src/apps/companies/` and `src/api/hooks/{companies,script}.ts`; plus `src/apps/companies/hubspot-sync.tsx` and a new `hubspot-sync.test.tsx` beside it; plus `engine/DESIGN.md` | Track 2 |
 | `engine/backend/apps/companies/`, `engine/backend/tests/companies/`, migration `0017` | Track 3 |
 | `engine/frontend/src/apps/companies/` except `hubspot-sync.tsx`; `src/api/hooks/companies.ts` and `src/api/hooks/script.ts` | Track 3 |
-| `engine/openapi.json`, `engine/frontend/src/api/schema.d.ts` | Generated. Any track runs `engine openapi` and `npm run types`. Never edit them by hand. At a merge conflict, run them again. |
+| `engine/frontend/openapi.json`, `engine/frontend/src/api/schema.d.ts` | Generated. Any track runs `engine openapi` and `npm run types`. Never edit them by hand. At a merge conflict, run them again. |
 | `plan/PLAN-V15.md` | Each track edits only its own part (its steps, its Progress line, its Log) |
 | `engine/AGENTS.md`, `projects/prep/PREP.md`, `CLAUDE.md` | M1 only |
 
@@ -229,13 +229,13 @@ Track 1 builds parts 1 to 3. Track 2 reads them. Track 3 builds and reads part 4
 
 ## Track 1: the backend (session 1)
 
-**Progress:** 1 of 8 steps done (T1-1).
+**Progress:** 2 of 8 steps done (T1-1, T1-2).
 
 - [x] **T1-1. Own copy and a baseline.** Done 2026-11-12 (counts in the Log).
   - The worktree, the `leadfinder_v15a` database and the ports (see "How to work this plan").
   - Run the backend tests once with `heavy.sh` and `RUN_GATES=1`, and note the counts.
   - **Done when:** the counts are in the Track 1 Log.
-- [ ] **T1-2. Request id, time per request, and loop lag.**
+- [x] **T1-2. Request id, time per request, and loop lag.** Done 2026-11-12 (see the Log).
   - **The request id:** a middleware in a new `core/api/request_id.py`, kept in a context variable. It goes on every log line (`core/logs.py`), the response header and the error body (`core/api/errors.py`).
   - **The request log:** one `request_done` line per request, with the request id, the method, the route pattern (like `/companies/{key}`, never the real path), the status and the time in ms. Turn off uvicorn's own access log in `serve` (`core/cli.py`), so lines aren't doubled.
   - **Loop lag:** a small task measures how late the event loop wakes up, every second. It logs `loop_lag` with the ms when it's over 250 ms (**TBC**).
@@ -331,6 +331,7 @@ Track 1 builds parts 1 to 3. Track 2 reads them. Track 3 builds and reads part 4
 
 Newest first.
 
+- 2026-11-12: **T1-2 done.** `core/api/request_id.py`: every request gets an 8-character code from letters and digits with no look-alikes (like `7F3K92QD`), in the `X-Request-ID` header, in every error body (`request_id`, also in `ProblemDetails`) and on every log line made during the request (a log-record factory, so the tests' log capture sees it too). It wraps the whole stack (`EngineApp.build_middleware_stack`), outside Starlette's error layer, so a 500 carries the header too. An edge id is only logged, as `edge_request_id` (the contract line is changed: a 36-character id is too long to read out). One `request_done` line per request: method, route pattern (never the real path), status, ms to the first byte. `RoutePaths` (in `core/api/routes.py`) is shared with the Health tab's traffic counter. uvicorn's access log is off (`access_log=False` in `serve`). `core/health/loop_lag.py`: a watcher started in the lifespan logs `loop_lag` with `lag_ms` when the loop wakes over 250 ms late (**TBC**). A 500 now reads "Something went wrong on our side" with "Try again. If it happens again, send this code to an admin: {code}." 10 tests in `tests/core/test_request_id.py`. Tests that compared a whole error body now use `tests/core/problems.py`'s `without_id`, which also checks the id equals the header; the sign-in test that says "not a word differs" compares the bodies without the id (it is random, so it tells nothing about the account). The contract file is `engine/frontend/openapi.json` (the plan said `engine/openapi.json`; fixed): it and `schema.d.ts` gain `request_id`. Checks: ruff, ruff format, mypy (241 files), and 408 passed, 25 skipped in the touched areas with `RUN_GATES=1`.
 - 2026-11-12: **T1-1 done.** S0 first, on the go signal: `plan-v15` from `master` (ee47912), plan commit 9ff63aa, made in this worktree, so the main folder stayed on `master`. Then `plan-v15-track1`. Worktree `../contour-v15-t1`; `COMPANIES.xlsx` copied in; `uv sync` and `npm ci` done. Database `leadfinder_v15a`: a `pg_dump` and `pg_restore` copy of `leadfinder_v14a` (at 0015, 13,915 companies); `ix_memory_embedding` failed in the restore (Docker's small shared memory) and was built again with `max_parallel_maintenance_workers=0`. Tests on `leadfinder_test_v15a`. **Baseline with `heavy.sh` and `RUN_GATES=1`: 3,521 passed, 25 skipped, 9 failed.** None was the base code's: 8 came from `CORS_ORIGINS` in this worktree's `engine/.env` (the tests read it); with the `.env` cut to the `POSTGRES_*` lines, those 8 files ran again: 292 passed, 25 skipped. The 9th is the known speed test, which passes alone. So: **3,530 passed, 25 skipped**, the same as PLAN-V14's merge. The `.env` rule in "How to work this plan" is fixed; Track 2 was told by message, and Track 3 wasn't reachable by message then. Two first tries were lost: one stopped at the first failure (`-x`), and one collected a new test file written while the run waited for the `heavy.sh` lock. Lesson: write nothing into the worktree until the run has really started.
 
 ## Track 2: the website (session 2)

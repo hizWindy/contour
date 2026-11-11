@@ -6830,6 +6830,18 @@
             "description": "On a 401 `auth_required`, why the sign-in ended: `idle`, `expired` or `ended`. Missing when there was no session at all.",
             "title": "Reason"
           },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The request's code, like 7F3K92QD, the same as the X-Request-ID header. A person reads it to an admin, who finds the request's log lines with it",
+            "title": "Request Id"
+          },
           "retry_after_seconds": {
             "anyOf": [
               {
@@ -12171,6 +12183,18 @@
             ],
             "description": "On a 401 `auth_required`, why the sign-in ended: `idle`, `expired` or `ended`. Missing when there was no session at all.",
             "title": "Reason"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The request's code, like 7F3K92QD, the same as the X-Request-ID header. A person reads it to an admin, who finds the request's log lines with it",
+            "title": "Request Id"
           },
           "retry_after_seconds": {
             "anyOf": [

@@ -4123,6 +4123,11 @@ export interface components {
              */
             reason?: string | null;
             /**
+             * Request Id
+             * @description The request's code, like 7F3K92QD, the same as the X-Request-ID header. A person reads it to an admin, who finds the request's log lines with it
+             */
+            request_id?: string | null;
+            /**
              * Retry After Seconds
              * @description How many seconds to wait before trying to sign in again. On a 429, and on a 401 `invalid_credentials` whose wrong try makes the next ones wait
              */
@@ -6552,6 +6557,11 @@ export interface components {
              * @description On a 401 `auth_required`, why the sign-in ended: `idle`, `expired` or `ended`. Missing when there was no session at all.
              */
             reason?: string | null;
+            /**
+             * Request Id
+             * @description The request's code, like 7F3K92QD, the same as the X-Request-ID header. A person reads it to an admin, who finds the request's log lines with it
+             */
+            request_id?: string | null;
             /**
              * Retry After Seconds
              * @description How many seconds to wait before trying to sign in again. On a 429, and on a 401 `invalid_credentials` whose wrong try makes the next ones wait
