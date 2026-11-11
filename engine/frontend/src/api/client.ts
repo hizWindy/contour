@@ -6,12 +6,20 @@
  * never an absolute address: in development Vite proxies `/api` to the backend, and a test checks
  * that no source file holds the backend's address.
  *
- * A failed call becomes an `ApiProblem` (title, detail, code, status, field errors, run id). Use
- * `unwrap(await api.GET(...))` to get the data or throw the problem. TanStack Query catches the
- * throw, and `ErrorState` shows it.
+ * A failed call becomes an `ApiProblem` (title, detail, code, status, field errors, run id,
+ * request id). Use `unwrap(await api.GET(...))` to get the data or throw the problem. TanStack
+ * Query catches the throw, and `ErrorState` shows it.
+ *
+ * Every call has a time limit (PLAN-V15 T2-2): 20 seconds for the server to start answering, more
+ * for an upload, a CSV download or a long change (`timeLimitFor`). A call that runs out becomes a
+ * `timeout` problem. A failure to reach the server becomes `offline` (the browser says so) or
+ * `unreachable`. A deploy's proxy page (a 502, 503 or 504 with no JSON) becomes `updating`. Only
+ * these four codes are made here; every other code is the backend's own. The words are in
+ * `words.ts`.
  */
 import createClient from 'openapi-fetch'
 import type { FieldError, paths } from './types'
+import { plainFieldMessage, statusWords, WORDS, type Words } from './words'
 
 export const API_BASE_URL = '/api/v1'
 
@@ -25,8 +33,13 @@ export interface ApiProblemFields {
   run_id?: string | null
   /** Why a session ended, on a 401 `auth_required`: `idle`, `expired` or `ended`. */
   reason?: string | null
-  /** How long to wait before the next sign-in try, on a 401 or a 429 from `POST /auth/login`. */
+  /**
+   * How long to wait before trying again: from a sign-in's 401 or 429 (PLAN-V6 B4), or the
+   * `Retry-After` header of a 503 (PLAN-V15).
+   */
   retry_after_seconds?: number | null
+  /** The code that ties this to a line in the backend's log, like `7F3K92QD` (PLAN-V15 T1-2). */
+  request_id?: string | null
 }
 
 /**
@@ -34,7 +47,8 @@ export interface ApiProblemFields {
  * a stable word to switch on (`run_already_active`). `status` is the HTTP status, or 0 when the
  * backend could not be reached at all. `errors` lists the wrong fields of a 422. `run_id` is set
  * when the problem is about a run (a 409 `run_already_active` names the run that is going).
- * `reason` and `retry_after_seconds` come with the sign-in's answers (PLAN-V6 B3, B4).
+ * `reason` and `retry_after_seconds` come with the sign-in's answers (PLAN-V6 B3, B4) and a 503.
+ * `request_id` is the code to send to an admin, and `at` is when it happened.
  */
 export class ApiProblem extends Error {
   readonly title: string
@@ -45,6 +59,8 @@ export class ApiProblem extends Error {
   readonly run_id: string | null
   readonly reason: string | null
   readonly retry_after_seconds: number | null
+  readonly request_id: string | null
+  readonly at: Date
 
   constructor(fields: ApiProblemFields) {
     super(fields.detail ? `${fields.title}. ${fields.detail}` : fields.title)
@@ -57,6 +73,8 @@ export class ApiProblem extends Error {
     this.run_id = fields.run_id ?? null
     this.reason = fields.reason ?? null
     this.retry_after_seconds = fields.retry_after_seconds ?? null
+    this.request_id = fields.request_id ?? null
+    this.at = new Date()
   }
 }
 
@@ -77,44 +95,26 @@ export function isAbort(value: unknown): boolean {
   )
 }
 
-const STATUS_TITLES: Partial<Record<number, string>> = {
-  400: "The request can't be understood",
-  403: 'Not allowed',
-  404: 'Not found',
-  409: 'Not possible right now',
-  413: 'Too much data',
-  422: "A value isn't valid",
-  429: 'Too many requests',
-  500: 'Something went wrong in the backend',
-  501: "This part isn't built yet",
-  502: "The backend isn't answering",
-  503: "The backend isn't available",
-  504: "The backend isn't answering",
+function made(words: Words, code: string, status = 0): ApiProblem {
+  return new ApiProblem({ ...words, code, status })
 }
 
-const STATUS_DETAILS: Partial<Record<number, string>> = {
-  400: 'Reload the page and try again.',
-  403: 'The backend refused this request. Open the site at http://localhost:5173.',
-  404: 'It may have been removed, or the link is wrong.',
-  409: 'Reload the page to see the current state.',
-  413: 'Narrow the request and try again.',
-  422: 'Check the highlighted fields and try again.',
-  429: 'Wait a few seconds and try again.',
-  500: 'Nothing was lost. Try again, and tell the team if it keeps happening.',
-  501: 'This feature is still being built.',
-  502: 'Check that the backend is running, then try again.',
-  503: 'Check that the backend and the database are running, then try again.',
-  504: 'Check that the backend is running, then try again.',
+/** True when the browser says it has no network. A browser that can't tell counts as online. */
+function browserOffline(): boolean {
+  return typeof navigator !== 'undefined' && navigator.onLine === false
 }
 
-/** The problem for a backend that cannot be reached at all (status 0). */
+/**
+ * The problem for a server that can't be reached at all (status 0): `offline` when the browser
+ * says so, else `unreachable`.
+ */
 export function networkProblem(): ApiProblem {
-  return new ApiProblem({
-    title: "Can't reach the backend",
-    detail: 'Check that it is running (uv run engine serve), then try again.',
-    code: 'network',
-    status: 0,
-  })
+  return browserOffline() ? made(WORDS.offline, 'offline') : made(WORDS.unreachable, 'unreachable')
+}
+
+/** The problem for a call that ran out of time (status 0, code `timeout`). */
+export function timeoutProblem(): ApiProblem {
+  return made(WORDS.timeout, 'timeout')
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -123,6 +123,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function asText(value: unknown): string | null {
   return typeof value === 'string' && value.trim() !== '' ? value : null
+}
+
+/** A safe request id: up to 64 letters, digits and dashes (the backend's own rule). */
+function asRequestId(value: unknown): string | null {
+  const text = asText(value)?.trim() ?? null
+  return text && /^[A-Za-z0-9-]{1,64}$/.test(text) ? text : null
 }
 
 function readFieldErrors(value: unknown): FieldError[] {
@@ -135,12 +141,28 @@ function readFieldErrors(value: unknown): FieldError[] {
       const message = asText(item.message) ?? asText(item.msg)
       if (message) {
         const field = asText(item.field) ?? (Array.isArray(item.loc) ? item.loc.join('.') : null)
-        found.push({ field: field ?? '', message })
+        found.push({ field: field ?? '', message: plainFieldMessage(message) })
       }
     }
   }
   return found
 }
+
+/** Seconds to wait, from the body's `retry_after_seconds` or the `Retry-After` header. */
+function readRetryAfter(response: Response, record: Record<string, unknown>): number | null {
+  const fromBody = record.retry_after_seconds
+  if (typeof fromBody === 'number' && Number.isFinite(fromBody) && fromBody >= 0) {
+    return fromBody
+  }
+  const header = response.headers.get('retry-after')?.trim()
+  if (header && /^\d+$/.test(header)) {
+    return Number(header)
+  }
+  return null
+}
+
+/** A deploy's proxy answers 502, 503 or 504 with its own page, not the backend's JSON. */
+const UPDATING_STATUSES = new Set([502, 503, 504])
 
 /**
  * Builds the problem for a failed response. `body` is what openapi-fetch parsed: the backend's
@@ -149,43 +171,46 @@ function readFieldErrors(value: unknown): FieldError[] {
  */
 export function problemFromResponse(response: Response, body?: unknown): ApiProblem {
   const status = response.status
-  const record = isRecord(body) ? body : {}
+  const json = isRecord(body)
+  const record = json ? body : {}
+  const requestId =
+    asRequestId(record.request_id) ?? asRequestId(response.headers.get('x-request-id'))
+  const retryAfter = readRetryAfter(response, record)
+  if (!json && UPDATING_STATUSES.has(status)) {
+    return new ApiProblem({
+      ...WORDS.updating,
+      code: 'updating',
+      status,
+      request_id: requestId,
+      retry_after_seconds: retryAfter,
+    })
+  }
   // The backend's own words win. FastAPI's `{detail: "text"}` is accepted too.
-  const title = asText(record.title) ?? STATUS_TITLES[status] ?? 'The request failed'
-  const detail = asText(record.detail) ?? STATUS_DETAILS[status] ?? null
-  const errors = readFieldErrors(record.errors ?? record.detail)
-  const wait = record.retry_after_seconds
+  const fallback = statusWords(status, requestId)
   return new ApiProblem({
-    title,
-    detail,
+    title: asText(record.title) ?? fallback?.title ?? "That didn't work",
+    detail: asText(record.detail) ?? fallback?.detail ?? 'Try again.',
     code: asText(record.code),
     status,
-    errors,
+    errors: readFieldErrors(record.errors ?? record.detail),
     run_id: asText(record.run_id),
     reason: asText(record.reason),
-    retry_after_seconds:
-      typeof wait === 'number' && Number.isFinite(wait) && wait >= 0 ? wait : null,
+    retry_after_seconds: retryAfter,
+    request_id: requestId,
   })
 }
 
 /**
- * Any thrown value as an `ApiProblem`. A network failure (fetch throws a TypeError) becomes the
- * "can't reach the backend" problem. Nothing from an unknown error is shown, because it could
- * hold text the person should not see.
+ * Any thrown value as an `ApiProblem`. A failed call is already one (the client below makes the
+ * network, time limit and proxy problems). Anything else broke in the page's own code, which says
+ * nothing about the connection, so it never reads "can't reach the server". Nothing from an
+ * unknown error is shown, because it could hold text the person should not see.
  */
 export function toApiProblem(error: unknown): ApiProblem {
   if (error instanceof ApiProblem) {
     return error
   }
-  if (error instanceof TypeError) {
-    return networkProblem()
-  }
-  return new ApiProblem({
-    title: 'Something went wrong',
-    detail: 'Try again. If it keeps happening, tell the team.',
-    status: 0,
-    code: 'unknown',
-  })
+  return made(WORDS.page, 'page_error')
 }
 
 interface ApiResult<Data> {
@@ -224,6 +249,80 @@ export function fieldErrorMap(
   return map
 }
 
+/*
+  Time limits, in ms: how long the server has to start answering (TBC: PLAN-V15 T2-2). The body
+  then arrives with no limit, so a big CSV is never cut off halfway.
+*/
+export const TIME_LIMITS = {
+  /** Every read and most changes. */
+  normal: 20_000,
+  /** An upload, a CSV download, and a change that writes to HubSpot. */
+  long: 120_000,
+  /** Rebuilding every HubSpot profile, which embeds them all inside the request. */
+  rebuild: 600_000,
+} as const
+
+const LONG_CALLS: readonly [string, RegExp, number][] = [
+  ['POST', /\/hubspot\/import$/, TIME_LIMITS.long],
+  ['POST', /\/hubspot\/profiles\/rebuild$/, TIME_LIMITS.rebuild],
+  ['GET', /\/lead-finder\/leads\/export$/, TIME_LIMITS.long],
+  ['POST', /\/lead-finder\/review\/send$/, TIME_LIMITS.long],
+  ['POST', /\/lead-finder\/leads\/[^/]+\/hubspot\/send$/, TIME_LIMITS.long],
+]
+
+/** The time limit for one call, or `null` for none (a live stream of updates). */
+export function timeLimitFor(request: Request): number | null {
+  if (request.headers.get('accept')?.includes('text/event-stream')) {
+    return null
+  }
+  const path = new URL(request.url).pathname
+  const long = LONG_CALLS.find(
+    ([method, pattern]) => method === request.method && pattern.test(path),
+  )
+  return long ? long[2] : TIME_LIMITS.normal
+}
+
+/**
+ * Calls `fetchFn` with the request's own cancel signal and the time limit joined in one. A
+ * cancel (the page left) stays an `AbortError`; the time limit running out is a `timeout`
+ * problem; any other failure to fetch is `offline` or `unreachable`.
+ */
+async function fetchWithLimit(fetchFn: typeof fetch, request: Request): Promise<Response> {
+  const limit = timeLimitFor(request)
+  const controller = new AbortController()
+  const outer = request.signal
+  const forward = (): void => {
+    controller.abort(outer.reason)
+  }
+  if (outer.aborted) {
+    forward()
+  } else {
+    outer.addEventListener('abort', forward, { once: true })
+  }
+  let timedOut = false
+  const timer =
+    limit === null
+      ? undefined
+      : setTimeout(() => {
+          timedOut = true
+          controller.abort()
+        }, limit)
+  try {
+    return await fetchFn(new Request(request, { signal: controller.signal }))
+  } catch (error) {
+    if (timedOut) {
+      throw timeoutProblem()
+    }
+    if (isAbort(error)) {
+      throw error
+    }
+    throw networkProblem()
+  } finally {
+    clearTimeout(timer)
+    outer.removeEventListener('abort', forward)
+  }
+}
+
 export interface ApiClientOptions {
   /** A fetch to use instead of the global one. For tests. */
   fetch?: typeof fetch
@@ -236,16 +335,7 @@ export interface ApiClientOptions {
 export function createApiClient(options: ApiClientOptions = {}) {
   return createClient<paths>({
     baseUrl: API_BASE_URL,
-    fetch: async (request) => {
-      try {
-        return await (options.fetch ?? globalThis.fetch)(request)
-      } catch (error) {
-        if (isAbort(error)) {
-          throw error
-        }
-        throw toApiProblem(error)
-      }
-    },
+    fetch: (request) => fetchWithLimit(options.fetch ?? globalThis.fetch, request),
   })
 }
 
