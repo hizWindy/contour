@@ -19,8 +19,8 @@ import {
   useQueryClient,
   type QueryClient,
 } from '@tanstack/react-query'
-import { api, isSignInNeeded, unwrap, type ApiProblem } from '../client'
-import { queryKeys } from '../query'
+import { api, isApiProblem, isSignInNeeded, unwrap, type ApiProblem } from '../client'
+import { queryKeys, retryDelay, shouldRetry } from '../query'
 import type { Schemas } from '../types'
 
 export type SignedInUser = Schemas['UserOut']
@@ -38,10 +38,14 @@ export function signedOutBy(problem: ApiProblem): SignIn {
 }
 
 /**
- * Who is signed in. Never retried: a 401 is an answer, not a failure, and a backend that can't
- * be reached shows the page's own errors. A failed answer is not asked again when another part
- * mounts (`retryOnMount: false`): the sign-in guard and the top bar both read it, and asking again
- * would hide the page, show it, and ask again, forever.
+ * Who is signed in. A 401 is an answer, not a failure (`signed_out`). A network error, a time
+ * limit or a 5xx is retried like any read (PLAN-V15 T2-2): one failed answer during a deploy used
+ * to leave the app with no account menu until a reload. It is also asked again when the connection
+ * comes back (`connection.ts` runs the failed reads again).
+ *
+ * A failed answer is not asked again when another part mounts (`retryOnMount: false`): the
+ * sign-in guard and the account menu both read it, and asking again would hide the page, show it,
+ * and ask again, forever.
  */
 export function meQueryOptions() {
   return queryOptions<SignIn, ApiProblem>({
@@ -55,10 +59,13 @@ export function meQueryOptions() {
           : { state: 'signed_out', reason: null, detail: null }
       } catch (error) {
         if (isSignInNeeded(error)) return signedOutBy(error)
+        // A backend with no sign-in routes at all (before PLAN-V6) has no sign-in.
+        if (isApiProblem(error) && error.status === 404) return { state: 'off' }
         throw error
       }
     },
-    retry: false,
+    retry: shouldRetry,
+    retryDelay,
     retryOnMount: false,
     staleTime: 60_000,
   })

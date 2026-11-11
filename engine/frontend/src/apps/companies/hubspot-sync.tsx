@@ -1,73 +1,32 @@
 /**
- * "Sync with HubSpot" on the Companies page (PLAN-V10 F2, 9 Nov): copies everything from HubSpot
- * now, instead of waiting for the 6:00 sync. It is a full sync: companies, offices, deals and
- * owners, and people and calls once HubSpot allows them. Reading HubSpot is free. It takes about
- * 10 minutes, and runs in the background, so the page stays usable.
+ * "Sync with HubSpot" on the Companies page (PLAN-V10 F2, PLAN-V15 T2-6): copies from HubSpot now,
+ * instead of waiting for the 6:00 sync. It asks for an "auto" sync: what changed since the last one,
+ * and everything once a week (a full copy stays on Admin, HubSpot). Reading HubSpot is free. It runs
+ * in the background, so the page stays usable.
  *
- * - **Beside it:** when our copy was last updated, or, while a sync runs, how far it has got. The
- *   backend saves its counts as it reads, so the bar fills (and never loops).
+ * - **Beside it:** when our copy was last updated, or, while a sync runs, its phase and how far it
+ *   has got: reading HubSpot, saving to our copy, saving people, updating profiles
+ *   (`components/hubspot/sync-progress.ts`). The bar fills, and never loops.
+ * - **Stop:** beside the progress. After a press it says "Stopping…" with the button off, then what
+ *   was kept, in the backend's words: "Stopped. Our copy didn't change." or "Stopped after saving
+ *   companies. People and profiles update with the next sync."
  * - **When it finishes,** the list refreshes and a toast says what was copied.
  * - **One at a time,** for everyone. Pressing it while a sync runs follows that one.
  */
 import { useQueryClient } from '@tanstack/react-query'
-import { Database, RefreshCw } from 'lucide-react'
+import { Database, RefreshCw, Square } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import { isApiProblem } from '@/api/client'
-import { useHubSpotSyncs, useStartHubSpotSync } from '@/api/hooks'
+import { useCancelHubSpotSync, useHubSpotSyncs, useStartHubSpotSync } from '@/api/hooks'
 import { queryKeys } from '@/api/query'
 import type { HubSpotSync as Sync } from '@/api/types'
+import { isStopping, stoppedWords, syncProgress } from '@/components/hubspot/sync-progress'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { formatNumber, formatRelative } from '@/lib/format'
 import { toastProblem } from '@/lib/problems'
-
-/** A full copy's usual length, until one has finished. */
-const FULL_MINUTES = 10
-
-function minutesOf(sync: Sync | undefined): number {
-  if (!sync?.finished_at) return FULL_MINUTES
-  const taken = new Date(sync.finished_at).getTime() - new Date(sync.started_at).getTime()
-  return Math.max(1, Math.round(taken / 60_000))
-}
-
-interface Progressing {
-  words: string
-  /** 0 to 100 once the counts are known, else null (then no bar: nothing is made up). */
-  value: number | null
-}
-
-/** How far a running sync has got. The last full copy gives the totals to expect. */
-function progressOf(running: Sync, lastFull: Sync | undefined): Progressing {
-  const full = running.mode === 'full' ? lastFull : undefined
-  const companies = full?.companies_read ?? 0
-  const deals = full?.deals_read ?? 0
-  if (running.deals_read > 0) {
-    if (deals > 0 && running.deals_read >= deals) {
-      return { words: 'Saving to our copy.', value: 95 }
-    }
-    const share = deals > 0 ? Math.min(1, running.deals_read / deals) : 0.5
-    return {
-      words: `Reading deals: ${formatNumber(running.deals_read)}${deals ? ` of about ${formatNumber(deals)}` : ''}.`,
-      value: 60 + share * 35,
-    }
-  }
-  if (running.companies_read > 0) {
-    const share = companies > 0 ? Math.min(1, running.companies_read / companies) : 0.5
-    return {
-      words: `Reading companies: ${formatNumber(running.companies_read)}${companies ? ` of about ${formatNumber(companies)}` : ''}.`,
-      value: share * 60,
-    }
-  }
-  return {
-    words:
-      running.mode === 'full'
-        ? `Syncing with HubSpot. A full copy takes about ${String(minutesOf(lastFull))} minutes.`
-        : 'Syncing with HubSpot.',
-    value: null,
-  }
-}
 
 function finishedWords(sync: Sync): string {
   const parts = [
@@ -80,10 +39,11 @@ function finishedWords(sync: Sync): string {
   return parts.filter(Boolean).join(' ')
 }
 
-/** The button, with the copy's age or the running sync's progress beside it. */
+/** The button, with the copy's age or the running sync's progress and Stop beside it. */
 export function HubSpotSync() {
   const syncs = useHubSpotSyncs()
   const start = useStartHubSpotSync()
+  const cancel = useCancelHubSpotSync()
   const queryClient = useQueryClient()
   const list = syncs.data ?? []
   const running = list.find((sync) => sync.status === 'running')
@@ -105,6 +65,8 @@ export function HubSpotSync() {
     void queryClient.invalidateQueries({ queryKey: queryKeys.companies.all })
     if (finished.status === 'done') {
       toast.success('HubSpot copy updated', { description: finishedWords(finished) })
+    } else if (finished.status === 'cancelled') {
+      toast('HubSpot sync stopped', { description: stoppedWords(finished) })
     } else {
       toast.error("The HubSpot sync didn't finish", {
         description: finished.error ?? 'Nothing in our copy was lost. Try again in a minute.',
@@ -112,15 +74,31 @@ export function HubSpotSync() {
     }
   }, [running, syncs.data, queryClient])
 
-  const progress = running ? progressOf(running, lastFull) : null
+  const stopping = Boolean(running && (isStopping(running) || cancel.isPending))
+  const progress = running ? syncProgress(running, lastFull) : null
   const busy = Boolean(running) || start.isPending
   const status = progress
-    ? progress.words
+    ? stopping
+      ? 'Stopping…'
+      : progress.words
     : lastGood?.finished_at
       ? `HubSpot copy updated ${formatRelative(lastGood.finished_at)}.`
       : syncs.isPending || syncs.isError
         ? null
         : 'Not synced yet.'
+
+  const stop = (sync: Sync): void => {
+    cancel.mutate(sync.id, {
+      onError: (error) => {
+        if (isApiProblem(error) && error.code === 'not_running') {
+          toast('That sync had already finished', { description: 'Its result shows here.' })
+          void syncs.refetch()
+          return
+        }
+        toastProblem(error)
+      },
+    })
+  }
 
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2 sm:justify-end">
@@ -138,6 +116,20 @@ export function HubSpotSync() {
           ) : null}
         </div>
       ) : null}
+      {running ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={stopping}
+          onClick={() => {
+            stop(running)
+          }}
+        >
+          <Square aria-hidden="true" />
+          {stopping ? 'Stopping…' : 'Stop'}
+        </Button>
+      ) : null}
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
@@ -146,7 +138,7 @@ export function HubSpotSync() {
             size="sm"
             disabled={busy}
             onClick={() => {
-              start.mutate('full', {
+              start.mutate('auto', {
                 onSuccess: () => {
                   toast('Syncing with HubSpot', {
                     description: 'You can keep working. The list refreshes when it is done.',
@@ -170,8 +162,8 @@ export function HubSpotSync() {
           </Button>
         </TooltipTrigger>
         <TooltipContent className="max-w-72">
-          Copies everything from HubSpot now: companies, offices, deals and owners, and people and
-          calls once HubSpot allows them. Free. About {minutesOf(lastFull)} minutes.
+          Copies what changed in HubSpot since the last sync, and everything once a week: companies,
+          offices, deals and owners. Free. A full copy is on Admin, HubSpot.
         </TooltipContent>
       </Tooltip>
     </div>

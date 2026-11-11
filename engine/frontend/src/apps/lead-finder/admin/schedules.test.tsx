@@ -315,7 +315,7 @@ describe('the round control', () => {
     await user.clear(budget)
     await user.type(budget, '500')
     expect(
-      screen.getByText('Must be at most US$200. The ceiling in engine/.env is lower.'),
+      screen.getByText('Must be at most US$200. The ceiling on the server is lower.'),
     ).toBeInTheDocument()
     expect(sent(calls, 'PUT')).toHaveLength(0)
   })

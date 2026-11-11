@@ -13,7 +13,7 @@ import { LeadCardView } from './lead-card-view'
 
 export default function LeadPage() {
   const { leadId = '' } = useParams()
-  const lead = useLead(leadId)
+  const lead = useLead(leadId, { missingIsPage: true })
   if (lead.error) {
     return (
       <>

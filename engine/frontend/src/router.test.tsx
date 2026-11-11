@@ -9,13 +9,18 @@ import { RouteError } from '@/shell/route-error'
 import { renderWithProviders } from '@/test/render'
 
 // The pages call the API. These tests are about addresses, titles and the menu, so every call
-// answers 404: a page then shows its title and a plain error, which is enough here.
+// answers 404: a page then shows its title and a plain error, which is enough here. A run or a
+// lead that is missing shows the full Not found page instead (PLAN-V15 T2-4), so those two answer
+// with a server fault: their page then shows its own title and a plain error too.
+const DETAIL = /\/(runs|lead-finder\/leads)\/[0-9a-f-]{36}$/
+
 beforeEach(() => {
   vi.stubGlobal(
     'fetch',
-    vi.fn(() =>
-      Promise.resolve(Response.json({ title: 'Not found', status: 404 }, { status: 404 })),
-    ),
+    vi.fn((request: Request) => {
+      const status = DETAIL.test(new URL(request.url).pathname) ? 500 : 404
+      return Promise.resolve(Response.json({ title: 'Not found', status }, { status }))
+    }),
   )
 })
 
@@ -129,18 +134,44 @@ describe('the router', () => {
     },
   )
 
-  it('says plainly when an address does not exist', async () => {
+  it('says plainly when an address does not exist, with a way back to Home', async () => {
     renderAt('/nowhere/at/all')
     expect(
-      await screen.findByRole('heading', { level: 1, name: "This page doesn't exist." }),
+      await screen.findByRole('heading', { level: 1, name: "We can't find that" }),
     ).toBeInTheDocument()
     const page = screen.getByRole('heading', { level: 1 }).closest('section')
     expect(page).not.toBeNull()
-    expect(within(page as HTMLElement).getByRole('link', { name: 'Start a run' })).toHaveAttribute(
+    expect(within(page as HTMLElement).getByRole('link', { name: 'Go to Home' })).toHaveAttribute(
       'href',
-      '/start',
+      '/',
     )
+    expect(within(page as HTMLElement).queryByRole('link', { name: 'Start a run' })).toBeNull()
   })
+
+  it.each([
+    ['/runs/0f3c9a2e-1111-2222-3333-444444444444', 404, "We can't find that"],
+    ['/leads/99999999-2222-3333-4444-555555555555', 404, "We can't find that"],
+    ['/leads/99999999-2222-3333-4444-555555555555', 403, "This page isn't open to you"],
+  ])(
+    'shows the full page for %s when it answers %i (PLAN-V15 T2-4)',
+    async (path, status, title) => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn((request: Request) => {
+          // Only the run or lead answers so; "who is signed in" answers 404 (no sign-in).
+          const answer = DETAIL.test(new URL(request.url).pathname) ? status : 404
+          return Promise.resolve(Response.json({ status: answer }, { status: answer }))
+        }),
+      )
+      renderAt(path)
+
+      expect(
+        await screen.findByRole('heading', { level: 1, name: title }, { timeout: LAZY }),
+      ).toBeInTheDocument()
+      expect(screen.getByRole('link', { name: 'Go to Home' })).toHaveAttribute('href', '/')
+      expect(screen.getByRole('navigation', { name: 'Main menu' })).toBeInTheDocument()
+    },
+  )
 
   it('lists Home, each project with its own pages, and Admin, and marks the page you are on', async () => {
     renderAt('/runs/0f3c9a2e-1111-2222-3333-444444444444')

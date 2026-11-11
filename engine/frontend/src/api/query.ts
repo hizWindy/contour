@@ -6,35 +6,72 @@
  * adds its own queries inside its own folder, and uses the keys below when it reads or
  * invalidates what another page may also show (a run, a lead, the settings).
  */
-import { QueryClient } from '@tanstack/react-query'
+import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query'
 import { isAbort, isApiProblem } from './client'
+import { connectionOf, problemKind } from './connection'
 import type { QueryOf } from './types'
 
 const MAX_RETRIES = 2
 
-/** Retry a read only when trying again could help: the backend was out of reach, or it broke. */
+/** The longest wait a `Retry-After` may ask for before a retry. */
+const MAX_RETRY_AFTER_MS = 30_000
+
+/** A deploy gives no `Retry-After`, and takes about a minute. */
+const UPDATING_RETRY_MS = 5_000
+
+/**
+ * Retry a read only when trying again could help: the server was out of reach, didn't answer in
+ * time, is updating or busy, or broke (a 5xx). Never a 4xx, or a 501 ("not built"), which a retry
+ * can't fix.
+ */
 export function shouldRetry(failureCount: number, error: unknown): boolean {
   if (failureCount >= MAX_RETRIES || isAbort(error)) {
     return false
   }
-  if (!isApiProblem(error)) {
-    return false
-  }
-  // 0 is "could not reach the backend". 501 means "not built", which a retry cannot fix.
-  return error.status === 0 || (error.status >= 500 && error.status !== 501)
+  const kind = problemKind(error)
+  return kind !== null && kind !== 'answer'
 }
 
-/** The wait before retry number `failureCount`: 1 s, then 2 s. */
-export function retryDelay(failureCount: number): number {
+/**
+ * The wait before retry number `failureCount`: what the server's `Retry-After` asks (at most 30 s),
+ * 5 s while it updates, else 1 s, then 2 s.
+ */
+export function retryDelay(failureCount: number, error?: unknown): number {
+  if (isApiProblem(error) && error.retry_after_seconds !== null) {
+    return Math.min(error.retry_after_seconds * 1000, MAX_RETRY_AFTER_MS)
+  }
+  if (problemKind(error) === 'updating') {
+    return UPDATING_RETRY_MS
+  }
   return Math.min(1000 * 2 ** failureCount, 5000)
 }
 
 /**
  * The app's query client. A read counts as fresh for 15 seconds. A change (a mutation) is never
  * repeated by itself, because a repeated "start run" or "reject" is not safe.
+ *
+ * One place for errors (PLAN-V15 T2-2): every failed read and change, and every good answer, goes
+ * to the connection state (`connection.ts`). The connection bar and the error pages read it, so a
+ * page never has to.
  */
 export function createQueryClient(): QueryClient {
-  return new QueryClient({
+  const client: QueryClient = new QueryClient({
+    queryCache: new QueryCache({
+      onError: (error) => {
+        connectionOf(client).noteError(error)
+      },
+      onSuccess: () => {
+        connectionOf(client).noteSuccess()
+      },
+    }),
+    mutationCache: new MutationCache({
+      onError: (error) => {
+        connectionOf(client).noteError(error)
+      },
+      onSuccess: () => {
+        connectionOf(client).noteSuccess()
+      },
+    }),
     defaultOptions: {
       queries: {
         staleTime: 15_000,
@@ -46,6 +83,7 @@ export function createQueryClient(): QueryClient {
       mutations: { retry: false },
     },
   })
+  return client
 }
 
 /**

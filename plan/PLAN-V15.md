@@ -343,13 +343,13 @@ Newest first.
 
 ## Track 2: the website (session 2)
 
-**Progress:** 0 of 7 steps done.
+**Progress:** 3 of 7 steps done (T2-1, T2-2, T2-7). T2-3 to T2-6 are built and checked, waiting for Al-khair's look. **Ready to merge** (`plan-v15-track2`).
 
-- [ ] **T2-1. Own copy and a baseline.**
+- [x] **T2-1. Own copy and a baseline.** Done 2026-11-12 (no code change; see the Log).
   - The worktree, the `leadfinder_v15b` database and the ports.
   - Run the website tests once with `heavy.sh`, and note the count.
   - **Done when:** the count is in the Track 2 Log.
-- [ ] **T2-2. The request layer.** Built against the contract with `mockApi`.
+- [x] **T2-2. The request layer.** Built against the contract with `mockApi`. Done 2026-11-12 (5e698bc).
   - **A time limit on every request** (`src/api/client.ts`): 20 seconds by default, 120 for uploads and CSV downloads, none for live run updates (SSE). The numbers are **TBC**. A request that runs out becomes code `timeout`.
   - **Tell the cases apart:**
     - `offline`: the browser says so (`navigator.onLine`);
@@ -365,7 +365,7 @@ Newest first.
   - **`/auth/me`** (`src/api/hooks/auth.ts`) retries on a network error, a timeout or a 5xx, like other reads. It is asked again when the connection comes back. This is the main fix for the profile menu.
   - **Files:** `src/api/client.ts`, `src/api/query.ts`, `src/api/hooks/auth.ts`, a new `src/api/connection.ts`, tests.
   - **Done when:** tests cover each case above, plus a `/auth/me` that fails once and then works.
-- [ ] **T2-3. The words.**
+- [ ] **T2-3. The words.** Built, waiting for a look (2346cf9).
   - **Every message** from the client fallbacks (`client.ts`), `src/lib/problems.ts` and `src/components/error-state.tsx` follows "Words for errors".
   - **422 messages:** Pydantic's field messages become plain words, like "Field required" to "fill this in".
   - **`ErrorState`:**
@@ -377,7 +377,7 @@ Newest first.
     - a test finds no command, file name or `localhost` in any message the website can show;
     - each status in "Words for errors" has a test;
     - Al-khair has looked.
-- [ ] **T2-4. Error pages and the connection bar.**
+- [ ] **T2-4. Error pages and the connection bar.** Built, waiting for a look and the browser check in T2-7 (08ec5bc).
   - **The connection bar:** a thin bar at the top of the app while the connection state isn't "online", instead of a red box in every card.
     - Offline: "You're offline…". Updating: "Contour is updating…", with a countdown.
     - It retries by itself: when the browser is back online, and every 10 seconds while updating, by asking the backend's health route.
@@ -397,7 +397,7 @@ Newest first.
     - each page and the bar show in the browser, at 3 widths, light and dark, by keyboard and with reduced motion;
     - the automatic retries work in tests;
     - Al-khair has looked.
-- [ ] **T2-5. The profile menu.**
+- [ ] **T2-5. The profile menu.** Built, waiting for a look (see the Log for the commit).
   - **No app without a user:** when `/auth/me` still fails after its retries, and it isn't a 401, the frame shows Connection lost or Updating, not the app without a menu (`src/shell/require-sign-in.tsx`). The sidebar never shows every module to someone whose access isn't known (`src/shell/visible-modules.ts`).
   - **On a phone,** the top bar stays at the top while the page scrolls. Built, waiting for a look.
   - `engine/DESIGN.md` says where the account sits now: the bottom of the left menu from 768px, the top bar below that.
@@ -406,7 +406,7 @@ Newest first.
     - a `/auth/me` that fails once still ends with the menu showing;
     - one that keeps failing shows Connection lost;
     - the sidebar shows no modules while access is unknown.
-- [ ] **T2-6. The sync Stop button.** Waits for `v15-api`.
+- [ ] **T2-6. The sync Stop button.** Waits for `v15-api`. Built, waiting for a look (see the Log).
   - Wait for the tag. If it's missing, stop and say "Waiting for the API (T1-3)".
   - `git merge v15-api`. Run `uv run engine migrate` on `leadfinder_v15b`, then `npm run types`.
   - **The hook:** `useCancelHubSpotSync` in `src/api/hooks/hubspot.ts`.
@@ -419,7 +419,7 @@ Newest first.
   - **The sync tests move** from `companies.test.tsx` into the new `hubspot-sync.test.tsx` (see "How to work this plan"). The "sends full" check becomes "sends auto".
   - **Files:** `src/api/hooks/hubspot.ts`, `hubspot-sync.tsx`, `hubspot-sync.test.tsx` (new), the moved tests in `companies.test.tsx`, `admin/connection.tsx`, tests.
   - **Done when:** tests cover Stop in each phase and a 409 `not_running`, the button sends "auto", and Al-khair has looked.
-- [ ] **T2-7. Track 2 check.**
+- [x] **T2-7. Track 2 check.** Done 2026-11-12 (see the Log).
   - Website tests, lint, types and build.
   - **A browser check of each error case:**
     - offline (DevTools);
@@ -434,7 +434,37 @@ Newest first.
 
 Newest first.
 
-- (empty)
+- 2026-11-12: **T2-7 done. Track 2 is ready to merge.** Final checks on `plan-v15-track2` (3726519 and this plan commit): website **89 files, 1,222 tests passed** (1 worker), types, lint, Prettier and the build clean. Open for Al-khair: a look at T2-3 to T2-6 (screenshots in `plan/shots/v15-t2/`), and the notes "For the look" below. For M1: the four `sync()` fields in `companies.test.tsx` (Track 3 has the exact lines), and a real account check of the account menu (**TBC**). The database `leadfinder_v15b` stays for M1; drop it after.
+- 2026-11-12: **T2-7, the browser check**, on the built site (`vite preview` on 5202) against the Track 2 backend (8032, `leadfinder_v15b` at 0016, no Claude or HubSpot key). Started from two temporary entries in the main folder's `.claude/launch.json`, removed after (the file is back as it was). Cases the backend can't make by itself (a 403, a 500, a timeout, a running sync) used test data in the page, like PLAN-V14's `card.mjs`.
+  - **Each case worked:** Not found (a real 404 for a missing lead, with the backend's real request id `4PCYQTJE` in the details); No access (403); a 500 on Rules with its words, its code and Try again, which loaded the page once the fault cleared; offline (the browser's own events: the Ochre bar, gone when back online); updating (every call a proxy page: the Cobalt bar with its countdown and the quiet card line, then back by itself in about 5 s with 21 rows); a timeout on Admin's "Check again" (after 20 s: "Contour took too long to answer. It may still have gone through…"); the backend really stopped (the preview proxy answers 502): a reload shows the full Updating page with no frame and no menu, and starting the backend again brought the frame and Results back by themselves in 11 s, with no reload; the Stop button on Companies ("Stopping…" with the button off, then "HubSpot sync stopped" with the contract's words).
+  - **Found and fixed (3726519):** after a deploy, the quiet preloader calls each page's loader, so a preload that failed reloaded the page someone was on (it could lose what they typed). The reload now happens only when the failed page is drawn. A test covers it. Then the new-version case worked: one reload on the page itself, then "Contour was updated" with Reload, menu kept.
+  - **Screenshots:** 34 in `plan/shots/v15-t2/` (git-ignored), from headless Chrome over the DevTools protocol (the pane was hidden): Connection lost, the offline bar, Updating and Not found at 1440, 1280 and 390 wide, light and dark; No access, the 500 with its details open, and a running and a stopping sync at 1440, light and dark; the phone's top bar after scrolling (still at the top, y=0); Tab reaching "Try again" with reduced motion. None scrolls sideways, and no page error was logged.
+  - **Not checked in the browser:** the account menu itself, because the track backend has sign-in off (the tests cover it: a `/auth/me` that fails once still ends with the menu; one that keeps failing shows Connection lost). A real Staff or Admin account check is **TBC** for M1. A real sync with Stop needs the HubSpot key (Track 1, T1-6).
+  - **For the look:** on Companies, "Stopping…" shows both in the status line and on the button.
+  - **Size:** the main file grew from 53.8 to 64.6 kB gzipped, but most of that moved from a separate start-up file (the error box and the toast library); all start-up JavaScript went from 231.3 to 235.5 kB gzipped (+4.2 kB).
+  - The clean copy `../contour-v15-t2-base` is removed (its `node_modules` link was undone first).
+- 2026-11-12: **T2-6 built**, waiting for a look. Merged `v15-api` (10ada26, from Track 1's message): no conflicts. Migration 0016 ran on `leadfinder_v15b` (with the main venv's Python, from this copy's `engine/backend`, after checking it read this copy's `engine/.env`). `npm run types` changed nothing. Built:
+  - `useCancelHubSpotSync` in `src/api/hooks/hubspot.ts`. The phase words and the bar in a shared `src/components/hubspot/sync-progress.ts`: "Reading HubSpot: 4,200 of about 13,913 companies.", "Saving to our copy.", "Saving people (1,200).", "Updating profiles (3,400 of 13,900)."; the bar fills by phase (profiles 80 to 100), so it no longer sits at 95%.
+  - Companies, "Sync with HubSpot": sends `auto`; Stop beside the progress; after a press "Stopping…" with the button off; then the toast "HubSpot sync stopped" with the backend's own last warning. A 409 `not_running` says "That sync had already finished" and reads the list again.
+  - Admin, HubSpot, Syncs card: "Sync now" (`auto`) and a new "Full copy" (`full`); while one runs, its phase and Stop; a stopped sync in the list reads "Stopped" and what it kept. "Off (HUBSPOT_WRITE_ENABLED)" became "Off (a server setting)", and the screen-words test now catches any ALL_CAPS setting name.
+  - The sync test moved from `companies.test.tsx` to a new `hubspot-sync.test.tsx` (own helpers; "sends full" became "sends auto"). In `companies.test.tsx`, besides the move, the `sync()` helper gained the four new required fields (`people_saved: 0, profiles_done: 0, profiles_total: 0, profiles_skipped: false`, after `profiles_rebuilt`); without them that file no longer type-checks once `v15-api` is in. Track 3 was told the exact lines, so the same change on both sides merges cleanly at M1.
+  - Full run (1 worker): **89 files, 1,221 tests passed**; types, lint and Prettier clean.
+- 2026-11-12: **T2-5 built**, waiting for a look. Full run (1 worker): 1,203 passed, 3 failed, all three tests that drew Home or the app with no answer to "who is signed in" (the smoke test, the Home prefetch test) or answered 403 to it (a new router test); fixed, and they pass. What it does: the sign-in guard never shows the app without a user. When `/auth/me` still fails after its retries it shows Connection lost (offline, out of reach, no answer in time), Updating (a deploy) or the failed answer with its request id, each standalone (no frame), and each comes back by itself. Offline before the first answer (TanStack pauses the query) now says "You're offline" instead of a grey shape forever. A later check that fails keeps the app. A 404 from `/auth/me` means a backend with no sign-in routes, so sign-in is off. The menu, Home and Ctrl+K offer no project while access isn't known. The top bar stays at the top on a phone. `DESIGN.md` says where the account sits. Tests that drew Home or the command menu without answering "who is signed in" now answer it (Home behind the guard; the command menu's calls answer 404).
+- 2026-11-12: **For M1 and Track 3** (sent to Track 3 as a message once its session was running again). Shared website changes that call prep's tests may meet at the merge:
+  - A failed fetch is code `offline` or `unreachable` (was `network`), a timeout `timeout`, and a 502, 503 or 504 with no JSON `updating`. `toApiProblem` no longer turns a plain `TypeError` into "can't reach": it is "This page couldn't be shown" (`page_error`).
+  - `ErrorState` always has Try again and a folded "Details for support". For `offline`, `unreachable` or `updating` it is a quiet `role="status"` line, not a red `role="alert"` box.
+  - The website's own words live in `src/api/words.ts`; T3-7 can use `WORDS` after M1. Pydantic's 422 messages come out plain.
+  - `/auth/me` retries twice, and a 404 there means sign-in is off. The menu offers no project while "who is signed in" isn't known, so a test that draws a page with the menu must answer `/auth/me`.
+- 2026-11-12: **Memory:** about 0.5 GB free with three tracks running. A test worker ended with exit 134 in the T2-4 run, so two files (`error-pages.test.tsx`, `safe-href.test.ts`) didn't run there (both pass alone). Full runs now use `--maxWorkers=1`. Al-khair: stopping the old previews (8000 to 8023, 5173 to 5193) would free memory for all three tracks.
+- 2026-11-12: **T2-4 built** (08ec5bc), waiting for a look and the T2-7 browser check. The connection bar (`src/shell/connection-bar.tsx`) at the top of the page area: Ochre for offline and out of reach, Cobalt for updating, a countdown and "Try now", checks every 10 seconds, and the failed reads run again when the server is back. A card whose read failed for the connection shows a quiet grey line, not a red box. Full pages in `src/shell/error-pages/`: Connection lost, Updating, a failed answer with its request id, No access and Not found ("Go to Home"; "Start a run" went), and New version: a page whose code is gone reloads once by itself (a `sessionStorage` mark, one minute), then says "Contour was updated" with Reload. Offline, a page's code that couldn't come says "You're offline" and reloads when back. The lead and run pages throw 403 and 404 to the route's error page; the Results side panel keeps its box. `DESIGN.md` gains "Errors and the connection". Full run (2 workers): 1,127 passed, 1 failed (the old "can't be reached" guard test, replaced in T2-5).
+  - **For the look:** a failed change shown in a box (Start's "Start run", the run page's Stop) also gets the quiet line during an outage, and its Try again asks again for the reads on screen, not the change: the person presses the button again.
+- 2026-11-12: **T2-3 built** (2346cf9), waiting for a look. `ErrorState` always has Try again (it asks again for the failed reads on screen) and a folded "Details for support" (status, code, request id, time in local and UTC, page) with "Copy the details". Pydantic's field messages become plain words. A failed change in a toast gets change words: a timeout says "It may still have gone through. Reload the page to check before you try again." Admin no longer names `engine/.env` or `HUBSPOT_SERVICE_KEY` ("kept in the server's settings", "Set on the server"). `src/test/screen-words.test.ts` reads every on-screen string in the app (TypeScript's parser: strings, template text, JSX text; not comments or imports) and finds no command, settings file, local address, setting name or code file name. Full run: 1,182 passed, 1 failed (the same guard test).
+  - **For the look:** two words not in the plan's table: "That didn't work. Try again." for a status with no words of its own, and "This page couldn't be shown" for a bug inside a page.
+- 2026-11-12: **T2-2 done** (5e698bc). Full run on the commit: 1,136 passed, 1 failed (the guard test that expected the app to show when `/auth/me` can't be reached; T2-5 changes that on purpose). Time limits: `TIME_LIMITS` in `client.ts` (20 s; 120 s for an upload, the CSV, a review send and a lead's HubSpot send; 10 minutes for the profile rebuild, which embeds inside the request until T1-4), all **TBC**. The limit covers the wait for the answer to start, not the download of its body.
+- 2026-11-12: **T2-2 built** (5e698bc): the time limits, the failure kinds, the request id, the retries, the connection state (`src/api/connection.ts`) and `/auth/me` retried. The words live in a new `src/api/words.ts`, used by T2-3.
+- 2026-11-12: **T2-1 done.** Worktree `../contour-v15-t2` on `plan-v15-track2` (from `plan-v15` 9ff63aa). Database `leadfinder_v15b`, a copy of `leadfinder_v14a` at 0015; the HNSW index `ix_memory_embedding` failed in the restore (shared memory) and was built again with `max_parallel_maintenance_workers=0`. `engine/.env` holds the `POSTGRES_*` lines only (Track 1's note: `API_PORT` and `CORS_ORIGINS` there break 8 backend tests, so they go on the command line when a backend starts). `npm ci` done, `COMPANIES.xlsx` copied.
+  - **Baseline:** website **83 files, 1,117 tests passed** (115 s). The first try with the default workers ran out of memory (4 workers ended with exit 134, about 2 GB free), so runs use `--maxWorkers=2`.
+  - The runs go in a second, clean copy, `../contour-v15-t2-base` (detached, `node_modules` linked to Track 2's), so code can change in the main copy while a test run reads the snapshot. Remove it at the end of the track.
 
 ## Track 3: call prep (session 3)
 

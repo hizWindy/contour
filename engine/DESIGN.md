@@ -107,7 +107,7 @@ Sizes are in rem, so browser zoom works. Nothing is smaller than 13px. Sentence 
 
 ## Layout
 
-- **App frame:** a left sidebar that folds to icons, a top bar with breadcrumbs, the command menu and the account menu (your initials and name, opening to your details and "Sign out"; it shows only where sign-in is on), then the page. The sidebar has Home at the top, one group per project (its name, then its pages), a "To be developed" group in quieter text, folded into one row that starts closed and opens by itself on one of its pages (each opens a page saying what the project will do), and the shared Admin at the bottom. Folded to icons, the group names hide and the page icons stay.
+- **App frame:** a left sidebar that folds to icons, a top bar with breadcrumbs and the command menu, then the page. The account menu (your initials and name, opening to your details and "Sign out"; it shows only where sign-in is on) sits at the bottom of the left menu from 768px wide (folded to icons on a tablet, it is your initials, with the name in a tooltip), and at the end of the top bar below 768px, where the top bar stays at the top while the page scrolls (PLAN-V15 T2-5). The app never shows without knowing who you are: if "who is signed in" can't be answered, a full page says why ("Errors and the connection"), and the menu offers no project until it is known. The sidebar has Home at the top, one group per project (its name, then its pages), a "To be developed" group in quieter text, folded into one row that starts closed and opens by itself on one of its pages (each opens a page saying what the project will do), and the shared Admin at the bottom. Folded to icons, the group names hide and the page icons stay.
 - **Home** (the "bento" Home, 11 Nov 2026, from Al-khair's draft in `inspirations/`): the date, a greeting by first name ("Good morning, Al-khair", the page's `h1`) and one sentence from each project (the Lead Finder says what its last run did). Faint contour lines sit behind the greeting, from a tablet up: decoration only. Then a grid of cards from `src/modules.ts`:
   - **Lead Finder** (two columns wide, two rows tall on a laptop): its good leads in large digits, every lead by result as one bar with the result badges as its legend (each a link to Results), the four signs seen most (the biggest lit in the accent), "Start with these" (the three best good leads still new, each with its sign and date), and the last run beside the one main button, "Start a run".
   - **Companies:** the count, how fresh the HubSpot copy is, a box that opens Companies with the name typed in its search, and the calls prepped today (or, in the serif voice, "No calls prepped today.").
@@ -174,6 +174,21 @@ Smooth and quick, like a well-made phone app (PLAN-V13, 11 Nov 2026). Motion sho
 - Errors say what happened and what to do next: "HubSpot didn't answer. Nothing was sent. Try again in a minute."
 - Empty states use the serif voice: "No leads yet. Start a run to see companies here."
 - No em dashes, no hype, and no "AI-powered".
+
+## Errors and the connection
+
+PLAN-V15 (12 Nov 2026). The words for every case are in `src/api/words.ts` ("Words for errors" in the plan): what happened, what it means for you, and what to do.
+
+- **Never on screen:** a command, a settings file, a local address, a setting's own name or a code file's name. A test reads every string in the app and checks this (`src/test/screen-words.test.ts`). Those go to the backend's log, under the request id.
+- **The error box** (`ErrorState`): the title, the next step, the wrong fields of a form in plain words ("Name: Fill this in."), Try again (always), then "Details for support" folded away: the status, the code, the request id, the time and the page, with "Copy the details".
+- **The connection bar:** one thin line at the top of the page area while the connection isn't fine, instead of a red box in every card. Ochre for "You're offline" and "Contour can't reach its server", Cobalt for "Contour is updating". It checks every 10 seconds with a countdown and "Try now" (offline waits for the browser). When the server is back, the bar goes and the failed reads run again by themselves. A card whose read failed for the connection shows a quiet grey line pointing at the bar, not a red box.
+- **Full error pages** (`src/shell/error-pages/`), for when a page has nothing to show: a card with an icon, the title as the page's `h1`, one or two sentences, the buttons, and the details for support where there is a request id. Inside the frame the menu stays; when even "who is signed in" can't be answered, the card fills the screen.
+  - **Connection lost:** Try again, and it comes back by itself.
+  - **Updating:** "Back in about a minute", with a countdown and "Try now".
+  - **Something went wrong** (a 500): the code to send to an admin.
+  - **No access** (403) and **Not found** (404): "Go to Home".
+  - **New version:** a page whose code is gone after a deploy reloads once by itself ("Contour was updated. Reloading…"). If that didn't help, the same title with a Reload button.
+- Nothing spins: the countdown is the only thing that moves.
 
 ## Accessibility (WCAG 2.2 AA)
 

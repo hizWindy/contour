@@ -1,5 +1,6 @@
 import { screen, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
+import type { HubSpotSync } from '@/api/types'
 import { mockApi, type Call } from '@/test/mock-api'
 import { renderWithProviders } from '@/test/render'
 import AdminHubSpotTab from './hubspot'
@@ -142,7 +143,7 @@ describe('Admin, HubSpot', () => {
     })
     const { user } = renderWithProviders(<AdminHubSpotTab />)
     expect(await screen.findByText('Yes, account 1234567')).toBeInTheDocument()
-    expect(screen.getByText(/Off \(HUBSPOT_WRITE_ENABLED\)/)).toBeInTheDocument()
+    expect(screen.getByText(/Off \(a server setting\)/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /of \d+ permissions/ }))
     const permissions = await screen.findByRole('list', { name: 'Permissions' })
     expect(permissions).toHaveTextContent('Yes: Read companies')
@@ -162,5 +163,101 @@ describe('Admin, HubSpot', () => {
     })
     expect(calls.find((call) => call.path === '/api/v1/hubspot/sync')?.search).toBe('?mode=auto')
     expect(JSON.stringify(calls)).not.toContain('pat-') // no key ever travels to the page
+  })
+})
+
+/** A sync as `/hubspot/status` lists it (PLAN-V15 T2-6 adds the phase and the counters). */
+function adminSync(changes: Partial<HubSpotSync> = {}): HubSpotSync {
+  return {
+    id: 7,
+    mode: 'full',
+    trigger: 'website',
+    status: 'running',
+    changed_since: null,
+    companies_read: 13900,
+    deals_read: 8900,
+    owners_read: 13,
+    companies_saved: 13900,
+    offices_saved: 22000,
+    deals_saved: 8000,
+    deals_skipped: 900,
+    companies_removed: 0,
+    deals_removed: 0,
+    profiles_rebuilt: 0,
+    people_saved: 1200,
+    profiles_done: 3400,
+    profiles_total: 13900,
+    profiles_skipped: false,
+    phase: 'profiles',
+    heartbeat_at: '2026-11-12T01:00:00Z',
+    cancel_requested_at: null,
+    error: null,
+    warnings: [],
+    started_at: '2026-11-12T00:50:00Z',
+    finished_at: null,
+    ...changes,
+  }
+}
+
+describe('Admin, HubSpot: stopping a sync, and a full copy (PLAN-V15 T2-6)', () => {
+  it('keeps "Full copy" beside "Sync now", and it asks for everything', async () => {
+    const calls = mockApi({
+      '/api/v1/hubspot/status': HUBSPOT_STATUS,
+      '/api/v1/hubspot/writes': [],
+      '/api/v1/hubspot/sync': (call: Call) =>
+        call.method === 'POST' ? Response.json(adminSync(), { status: 202 }) : undefined,
+    })
+    const { user } = renderWithProviders(<AdminHubSpotTab />)
+
+    await user.click(await screen.findByRole('button', { name: 'Full copy' }))
+
+    await waitFor(() => {
+      expect(calls.find((call) => call.path === '/api/v1/hubspot/sync')?.search).toBe('?mode=full')
+    })
+  })
+
+  it('shows the running phase and Stop, which stops it and says "Stopping…" until it has', async () => {
+    const asked = adminSync({ cancel_requested_at: '2026-11-12T01:00:05Z' })
+    let status = { ...HUBSPOT_STATUS, running_sync: adminSync(), recent_syncs: [adminSync()] }
+    const calls = mockApi({
+      '/api/v1/hubspot/status': () => Response.json(status),
+      '/api/v1/hubspot/writes': [],
+      '/api/v1/hubspot/syncs/7/cancel': (call: Call) => {
+        if (call.method !== 'POST') return undefined
+        status = { ...status, running_sync: asked, recent_syncs: [asked] }
+        return Response.json(asked, { status: 202 })
+      },
+    })
+    const { user } = renderWithProviders(<AdminHubSpotTab />)
+
+    expect(await screen.findByText(/Updating profiles \(3,400 of 13,900\)\./)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Sync now' })).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: 'Stop' }))
+
+    expect(await screen.findByRole('button', { name: 'Stopping…' })).toBeDisabled()
+    expect(
+      calls.filter((call) => call.method === 'POST' && call.path.endsWith('/cancel')),
+    ).toHaveLength(1)
+  })
+
+  it('lists a stopped sync with what it kept', async () => {
+    const stopped = adminSync({
+      status: 'cancelled',
+      phase: null,
+      finished_at: '2026-11-12T01:00:06Z',
+      warnings: ['Stopped after saving companies. People and profiles update with the next sync.'],
+    })
+    mockApi({
+      '/api/v1/hubspot/status': { ...HUBSPOT_STATUS, recent_syncs: [stopped] },
+      '/api/v1/hubspot/writes': [],
+    })
+    renderWithProviders(<AdminHubSpotTab />)
+
+    const list = await screen.findByRole('list', { name: 'Recent syncs' })
+    expect(list).toHaveTextContent('Stopped')
+    expect(list).toHaveTextContent(
+      'Stopped after saving companies. People and profiles update with the next sync.',
+    )
   })
 })

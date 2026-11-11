@@ -125,7 +125,7 @@ export function checkForm(form: RoundForm, budgetMax: number): RoundErrors {
   if (form.budget.trim() === '' || !Number.isFinite(budget) || budget < 1) {
     errors.budget = 'Use US$1 or more.'
   } else if (budget > budgetMax) {
-    errors.budget = `Must be at most ${usd(budgetMax)}. The ceiling in engine/.env is lower.`
+    errors.budget = `Must be at most ${usd(budgetMax)}. The ceiling on the server is lower.`
   } else if (Math.round(budget * 100) !== budget * 100) {
     errors.budget = 'Use whole cents.'
   }

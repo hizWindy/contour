@@ -57,6 +57,27 @@ export function useStartHubSpotSync() {
   })
 }
 
+/**
+ * Stops a running sync (PLAN-V15 T2-6, `POST /hubspot/syncs/{id}/cancel`). The answer is the sync:
+ * `cancelled` once it stopped (within about 5 seconds), or still `running` with
+ * `cancel_requested_at` while the other backend stops it during a deploy. A sync that already
+ * finished answers 409 `not_running`. The last of its `warnings` says what was kept.
+ */
+export function useCancelHubSpotSync() {
+  const queryClient = useQueryClient()
+  return useMutation<HubSpotSync, ApiProblem, number>({
+    mutationFn: async (syncId) =>
+      unwrap(
+        await api.POST('/hubspot/syncs/{sync_id}/cancel', {
+          params: { path: { sync_id: syncId } },
+        }),
+      ),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.hubspot.all })
+    },
+  })
+}
+
 /** The log of writes to HubSpot, newest first. */
 export function useHubSpotWrites(limit = 50) {
   return useQuery({

@@ -1,9 +1,11 @@
-import { useQuery, type QueryClient } from '@tanstack/react-query'
-import { screen, waitFor } from '@testing-library/react'
+import { onlineManager, useQuery, type QueryClient } from '@tanstack/react-query'
+import { act, screen, waitFor } from '@testing-library/react'
 import { createMemoryRouter, Outlet, RouterProvider, useLocation } from 'react-router'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { api, unwrap } from '@/api/client'
 import { meQueryOptions } from '@/api/hooks'
+import { queryKeys } from '@/api/query'
+import { LEAD_FINDER } from '@/apps/lead-finder/module'
 import LoginPage from '@/auth/login-page'
 import {
   loginOk,
@@ -16,6 +18,7 @@ import {
 import { createTestQueryClient, renderWithProviders } from '@/test/render'
 import { RequireSignIn } from './require-sign-in'
 import { UserMenu } from './user-menu'
+import { visibleModules } from './visible-modules'
 
 function Here() {
   const location = useLocation()
@@ -152,23 +155,133 @@ describe('the app knows who is signed in', () => {
     expect(address()).toHaveTextContent('/results')
     expect(screen.queryByRole('button', { name: /^Account menu/ })).toBeNull()
   })
+})
 
-  it("if the backend can't be reached, the page shows and its own errors say so", async () => {
+describe('no app without a user (PLAN-V15 T2-5, the account menu that disappeared)', () => {
+  afterEach(() => {
+    onlineManager.setOnline(true)
+  })
+
+  const leadsOk = (url: URL) =>
+    url.pathname.endsWith('/lead-finder/leads') ? Response.json({ total: 0, items: [] }) : undefined
+
+  it('a /auth/me that fails once still ends with the account menu showing', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    let failures = 1
+    stubAuthBackend({
+      me: () => {
+        if (failures > 0) {
+          failures -= 1
+          throw new TypeError('Failed to fetch')
+        }
+        return signedIn()
+      },
+      other: leadsOk,
+    })
+    renderApp('/results')
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000)
+    })
+
+    expect(await screen.findByText('The results')).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: `Account menu, ${SAMPLE_USER.name}` }),
+    ).toBeInTheDocument()
+  })
+
+  it('one that keeps failing shows Connection lost, not the app, and comes back by itself', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    let up = false
     const backend = stubAuthBackend({
       me: () => {
-        throw new TypeError('Failed to fetch')
+        if (!up) throw new TypeError('Failed to fetch')
+        return signedIn()
       },
-      other: () => {
-        throw new TypeError('Failed to fetch')
+      other: (url) => {
+        if (!up) throw new TypeError('Failed to fetch')
+        return url.pathname.endsWith('/health') ? Response.json({ status: 'ok' }) : leadsOk(url)
       },
     })
     renderApp('/results')
 
-    expect(await screen.findByText('The leads failed')).toBeInTheDocument()
-    expect(address()).toHaveTextContent('/results')
-    // Asked once, not again and again: a failed answer doesn't hide the page and ask once more.
-    await new Promise((resolve) => setTimeout(resolve, 200))
-    expect(backend.calls.filter((call) => call.path === '/auth/me')).toHaveLength(1)
-    expect(screen.getByText('The leads failed')).toBeInTheDocument()
+    // Asked three times (two retries, 1 s then 2 s apart), then the page says why.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000)
+    })
+    expect(
+      await screen.findByRole('heading', { level: 1, name: "Contour can't reach its server" }),
+    ).toBeInTheDocument()
+    expect(backend.calls.filter((call) => call.path === '/auth/me')).toHaveLength(3)
+    expect(screen.queryByText('The results')).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Account menu/ })).toBeNull()
+
+    up = true
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000)
+    })
+
+    expect(await screen.findByText('The results')).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: `Account menu, ${SAMPLE_USER.name}` }),
+    ).toBeInTheDocument()
+  })
+
+  it('a deploy shows Updating', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    stubAuthBackend({ me: () => new Response('upstream connect error', { status: 503 }) })
+    renderApp('/results')
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15_000)
+    })
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Contour is updating' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('The results')).toBeNull()
+  })
+
+  it("offline before the first answer says you're offline, and carries on when back", async () => {
+    onlineManager.setOnline(false)
+    stubAuthBackend({ me: signedIn(), other: leadsOk })
+    renderApp('/results')
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: "You're offline" }),
+    ).toBeInTheDocument()
+
+    act(() => {
+      onlineManager.setOnline(true)
+    })
+
+    expect(await screen.findByText('The results')).toBeInTheDocument()
+  })
+
+  it('a check that fails later keeps the app and its menu', async () => {
+    const backend = stubAuthBackend({ me: signedIn(), other: leadsOk })
+    const queryClient = createTestQueryClient()
+    renderApp('/results', queryClient)
+    expect(await screen.findByText('The results')).toBeInTheDocument()
+
+    backend.handlers.me = () => {
+      throw new TypeError('Failed to fetch')
+    }
+    await act(async () => {
+      await queryClient.refetchQueries({ queryKey: queryKeys.auth.me() }).catch(() => undefined)
+    })
+
+    expect(screen.getByText('The results')).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: `Account menu, ${SAMPLE_USER.name}` }),
+    ).toBeInTheDocument()
+  })
+
+  it('offers no project in the menu while access is not known', () => {
+    expect(visibleModules(undefined, [LEAD_FINDER])).toEqual([])
+    expect(
+      visibleModules({ state: 'signed_out', reason: null, detail: null }, [LEAD_FINDER]),
+    ).toEqual([])
+    expect(visibleModules({ state: 'off' }, [LEAD_FINDER])).toEqual([LEAD_FINDER])
   })
 })

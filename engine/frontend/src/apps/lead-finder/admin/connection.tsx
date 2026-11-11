@@ -1,7 +1,8 @@
 /**
  * Admin, HubSpot: the connection page (PLAN-V5 C1). The key (set or not, never the key itself),
- * each permission, what each project can do, the syncs with a "Sync now" button, whether
- * writing is on, and the last 50 writes with links to HubSpot.
+ * each permission, what each project can do, the syncs with "Sync now" (what changed, and
+ * everything once a week), "Full copy" and, while one runs, its phase and Stop (PLAN-V15 T2-6),
+ * whether writing is on, and the last 50 writes with links to HubSpot.
  */
 import { createColumnHelper } from '@tanstack/react-table'
 import {
@@ -9,12 +10,16 @@ import {
   CircleCheck,
   CircleQuestionMark,
   CircleX,
+  Copy,
   RefreshCw,
   ShieldCheck,
+  Square,
   type LucideIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { isApiProblem } from '@/api/client'
 import {
+  useCancelHubSpotSync,
   useHubSpotStatus,
   useHubSpotWrites,
   useRecheckHubSpot,
@@ -22,6 +27,7 @@ import {
 } from '@/api/hooks'
 import type { HubSpotScope, HubSpotSync, HubSpotWrite } from '@/api/types'
 import { DataTable } from '@/components/data-table'
+import { isStopping, stoppedWords, syncProgress } from '@/components/hubspot/sync-progress'
 import { ErrorState } from '@/components/error-state'
 import { SourceLink } from '@/components/source-link'
 import { Button } from '@/components/ui/button'
@@ -47,6 +53,7 @@ const SYNC_STATUS: Record<HubSpotSync['status'], string> = {
   done: 'Done',
   failed: 'Failed',
   interrupted: 'Stopped part way',
+  cancelled: 'Stopped',
 }
 const TRIGGER: Record<HubSpotSync['trigger'], string> = {
   command: 'Command',
@@ -122,7 +129,7 @@ export function ConnectionCard() {
     <Card>
       <CardHeader>
         <CardTitle className="text-section font-semibold">The connection</CardTitle>
-        <CardDescription>One key for every project, kept in engine/.env.</CardDescription>
+        <CardDescription>One key for every project, kept in the server's settings.</CardDescription>
         <CardAction>
           <Button
             type="button"
@@ -144,7 +151,11 @@ export function ConnectionCard() {
           <>
             <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 sm:grid-cols-[auto_1fr_auto_1fr]">
               <dt className="text-muted-foreground">Key</dt>
-              <dd>{data.key_set ? 'Set' : 'Missing: add HUBSPOT_SERVICE_KEY to engine/.env'}</dd>
+              <dd>
+                {data.key_set
+                  ? 'Set'
+                  : 'Missing: whoever runs the server adds the HubSpot key to its settings'}
+              </dd>
               <dt className="text-muted-foreground">Connected</dt>
               <dd>
                 {data.check.connected
@@ -152,9 +163,7 @@ export function ConnectionCard() {
                   : (data.check.problem ?? 'No')}
               </dd>
               <dt className="text-muted-foreground">Writing</dt>
-              <dd>
-                {data.write_enabled ? 'On' : 'Off (HUBSPOT_WRITE_ENABLED). Previews still work.'}
-              </dd>
+              <dd>{data.write_enabled ? 'On' : 'Off (a server setting). Previews still work.'}</dd>
               <dt className="text-muted-foreground">Checked</dt>
               <dd>{formatDateTime(data.check.checked_at)}</dd>
             </dl>
@@ -205,42 +214,90 @@ export function ConnectionCard() {
 export function SyncCard() {
   const status = useHubSpotStatus()
   const start = useStartHubSpotSync()
+  const cancel = useCancelHubSpotSync()
   const data = status.data
   const running = data?.running_sync ?? null
   const good = data?.last_good_sync ?? null
   const recent = (data?.recent_syncs ?? []).slice(0, 5)
+  const lastFull = (data?.recent_syncs ?? []).find(
+    (sync) => sync.status === 'done' && sync.mode === 'full',
+  )
+  const stopping = Boolean(running && (isStopping(running) || cancel.isPending))
+  const startSync = (mode: 'auto' | 'full'): void => {
+    start.mutate(mode, {
+      onSuccess: (sync) => {
+        toast(
+          sync.mode === 'full'
+            ? 'Sync started. It reads everything, which takes a few minutes.'
+            : 'Sync started. It reads what changed since the last one.',
+        )
+      },
+      onError: toastProblem,
+    })
+  }
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-section font-semibold">Syncs</CardTitle>
-        <CardDescription>
+        <CardDescription role="status">
           {running
-            ? `Syncing since ${formatDateTime(running.started_at)}. This page updates by itself.`
+            ? `Syncing since ${formatDateTime(running.started_at)}. ${
+                stopping ? 'Stopping…' : syncProgress(running, lastFull).words
+              } This page updates by itself.`
             : good
               ? `Last good sync ${formatDateTime(good.finished_at ?? good.started_at)}: ${syncCounts(good)}.`
               : 'No sync yet. Pages use the export until the first one.'}
         </CardDescription>
-        <CardAction>
-          <Button
-            type="button"
-            size="sm"
-            disabled={!data?.key_set || running !== null || start.isPending}
-            onClick={() => {
-              start.mutate('auto', {
-                onSuccess: (sync) => {
-                  toast(
-                    sync.mode === 'full'
-                      ? 'Sync started. It reads everything, which takes a few minutes.'
-                      : 'Sync started. It reads what changed since the last one.',
-                  )
-                },
-                onError: toastProblem,
-              })
-            }}
-          >
-            <RefreshCw aria-hidden="true" />
-            {running ? 'Syncing.' : 'Sync now'}
-          </Button>
+        <CardAction className="flex flex-wrap justify-end gap-2">
+          {running ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={stopping}
+              onClick={() => {
+                cancel.mutate(running.id, {
+                  onError: (error) => {
+                    if (isApiProblem(error) && error.code === 'not_running') {
+                      toast('That sync had already finished')
+                      void status.refetch()
+                      return
+                    }
+                    toastProblem(error)
+                  },
+                })
+              }}
+            >
+              <Square aria-hidden="true" />
+              {stopping ? 'Stopping…' : 'Stop'}
+            </Button>
+          ) : (
+            <>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={!data?.key_set || start.isPending}
+                onClick={() => {
+                  startSync('full')
+                }}
+              >
+                <Copy aria-hidden="true" />
+                Full copy
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                disabled={!data?.key_set || start.isPending}
+                onClick={() => {
+                  startSync('auto')
+                }}
+              >
+                <RefreshCw aria-hidden="true" />
+                Sync now
+              </Button>
+            </>
+          )}
         </CardAction>
       </CardHeader>
       {recent.length > 0 ? (
@@ -258,6 +315,7 @@ export function SyncCard() {
                 <span className="text-muted-foreground">
                   {sync.mode === 'full' ? 'Everything' : 'What changed'}, by{' '}
                   {TRIGGER[sync.trigger].toLowerCase()}. {syncCounts(sync)}.
+                  {sync.status === 'cancelled' ? ` ${stoppedWords(sync)}` : ''}
                 </span>
                 {sync.error ? <span className="text-destructive-ink">{sync.error}</span> : null}
               </li>

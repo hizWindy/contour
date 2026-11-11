@@ -8,6 +8,8 @@ import {
   isApiProblem,
   newIdempotencyKey,
   problemFromResponse,
+  TIME_LIMITS,
+  timeLimitFor,
   toApiProblem,
   unwrap,
   uploadHubspotExport,
@@ -170,7 +172,7 @@ describe('unwrap and ApiProblem', () => {
     expect(fieldErrorMap(problem)).toEqual({ limit: 'Input should be at most 200' })
   })
 
-  it('uses plain words for the status when the body is not a problem, and shows no raw text', async () => {
+  it('reads a proxy page (a 502 with no JSON) as "updating", and shows no raw text', async () => {
     mockFetch(
       () =>
         new Response(
@@ -184,8 +186,9 @@ describe('unwrap and ApiProblem', () => {
     const problem = await failure(api.GET('/health').then(unwrap))
 
     expect(problem.status).toBe(502)
-    expect(problem.title).toBe("The backend isn't answering")
-    expect(problem.detail).toBe('Check that the backend is running, then try again.')
+    expect(problem.code).toBe('updating')
+    expect(problem.title).toBe('Contour is updating')
+    expect(problem.detail).toBe("It'll be back in about a minute. This page will reload by itself.")
     expect(problem.message).not.toContain('<html>')
     expect(problem.message).not.toContain('alert')
   })
@@ -201,11 +204,11 @@ describe('unwrap and ApiProblem', () => {
   it('falls back to a generic title for a status it does not know', () => {
     const problem = problemFromResponse(new Response(null, { status: 418 }), undefined)
 
-    expect(problem.title).toBe('The request failed')
-    expect(problem.detail).toBeNull()
+    expect(problem.title).toBe("That didn't work")
+    expect(problem.detail).toBe('Try again.')
   })
 
-  it('turns a network failure into the "can\'t reach the backend" problem', async () => {
+  it('turns a network failure into the "can\'t reach its server" problem', async () => {
     mockFetch(() => {
       throw new TypeError('Failed to fetch')
     })
@@ -213,9 +216,9 @@ describe('unwrap and ApiProblem', () => {
     const problem = await failure(api.GET('/health').then(unwrap))
 
     expect(problem.status).toBe(0)
-    expect(problem.code).toBe('network')
-    expect(problem.title).toBe("Can't reach the backend")
-    expect(problem.detail).toContain('uv run engine serve')
+    expect(problem.code).toBe('unreachable')
+    expect(problem.title).toBe("Contour can't reach its server")
+    expect(problem.detail).toBe("We'll try again in 10 seconds.")
   })
 
   it('lets a cancelled request through as it is, so the caller can ignore it', async () => {
@@ -231,8 +234,15 @@ describe('unwrap and ApiProblem', () => {
     const problem = toApiProblem(new Error('password=hunter2 at C:\\secret\\file.py'))
 
     expect(problem.message).not.toContain('hunter2')
-    expect(problem.title).toBe('Something went wrong')
-    expect(problem.code).toBe('unknown')
+    expect(problem.title).toBe("This page couldn't be shown")
+    expect(problem.code).toBe('page_error')
+  })
+
+  it('never reads a bug in page code as "can\'t reach the server" (PLAN-V15 T2-2)', () => {
+    const problem = toApiProblem(new TypeError("Cannot read properties of undefined (reading 'x')"))
+
+    expect(problem.code).toBe('page_error')
+    expect(problem.title).not.toContain('reach')
   })
 
   it('passes an ApiProblem through unchanged', () => {
@@ -257,6 +267,144 @@ describe('unwrap and ApiProblem', () => {
       run_cap_usd: 'Too high',
       limit: 'Too big',
       plain: 'No prefix',
+    })
+  })
+})
+
+/** A fetch that never answers: it only ends when its request is cancelled. */
+function hangingFetch() {
+  return mockFetch(
+    (request) =>
+      new Promise<Response>((_, reject) => {
+        request.signal.addEventListener('abort', () => {
+          reject(Object.assign(new Error('The operation was aborted'), { name: 'AbortError' }))
+        })
+      }),
+  )
+}
+
+describe('the request layer (PLAN-V15 T2-2)', () => {
+  it('gives up after 20 seconds with no answer, as a "timeout" problem', async () => {
+    vi.useFakeTimers()
+    const fetchMock = hangingFetch()
+
+    const call = failure(api.GET('/health').then(unwrap))
+    await vi.advanceTimersByTimeAsync(TIME_LIMITS.normal - 1)
+    expect(fetchMock.mock.calls[0]?.[0].signal.aborted).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
+    const problem = await call
+
+    expect(problem.code).toBe('timeout')
+    expect(problem.status).toBe(0)
+    expect(problem.title).toBe('Contour took too long to answer')
+    expect(problem.detail).toBe('Nothing was lost. Try again.')
+  })
+
+  it("keeps the page's own cancel a cancel, not a timeout", async () => {
+    hangingFetch()
+    const controller = new AbortController()
+
+    const call = api.GET('/health', { signal: controller.signal })
+    controller.abort()
+
+    await expect(call).rejects.toMatchObject({ name: 'AbortError' })
+  })
+
+  it('has a longer limit for an upload, a CSV download and a HubSpot write, and none for a stream', () => {
+    const at = (path: string, init?: RequestInit) =>
+      timeLimitFor(new Request(`http://localhost:3000/api/v1${path}`, init))
+
+    expect(at('/lead-finder/leads')).toBe(TIME_LIMITS.normal)
+    expect(at('/hubspot/import', { method: 'POST' })).toBe(TIME_LIMITS.long)
+    expect(at('/lead-finder/leads/export')).toBe(TIME_LIMITS.long)
+    expect(at('/lead-finder/review/send', { method: 'POST' })).toBe(TIME_LIMITS.long)
+    expect(at('/lead-finder/leads/abc/hubspot/send', { method: 'POST' })).toBe(TIME_LIMITS.long)
+    expect(at('/hubspot/profiles/rebuild', { method: 'POST' })).toBe(TIME_LIMITS.rebuild)
+    expect(at('/runs/r1/events', { headers: { accept: 'text/event-stream' } })).toBeNull()
+  })
+
+  it('says "offline" when the browser has no network', async () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    mockFetch(() => {
+      throw new TypeError('Failed to fetch')
+    })
+
+    const problem = await failure(api.GET('/health').then(unwrap))
+
+    expect(problem.code).toBe('offline')
+    expect(problem.title).toBe("You're offline")
+    expect(problem.detail).toBe('Contour will carry on when your connection is back.')
+  })
+
+  it('reads a 503 or 504 with no JSON as "updating" too', async () => {
+    for (const status of [503, 504]) {
+      mockFetch(() => new Response('upstream connect error', { status }))
+      const problem = await failure(api.GET('/health').then(unwrap))
+      expect(problem.code, `${status}`).toBe('updating')
+    }
+  })
+
+  it('keeps the backend\'s own 503 "busy", with its wait from Retry-After', async () => {
+    mockFetch(
+      () =>
+        new Response(
+          JSON.stringify({
+            title: 'Contour is busy',
+            detail: 'Try again in a few seconds.',
+            status: 503,
+            code: 'busy',
+          }),
+          {
+            status: 503,
+            headers: { 'content-type': 'application/problem+json', 'retry-after': '5' },
+          },
+        ),
+    )
+
+    const problem = await failure(api.GET('/health').then(unwrap))
+
+    expect(problem.code).toBe('busy')
+    expect(problem.retry_after_seconds).toBe(5)
+  })
+
+  it('reads the request id from the error body, or else from the X-Request-ID header', async () => {
+    mockFetch(() => problemJson(500, { title: 'x', status: 500, request_id: '7F3K92QD' }))
+    expect((await failure(api.GET('/health').then(unwrap))).request_id).toBe('7F3K92QD')
+
+    mockFetch(() => new Response(null, { status: 500, headers: { 'x-request-id': 'AB12CD34' } }))
+    const problem = await failure(api.GET('/health').then(unwrap))
+    expect(problem.request_id).toBe('AB12CD34')
+    expect(problem.title).toBe('Something went wrong on our side')
+    expect(problem.detail).toBe(
+      'Try again. If it happens again, send this code to an admin: AB12CD34.',
+    )
+  })
+
+  it('drops a request id that is not letters, digits and dashes', () => {
+    const problem = problemFromResponse(
+      new Response(null, { status: 500, headers: { 'x-request-id': '<b>id</b>' } }),
+      undefined,
+    )
+
+    expect(problem.request_id).toBeNull()
+    expect(problem.detail).toBe('Try again. If it happens again, tell an admin.')
+  })
+
+  it("turns Pydantic's field messages into plain words", () => {
+    const problem = problemFromResponse(new Response(null, { status: 422 }), {
+      detail: [
+        { loc: ['body', 'name'], msg: 'Field required' },
+        { loc: ['body', 'limit'], msg: 'Input should be greater than or equal to 1' },
+        { loc: ['body', 'result'], msg: "Input should be 'pass', 'watch' or 'drop'" },
+        { loc: ['body', 'note'], msg: 'Value error, Pick a city first.' },
+      ],
+    })
+
+    expect(fieldErrorMap(problem)).toEqual({
+      name: 'Fill this in.',
+      limit: 'Use 1 or more.',
+      result: 'Pick one of: pass, watch or drop.',
+      note: 'Pick a city first.',
     })
   })
 })

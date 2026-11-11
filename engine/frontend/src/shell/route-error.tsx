@@ -1,53 +1,64 @@
-import { CircleQuestionMark } from 'lucide-react'
-import { isRouteErrorResponse, Link, useRouteError } from 'react-router'
-import { ApiProblem, isApiProblem } from '@/api/client'
-import { EmptyState } from '@/components/empty-state'
-import { ErrorState } from '@/components/error-state'
-import { Button } from '@/components/ui/button'
+import { useContext } from 'react'
+import { useRouteError } from 'react-router'
+import { isApiProblem } from '@/api/client'
+import { browser } from '@/lib/reload'
+import { errorPageKind } from './error-pages/choose'
+import {
+  ConnectionLostPage,
+  NewVersionPage,
+  NoAccessPage,
+  NotFoundPage,
+  PageBrokePage,
+  ProblemPage,
+  UpdatingPage,
+} from './error-pages/pages'
+import { InFrameContext } from './in-frame'
 
-/** A page for an address the website does not have. */
+/** A page for an address the website does not have (PLAN-V15 T2-4: "Go to Home"). */
 export function NotFound() {
-  return (
-    <EmptyState
-      icon={CircleQuestionMark}
-      title="This page doesn't exist."
-      description="Check the address, or go back to the start."
-      headingLevel={1}
-      action={
-        <Button asChild variant="outline" size="sm">
-          <Link to="/start">Start a run</Link>
-        </Button>
-      }
-    />
-  )
+  return <NotFoundPage />
 }
 
 /**
- * What a page shows when it fails to load or breaks while it draws: a plain message and a way
- * to try again, never a stack trace. Each route has it, so one broken page keeps the menu working.
+ * What a page shows when it fails to load or breaks while it draws (PLAN-V15 T2-4): the full
+ * error page that fits, never a stack trace. Each route has it, so one broken page keeps the menu
+ * working.
+ *
+ * - A 404 or 403 (a detail page throws those, `throwOnError`): Not found, or No access.
+ * - The connection: Connection lost or Updating. Coming back reloads the page: the router keeps a
+ *   route's error (and a page's failed code) until the next visit, so a new read wouldn't clear it.
+ * - Code gone after a deploy (`page-route.tsx` already reloaded once): New version.
+ * - Any other failed answer: its own words, Try again (a reload) and the details for support.
+ * - A bug inside the page: "This page couldn't be shown", with a reload.
  */
 export function RouteError() {
   const error = useRouteError()
-  if (isRouteErrorResponse(error) && error.status === 404) {
-    return <NotFound />
+  const standalone = !useContext(InFrameContext)
+  const problem = isApiProblem(error) ? error : undefined
+  switch (errorPageKind(error)) {
+    case 'notFound':
+      return <NotFoundPage problem={problem} />
+    case 'forbidden':
+      return <NoAccessPage problem={problem} />
+    case 'connection':
+      return <ConnectionLostPage problem={problem} standalone={standalone} reloadWhenBack />
+    case 'updating':
+      return <UpdatingPage problem={problem} standalone={standalone} reloadWhenBack />
+    case 'newVersion':
+      return <NewVersionPage />
+    case 'problem':
+      return problem ? (
+        <ProblemPage
+          problem={problem}
+          standalone={standalone}
+          onTryAgain={() => {
+            browser.reload()
+          }}
+        />
+      ) : (
+        <PageBrokePage />
+      )
+    case 'page':
+      return <PageBrokePage />
   }
-  // A failed call explains itself. Anything else broke inside the page (or its code didn't load),
-  // which is not the backend's fault, so it gets its own plain words.
-  const shown = isApiProblem(error)
-    ? error
-    : new ApiProblem({
-        title: "This page couldn't be shown",
-        detail: 'Reload the page. If it keeps happening, tell the team.',
-        status: 0,
-        code: 'page_error',
-      })
-  return (
-    <ErrorState
-      error={shown}
-      onRetry={() => {
-        window.location.reload()
-      }}
-      retryLabel="Reload the page"
-    />
-  )
 }
