@@ -754,6 +754,10 @@
             "title": "People Status",
             "type": "string"
           },
+          "relationship": {
+            "$ref": "#/components/schemas/Relationship",
+            "description": "Where we stand: open deal, customer, past customer, lost deal, contacted before, or cold (PLAN-V15). The API always sends it"
+          },
           "source": {
             "enum": [
               "hubspot",
@@ -7150,6 +7154,54 @@
           "reasons"
         ],
         "title": "RejectReasonCounts",
+        "type": "object"
+      },
+      "Relationship": {
+        "description": "Where we stand with the company (PLAN-V15 T3-3). Both call scripts open from it.",
+        "properties": {
+          "reason": {
+            "description": "One plain sentence, like 'Open deal: Perth fitout, at Proposal.'",
+            "title": "Reason",
+            "type": "string"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The date the stage rests on: the last talk, or the won or lost deal's close date. None when there is none, as for an open deal or a cold call",
+            "title": "Since"
+          },
+          "source": {
+            "description": "Where it shows, like 'HubSpot deal' or 'HubSpot call, 3 Mar 2026'",
+            "title": "Source",
+            "type": "string"
+          },
+          "stage": {
+            "enum": [
+              "open_deal",
+              "customer",
+              "past_customer",
+              "lost_deal",
+              "contacted",
+              "cold"
+            ],
+            "title": "Stage",
+            "type": "string"
+          }
+        },
+        "required": [
+          "stage",
+          "since",
+          "reason",
+          "source"
+        ],
+        "title": "Relationship",
         "type": "object"
       },
       "ResearchCost": {

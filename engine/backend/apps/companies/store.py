@@ -33,6 +33,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import ColumnElement
 
 from apps.companies.deals import CLOSED_STAGES, WON_STAGES, DealState, stage_kind
+from apps.companies.relationship import Pieces, relationship_of
 from apps.companies.schemas import (
     CompanyCall,
     CompanyDeal,
@@ -466,6 +467,32 @@ async def company_detail(
         for office in offices
         if office.lease_expiry and office.lease_expiry >= on
     ]
+    deal_rows = [
+        CompanyDeal(
+            name=deal.name,
+            stage=deal.stage,
+            state=stage_kind(deal.stage),
+            pipeline=deal.pipeline,
+            amount_aud=deal.amount_aud,
+            close_date=deal.close_date,
+            owner=deal.owner,
+            next_step=deal.next_step,
+            hubspot_url=deal.hubspot_url,
+        )
+        for deal in deals
+    ]
+    people = await people_of(session, key) if ready else []
+    stage = relationship_of(
+        Pieces(
+            source="hubspot",
+            deals=deal_rows,
+            lifecycle_stage=company.lifecycle_stage,
+            last_talk=company.last_contacted,
+            calls=calls,
+            people=people,
+        ),
+        on,
+    )
     return CompanyDetail(
         key=key,
         source="hubspot",
@@ -499,25 +526,13 @@ async def company_detail(
             )
             for office in offices
         ],
-        deals=[
-            CompanyDeal(
-                name=deal.name,
-                stage=deal.stage,
-                state=stage_kind(deal.stage),
-                pipeline=deal.pipeline,
-                amount_aud=deal.amount_aud,
-                close_date=deal.close_date,
-                owner=deal.owner,
-                next_step=deal.next_step,
-                hubspot_url=deal.hubspot_url,
-            )
-            for deal in deals
-        ],
+        deals=deal_rows,
         notes=await notes_about(session, [company.name], now),
-        people=await people_of(session, key) if ready else [],
+        people=people,
         calls=calls,
         people_status="ready" if ready else "waiting",
         lead=lead,
+        relationship=stage,
     )
 
 
@@ -559,6 +574,7 @@ async def _lead_only_detail(
             calls=[],
             people_status="ready" if await people_ready(session) else "waiting",
             lead=_lead_out(hook, info),
+            relationship=relationship_of(Pieces(source="lead"), today()),
         )
     return None
 

@@ -8,6 +8,9 @@ What goes to Claude is made from the pack by `claude_text`, never from raw rows:
   looks like one in free text (a call note) is blanked by `scrub`.
 - **No names unless Levi has said yes** (`hubspot_names_to_claude_ok`). Until then the company
   is written as {company} and the person as {person}, and there is no web check.
+
+The pack ends with HubSpot's lifecycle stage and the relationship stage (PLAN-V15 T3-3), so the
+script opens from where we stand. They come last, so the other facts keep their numbers.
 """
 
 import re
@@ -15,7 +18,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
-from typing import Literal
+from typing import Final, Literal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -39,6 +42,16 @@ MAX_NOTES = 8  # saved notes in the pack
 MAX_DEALS = 5
 NOTE_CHARS = 600  # a call note is cut to this many characters
 TEXT_CHARS = 400  # a description or a summary is cut to this many
+
+# The relationship stage in a few words, for the facts pack.
+STAGE_WORDS: Final = {
+    "open_deal": "open deal",
+    "customer": "customer",
+    "past_customer": "past customer",
+    "lost_deal": "lost deal",
+    "contacted": "contacted before",
+    "cold": "cold",
+}
 
 COMPANY_MARK = "{company}"
 PERSON_MARK = "{person}"
@@ -106,6 +119,7 @@ class FactsPack:
     last_call: CompanyCall | None
     leads_used: bool  # True when the Lead Finder's lead is in it (only for its tick)
     facts: list[Fact] = field(default_factory=list)
+    stage_fact: str | None = None  # the id of the relationship stage's fact, like F14
 
     def add(
         self,
@@ -212,7 +226,33 @@ async def build_facts(
                 "Lead Finder: best sign",
                 when=lead.sign_date,
             )
+    _stage_facts(pack, company)
     return pack
+
+
+def _stage_facts(pack: FactsPack, company: CompanyDetail) -> None:
+    """HubSpot's lifecycle stage, then where we stand with the company (PLAN-V15 T3-3)."""
+    if company.lifecycle_stage:
+        pack.add(
+            f"HubSpot's lifecycle stage for {company.name} is '{company.lifecycle_stage}'.",
+            "hubspot",
+            "HubSpot: lifecycle stage",
+        )
+    stage = company.relationship
+    kind: SourceKind = (
+        "call"
+        if stage.source.startswith("HubSpot call")
+        else "lead"
+        if stage.source == "Lead Finder"
+        else "hubspot"
+    )
+    pack.add(
+        f"Relationship stage: {STAGE_WORDS[stage.stage]}. {stage.reason}",
+        kind,
+        stage.source,
+        when=stage.since,
+    )
+    pack.stage_fact = pack.facts[-1].id
 
 
 def _company_facts(pack: FactsPack, company: CompanyDetail) -> None:

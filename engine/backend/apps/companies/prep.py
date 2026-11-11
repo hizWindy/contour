@@ -44,6 +44,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from apps.companies.facts import (
     COMPANY_MARK,
     PERSON_MARK,
+    STAGE_WORDS,
     FactsPack,
     build_facts,
     claude_text,
@@ -76,7 +77,8 @@ log = logging.getLogger(__name__)
 APP = "companies"
 # prep-2 (9 Nov): guided questions with follow-ups. prep-3 (11 Nov): news with no age limit.
 # prep-4 (11 Nov): the call technique and the style notes (PLAN-V14 T1-4).
-PROMPT_VERSION = "prep-4"
+# prep-5 (12 Nov): the relationship stage sets the opener (PLAN-V15 T3-3).
+PROMPT_VERSION = "prep-5"
 LINE_CHARS = 400
 FOLLOW_UP_CHARS = 200
 MAX_FOLLOW_UPS = 3
@@ -178,8 +180,15 @@ never states a fact.
 marks exactly as they are.
 
 How to run the call (Contour's call technique):
-- Opener: say who you are and why you are calling, then ask for time, like "Do you have two \
+- The relationship stage (a fact in the pack) sets the opener. If the stage isn't cold, don't say \
+who Contour is or what we do. Open from the relationship: an open deal follows up on that deal and \
+aims at its next step; a customer gets a check-in; a past customer gets a short reminder of the \
+work we did; a lost deal asks what has changed since; contacted before names the last talk. Only \
+a cold call says who you are and that Contour designs and builds offices.
+- Opener: the hello and the reason for the call, then ask for time, like "Do you have two \
 minutes?". Keep the ask for time in the same line as the reason, so the line keeps its source.
+- On a switchboard call that isn't cold, ask for the person we last spoke with, by name, and say \
+when we spoke.
 - Order the questions: their situation, then the problem, then what the problem costs them, then \
 what fixing it would be worth. Example: a lease ending in 16 months gives "When does the lease \
 end?" first, and "What happens if it ends before the new space is ready?" third.
@@ -265,8 +274,18 @@ def _prompt(
         else "Do not search the web. Write from the facts pack only. Leave pages empty, and set "
         "still_there to unknown."
     )
+    stage = pack.company.relationship.stage
+    where_we_stand = (
+        f"Relationship stage: {STAGE_WORDS[stage]}"
+        + (f" ({pack.stage_fact}). " if pack.stage_fact else ". ")
+        + (
+            "A cold call: say who you are and what Contour does."
+            if stage == "cold"
+            else "Don't introduce Contour or say what we do: open from the relationship."
+        )
+    )
     return (
-        f"{claude_text(who, pack, names_ok=names)}\n\n{task}\n\n"
+        f"{claude_text(who, pack, names_ok=names)}\n{where_we_stand}\n\n{task}\n\n"
         f"Today is {day(datetime.now(UTC))}.\n\n"
         f"Facts pack:\n{facts_for_claude(pack, names_ok=names)}"
         f"{_style_block(style or StyleNotes(), pack, names_ok=names)}"
@@ -681,6 +700,7 @@ class PrepRunner:
                 "names_ok": context.names_ok,
                 "web": web,
                 "style_used": {"mine": style.mine is not None, "team_notes": len(style.team)},
+                "stage_used": pack.company.relationship.stage,
             }
             prep.stage = 2  # the web check (or the smaller request) is running
             await session.commit()

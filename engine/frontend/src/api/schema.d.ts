@@ -1702,6 +1702,8 @@ export interface components {
              * @enum {string}
              */
             people_status: "ready" | "waiting";
+            /** @description Where we stand: open deal, customer, past customer, lost deal, contacted before, or cold (PLAN-V15). The API always sends it */
+            relationship?: components["schemas"]["Relationship"];
             /**
              * Source
              * @enum {string}
@@ -4274,6 +4276,32 @@ export interface components {
             reasons: components["schemas"]["RejectReasonCount"][];
             /** Total */
             total: number;
+        };
+        /**
+         * Relationship
+         * @description Where we stand with the company (PLAN-V15 T3-3). Both call scripts open from it.
+         */
+        Relationship: {
+            /**
+             * Reason
+             * @description One plain sentence, like 'Open deal: Perth fitout, at Proposal.'
+             */
+            reason: string;
+            /**
+             * Since
+             * @description The date the stage rests on: the last talk, or the won or lost deal's close date. None when there is none, as for an open deal or a cold call
+             */
+            since: string | null;
+            /**
+             * Source
+             * @description Where it shows, like 'HubSpot deal' or 'HubSpot call, 3 Mar 2026'
+             */
+            source: string;
+            /**
+             * Stage
+             * @enum {string}
+             */
+            stage: "open_deal" | "customer" | "past_customer" | "lost_deal" | "contacted" | "cold";
         };
         /** ResearchCost */
         ResearchCost: {

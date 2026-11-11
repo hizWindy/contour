@@ -144,7 +144,35 @@ class CompanyLead(Out):
     link: str
 
 
+RelationshipStage = Literal[
+    "open_deal", "customer", "past_customer", "lost_deal", "contacted", "cold"
+]
+
+
+class Relationship(Out):
+    """Where we stand with the company (PLAN-V15 T3-3). Both call scripts open from it."""
+
+    stage: RelationshipStage
+    since: DayOrNone = Field(
+        description=(
+            "The date the stage rests on: the last talk, or the won or lost deal's close date. "
+            "None when there is none, as for an open deal or a cold call"
+        )
+    )
+    reason: str = Field(
+        description="One plain sentence, like 'Open deal: Perth fitout, at Proposal.'"
+    )
+    source: str = Field(
+        description="Where it shows, like 'HubSpot deal' or 'HubSpot call, 3 Mar 2026'"
+    )
+
+
 class CompanyDetail(Out):
+    model_config = ConfigDict(
+        json_schema_serialization_defaults_required=True,
+        json_schema_extra=optional_in_types("relationship"),
+    )
+
     key: str
     source: Source
     name: str
@@ -172,6 +200,10 @@ class CompanyDetail(Out):
         description="waiting: HubSpot can't give contacts and calls yet (its scopes)"
     )
     lead: CompanyLead | None = Field(description="Only with the Lead Finder tick")
+    relationship: Relationship = Field(
+        description="Where we stand: open deal, customer, past customer, lost deal, contacted "
+        "before, or cold (PLAN-V15). The API always sends it"
+    )
 
 
 # --- The prep box ------------------------------------------------------------------------------
