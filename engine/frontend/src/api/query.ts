@@ -139,6 +139,9 @@ export const queryKeys = {
       ['companies', 'facts', key, contactId ?? null] as const,
     prep: (id: string) => ['companies', 'prep', id] as const,
     today: () => ['companies', 'today'] as const,
+    edits: (key: string, contactId: string | null) =>
+      ['companies', 'edits', key, contactId ?? null] as const,
+    style: () => ['companies', 'style'] as const,
   },
   hubspot: {
     all: ['hubspot'] as const,

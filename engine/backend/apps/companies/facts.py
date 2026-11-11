@@ -14,6 +14,7 @@ import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
 from typing import Literal
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -264,7 +265,12 @@ def _company_facts(pack: FactsPack, company: CompanyDetail) -> None:
 
 
 def facts_out(
-    pack: FactsPack, *, prep_enabled: bool, names_ok: bool, people_ready: bool
+    pack: FactsPack,
+    *,
+    prep_enabled: bool,
+    names_ok: bool,
+    people_ready: bool,
+    prep_cap_usd: Decimal,
 ) -> PrepFacts:
     company = pack.company
     return PrepFacts(
@@ -286,6 +292,7 @@ def facts_out(
         people_status="ready" if people_ready else "waiting",
         prep_enabled=prep_enabled,
         names_ok=names_ok,
+        prep_cap_usd=prep_cap_usd,
     )
 
 

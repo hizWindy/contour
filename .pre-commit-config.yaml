@@ -24,7 +24,8 @@ repos:
         pass_filenames: false
       - id: fast-tests
         name: fast tests (engine)
-        entry: uv run --directory engine/backend pytest -m "not integration" -q
+        # `python -m`, as for mypy: Windows Application Control can block a new venv's pytest.exe.
+        entry: uv run --directory engine/backend python -m pytest -m "not integration" -q
         language: system
         files: ^engine/backend/
         pass_filenames: false
