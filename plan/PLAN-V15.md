@@ -151,7 +151,7 @@ Every track uses these words, so the site speaks with one voice. The rule: say w
 | Track 2 | `API_PORT=8032` | port 5202, proxy to 8032 | `leadfinder_v15b` | `_v15b` |
 | Track 3 | `API_PORT=8033` | port 5203, proxy to 8033 | `leadfinder_v15c` | `_v15c` |
 
-- **The track's `engine/.env`** holds the database lines only, plus `API_PORT`, `POSTGRES_DB` and `CORS_ORIGINS` as a JSON list (like `["http://localhost:5201"]`).
+- **The track's `engine/.env`** holds the `POSTGRES_*` lines only, with `POSTGRES_DB` set to the track's database. **Never put `API_PORT` or `CORS_ORIGINS` in it:** the backend tests read that file, and 8 of them fail when `CORS_ORIGINS` names a track port (found in T1-1). Pass both as environment variables only when starting the track's backend, like `API_PORT=8031 CORS_ORIGINS='["http://localhost:5201"]'`.
 - **Make each database once,** as a copy of `leadfinder_v14a` (at migration 0015) with `pg_dump` and `pg_restore`. If the HNSW index `ix_memory_embedding` fails in the restore, build it again with `max_parallel_maintenance_workers=0`.
 - **Keys:** a track backend starts with **no Claude key**. Only Track 1 loads the HubSpot key, and only for the free full sync in T1-6. Read the key from the main folder's `engine/.env` into the process only. Never print it, and never write it to a file.
 - **After merging `v15-api`,** Track 2 runs `uv run engine migrate` on its database (migration 0016), then `npm run types`.
@@ -182,7 +182,7 @@ Every track uses these words, so the site speaks with one voice. The rule: say w
 Track 1 builds parts 1 to 3. Track 2 reads them. Track 3 builds and reads part 4 by itself.
 
 **1. Request ids (T1-2).**
-- Every response has the header `X-Request-ID`. The backend uses a safe incoming one (up to 64 letters, digits and dashes), or makes an 8-character code like `7F3K92QD`.
+- Every response has the header `X-Request-ID`: an 8-character code like `7F3K92QD`, from letters and digits with no look-alikes, so a person can read it out. The backend always makes its own. A safe id the edge sends (up to 64 letters, digits and dashes) only goes in the log, as `edge_request_id`: it can be 36 characters, too long to read out (changed in T1-2).
 - Every error body (`ProblemDetails`) gains `request_id`, the same code.
 - Every log line made during the request carries `request_id`.
 
@@ -229,9 +229,9 @@ Track 1 builds parts 1 to 3. Track 2 reads them. Track 3 builds and reads part 4
 
 ## Track 1: the backend (session 1)
 
-**Progress:** 0 of 8 steps done.
+**Progress:** 1 of 8 steps done (T1-1).
 
-- [ ] **T1-1. Own copy and a baseline.**
+- [x] **T1-1. Own copy and a baseline.** Done 2026-11-12 (counts in the Log).
   - The worktree, the `leadfinder_v15a` database and the ports (see "How to work this plan").
   - Run the backend tests once with `heavy.sh` and `RUN_GATES=1`, and note the counts.
   - **Done when:** the counts are in the Track 1 Log.
@@ -331,7 +331,7 @@ Track 1 builds parts 1 to 3. Track 2 reads them. Track 3 builds and reads part 4
 
 Newest first.
 
-- (empty)
+- 2026-11-12: **T1-1 done.** S0 first, on the go signal: `plan-v15` from `master` (ee47912), plan commit 9ff63aa, made in this worktree, so the main folder stayed on `master`. Then `plan-v15-track1`. Worktree `../contour-v15-t1`; `COMPANIES.xlsx` copied in; `uv sync` and `npm ci` done. Database `leadfinder_v15a`: a `pg_dump` and `pg_restore` copy of `leadfinder_v14a` (at 0015, 13,915 companies); `ix_memory_embedding` failed in the restore (Docker's small shared memory) and was built again with `max_parallel_maintenance_workers=0`. Tests on `leadfinder_test_v15a`. **Baseline with `heavy.sh` and `RUN_GATES=1`: 3,521 passed, 25 skipped, 9 failed.** None was the base code's: 8 came from `CORS_ORIGINS` in this worktree's `engine/.env` (the tests read it); with the `.env` cut to the `POSTGRES_*` lines, those 8 files ran again: 292 passed, 25 skipped. The 9th is the known speed test, which passes alone. So: **3,530 passed, 25 skipped**, the same as PLAN-V14's merge. The `.env` rule in "How to work this plan" is fixed; Track 2 was told by message, and Track 3 wasn't reachable by message then. Two first tries were lost: one stopped at the first failure (`-x`), and one collected a new test file written while the run waited for the `heavy.sh` lock. Lesson: write nothing into the worktree until the run has really started.
 
 ## Track 2: the website (session 2)
 
