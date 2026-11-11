@@ -596,6 +596,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/hubspot/syncs/{sync_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop a running HubSpot sync
+         * @description Saves the Stop on the sync, then stops it, within about 5 seconds when this backend runs it. Stopped before its save, our copy doesn't change. Stopped after it, the companies stay, and people and profiles update with the next sync. The answer is the sync: `cancelled` once it has stopped, or still `running` with `cancel_requested_at` while the other backend (during a deploy) stops it. Follow it with GET /hubspot/syncs.
+         */
+        post: operations["cancel_hubspot_sync"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/hubspot/writes": {
         parameters: {
             query?: never;
@@ -4123,6 +4143,11 @@ export interface components {
              */
             reason?: string | null;
             /**
+             * Request Id
+             * @description The request's code, like 7F3K92QD, the same as the X-Request-ID header. A person reads it to an admin, who finds the request's log lines with it
+             */
+            request_id?: string | null;
+            /**
              * Retry After Seconds
              * @description How many seconds to wait before trying to sign in again. On a 429, and on a 401 `invalid_credentials` whose wrong try makes the next ones wait
              */
@@ -6193,6 +6218,11 @@ export interface components {
          */
         SyncOut: {
             /**
+             * Cancel Requested At
+             * @description When someone pressed Stop
+             */
+            cancel_requested_at?: string | null;
+            /**
              * Changed Since
              * @description A changes sync read what changed since
              */
@@ -6221,6 +6251,11 @@ export interface components {
             error: string | null;
             /** Finished At */
             finished_at: string | null;
+            /**
+             * Heartbeat At
+             * @description When it last showed it was alive
+             */
+            heartbeat_at?: string | null;
             /** Id */
             id: number;
             /**
@@ -6232,8 +6267,37 @@ export interface components {
             offices_saved: number;
             /** Owners Read */
             owners_read: number;
+            /**
+             * People Saved
+             * @description Contacts and calls saved
+             * @default 0
+             */
+            people_saved: number;
+            /**
+             * Phase
+             * @description What it is doing while it runs: reading, saving, people or profiles
+             */
+            phase?: ("reading" | "saving" | "people" | "profiles") | null;
+            /**
+             * Profiles Done
+             * @description Company profiles rebuilt so far
+             * @default 0
+             */
+            profiles_done: number;
             /** Profiles Rebuilt */
             profiles_rebuilt: number;
+            /**
+             * Profiles Skipped
+             * @description Companies were saved but their profiles weren't rebuilt
+             * @default false
+             */
+            profiles_skipped: boolean;
+            /**
+             * Profiles Total
+             * @description Company profiles this sync rebuilds
+             * @default 0
+             */
+            profiles_total: number;
             /**
              * Started At
              * Format: date-time
@@ -6243,7 +6307,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "running" | "done" | "failed" | "interrupted";
+            status: "running" | "done" | "failed" | "interrupted" | "cancelled";
             /**
              * Trigger
              * @enum {string}
@@ -6552,6 +6616,11 @@ export interface components {
              * @description On a 401 `auth_required`, why the sign-in ended: `idle`, `expired` or `ended`. Missing when there was no session at all.
              */
             reason?: string | null;
+            /**
+             * Request Id
+             * @description The request's code, like 7F3K92QD, the same as the X-Request-ID header. A person reads it to an admin, who finds the request's log lines with it
+             */
+            request_id?: string | null;
             /**
              * Retry After Seconds
              * @description How many seconds to wait before trying to sign in again. On a 429, and on a 401 `invalid_credentials` whose wrong try makes the next ones wait
@@ -10593,6 +10662,127 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SyncOut"][];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    cancel_hubspot_sync: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sync_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncOut"];
                 };
             };
             /** @description The request can't be understood */

@@ -35,6 +35,7 @@ from tests.core.auth_world import (
     sign_in,
     token_in,
 )
+from tests.core.problems import without_id
 
 pytestmark = pytest.mark.integration
 
@@ -115,14 +116,16 @@ async def test_a_wrong_password_an_unknown_login_and_a_switched_off_account_get_
         assert answer.status_code == 401
         assert "set-cookie" not in answer.headers
         assert answer.headers["content-type"].startswith("application/problem+json")
-        assert answer.json() == {
+        assert without_id(answer) == {
             "type": "about:blank",
             "title": "Sign-in failed",
             "status": 401,
             "detail": "That email or password isn't right.",
             "code": "invalid_credentials",
         }
-        assert answer.text == answers[0].text  # not a word differs
+        # Not a word differs. Only the request id does: it is new for every request, so it
+        # tells nothing about the account.
+        assert without_id(answer) == without_id(answers[0])
     assert await all_rows(world, UserSession) == []
 
     # The log says which it was, for the Admin: that is not for the person who tried.
@@ -250,7 +253,7 @@ async def test_without_a_session_me_is_a_401_that_names_its_code(
     response = await me(browser)
     assert response.status_code == 401
     assert response.headers["content-type"].startswith("application/problem+json")
-    assert response.json() == {
+    assert without_id(response) == {
         "type": "about:blank",
         "title": "Sign in needed",
         "status": 401,

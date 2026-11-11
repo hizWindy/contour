@@ -202,25 +202,16 @@ class TrafficMiddleware:
     """
 
     def __init__(self, app: ASGIApp, traffic: ApiTraffic) -> None:
+        from core.api.routes import RoutePaths
+
         self.app = app
         self.traffic = traffic
-        self._paths: dict[object, str] | None = None
+        self._paths = RoutePaths()
         self._failed_once = False
-
-    def _full_path(self, scope: Scope, route: object) -> str | None:
-        path = getattr(route, "path", None)
-        if not isinstance(path, str):
-            return None
-        if self._paths is None:
-            from core.api.routes import api_routes
-
-            app = scope.get("app")
-            self._paths = {info.endpoint: info.path for info in api_routes(app)} if app else {}
-        return self._paths.get(getattr(route, "endpoint", None), path)
 
     def _count(self, scope: Scope, answer: dict[str, Any], crashed: bool, started: float) -> None:
         try:
-            path = self._full_path(scope, scope.get("route"))
+            path = self._paths.of(scope)
             if path is None:
                 return
             status = answer.get("status")

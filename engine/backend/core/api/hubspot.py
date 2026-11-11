@@ -22,7 +22,13 @@ from core.hubspot.connection import (
 from core.hubspot.importer import ExportError, read_export
 from core.hubspot.profiles import rebuild_profiles as build_profiles
 from core.hubspot.service import HubSpotSummary, ImportResult, save_export, summary
-from core.hubspot.sync import SyncAlreadyRunning, SyncOut, recent_syncs
+from core.hubspot.sync import (
+    SyncAlreadyRunning,
+    SyncNotFound,
+    SyncNotRunning,
+    SyncOut,
+    recent_syncs,
+)
 from core.hubspot.writer import (
     WriteInProgress,
     WriteNotFound,
@@ -119,6 +125,35 @@ async def list_hubspot_syncs(
     session: SessionDep, limit: Annotated[int, Query(ge=1, le=50)] = 10
 ) -> list[SyncOut]:
     return await recent_syncs(session, limit=limit)
+
+
+@router.post(
+    "/syncs/{sync_id}/cancel",
+    status_code=202,
+    response_model=SyncOut,
+    summary="Stop a running HubSpot sync",
+    description=(
+        "Saves the Stop on the sync, then stops it, within about 5 seconds when this backend "
+        "runs it. Stopped before its save, our copy doesn't change. Stopped after it, the "
+        "companies stay, and people and profiles update with the next sync. The answer is the "
+        "sync: `cancelled` once it has stopped, or still `running` with `cancel_requested_at` "
+        "while the other backend (during a deploy) stops it. Follow it with GET /hubspot/syncs."
+    ),
+)
+async def cancel_hubspot_sync(request: Request, sync_id: int) -> SyncOut:
+    try:
+        return await sync_runner(request.app).cancel(sync_id)
+    except SyncNotFound as error:
+        raise Problem(
+            404, "No such HubSpot sync", "Look at the list of syncs again.", code="sync_not_found"
+        ) from error
+    except SyncNotRunning as error:
+        raise Problem(
+            409,
+            "This sync has already finished",
+            "There is nothing to stop.",
+            code="not_running",
+        ) from error
 
 
 @router.get(

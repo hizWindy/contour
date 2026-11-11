@@ -5,7 +5,7 @@ Newer FastAPI keeps an included router as one lazy entry in `app.routes`, so a p
 their full paths) and falls back to the plain loop for a version that copies them.
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -54,3 +54,31 @@ def _info(route: Any) -> RouteInfo:
         unique_id=route.unique_id,
         endpoint=route.endpoint,
     )
+
+
+class RoutePaths:
+    """The full path of the route a request matched, as written in the code (like
+    `/api/v1/runs/{run_id}`), for counting and logging. Never the real path, which can hold a
+    company name.
+
+    The matched route is in the request's scope once the router has run. FastAPI keeps an
+    included router nested, so the route knows only its own part of the path
+    (`/health/details`); its full path comes from `api_routes`, by its endpoint function (the
+    same object in both), looked up once. None when no route matched (an unknown path, or a
+    request refused before routing).
+    """
+
+    def __init__(self) -> None:
+        self._paths: dict[object, str] | None = None
+
+    def of(self, scope: Mapping[str, Any]) -> str | None:
+        route = scope.get("route")
+        path = getattr(route, "path", None)
+        if not isinstance(path, str):
+            return None
+        if self._paths is None:
+            app = scope.get("app")
+            self._paths = (
+                {info.endpoint: info.path for info in api_routes(app)} if app is not None else {}
+            )
+        return self._paths.get(getattr(route, "endpoint", None), path)

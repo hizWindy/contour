@@ -102,6 +102,7 @@ ROUTES = [
     ("GET", f"{API}/hubspot/status"),
     ("POST", f"{API}/hubspot/sync"),
     ("GET", f"{API}/hubspot/syncs"),
+    ("POST", f"{API}/hubspot/syncs/{{sync_id}}/cancel"),
     ("GET", f"{API}/hubspot/writes"),
     ("POST", f"{API}/hubspot/writes/{{write_id}}/apply"),
     ("POST", f"{API}/memory"),

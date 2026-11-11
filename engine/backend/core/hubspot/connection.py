@@ -6,6 +6,7 @@ for `CHECK_FRESH_SECONDS`, so opening the page doesn't call HubSpot every time),
 needs, the syncs and our copy's counts.
 """
 
+import logging
 import time
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
@@ -26,6 +27,7 @@ if TYPE_CHECKING:
     from core.apps import AppSpec
 
 CHECK_FRESH_SECONDS = 600
+log = logging.getLogger(__name__)
 
 
 def hubspot_provider(app: FastAPI) -> Any:
@@ -53,8 +55,23 @@ def sync_runner(app: FastAPI) -> SyncRunner:
 
 
 async def start_up(app: FastAPI) -> None:
-    """At backend start: a background sync when the last good one is old. Never raises."""
-    await sync_runner(app).start_if_due()
+    """At backend start (or when this backend takes over after a deploy): clears syncs a stopped
+    backend left "running" (PLAN-V15 T1-3), then starts a background sync when the last good one
+    is old. Never raises."""
+    runner = sync_runner(app)
+    if hubspot_set_up(app):  # with no HubSpot, no sync ever ran: nothing to clear, no database
+        try:
+            await runner.clear_left_over()
+        except Exception:
+            log.exception("hubspot_left_over_not_cleared")
+    await runner.start_if_due()
+
+
+def hubspot_set_up(app: FastAPI) -> bool:
+    """A HubSpot key is set, or the app has its own client (the fake backend)."""
+    own = getattr(app.state, "hubspot_provider", None)
+    secret = get_settings().hubspot_service_key
+    return own is not None or bool(secret is not None and secret.get_secret_value().strip())
 
 
 async def shut_down(app: FastAPI) -> None:

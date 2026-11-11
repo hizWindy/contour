@@ -26,6 +26,7 @@ from tests.core.auth_world import (
     make_account,
     sign_in,
 )
+from tests.core.problems import without_id
 
 pytestmark = pytest.mark.integration
 
@@ -85,17 +86,17 @@ async def test_the_first_two_wrong_tries_cost_nothing_and_the_third_starts_the_w
     for _ in range(2):
         slip = await wrong(browser)
         assert slip.status_code == 401
-        assert slip.json() == PLAIN_401  # no wait, and nothing more to say
+        assert without_id(slip) == PLAIN_401  # no wait, and nothing more to say
     third = await wrong(browser)
     assert third.status_code == 401
-    assert third.json() == {**PLAIN_401, "retry_after_seconds": 2}
+    assert without_id(third) == {**PLAIN_401, "retry_after_seconds": 2}
 
     # Even the right password is turned away during the wait, and nothing is checked.
     early = await sign_in(browser)
     assert early.status_code == 429
     assert early.headers["content-type"].startswith("application/problem+json")
     assert early.headers["retry-after"] == "2"
-    assert early.json() == {
+    assert without_id(early) == {
         "type": "about:blank",
         "title": "Too many tries",
         "status": 429,
@@ -173,11 +174,11 @@ async def test_a_right_password_in_between_starts_the_count_again(
     world: World, browser: httpx.AsyncClient
 ) -> None:
     await make_account(world)
-    assert (await wrong(browser)).json() == PLAIN_401
-    assert (await wrong(browser)).json() == PLAIN_401
+    assert without_id(await wrong(browser)) == PLAIN_401
+    assert without_id(await wrong(browser)) == PLAIN_401
     assert (await sign_in(browser)).status_code == 200  # before any wait
     for _ in range(2):  # two more slips are free again
-        assert (await wrong(browser)).json() == PLAIN_401
+        assert without_id(await wrong(browser)) == PLAIN_401
 
 
 async def test_a_try_during_a_wait_is_not_checked_not_counted_and_not_logged(
