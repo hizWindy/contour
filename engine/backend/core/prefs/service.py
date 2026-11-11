@@ -15,6 +15,10 @@ The rules this follows:
   tightened, a ceiling was lowered) is left out and logged by key. The ceilings clamp the result
   as a last guard.
 - Nothing here returns a SecretStr or any other env-only secret.
+
+One row is not a setting: `lead_finder_round` holds the Lead Finder's round plan (the cities picked
+and the first day, PLAN-V13 T1-3), so they are kept while the round is off. It is read and written
+only by `apps/lead_finder/round.py`. It isn't in `EDITABLE_KEYS`, so it is never read as a setting.
 """
 
 import logging
@@ -96,6 +100,12 @@ TEXT: dict[str, tuple[str, str]] = {
         "Cap for one automatic run (US$)",
         "The most a run that a schedule started may cost. It has no company limit: it stops at "
         "its share of the goal, or when no company is left. A city run usually costs far less.",
+    ),
+    "lead_finder_round_cap_usd": (
+        "Budget for one round (US$)",
+        "The most all the city runs of one round may spend together. Before each automatic run "
+        "starts, its cap becomes the smaller of the cap above and what is left of this. When "
+        "nothing is left, the next city waits for the next round.",
     ),
     "daily_cap_usd": (
         "Cap for one day (US$)",

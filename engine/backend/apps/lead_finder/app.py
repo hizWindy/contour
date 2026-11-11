@@ -1,6 +1,7 @@
 """Tells the core about the Lead Finder: its name, endpoints, schema, rules check and runs."""
 
 from apps.lead_finder.api import router
+from apps.lead_finder.api_round import router as round_router
 from apps.lead_finder.company_leads import COMPANY_LEADS
 from apps.lead_finder.hubspot_send import mark_sent
 from apps.lead_finder.jobs import JOBS
@@ -39,4 +40,5 @@ APP = AppSpec(
     hubspot_needs=HUBSPOT_NEEDS,
     hubspot_written=mark_sent,
     company_leads=COMPANY_LEADS,  # its leads on the Companies page (PLAN-V10 B2)
+    schedule_router=round_router,  # one control for the city schedules (PLAN-V13 T1-3)
 )

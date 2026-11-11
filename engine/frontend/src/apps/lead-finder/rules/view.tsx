@@ -1,5 +1,5 @@
 /**
- * Admin, Rules: the rules a company is checked against, read only. They live in the rules files
+ * Rules: the rules a company is checked against, read only (a Lead Finder page, once an Admin tab). They live in the rules files
  * (`apps/lead_finder/rules/`), and every choice still to be confirmed with Levi is listed as TBC.
  */
 import { useRules } from '@/api/hooks'

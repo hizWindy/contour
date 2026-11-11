@@ -19,6 +19,7 @@ from core.api.security import ProblemCORSMiddleware, add_security_layers
 from core.apps import load_apps
 from core.config import get_settings
 from core.db.engine import get_engine
+from core.health.traffic import ApiTraffic, TrafficMiddleware
 from core.hubspot import connection as hubspot_connection
 from core.logs import setup_logging
 from core.runs import lifecycle
@@ -139,6 +140,9 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     add_security_layers(app, settings)  # after CORS, so the host check and origin guard are outside
+    # Outermost: counts each API request's status and time for the Health tab (PLAN-V13 T1-2).
+    app.state.api_traffic = ApiTraffic()
+    app.add_middleware(TrafficMiddleware, traffic=app.state.api_traffic)
     add_error_handlers(app)
 
     api = APIRouter(prefix=API_PREFIX, responses=PROBLEM_RESPONSES)
@@ -150,6 +154,14 @@ def create_app() -> FastAPI:
     api.include_router(runs_read.router)  # before runs: the estimate and summary paths come first
     api.include_router(runs.router)
     api.include_router(settings_routes.router)
+    for spec in specs:
+        if spec.schedule_router is not None:  # a project's own schedule controls (PLAN-V13 T1-3)
+            api.include_router(
+                spec.schedule_router,
+                prefix=f"{schedule_routes.router.prefix}{spec.route_prefix}",
+                tags=["schedules"],
+                dependencies=[Depends(require_app(spec.name))],
+            )
     api.include_router(schedule_routes.router)
     for spec in specs:
         # Only the people with the project ticked (and Admins) may use it (PLAN-V9 E1).

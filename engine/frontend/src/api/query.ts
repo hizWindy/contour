@@ -89,6 +89,11 @@ export const queryKeys = {
   },
   schedules: {
     all: ['schedules'] as const,
+    /** The Lead Finder's city schedules as one plan, and the round so far (PLAN-V13 T1-3). */
+    round: () => ['schedules', 'lead-finder'] as const,
+  },
+  health: {
+    all: ['health'] as const,
   },
   leads: {
     all: ['leads'] as const,

@@ -50,6 +50,7 @@ RUN_BODY = {"app": "lead_finder", "mode": "discovery"}
 # Every route in section 5 of the design, with the names this code uses for the ids.
 ROUTES = [
     ("GET", f"{API}/health"),
+    ("GET", f"{API}/health/details"),  # Admin's Health tab (PLAN-V13 T1-2)
     # The Companies page (PLAN-V10)
     ("GET", f"{API}/companies"),
     ("GET", f"{API}/companies/facets"),
@@ -81,6 +82,8 @@ ROUTES = [
     ("PATCH", f"{API}/settings"),
     ("DELETE", f"{API}/settings/{{key}}"),
     ("GET", f"{API}/schedules"),
+    ("GET", f"{API}/schedules/lead-finder"),  # the city schedules as one (PLAN-V13 T1-3)
+    ("PUT", f"{API}/schedules/lead-finder"),
     ("PATCH", f"{API}/schedules/{{schedule_id}}"),
     ("POST", f"{API}/schedules/{{schedule_id}}/run"),
     ("POST", f"{API}/hubspot/import"),

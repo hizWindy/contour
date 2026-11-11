@@ -23,6 +23,7 @@ import { PLANNED } from '@/modules'
 import { useVisibleModules } from './visible-modules'
 import { ADMIN, HOME, isHere, type AppModule, type NavItem } from './nav'
 import { TONE_CLASSES } from './tone'
+import { SidebarAccount } from './user-menu'
 import { cn } from '@/lib/utils'
 
 const PLANNED_LABEL_ID = 'menu-planned'
@@ -158,8 +159,9 @@ function ModuleGroup({ app, pathname }: { app: AppModule; pathname: string }) {
 
 /**
  * The left menu: Home, then one dropdown per project with its own pages (from src/modules.ts), the
- * projects still to be developed, and the shared Admin at the bottom. It folds to icons, and each
- * icon keeps a tooltip with the page name. A page shows as selected while you are on it or inside
+ * projects still to be developed, and the shared Admin at the bottom, with the signed-in person's
+ * name and role under it (PLAN-V13 T1-6). It folds to icons, and each icon keeps a tooltip with
+ * the page name. A page shows as selected while you are on it or inside
  * it.
  */
 export function AppSidebar() {
@@ -219,6 +221,7 @@ export function AppSidebar() {
         <SidebarFooter className="border-t border-sidebar-border">
           <SidebarMenu>
             <MenuLink item={ADMIN} pathname={pathname} />
+            <SidebarAccount />
           </SidebarMenu>
         </SidebarFooter>
       </nav>

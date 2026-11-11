@@ -69,7 +69,8 @@ export const routes: RouteObject[] = [
         handle: { crumb: 'Admin' } satisfies RouteHandle,
         ...page(() => import('@/apps/lead-finder/admin')),
         children: [
-          { index: true, element: <Navigate to="runs" replace /> },
+          { index: true, element: <Navigate to="health" replace /> },
+          adminTab('health', () => import('@/apps/lead-finder/admin/health')),
           adminTab('runs', () => import('@/apps/lead-finder/admin/runs')),
           adminTab('schedules', () => import('@/apps/lead-finder/admin/schedules')),
           adminTab('searches', () => import('@/apps/lead-finder/admin/searches')),

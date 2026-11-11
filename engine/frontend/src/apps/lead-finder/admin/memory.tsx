@@ -5,7 +5,6 @@ import { useMemorySearch } from '@/api/hooks'
 import { EmptyState } from '@/components/empty-state'
 import { ErrorState } from '@/components/error-state'
 import { SourceLink } from '@/components/source-link'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
@@ -52,19 +51,28 @@ export default function AdminMemoryTab() {
       ) : results.data && results.data.length === 0 ? (
         <EmptyState title="Nothing close to that." headingLevel={3} />
       ) : (
-        <ul aria-label="Memory results" className="flex flex-col gap-3">
+        <ul aria-label="Memory results" className="flex flex-col">
           {(results.data ?? []).map((hit) => (
-            <li key={hit.id} className="flex flex-col gap-1 rounded-lg border bg-card p-4 text-ui">
-              <p className="flex flex-wrap items-center gap-2 text-caption text-muted-foreground">
-                <Badge variant="outline">{humanise(hit.kind)}</Badge>
+            <li
+              key={hit.id}
+              className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1 border-b py-3 text-ui last:border-b-0"
+            >
+              <p className="flex min-w-0 flex-wrap items-center gap-x-2 text-caption text-muted-foreground">
                 {hit.subject ? (
                   <span className="font-semibold text-foreground">{hit.subject}</span>
                 ) : null}
-                <span>{formatPercent(hit.similarity * 100)} close</span>
+                <span>{humanise(hit.kind)}</span>
                 {hit.source_date ? <span>{formatDate(hit.source_date)}</span> : null}
               </p>
-              <p>{hit.content}</p>
-              {hit.url ? <SourceLink href={hit.url} /> : null}
+              <span className="text-caption text-muted-foreground tabular-nums">
+                {formatPercent(hit.similarity * 100)} close
+              </span>
+              <p className="col-span-2 line-clamp-2" title={hit.content}>
+                {hit.content}
+              </p>
+              <span className="col-span-2 text-caption">
+                {hit.url ? <SourceLink href={hit.url} /> : 'No web source: from a run or HubSpot.'}
+              </span>
             </li>
           ))}
         </ul>

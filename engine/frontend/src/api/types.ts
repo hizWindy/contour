@@ -73,6 +73,15 @@ export type Schedule = Schemas['ScheduleOut']
 export type ScheduleEstimate = Schemas['ScheduleEstimate']
 export type ScheduleEdit = Schemas['ScheduleEdit']
 export type RunNow = Schemas['RunNow']
+export type LeadFinderRound = Schemas['RoundOut']
+export type LeadFinderRoundIn = Schemas['RoundIn']
+export type RoundCity = Schemas['RoundCityOut']
+
+// Health (PLAN-V13 T1-2)
+export type HealthDetails = Schemas['HealthDetails']
+export type SystemCheck = Schemas['SystemCheckOut']
+export type HealthState = SystemCheck['state']
+export type EndpointTraffic = Schemas['EndpointTrafficOut']
 
 // Companies (PLAN-V10)
 export type CompanyRow = Schemas['CompanyRow']

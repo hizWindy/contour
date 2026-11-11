@@ -20,7 +20,7 @@ import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { formatDateTime, formatNumber, formatStaff } from '@/lib/format'
 import { toastProblem } from '@/lib/problems'
-import { ConnectionCard, PermissionsCard, SyncCard, WritesCard } from './connection'
+import { ConnectionCard, SyncCard, WritesCard } from './connection'
 
 type WatchItem = WatchlistOut['items'][number]
 const help = createColumnHelper<WatchItem>()
@@ -206,17 +206,32 @@ function Backup() {
   )
 }
 
+/** The watchlist preview and the export backup: used rarely, so behind "More" (PLAN-V13 T1-9). */
+function More() {
+  return (
+    <Collapsible>
+      <CollapsibleTrigger className="group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-section font-semibold hover:bg-muted touch:min-h-11">
+        More: the watchlist and the export backup
+        <ChevronDown
+          aria-hidden="true"
+          className="ml-auto size-4 transition-transform duration-(--duration-fast) ease-(--ease) group-data-[state=open]:rotate-180"
+        />
+      </CollapsibleTrigger>
+      <CollapsibleContent className="flex flex-col gap-6 pt-4">
+        <Watchlist />
+        <Backup />
+      </CollapsibleContent>
+    </Collapsible>
+  )
+}
+
 export default function AdminHubSpotTab() {
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid gap-6 lg:grid-cols-2">
-        <ConnectionCard />
-        <PermissionsCard />
-      </div>
+      <ConnectionCard />
       <SyncCard />
       <WritesCard />
-      <Watchlist />
-      <Backup />
+      <More />
     </div>
   )
 }

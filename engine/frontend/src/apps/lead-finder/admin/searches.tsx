@@ -7,6 +7,7 @@
 import { createColumnHelper } from '@tanstack/react-table'
 import { FileSearch } from 'lucide-react'
 import { useState } from 'react'
+import { useDebounced } from '@/hooks/useDebounced'
 import { useSearchParams } from 'react-router'
 import { useSearches } from '@/api/hooks'
 import type { SearchOut } from '@/api/types'
@@ -15,7 +16,9 @@ import { EmptyState } from '@/components/empty-state'
 import { ErrorState } from '@/components/error-state'
 import { Money } from '@/components/money'
 import { SourceLink } from '@/components/source-link'
+import { Segmented } from '@/components/motion'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import {
   Sheet,
   SheetContent,
@@ -98,16 +101,31 @@ function Details({ search }: { search: SearchOut }) {
   )
 }
 
+/** The steps a request can be, by the start of its name (the API's `step` filter). */
+const STEPS = [
+  { value: '', label: 'Every step' },
+  { value: 'discover', label: 'Discovery' },
+  { value: 'search', label: 'Research' },
+  { value: 'extract', label: 'Reading' },
+  { value: 'why', label: 'Why now' },
+  { value: 'prep', label: 'Call prep' },
+]
+
 export default function AdminSearchesTab() {
   const [params, setParams] = useSearchParams()
   const runId = params.get('run_id')
   const [pageIndex, setPageIndex] = useState(0)
   const [active, setActive] = useState<string | null>(null)
   const [opened, setOpened] = useState<string | null>(null)
+  const [step, setStep] = useState('')
+  const [company, setCompany] = useState('')
+  const subject = useDebounced(company.trim())
   const searches = useSearches({
     limit: PAGE_SIZE,
     offset: pageIndex * PAGE_SIZE,
     ...(runId ? { run_id: runId } : {}),
+    ...(step ? { step } : {}),
+    ...(subject ? { subject } : {}),
   })
   const items = searches.data?.items ?? []
   // While the panel slides shut it keeps showing the request it had.
@@ -118,27 +136,55 @@ export default function AdminSearchesTab() {
   }
   return (
     <div className="flex flex-col gap-4">
-      {runId ? (
-        <p className="flex flex-wrap items-center gap-2 text-ui">
-          Showing the requests of run {shortId(runId)}.
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setPageIndex(0)
-              setParams({})
-            }}
-          >
-            Show every request
-          </Button>
-        </p>
-      ) : null}
+      {/* One row of filters (PLAN-V13 T1-9): the step, the company, and the run when there is one. */}
+      <div
+        className="flex flex-wrap items-center gap-3"
+        role="search"
+        aria-label="Filter the search log"
+      >
+        <Segmented
+          aria-label="Step"
+          size="sm"
+          options={STEPS}
+          value={step}
+          onChange={(value) => {
+            setPageIndex(0)
+            setStep(value)
+          }}
+        />
+        <Input
+          aria-label="Company"
+          placeholder="Company"
+          className="h-8 w-48"
+          value={company}
+          onChange={(event) => {
+            setPageIndex(0)
+            setCompany(event.target.value)
+          }}
+        />
+        {runId ? (
+          <p className="flex flex-wrap items-center gap-2 text-ui">
+            Run {shortId(runId)} only.
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setPageIndex(0)
+                setParams({})
+              }}
+            >
+              Show every request
+            </Button>
+          </p>
+        ) : null}
+      </div>
       {searches.error ? (
         <ErrorState error={searches.error} context="The search log couldn't be loaded." />
       ) : (
         <DataTable
           label="Search log"
+          compact
           columns={columns}
           data={items}
           getRowId={(item) => item.id}
