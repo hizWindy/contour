@@ -57,19 +57,33 @@ async def upsert_companies(
 ) -> int:
     """Adds or updates each company by `hubspot_id`. Every column is replaced, and `source` and
     `imported_at` say where and when this copy came from. The caller commits."""
+    return len(await upsert_company_rows(session, companies, source=source))
+
+
+async def upsert_company_rows(
+    session: AsyncSession,
+    companies: Sequence[CompanyRow],
+    *,
+    source: str,
+    saved_before: datetime | None = None,
+) -> list[str]:
+    """`upsert_companies`, returning the ids it wrote. With `saved_before`, a company our copy
+    saved at or after that moment is left as it is: a sync that read HubSpot earlier never
+    overwrites it with older values (PLAN-V15 T1-5)."""
     rows = [company.model_dump() | {"source": source} for company in companies]
+    written: list[str] = []
     for chunk in _chunks(rows):
         statement = insert(HubSpotCompany).values(list(chunk))
-        await session.execute(
-            statement.on_conflict_do_update(
-                index_elements=[HubSpotCompany.hubspot_id],
-                set_={
-                    **{name: statement.excluded[name] for name in chunk[0] if name != "hubspot_id"},
-                    "imported_at": func.now(),
-                },
-            )
+        upsert = statement.on_conflict_do_update(
+            index_elements=[HubSpotCompany.hubspot_id],
+            set_={
+                **{name: statement.excluded[name] for name in chunk[0] if name != "hubspot_id"},
+                "imported_at": func.now(),
+            },
+            where=None if saved_before is None else HubSpotCompany.imported_at < saved_before,
         )
-    return len(rows)
+        written += list(await session.scalars(upsert.returning(HubSpotCompany.hubspot_id)))
+    return written
 
 
 async def replace_offices(
@@ -87,25 +101,32 @@ async def replace_offices(
     return len(rows)
 
 
-async def upsert_deals(session: AsyncSession, deals: Sequence[DealRow], *, source: str) -> int:
-    """Adds or updates each deal by `hubspot_deal_id`. The caller commits."""
+async def upsert_deals(
+    session: AsyncSession,
+    deals: Sequence[DealRow],
+    *,
+    source: str,
+    saved_before: datetime | None = None,
+) -> int:
+    """Adds or updates each deal by `hubspot_deal_id`. Returns how many it wrote. With
+    `saved_before`, a deal saved at or after that moment is left as it is (PLAN-V15 T1-5). The
+    caller commits."""
     rows = [deal.model_dump() | {"source": source} for deal in deals]
+    written = 0
     for chunk in _chunks(rows):
         statement = insert(HubSpotDeal).values(list(chunk))
-        await session.execute(
-            statement.on_conflict_do_update(
-                index_elements=[HubSpotDeal.hubspot_deal_id],
-                set_={
-                    **{
-                        name: statement.excluded[name]
-                        for name in chunk[0]
-                        if name != "hubspot_deal_id"
-                    },
-                    "imported_at": func.now(),
+        upsert = statement.on_conflict_do_update(
+            index_elements=[HubSpotDeal.hubspot_deal_id],
+            set_={
+                **{
+                    name: statement.excluded[name] for name in chunk[0] if name != "hubspot_deal_id"
                 },
-            )
+                "imported_at": func.now(),
+            },
+            where=None if saved_before is None else HubSpotDeal.imported_at < saved_before,
         )
-    return len(rows)
+        written += len(list(await session.scalars(upsert.returning(HubSpotDeal.hubspot_deal_id))))
+    return written
 
 
 async def upsert_owners(session: AsyncSession, owners: Sequence[dict[str, Any]]) -> int:

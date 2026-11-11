@@ -77,7 +77,12 @@ from core.hubspot.models import HubSpotCompany, HubSpotDeal, HubSpotSync
 from core.hubspot.people import WAITING as PEOPLE_WAITING
 from core.hubspot.people import read_people, save_people
 from core.hubspot.profiles import rebuild_profiles
-from core.hubspot.service import replace_offices, upsert_companies, upsert_deals, upsert_owners
+from core.hubspot.service import (
+    replace_offices,
+    upsert_company_rows,
+    upsert_deals,
+    upsert_owners,
+)
 from core.logs import scrub
 from core.memory.embedder import Embedder
 
@@ -169,6 +174,9 @@ class SyncPlan:
     id: int
     mode: Mode
     since: datetime | None
+    # When the sync began (the database's clock). Its save leaves alone what our copy saved at
+    # or after this moment: a lead sent to HubSpot meanwhile (PLAN-V15 T1-5).
+    started_at: datetime | None = None
 
 
 @dataclass
@@ -249,7 +257,10 @@ async def begin(
             await session.rollback()
             other = await running_sync(session)
             raise SyncAlreadyRunning(other.id if other else None) from error
-        return SyncPlan(row.id, chosen, since)
+        started_at = await session.scalar(
+            select(HubSpotSync.started_at).where(HubSpotSync.id == row.id)
+        )
+        return SyncPlan(row.id, chosen, since, started_at)
 
 
 async def _choose(
@@ -435,8 +446,20 @@ class Saved:
     changed_company_ids: set[str] = field(default_factory=set)
 
 
-async def save_snapshot(session: AsyncSession, snapshot: Snapshot, *, full: bool) -> Saved:
-    """Saves one sync's reads in the session's transaction. The caller commits."""
+async def save_snapshot(
+    session: AsyncSession,
+    snapshot: Snapshot,
+    *,
+    full: bool,
+    started_at: datetime | None = None,
+) -> Saved:
+    """Saves one sync's reads in the session's transaction. The caller commits.
+
+    With `started_at` (the sync's start), a company, office or deal our copy saved at or after
+    that moment is newer than what this sync read, so it is never overwritten or removed
+    (PLAN-V15 T1-5). Example: the sync reads at 6:00, ABC Logistics is sent to HubSpot and saved
+    to our copy at 6:05, and the save at 6:10 keeps it, though the 6:00 read hadn't seen it.
+    """
     saved = Saved()
     await upsert_owners(
         session,
@@ -444,9 +467,19 @@ async def save_snapshot(session: AsyncSession, snapshot: Snapshot, *, full: bool
     )
     companies = [item.company for item in snapshot.companies]
     company_ids = [company.hubspot_id for company in companies]
-    saved.companies = await upsert_companies(session, companies, source=SOURCE)
+    written = set(
+        await upsert_company_rows(session, companies, source=SOURCE, saved_before=started_at)
+    )
+    saved.companies = len(written)
     saved.offices = await replace_offices(
-        session, company_ids, [office for item in snapshot.companies for office in item.offices]
+        session,
+        [company_id for company_id in company_ids if company_id in written],
+        [
+            office
+            for item in snapshot.companies
+            if item.company.hubspot_id in written
+            for office in item.offices
+        ],
     )
 
     # A deal is kept under its company, so a deal whose company isn't in our copy is left out
@@ -455,22 +488,25 @@ async def save_snapshot(session: AsyncSession, snapshot: Snapshot, *, full: bool
     known = set(company_ids) | await _companies_we_have(session, others)
     deals = [deal for deal in snapshot.deals if deal.hubspot_company_id in known]
     saved.deals_skipped = snapshot.deals_read - len(deals)
-    saved.deals = await upsert_deals(session, deals, source=SOURCE)
+    saved.deals = await upsert_deals(session, deals, source=SOURCE, saved_before=started_at)
 
     # Removing what HubSpot no longer has needs a full read, and never runs on an empty one: an
     # empty answer is more likely a fault than a HubSpot with no companies.
     if full and companies:
+        older = [] if started_at is None else [HubSpotCompany.imported_at < started_at]
         gone = await session.execute(
             delete(HubSpotCompany)
-            .where(HubSpotCompany.hubspot_id != all_(_ids("seen_companies", company_ids)))
+            .where(HubSpotCompany.hubspot_id != all_(_ids("seen_companies", company_ids)), *older)
             .returning(HubSpotCompany.hubspot_id)
         )
         gone_companies = {row[0] for row in gone}
+        older_deals = [] if started_at is None else [HubSpotDeal.imported_at < started_at]
         removed = await session.execute(
             delete(HubSpotDeal)
             .where(
                 HubSpotDeal.hubspot_deal_id
-                != all_(_ids("seen_deals", [deal.hubspot_deal_id for deal in deals]))
+                != all_(_ids("seen_deals", [deal.hubspot_deal_id for deal in deals])),
+                *older_deals,
             )
             .returning(HubSpotDeal.hubspot_company_id)
         )
@@ -478,7 +514,7 @@ async def save_snapshot(session: AsyncSession, snapshot: Snapshot, *, full: bool
         saved.companies_removed = len(gone_companies)
         saved.deals_removed = len(removed_deals)
         saved.changed_company_ids |= gone_companies | set(removed_deals)
-    saved.changed_company_ids |= set(company_ids) | {deal.hubspot_company_id for deal in deals}
+    saved.changed_company_ids |= written | {deal.hubspot_company_id for deal in deals}
     return saved
 
 
@@ -576,7 +612,9 @@ async def run(
 
         await _note(sessions, plan.id, phase="saving")
         async with sessions() as session:
-            stored = await save_snapshot(session, snapshot, full=mode == "full")
+            stored = await save_snapshot(
+                session, snapshot, full=mode == "full", started_at=plan.started_at
+            )
             await _set(
                 session,
                 plan.id,
