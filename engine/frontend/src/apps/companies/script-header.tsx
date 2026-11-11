@@ -13,7 +13,7 @@
  */
 import { CircleCheck, CircleDashed, RefreshCw } from 'lucide-react'
 import { useId } from 'react'
-import type { PrepOut } from '@/api/types'
+import type { PrepOut, StyleUsed } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { formatRelative, formatTime } from '@/lib/format'
@@ -25,15 +25,6 @@ import type { CallGuide } from './playbook'
 export const SCRIPT_TITLE_ID = 'sales-script'
 
 const STEPS = ['Facts from HubSpot', 'Web check', 'Script'] as const
-
-/**
- * The style a prep was written with (PLAN-V14 contract: `style_used`, from T1-3). Read here until
- * the `v14-api` tag brings it into the generated types.
- */
-interface StyleUsed {
-  mine: boolean
-  team_notes: number
-}
 
 /** The bar that fills one step at a time: facts, web check, script. It never loops. */
 function Searching({ stage }: { stage: number }) {
@@ -75,7 +66,7 @@ function styleWords(style: StyleUsed | undefined): string {
 
 /** "Made 2 days ago by Tom. Written with the team style." */
 function madeWords(prep: PrepOut, now: Date = new Date()): string {
-  const style = styleWords((prep as PrepOut & { style_used?: StyleUsed }).style_used)
+  const style = styleWords(prep.style_used)
   if (prep.trigger === 'search_ahead') {
     return `Searched ahead at ${formatTime(prep.created_at)}.${style}`
   }
@@ -94,7 +85,7 @@ export interface ScriptHeaderProps {
   /** HubSpot names may go to Claude, so there is a web check. */
   namesOk: boolean
   /** The most one prep may cost (`prep_cap_usd`), or null before the facts say. */
-  capUsd: string | number | null
+  capUsd: string | null
   /** Call prep is checking now: the first prep, or a Research again. */
   running: boolean
   /** The step the 3-step bar is on. */
@@ -107,7 +98,7 @@ export interface ScriptHeaderProps {
 function hintWords({ enabled, namesOk, capUsd, running }: ScriptHeaderProps): string {
   if (enabled === false) return 'Call prep is off. An admin can switch it on.'
   if (running) return 'Call prep is checking the web and writing a new script.'
-  const cost = capUsd === null ? '' : ` Costs up to ${formatMoney(String(capUsd))}.`
+  const cost = capUsd === null ? '' : ` Costs up to ${formatMoney(capUsd)}.`
   if (!namesOk) return `Names don't go to Claude yet, so there is no web check.${cost}`
   return `New news, a new "still there?" check and a new script.${cost}`
 }

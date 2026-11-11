@@ -5,6 +5,10 @@
  *
  * - Each answer shows its value first (one line, two for News) and a small detail line under it.
  *   A press opens it in full, with its sources, in a small popover.
+ * - **News** (PLAN-V14 T2-5) is the newest item, however old, with its date and age ("14 Jun 2026,
+ *   5 months ago"). The others sit behind "+2 more", in the popover with each date and source.
+ *   With nothing on the web, the Lead Finder's newest saved note shows ("Saved research, 3 Oct"),
+ *   and with none either, "No news found".
  * - **On a phone** the three stack as short rows of one line each, so nothing scrolls sideways.
  * - **Connections** waits for Levi's customer list (PREP.md, **TBC**). Its answer is here, ready,
  *   and shows with `connections`.
@@ -24,14 +28,15 @@ import {
   Users,
   type LucideIcon,
 } from 'lucide-react'
-import type { ReactNode } from 'react'
-import type { CompanyDetail, PrepFacts, PrepScript } from '@/api/types'
+import { useContext, type ReactNode } from 'react'
+import type { CompanyDetail, CompanyNote, PrepFacts, PrepScript } from '@/api/types'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatDate } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { agoWords, talkStale } from './dates'
 import { GuideText } from './guide-parts'
+import { SourcesContext } from './guide-sources'
 import { STILL_WORDS } from './script-text'
 
 type Tone = 'quiet' | 'attention' | 'alert'
@@ -52,11 +57,14 @@ interface Answer {
   detail?: string
   /** The sources of the value, or of the detail. Shown as still marks; the popover links them. */
   sources?: { value?: string[]; detail?: string[] }
-  /** The value and the detail in full, with their source marks, for the popover. */
-  full?: { value?: ReactNode; detail?: ReactNode }
+  /**
+   * The value and the detail in full, with their source marks, for the popover. Or `body`, which
+   * takes the place of both (News, with every item).
+   */
+  full?: { value?: ReactNode; detail?: ReactNode; body?: ReactNode }
   /** Call prep is still looking. */
   loading?: boolean
-  /** News gets two lines for its value. */
+  /** News gets two lines for its value, and on a phone its detail keeps a line of its own. */
   lines?: 1 | 2
 }
 
@@ -125,7 +133,13 @@ function AnswerItem({ answer }: { answer: Answer }) {
           <span className="text-caption text-muted-foreground max-sm:w-20 max-sm:shrink-0">
             {label}
           </span>
-          <span className="flex min-w-0 flex-1 gap-x-1.5 max-sm:items-center sm:w-full sm:flex-col sm:gap-y-1">
+          <span
+            className={cn(
+              'flex min-w-0 flex-1 gap-x-1.5 sm:w-full sm:flex-col sm:gap-y-1',
+              // News keeps its date and age on a phone: a second line, not cut off.
+              lines === 2 ? 'max-sm:flex-col max-sm:gap-y-0.5' : 'max-sm:items-center',
+            )}
+          >
             <span className="flex min-w-0 items-start gap-1.5 text-ui font-semibold max-sm:shrink-0 max-sm:max-w-full">
               <Icon aria-hidden="true" className={cn('mt-0.5 size-4 shrink-0', ICON_TONES[tone])} />
               <span
@@ -140,9 +154,11 @@ function AnswerItem({ answer }: { answer: Answer }) {
             </span>
             {detail ? (
               <span className="min-w-0 truncate text-caption text-muted-foreground">
-                <span aria-hidden="true" className="sm:hidden">
-                  ·{' '}
-                </span>
+                {lines === 2 ? null : (
+                  <span aria-hidden="true" className="sm:hidden">
+                    ·{' '}
+                  </span>
+                )}
                 {detail}
                 <Marks ids={sources?.detail} />
               </span>
@@ -150,15 +166,23 @@ function AnswerItem({ answer }: { answer: Answer }) {
           </span>
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-80 max-w-[calc(100vw-2rem)] gap-1.5">
+      <PopoverContent
+        align="start"
+        aria-label={label}
+        className="w-80 max-w-[calc(100vw-2rem)] gap-1.5"
+      >
         <p className="text-caption text-muted-foreground">{label}</p>
-        <p className="flex items-start gap-1.5 font-semibold">
-          <Icon aria-hidden="true" className={cn('mt-0.5 size-4 shrink-0', ICON_TONES[tone])} />
-          <span className="min-w-0">{full?.value ?? value}</span>
-        </p>
-        {full?.detail || detail ? (
-          <p className="text-caption text-muted-foreground">{full?.detail ?? detail}</p>
-        ) : null}
+        {full?.body ?? (
+          <>
+            <p className="flex items-start gap-1.5 font-semibold">
+              <Icon aria-hidden="true" className={cn('mt-0.5 size-4 shrink-0', ICON_TONES[tone])} />
+              <span className="min-w-0">{full?.value ?? value}</span>
+            </p>
+            {full?.detail || detail ? (
+              <p className="text-caption text-muted-foreground">{full?.detail ?? detail}</p>
+            ) : null}
+          </>
+        )}
       </PopoverContent>
     </Popover>
   )
@@ -270,35 +294,75 @@ function talkAnswer({ company, facts, today }: BeforeYouDialProps): Answer {
   }
 }
 
-function newsAnswer({ company, facts, script, checking }: BeforeYouDialProps): Answer {
-  const news = script?.news[0]
-  if (news) {
+type NewsItem = PrepScript['news'][number]
+
+/** "14 Jun 2026, 5 months ago", or "No date" when none of the pages it cites has one. */
+function whenWords(date: string | null | undefined, today: string): string {
+  return date ? `${formatDate(date)}, ${agoWords(date, today)}` : 'No date'
+}
+
+/** Every news item, newest first, each with its date, its age and where it comes from. */
+function NewsList({ items, today }: { items: NewsItem[]; today: string }) {
+  const sources = useContext(SourcesContext)
+  return (
+    <ol className="flex flex-col gap-3">
+      {items.map((item) => {
+        const from = item.sources
+          .map((id) => sources.get(id)?.label)
+          .filter(Boolean)
+          .join(', ')
+        return (
+          <li key={item.text} className="flex items-start gap-1.5">
+            <Newspaper
+              aria-hidden="true"
+              className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+            />
+            <span className="flex min-w-0 flex-col gap-0.5">
+              <span>
+                <GuideText line={{ ...item, why: null, icon: 'news' }} />
+              </span>
+              <span className="text-caption text-muted-foreground">
+                {whenWords(item.date, today)}
+                {from ? ` · ${from}` : ''}
+              </span>
+            </span>
+          </li>
+        )
+      })}
+    </ol>
+  )
+}
+
+/** The Lead Finder's newest saved note, when the web has nothing (or isn't checked). */
+function noteAnswer(note: CompanyNote): Answer {
+  const saved = `Saved research${note.date ? `, ${formatDate(note.date)}` : ''}`
+  return { label: 'News', icon: Newspaper, value: note.text, lines: 2, detail: saved }
+}
+
+function newsAnswer({ company, facts, script, checking, today }: BeforeYouDialProps): Answer {
+  const items = script?.news ?? []
+  const [newest] = items
+  if (newest) {
+    const more = items.length - 1
     return {
       label: 'News',
       icon: Newspaper,
-      value: news.text,
+      value: newest.text,
       lines: 2,
-      sources: { value: news.sources },
-      full: { value: <GuideText line={{ ...news, why: null, icon: 'news' }} /> },
-    }
-  }
-  if (script) {
-    return {
-      label: 'News',
-      icon: Newspaper,
-      value: 'Nothing new',
-      detail: 'None found in the last 90 days.',
+      detail: `${whenWords(newest.date, today)}${more > 0 ? ` · +${String(more)} more` : ''}`,
+      sources: { value: newest.sources },
+      full: { body: <NewsList items={items} today={today} /> },
     }
   }
   if (checking) return { label: 'News', icon: Newspaper, value: '', loading: true }
   const note = company?.notes[0]
-  if (note) {
+  if (note) return noteAnswer(note)
+  if (script) {
     return {
       label: 'News',
       icon: Newspaper,
-      value: note.text,
-      lines: 2,
-      detail: `Saved research${note.date ? `, ${formatDate(note.date)}` : ''}.`,
+      value: 'No news found',
+      detail: 'Nothing on the web or in saved research.',
     }
   }
   return {

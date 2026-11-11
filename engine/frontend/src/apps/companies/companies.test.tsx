@@ -497,7 +497,7 @@ describe('the prep box and the call prep', () => {
     const script = await within(modal).findByRole('region', { name: 'Sales script' })
     const again = within(script).getByRole('button', { name: 'Research again' })
     expect(again).toHaveAccessibleDescription(
-      'New news, a new "still there?" check and a new script.',
+      'New news, a new "still there?" check and a new script. Costs up to US$0.25.',
     )
     // The footer has no Refresh any more.
     expect(within(modal).queryByRole('button', { name: 'Refresh' })).not.toBeInTheDocument()

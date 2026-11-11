@@ -74,6 +74,7 @@ function facts(changes: Partial<PrepFacts> = {}): PrepFacts {
     people_status: 'ready',
     prep_enabled: true,
     names_ok: true,
+    prep_cap_usd: '0.25',
     ...changes,
   }
 }
@@ -189,7 +190,109 @@ describe('the answers in the card header', () => {
   })
 })
 
-function made(changes: Partial<PrepOut> & { style_used?: unknown } = {}): PrepOut {
+const MORE_SOURCES: PrepSource[] = [
+  ...SOURCES,
+  {
+    id: 'W2',
+    kind: 'web',
+    label: 'New chief executive',
+    url: 'https://example.com/ceo',
+    date: '2026-03-02',
+  },
+  { id: 'W3', kind: 'web', label: 'An undated page', url: null, date: null },
+]
+
+function renderNews(changes: Partial<BeforeYouDialProps> = {}) {
+  return renderWithProviders(
+    <SourcesContext.Provider value={new Map(MORE_SOURCES.map((source) => [source.id, source]))}>
+      <BeforeYouDial
+        company={company()}
+        facts={facts()}
+        script={script()}
+        checking={false}
+        person={{ id: '201', name: 'Jason Reeds' }}
+        today={TODAY}
+        {...changes}
+      />
+    </SourcesContext.Provider>,
+  )
+}
+
+describe('the News answer', () => {
+  it('shows the newest item with its date and age, however old', () => {
+    renderNews({
+      script: script({
+        news: [{ text: 'A contract won in June.', sources: ['W1'], date: '2026-06-14' }],
+      }),
+    })
+    const news = screen.getByRole('button', { name: /^News/ })
+    expect(news).toHaveTextContent('A contract won in June.')
+    expect(news).toHaveTextContent('14 June 2026, 4 months ago')
+    expect(news).not.toHaveTextContent('more')
+  })
+
+  it('says "No date" for an item whose pages have none', () => {
+    renderNews({
+      script: script({ news: [{ text: 'An old item.', sources: ['W3'], date: null }] }),
+    })
+    expect(screen.getByRole('button', { name: /^News/ })).toHaveTextContent('No date')
+  })
+
+  it('puts the others behind "+2 more", with each date and source in the popover', async () => {
+    const { user } = renderNews({
+      script: script({
+        news: [
+          { text: 'A new clinic opened.', sources: ['W1'], date: '2026-10-20' },
+          { text: 'A new chief executive.', sources: ['W2'], date: '2026-03-02' },
+          { text: 'An undated item.', sources: ['W3'], date: null },
+        ],
+      }),
+    })
+    const news = screen.getByRole('button', { name: /^News/ })
+    expect(news).toHaveTextContent('20 Oct 2026, 3 weeks ago · +2 more')
+    await user.click(news)
+    const popover = await screen.findByRole('dialog', { name: 'News' })
+    const items = within(popover).getAllByRole('listitem')
+    expect(items).toHaveLength(3)
+    expect(items[0]).toHaveTextContent(
+      /^A new clinic opened\..*20 Oct 2026, 3 weeks ago · ABC Logistics wins contract$/,
+    )
+    expect(items[1]).toHaveTextContent('2 Mar 2026, 8 months ago · New chief executive')
+    expect(items[2]).toHaveTextContent('No date · An undated page')
+    expect(
+      within(popover).getByRole('link', { name: /Source: New chief executive/ }),
+    ).toHaveAttribute('href', 'https://example.com/ceo')
+  })
+
+  it("falls back to the Lead Finder's newest saved note when the web found nothing", () => {
+    renderNews({
+      script: script({ news: [] }),
+      company: company({
+        notes: [
+          {
+            text: 'Plans a second Perth office.',
+            date: '2026-10-03',
+            found_by: 'lead_finder',
+            url: null,
+          },
+        ],
+      }),
+    })
+    const news = screen.getByRole('button', { name: /^News/ })
+    expect(news).toHaveTextContent('Plans a second Perth office.')
+    expect(news).toHaveTextContent('Saved research, 3 Oct 2026')
+  })
+
+  it('says "No news found" when there is no note either, and never names 90 days', () => {
+    renderNews({ script: script({ news: [] }) })
+    const news = screen.getByRole('button', { name: /^News/ })
+    expect(news).toHaveTextContent('No news found')
+    expect(news).toHaveTextContent('Nothing on the web or in saved research.')
+    expect(document.body).not.toHaveTextContent(/90 days/)
+  })
+})
+
+function made(changes: Partial<PrepOut> = {}): PrepOut {
   return {
     id: 'aaaaaaaa-1111-2222-3333-444444444444',
     company_key: '101',

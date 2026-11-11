@@ -28,7 +28,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { isApiProblem } from '@/api/client'
 import { useCompany, useMe, usePrep, usePrepFacts, useStartPrep } from '@/api/hooks'
-import type { CompanyDetail, CompanyPerson, PrepFacts } from '@/api/types'
+import type { CompanyDetail, CompanyPerson } from '@/api/types'
 import { ErrorState } from '@/components/error-state'
 import { Pending } from '@/components/skeletons'
 import { Button } from '@/components/ui/button'
@@ -54,16 +54,6 @@ import { useGuide } from './use-guide'
 import { WAITING_FOR_PEOPLE } from './words'
 
 const COPIED_MS = 2000
-
-/**
- * The most one prep may cost: the facts' `prep_cap_usd` (PLAN-V14 contract). Read with a check
- * until the `v14-api` tag brings it into the generated types.
- */
-function capOf(facts: PrepFacts | undefined): string | number | null {
-  if (!facts || !('prep_cap_usd' in facts)) return null
-  const cap = facts.prep_cap_usd
-  return typeof cap === 'string' || typeof cap === 'number' ? cap : null
-}
 
 function targetKey(target: PrepTarget): string {
   return target.prepId ?? `${target.companyKey}|${target.cold ? 'cold' : (target.person?.id ?? '')}`
@@ -351,7 +341,6 @@ export function PrepModal({ target, onClose, onChangeTarget, onOpenCompany }: Pr
   }
 
   const enabled = off ? false : (facts.data?.prep_enabled ?? null)
-  const capUsd = capOf(facts.data)
 
   return (
     <Dialog
@@ -470,7 +459,7 @@ export function PrepModal({ target, onClose, onChangeTarget, onOpenCompany }: Pr
                         prep={prep.data}
                         enabled={enabled}
                         namesOk={facts.data?.names_ok !== false}
-                        capUsd={capUsd}
+                        capUsd={facts.data?.prep_cap_usd ?? null}
                         running={checking || start.isPending}
                         stage={prep.data?.stage ?? 0}
                         failed={Boolean(problem) || prep.data?.status === 'failed'}
