@@ -12,6 +12,7 @@ import { createMemoryRouter, RouterProvider } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { browser } from '@/lib/reload'
 import { routes } from '@/router'
+import { loadCode } from '@/shell/preload'
 import { renderWithProviders } from '@/test/render'
 
 vi.mock('@/apps/lead-finder/results', () => {
@@ -42,6 +43,15 @@ function renderResults() {
 }
 
 describe('a page whose code fails to load', () => {
+  it('never reloads from a quiet preload: only when the page is opened', async () => {
+    const reload = vi.spyOn(browser, 'reload').mockImplementation(() => undefined)
+
+    await loadCode(routes, ['/results'])
+
+    expect(reload).not.toHaveBeenCalled()
+    expect(window.sessionStorage.getItem('contour.reloaded-for-new-code')).toBeNull()
+  })
+
   it('reloads once by itself to get the new version, and keeps the menu', async () => {
     const reload = vi.spyOn(browser, 'reload').mockImplementation(() => undefined)
     renderResults()

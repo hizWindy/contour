@@ -30,21 +30,31 @@ function readMark(): number | null {
 }
 
 /**
- * Reloads once to pick up a new version. True when it reloaded; false when it already did in the
- * last minute (or storage is blocked, so it can't tell), and the page should say so instead.
+ * True when a reload for a new version may happen now: none was done in the last minute, and the
+ * mark can be kept (with storage blocked it couldn't tell, so it never reloads by itself).
  */
-export function reloadOnceForNewCode(now: number = Date.now()): boolean {
+export function mayReloadForNewCode(now: number = Date.now()): boolean {
   const mark = readMark()
   if (mark !== null && now - mark < MARK_FRESH_MS) {
     return false
   }
   try {
-    window.sessionStorage.setItem(MARK, String(now))
+    window.sessionStorage.setItem(`${MARK}-check`, '1')
+    window.sessionStorage.removeItem(`${MARK}-check`)
+    return true
   } catch {
     return false
   }
+}
+
+/** Marks the reload, then reloads. Call it only for the page on screen, never from a preload. */
+export function reloadForNewCode(now: number = Date.now()): void {
+  try {
+    window.sessionStorage.setItem(MARK, String(now))
+  } catch {
+    return
+  }
   browser.reload()
-  return true
 }
 
 /** What browsers and Vite say when a code file can't be fetched. */
