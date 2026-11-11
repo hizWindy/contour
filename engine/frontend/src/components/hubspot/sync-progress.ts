@@ -64,11 +64,12 @@ export function syncProgress(running: HubSpotSync, lastFull?: HubSpotSync): Sync
     case 'saving':
       return { words: 'Saving to our copy.', value: 72 }
     case 'people':
-      return { words: `Saving people (${formatNumber(running.people_saved)}).`, value: 77 }
+      return { words: `Saving people (${formatNumber(running.people_saved ?? 0)}).`, value: 77 }
     case 'profiles': {
-      const total = running.profiles_total
+      // Optional in the types (old test data has none); the API always sends them.
+      const total = running.profiles_total ?? 0
       if (total <= 0) return { words: 'Updating profiles.', value: 80 }
-      const done = Math.min(running.profiles_done, total)
+      const done = Math.min(running.profiles_done ?? 0, total)
       return {
         words: `Updating profiles (${formatNumber(done)} of ${formatNumber(total)}).`,
         value: 80 + (done / total) * 20,

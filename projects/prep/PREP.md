@@ -1,8 +1,10 @@
 # Call prep
 
-Last updated: 2026-11-11. **TBC** means to be confirmed.
+Last updated: 2026-11-12. **TBC** means to be confirmed.
 
 **Status (11 Nov):** PLAN-V10 built call prep, and [PLAN-V14](../../plan/PLAN-V14.md) refined it: "Research again", the three answers in the card's header, news with no age limit, the call technique in both scripts, and editable scripts with Your style and a team style. Both are merged into `master`, not deployed, and call prep is not switched on yet. The new prompt hasn't been tried on real companies (PLAN-V14 T1-5, paid, on Al-khair's word). What works now, from our HubSpot copy: the Companies page, the company panel, the prep box, "Sync with HubSpot", and the prep card with a sales script and guided questions (free, written from the copy). Call prep's web check (news, "still there?") stays off until Al-khair switches it on. People and call history wait for HubSpot access to contacts. The questions for Levi are in [EMAIL.md](EMAIL.md).
+
+**12 Nov:** [PLAN-V15](../../plan/PLAN-V15.md) is merged into `master`, not deployed. The script now knows the relationship (open deal, customer, past customer, lost deal, contacted before, or cold): only a cold call introduces Contour. Each person picks a tone (Friendly by default, Direct, Consultative or Formal), and an Admin sets the team's default. Call prep's errors are in plain words, and two clicks can't start two paid preps. The opener wording for each stage and tone is **TBC** with Levi.
 
 Call prep tells a salesperson what they need to know before they ring someone. They type a person or a company, and get a short call script. It is the second project after the Lead Finder (Levi, 2 Nov meeting).
 
