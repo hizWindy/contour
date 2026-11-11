@@ -156,11 +156,15 @@
   --size-body: 1rem; /* 16px, reading text, 400 */
   --size-ui: 0.875rem; /* 14px, tables, forms and menus, 400 (600 for headers) */
   --size-caption: 0.8125rem; /* 13px, labels and captions, 400. Nothing is smaller. */
+  --size-display: 2.25rem; /* 36px, Home only: the greeting and a card's one number, 600 */
+  --size-figure: 4rem; /* 64px, Home only: the Lead Finder's count of good leads, 400 */
   --leading-title: 1.25;
   --leading-section: 1.4;
   --leading-body: 1.5;
   --leading-ui: 1.43;
   --leading-caption: 1.38;
+  --leading-display: 1.15;
+  --leading-figure: 1;
 
   /* ---- Space: an 8-point scale. Tailwind's p-2, p-4, p-6, p-8, p-12 and p-16 are these. ---- */
   --space-1: 0.5rem; /* 8px */

@@ -11,7 +11,7 @@ import { shortId } from '@/lib/format'
 import type { RouteHandle } from '@/shell/crumbs'
 import type { AppModule } from '@/shell/nav'
 import { page } from '@/shell/page-route'
-import { LeadFinderSummary } from './home-summary'
+import { LeadFinderHomeCard, LeadFinderHomeLine } from './home-card'
 import {
   prefetchLead,
   prefetchLeadFinderSummary,
@@ -28,7 +28,8 @@ export const LEAD_FINDER: AppModule = {
   name: 'Lead Finder',
   icon: Target,
   tone: 'lead',
-  summary: LeadFinderSummary,
+  homeCards: [{ id: 'lead-finder', component: LeadFinderHomeCard, wide: true }],
+  homeLine: LeadFinderHomeLine,
   prefetchSummary: prefetchLeadFinderSummary,
   description:
     'Finds companies that fit Contour and show signs of an office change, and ranks them for sales.',

@@ -2,6 +2,7 @@ import { screen, within } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { LEAD_FINDER } from '@/apps/lead-finder/module'
+import { PLANNED } from '@/modules'
 import { routes } from '@/router'
 import { renderWithProviders } from '@/test/render'
 import { asLaptop } from '@/test/screen'
@@ -60,6 +61,40 @@ describe("a project's dropdown in the open menu", () => {
       'page',
     )
     expect(toggle).toHaveAttribute('data-active', 'false')
+  })
+})
+
+describe('the projects still to be developed, in the open menu', () => {
+  it('fold into one row that starts closed, since Home shows them as cards', async () => {
+    asLaptop()
+    const { user } = renderAt('/')
+    await screen.findByRole('heading', { level: 1, name: /^Good/ }, { timeout: LAZY })
+
+    const group = within(mainMenu().getByRole('group', { name: 'To be developed' }))
+    const row = group.getByRole('button', { name: 'To be developed' })
+    expect(row).toHaveAttribute('aria-expanded', 'false')
+    expect(group.queryAllByRole('link')).toHaveLength(0)
+
+    await user.click(row)
+    expect(row).toHaveAttribute('aria-expanded', 'true')
+    expect(group.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual(
+      PLANNED.map((project) => project.to),
+    )
+  })
+
+  it('opens by itself on one of their pages, with that page marked', async () => {
+    asLaptop()
+    const project = PLANNED[0]
+    if (!project) return
+    renderAt(project.to)
+    await screen.findByRole('heading', { level: 1, name: project.name }, { timeout: LAZY })
+
+    const group = within(mainMenu().getByRole('group', { name: 'To be developed' }))
+    expect(group.getByRole('button', { name: 'To be developed' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    )
+    expect(group.getByRole('link', { name: project.name })).toHaveAttribute('aria-current', 'page')
   })
 })
 

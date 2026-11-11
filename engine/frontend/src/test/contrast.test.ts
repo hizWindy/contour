@@ -188,6 +188,9 @@ describe('tokens match "Tokens for shadcn" in DESIGN.md', () => {
     expect(declarations.get('size-body')).toBe('1rem')
     expect(declarations.get('size-ui')).toBe('0.875rem')
     expect(declarations.get('size-caption')).toBe('0.8125rem')
+    // Home only (the "bento" Home): the greeting and a card's one number, and the Lead Finder's count.
+    expect(declarations.get('size-display')).toBe('2.25rem')
+    expect(declarations.get('size-figure')).toBe('4rem')
     expect(declarations.get('weight-regular')).toBe('400')
     expect(declarations.get('weight-semibold')).toBe('600')
     expect(declarations.get('ease')).toBe('cubic-bezier(0.4, 0, 0.2, 1)')

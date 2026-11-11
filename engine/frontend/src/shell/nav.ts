@@ -57,14 +57,34 @@ export interface AppModule {
   tone?: ProjectTone
   /** What the project does, in one sentence, for its card on Home. */
   description: string
-  /** Where the project stands, for its Home card (the last run, the leads). Optional. */
+  /**
+   * The project's own cards on Home, in place of the plain card (its name, `summary` and pages).
+   * Each card asks for its own data. Optional.
+   */
+  homeCards?: readonly HomeCard[]
+  /** One sentence under the greeting on Home, like what the last run found. Optional. */
+  homeLine?: ComponentType
+  /** Where the project stands, for its plain Home card (the last run, the leads). Optional. */
   summary?: ComponentType
-  /** Starts what `summary` asks for, while Home's code downloads (PLAN-V7 C1). Optional. */
+  /**
+   * Starts what its Home cards, its Home line or its `summary` ask for, while Home's code
+   * downloads (PLAN-V7 C1). Optional.
+   */
   prefetchSummary?: (client: QueryClient) => void
   /** Its pages, in menu order. On Home each shows with its `purpose`. */
   pages: readonly NavItem[]
   /** Its addresses, inside the app frame. */
   routes: RouteObject[]
+}
+
+/** A card on Home that a project brings (`AppModule.homeCards`). */
+export interface HomeCard {
+  /** A short name for code and tests, like "lead-finder". */
+  id: string
+  /** The card. It asks for its own data, and is a region named by its title. */
+  component: ComponentType
+  /** The project's main card: two columns wide on a laptop, beside the narrow cards. */
+  wide?: boolean
 }
 
 /**
@@ -82,6 +102,15 @@ export interface PlannedModule {
   description: string
   /** Where it stands and who said so, like "On hold (Levi, 23 Oct)". */
   status: string
+  /**
+   * Its place in the queue, in one word for Home, like "Next" or "Third". Without it, the project
+   * is listed under "Later" on Home.
+   */
+  when?: string
+  /** On Home, under its card: what it waits for, like "Needs HubSpot write access (TBC)". */
+  needs?: string
+  /** On Home, a shorter version of `description` that fits a small card. */
+  short?: string
 }
 
 /**

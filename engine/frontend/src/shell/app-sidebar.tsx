@@ -21,7 +21,7 @@ import {
 } from '@/components/ui/sidebar'
 import { PLANNED } from '@/modules'
 import { useVisibleModules } from './visible-modules'
-import { ADMIN, HOME, isHere, type AppModule, type NavItem } from './nav'
+import { ADMIN, HOME, isHere, isWithin, type AppModule, type NavItem } from './nav'
 import { TONE_CLASSES } from './tone'
 import { SidebarAccount } from './user-menu'
 import { cn } from '@/lib/utils'
@@ -158,8 +158,70 @@ function ModuleGroup({ app, pathname }: { app: AppModule; pathname: string }) {
 }
 
 /**
+ * The projects still to be developed. Home shows them as cards, so here they fold into one quiet
+ * row that starts closed, and opens by itself on one of their pages. Folded to icons, the menu
+ * shows each one's icon (with its name as a tooltip), so they can always be reached.
+ */
+function PlannedGroup({ pathname }: { pathname: string }) {
+  const { state, isMobile } = useSidebar()
+  const inside = PLANNED.some((project) => isWithin(pathname, project.to))
+  const [open, setOpen] = useState(inside)
+  // Opening one of their pages opens the row (set while rendering, not in an effect).
+  const [wasInside, setWasInside] = useState(inside)
+  if (inside !== wasInside) {
+    setWasInside(inside)
+    if (inside) setOpen(true)
+  }
+  const links = (
+    <SidebarMenu>
+      {PLANNED.map(({ to, name, icon }) => (
+        <MenuLink key={to} item={{ to, label: name, icon }} pathname={pathname} planned />
+      ))}
+    </SidebarMenu>
+  )
+
+  if (state === 'collapsed' && !isMobile) {
+    return (
+      <SidebarGroup role="group" aria-labelledby={PLANNED_LABEL_ID}>
+        <SidebarGroupLabel id={PLANNED_LABEL_ID}>To be developed</SidebarGroupLabel>
+        <SidebarGroupContent>{links}</SidebarGroupContent>
+      </SidebarGroup>
+    )
+  }
+
+  return (
+    <Collapsible asChild open={open} onOpenChange={setOpen}>
+      <SidebarGroup role="group" aria-labelledby={PLANNED_LABEL_ID} className="group/planned">
+        <SidebarGroupLabel asChild>
+          <CollapsibleTrigger
+            id={PLANNED_LABEL_ID}
+            className="w-full justify-between hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          >
+            <span>To be developed</span>
+            <span className="flex items-center gap-1.5">
+              {open ? null : (
+                <span aria-hidden="true" className="text-caption tabular-nums">
+                  {PLANNED.length}
+                </span>
+              )}
+              <ChevronRight
+                aria-hidden="true"
+                className="size-4 transition-transform duration-(--duration-fast) ease-(--ease) group-data-[state=open]/planned:rotate-90"
+              />
+            </span>
+          </CollapsibleTrigger>
+        </SidebarGroupLabel>
+        <CollapsibleContent>
+          <SidebarGroupContent>{links}</SidebarGroupContent>
+        </CollapsibleContent>
+      </SidebarGroup>
+    </Collapsible>
+  )
+}
+
+/**
  * The left menu: Home, then one dropdown per project with its own pages (from src/modules.ts), the
- * projects still to be developed, and the shared Admin at the bottom, with the signed-in person's
+ * projects still to be developed (one row that starts closed), and the shared Admin at the bottom, with the signed-in person's
  * name and role under it (PLAN-V13 T1-6). It folds to icons, and each icon keeps a tooltip with
  * the page name. A page shows as selected while you are on it or inside
  * it.
@@ -200,23 +262,7 @@ export function AppSidebar() {
           {grouped.map((app) => (
             <ModuleGroup key={app.id} app={app} pathname={pathname} />
           ))}
-          {PLANNED.length > 0 ? (
-            <SidebarGroup role="group" aria-labelledby={PLANNED_LABEL_ID}>
-              <SidebarGroupLabel id={PLANNED_LABEL_ID}>To be developed</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {PLANNED.map(({ to, name, icon }) => (
-                    <MenuLink
-                      key={to}
-                      item={{ to, label: name, icon }}
-                      pathname={pathname}
-                      planned
-                    />
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          ) : null}
+          {PLANNED.length > 0 ? <PlannedGroup pathname={pathname} /> : null}
         </SidebarContent>
         <SidebarFooter className="border-t border-sidebar-border">
           <SidebarMenu>

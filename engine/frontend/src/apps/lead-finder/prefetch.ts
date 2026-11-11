@@ -15,17 +15,34 @@ import {
   runQueryOptions,
   runsQueryOptions,
 } from '@/api/hooks'
+import type { QueryOf } from '@/api/types'
 import type { PrefetchArgs } from '@/shell/crumbs'
 import { filterQuery, listQuery, readResults } from './results/params'
 import { FIRST_RUNS_PAGE } from './run/runs-query'
 
-/** The newest run, for the "Last run" line on Home. */
+/** The newest run, for the line under the greeting and the "Last run" line on Home. */
 export const LAST_RUN = { app: 'lead_finder', limit: 1 } as const
 
-/** What the Lead Finder's card on Home asks for: the newest run, and the lead counts. */
+/**
+ * The best good leads nobody has acted on yet, for "Start with these" on Home: a Pass or a
+ * Director review whose status is still new, highest score first.
+ */
+export const TOP_LEADS = {
+  result: ['pass', 'director_review'],
+  status: ['new'],
+  sort: 'score',
+  order: 'desc',
+  limit: 3,
+} satisfies QueryOf<'list_leads'>
+
+/**
+ * What the Lead Finder asks for on Home: the newest run, the lead counts (by result and by sign)
+ * and the best new good leads.
+ */
 export function prefetchLeadFinderSummary(client: QueryClient): void {
   void client.prefetchQuery(runsQueryOptions(LAST_RUN))
   void client.prefetchQuery(leadFacetsQueryOptions())
+  void client.prefetchQuery(leadsQueryOptions(TOP_LEADS))
 }
 
 export function prefetchStart({ client }: PrefetchArgs): void {

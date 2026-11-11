@@ -12,7 +12,12 @@ describe('App', () => {
 
     // The page loads its code on first use; a busy test run can take more than the default second.
     expect(
-      await screen.findByRole('heading', { level: 1, name: 'Home' }, { timeout: 5000 }),
+      await screen.findByRole(
+        'heading',
+        // Home's title is the greeting, which follows the clock.
+        { level: 1, name: /^Good (morning|afternoon|evening)/ },
+        { timeout: 5000 },
+      ),
     ).toBeInTheDocument()
     expect(screen.getByText('Contour')).toBeInTheDocument()
     expect(screen.getByRole('group', { name: 'Lead Finder' })).toBeInTheDocument()

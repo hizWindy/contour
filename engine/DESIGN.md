@@ -93,6 +93,8 @@ Where a company came from (From HubSpot, Found, Typed) is a quiet mark, not a ba
 | Reading text, like the lead card summary | 1rem (16px) | 400 |
 | Tables, forms and menus | 0.875rem (14px) | 400, and 600 for headers |
 | Labels and captions | 0.8125rem (13px) | 400 |
+| Home only: the greeting and a card's one number (`text-display`) | 2.25rem (36px) | 600 |
+| Home only: the Lead Finder's count of good leads (`text-figure`) | 4rem (64px) | 400 |
 
 Sizes are in rem, so browser zoom works. Nothing is smaller than 13px. Sentence case everywhere, with no all-caps labels.
 
@@ -105,8 +107,14 @@ Sizes are in rem, so browser zoom works. Nothing is smaller than 13px. Sentence 
 
 ## Layout
 
-- **App frame:** a left sidebar that folds to icons, a top bar with breadcrumbs, the command menu and the account menu (your initials and name, opening to your details and "Sign out"; it shows only where sign-in is on), then the page. The sidebar has Home at the top, one group per project (its name, then its pages), a "To be developed" group in quieter text (each opens a page saying what the project will do), and the shared Admin at the bottom. Folded to icons, the group names hide and the page icons stay.
-- **Home:** one card per project, like a small table of contents: its name and what it does, where it stands now (for the Lead Finder: the last run with its status and cost, and the leads by result, each a link), then its pages as rows with one line on what you do there. No coloured stripes and no decorative icon tiles: colour on Home comes from the result badges, which carry meaning.
+- **App frame:** a left sidebar that folds to icons, a top bar with breadcrumbs, the command menu and the account menu (your initials and name, opening to your details and "Sign out"; it shows only where sign-in is on), then the page. The sidebar has Home at the top, one group per project (its name, then its pages), a "To be developed" group in quieter text, folded into one row that starts closed and opens by itself on one of its pages (each opens a page saying what the project will do), and the shared Admin at the bottom. Folded to icons, the group names hide and the page icons stay.
+- **Home** (the "bento" Home, 11 Nov 2026, from Al-khair's draft in `inspirations/`): the date, a greeting by first name ("Good morning, Al-khair", the page's `h1`) and one sentence from each project (the Lead Finder says what its last run did). Faint contour lines sit behind the greeting, from a tablet up: decoration only. Then a grid of cards from `src/modules.ts`:
+  - **Lead Finder** (two columns wide, two rows tall on a laptop): its good leads in large digits, every lead by result as one bar with the result badges as its legend (each a link to Results), the four signs seen most (the biggest lit in the accent), "Start with these" (the three best good leads still new, each with its sign and date), and the last run beside the one main button, "Start a run".
+  - **Companies:** the count, how fresh the HubSpot copy is, a box that opens Companies with the name typed in its search, and the calls prepped today (or, in the serif voice, "No calls prepped today.").
+  - **Runs and cost** (shared, like the Admin tab it opens): the spend over 30 days and a bar for each of the newest 8 days with a run, today's lit in the accent.
+  - A project that brings no cards of its own gets the plain card: its name, what it does, where it stands and its pages as rows.
+  - **To be developed:** a quiet Stone card for each project with a place in the queue ("Next", "Third") and what it waits for, and one "Later" card listing the rest. The menu folds these projects into one row that starts closed, since Home already shows them.
+  - Each card's icon tile carries its project colour (Eucalyptus, Heath); Runs and cost has a Stone tile. Links to another page end in an arrow (→), never ↗, which would mean another site. The cards fade and rise once, one after another; the bars grow once. With reduced motion, everything is simply there.
 - **Width:** up to 1440px. Tables and the map can use the full width.
 - **List and detail:** clicking a result opens its lead card in a side panel, so the list stays in view. Each card also has its own page and link.
 - **Map page:** the map and the list sit side by side, with a divider you can drag.

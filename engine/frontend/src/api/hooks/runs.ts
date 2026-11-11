@@ -60,13 +60,18 @@ export function useRunLog(runId: string | undefined, after = 0) {
   })
 }
 
-/** Cost and run counts by day, for the cost chart. `since` is a Melbourne date (YYYY-MM-DD). */
-export function useRunSummary(since?: string) {
-  return useQuery({
+/** Cost and run counts by day. `since` is a Melbourne date (YYYY-MM-DD). */
+export function runSummaryQueryOptions(since?: string) {
+  return queryOptions({
     queryKey: queryKeys.runs.summary(since),
     queryFn: async ({ signal }) =>
       unwrap(await api.GET('/runs/summary', { params: { query: { since } }, signal })),
   })
+}
+
+/** Cost and run counts by day, for the cost chart. `since` is a Melbourne date (YYYY-MM-DD). */
+export function useRunSummary(since?: string) {
+  return useQuery(runSummaryQueryOptions(since))
 }
 
 /**

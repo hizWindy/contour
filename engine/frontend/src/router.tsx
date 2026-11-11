@@ -8,9 +8,11 @@
  * page that says so.
  */
 import { createBrowserRouter, Navigate, type RouteObject } from 'react-router'
+import { runSummaryQueryOptions } from '@/api/hooks'
 import { MODULES, PLANNED } from '@/modules'
 import { AppFrame } from '@/shell/app-frame'
 import type { RouteHandle } from '@/shell/crumbs'
+import { costSince } from '@/shell/home-words'
 import { adminTabLabel } from '@/shell/nav'
 import { page, type PageModule } from '@/shell/page-route'
 import { NotFound, RouteError } from '@/shell/route-error'
@@ -48,11 +50,12 @@ export const routes: RouteObject[] = [
         index: true,
         handle: {
           crumb: 'Home',
-          // The cards on Home ask for their own data (each project's `summary`).
+          // The cards on Home ask for their own data: each project's, then the shared Runs and cost.
           prefetch: ({ client }) => {
             for (const app of MODULES) {
               app.prefetchSummary?.(client)
             }
+            void client.prefetchQuery(runSummaryQueryOptions(costSince()))
           },
         } satisfies RouteHandle,
         ...page(() => import('@/shell/home')),

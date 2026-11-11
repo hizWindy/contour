@@ -7,7 +7,8 @@ import { Building2 } from 'lucide-react'
 import type { RouteHandle } from '@/shell/crumbs'
 import type { AppModule } from '@/shell/nav'
 import { page } from '@/shell/page-route'
-import { prefetchCompanies, prefetchCompany } from './prefetch'
+import { CompaniesHomeCard } from './home-card'
+import { prefetchCompanies, prefetchCompaniesHome, prefetchCompany } from './prefetch'
 
 export const COMPANIES: AppModule = {
   id: 'companies',
@@ -15,6 +16,8 @@ export const COMPANIES: AppModule = {
   name: 'Companies',
   icon: Building2,
   tone: 'companies',
+  homeCards: [{ id: 'companies', component: CompaniesHomeCard }],
+  prefetchSummary: prefetchCompaniesHome,
   description:
     'Every client and prospect in HubSpot, with what we know about each, and a call script before you ring.',
   pages: [

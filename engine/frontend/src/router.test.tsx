@@ -23,6 +23,9 @@ beforeEach(() => {
 // first load of a heavy page (the charts) can take more than the 1 s default.
 const LAZY = 5000
 
+/** Home's title is the greeting, which follows the clock. */
+const GREETING = /^Good (morning|afternoon|evening)/
+
 function renderAt(path: string) {
   const router = createMemoryRouter(routes, { initialEntries: [path] })
   const result = renderWithProviders(<RouterProvider router={router} />, { withRouter: false })
@@ -56,10 +59,10 @@ describe('the router', () => {
     expect(document.title).toBe(`${trail.at(-1) ?? ''} - Contour`)
   })
 
-  it('shows Home at the home address, with a card for every project and its pages', async () => {
+  it('shows Home at the home address, with a card for every project and Runs and cost', async () => {
     const { router } = renderAt('/')
     expect(
-      await screen.findByRole('heading', { level: 1, name: 'Home' }, { timeout: LAZY }),
+      await screen.findByRole('heading', { level: 1, name: GREETING }, { timeout: LAZY }),
     ).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/')
     expect(document.title).toBe('Home - Contour')
@@ -67,14 +70,16 @@ describe('the router', () => {
     const page = document.getElementById('page') as HTMLElement
     for (const app of MODULES) {
       const card = within(page).getByRole('region', { name: app.name })
-      expect(within(card).getByText(app.description)).toBeInTheDocument()
-      for (const item of app.pages) {
-        expect(within(card).getByRole('link', { name: item.label })).toHaveAttribute(
-          'href',
-          item.to,
-        )
-      }
+      // Each card opens its project: at least one of its pages is a link on it.
+      const hrefs = within(card)
+        .getAllByRole('link')
+        .map((link) => link.getAttribute('href'))
+      expect(
+        app.pages.some((item) => hrefs.includes(item.to)),
+        app.name,
+      ).toBe(true)
     }
+    expect(within(page).getByRole('region', { name: 'Runs and cost' })).toBeInTheDocument()
   })
 
   it.each([
@@ -178,8 +183,9 @@ describe('the router', () => {
   })
 
   it('lists the projects still to be developed in their own menu group', async () => {
+    // A tablet: the menu is folded to icons, so the group shows each one's icon.
     renderAt('/')
-    await screen.findByRole('heading', { level: 1, name: 'Home' }, { timeout: LAZY })
+    await screen.findByRole('heading', { level: 1, name: GREETING }, { timeout: LAZY })
     const menu = within(screen.getByRole('navigation', { name: 'Main menu' }))
     const planned = within(menu.getByRole('group', { name: 'To be developed' }))
     expect(planned.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual(
@@ -206,12 +212,16 @@ describe('the router', () => {
 
   it('lists the projects still to be developed on Home, each with its page', async () => {
     renderAt('/')
-    await screen.findByRole('heading', { level: 1, name: 'Home' }, { timeout: LAZY })
+    await screen.findByRole('heading', { level: 1, name: GREETING }, { timeout: LAZY })
     const section = within(screen.getByRole('region', { name: 'To be developed' }))
     for (const project of PLANNED) {
       expect(section.getByRole('link', { name: project.name })).toHaveAttribute('href', project.to)
-      expect(section.getByText(project.status)).toBeInTheDocument()
+      // A project in the queue says where it stands; the rest are listed under "Later".
+      if (project.when) {
+        expect(section.getByText(project.needs ?? project.status)).toBeInTheDocument()
+      }
     }
+    expect(section.getByText('Later')).toBeInTheDocument()
   })
 
   it('keeps Results marked while a lead card is open', async () => {

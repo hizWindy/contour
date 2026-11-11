@@ -3,13 +3,13 @@ import { extendTailwindMerge } from 'tailwind-merge'
 
 /**
  * Tailwind class merging that knows our own names from `styles/index.css`:
- * the type scale (`text-title`, `text-ui`, ...), the float shadow, the one easing curve and the
+ * the type scale (`text-display`, `text-title`, `text-ui`, ...), the float shadow, the one easing curve and the
  * springs.
  */
 const twMerge = extendTailwindMerge({
   extend: {
     classGroups: {
-      'font-size': [{ text: ['title', 'section', 'body', 'ui', 'caption'] }],
+      'font-size': [{ text: ['display', 'figure', 'title', 'section', 'body', 'ui', 'caption'] }],
       shadow: [{ shadow: ['float'] }],
       ease: [{ ease: ['standard', 'spring-snappy', 'spring-smooth', 'spring-soft'] }],
     },

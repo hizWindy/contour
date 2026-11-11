@@ -153,6 +153,10 @@
   --text-ui--line-height: var(--leading-ui);
   --text-caption: var(--size-caption);
   --text-caption--line-height: var(--leading-caption);
+  --text-display: var(--size-display);
+  --text-display--line-height: var(--leading-display);
+  --text-figure: var(--size-figure);
+  --text-figure--line-height: var(--leading-figure);
   /* shadcn's own names, on the same scale. */
   --text-xs: var(--size-caption);
   --text-xs--line-height: var(--leading-caption);
