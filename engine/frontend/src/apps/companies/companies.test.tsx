@@ -239,6 +239,10 @@ function sync(changes: Partial<HubSpotSync> = {}): HubSpotSync {
     companies_removed: 0,
     deals_removed: 0,
     profiles_rebuilt: 13913,
+    people_saved: 0,
+    profiles_done: 0,
+    profiles_total: 0,
+    profiles_skipped: false,
     error: null,
     warnings: [],
     started_at: new Date(Date.now() - 5 * 3_600_000 - 546_000).toISOString(),
@@ -589,50 +593,6 @@ describe('the prep box and the call prep', () => {
     expect(await within(modal).findByText('Copied')).toBeInTheDocument()
     await act(async () => {
       await Promise.resolve()
-    })
-  })
-})
-
-describe('the HubSpot sync button', () => {
-  it('says when our copy was updated, follows a full sync, and refreshes the list after', async () => {
-    const running = sync({
-      id: 5,
-      status: 'running',
-      trigger: 'website',
-      companies_read: 4200,
-      deals_read: 0,
-      companies_saved: 0,
-      deals_saved: 0,
-      started_at: new Date().toISOString(),
-      finished_at: null,
-    })
-    const backend = mockApi({ afterStart: [running, sync()] })
-    const { user } = renderCompanies()
-    expect(await screen.findByText(/HubSpot copy updated 5 hours ago/)).toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: 'Sync with HubSpot' }))
-    await waitFor(() => {
-      const posted = backend.requests.find((request) => request.url.includes('/hubspot/sync?'))
-      expect(posted && new URL(posted.url).searchParams.get('mode')).toBe('full')
-    })
-    expect(await screen.findByText('Reading companies: 4,200 of about 13,913.')).toBeInTheDocument()
-    expect(screen.getByRole('progressbar', { name: 'HubSpot sync' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Syncing' })).toBeDisabled()
-
-    // It finishes: the next look says what was copied, and the list is read again.
-    const listReads = (): number =>
-      backend.requests.filter((request) => new URL(request.url).pathname === API).length
-    const before = listReads()
-    backend.syncs = [
-      sync({ id: 5, trigger: 'website', companies_saved: 13916, deals_saved: 8050 }),
-      sync(),
-    ]
-    expect(
-      await screen.findByText('HubSpot copy updated', {}, { timeout: 5000 }),
-    ).toBeInTheDocument()
-    expect(screen.getByText('13,916 companies and 8,050 deals copied.')).toBeInTheDocument()
-    await waitFor(() => {
-      expect(listReads()).toBeGreaterThan(before)
     })
   })
 })

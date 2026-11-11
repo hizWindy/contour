@@ -338,7 +338,7 @@ Newest first.
 
 ## Track 2: the website (session 2)
 
-**Progress:** 2 of 7 steps done (T2-1, T2-2). T2-3 (2346cf9) and T2-4 (08ec5bc) are built, waiting for a look. T2-5 is built, waiting for a look. T2-6 waits for the tag `v15-api`.
+**Progress:** 2 of 7 steps done (T2-1, T2-2). T2-3 (2346cf9) and T2-4 (08ec5bc) are built, waiting for a look. T2-5 and T2-6 are built, waiting for a look. T2-7 (the browser check) is next.
 
 - [x] **T2-1. Own copy and a baseline.** Done 2026-11-12 (no code change; see the Log).
   - The worktree, the `leadfinder_v15b` database and the ports.
@@ -401,7 +401,7 @@ Newest first.
     - a `/auth/me` that fails once still ends with the menu showing;
     - one that keeps failing shows Connection lost;
     - the sidebar shows no modules while access is unknown.
-- [ ] **T2-6. The sync Stop button.** Waits for `v15-api`.
+- [ ] **T2-6. The sync Stop button.** Waits for `v15-api`. Built, waiting for a look (see the Log).
   - Wait for the tag. If it's missing, stop and say "Waiting for the API (T1-3)".
   - `git merge v15-api`. Run `uv run engine migrate` on `leadfinder_v15b`, then `npm run types`.
   - **The hook:** `useCancelHubSpotSync` in `src/api/hooks/hubspot.ts`.
@@ -429,6 +429,12 @@ Newest first.
 
 Newest first.
 
+- 2026-11-12: **T2-6 built**, waiting for a look. Merged `v15-api` (10ada26, from Track 1's message): no conflicts. Migration 0016 ran on `leadfinder_v15b` (with the main venv's Python, from this copy's `engine/backend`, after checking it read this copy's `engine/.env`). `npm run types` changed nothing. Built:
+  - `useCancelHubSpotSync` in `src/api/hooks/hubspot.ts`. The phase words and the bar in a shared `src/components/hubspot/sync-progress.ts`: "Reading HubSpot: 4,200 of about 13,913 companies.", "Saving to our copy.", "Saving people (1,200).", "Updating profiles (3,400 of 13,900)."; the bar fills by phase (profiles 80 to 100), so it no longer sits at 95%.
+  - Companies, "Sync with HubSpot": sends `auto`; Stop beside the progress; after a press "Stopping…" with the button off; then the toast "HubSpot sync stopped" with the backend's own last warning. A 409 `not_running` says "That sync had already finished" and reads the list again.
+  - Admin, HubSpot, Syncs card: "Sync now" (`auto`) and a new "Full copy" (`full`); while one runs, its phase and Stop; a stopped sync in the list reads "Stopped" and what it kept. "Off (HUBSPOT_WRITE_ENABLED)" became "Off (a server setting)", and the screen-words test now catches any ALL_CAPS setting name.
+  - The sync test moved from `companies.test.tsx` to a new `hubspot-sync.test.tsx` (own helpers; "sends full" became "sends auto"). In `companies.test.tsx`, besides the move, the `sync()` helper gained the four new required fields (`people_saved: 0, profiles_done: 0, profiles_total: 0, profiles_skipped: false`, after `profiles_rebuilt`); without them that file no longer type-checks once `v15-api` is in. Track 3 was told the exact lines, so the same change on both sides merges cleanly at M1.
+  - Full run (1 worker): **89 files, 1,221 tests passed**; types, lint and Prettier clean.
 - 2026-11-12: **T2-5 built**, waiting for a look. Full run (1 worker): 1,203 passed, 3 failed, all three tests that drew Home or the app with no answer to "who is signed in" (the smoke test, the Home prefetch test) or answered 403 to it (a new router test); fixed, and they pass. What it does: the sign-in guard never shows the app without a user. When `/auth/me` still fails after its retries it shows Connection lost (offline, out of reach, no answer in time), Updating (a deploy) or the failed answer with its request id, each standalone (no frame), and each comes back by itself. Offline before the first answer (TanStack pauses the query) now says "You're offline" instead of a grey shape forever. A later check that fails keeps the app. A 404 from `/auth/me` means a backend with no sign-in routes, so sign-in is off. The menu, Home and Ctrl+K offer no project while access isn't known. The top bar stays at the top on a phone. `DESIGN.md` says where the account sits. Tests that drew Home or the command menu without answering "who is signed in" now answer it (Home behind the guard; the command menu's calls answer 404).
 - 2026-11-12: **For M1 and Track 3** (sent to Track 3 as a message once its session was running again). Shared website changes that call prep's tests may meet at the merge:
   - A failed fetch is code `offline` or `unreachable` (was `network`), a timeout `timeout`, and a 502, 503 or 504 with no JSON `updating`. `toApiProblem` no longer turns a plain `TypeError` into "can't reach": it is "This page couldn't be shown" (`page_error`).

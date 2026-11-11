@@ -26,7 +26,7 @@ const FORBIDDEN: readonly { what: string; pattern: RegExp }[] = [
   { what: 'a local address', pattern: /\blocalhost\b|127\.0\.0\.1|\[::1\]|:5173\b|:8000\b/ },
   {
     what: "a setting's own name",
-    pattern: /\b[A-Z][A-Z0-9]*_(API_KEY|SERVICE_KEY|TOKEN|SECRET|PASSWORD|URL)\b/,
+    pattern: /\b[A-Z][A-Z0-9]+(?:_[A-Z0-9]+)+\b/,
   },
   { what: "a code file's name", pattern: /\b[\w-]+\.(py|tsx?|ya?ml|toml|sh|ps1)\b/ },
 ]
@@ -127,7 +127,7 @@ describe('the words on screen (PLAN-V15 T2-3)', () => {
       'Check that it is running (uv run engine serve).',
       'Add the key to engine/.env.',
       'Open the site at http://localhost:5173.',
-      'Missing: add HUBSPOT_SERVICE_KEY.',
+      'Turn on HUBSPOT_WRITE_ENABLED.',
       'See criteria.yaml.',
     ]
     for (const [index, { pattern }] of FORBIDDEN.entries()) {
