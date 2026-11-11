@@ -13,7 +13,9 @@ import { useId, useState } from 'react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { cn } from '@/lib/utils'
 import { GuideWhy } from './guide-parts'
+import { EditableLine } from './line-editor'
 import type { GuideQuestion } from './playbook'
+import { lineSlot } from './script-layers'
 
 function FollowUps({ id, question, open }: { id: string; question: GuideQuestion; open: boolean }) {
   return (
@@ -89,30 +91,36 @@ function QuestionRow({
         />
       </div>
       <div className="flex min-w-0 flex-col gap-1">
-        <button
-          type="button"
-          aria-expanded={hasFollowUps ? open : undefined}
-          aria-controls={hasFollowUps ? `${id}-next` : undefined}
-          onClick={onOpen}
-          className={cn(
-            'group flex w-full items-start gap-2 rounded-sm text-left text-body transition-colors',
-            asked ? 'text-muted-foreground' : 'text-foreground',
-          )}
+        <EditableLine
+          line={question}
+          slot={lineSlot('question', index, question)}
+          label={`Question ${String(index + 1)}`}
         >
-          <span className="min-w-0 flex-1">
-            <span className="sr-only">Question {index + 1}: </span>
-            {question.text}
-          </span>
-          {hasFollowUps ? (
-            <ChevronDown
-              aria-hidden="true"
-              className={cn(
-                'mt-1 size-4 shrink-0 text-muted-foreground transition-transform duration-250',
-                open && 'rotate-180',
-              )}
-            />
-          ) : null}
-        </button>
+          <button
+            type="button"
+            aria-expanded={hasFollowUps ? open : undefined}
+            aria-controls={hasFollowUps ? `${id}-next` : undefined}
+            onClick={onOpen}
+            className={cn(
+              'group flex w-full items-start gap-2 rounded-sm text-left text-body transition-colors',
+              asked ? 'text-muted-foreground' : 'text-foreground',
+            )}
+          >
+            <span className="min-w-0 flex-1">
+              <span className="sr-only">Question {index + 1}: </span>
+              {question.text}
+            </span>
+            {hasFollowUps ? (
+              <ChevronDown
+                aria-hidden="true"
+                className={cn(
+                  'mt-1 size-4 shrink-0 text-muted-foreground transition-transform duration-250',
+                  open && 'rotate-180',
+                )}
+              />
+            ) : null}
+          </button>
+        </EditableLine>
         <GuideWhy line={question} />
         {hasFollowUps ? <FollowUps id={`${id}-next`} question={question} open={open} /> : null}
       </div>
@@ -144,7 +152,7 @@ export function GuidedQuestions({ questions }: { questions: GuideQuestion[] }) {
       <ol className="flex flex-col gap-1">
         {questions.map((question, index) => (
           <QuestionRow
-            key={question.text}
+            key={lineSlot('question', index, question)}
             question={question}
             index={index}
             asked={asked.has(index)}

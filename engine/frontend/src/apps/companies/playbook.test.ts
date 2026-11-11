@@ -1,86 +1,60 @@
 import { describe, expect, it } from 'vitest'
-import type { CompanyDetail, PrepScript } from '@/api/types'
-import { buildGuide, guideFromPrep, guideText, shortMoney } from './playbook'
-
-const TODAY = '2026-11-09'
-const JASON = { name: 'Jason Reeds', title: 'Head of Operations' }
-
-function detail(changes: Partial<CompanyDetail> = {}): CompanyDetail {
-  return {
-    key: '101',
-    source: 'hubspot',
-    name: 'ABC Logistics',
-    domain: 'abclogistics.com.au',
-    website: null,
-    city: 'Perth',
-    state: 'WA',
-    industry: 'Logistics',
-    staff: 300,
-    linkedin_staff: 280,
-    description: null,
-    owner: 'Levi',
-    lifecycle_stage: 'Opportunity',
-    last_talk: '2026-10-01',
-    last_talk_note: null,
-    next_lease_end: '2027-06-30',
-    deal: 'open',
-    hubspot_url: null,
-    offices: [
-      {
-        label: 'Perth',
-        city: 'Perth',
-        street: null,
-        level: null,
-        lease_end: '2027-06-30',
-        moved_in: null,
-        office_m2: null,
-        linkedin_staff: null,
-        quality: null,
-      },
-    ],
-    deals: [
-      {
-        name: 'Perth fit-out',
-        stage: 'Qualified Deal',
-        state: 'open',
-        pipeline: null,
-        amount_aud: '1500000',
-        close_date: '2027-03-01',
-        owner: 'Levi',
-        next_step: 'Site visit',
-        hubspot_url: null,
-      },
-    ],
-    notes: [],
-    people: [],
-    calls: [
-      {
-        id: '301',
-        called_at: '2026-10-01T01:00:00Z',
-        person: 'Jason Reeds',
-        owner: 'Levi',
-        minutes: 7,
-        outcome: 'Connected',
-        note: 'Lease ends next year.',
-        hubspot_url: null,
-      },
-    ],
-    people_status: 'ready',
-    lead: null,
-    ...changes,
-  }
-}
+import type { PrepScript } from '@/api/types'
+import { detail, JASON, TODAY } from './guide-fixtures'
+import {
+  buildGuide,
+  guideFromPrep,
+  guideText,
+  guideTone,
+  shortMoney,
+  type CallGuide,
+  type GuideLine,
+} from './playbook'
 
 const texts = (lines: { text: string }[]): string[] => lines.map((line) => line.text)
 
+const TIME_ASK = 'Do you have two minutes, or is there a better time?'
+const AFTER_NO = 'After a second no, thank them and let it go.'
+
+/** A returning client, a company with a lease date and a cold call: the three cases of T3-2. */
+const RETURNING = (): CallGuide =>
+  buildGuide({ company: detail(), person: JASON, caller: 'Mia Wong', today: TODAY })
+const LEASE_ONLY = (): CallGuide =>
+  buildGuide({
+    company: detail({ deals: [], calls: [], deal: 'none' }),
+    person: JASON,
+    caller: 'Mia',
+    today: TODAY,
+  })
+const COLD = (): CallGuide =>
+  buildGuide({
+    company: detail({ deals: [], calls: [], deal: 'none', offices: [], next_lease_end: null }),
+    person: null,
+    caller: 'Mia',
+    today: TODAY,
+  })
+
+/** Every line the caller reads, in one list. */
+function allLines(guide: CallGuide): GuideLine[] {
+  return [
+    ...(guide.tone ? [guide.tone] : []),
+    ...guide.opener,
+    ...guide.whyNow,
+    ...guide.questions,
+    ...guide.ifTheySay.map((item) => item.answer),
+    ...(guide.goal ? [guide.goal] : []),
+  ]
+}
+
 describe('the free call script', () => {
   it('opens from the last call, gives the deal and the lease as reasons, and guides the questions', () => {
-    const guide = buildGuide({ company: detail(), person: JASON, caller: 'Mia Wong', today: TODAY })
+    const guide = RETURNING()
 
     expect(guide.madeFrom).toBe('hubspot')
     expect(texts(guide.opener)).toEqual([
       "Hi Jason, it's Mia from Contour. We spoke on 1 Oct.",
       'I wanted to follow up on Perth fit-out.',
+      TIME_ASK,
     ])
     expect(texts(guide.whyNow)).toEqual([
       'The Perth lease ends in Jun 2027, in 7 months.',
@@ -90,13 +64,15 @@ describe('the free call script', () => {
     expect(texts(guide.questions)).toEqual([
       'Last time we spoke was on 1 Oct. What has changed since then?',
       'Where are things at with Perth fit-out? Is Mar 2027 still the plan?',
-      'Your Perth lease ends in Jun 2027. Are you planning to renew, or to move?',
+      'Is anything holding up Perth fit-out, or still undecided?',
+      "What happens if Perth fit-out isn't finished before the Perth lease ends in Jun 2027?",
+      'If Perth fit-out runs to plan, what does that mean for the team?',
       'Who else is involved in decisions about the office?',
     ])
-    expect(guide.questions[2]?.followUps.map((follow) => follow.answer)).toEqual([
-      'Renew',
-      'Move',
-      'Not sure yet',
+    expect(guide.questions[3]?.why).toBe('HubSpot: Perth office')
+    expect(guide.questions[1]?.followUps.map((follow) => follow.answer)).toEqual([
+      'On track',
+      'Delayed',
     ])
     expect(guide.goal).toMatchObject({ text: 'Site visit.', why: 'HubSpot: deal, next step' })
     expect(guide.ifTheySay.map((item) => item.theySay)).toEqual([
@@ -105,7 +81,7 @@ describe('the free call script', () => {
       'Just send me an email.',
     ])
     expect(guide.ifTheySay[0]?.answer.text).toBe(
-      'Understood. With the lease ending in Jun 2027, could I check in again in Feb 2027?',
+      "Sounds like the timing isn't right yet. That's fair. With the lease ending in Jun 2027, could I check in again in Feb 2027?",
     )
   })
 
@@ -115,6 +91,7 @@ describe('the free call script', () => {
     expect(texts(guide.opener)).toEqual([
       "Hi, it's [your name] from Contour. We design and build offices. Could I speak to whoever looks after your office space?",
       "When you're put through: I wanted to follow up on Perth fit-out.",
+      `Then: ${TIME_ASK}`,
     ])
     expect(guide.goal?.text).toBe(
       'Get the name of the person who looks after the office, and a good time to call them.',
@@ -157,14 +134,26 @@ describe('the free call script', () => {
     expect(texts(guide.opener)).toEqual([
       "Hi Jason, it's Mia from Contour. We design and build offices.",
       'I wanted to check in on how the Melbourne office is working for the team.',
+      TIME_ASK,
     ])
     expect(texts(guide.questions)).toEqual([
       'When does the lease on your Melbourne office end?',
       'How is the Melbourne office working for the team?',
+      "If something isn't working, how does it affect the team day to day?",
+      'If that were fixed, what would it be worth to the team?',
       'Who else is involved in decisions about the office?',
     ])
-    expect(guide.ifTheySay[0]?.theySay).toBe("We're happy with the office.")
+    expect(guide.ifTheySay[0]).toMatchObject({
+      theySay: "We're happy with the office.",
+      answer: {
+        text: "Sounds like it's working well. That's great to hear. Is anything changing with team size or sites this year?",
+      },
+    })
     expect(guide.goal?.text).toBe('Ask for a referral, and a heads-up on any new office.')
+    expect(guide.tone).toMatchObject({
+      text: `Warm. They are a client, so catch up before the questions. ${AFTER_NO}`,
+      why: 'A Contour customer',
+    })
   })
 
   it('names "Other Office 2" by its city, and asks where the team is when no office is known', () => {
@@ -189,8 +178,12 @@ describe('the free call script', () => {
     expect(texts(guide.whyNow)).toContain(
       'The Sydney office is rated "Needs an Upgrade" in HubSpot.',
     )
+    // The lease leads the questions, and its problem question uses the office's rating.
     expect(texts(guide.questions)).toContain(
-      'Your Sydney office is rated "Needs an Upgrade". Is a refresh on the list for next year?',
+      'Your Sydney office is rated "Needs an Upgrade". What isn\'t working in it today?',
+    )
+    expect(texts(guide.questions)).toContain(
+      'What happens if the lease ends before the new space is ready?',
     )
 
     const nowhere = buildGuide({
@@ -221,9 +214,14 @@ describe('the free call script', () => {
       'LinkedIn shows 150 staff in Australia, and HubSpot has 100. They may be growing.',
       'No talk on record since 1 Nov 2025, 12 months ago.',
     ])
-    expect(texts(guide.questions)).toContain(
+    expect(texts(guide.questions)).toEqual([
+      'Where is the team based now, and when does that lease end?',
       'Are you growing? LinkedIn shows 150 staff in Australia, and HubSpot has 100.',
-    )
+      'Is the current office still big enough for the team?',
+      'What happens if the team outgrows the space before there is a plan?',
+      'If the space grew with the team, what would that mean for you?',
+      'Who else is involved in decisions about the office?',
+    ])
     expect(
       buildGuide({
         company: detail({ staff: 100, linkedin_staff: 150, last_talk: '2025-01-01' }),
@@ -234,17 +232,150 @@ describe('the free call script', () => {
     ).toHaveLength(3)
   })
 
-  it('copies as plain text, follow-ups included', () => {
+  it('copies as plain text, the tone and follow-ups included', () => {
     const guide = buildGuide({ company: detail(), person: JASON, caller: 'Mia', today: TODAY })
     const text = guideText(guide, 'Jason Reeds, Head of Operations, ABC Logistics')
 
-    expect(text).toContain('Call: Jason Reeds, Head of Operations, ABC Logistics')
-    expect(text).toContain('3. Guided questions')
     expect(text).toContain(
-      '   If "Renew": What would make the current space work better for the team?',
+      `Call: Jason Reeds, Head of Operations, ABC Logistics\nTone: Warm. You have spoken before, so pick up where you left off. ${AFTER_NO}`,
     )
+    expect(text).toContain('3. Guided questions')
+    expect(text).toContain('   If "On track": What do you need from us before then?')
     expect(text).toContain('5. Goal of the call\n- Site visit.')
     expect(text).not.toContain('—')
+  })
+
+  it('says how old saved research is once it is over 90 days old', () => {
+    const note = (date: string) => ({
+      date,
+      found_by: 'lead_finder',
+      text: 'Won a contract with the state.',
+      url: null,
+    })
+    const reason = (date: string) =>
+      buildGuide({
+        company: detail({ deals: [], notes: [note(date)] }),
+        person: JASON,
+        caller: 'Mia',
+        today: TODAY,
+      }).whyNow.find((item) => item.icon === 'news')?.why
+
+    expect(reason('2026-06-03')).toBe('Saved research, 3 Jun 2026, 5 months ago')
+    expect(reason('2026-10-20')).toBe('Saved research, 20 Oct 2026')
+  })
+})
+
+describe('the script technique (PLAN-V14)', () => {
+  const cases = [
+    ['a returning client', RETURNING],
+    ['a company with a lease date', LEASE_ONLY],
+    ['a cold call', COLD],
+  ] as const
+
+  it.each(cases)('%s: the opener says who and why, then asks for two minutes', (_, make) => {
+    const opener = texts(make().opener)
+    expect(opener[0]).toMatch(/it's Mia from Contour\./)
+    expect(opener).toHaveLength(3)
+    expect(opener[2]).toMatch(/Do you have two minutes, or is there a better time\?$/)
+  })
+
+  it('a company with a lease date: situation, problem, cost, worth, then who decides', () => {
+    const guide = LEASE_ONLY()
+    expect(texts(guide.opener)[1]).toBe(
+      'Your Perth lease ends in Jun 2027, so I wanted to check in early.',
+    )
+    expect(texts(guide.questions)).toEqual([
+      'Your Perth lease ends in Jun 2027. Are you planning to renew, or to move?',
+      "What isn't working as well as it should in the Perth office today?",
+      'What happens if the lease ends before the new space is ready?',
+      'If the new space were ready well before Jun 2027, what would that mean for the team?',
+      'Who else is involved in decisions about the office?',
+    ])
+    expect(guide.questions.slice(0, 4).map((item) => item.why)).toEqual(
+      Array(4).fill('HubSpot: Perth office'),
+    )
+  })
+
+  it('a cold call: a standard reason, standard questions in the same order, and the switchboard goal', () => {
+    const guide = COLD()
+    expect(texts(guide.opener)).toEqual([
+      "Hi, it's Mia from Contour. We design and build offices. Could I speak to whoever looks after your office space?",
+      "When you're put through: I'm calling to see what's ahead for your office over the next year or two.",
+      `Then: ${TIME_ASK}`,
+    ])
+    expect(texts(guide.questions)).toEqual([
+      'Where is the team based now, and when does that lease end?',
+      "What isn't working as well as it should in the current office?",
+      'What does that cost the team, day to day?',
+      'If that were fixed, what would it be worth to the team?',
+      'Who looks after the office, and when is the next move?',
+    ])
+  })
+
+  it.each(cases)('%s: each pushback answer has three beats and one question', (_, make) => {
+    const answers = make().ifTheySay.map((item) => item.answer.text)
+    expect(answers.length).toBeGreaterThan(0)
+    for (const answer of answers) {
+      // Name the feeling. Agree with what is fair. Ask one question.
+      expect(answer).toMatch(/^Sounds like [^.?]+\. [^.?]+\. [^.?]+\?$/)
+      expect(answer.split('?')).toHaveLength(2)
+    }
+  })
+
+  it('a pushback with no lease date to lean on asks what would need to be true', () => {
+    const guide = buildGuide({
+      company: detail({ deals: [], calls: [], deal: 'none', offices: [], next_lease_end: null }),
+      person: JASON,
+      caller: 'Mia',
+      today: TODAY,
+    })
+    expect(guide.ifTheySay[0]?.answer.text).toBe(
+      "Sounds like the timing is tight. That's fair. What would need to be true for it to be worth a look?",
+    )
+  })
+
+  it('the tone is warm for a returning client and light for a cold call', () => {
+    expect(RETURNING().tone).toMatchObject({
+      text: `Warm. You have spoken before, so pick up where you left off. ${AFTER_NO}`,
+      why: 'HubSpot call, 1 Oct 2026',
+    })
+    const light = `Light. A cold call: keep it short and friendly, and listen more than you talk. ${AFTER_NO}`
+    expect(LEASE_ONLY().tone).toMatchObject({ text: light, why: null })
+    expect(COLD().tone).toMatchObject({ text: light, why: null })
+    // An open deal is a returning client, even through the switchboard.
+    expect(
+      buildGuide({ company: detail(), person: null, caller: 'Mia', today: TODAY }).tone?.text,
+    ).toBe(`Warm. There is a deal in progress, so pick up where it stands. ${AFTER_NO}`)
+  })
+
+  it.each(cases)('%s: a feeling is only ever a question', (_, make) => {
+    const guide = make()
+    const said = [
+      ...allLines(guide).map((item) => item.text),
+      ...guide.questions.flatMap((item) => item.followUps.map((follow) => follow.ask)),
+    ]
+    const feeling = /stress|worr|frustrat|anxious|nervous|overwhelm|hanging over|upset|annoy/i
+    const felt = said.filter((text) => feeling.test(text))
+    for (const text of felt) expect(text).toMatch(/\?$/)
+  })
+
+  it.each(cases)('%s: every line keeps its source mark', (_, make) => {
+    // A line with a fact (a date, a number, the deal, the lease, a rating) says where it comes from.
+    const fact = /\d|fit-out|lease|rated/i
+    for (const item of allLines(make())) {
+      if (fact.test(item.text)) expect(item.why, item.text).toBeTruthy()
+    }
+  })
+
+  it('the questions never pass six: two situation, problem, cost, worth, who decides', () => {
+    for (const make of [RETURNING, LEASE_ONLY, COLD]) {
+      expect(make().questions.length).toBeLessThanOrEqual(6)
+    }
+  })
+
+  it("gives Claude's script the same tone line", () => {
+    const input = { company: detail(), person: JASON, caller: 'Mia', today: TODAY }
+    expect(guideTone(input)).toEqual(buildGuide(input).tone)
   })
 })
 
@@ -276,6 +407,8 @@ describe("call prep's script in the same shape", () => {
     )
 
     expect(guide.madeFrom).toBe('claude')
+    // The answer form has no tone; the card adds the same tone line as the free script.
+    expect(guide.tone).toBeNull()
     expect(guide.whyNow[0]).toMatchObject({
       why: 'HubSpot: Perth office',
       sources: ['F7'],
