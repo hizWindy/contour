@@ -109,17 +109,10 @@ ERROR_MAKERS = {
 }
 # Developer-only text: the command line and the settings checks at start-up.
 NOT_SHOWN = {"core/cli.py", "core/config.py", "apps/lead_finder/cli.py"}
-# Left on purpose, each for its reason:
-# - the host check answers only on the laptop (a server checks its own public address);
-# - the Settings page's texts (Admins only) are mirrored in the website's own checks, which are
-#   Track 2's files: changed together at the merge (PLAN-V15 M1).
+# Left on purpose: the host check answers only on the laptop (a server checks its own public
+# address).
 LEFT = {
     ("core/api/security.py", "The engine only answers to localhost or 127.0.0.1."),
-    (
-        "core/prefs/service.py",
-        "No setting a person can change has this name. Settings that come from engine/.env "
-        "can't be reset here.",
-    ),
 }
 NAMED_TEXTS = ("TITLE", "DETAIL", "DOWN", "FAILED", "ERROR", "MISSING", "INTERRUPTED")
 

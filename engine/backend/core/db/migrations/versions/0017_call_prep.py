@@ -12,7 +12,7 @@
   as for the style notes.
 
 Revision ID: 0017_call_prep
-Revises: 0015_script_notes (PLAN-V15 M1 changes this to 0016_sync_cancel)
+Revises: 0016_sync_cancel (re-pointed at the PLAN-V15 merge; Track 3 wrote it after 0015)
 Create Date: 2026-11-12
 """
 
@@ -22,7 +22,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "0017_call_prep"
-down_revision: str | Sequence[str] | None = "0015_script_notes"
+down_revision: str | Sequence[str] | None = "0016_sync_cancel"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

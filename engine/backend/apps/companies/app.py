@@ -27,8 +27,7 @@ HUBSPOT_NEEDS = HubSpotNeeds(
 
 async def stop_preps(app: FastAPI) -> None:
     """Stops the preps running in this backend when it shuts down, and logs their spend (PLAN-V15
-    T3-7). For `AppSpec.on_shutdown`, which comes with Track 1's T1-6: PLAN-V15 M1 adds
-    `on_shutdown=stop_preps` below."""
+    T3-7). The backend calls it through `AppSpec.on_shutdown` (Track 1's T1-6)."""
     runner: PrepRunner | None = getattr(app.state, "prep_runner", None)
     if runner is not None:
         await runner.stop()
@@ -48,4 +47,5 @@ APP = AppSpec(
     tables_module="apps.companies.tables",
     hubspot_needs=HUBSPOT_NEEDS,
     jobs=JOBS,  # the morning search ahead (PLAN-V10 D5)
+    on_shutdown=stop_preps,  # running preps stop and log their spend (PLAN-V15)
 )

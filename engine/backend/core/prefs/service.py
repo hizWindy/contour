@@ -570,7 +570,7 @@ async def patch_settings(session: AsyncSession, values: dict[str, SettingValue])
     for key in parsed:
         top = getattr(base, CEILINGS[key]) if key in CEILINGS else None
         if top is not None and getattr(checked, key) > top:
-            message = f"Must be at most {_shown(key, top)}. The ceiling in engine/.env is lower."
+            message = f"Must be at most {_shown(key, top)}. The ceiling on the server is lower."
             errors.append(_error(key, message))
     if errors:
         raise _invalid(errors)
@@ -611,7 +611,7 @@ async def reset_setting(session: AsyncSession, key: str) -> SettingsOut:
             404,
             "No such setting",
             "No setting a person can change has this name. "
-            "Settings that come from engine/.env can't be reset here.",
+            "Settings set on the server can't be reset here.",
             code="setting_not_found",
         )
     await _lock(session)

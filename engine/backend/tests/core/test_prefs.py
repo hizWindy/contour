@@ -296,7 +296,7 @@ async def test_a_value_above_its_ceiling_is_refused(
     monkeypatch.setattr(service, "get_settings", lambda: low)
     problem = await problem_of(patch_settings(session, {"run_cap_usd": "12.00"}))
     assert errors_of(problem) == {
-        "body.values.run_cap_usd": "Must be at most 10.00. The ceiling in engine/.env is lower."
+        "body.values.run_cap_usd": "Must be at most 10.00. The ceiling on the server is lower."
     }
 
 
