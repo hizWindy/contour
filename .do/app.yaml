@@ -155,6 +155,11 @@ envs:
   - key: POSTGRES_SSLMODE
     value: require
     scope: RUN_TIME
+  # The embedding model uses one thread (PLAN-V15 T1-4). The backend has 1 vCPU, and ONNX would
+  # otherwise start one thread per core it sees on the host, starving the backend's own work.
+  - key: EMBEDDING_THREADS
+    value: "1"
+    scope: RUN_TIME
   # The backend opens at most 15 connections with these (the cluster's plan allows 22).
   - key: DB_POOL_SIZE
     value: "6"

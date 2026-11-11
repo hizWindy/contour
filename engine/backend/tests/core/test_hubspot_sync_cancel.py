@@ -111,7 +111,9 @@ async def test_a_cancel_while_rebuilding_profiles_keeps_the_companies_and_the_ne
     first = await begin(session_factory, trigger="command", mode="full", settings=SETTINGS)
     await run(first, sessions=session_factory, hubspot=contour(), embedder=CountingEmbedder())  # type: ignore[arg-type]
     embedder = GatedEmbedder()
-    runner = runner_for(session_factory, contour(), embedder)
+    changed = contour()
+    changed.add_company("104", name="Delta Build")  # a new company: its profile must be embedded
+    runner = runner_for(session_factory, changed, embedder)
     started = await runner.start(trigger="website", mode="full")
     await asyncio.wait_for(embedder.reached.wait(), 5)
 
@@ -119,7 +121,7 @@ async def test_a_cancel_while_rebuilding_profiles_keeps_the_companies_and_the_ne
     out = await runner.cancel(started.id)
     assert out.status == "cancelled" and out.profiles_skipped
     assert out.warnings[-1] == CANCELLED_AFTER_SAVE
-    assert await session.scalar(select(func.count()).select_from(HubSpotCompany)) == 3
+    assert await session.scalar(select(func.count()).select_from(HubSpotCompany)) == 4
 
     # The next sync is a changes sync that finds nothing changed (an empty HubSpot answer), yet
     # it rebuilds every profile the stopped one skipped.
@@ -128,11 +130,13 @@ async def test_a_cancel_while_rebuilding_profiles_keeps_the_companies_and_the_ne
     assert plan.mode == "changes"
     done = await run(plan, sessions=session_factory, hubspot=FakeHubSpot(), embedder=again)  # type: ignore[arg-type]
     assert done.status == "done" and not done.profiles_skipped
-    assert done.profiles_rebuilt == 3 and len(again.texts) == 3
+    # All 4 profiles are rebuilt; only Delta Build's text is new, so only it is embedded.
+    assert done.profiles_rebuilt == 4 and again.texts == [again.texts[0]]
+    assert "Delta Build" in again.texts[0]
     profiles = await session.scalar(
         select(func.count()).select_from(MemoryItem).where(MemoryItem.app == "hubspot")
     )
-    assert profiles == 3
+    assert profiles == 4
 
 
 async def test_the_heartbeat_and_phase_are_written_while_it_runs(

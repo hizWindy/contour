@@ -20,6 +20,7 @@ from core.hubspot.connection import (
     written_hook,
 )
 from core.hubspot.importer import ExportError, read_export
+from core.hubspot.profiles import RebuildRunning
 from core.hubspot.profiles import rebuild_profiles as build_profiles
 from core.hubspot.service import HubSpotSummary, ImportResult, save_export, summary
 from core.hubspot.sync import (
@@ -216,7 +217,15 @@ async def import_export(
     result = await save_export(session, export)
     # The companies are saved. Their profiles (for possible matches and look-alikes) follow.
     try:
-        rebuilt = await build_profiles(session, embedder)
+        rebuilt = await build_profiles(session, embedder, wait=False)
+    except RebuildRunning as error:
+        raise Problem(
+            409,
+            "The companies were loaded, but another rebuild of the profiles is running",
+            "Press Rebuild profiles on the Admin page in a minute, so the new companies get "
+            "theirs.",
+            code="rebuild_running",
+        ) from error
     except Exception as error:  # the import itself worked, so say what is left to do
         log.exception("profiles_not_rebuilt_after_import")
         raise Problem(
@@ -244,4 +253,13 @@ async def get_summary(session: SessionDep) -> HubSpotSummary:
     ),
 )
 async def rebuild_profiles(session: SessionDep, embedder: EmbedderDep) -> RebuildResult:
-    return RebuildResult(profiles_rebuilt=await build_profiles(session, embedder))
+    try:
+        built = await build_profiles(session, embedder, wait=False)
+    except RebuildRunning as error:  # a second press, or a sync rebuilding them now
+        raise Problem(
+            409,
+            "The company profiles are being rebuilt now",
+            "Wait a minute, then look again.",
+            code="rebuild_running",
+        ) from error
+    return RebuildResult(profiles_rebuilt=built)

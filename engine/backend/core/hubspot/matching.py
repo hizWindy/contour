@@ -30,17 +30,27 @@ the profile score alone can't tell the same company from a neighbour. A renamed 
 scores up to 0.95 (Mineral Resources against MEGA Resources, both Perth miners), because a short
 profile with no deals reads like every company of its kind. So the same industry is NOT a second
 sign; a shared brand word is.
+
+**Speed (PLAN-V15 T1-4).** A run asks up to 3 times per company, and our copy holds about 14,000
+companies. So the copy is loaded once, as small plain records with every name's cleaned forms
+already made, and kept until it changes (its row counts or newest save time move). Only one
+caller loads it; the others wait for it. The loose checks (4 and 5) use one batch search each
+(rapidfuzz's `process.extract`, the same `token_set_ratio`, run in C++), then the same core-word
+guard on the few that pass, in a thread, so other requests are answered meanwhile. The answers
+are exactly those of comparing every pair.
 """
 
+import asyncio
 import re
+import weakref
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import date
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
-from rapidfuzz import fuzz
+from rapidfuzz import fuzz, process
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from core.hubspot.importer import normalize_domain
 from core.hubspot.models import HubSpotCompany, HubSpotDeal, HubSpotOffice
@@ -369,15 +379,70 @@ def same_city(city: str | None, office_cities: frozenset[str]) -> bool:
 
 
 @dataclass(frozen=True)
+class _Company:
+    """The four fields of a HubSpot company that matching reads."""
+
+    hubspot_id: str
+    name: str
+    domain: str | None
+    owner: str | None
+
+
+@dataclass(frozen=True)
+class _Deal:
+    """The four fields of a deal that matching reads."""
+
+    name: str
+    stage: str | None
+    close_date: date | None
+    last_contacted: date | None
+
+
+@dataclass(frozen=True)
 class _Known:
-    """A HubSpot company, loaded once for the whole call, with its deals."""
+    """A HubSpot company, with its deals."""
 
-    row: HubSpotCompany
+    row: _Company
     cleaned: str
-    deals: tuple[HubSpotDeal, ...]
+    deals: tuple[_Deal, ...]
 
 
-def _summary(deals: Sequence[HubSpotDeal]) -> tuple[Status, list[str], date | None]:
+@dataclass(frozen=True)
+class _Copy:
+    """Our copy of HubSpot as matching needs it, with lookups by domain, name and id."""
+
+    key: tuple[Any, ...]
+    known: tuple[_Known, ...]
+    by_domain: dict[str, list[_Known]]
+    by_name: dict[str, list[_Known]]
+    by_id: dict[str, _Known]
+    # Every cleaned form of every company name (`_variants`), flat, for one batch search, with
+    # each form's core words and its company (an index into `known`). The same for every deal's
+    # lead name, whose core words also leave out the deal words.
+    name_forms: list[str] = field(default_factory=list)
+    name_cores: list[tuple[str, ...]] = field(default_factory=list)
+    name_owner: list[int] = field(default_factory=list)
+    deal_forms: list[str] = field(default_factory=list)
+    deal_cores: list[tuple[str, ...]] = field(default_factory=list)
+    deal_owner: list[int] = field(default_factory=list)
+
+
+_cached: _Copy | None = None
+# One lock for each event loop (the tests run one loop each), so only one caller loads.
+_load_locks: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Lock]" = (
+    weakref.WeakKeyDictionary()
+)
+
+
+def _company_of(row: HubSpotCompany) -> _Company:
+    return _Company(row.hubspot_id, row.name, row.domain, row.owner)
+
+
+def _deal_of(row: HubSpotDeal) -> _Deal:
+    return _Deal(row.name, row.stage, row.close_date, row.last_contacted)
+
+
+def _summary(deals: Sequence[_Deal]) -> tuple[Status, list[str], date | None]:
     open_deals = [d.name for d in deals if (d.stage or "").lower() != DISSOLVED]
     dissolved = [
         d.close_date or d.last_contacted for d in deals if (d.stage or "").lower() == DISSOLVED
@@ -387,7 +452,7 @@ def _summary(deals: Sequence[HubSpotDeal]) -> tuple[Status, list[str], date | No
     return status, open_deals, max(known_dates) if known_dates else None
 
 
-def _found(company: HubSpotCompany, deals: Sequence[HubSpotDeal], by: MatchedBy) -> HubSpotMatch:
+def _found(company: _Company, deals: Sequence[_Deal], by: MatchedBy) -> HubSpotMatch:
     status, open_deals, last_dissolved = _summary(deals)
     return HubSpotMatch(
         status=status,
@@ -424,22 +489,112 @@ def _candidate(known: _Known, reason: CandidateReason, score: float) -> MatchCan
     )
 
 
-async def _load(session: AsyncSession) -> list[_Known]:
-    """Every company except the one with no name, and its deals: two queries."""
+async def _copy_key(session: AsyncSession) -> tuple[Any, ...]:
+    """What changes whenever our copy does: every save sets `imported_at` (an insert and an
+    update alike), and a removal lowers a count. The database's address keeps two databases
+    apart (the tests use their own)."""
     companies = (
-        await session.scalars(
-            select(HubSpotCompany)
+        await session.execute(
+            select(
+                func.count(),
+                func.max(HubSpotCompany.imported_at),
+                func.max(HubSpotCompany.hubspot_id),
+            )
+        )
+    ).one()
+    deals = (await session.execute(select(func.count(), func.max(HubSpotDeal.imported_at)))).one()
+    bind = session.bind
+    url = bind.url if isinstance(bind, AsyncEngine) else bind.engine.url if bind else ""
+    return (str(url), *companies, *deals)
+
+
+def _build(
+    key: tuple[Any, ...],
+    companies: Sequence[tuple[str, str, str | None, str | None]],
+    deal_rows: Sequence[tuple[str, str, str | None, date | None, date | None]],
+) -> _Copy:
+    """Builds the records and the lookups. Pure CPU work (14,000 names to clean), so it runs in
+    a thread."""
+    deals: dict[str, list[_Deal]] = {}
+    for company_id, name, stage, close_date, last_contacted in deal_rows:
+        deals.setdefault(company_id, []).append(_Deal(name, stage, close_date, last_contacted))
+    known = tuple(
+        _Known(_Company(*row), clean_name(row[1]), tuple(deals.get(row[0], ())))
+        for row in companies
+    )
+    by_domain: dict[str, list[_Known]] = {}
+    by_name: dict[str, list[_Known]] = {}
+    copy = _Copy(key, known, by_domain, by_name, {item.row.hubspot_id: item for item in known})
+    for index, item in enumerate(known):
+        if item.row.domain:
+            by_domain.setdefault(item.row.domain, []).append(item)
+        by_name.setdefault(item.cleaned, []).append(item)
+        for form in _variants(item.row.name):
+            copy.name_forms.append(form)
+            copy.name_cores.append(_core(form))
+            copy.name_owner.append(index)
+        for deal in item.deals:
+            for form in _variants(deal_lead(deal.name)):
+                copy.deal_forms.append(form)
+                copy.deal_cores.append(_core(form, DEAL_WORDS))
+                copy.deal_owner.append(index)
+    return copy
+
+
+async def _load(session: AsyncSession) -> _Copy:
+    """Every company except the one with no name, and its deals. Read from the database only
+    when our copy changed since the last call; otherwise the kept one is used."""
+    loop = asyncio.get_running_loop()
+    lock = _load_locks.get(loop)
+    if lock is None:
+        lock = _load_locks[loop] = asyncio.Lock()
+    async with lock:  # 20 matches at once after a change load it once, not 20 times
+        return await _load_now(session)
+
+
+async def _load_now(session: AsyncSession) -> _Copy:
+    global _cached
+    key = await _copy_key(session)
+    cached = _cached
+    if cached is not None and cached.key == key:
+        return cached
+    companies = (
+        await session.execute(
+            select(
+                HubSpotCompany.hubspot_id,
+                HubSpotCompany.name,
+                HubSpotCompany.domain,
+                HubSpotCompany.owner,
+            )
             .where(func.lower(func.btrim(HubSpotCompany.name)) != PLACEHOLDER_NAME)
             .order_by(HubSpotCompany.hubspot_id)
         )
     ).all()
-    deals: dict[str, list[HubSpotDeal]] = {}
-    for deal in await session.scalars(select(HubSpotDeal).order_by(HubSpotDeal.hubspot_deal_id)):
-        deals.setdefault(deal.hubspot_company_id, []).append(deal)
-    return [
-        _Known(company, clean_name(company.name), tuple(deals.get(company.hubspot_id, ())))
-        for company in companies
-    ]
+    deal_rows = (
+        await session.execute(
+            select(
+                HubSpotDeal.hubspot_company_id,
+                HubSpotDeal.name,
+                HubSpotDeal.stage,
+                HubSpotDeal.close_date,
+                HubSpotDeal.last_contacted,
+            ).order_by(HubSpotDeal.hubspot_deal_id)
+        )
+    ).all()
+    built = await asyncio.to_thread(
+        _build,
+        key,
+        [tuple(row) for row in companies],  # type: ignore[misc]
+        [tuple(row) for row in deal_rows],  # type: ignore[misc]
+    )
+    _cached = built
+    return built
+
+
+def forget_loaded_copy() -> None:
+    """Drops the kept copy (for tests that change our copy in ways the key can't see)."""
+    global _cached
+    _cached = None
 
 
 def _names_to_try(name: str, found_name: str | None) -> list[str]:
@@ -453,39 +608,71 @@ def _names_to_try(name: str, found_name: str | None) -> list[str]:
     return names
 
 
-def _name_in_deal(
-    known: Sequence[_Known], names: Sequence[str], fuzzy_min: int
-) -> list[MatchCandidate]:
-    found: list[MatchCandidate] = []
-    for item in known:
-        best = 0
-        for deal in item.deals:
-            lead = deal_lead(deal.name)
-            for name in names:
-                score = close_name_score(name, lead, fuzzy_min, extra_generic=DEAL_WORDS)
-                best = max(best, score or 0)
-        if best:
-            found.append(_candidate(item, "name_in_deal", best / 100))
-    return found
-
-
-def _close_name(
-    known: Sequence[_Known], names: Sequence[str], fuzzy_min: int
-) -> list[MatchCandidate]:
-    found: list[MatchCandidate] = []
-    for item in known:
-        best = max(
-            (close_name_score(name, item.row.name, fuzzy_min) or 0 for name in names), default=0
+def _best_scores(
+    lefts: Sequence[tuple[str, tuple[str, ...]]],
+    forms: list[str],
+    cores: list[tuple[str, ...]],
+    owners: list[int],
+    fuzzy_min: int,
+) -> dict[int, int]:
+    """For each company, the best `close_name_score` between a wanted form and its forms. The
+    same as comparing every pair: the batch search keeps exactly the pairs whose
+    `token_set_ratio` is `fuzzy_min` or more, and the guard then runs on those alone."""
+    best: dict[int, int] = {}
+    if not forms:
+        return best
+    for left, left_core in lefts:
+        found = process.extract(
+            left,
+            forms,
+            scorer=fuzz.token_set_ratio,
+            processor=None,
+            score_cutoff=fuzzy_min,
+            limit=None,
         )
-        if best:
-            found.append(_candidate(item, "close_name", best / 100))
+        for _form, score, index in found:
+            if not _cores_agree(left_core, cores[index], fuzzy_min):
+                continue
+            owner = owners[index]
+            best[owner] = max(best.get(owner, 0), round(score))
+    return best
+
+
+def _loose_candidates(copy: _Copy, names: Sequence[str], fuzzy_min: int) -> list[MatchCandidate]:
+    """Checks 4 (`name_in_deal`: a wanted name against each deal's lead name) and 5
+    (`close_name`: against each company name) over every company. CPU work: run in a thread."""
+    wanted = [form for name in names for form in _variants(name)]
+    in_deals = _best_scores(
+        [(form, _core(form, DEAL_WORDS)) for form in wanted],
+        copy.deal_forms,
+        copy.deal_cores,
+        copy.deal_owner,
+        fuzzy_min,
+    )
+    in_names = _best_scores(
+        [(form, _core(form)) for form in wanted],
+        copy.name_forms,
+        copy.name_cores,
+        copy.name_owner,
+        fuzzy_min,
+    )
+    found = [
+        _candidate(copy.known[index], "name_in_deal", score / 100)
+        for index, score in sorted(in_deals.items())
+        if score
+    ]
+    found += [
+        _candidate(copy.known[index], "close_name", score / 100)
+        for index, score in sorted(in_names.items())
+        if score
+    ]
     return found
 
 
 async def _similar_profile(
     session: AsyncSession,
     embedder: "Embedder",
-    known: Sequence[_Known],
+    by_id: dict[str, _Known],
     *,
     names: Sequence[str],
     city: str | None,
@@ -496,7 +683,6 @@ async def _similar_profile(
     hits = await search_similar(
         session, vector, app=PROFILE_APP, kind=PROFILE_KIND, limit=PROFILE_POOL
     )
-    by_id = {item.row.hubspot_id: item for item in known}
     near = [
         (hit.similarity, by_id[str(hit.item.meta.get("hubspot_id"))])
         for hit in hits
@@ -556,29 +742,30 @@ async def match_company(
                     select(HubSpotDeal).where(HubSpotDeal.hubspot_company_id == hubspot_id)
                 )
             ).all()
-            return _found(company, deals, "hubspot_id")
+            return _found(_company_of(company), [_deal_of(deal) for deal in deals], "hubspot_id")
 
-    known = await _load(session)
+    copy = await _load(session)
     domain = normalize_domain(website)
     if domain:
-        same_domain = [item for item in known if item.row.domain == domain]
+        same_domain = copy.by_domain.get(domain)
         if same_domain:
             best = _best_of(same_domain)
             return _found(best.row, best.deals, "domain")
 
     names = _names_to_try(name, found_name)
     for wanted in (clean_name(n) for n in names):
-        same_name = [item for item in known if item.cleaned == wanted]
+        same_name = copy.by_name.get(wanted)
         if same_name:
             best = _best_of(same_name)
             return _found(best.row, best.deals, "name")
 
-    candidates = _name_in_deal(known, names, fuzzy_min) + _close_name(known, names, fuzzy_min)
+    # Every company is scored here: CPU work, in a thread, so the backend keeps answering.
+    candidates = await asyncio.to_thread(_loose_candidates, copy, names, fuzzy_min)
     if embedder is not None and profile_text and names:
         candidates += await _similar_profile(
             session,
             embedder,
-            known,
+            copy.by_id,
             names=names,
             city=city,
             profile_text=profile_text,

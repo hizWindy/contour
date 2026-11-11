@@ -337,7 +337,9 @@ async def test_rebuilding_again_replaces_the_profiles_and_never_duplicates(
 
     assert len(second) == 99
     assert len({item.meta["hubspot_id"] for item in second}) == 99
-    assert first_ids.isdisjoint({item.id for item in second})  # replaced, not kept
+    # Nothing changed, so every profile keeps its item and its embedding (PLAN-V15 T1-4):
+    # only a new or changed text is embedded again.
+    assert first_ids == {item.id for item in second}
 
 
 @pytest.mark.integration

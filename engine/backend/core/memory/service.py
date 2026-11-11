@@ -6,7 +6,7 @@ from datetime import date, datetime
 from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -213,6 +213,81 @@ async def replace_items_where(
         )
     await _embed_and_add(session, embedder, notes, app=app, kind=kind, progress=progress)
     return len(notes)
+
+
+async def replace_changed_items(
+    session: AsyncSession,
+    embedder: Embedder,
+    notes: list[Note],
+    *,
+    app: str,
+    kind: str,
+    meta_key: str,
+    scope: Collection[str] | None = None,
+    progress: EmbedProgress | None = None,
+) -> int:
+    """Brings the items of one app and kind in line with `notes`, one item for each value of
+    `meta[meta_key]`: all of them, or only those whose value is in `scope`. Returns how many
+    texts were embedded (PLAN-V15 T1-4).
+
+    Embedding is the slow part (about 14,000 company profiles), and most texts don't change from
+    one sync to the next. So an item whose text is the same keeps its embedding: only its
+    subject, address, date and meta are updated, if they changed. A new or changed text is
+    embedded and saved; an item with no note any more (or a second one for the same value) is
+    deleted. Like `replace_items`, it all happens in the caller's transaction: the caller
+    commits.
+    """
+    key = MemoryItem.meta[meta_key].astext
+    columns = (
+        MemoryItem.id,
+        key,
+        MemoryItem.content,
+        MemoryItem.subject,
+        MemoryItem.url,
+        MemoryItem.source_date,
+        MemoryItem.meta,
+    )
+    mine = (MemoryItem.app == app, MemoryItem.kind == kind)
+    rows: list[Any] = []
+    if scope is None:
+        rows = list(await session.execute(select(*columns).where(*mine)))
+    else:
+        wanted = list(dict.fromkeys(scope))
+        for start in range(0, len(wanted), DELETE_CHUNK):
+            chunk = wanted[start : start + DELETE_CHUNK]
+            rows += list(await session.execute(select(*columns).where(*mine, key.in_(chunk))))
+    existing: dict[str | None, Any] = {}
+    drop: list[UUID] = []
+    for row in rows:
+        if row[1] in existing:
+            drop.append(row[0])  # a second item for one value: only one is kept
+        else:
+            existing[row[1]] = row
+    to_embed: list[Note] = []
+    for note in notes:
+        meta = note.meta or {}
+        value = meta.get(meta_key)
+        old = existing.pop(None if value is None else str(value), None)
+        if old is not None and old[2] == note.content:
+            if (old[3], old[4], old[5], old[6]) != (note.subject, note.url, note.source_date, meta):
+                await session.execute(
+                    update(MemoryItem)
+                    .where(MemoryItem.id == old[0])
+                    .values(
+                        subject=note.subject, url=note.url, source_date=note.source_date, meta=meta
+                    )
+                )
+            continue
+        if old is not None:
+            drop.append(old[0])
+        to_embed.append(note)
+    drop += [row[0] for row in existing.values()]
+    for start in range(0, len(drop), DELETE_CHUNK):
+        await session.execute(
+            delete(MemoryItem).where(MemoryItem.id.in_(drop[start : start + DELETE_CHUNK]))
+        )
+    await _embed_and_add(session, embedder, to_embed, app=app, kind=kind, progress=progress)
+    return len(to_embed)
 
 
 async def _embed_and_add(
