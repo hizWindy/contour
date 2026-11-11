@@ -88,14 +88,14 @@ describe('the router', () => {
     expect(router.state.location.pathname).toBe(now)
   })
 
-  it('opens the first Admin tab, and every tab has its own address', async () => {
+  it('opens on Health, and every tab has its own address', async () => {
     const { router } = renderAt('/admin')
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Admin' }, { timeout: LAZY }),
     ).toBeInTheDocument()
     await waitFor(
       () => {
-        expect(router.state.location.pathname).toBe('/admin/runs')
+        expect(router.state.location.pathname).toBe('/admin/health')
       },
       { timeout: LAZY },
     )
@@ -103,9 +103,7 @@ describe('the router', () => {
     const tabs = screen.getByRole('navigation', { name: 'Admin sections' })
     const links = within(tabs).getAllByRole('link')
     expect(links.map((link) => link.getAttribute('href'))).toEqual(ADMIN_TABS.map((tab) => tab.to))
-    expect(await within(tabs).findByRole('link', { current: 'page' })).toHaveTextContent(
-      'Runs and cost',
-    )
+    expect(await within(tabs).findByRole('link', { current: 'page' })).toHaveTextContent('Health')
   })
 
   it.each(ADMIN_TABS.map((tab) => [tab.to, tab.label]))(

@@ -55,6 +55,7 @@ EDITABLE_KEYS: Final[list[str]] = [
     "run_cap_usd",
     "run_max_companies",
     "scheduled_run_cap_usd",
+    "lead_finder_round_cap_usd",
     "daily_cap_usd",
     "lead_finder_goal_good_leads",
     "slice_reserve_usd",
@@ -91,6 +92,7 @@ CEILINGS: Final[dict[str, str]] = {
     "slice_reserve_usd": "hard_company_cap_usd",
     "run_cap_usd": "hard_run_cap_usd",
     "scheduled_run_cap_usd": "hard_scheduled_run_cap_usd",
+    "lead_finder_round_cap_usd": "hard_scheduled_run_cap_usd",
     "daily_cap_usd": "hard_daily_cap_usd",
     "prep_cap_usd": "hard_company_cap_usd",
     "search_ahead_cap_usd": "hard_daily_cap_usd",
@@ -380,6 +382,13 @@ class Settings(BaseSettings):
     # run costs about US$25 to US$30 (TBC). A run a person starts keeps run_cap_usd and
     # run_max_companies above.
     scheduled_run_cap_usd: Decimal = Field(Decimal("150.00"), ge=Decimal("1"), le=Decimal("200"))
+    # The round budget (PLAN-V13 T1-3): the most all of one round's city runs may spend together.
+    # Before an automatic run starts, its money limit becomes the smaller of scheduled_run_cap_usd
+    # and what is left of this (apps/lead_finder/goal.py). It can only lower a run's limit. Under
+    # the same ceiling as one automatic run. US$150 is TBC with Al-khair.
+    lead_finder_round_cap_usd: Decimal = Field(
+        Decimal("150.00"), ge=Decimal("1"), le=Decimal("200")
+    )
     # The Lead Finder's goal: good leads (Pass or Director review) that the automatic runs find
     # together in one round of the city schedules, every 2 weeks (Levi, 5 Nov: about 100; 90 or
     # 100 is TBC with him).

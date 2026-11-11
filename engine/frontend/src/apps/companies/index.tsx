@@ -13,11 +13,11 @@
  */
 import type { OnChangeFn, SortingState } from '@tanstack/react-table'
 import { Building2 } from 'lucide-react'
-import { useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router'
 import { companyQueryOptions, useCompanies, useCompanyFacets } from '@/api/hooks'
-import type { CompanyDetail, CompanyPerson } from '@/api/types'
+import type { CompanyDetail, CompanyPerson, CompanyRow } from '@/api/types'
 import { DataTable, DensityToggle } from '@/components/data-table'
 import { EmptyState } from '@/components/empty-state'
 import { ErrorState } from '@/components/error-state'
@@ -113,10 +113,15 @@ export default function CompaniesPage() {
       void queryClient.prefetchQuery(companyQueryOptions(key))
     }
   }
-  const openCompany = (key: string): void => {
-    setActive(key)
-    go({ ...state, company: key })
-  }
+  const openCompany = useCallback(
+    (key: string): void => {
+      setActive(key)
+      go({ ...state, company: key })
+    },
+    // `go` only wraps setParams, which never changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [state],
+  )
   const closeCompany = (): void => {
     if (state.company !== null) {
       go({ ...state, company: null })
@@ -133,6 +138,10 @@ export default function CompaniesPage() {
       await navigate(`/companies/${encodeURIComponent(key)}`)
     })()
   }
+  // "Prep a call" from a row: the company, nobody picked yet.
+  const prepRow = useCallback((row: CompanyRow): void => {
+    setPrep({ companyKey: row.key, companyName: row.name, person: null })
+  }, [])
   const prepCall = (company: CompanyDetail, person: CompanyPerson | null): void => {
     setPrep({
       companyKey: company.key,
@@ -145,7 +154,11 @@ export default function CompaniesPage() {
   const facets = useCompanyFacets()
   const page = companies.data
   const leadsShown = page?.leads_shown ?? facets.data?.leads_shown ?? false
-  const columns = useMemo(() => companyColumns({ leadsShown }), [leadsShown])
+  // The row actions (PLAN-V13 T2-8): "Prep a call" and "Open in HubSpot" at the end of a row.
+  const columns = useMemo(
+    () => companyColumns({ leadsShown, handlers: { onPrep: prepRow, onOpen: openCompany } }),
+    [leadsShown, prepRow, openCompany],
+  )
   const filtered = activeFilterCount(state.filters) > 0
   const activeRow = state.company ?? active
 

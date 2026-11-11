@@ -12,9 +12,10 @@ declare module '@tanstack/react-table' {
     /** Stays in view on the left while the rest of the table scrolls sideways (the name). */
     sticky?: boolean
     /**
-     * Hides the column on screens narrower than this: `sm` is 640px, `md` is 768px. A phone shows
-     * the few columns that tell rows apart, and the details are one tap away (the side panel).
+     * Hides the column on screens narrower than this: `sm` is 640px, `md` is 768px, `lg` is
+     * 1024px and `xl` is 1280px. A phone shows the few columns that tell rows apart, and the
+     * details are one tap away (the side panel).
      */
-    hideBelow?: 'sm' | 'md'
+    hideBelow?: 'sm' | 'md' | 'lg' | 'xl'
   }
 }

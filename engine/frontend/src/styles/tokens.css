@@ -27,10 +27,22 @@
   --popover: var(--card);
   --popover-foreground: var(--foreground);
 
-  /* Navy is the one accent. It is for primary buttons, selected rows, the focus ring and live
-     progress, and nowhere else. In shadcn, --accent means a hover background, not Navy. */
+  /* Navy is the colour of the main buttons and of selected rows, and nowhere else.
+     In shadcn, --accent means a hover background, not Navy and not the accent below. */
   --primary: light-dark(#233a56, #8ea5c3);
   --primary-foreground: light-dark(#fbfbf8, #26231b);
+
+  /* The accent (PLAN-V13, Cobalt): a bright step of Navy for what is selected, live or
+     highlighted. The selected menu item (its tint, its text and a 2px bar), the selected tab or
+     segment, a switch that is on, a picked chip, the focus ring, progress, links, and the one
+     bar or line a chart highlights. Never a button fill, never body text, never a result.
+     --accent-strong is 5.3:1 on the page in light and 6.4:1 in dark, so it can be link text.
+     --accent-ink is the text on --accent-soft (7.6:1 in both modes). */
+  --accent-strong: light-dark(#2f5bd8, #80a4f8);
+  --accent-soft: light-dark(#e1e8fa, #243556);
+  --accent-ink: light-dark(#1e3f9e, #b9ccfa);
+  --link: var(--accent-strong);
+  --progress: var(--accent-strong);
 
   --secondary: light-dark(#e5e8db, #3a362c);
   --secondary-foreground: var(--foreground);
@@ -45,7 +57,8 @@
   --border: light-dark(#d3d7c6, #4a463b);
   /* The border of form fields. At least 3:1 on both the page and the card, in light and dark. */
   --input: light-dark(#8a8e79, #7f7a6d);
-  --ring: var(--primary);
+  /* The focus ring is the accent: at least 3:1 on the page, cards, popovers and the sidebar. */
+  --ring: var(--accent-strong);
 
   /* Selected rows: a light tint of Navy, with a Navy marker (--primary) at the edge. */
   --selected: light-dark(#e3e9f0, #2c394a);
@@ -74,8 +87,10 @@
 
   /* Drop is a grey outline: --input for the line, --muted-foreground for the text. */
 
-  /* ---- Charts: Navy, Olive, Sand, Ochre, Terracotta (lighter steps in dark) ---------------- */
-  --chart-1: light-dark(#233a56, #8ea5c3);
+  /* ---- Charts: the accent, Olive, Sand, Ochre, Terracotta (lighter steps in dark) -----------
+     --chart-1 is the accent, for the one bar or line a chart highlights. The rest of a chart's
+     bars are muted (--border), so the highlighted one stands out. */
+  --chart-1: var(--accent-strong);
   --chart-2: light-dark(#5f693a, #a3ae74);
   --chart-3: light-dark(#bba087, #cdb59b);
   --chart-4: light-dark(#a8742a, #d9a25a);
@@ -116,6 +131,9 @@
   --sidebar-primary-foreground: var(--primary-foreground);
   --sidebar-accent: light-dark(#d3d7c6, #3a362c);
   --sidebar-accent-foreground: var(--foreground);
+  /* The selected menu item: the accent's tint, its ink, and a 2px --accent-strong bar at the edge. */
+  --sidebar-selected: var(--accent-soft);
+  --sidebar-selected-foreground: var(--accent-ink);
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
 
@@ -164,10 +182,88 @@
   --focus-width: 2px;
   --focus-offset: 2px;
 
-  /* ---- Motion: one curve, two durations --------------------------------------------------- */
+  /* ---- Motion (DESIGN.md "Motion") -------------------------------------------------------
+     The one curve, for colour and opacity changes. 150ms for small changes, 250ms for dialogs. */
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
   --duration-fast: 150ms; /* hover and other small changes */
   --duration-slow: 250ms; /* panels and dialogs */
+  /* Springs, for what moves (transform only). The curves are the same damped-spring maths the
+     motion kit (components/motion/springs.ts) gives Motion, written out as CSS linear() so a
+     shadcn part can use them in a plain transition. No bounce for panels, tabs and indicators;
+     a very small bounce (0.1) only for toggles and chips. Leaving is quicker than arriving. */
+  --spring-snappy: linear(
+    0,
+    0.078,
+    0.235,
+    0.401,
+    0.549,
+    0.669,
+    0.762,
+    0.831,
+    0.882,
+    0.918,
+    0.944,
+    0.962,
+    0.974,
+    0.982,
+    0.988,
+    0.992,
+    0.995,
+    0.996,
+    0.998,
+    0.998,
+    1
+  );
+  --spring-smooth: linear(
+    0,
+    0.078,
+    0.235,
+    0.401,
+    0.549,
+    0.669,
+    0.762,
+    0.831,
+    0.882,
+    0.918,
+    0.944,
+    0.962,
+    0.974,
+    0.982,
+    0.988,
+    0.992,
+    0.995,
+    0.996,
+    0.998,
+    0.998,
+    1
+  );
+  --spring-soft: linear(
+    0,
+    0.058,
+    0.186,
+    0.336,
+    0.481,
+    0.608,
+    0.712,
+    0.795,
+    0.858,
+    0.905,
+    0.938,
+    0.961,
+    0.977,
+    0.987,
+    0.994,
+    0.998,
+    1,
+    1.001,
+    1.001,
+    1.002,
+    1
+  );
+  --duration-snappy: 250ms; /* an indicator, a chip, a segment */
+  --duration-smooth: 400ms; /* a panel or sheet arriving, content revealing */
+  --duration-soft: 350ms; /* a toggle or a chip's tick */
+  --duration-exit: 150ms; /* anything leaving */
 }
 
 :root[data-theme='light'] {

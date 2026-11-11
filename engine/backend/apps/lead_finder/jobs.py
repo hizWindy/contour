@@ -19,6 +19,12 @@ money limit is `scheduled_run_cap_usd` (US$150), a brake against a fault; a city
 about US$25 to US$30 (TBC). Both are on the Settings page, under ceilings in .env. A run a person
 starts keeps its own limits (US$20 and 20 companies).
 
+**The round's budget** (PLAN-V13 T1-3, `goal.py`). All of a round's city runs together may spend
+`lead_finder_round_cap_usd` (US$150). Just before a run starts, its money limit becomes the smaller
+of `scheduled_run_cap_usd` and what is left of the round's budget, saved with the run as its own
+lower cap (`caps.run_cap_usd`, which can only lower a limit). When nothing is left, it doesn't
+start: "This round's budget (US$150) is spent. Next round: 30 Nov."
+
 **Why separate days.** Only one run goes at a time; the daily limit is US$50; the server's memory
 is small; and each email stays short.
 
@@ -39,6 +45,7 @@ start while any other run holds the slot (the run manager says 409).
 from datetime import time
 from decimal import ROUND_UP, Decimal
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI
 from pydantic import ValidationError
@@ -49,7 +56,7 @@ from core.api.errors import Problem
 from core.runs.manager import RunManager
 from core.runs.models import TERMINAL_RUN_STATUSES, Run
 from core.runs.schemas import RunCreate, RunEstimate
-from core.schedules.calc import Cadence
+from core.schedules.calc import DEFAULT_ZONE, Cadence
 from core.schedules.jobs import (
     DefaultSchedule,
     JobContext,
@@ -112,6 +119,7 @@ DEFAULT_CADENCE = cadence_for(0)  # Melbourne's
 DEFAULT_SETTINGS: dict[str, Any] = settings_for("Melbourne")
 
 CENT = Decimal("0.01")
+ZONE = ZoneInfo(DEFAULT_ZONE)  # the days in a schedule's reason, like "Next round: 30 Nov"
 SLOT_TAKEN = "A run is already going, so this time was skipped."
 NOT_READY = "The run engine isn't ready, so this time was skipped."
 BODY_PARAMS = "body.params."
@@ -182,19 +190,65 @@ async def _estimate(context: JobContext) -> RunEstimate:
     )
 
 
+async def within_round_budget(manager: RunManager, context: JobContext) -> dict[str, Any]:
+    """The run's choices with the round's budget applied: its money limit lowered to what is left
+    of the budget when that is less than its own cap. Raises `JobSkipped` when nothing is left."""
+    from apps.lead_finder.goal import round_so_far, run_cap_in_round, spent_reason
+
+    settings = await manager.settings_provider()
+    async with manager.session_factory() as session:
+        state = await round_so_far(
+            session,
+            settings.lead_finder_goal_good_leads,
+            context.now,
+            schedule_id=context.schedule_id,
+        )
+    budget = settings.lead_finder_round_cap_usd
+    cap = run_cap_in_round(settings.scheduled_run_cap_usd, budget, state.spent_usd)
+    if cap <= 0:
+        raise JobSkipped(spent_reason(budget, state.next_round_at, ZONE))
+    if cap >= settings.scheduled_run_cap_usd:
+        return context.settings
+    caps = dict(context.settings.get("caps") or {})
+    own = caps.get("run_cap_usd")
+    caps["run_cap_usd"] = str(cap if own is None else min(cap, Decimal(str(own))))
+    return {**context.settings, "caps": caps}
+
+
 async def start_discovery(context: JobContext) -> JobResult:
-    """Starts a discovery run from the schedule's saved choices, if it fits the limits."""
+    """Starts a discovery run from the schedule's saved choices, if it fits the limits and what is
+    left of the round's budget."""
     manager = _manager(context.app)
     reason = doesnt_fit(await _estimate(context))
     if reason is not None:
         raise JobSkipped(reason)
+    params = await within_round_budget(manager, context)
     try:
-        run = await manager.start(APP, MODE, context.settings, schedule_id=context.schedule_id)
+        run = await manager.start(APP, MODE, params, schedule_id=context.schedule_id)
     except Problem as problem:
+        if problem.code == "discovery_too_large" and params is not context.settings:
+            raise JobSkipped(await _too_little(manager, context)) from None
         if problem.status in (409, 422):  # not a fault: the choices or the slot, said plainly
             raise JobSkipped(_refusal(problem)) from None
         raise
     return JobResult(ref=str(run.id))
+
+
+async def _too_little(manager: RunManager, context: JobContext) -> str:
+    """The reason when a little of the round's budget is left, but too little for the searches."""
+    from apps.lead_finder.goal import budget_left, round_so_far, too_little_reason
+
+    settings = await manager.settings_provider()
+    async with manager.session_factory() as session:
+        state = await round_so_far(
+            session,
+            settings.lead_finder_goal_good_leads,
+            context.now,
+            schedule_id=context.schedule_id,
+        )
+    budget = settings.lead_finder_round_cap_usd
+    left = budget_left(budget, state.spent_usd)
+    return too_little_reason(left, budget, state.next_round_at, ZONE)
 
 
 async def estimate_discovery_job(context: JobContext) -> JobEstimate:

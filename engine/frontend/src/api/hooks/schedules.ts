@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, unwrap, type ApiProblem } from '../client'
 import { queryKeys } from '../query'
-import type { RunNow, Schedule, ScheduleEdit } from '../types'
+import type { LeadFinderRound, LeadFinderRoundIn, RunNow, Schedule, ScheduleEdit } from '../types'
 
 const REFRESH_MS = 30_000
 
@@ -55,5 +55,35 @@ export function useRunScheduleNow() {
         }),
       ),
     onSuccess: refresh,
+  })
+}
+
+/**
+ * The Lead Finder's four city schedules as one plan, the round so far and its budget
+ * (`GET /schedules/lead-finder`, PLAN-V13 T1-3). Read again every 30 seconds, like the list.
+ */
+export function useLeadFinderRound() {
+  return useQuery({
+    queryKey: queryKeys.schedules.round(),
+    queryFn: async ({ signal }) => unwrap(await api.GET('/schedules/lead-finder', { signal })),
+    refetchInterval: REFRESH_MS,
+  })
+}
+
+/**
+ * Saves the whole plan (`PUT /schedules/lead-finder`): the four schedules change in one step, and
+ * the budget is a setting, so the settings are read again too. What can't be saved comes back as
+ * field errors `body.<name>`.
+ */
+export function useSaveLeadFinderRound() {
+  const queryClient = useQueryClient()
+  return useMutation<LeadFinderRound, ApiProblem, LeadFinderRoundIn>({
+    mutationFn: async (body) => unwrap(await api.PUT('/schedules/lead-finder', { body })),
+    onSuccess: (round) => {
+      queryClient.setQueryData(queryKeys.schedules.round(), round)
+      // The list only (its city rows changed); the plan itself is the answer above.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.schedules.all, exact: true })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.settings.all })
+    },
   })
 }

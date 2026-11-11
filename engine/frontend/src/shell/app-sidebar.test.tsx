@@ -76,3 +76,41 @@ describe('the menu folded to icons', () => {
     }
   })
 })
+
+describe('the account at the foot of the menu (PLAN-V13 T1-6)', () => {
+  it('shows the name and role, and opens the account menu', async () => {
+    asLaptop()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((request: Request) =>
+        Promise.resolve(
+          new URL(request.url).pathname === '/api/v1/auth/me'
+            ? Response.json({
+                auth_required: true,
+                user: {
+                  id: '11111111-2222-3333-4444-555555555555',
+                  email: 'al@example.test',
+                  username: 'alkhair',
+                  name: 'Al-khair M. Pama',
+                  role: 'admin',
+                },
+                session: null,
+              })
+            : Response.json({ title: 'Not found', status: 404 }, { status: 404 }),
+        ),
+      ),
+    )
+    const { user } = renderAt('/')
+    const account = await screen.findByRole(
+      'button',
+      { name: 'Account menu, Al-khair M. Pama, System admin' },
+      { timeout: LAZY },
+    )
+    expect(mainMenu().getByText('Al-khair M. Pama')).toBeInTheDocument()
+    expect(mainMenu().getByText('System admin')).toBeInTheDocument()
+    await user.click(account)
+    const menu = await screen.findByRole('menu')
+    expect(within(menu).getByText('al@example.test')).toBeInTheDocument()
+    expect(within(menu).getByRole('menuitem', { name: 'Sign out' })).toBeInTheDocument()
+  })
+})

@@ -67,7 +67,8 @@ export function TopBar() {
         </BreadcrumbList>
       </Breadcrumb>
       <CommandMenu />
-      <UserMenu />
+      {/* From a tablet up, the account is at the foot of the left menu. */}
+      <UserMenu className="md:hidden" />
     </header>
   )
 }

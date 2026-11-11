@@ -1,6 +1,6 @@
 """The `engine` command: serve, migrate, import-hubspot, hubspot-check, hubspot-sync, openapi,
-rebuild-profiles, purge, and the three that run the sign-in from the server: create-admin,
-reset-password and sign-out-everyone.
+rebuild-profiles, purge, and the four that run the sign-in from the server: create-admin,
+reset-password, rename and sign-out-everyone.
 
 Run it with `uv run engine <command>` from engine/backend.
 """
@@ -299,7 +299,7 @@ async def _purge(days: int) -> str:
     )
 
 
-# --- create-admin, reset-password and sign-out-everyone ----------------------------------------
+# --- create-admin, reset-password, rename and sign-out-everyone --------------------------------
 # There is no sign-up page and no reset by email: the account and its password are made here, on
 # the server. The password is asked for twice, never shown, and never taken from an argument or a
 # pipe, where it would be kept in a shell history or a log.
@@ -437,6 +437,25 @@ async def _reset_password(login: str) -> tuple[str, bool]:
     return f"The password for {user.email} is changed, and any lock is lifted. {after}", True
 
 
+async def _rename(login: str, name: str) -> tuple[str, bool]:
+    """Changes the name an account shows on the top bar and the People tab."""
+    from core.auth import admin, users
+    from core.db.engine import get_engine, get_sessionmaker
+
+    try:
+        async with get_sessionmaker()() as db:
+            user = await users.find_by_login(db, login)
+            if user is None:
+                return "No account has that email or username.", False
+            try:
+                saved = await admin.rename(db, user, name, now=datetime.now(UTC))
+            except ValueError as error:
+                return f"The name was not changed. {error}", False
+    finally:
+        await get_engine().dispose()
+    return f"{user.email} is now called {saved}.", True
+
+
 async def _sign_out_everyone() -> str:
     """Ends every session of every account."""
     from core.auth import admin
@@ -548,6 +567,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="Give an account a new password, lift its lock and end its sessions.",
     )
     reset_cmd.add_argument("--user", required=True, help="The account's email or username")
+    rename_cmd = commands.add_parser(
+        "rename", help="Change the name an account shows (the top bar and the People tab)."
+    )
+    rename_cmd.add_argument("--user", required=True, help="The account's email or username")
+    rename_cmd.add_argument("--name", required=True, help='The new name, like "Al-khair M. Pama"')
     commands.add_parser("sign-out-everyone", help="End every session of every account.")
     email_cmd = commands.add_parser(
         "email-test", help="Send one test email (the log provider only writes it to the log)."
@@ -598,6 +622,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0 if ok else 1
         elif args.command == "reset-password":
             text, ok = asyncio.run(_reset_password(args.user), loop_factory=loop_factory())
+            print(text, file=sys.stdout if ok else sys.stderr)
+            return 0 if ok else 1
+        elif args.command == "rename":
+            text, ok = asyncio.run(_rename(args.user, args.name), loop_factory=loop_factory())
             print(text, file=sys.stdout if ok else sys.stderr)
             return 0 if ok else 1
         elif args.command == "sign-out-everyone":

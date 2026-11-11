@@ -1,5 +1,5 @@
 """What an administrator does from the server's command line: make the Admin account, set a new
-password, sign everyone out. PLAN-V6 B2.
+password, change a name (PLAN-V13 T1-4), sign everyone out. PLAN-V6 B2.
 
 There is no sign-up page and no password reset by email, on purpose: the only way to make an
 account or to change a password is to be on the server. Each function here does one thing, writes
@@ -151,6 +151,35 @@ async def reset_password(
     )
     await db.commit()
     return ended
+
+
+NAME_MAX = 120  # the users.name column
+
+
+def clean_name(text: str) -> str:
+    """A person's name as the top bar and the People tab show it: spaces trimmed and joined.
+    Raises ValueError for an empty name or one too long."""
+    name = " ".join(text.split())
+    if not name:
+        raise ValueError("Give a name, like Al-khair M. Pama.")
+    if len(name) > NAME_MAX:
+        raise ValueError(f"Use {NAME_MAX} characters or fewer.")
+    return name
+
+
+async def rename(db: AsyncSession, user: User, name: str, *, now: datetime) -> str:
+    """Changes the name an account shows (PLAN-V13 T1-4). The People tab can't change a name, so
+    this is the way. Logged as `account_changed`. Returns the name as saved."""
+    user.name = clean_name(name)
+    audit.add_entry(
+        db,
+        "account_changed",
+        user_id=user.id,
+        details={"by": BY_COMMAND, "fields": ["name"]},
+        at=now,
+    )
+    await db.commit()
+    return user.name
 
 
 async def sign_out_everyone(db: AsyncSession, *, now: datetime) -> tuple[int, int]:

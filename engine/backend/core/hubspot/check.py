@@ -1,7 +1,9 @@
 """The connection check (PLAN-V5 B2): which permissions (scopes) the HubSpot key has.
 
 HubSpot has no call that lists a service key's scopes, so the check tries one small thing for
-each and reads the answer. Free, and it changes nothing:
+each and reads the answer. The probes run at the same time (the client's pacer keeps to HubSpot's
+rate), so the whole check takes about a second, not one after another (PLAN-V13 T1-2: Admin's
+Health tab gives each check 5 seconds). Free, and it changes nothing:
 - a read scope: read one record of that kind. A "missing scopes" answer means no.
 - a write scope: change record 0, which can't exist. "Missing scopes" means no; "not found"
   means the key got past the permission check, so yes.
@@ -10,6 +12,7 @@ Anything else (HubSpot down, an odd answer) is "unknown", with the reason.
 The answer never holds the key, only whether one is set.
 """
 
+import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -119,6 +122,30 @@ def _unknown(detail: str) -> list[ScopeOut]:
     ]
 
 
+async def _probe(hubspot: HubSpot, probe: Probe) -> ScopeOut:
+    """One scope: yes, no, or unknown with the reason."""
+    state: ScopeState
+    detail: str | None = None
+    try:
+        answer = await probe.run(hubspot)
+    except HubSpotMissingScope:
+        state, detail = "no", "HubSpot said this permission is missing."
+    except HubSpotUnavailable as error:
+        state, detail = "unknown", f"{error.title}. {error.detail}"
+    except HubSpotError as error:
+        state, detail = "unknown", f"{error.title}. {error.detail}"
+    else:
+        if probe.access == "read" or answer is True:
+            state = "yes"
+        elif answer is False:
+            state, detail = "no", "HubSpot said this permission is missing."
+        else:
+            state, detail = "unknown", "HubSpot's answer didn't say either way."
+    return ScopeOut(
+        scope=probe.scope, access=probe.access, label=probe.label, state=state, detail=detail
+    )
+
+
 async def check_connection(hubspot: HubSpot | None) -> ConnectionCheck:
     """Tries each scope once. `hubspot` is None when no key is set."""
     now = datetime.now(UTC)
@@ -142,34 +169,7 @@ async def check_connection(hubspot: HubSpot | None) -> ConnectionCheck:
             checked_at=now,
         )
 
-    scopes: list[ScopeOut] = []
-    for probe in PROBES:
-        state: ScopeState
-        detail: str | None = None
-        try:
-            answer = await probe.run(hubspot)
-        except HubSpotMissingScope:
-            state, detail = "no", "HubSpot said this permission is missing."
-        except HubSpotUnavailable as error:
-            state, detail = "unknown", f"{error.title}. {error.detail}"
-        except HubSpotError as error:
-            state, detail = "unknown", f"{error.title}. {error.detail}"
-        else:
-            if probe.access == "read" or answer is True:
-                state = "yes"
-            elif answer is False:
-                state, detail = "no", "HubSpot said this permission is missing."
-            else:
-                state, detail = "unknown", "HubSpot's answer didn't say either way."
-        scopes.append(
-            ScopeOut(
-                scope=probe.scope,
-                access=probe.access,
-                label=probe.label,
-                state=state,
-                detail=detail,
-            )
-        )
+    scopes = list(await asyncio.gather(*(_probe(hubspot, probe) for probe in PROBES)))
     return ConnectionCheck(
         key_set=True, connected=True, portal_id=account.portal_id, scopes=scopes, checked_at=now
     )

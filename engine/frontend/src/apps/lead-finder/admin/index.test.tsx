@@ -47,6 +47,38 @@ describe('the Admin tabs on a narrow screen', () => {
 })
 
 describe('the Admin tabs', () => {
+  it('open on Health, and say what each is for in one short line (PLAN-V13 T1-6)', () => {
+    expect(ADMIN_TABS.map((tab) => tab.label)).toEqual([
+      'Health',
+      'Runs and cost',
+      'Schedules',
+      'Search log',
+      'Memory',
+      'HubSpot',
+      'People',
+      'Settings',
+    ])
+    expect(ADMIN_TABS[0]?.purpose).toBe('Is everything working?')
+    for (const tab of ADMIN_TABS) {
+      expect(tab.purpose?.length, tab.label).toBeLessThanOrEqual(60)
+    }
+  })
+
+  it('mark the open tab with the accent underline, and only that one', async () => {
+    const { user } = renderAdmin('/admin/health')
+    const tabs = screen.getByRole('navigation', { name: 'Admin sections' })
+    const underlines = () => tabs.querySelectorAll('[data-slot=tab-indicator]')
+    expect(underlines()).toHaveLength(1)
+    expect(within(tabs).getByRole('link', { current: 'page' })).toContainElement(
+      underlines()[0] as HTMLElement,
+    )
+    await user.click(within(tabs).getByRole('link', { name: 'People' }))
+    expect(underlines()).toHaveLength(1)
+    expect(within(tabs).getByRole('link', { name: 'People' })).toContainElement(
+      underlines()[0] as HTMLElement,
+    )
+  })
+
   it('say what each tab is for, in a sentence, for every tab', () => {
     for (const tab of ADMIN_TABS) {
       expect(tab.purpose, tab.label).toBeTruthy()

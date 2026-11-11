@@ -9,6 +9,8 @@
  * - **The card it came from** is marked with a Navy edge, so you keep your place.
  * - **Pages:** Previous and Next under the list, which scrolls back to its first card.
  * - **Motion:** a pressed card tints at once; the list dims while the next page loads (150 ms).
+ * - **Source:** with the Lead Finder tick, each card says where the company came from
+ *   (HubSpot, Lead Finder or Both), as the table's Source column does (PLAN-V13 T2-8).
  */
 import { ChevronLeft, ChevronRight, CircleDashed } from 'lucide-react'
 import { useId, type ReactNode } from 'react'
@@ -20,6 +22,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { DealMark, LastTalk, LeaseEnd } from './marks'
+import { CompanySource } from './source'
 import { companyPlace } from './words'
 
 function Card({
@@ -92,8 +95,10 @@ function Card({
               <LastTalk date={row.last_talk} today={today} />
             </span>
           </span>
-          <span className="text-caption text-muted-foreground">
+          <span className="flex flex-wrap items-center justify-between gap-2 text-caption text-muted-foreground">
             {row.owner ? `Owner: ${row.owner}` : 'No owner'}
+            {/* Where it came from (PLAN-V13 T2-8), for the Lead Finder tick. */}
+            {leadsShown ? <CompanySource row={row} /> : null}
           </span>
         </span>
       </button>

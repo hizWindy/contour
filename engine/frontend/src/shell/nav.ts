@@ -6,6 +6,7 @@
  * and the Admin tabs are shared: they belong to no one project.
  */
 import {
+  Activity,
   CalendarClock,
   Database,
   FileSearch,
@@ -92,63 +93,66 @@ export const HOME: NavItem = { to: '/', label: 'Home', icon: House }
 /** The shared Admin page, at the bottom of the menu. The command menu lists its tabs instead. */
 export const ADMIN: NavItem = { to: '/admin', label: 'Admin', icon: Settings2 }
 
-/** The tabs of the Admin page, in tab order. Each has its own address under /admin. */
+/**
+ * The tabs of the Admin page, in tab order. Each has its own address under /admin, and its purpose
+ * is one short line under the tabs (PLAN-V13 T1-6). Admin opens on Health.
+ */
 export const ADMIN_TABS: readonly NavItem[] = [
+  {
+    to: '/admin/health',
+    label: 'Health',
+    icon: Activity,
+    keywords: ['status', 'working', 'errors', 'api', 'check'],
+    purpose: 'Is everything working?',
+  },
   {
     to: '/admin/runs',
     label: 'Runs and cost',
     icon: ListChecks,
     keywords: ['spend', 'chart'],
-    purpose:
-      'See how much each run cost and what you have spent day by day. Open a run to see what it found.',
+    purpose: 'What each run found, and what it cost.',
   },
   {
     to: '/admin/schedules',
     label: 'Schedules',
     icon: CalendarClock,
-    keywords: ['automatic', 'every', 'fortnight', 'daily'],
-    purpose:
-      'The jobs that start on their own: the Lead Finder and the daily HubSpot copy. Switch one on or off, change when it runs, or start it now.',
+    keywords: ['automatic', 'every', 'fortnight', 'daily', 'round', 'budget'],
+    purpose: 'What starts on its own, and when.',
   },
   {
     to: '/admin/searches',
     label: 'Search log',
     icon: FileSearch,
     keywords: ['claude', 'sources'],
-    purpose:
-      'Every request sent to Claude: what it searched, which pages it read and what it cost. Use it to check where the money went.',
+    purpose: 'Every request to Claude, and where the money went.',
   },
   {
     to: '/admin/memory',
     label: 'Memory',
     icon: Database,
     keywords: ['notes', 'search'],
-    purpose:
-      'What the engine remembers from past research. Search it in your own words to see which notes it would use.',
+    purpose: 'What the engine remembers from past research.',
   },
   {
     to: '/admin/hubspot',
     label: 'HubSpot',
     icon: Upload,
     keywords: ['import', 'watchlist'],
-    purpose:
-      'The HubSpot connection for every project: its permissions, the syncs, the writes and the watchlist. Nothing is written without a preview and a confirm.',
+    purpose: 'The connection, the syncs and the writes.',
   },
   {
     to: '/admin/people',
     label: 'People',
     icon: Users,
     keywords: ['accounts', 'access', 'users', 'staff'],
-    purpose:
-      'Who has an account, and which projects each person may use. Tick a project, like Lead Finder or Companies, to open it to someone. Admins may use everything.',
+    purpose: 'Who can sign in, and which projects each may use.',
   },
   {
     to: '/admin/settings',
     label: 'Settings',
     icon: SlidersHorizontal,
     keywords: ['caps', 'models'],
-    purpose:
-      'Spending limits, which Claude model each step uses, and how many things run at once. A change applies from the next run.',
+    purpose: 'Spending limits, models, and how much runs at once.',
   },
 ]
 

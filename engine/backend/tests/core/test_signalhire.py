@@ -332,6 +332,7 @@ async def test_only_the_company_numbers_are_ever_asked_for() -> None:
         "profile_count",
         "count_people",
         "senior_people",
+        "credits",  # the account's balance, for the Health tab (PLAN-V13 T1-2): no person data
         "aclose",
     }
 

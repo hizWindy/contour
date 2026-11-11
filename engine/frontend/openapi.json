@@ -28,6 +28,40 @@
         "title": "AccessPoints",
         "type": "object"
       },
+      "ApiTrafficOut": {
+        "properties": {
+          "endpoints": {
+            "description": "Each endpoint with requests: errors first, then the slowest",
+            "items": {
+              "$ref": "#/components/schemas/EndpointTrafficOut"
+            },
+            "title": "Endpoints",
+            "type": "array"
+          },
+          "errors": {
+            "title": "Errors",
+            "type": "integer"
+          },
+          "requests": {
+            "title": "Requests",
+            "type": "integer"
+          },
+          "since": {
+            "description": "The start of the counts: an hour ago, or when the backend started",
+            "format": "date-time",
+            "title": "Since",
+            "type": "string"
+          }
+        },
+        "required": [
+          "since",
+          "requests",
+          "errors",
+          "endpoints"
+        ],
+        "title": "ApiTrafficOut",
+        "type": "object"
+      },
       "AreaOption": {
         "properties": {
           "id": {
@@ -2284,6 +2318,58 @@
         "title": "DecisionMaker",
         "type": "object"
       },
+      "EndpointTrafficOut": {
+        "properties": {
+          "average_ms": {
+            "description": "The average time to start the answer",
+            "title": "Average Ms",
+            "type": "integer"
+          },
+          "errors": {
+            "description": "Answers of 500 and above: faults",
+            "title": "Errors",
+            "type": "integer"
+          },
+          "method": {
+            "examples": [
+              "GET"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "path": {
+            "examples": [
+              "/api/v1/runs/{run_id}"
+            ],
+            "title": "Path",
+            "type": "string"
+          },
+          "refused": {
+            "description": "Answers of 400 to 499: not allowed, or not valid",
+            "title": "Refused",
+            "type": "integer"
+          },
+          "requests": {
+            "title": "Requests",
+            "type": "integer"
+          },
+          "slowest_ms": {
+            "title": "Slowest Ms",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "method",
+          "path",
+          "requests",
+          "errors",
+          "refused",
+          "average_ms",
+          "slowest_ms"
+        ],
+        "title": "EndpointTrafficOut",
+        "type": "object"
+      },
       "EventLog": {
         "description": "A page of a run's events, oldest first.",
         "properties": {
@@ -2761,6 +2847,55 @@
           "follow_ups"
         ],
         "title": "GuidedQuestion",
+        "type": "object"
+      },
+      "HealthDetails": {
+        "properties": {
+          "api": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ApiTrafficOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Empty when this backend doesn't count"
+          },
+          "checked_at": {
+            "format": "date-time",
+            "title": "Checked At",
+            "type": "string"
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/SystemCheckOut"
+            },
+            "title": "Checks",
+            "type": "array"
+          },
+          "fresh_until": {
+            "description": "Until then, the same answer is sent again",
+            "format": "date-time",
+            "title": "Fresh Until",
+            "type": "string"
+          },
+          "schedules": {
+            "items": {
+              "$ref": "#/components/schemas/ScheduleCheckOut"
+            },
+            "title": "Schedules",
+            "type": "array"
+          }
+        },
+        "required": [
+          "checked_at",
+          "fresh_until",
+          "checks",
+          "schedules",
+          "api"
+        ],
+        "title": "HealthDetails",
         "type": "object"
       },
       "HealthOut": {
@@ -7392,6 +7527,436 @@
         "title": "Rivals",
         "type": "object"
       },
+      "RoundCityOut": {
+        "properties": {
+          "city": {
+            "enum": [
+              "Melbourne",
+              "Adelaide",
+              "Perth",
+              "Sydney"
+            ],
+            "title": "City",
+            "type": "string"
+          },
+          "day": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Its day of the week, for a round in weeks",
+            "title": "Day"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why its last start didn't happen",
+            "title": "Last Error"
+          },
+          "last_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RoundRunOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_run_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Run At"
+          },
+          "last_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "starting",
+                  "started",
+                  "skipped",
+                  "failed"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Status"
+          },
+          "next_run_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Run At"
+          },
+          "picked": {
+            "title": "Picked",
+            "type": "boolean"
+          },
+          "schedule_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Empty until the scheduler made it",
+            "title": "Schedule Id"
+          }
+        },
+        "required": [
+          "city",
+          "picked",
+          "schedule_id",
+          "enabled",
+          "day",
+          "next_run_at",
+          "last_run_at",
+          "last_status",
+          "last_error",
+          "last_run"
+        ],
+        "title": "RoundCityOut",
+        "type": "object"
+      },
+      "RoundIn": {
+        "additionalProperties": false,
+        "description": "The whole plan. Every field is needed: the page always sends what it shows.",
+        "properties": {
+          "at": {
+            "description": "The time of day, 24-hour, Melbourne time",
+            "examples": [
+              "07:00"
+            ],
+            "title": "At",
+            "type": "string"
+          },
+          "budget_usd": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "description": "The most a whole round may spend",
+            "title": "Budget Usd"
+          },
+          "cities": {
+            "description": "The cities to search, in any order",
+            "items": {
+              "enum": [
+                "Melbourne",
+                "Adelaide",
+                "Perth",
+                "Sydney"
+              ],
+              "type": "string"
+            },
+            "maxItems": 4,
+            "minItems": 1,
+            "title": "Cities",
+            "type": "array"
+          },
+          "enabled": {
+            "description": "On or off, for the whole round. On spends money",
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "every": {
+            "description": "Every how many days or weeks",
+            "maximum": 365.0,
+            "minimum": 1.0,
+            "title": "Every",
+            "type": "integer"
+          },
+          "unit": {
+            "enum": [
+              "days",
+              "weeks"
+            ],
+            "title": "Unit",
+            "type": "string"
+          },
+          "weekday": {
+            "description": "The first day: 0 Monday to 6 Sunday",
+            "maximum": 6.0,
+            "minimum": 0.0,
+            "title": "Weekday",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "enabled",
+          "cities",
+          "every",
+          "unit",
+          "weekday",
+          "at",
+          "budget_usd"
+        ],
+        "title": "RoundIn",
+        "type": "object"
+      },
+      "RoundOut": {
+        "properties": {
+          "at": {
+            "examples": [
+              "07:00"
+            ],
+            "title": "At",
+            "type": "string"
+          },
+          "budget_max_usd": {
+            "description": "The highest budget allowed (the ceiling)",
+            "title": "Budget Max Usd",
+            "type": "string"
+          },
+          "budget_usd": {
+            "description": "The most a whole round may spend",
+            "title": "Budget Usd",
+            "type": "string"
+          },
+          "cities": {
+            "description": "The picked cities, in the fixed order",
+            "items": {
+              "enum": [
+                "Melbourne",
+                "Adelaide",
+                "Perth",
+                "Sydney"
+              ],
+              "type": "string"
+            },
+            "title": "Cities",
+            "type": "array"
+          },
+          "city_plan": {
+            "description": "The four cities, in the fixed order",
+            "items": {
+              "$ref": "#/components/schemas/RoundCityOut"
+            },
+            "title": "City Plan",
+            "type": "array"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "every": {
+            "title": "Every",
+            "type": "integer"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the next city won't start, when the budget is spent",
+            "title": "Note"
+          },
+          "round": {
+            "$ref": "#/components/schemas/RoundSoFarOut"
+          },
+          "run_cap_usd": {
+            "description": "The most one automatic run may spend",
+            "title": "Run Cap Usd",
+            "type": "string"
+          },
+          "summary": {
+            "description": "The plan in a sentence",
+            "examples": [
+              "Next round: Mon 16 Nov, 7:00 am. Melbourne Mon, Adelaide Tue, Perth Wed, Sydney Thu. Up to US$150."
+            ],
+            "title": "Summary",
+            "type": "string"
+          },
+          "timezone": {
+            "examples": [
+              "Australia/Melbourne"
+            ],
+            "title": "Timezone",
+            "type": "string"
+          },
+          "unit": {
+            "enum": [
+              "days",
+              "weeks"
+            ],
+            "title": "Unit",
+            "type": "string"
+          },
+          "weekday": {
+            "description": "The first day: 0 Monday to 6 Sunday",
+            "title": "Weekday",
+            "type": "integer"
+          },
+          "when": {
+            "examples": [
+              "Every 2 weeks from Monday at 7:00 am"
+            ],
+            "title": "When",
+            "type": "string"
+          }
+        },
+        "required": [
+          "enabled",
+          "cities",
+          "every",
+          "unit",
+          "weekday",
+          "at",
+          "timezone",
+          "when",
+          "summary",
+          "budget_usd",
+          "budget_max_usd",
+          "run_cap_usd",
+          "note",
+          "round",
+          "city_plan"
+        ],
+        "title": "RoundOut",
+        "type": "object"
+      },
+      "RoundRunOut": {
+        "description": "A city's newest automatic run.",
+        "properties": {
+          "cost_usd": {
+            "title": "Cost Usd",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "good_leads": {
+            "description": "Pass and Director review leads",
+            "title": "Good Leads",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "created_at",
+          "status",
+          "good_leads",
+          "cost_usd"
+        ],
+        "title": "RoundRunOut",
+        "type": "object"
+      },
+      "RoundSoFarOut": {
+        "properties": {
+          "goal": {
+            "description": "The good leads a round aims for (Settings)",
+            "title": "Goal",
+            "type": "integer"
+          },
+          "good_leads": {
+            "title": "Good Leads",
+            "type": "integer"
+          },
+          "left_usd": {
+            "description": "What is left of the round's budget",
+            "title": "Left Usd",
+            "type": "string"
+          },
+          "next_round_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the next one begins, while it is on",
+            "title": "Next Round At"
+          },
+          "runs": {
+            "title": "Runs",
+            "type": "integer"
+          },
+          "spent_usd": {
+            "title": "Spent Usd",
+            "type": "string"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When this round began",
+            "title": "Started At"
+          }
+        },
+        "required": [
+          "started_at",
+          "next_round_at",
+          "runs",
+          "good_leads",
+          "goal",
+          "spent_usd",
+          "left_usd"
+        ],
+        "title": "RoundSoFarOut",
+        "type": "object"
+      },
       "RuleCheck": {
         "properties": {
           "detail": {
@@ -8407,6 +8972,102 @@
           "runs"
         ],
         "title": "RunSummaryDay",
+        "type": "object"
+      },
+      "ScheduleCheckOut": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "job": {
+            "title": "Job",
+            "type": "string"
+          },
+          "last_run_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Run At"
+          },
+          "last_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "starting",
+                  "started",
+                  "skipped",
+                  "failed"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Status"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "next_run_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Run At"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it is a problem, in plain words",
+            "title": "Note"
+          },
+          "state": {
+            "enum": [
+              "ok",
+              "problem",
+              "off"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "job",
+          "name",
+          "enabled",
+          "state",
+          "next_run_at",
+          "last_run_at",
+          "last_status",
+          "note"
+        ],
+        "title": "ScheduleCheckOut",
         "type": "object"
       },
       "ScheduleEdit": {
@@ -10490,6 +11151,81 @@
           "finished_at"
         ],
         "title": "SyncOut",
+        "type": "object"
+      },
+      "SystemCheckOut": {
+        "properties": {
+          "checked_at": {
+            "format": "date-time",
+            "title": "Checked At",
+            "type": "string"
+          },
+          "id": {
+            "enum": [
+              "database",
+              "claude",
+              "hubspot",
+              "signalhire",
+              "email",
+              "schedules",
+              "api"
+            ],
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "examples": [
+              "HubSpot"
+            ],
+            "title": "Name",
+            "type": "string"
+          },
+          "next_step": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What to do about it. Set for a problem or off",
+            "title": "Next Step"
+          },
+          "sentence": {
+            "description": "What the check found, in one plain sentence",
+            "examples": [
+              "Last sync 6:02 am, 13,913 companies."
+            ],
+            "title": "Sentence",
+            "type": "string"
+          },
+          "state": {
+            "description": "ok, problem, or off (not set up here)",
+            "enum": [
+              "ok",
+              "problem",
+              "off"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "took_ms": {
+            "description": "How long the check took, in milliseconds",
+            "title": "Took Ms",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "state",
+          "sentence",
+          "next_step",
+          "took_ms",
+          "checked_at"
+        ],
+        "title": "SystemCheckOut",
         "type": "object"
       },
       "TbcNote": {
@@ -14257,6 +14993,157 @@
           }
         },
         "summary": "Check the backend and the database",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/health/details": {
+      "get": {
+        "description": "One check for each system: the database, Claude, HubSpot, Signal Hire, email, the schedules and the API. Each is free (no paid Claude request, no email sent), runs at the same time as the others and stops at 5 seconds. The answer is kept for 60 seconds; `refresh=true` checks again now. For Admins only.",
+        "operationId": "health_details",
+        "parameters": [
+          {
+            "description": "Check again now",
+            "in": "query",
+            "name": "refresh",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Check again now",
+              "title": "Refresh",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthDetails"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Every system's health, for Admin's Health tab",
         "tags": [
           "health"
         ]
@@ -22919,6 +23806,287 @@
           }
         ],
         "summary": "Every schedule, with its next run, its last run and what one start costs",
+        "tags": [
+          "schedules"
+        ]
+      }
+    },
+    "/schedules/lead-finder": {
+      "get": {
+        "operationId": "get_lead_finder_round",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoundOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "The city schedules as one plan, the round so far and its budget",
+        "tags": [
+          "schedules"
+        ]
+      },
+      "put": {
+        "description": "Changes the four city schedules in one transaction. Picked cities are on, one day apart in the order Melbourne, Adelaide, Perth, Sydney, from the first day (`weekday`, 0 Monday to 6 Sunday) at `at` (24-hour, Melbourne time). The others are off. A round must end before the next starts, so `every` in days is at least the number of cities. `budget_usd` is the most a whole round may spend (the setting `lead_finder_round_cap_usd`). Saving the same times again keeps each schedule's next run. Switching it on spends money, so it needs the Admin role.",
+        "operationId": "put_lead_finder_round",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoundIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoundOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Save the city schedules as one plan, and the round's budget",
         "tags": [
           "schedules"
         ]

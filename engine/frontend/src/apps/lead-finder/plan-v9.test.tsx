@@ -11,6 +11,7 @@ import { LEAD_FINDER } from './module'
 import { costPerGoodLead, goodLeads } from './good-leads-data'
 import AdminPeopleTab from './admin/people'
 import AdminRunsTab from './admin/runs'
+import { RunsTable } from './run/runs-table'
 import ResultsPage from './results'
 
 interface Call {
@@ -108,7 +109,8 @@ describe('good leads (PLAN-V9 D2)', () => {
         ],
       },
     })
-    renderWithProviders(<AdminRunsTab />)
+    // The full list is the Runs page's (Admin shows the newest runs, PLAN-V13 T1-8).
+    renderWithProviders(<RunsTable />)
     const table = await screen.findByRole('table', { name: 'Runs' })
     await within(table).findByText('no good leads yet')
     expect(within(table).getByText('US$1.20')).toBeInTheDocument()
@@ -305,13 +307,18 @@ describe('the People tab (PLAN-V9 E1)', () => {
       [`PATCH /api/v1/people/${MARCUS.id}`]: { ...MARCUS, apps: ['lead_finder'] },
     })
     const { user } = renderWithProviders(<AdminPeopleTab />)
-    const people = await screen.findByRole('list', { name: 'People' })
-    const rows = within(people).getAllByRole('listitem')
-    const adminTick = within(rows[0]).getByRole('checkbox', { name: /Lead Finder/ })
+    await screen.findByRole('table', { name: 'People' })
+    await user.click(screen.getByRole('button', { name: 'Edit Al Khair' }))
+    const adminTick = within(await screen.findByRole('dialog')).getByRole('checkbox', {
+      name: /Lead Finder/,
+    })
     expect(adminTick).toBeChecked()
     expect(adminTick).toBeDisabled()
-
-    await user.click(within(rows[1]).getByRole('checkbox', { name: /Lead Finder/ }))
+    await user.keyboard('{Escape}')
+    await user.click(await screen.findByRole('button', { name: 'Edit Marcus Lee' }))
+    await user.click(
+      within(await screen.findByRole('dialog')).getByRole('checkbox', { name: /Lead Finder/ }),
+    )
     await waitFor(() => {
       expect(calls.find((call) => call.method === 'PATCH')?.body).toEqual({ apps: ['lead_finder'] })
     })
@@ -324,12 +331,18 @@ describe('the People tab (PLAN-V9 E1)', () => {
       [`PATCH /api/v1/people/${MARCUS.id}`]: { ...MARCUS, apps: ['lead_finder', 'companies'] },
     })
     const { user } = renderWithProviders(<AdminPeopleTab />)
-    const people = await screen.findByRole('list', { name: 'People' })
-    const rows = within(people).getAllByRole('listitem')
-    const adminTick = within(rows[0]).getByRole('checkbox', { name: /Companies/ })
+    await screen.findByRole('table', { name: 'People' })
+    await user.click(screen.getByRole('button', { name: 'Edit Al Khair' }))
+    const adminTick = within(await screen.findByRole('dialog')).getByRole('checkbox', {
+      name: /Companies/,
+    })
     expect(adminTick).toBeChecked()
     expect(adminTick).toBeDisabled()
-    await user.click(within(rows[1]).getByRole('checkbox', { name: /Companies/ }))
+    await user.keyboard('{Escape}')
+    await user.click(await screen.findByRole('button', { name: 'Edit Marcus Lee' }))
+    await user.click(
+      within(await screen.findByRole('dialog')).getByRole('checkbox', { name: /Companies/ }),
+    )
     await waitFor(() => {
       expect(calls.find((call) => call.method === 'PATCH')?.body).toEqual({
         apps: ['lead_finder', 'companies'],
@@ -344,7 +357,9 @@ describe('the People tab (PLAN-V9 E1)', () => {
       'POST /api/v1/people': { ...MARCUS, apps: ['lead_finder'] },
     })
     const { user } = renderWithProviders(<AdminPeopleTab />)
-    await screen.findByRole('list', { name: 'People' })
+    await screen.findByRole('table', { name: 'People' })
+    await user.click(screen.getByRole('button', { name: 'Add a person' }))
+    await screen.findByRole('dialog')
     await user.type(screen.getByLabelText('Name'), 'Marcus Lee')
     await user.type(screen.getByLabelText('Email'), 'marcus@example.test')
     await user.type(screen.getByLabelText('Starting password'), 'tulip harbour bicycle moonlight')

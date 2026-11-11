@@ -40,6 +40,9 @@ class AppSpec:
     jobs: "tuple[JobSpec, ...]" = ()
     # The companies it found, for the Companies page (PLAN-V10 B2): core/company_leads.py.
     company_leads: "CompanyLeads | None" = None
+    # Its own controls for its schedules (PLAN-V13 T1-3), mounted at /schedules<route_prefix>,
+    # like the Lead Finder's one control for its city schedules at /schedules/lead-finder.
+    schedule_router: APIRouter | None = None
 
 
 def load_apps(names: Sequence[str]) -> list[AppSpec]:

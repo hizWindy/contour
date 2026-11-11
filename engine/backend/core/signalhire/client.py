@@ -12,6 +12,7 @@ against the real account):
 - `count_people` and `senior_people`: the daily search quota, which the Signal Hire website
   shares. Never credits.
 - `company_info`: 1 company credit for each answer.
+- `credits` (the balance, for the Health tab): nothing.
 
 The Company API is off until Signal Hire's support switches it on. A 403 on a company call means
 it is still off (`SignalHireCompanyApiOff`). The search doesn't need it, so counting people still
@@ -378,6 +379,18 @@ class HttpSignalHire:
             current = person.experience[0].title if person.experience else None
             people.append(PersonOnFile(person.uid, person.full_name, current))
         return people
+
+    async def credits(self) -> int:
+        """The account's credit balance (`GET /credits`). It reads the balance and spends nothing,
+        so Admin's Health tab uses it to check the key (PLAN-V13 T1-2). Not in the protocol: no
+        project needs it."""
+        data = await self._call("GET", "/credits", must_find=True)
+        value = data.get("credits")
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise SignalHireError(
+                "Signal Hire sent an answer we couldn't read", "It had no credit balance."
+            )
+        return value
 
     # --- One request -----------------------------------------------------------------------
 
