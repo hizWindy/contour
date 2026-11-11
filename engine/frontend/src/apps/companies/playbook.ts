@@ -48,6 +48,12 @@ export interface GuideLine {
   /** Claude's lines only: the ids of their sources (F3, W1), shown as chips. */
   sources: string[]
   icon: GuideIcon
+  /** The person's own wording for this slot (script-layers.ts), shown as Yours. Absent on a draft line. */
+  edited?: {
+    slot: string
+    /** The draft's text it replaces, or null when the draft has no line in that slot any more. */
+    draft: string | null
+  }
 }
 
 export interface FollowUp {
