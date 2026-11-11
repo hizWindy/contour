@@ -216,13 +216,13 @@ Newest first.
 
 ## Track 2: the card (session 2)
 
-**Progress:** 0 of 6 steps done.
+**Progress:** 2 of 6 steps done (T2-1, T2-2).
 
-- [ ] **T2-1. Own copy and a baseline.**
+- [x] **T2-1. Own copy and a baseline.** Done 2026-11-11: worktree `../contour-v14-t2`, database `leadfinder_v14b` (a copy of `leadfinder_v10`), 1,044 website tests pass.
   - The worktree, the `leadfinder_v14b` database and the ports.
   - Run the website tests once with `heavy.sh`, and note the count.
   - **Done when:** the count is in the Track 2 Log.
-- [ ] **T2-2. The seam, then the tag `v14-seam`.** Moves only. No behaviour changes.
+- [x] **T2-2. The seam, then the tag `v14-seam`.** Moves only. No behaviour changes. Done 2026-11-11 (0288a9f, tag `v14-seam`).
   - `prep-card.tsx` (505 lines) splits:
     - `BeforeYouDial` and the three tile functions go to `before-you-dial.tsx`;
     - `Step`, `Quiet`, `SalesScript` and `SalesScriptPending` go to `sales-script.tsx`;
@@ -263,7 +263,12 @@ Newest first.
 
 Newest first.
 
-- Nothing yet.
+- 2026-11-11: **Seam ready** (0288a9f, tag `v14-seam`). Track 3 can merge it. Where things went:
+  - `before-you-dial.tsx`: `BeforeYouDial` and its tiles. `sales-script.tsx`: `Step`, `Quiet` (exported, because `CallSide` uses it too), `SalesScript` and `SalesScriptPending`. `prep-card.tsx` keeps `SideSection`, `Fact` and `CallSide`.
+  - `script-header.tsx`: `ScriptHeader` (the title and the "Written from" line) and `SCRIPT_TITLE_ID`. The modal now draws the `<section aria-labelledby>` around `ScriptHeader` and `SalesScript`, so `SalesScript` is a plain `div` with the steps and the "left out" line.
+  - `use-guide.ts`: `useGuide({ script, labels, company, picking, person, caller, today, companyKey, contactId })`. The modal already passes `companyKey` and `contactId`, so Track 3 can read the line edits there without touching `prep-modal.tsx`.
+  - Checks: all 1,044 website tests pass with no test changed; types, lint and format pass; screenshots of a cold-call card before and after are byte-identical (1440px, light, the top and the scrolled end).
+- 2026-11-11: T2-1 baseline. Website tests: 78 files, 1,044 tests, all pass (42 s). `leadfinder_v14b` is a `pg_dump`/`pg_restore` copy of `leadfinder_v10` (at 0014). One index (`ix_memory_embedding`, HNSW) failed in the restore on Docker's small shared memory and was built again with `max_parallel_maintenance_workers=0`. The copy has no HubSpot contacts or calls, so browser checks use a cold call. Call prep is off there (no override), and the Track 2 backend starts with no Claude, HubSpot or Signal Hire keys, so a check can't spend money.
 
 ## Track 3: the script (session 3)
 
