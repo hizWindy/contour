@@ -36,6 +36,7 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Literal
 
+import anthropic
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy import text as sql_text
@@ -68,7 +69,7 @@ from apps.companies.script_notes import StyleNotes, notes_for_prompt
 from apps.companies.tables import Prep
 from apps.companies.tones import TONE_DEFAULT, TONE_PRESETS, tone_for, tone_words
 from core.claude.budget import Budget, BudgetSpent
-from core.claude.client import Claude, ClaudeError, Reply, WebTools
+from core.claude.client import Claude, ClaudeError, ClaudeUnavailable, Reply, WebTools
 from core.company_leads import CompanyLeads
 from core.memory.embedder import Embedder
 from core.memory.service import Note, remember_many
@@ -88,7 +89,20 @@ MAX_FOLLOW_UPS = 3
 EM_DASH = chr(0x2014)  # the website shows no em dashes (DESIGN.md)
 EN_DASH = chr(0x2013)
 STUCK_MINUTES = 5  # a prep still "searching" after this, with no task behind it, has failed
-STUCK_ERROR = "This prep stopped when the server restarted. Press Research again."
+# Why a prep failed, in plain words (PLAN-V15 "Words for errors"): what happened, then one thing
+# to do. The card adds that its script is from our HubSpot copy, and a "Try again" button.
+STUCK_ERROR = "Contour restarted while this prep was running. Try again."
+STOPPED = "Contour stopped while this prep was running. Try again."
+INCOMPLETE = "Claude's answer came back incomplete. Try again."
+SERVER_FAULT = "Something went wrong on our side while writing the script. Try again."
+DAILY_LIMIT = (
+    "Call prep has reached today's limit. It starts again tomorrow. An admin can raise the limit."
+)
+CLAUDE_BUSY = "Claude is busy right now. Try again in a minute."
+UNREACHABLE = "Our server can't reach Claude. Try again in a few minutes."
+CLAUDE_SETUP = "Claude isn't set up correctly. An admin needs to check the Claude key."
+TOO_SLOW = "Claude took too long to answer. Nothing was lost. Try again."
+CLAUDE_ERROR = "Claude couldn't write the script. Try again in a minute."
 MAX_NEWS = 3
 # One web check per company at a time (PLAN-V15 T3-2): a second prep for the same company waits
 # for the first one's check, then writes from its notes. A Postgres advisory lock key, used with
@@ -619,34 +633,39 @@ class PrepRunner:
             await self._run(prep_id, context)
         except asyncio.CancelledError:
             with contextlib.suppress(Exception):
-                await asyncio.shield(
-                    self._fail(prep_id, "The server stopped while this prep was running.")
-                )
+                await asyncio.shield(self._fail(prep_id, STOPPED, code="stopped"))
             raise
+        except _Plain as error:
+            await self._fail(prep_id, error.detail, code=error.code)
         except BudgetSpent as error:
-            if isinstance(error, ClaudeError):  # the daily limit: its own plain words
-                await self._fail(prep_id, f"{error.title}. {error.detail}")
+            if isinstance(error, ClaudeError):  # the daily limit for all Claude spending
+                log.info("prep_failed", extra={"prep_id": str(prep_id), "why": str(error)})
+                await self._fail(prep_id, DAILY_LIMIT, code="daily_limit")
             else:
                 await self._fail(
                     prep_id,
-                    f"This prep stopped at its US${context.cap_usd:.2f} cap, so no script was "
-                    "written. Press Research again, or ask an Admin to raise the cap.",
+                    f"This prep reached its US${context.cap_usd:.2f} cap before the script was "
+                    "written. Try again, or ask an admin to raise the cap.",
+                    code="cap",
                 )
         except ClaudeError as error:
-            await self._fail(prep_id, f"{error.title}. {error.detail}")
+            # The technical words go to the log; the card gets plain ones.
+            log.warning("prep_failed", extra={"prep_id": str(prep_id), "why": str(error)})
+            code, words = claude_words(error)
+            await self._fail(prep_id, words, code=code)
         except Exception:
             log.exception("prep_failed", extra={"prep_id": str(prep_id)})
-            await self._fail(
-                prep_id,
-                "Something went wrong while writing the script. Press Research again.",
-            )
+            await self._fail(prep_id, SERVER_FAULT, code="server")
         finally:
             self._busy.discard(prep_id)
 
-    async def _fail(self, prep_id: uuid.UUID, why: str) -> None:
+    async def _fail(self, prep_id: uuid.UUID, why: str, *, code: str) -> None:
+        """Fails the prep in plain words. `code` (kept in its facts) says why, for code that reads
+        it, like the morning search ahead stopping at the daily limit."""
         async with self.sessions() as session:
             prep = await session.get(Prep, prep_id)
             if prep is not None and prep.status == "searching":
+                prep.facts = {**(prep.facts or {}), "error_code": code}
                 prep.status = "failed"
                 prep.error = why
                 prep.finished_at = datetime.now(UTC)
@@ -709,7 +728,10 @@ class PrepRunner:
             now = datetime.now(UTC)
             pack = await build_facts(session, prep.company_key, prep.contact_id, context.hooks, now)
             if pack is None:
-                raise _Plain("This company is no longer in the HubSpot copy or the Lead Finder.")
+                raise _Plain(
+                    "This company is no longer in the HubSpot copy or the Lead Finder.",
+                    code="company_gone",
+                )
             # The team's style notes and tone, and the asker's own. The morning search ahead has
             # no asker, so it gets the team's.
             asker = context.trigger == "person"
@@ -747,9 +769,7 @@ class PrepRunner:
                     subject=subject,
                 )
             if reply.parsed is None:
-                raise _Plain(
-                    "Claude's answer didn't fit the call script form. Press Research again."
-                )
+                raise _Plain(INCOMPLETE, code="incomplete")
             prep.stage = 3  # the script is being checked
             checked = check_answer(
                 reply.parsed,
@@ -791,11 +811,32 @@ class PrepRunner:
             log.warning("prep_notes_not_saved", exc_info=True)
 
 
-class _Plain(ClaudeError):
+class _Plain(Exception):
     """A prep that can't go on, with the reason in plain words."""
 
-    def __init__(self, detail: str) -> None:
-        super().__init__("No script", detail)
+    def __init__(self, detail: str, *, code: str) -> None:
+        super().__init__(detail)
+        self.detail = detail
+        self.code = code
+
+
+def claude_words(error: ClaudeError) -> tuple[str, str]:
+    """A Claude error as call prep says it (PLAN-V15 "Words for errors"), and its code. Read from
+    what went wrong, not from the error's own words, which may name a setting or a file."""
+    cause = error.__cause__
+    if isinstance(error, ClaudeUnavailable):
+        if isinstance(cause, anthropic.APIConnectionError) and not isinstance(
+            cause, anthropic.APITimeoutError
+        ):
+            return "unreachable", UNREACHABLE
+        return "claude_setup", CLAUDE_SETUP
+    if isinstance(cause, anthropic.APITimeoutError):
+        return "timeout", TOO_SLOW
+    if isinstance(cause, anthropic.RateLimitError) or (
+        isinstance(cause, anthropic.APIStatusError) and cause.status_code in (503, 529)
+    ):
+        return "claude_busy", CLAUDE_BUSY
+    return "claude_error", CLAUDE_ERROR
 
 
 def made_by_name(names: dict[uuid.UUID, str], prep: Prep) -> str | None:

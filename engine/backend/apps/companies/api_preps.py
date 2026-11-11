@@ -21,7 +21,7 @@ from sqlalchemy.exc import IntegrityError
 
 from apps.companies import store
 from apps.companies.deps import LeadsDep
-from apps.companies.facts import build_facts, facts_out
+from apps.companies.facts import build_facts, copy_finished_at, facts_out
 from apps.companies.prep import (
     PrepContext,
     PrepRunner,
@@ -63,8 +63,8 @@ Key = Annotated[str, Path(min_length=1, max_length=64)]
 def company_not_found() -> Problem:
     return Problem(
         404,
-        "Company not found",
-        "There is no such company, or it isn't open to your account.",
+        "We can't find that company",
+        "It may have been removed, or it isn't open to your account.",
         code="company_not_found",
     )
 
@@ -72,8 +72,8 @@ def company_not_found() -> Problem:
 def prep_not_found() -> Problem:
     return Problem(
         404,
-        "Prep not found",
-        "There is no such call prep, or it isn't open to your account.",
+        "We can't find that call prep",
+        "It may have been removed, or it isn't open to your account.",
         code="prep_not_found",
     )
 
@@ -82,8 +82,8 @@ def prep_off() -> Problem:
     return Problem(
         409,
         "Call prep is off",
-        "Call scripts are switched off. An Admin switches them on in Admin, Settings. The facts "
-        "from HubSpot still show.",
+        "Call scripts are switched off. An admin can switch them on in Admin, Settings. The "
+        "facts from HubSpot still show.",
         code="prep_off",
     )
 
@@ -261,8 +261,8 @@ async def start_prep(
     if contact_id is not None and person is None:
         raise Problem(
             404,
-            "Person not found",
-            "That person isn't at this company in the HubSpot copy.",
+            "We can't find that person",
+            "They aren't at this company in our HubSpot copy any more.",
             code="person_not_found",
         )
     prep = Prep(
@@ -319,4 +319,5 @@ async def get_facts(
         names_ok=settings.hubspot_names_to_claude_ok,
         people_ready=pack.company.people_status == "ready",
         prep_cap_usd=settings.prep_cap_usd,
+        copy_at=await copy_finished_at(session),
     )

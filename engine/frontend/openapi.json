@@ -6235,6 +6235,19 @@
             "title": "Company Name",
             "type": "string"
           },
+          "copy_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the last HubSpot sync finished, so the card can say an old copy is old (PLAN-V15). None before the first sync",
+            "title": "Copy At"
+          },
           "deal": {
             "enum": [
               "open",

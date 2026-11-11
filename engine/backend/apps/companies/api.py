@@ -44,8 +44,8 @@ Key = Annotated[
 def not_found() -> Problem:
     return Problem(
         404,
-        "Company not found",
-        "There is no such company, or it isn't open to your account.",
+        "We can't find that company",
+        "It may have been removed, or it isn't open to your account.",
         code="company_not_found",
     )
 

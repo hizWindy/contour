@@ -71,22 +71,24 @@ def _owned(
 # --- Checking text ------------------------------------------------------------------------------
 
 
-def contact_details() -> Problem:
-    return Problem(
-        422,
-        "Contact details left out",
-        "Leave out email addresses and phone numbers. Scripts and styles never hold them, "
-        "because style notes go to Claude.",
-        code="contact_details",
+def contact_details(*, line: bool = False) -> Problem:
+    """A line or a note with an email address or a phone number (PLAN-V15 T3-7). A line edit
+    never goes to Claude, so its words don't say it does."""
+    detail = (
+        "Phone numbers and emails can't be saved in a script line. Take them out, then save."
+        if line
+        else "Phone numbers and emails can't be saved in a style note, because style notes go "
+        "to Claude. Take them out, then save."
     )
+    return Problem(422, "Contact details left out", detail, code="contact_details")
 
 
-def clean(text: str) -> str:
+def clean(text: str, *, line: bool = False) -> str:
     """The text with spaces tidied, line breaks kept. Refuses contact details."""
-    lines = [" ".join(line.split()) for line in text.strip().splitlines()]
-    tidy = "\n".join(line for line in lines if line)
+    lines = [" ".join(part.split()) for part in text.strip().splitlines()]
+    tidy = "\n".join(part for part in lines if part)
     if scrub(tidy) != tidy:
-        raise contact_details()
+        raise contact_details(line=line)
     return tidy
 
 
@@ -122,7 +124,7 @@ async def my_edits(
 async def save_edit(
     session: AsyncSession, user: uuid.UUID | None, body: ScriptEditIn, now: datetime
 ) -> ScriptEditOut:
-    text = clean(body.text)
+    text = clean(body.text, line=True)
     if not text:
         raise _empty()
     # One statement, so two first saves of the same line at once never clash (PLAN-V15 T3-2).

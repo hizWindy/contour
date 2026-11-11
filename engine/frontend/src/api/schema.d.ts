@@ -3935,6 +3935,11 @@ export interface components {
             /** Company Name */
             company_name: string;
             /**
+             * Copy At
+             * @description When the last HubSpot sync finished, so the card can say an old copy is old (PLAN-V15). None before the first sync
+             */
+            copy_at?: string | null;
+            /**
              * Deal
              * @enum {string}
              */

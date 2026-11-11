@@ -43,8 +43,8 @@ NoteId = Annotated[uuid.UUID, Path()]
 def _company_not_found() -> Problem:
     return Problem(
         404,
-        "Company not found",
-        "There is no company with that key here.",
+        "We can't find that company",
+        "It may have been removed, or it isn't open to your account.",
         code="company_not_found",
     )
 

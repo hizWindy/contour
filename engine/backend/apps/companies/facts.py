@@ -20,6 +20,7 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Final, Literal
 
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.companies import store
@@ -32,7 +33,7 @@ from apps.companies.schemas import (
     PrepSource,
 )
 from core.company_leads import CompanyLeads
-from core.hubspot.models import HubSpotCompany, HubSpotContact
+from core.hubspot.models import HubSpotCompany, HubSpotContact, HubSpotSync
 
 SourceKind = Literal["hubspot", "call", "memory", "lead", "web"]
 
@@ -304,6 +305,14 @@ def _company_facts(pack: FactsPack, company: CompanyDetail) -> None:
         pack.add(text, "hubspot", "HubSpot: deal", url=deal.hubspot_url)
 
 
+async def copy_finished_at(session: AsyncSession) -> datetime | None:
+    """When the last HubSpot sync that finished well ended: how old our copy is (PLAN-V15)."""
+    found: datetime | None = await session.scalar(
+        select(func.max(HubSpotSync.finished_at)).where(HubSpotSync.status == "done")
+    )
+    return found
+
+
 def facts_out(
     pack: FactsPack,
     *,
@@ -311,6 +320,7 @@ def facts_out(
     names_ok: bool,
     people_ready: bool,
     prep_cap_usd: Decimal,
+    copy_at: datetime | None = None,
 ) -> PrepFacts:
     company = pack.company
     return PrepFacts(
@@ -333,6 +343,7 @@ def facts_out(
         prep_enabled=prep_enabled,
         names_ok=names_ok,
         prep_cap_usd=prep_cap_usd,
+        copy_at=copy_at,
     )
 
 

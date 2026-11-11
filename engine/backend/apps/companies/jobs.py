@@ -240,7 +240,7 @@ async def search_ahead(app: FastAPI, settings: Settings, now: datetime | None = 
                 morning.spent_usd += done.cost_usd
                 if done.status == "ready":
                     morning.prepped += 1
-                elif done.error and "daily limit" in done.error:
+                elif (done.facts or {}).get("error_code") == "daily_limit":
                     morning.stopped = "It stopped at the daily limit for all Claude spending."
                     break
     log.info(

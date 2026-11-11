@@ -263,6 +263,11 @@ class PrepPerson(Out):
 class PrepFacts(Out):
     """Everything we already know, each fact with its source. Free: no Claude request."""
 
+    model_config = ConfigDict(
+        json_schema_serialization_defaults_required=True,
+        json_schema_extra=optional_in_types("copy_at"),
+    )
+
     company_key: str
     company_name: str
     city: str | None
@@ -286,6 +291,11 @@ class PrepFacts(Out):
     prep_cap_usd: Decimal = Field(
         Decimal("0.25"),
         description="The most one prep may cost: what 'Research again' costs at most (PLAN-V14)",
+    )
+    copy_at: datetime | None = Field(
+        None,
+        description="When the last HubSpot sync finished, so the card can say an old copy is old "
+        "(PLAN-V15). None before the first sync",
     )
 
 
