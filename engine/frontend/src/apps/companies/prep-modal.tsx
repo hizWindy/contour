@@ -18,20 +18,17 @@
 import {
   Building2,
   CircleAlert,
-  CircleCheck,
-  CircleDashed,
   Copy,
   Hourglass,
   PhoneCall,
   PhoneOutgoing,
-  RefreshCw,
   type LucideIcon,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { isApiProblem } from '@/api/client'
 import { useCompany, useMe, usePrep, usePrepFacts, useStartPrep } from '@/api/hooks'
-import type { CompanyDetail, CompanyPerson, PrepOut } from '@/api/types'
+import type { CompanyDetail, CompanyPerson, PrepFacts } from '@/api/types'
 import { ErrorState } from '@/components/error-state'
 import { Pending } from '@/components/skeletons'
 import { Button } from '@/components/ui/button'
@@ -42,9 +39,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
-import { formatRelative, formatTime, melbourneDate } from '@/lib/format'
+import { melbourneDate } from '@/lib/format'
 import { PHONE, useMediaQuery } from '@/lib/use-media-query'
 import { cn } from '@/lib/utils'
 import { BeforeYouDial } from './before-you-dial'
@@ -58,7 +54,16 @@ import { useGuide } from './use-guide'
 import { WAITING_FOR_PEOPLE } from './words'
 
 const COPIED_MS = 2000
-const STEPS = ['Facts from HubSpot', 'Web check', 'Script'] as const
+
+/**
+ * The most one prep may cost: the facts' `prep_cap_usd` (PLAN-V14 contract). Read with a check
+ * until the `v14-api` tag brings it into the generated types.
+ */
+function capOf(facts: PrepFacts | undefined): string | number | null {
+  if (!facts || !('prep_cap_usd' in facts)) return null
+  const cap = facts.prep_cap_usd
+  return typeof cap === 'string' || typeof cap === 'number' ? cap : null
+}
 
 function targetKey(target: PrepTarget): string {
   return target.prepId ?? `${target.companyKey}|${target.cold ? 'cold' : (target.person?.id ?? '')}`
@@ -139,45 +144,6 @@ function CopyButton({
       <span aria-live="polite">{copied ? 'Copied' : label}</span>
     </Button>
   )
-}
-
-/** The bar that fills one step at a time: facts, web check, script. It never loops. */
-function Searching({ stage }: { stage: number }) {
-  const done = Math.max(0, Math.min(3, stage))
-  const now = STEPS[Math.min(done, STEPS.length - 1)]
-  return (
-    <div className="flex flex-col gap-1.5">
-      <Progress value={Math.max(8, (done / 3) * 100)} aria-label={`Call prep: ${now}`} />
-      <ol className="grid grid-cols-3 gap-2 text-caption">
-        {STEPS.map((step, index) => (
-          <li
-            key={step}
-            className={cn(
-              'flex items-center gap-1 transition-colors',
-              index < done ? 'text-foreground' : 'text-muted-foreground',
-            )}
-          >
-            {index < done ? (
-              <CircleCheck aria-hidden="true" className="size-3.5" />
-            ) : (
-              <CircleDashed aria-hidden="true" className="size-3.5" />
-            )}
-            {step}
-          </li>
-        ))}
-      </ol>
-    </div>
-  )
-}
-
-function readyWords(prep: PrepOut): string {
-  if (prep.trigger === 'search_ahead') {
-    return `Ready. Call prep searched ahead at ${formatTime(prep.created_at)}.`
-  }
-  if (prep.reused) {
-    return `Ready. Call prep made this ${formatRelative(prep.created_at)}${prep.made_by ? ` for ${prep.made_by}` : ''}. Refresh makes a new one.`
-  }
-  return 'Ready. Call prep checked the web just now.'
 }
 
 /** "Who are you calling?": the company's people, and a cold call to the switchboard. */
@@ -384,28 +350,8 @@ export function PrepModal({ target, onClose, onChangeTarget, onOpenCompany }: Pr
     if (companyKey && onOpenCompany) onOpenCompany(companyKey)
   }
 
-  let status: { icon: LucideIcon; words: string; tone?: string } | null = null
-  if (!picking) {
-    if (prep.data?.status === 'ready') status = { icon: CircleCheck, words: readyWords(prep.data) }
-    else if (prep.data?.status === 'failed') {
-      status = {
-        icon: CircleAlert,
-        tone: 'text-destructive',
-        words: 'The web check failed. This script is from our HubSpot copy.',
-      }
-    } else if (checking) {
-      status = {
-        icon: Hourglass,
-        words:
-          'Ready from our HubSpot copy. Call prep is checking the web for news and "still there?".',
-      }
-    } else if (off || facts.data?.prep_enabled === false) {
-      status = {
-        icon: CircleCheck,
-        words: 'Ready from our HubSpot copy. Call prep is off, so there is no web check.',
-      }
-    } else status = { icon: CircleCheck, words: 'Ready from our HubSpot copy.' }
-  }
+  const enabled = off ? false : (facts.data?.prep_enabled ?? null)
+  const capUsd = capOf(facts.data)
 
   return (
     <Dialog
@@ -452,15 +398,6 @@ export function PrepModal({ target, onClose, onChangeTarget, onOpenCompany }: Pr
                   )}
                 </p>
               </DialogDescription>
-              {status ? (
-                <p className="mt-1 flex items-start gap-1.5 text-caption text-muted-foreground">
-                  <status.icon
-                    aria-hidden="true"
-                    className={cn('mt-0.5 size-3.5 shrink-0', status.tone)}
-                  />
-                  <span role="status">{status.words}</span>
-                </p>
-              ) : null}
             </div>
           </div>
           {picking ? null : (
@@ -478,7 +415,6 @@ export function PrepModal({ target, onClose, onChangeTarget, onOpenCompany }: Pr
               </div>
             </SourcesContext.Provider>
           )}
-          {checking ? <Searching stage={prep.data?.stage ?? 0} /> : null}
         </DialogHeader>
         <SourcesContext.Provider value={sources}>
           <div
@@ -518,7 +454,7 @@ export function PrepModal({ target, onClose, onChangeTarget, onOpenCompany }: Pr
                     <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
                     <span>
                       {prep.data.error ?? 'The web check failed.'} The script below is from our
-                      HubSpot copy. Press Refresh to try again.
+                      HubSpot copy. Press Try again.
                     </span>
                   </div>
                 ) : null}
@@ -529,7 +465,19 @@ export function PrepModal({ target, onClose, onChangeTarget, onOpenCompany }: Pr
                       aria-labelledby={SCRIPT_TITLE_ID}
                       className="flex min-w-0 animate-in flex-col gap-4 duration-150 fade-in-0"
                     >
-                      <ScriptHeader madeFrom={guide.madeFrom} />
+                      <ScriptHeader
+                        madeFrom={guide.madeFrom}
+                        prep={prep.data}
+                        enabled={enabled}
+                        namesOk={facts.data?.names_ok !== false}
+                        capUsd={capUsd}
+                        running={checking || start.isPending}
+                        stage={prep.data?.stage ?? 0}
+                        failed={Boolean(problem) || prep.data?.status === 'failed'}
+                        onResearch={() => {
+                          ask(true)
+                        }}
+                      />
                       <SalesScript guide={guide} />
                     </section>
                   ) : company.error ? (
@@ -571,20 +519,6 @@ export function PrepModal({ target, onClose, onChangeTarget, onOpenCompany }: Pr
                 label="Copy script"
                 disabled={!guide}
               />
-              {facts.data?.prep_enabled && !off ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={start.isPending || checking}
-                  onClick={() => {
-                    ask(true)
-                  }}
-                >
-                  <RefreshCw aria-hidden="true" />
-                  Refresh
-                </Button>
-              ) : null}
             </div>
           </div>
         ) : !picking ? (
@@ -603,20 +537,6 @@ export function PrepModal({ target, onClose, onChangeTarget, onOpenCompany }: Pr
                 label="Copy script"
                 disabled={!guide}
               />
-              {facts.data?.prep_enabled && !off ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={start.isPending || checking}
-                  onClick={() => {
-                    ask(true)
-                  }}
-                >
-                  <RefreshCw aria-hidden="true" />
-                  Refresh
-                </Button>
-              ) : null}
             </div>
           </div>
         ) : null}

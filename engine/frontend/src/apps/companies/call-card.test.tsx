@@ -4,11 +4,12 @@
  * companies.test.tsx.
  */
 import { screen, within } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
-import type { CompanyDetail, PrepFacts, PrepScript, PrepSource } from '@/api/types'
+import { describe, expect, it, vi } from 'vitest'
+import type { CompanyDetail, PrepFacts, PrepOut, PrepScript, PrepSource } from '@/api/types'
 import { renderWithProviders } from '@/test/render'
 import { BeforeYouDial, type BeforeYouDialProps } from './before-you-dial'
 import { SourcesContext } from './guide-sources'
+import { ScriptHeader, type ScriptHeaderProps } from './script-header'
 
 const TODAY = '2026-11-11'
 
@@ -185,5 +186,119 @@ describe('the answers in the card header', () => {
   it('asks for the switchboard on a cold call', () => {
     renderAnswers({ person: null })
     expect(screen.getByRole('button', { name: /^Who/ })).toHaveTextContent('Nobody named')
+  })
+})
+
+function made(changes: Partial<PrepOut> & { style_used?: unknown } = {}): PrepOut {
+  return {
+    id: 'aaaaaaaa-1111-2222-3333-444444444444',
+    company_key: '101',
+    company_name: 'ABC Logistics',
+    person: { id: '201', name: 'Jason Reeds', title: 'Head of Operations' },
+    kind: 'person',
+    trigger: 'person',
+    status: 'ready',
+    stage: 3,
+    error: null,
+    script: script(),
+    sources: SOURCES,
+    web_checked: true,
+    reused: true,
+    made_by: 'Tom',
+    created_at: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+    finished_at: null,
+    ...changes,
+  }
+}
+
+function renderHeader(changes: Partial<ScriptHeaderProps> = {}) {
+  const onResearch = vi.fn()
+  const props: ScriptHeaderProps = {
+    madeFrom: 'claude',
+    prep: made(),
+    enabled: true,
+    namesOk: true,
+    capUsd: '0.25',
+    running: false,
+    stage: 0,
+    failed: false,
+    onResearch,
+    ...changes,
+  }
+  return { ...renderWithProviders(<ScriptHeader {...props} />), onResearch }
+}
+
+describe('"Research again" in the script header', () => {
+  it('says what it does and what it costs, and a press asks for a new prep at once', async () => {
+    const { user, onResearch } = renderHeader({
+      prep: made({ style_used: { mine: false, team_notes: 3 } }),
+    })
+    expect(screen.getByRole('heading', { name: 'Sales script' })).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Made 2 days ago by Tom. Written with the team style.',
+    )
+    const again = screen.getByRole('button', { name: 'Research again' })
+    expect(again).toHaveAccessibleDescription(
+      'New news, a new "still there?" check and a new script. Costs up to US$0.25.',
+    )
+    again.focus()
+    await user.keyboard('{Enter}')
+    expect(onResearch).toHaveBeenCalledTimes(1)
+  })
+
+  it('names your style and the team style when both were used', () => {
+    renderHeader({ prep: made({ style_used: { mine: true, team_notes: 2 } }) })
+    expect(screen.getByRole('status')).toHaveTextContent('Written with the team style and yours.')
+  })
+
+  it('says when call prep searched ahead, and a date after a week', () => {
+    const { unmount } = renderHeader({
+      prep: made({ trigger: 'search_ahead', made_by: null, created_at: '2026-11-10T20:30:00Z' }),
+    })
+    expect(screen.getByRole('status')).toHaveTextContent(/^Searched ahead at .+\.$/)
+    unmount()
+    renderHeader({ prep: made({ created_at: '2026-10-03T01:00:00Z', made_by: 'Mia' }) })
+    expect(screen.getByRole('status')).toHaveTextContent(/^Made on .+2026 by Mia\.$/)
+  })
+
+  it('is greyed out while call prep is off, and says an admin can switch it on', () => {
+    renderHeader({ madeFrom: 'hubspot', prep: undefined, enabled: false })
+    expect(screen.getByRole('status')).toHaveTextContent('Written from our HubSpot copy.')
+    const again = screen.getByRole('button', { name: 'Research again' })
+    expect(again).toBeDisabled()
+    expect(again).toHaveAccessibleDescription('Call prep is off. An admin can switch it on.')
+  })
+
+  it('waits, greyed out, until the facts say whether call prep is on', () => {
+    renderHeader({ madeFrom: 'hubspot', prep: undefined, enabled: null, capUsd: null })
+    expect(screen.getByRole('button', { name: 'Research again' })).toBeDisabled()
+  })
+
+  it('says there is no web check while names stay off', () => {
+    renderHeader({ namesOk: false })
+    expect(screen.getByRole('button', { name: 'Research again' })).toHaveAccessibleDescription(
+      "Names don't go to Claude yet, so there is no web check. Costs up to US$0.25.",
+    )
+  })
+
+  it('shows "Researching..." with the 3-step bar while it runs', () => {
+    renderHeader({ madeFrom: 'hubspot', prep: undefined, running: true, stage: 1 })
+    expect(screen.getByRole('button', { name: 'Researching...' })).toBeDisabled()
+    expect(screen.getByRole('progressbar', { name: 'Call prep: Web check' })).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Written from our HubSpot copy until the new one is ready.',
+    )
+  })
+
+  it('says "Try again" after a failure', () => {
+    renderHeader({ madeFrom: 'hubspot', prep: undefined, failed: true })
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeEnabled()
+  })
+
+  it('is full width under the title on a phone', () => {
+    renderHeader()
+    expect(screen.getByRole('button', { name: 'Research again' }).className).toContain(
+      'max-sm:w-full',
+    )
   })
 })

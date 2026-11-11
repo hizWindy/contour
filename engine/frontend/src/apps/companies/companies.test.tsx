@@ -426,7 +426,7 @@ describe('the prep box and the call prep', () => {
     expect(within(modal).getByText('Are you planning to renew or move?')).toBeInTheDocument()
     // Call prep's guided question opens with its follow-up.
     expect(within(modal).getByText('Who is helping you look?')).toBeInTheDocument()
-    expect(within(modal).getByText('Written by call prep, with a web check.')).toBeInTheDocument()
+    expect(within(modal).getByText(/^Made .+ by Mia\.$/)).toBeInTheDocument()
     expect(
       within(modal).getByText('1 line was left out because it had no source.'),
     ).toBeInTheDocument()
@@ -463,24 +463,56 @@ describe('the prep box and the call prep', () => {
     expect(await within(modal).findByRole('progressbar', { name: /Call prep/ })).toBeInTheDocument()
     expect(within(modal).getByText(/Call prep is checking the web/)).toBeInTheDocument()
     expect(within(modal).getByText('Web check')).toBeInTheDocument()
-    expect(await within(modal).findByText('Written from our HubSpot copy.')).toBeInTheDocument()
+    expect(
+      await within(modal).findByText('Written from our HubSpot copy until the new one is ready.'),
+    ).toBeInTheDocument()
+    expect(within(modal).getByRole('button', { name: 'Researching...' })).toBeDisabled()
   })
 
-  it('says a failed prep in plain words, and a searched-ahead one with its time', async () => {
-    mockApi({
-      prep: prep({
-        status: 'failed',
-        script: null,
-        error: 'Claude did not answer. Press Refresh.',
-      }),
+  it('says a failed prep in plain words, and "Try again" makes a new one', async () => {
+    const backend = mockApi({
+      prep: prep({ status: 'failed', script: null, error: 'Claude did not answer.' }),
     })
     const { user } = renderCompanies()
     await screen.findByText('ABC Logistics')
     await user.type(screen.getByRole('combobox', { name: /Who are you calling/ }), 'jas')
     await user.click(await screen.findByRole('option', { name: /Jason Reeds/ }))
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Claude did not answer. Press Refresh.',
+      'Claude did not answer. The script below is from our HubSpot copy. Press Try again.',
     )
+    await user.click(screen.getByRole('button', { name: 'Try again' }))
+    await waitFor(() => {
+      expect(backend.requests.filter((request) => request.method === 'POST')).toHaveLength(2)
+    })
+  })
+
+  it('"Research again" sits at the top of the script and makes a new prep, with no confirm box', async () => {
+    const backend = mockApi()
+    const { user } = renderCompanies()
+    await screen.findByText('ABC Logistics')
+    await user.type(screen.getByRole('combobox', { name: /Who are you calling/ }), 'jas')
+    await user.click(await screen.findByRole('option', { name: /Jason Reeds/ }))
+    const modal = await screen.findByRole('dialog', { name: /Jason Reeds/ })
+    const script = await within(modal).findByRole('region', { name: 'Sales script' })
+    const again = within(script).getByRole('button', { name: 'Research again' })
+    expect(again).toHaveAccessibleDescription(
+      'New news, a new "still there?" check and a new script.',
+    )
+    // The footer has no Refresh any more.
+    expect(within(modal).queryByRole('button', { name: 'Refresh' })).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(again).toBeEnabled()
+    })
+    await user.click(again)
+    await waitFor(() => {
+      const posts = backend.requests.filter((request) => request.method === 'POST')
+      expect(posts).toHaveLength(2)
+    })
+    const posts = backend.requests.filter((request) => request.method === 'POST')
+    const last = posts[posts.length - 1]
+    if (!last) throw new Error('no request')
+    expect(await last.clone().json()).toMatchObject({ contact_id: '201', refresh: true })
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
   })
 
   it('a searched-ahead prep says so', async () => {
@@ -489,7 +521,7 @@ describe('the prep box and the call prep', () => {
     await screen.findByText('ABC Logistics')
     await user.type(screen.getByRole('combobox', { name: /Who are you calling/ }), 'jas')
     await user.click(await screen.findByRole('option', { name: /Jason Reeds/ }))
-    expect(await screen.findByText(/Call prep searched ahead at/)).toBeInTheDocument()
+    expect(await screen.findByText(/^Searched ahead at /)).toBeInTheDocument()
   })
 
   it('while call prep is off, the card still has a sales script and guided questions', async () => {
@@ -505,6 +537,11 @@ describe('the prep box and the call prep', () => {
     expect(within(modal).getByText('Written from our HubSpot copy.')).toBeInTheDocument()
     expect(within(modal).getByText('I wanted to follow up on Perth fit-out.')).toBeInTheDocument()
     expect(within(modal).queryByRole('button', { name: 'Refresh' })).not.toBeInTheDocument()
+    // "Research again" stays in view, greyed out, and says who can switch call prep on.
+    expect(within(modal).getByRole('button', { name: 'Research again' })).toBeDisabled()
+    expect(
+      within(modal).getByText('Call prep is off. An admin can switch it on.'),
+    ).toBeInTheDocument()
 
     // The guided questions: the first is open; ticking it opens the next one.
     const questions = within(modal).getAllByRole('button', { expanded: true })
