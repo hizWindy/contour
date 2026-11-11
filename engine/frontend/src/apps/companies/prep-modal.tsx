@@ -2,8 +2,10 @@
  * The prep card (PLAN-V10 D4 and F1): what to know and say on one call, in a modal over the page.
  * The company panel is everything we know about a client; this card is quick info and a script.
  *
- * - **At once:** "Before you dial" (Levi's 4 questions), the sales script and the guided questions
- *   are written here from what we already know (`playbook.ts`). Free, and ready as the card opens.
+ * - **At once:** the sales script and the guided questions are written here from what we already
+ *   know (`playbook.ts`). Free, and ready as the card opens.
+ * - **In the header,** under the person's name: Still there?, Last talk and News (PLAN-V14 T2-3,
+ *   `before-you-dial.tsx`). The header doesn't scroll, so they stay in view.
  * - **Then complete:** with call prep switched on, Claude checks the web for news and "still
  *   there?" and writes its own script. It cross-fades in when it is ready. Its lines show their
  *   sources (F for a fact we had, W for a web page found).
@@ -16,20 +18,17 @@
 import {
   Building2,
   CircleAlert,
-  CircleCheck,
-  CircleDashed,
   Copy,
   Hourglass,
   PhoneCall,
   PhoneOutgoing,
-  RefreshCw,
   type LucideIcon,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { isApiProblem } from '@/api/client'
 import { useCompany, useMe, usePrep, usePrepFacts, useStartPrep } from '@/api/hooks'
-import type { CompanyDetail, CompanyPerson, PrepOut } from '@/api/types'
+import type { CompanyDetail, CompanyPerson } from '@/api/types'
 import { ErrorState } from '@/components/error-state'
 import { Pending } from '@/components/skeletons'
 import { Button } from '@/components/ui/button'
@@ -40,19 +39,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
-import { formatRelative, formatTime, melbourneDate } from '@/lib/format'
+import { melbourneDate } from '@/lib/format'
 import { PHONE, useMediaQuery } from '@/lib/use-media-query'
 import { cn } from '@/lib/utils'
+import { BeforeYouDial } from './before-you-dial'
 import { SourcesContext } from './guide-sources'
-import { BeforeYouDial, CallSide, SalesScript, SalesScriptPending } from './prep-card'
+import { CallSide } from './prep-card'
 import type { PrepTarget } from './prep-box'
-import { buildGuide, guideFromPrep, guideText } from './playbook'
+import { guideText } from './playbook'
+import { SalesScript, SalesScriptPending } from './sales-script'
+import { SCRIPT_TITLE_ID, ScriptHeader } from './script-header'
+import { useGuide } from './use-guide'
 import { WAITING_FOR_PEOPLE } from './words'
 
 const COPIED_MS = 2000
-const STEPS = ['Facts from HubSpot', 'Web check', 'Script'] as const
 
 function targetKey(target: PrepTarget): string {
   return target.prepId ?? `${target.companyKey}|${target.cold ? 'cold' : (target.person?.id ?? '')}`
@@ -133,45 +134,6 @@ function CopyButton({
       <span aria-live="polite">{copied ? 'Copied' : label}</span>
     </Button>
   )
-}
-
-/** The bar that fills one step at a time: facts, web check, script. It never loops. */
-function Searching({ stage }: { stage: number }) {
-  const done = Math.max(0, Math.min(3, stage))
-  const now = STEPS[Math.min(done, STEPS.length - 1)]
-  return (
-    <div className="flex flex-col gap-1.5">
-      <Progress value={Math.max(8, (done / 3) * 100)} aria-label={`Call prep: ${now}`} />
-      <ol className="grid grid-cols-3 gap-2 text-caption">
-        {STEPS.map((step, index) => (
-          <li
-            key={step}
-            className={cn(
-              'flex items-center gap-1 transition-colors',
-              index < done ? 'text-foreground' : 'text-muted-foreground',
-            )}
-          >
-            {index < done ? (
-              <CircleCheck aria-hidden="true" className="size-3.5" />
-            ) : (
-              <CircleDashed aria-hidden="true" className="size-3.5" />
-            )}
-            {step}
-          </li>
-        ))}
-      </ol>
-    </div>
-  )
-}
-
-function readyWords(prep: PrepOut): string {
-  if (prep.trigger === 'search_ahead') {
-    return `Ready. Call prep searched ahead at ${formatTime(prep.created_at)}.`
-  }
-  if (prep.reused) {
-    return `Ready. Call prep made this ${formatRelative(prep.created_at)}${prep.made_by ? ` for ${prep.made_by}` : ''}. Refresh makes a new one.`
-  }
-  return 'Ready. Call prep checked the web just now.'
 }
 
 /** "Who are you calling?": the company's people, and a cold call to the switchboard. */
@@ -351,16 +313,17 @@ export function PrepModal({ target, onClose, onChangeTarget, onOpenCompany }: Pr
     () => new Map([...sources.values()].map((source) => [source.id, source.label])),
     [sources],
   )
-  const guide = useMemo(() => {
-    if (claude) return guideFromPrep(claude, labels)
-    if (!company.data || picking) return null
-    return buildGuide({
-      company: company.data,
-      person: person ? { name: person.name, title: person.title ?? null } : null,
-      caller,
-      today,
-    })
-  }, [claude, labels, company.data, picking, person, caller, today])
+  const guide = useGuide({
+    script: claude,
+    labels,
+    company: company.data,
+    picking,
+    person,
+    caller,
+    today,
+    companyKey,
+    contactId,
+  })
 
   const checking = !off && prep.data?.status === 'searching'
   const companyName =
@@ -377,28 +340,7 @@ export function PrepModal({ target, onClose, onChangeTarget, onOpenCompany }: Pr
     if (companyKey && onOpenCompany) onOpenCompany(companyKey)
   }
 
-  let status: { icon: LucideIcon; words: string; tone?: string } | null = null
-  if (!picking) {
-    if (prep.data?.status === 'ready') status = { icon: CircleCheck, words: readyWords(prep.data) }
-    else if (prep.data?.status === 'failed') {
-      status = {
-        icon: CircleAlert,
-        tone: 'text-destructive',
-        words: 'The web check failed. This script is from our HubSpot copy.',
-      }
-    } else if (checking) {
-      status = {
-        icon: Hourglass,
-        words:
-          'Ready from our HubSpot copy. Call prep is checking the web for news and "still there?".',
-      }
-    } else if (off || facts.data?.prep_enabled === false) {
-      status = {
-        icon: CircleCheck,
-        words: 'Ready from our HubSpot copy. Call prep is off, so there is no web check.',
-      }
-    } else status = { icon: CircleCheck, words: 'Ready from our HubSpot copy.' }
-  }
+  const enabled = off ? false : (facts.data?.prep_enabled ?? null)
 
   return (
     <Dialog
@@ -445,18 +387,23 @@ export function PrepModal({ target, onClose, onChangeTarget, onOpenCompany }: Pr
                   )}
                 </p>
               </DialogDescription>
-              {status ? (
-                <p className="mt-1 flex items-start gap-1.5 text-caption text-muted-foreground">
-                  <status.icon
-                    aria-hidden="true"
-                    className={cn('mt-0.5 size-3.5 shrink-0', status.tone)}
-                  />
-                  <span role="status">{status.words}</span>
-                </p>
-              ) : null}
             </div>
           </div>
-          {checking ? <Searching stage={prep.data?.stage ?? 0} /> : null}
+          {picking ? null : (
+            // Under the person's name, and out of the scroll, so it stays in view.
+            <SourcesContext.Provider value={sources}>
+              <div className="-mr-9 max-sm:-mr-10 sm:pl-13">
+                <BeforeYouDial
+                  company={company.data}
+                  facts={facts.data}
+                  script={claude}
+                  checking={checking}
+                  person={person}
+                  today={today}
+                />
+              </div>
+            </SourcesContext.Provider>
+          )}
         </DialogHeader>
         <SourcesContext.Provider value={sources}>
           <div
@@ -480,14 +427,6 @@ export function PrepModal({ target, onClose, onChangeTarget, onOpenCompany }: Pr
               />
             ) : (
               <div className="flex flex-col gap-6">
-                <BeforeYouDial
-                  company={company.data}
-                  facts={facts.data}
-                  script={claude}
-                  checking={checking}
-                  person={person}
-                  today={today}
-                />
                 {problem ? (
                   <ErrorState
                     error={start.error}
@@ -504,15 +443,32 @@ export function PrepModal({ target, onClose, onChangeTarget, onOpenCompany }: Pr
                     <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
                     <span>
                       {prep.data.error ?? 'The web check failed.'} The script below is from our
-                      HubSpot copy. Press Refresh to try again.
+                      HubSpot copy. Press Try again.
                     </span>
                   </div>
                 ) : null}
-                <div className="grid grid-cols-1 gap-6 border-t pt-6 lg:grid-cols-[minmax(0,1fr)_19rem]">
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_19rem]">
                   {guide ? (
-                    <div key={guide.madeFrom} className="min-w-0 animate-in duration-150 fade-in-0">
+                    <section
+                      key={guide.madeFrom}
+                      aria-labelledby={SCRIPT_TITLE_ID}
+                      className="flex min-w-0 animate-in flex-col gap-4 duration-150 fade-in-0"
+                    >
+                      <ScriptHeader
+                        madeFrom={guide.madeFrom}
+                        prep={prep.data}
+                        enabled={enabled}
+                        namesOk={facts.data?.names_ok !== false}
+                        capUsd={facts.data?.prep_cap_usd ?? null}
+                        running={checking || start.isPending}
+                        stage={prep.data?.stage ?? 0}
+                        failed={Boolean(problem) || prep.data?.status === 'failed'}
+                        onResearch={() => {
+                          ask(true)
+                        }}
+                      />
                       <SalesScript guide={guide} />
-                    </div>
+                    </section>
                   ) : company.error ? (
                     <ErrorState
                       error={company.error}
@@ -552,20 +508,6 @@ export function PrepModal({ target, onClose, onChangeTarget, onOpenCompany }: Pr
                 label="Copy script"
                 disabled={!guide}
               />
-              {facts.data?.prep_enabled && !off ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={start.isPending || checking}
-                  onClick={() => {
-                    ask(true)
-                  }}
-                >
-                  <RefreshCw aria-hidden="true" />
-                  Refresh
-                </Button>
-              ) : null}
             </div>
           </div>
         ) : !picking ? (
@@ -584,20 +526,6 @@ export function PrepModal({ target, onClose, onChangeTarget, onOpenCompany }: Pr
                 label="Copy script"
                 disabled={!guide}
               />
-              {facts.data?.prep_enabled && !off ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={start.isPending || checking}
-                  onClick={() => {
-                    ask(true)
-                  }}
-                >
-                  <RefreshCw aria-hidden="true" />
-                  Refresh
-                </Button>
-              ) : null}
             </div>
           </div>
         ) : null}

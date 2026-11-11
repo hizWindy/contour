@@ -222,13 +222,13 @@ Newest first.
 
 ## Track 2: the card (session 2)
 
-**Progress:** 0 of 6 steps done.
+**Progress:** 2 of 6 steps done (T2-1, T2-2). T2-3 to T2-6 are built, waiting for Al-khair's look and his "ready to merge".
 
-- [ ] **T2-1. Own copy and a baseline.**
+- [x] **T2-1. Own copy and a baseline.** Done 2026-11-11: worktree `../contour-v14-t2`, database `leadfinder_v14b` (a copy of `leadfinder_v10`), 1,044 website tests pass.
   - The worktree, the `leadfinder_v14b` database and the ports.
   - Run the website tests once with `heavy.sh`, and note the count.
   - **Done when:** the count is in the Track 2 Log.
-- [ ] **T2-2. The seam, then the tag `v14-seam`.** Moves only. No behaviour changes.
+- [x] **T2-2. The seam, then the tag `v14-seam`.** Moves only. No behaviour changes. Done 2026-11-11 (0288a9f, tag `v14-seam`).
   - `prep-card.tsx` (505 lines) splits:
     - `BeforeYouDial` and the three tile functions go to `before-you-dial.tsx`;
     - `Step`, `Quiet`, `SalesScript` and `SalesScriptPending` go to `sales-script.tsx`;
@@ -237,14 +237,14 @@ Newest first.
   - `SalesScript`'s title and its "Written from our HubSpot copy" line move out into a new `script-header.tsx`, which the modal draws above `<SalesScript>`. T2-4 builds on it.
   - Commit, tag `v14-seam`, and add "Seam ready" to the Track 2 Log.
   - **Done when:** all website tests pass with no test changed except for imports, the card looks the same in the browser, and the tag exists.
-- [ ] **T2-3. The header row.** Built on the seam.
+- [ ] **T2-3. The header row.** Built on the seam. Built, waiting for a look (788f1c9).
   - **Still there?, Last talk and News** move into the card's header, in one row under the person's name. The "Before you dial" section goes. Each shows its value first (one line, two for News) and a small detail line under it.
   - **On a phone** the three stack as short rows, so nothing needs a sideways scroll. A long value opens in full on a tap.
   - **Connections** is hidden until Levi's customer list is loaded. The tile's code stays, ready for it (PREP.md says so, **TBC**).
   - While call prep is off, a tile says what is missing in one line, like "Not checked. Call prep is off." The same words as today, in a shorter form.
   - **Files:** `before-you-dial.tsx`, `prep-card.tsx`, `prep-modal.tsx`, tests.
   - **Done when:** the three answers are visible without scrolling at all 3 widths, light and dark, it works by keyboard, and Al-khair has looked.
-- [ ] **T2-4. "Research again".**
+- [ ] **T2-4. "Research again".** Built, waiting for a look (39c34fa). No confirm box, as written (**TBC** with Al-khair).
   - **Where:** in `script-header.tsx`, at the top right of the script column. The two "Refresh" buttons in the footer go.
   - **The label:** "Research again", with a hint under it: "New news, a new 'still there?' check and a new script. Costs up to US$0.25." The amount comes from `prep_cap_usd`.
   - **A status line** beside the title: "Made 2 days ago by Tom. Written with the team style." (`style_used` and `made_by`). When call prep is off: "Written from our HubSpot copy."
@@ -253,14 +253,14 @@ Newest first.
   - **On a phone,** the button is full width under the title.
   - **Files:** `script-header.tsx`, `prep-modal.tsx`, tests.
   - **Done when:** it works in each state above (shown with test data while call prep is off), by keyboard and on a phone, and Al-khair has looked.
-- [ ] **T2-5. The news tile.**
+- [ ] **T2-5. The news tile.** Built, waiting for a look (2685b01, after merging `v14-api` in 55e2105).
   - Show the newest item with its date and age: "Contract won · 5 months ago". Other items sit behind "+2 more", in a small popover with each date and source.
   - Nothing found on the web: show the Lead Finder's newest saved note with its date ("Saved research, 3 Oct"). If there is none either, "No news found".
   - Every "last 90 days" wording goes.
   - Reads `date` on a news line. Before the `v14-api` tag it works from `mockApi`. After it, merge the tag and run `npm run types`.
   - **Files:** `before-you-dial.tsx`, tests.
   - **Done when:** tests cover a dated item, an undated item, a note as fallback and nothing at all, and Al-khair has looked.
-- [ ] **T2-6. Track 2 check.**
+- [ ] **T2-6. Track 2 check.** Checks pass and the screenshots are taken (see the Log). Waiting for Al-khair's "ready to merge".
   - Website tests, lint, types and build.
   - A browser check of the card in each state, at 3 widths, light and dark, reduced motion.
   - **Done when:** all pass, the screenshots are in the Log, and Al-khair says Track 2 is ready to merge.
@@ -269,7 +269,23 @@ Newest first.
 
 Newest first.
 
-- Nothing yet.
+- 2026-11-11: **T2-6 checks pass.** Website 1,067 tests (79 files; 23 more than the baseline), lint, types, format and build. Browser: the card in 5 states (call prep off for real; ready, researching, failed, and names off with no news, from test data) at 1440, 1280 and 390px, light and dark, with reduced motion, plus one run with motion on: 31 shots, no sideways scroll, no console errors. Shots: `plan/shots/v14-t2/` (kept out of git: they show a real HubSpot client).
+  - **Test data, and why it costs nothing:** call prep stays off in `leadfinder_v14b`. The screenshot script answers the call prep requests in the browser (Chrome's Fetch domain) with a prep marked "Test:". Nothing reaches Claude, and the backend has no Claude key.
+  - **For Al-khair to look at:** T2-3 (`t23-*`, `t26/off-*`), T2-4 (`t24-*`, `t26/{ready,running,failed,names-off}-*`), T2-5 (`t25-*`: the "+2 more" popover is `t25-1440-news-more.png`).
+  - **One choice for Al-khair (TBC):** while Research again runs, the card shows the free script until the new one is ready (as Refresh did). Keeping the old call prep script on screen until then would read better. Not built: it changes behaviour the plan doesn't name.
+- 2026-11-11: **T2-5 built** (2685b01). News shows the newest item, however old, with its date and age ("14 June 2026, 4 months ago"; en-AU writes June and July in full), or "No date". "+2 more" opens the popover with each item's date, age and source. With no web news, the newest saved note ("Saved research, 3 Oct 2026"), then "No news found". On a phone the News row keeps its date on a second line, so old news never looks fresh. No "90 days" wording is left in `src/apps/companies/`.
+  - **Merged `v14-api`** first (55e2105, no conflicts). `npm run types` changed nothing. `leadfinder_v14b` is at 0015. The interim reads of `prep_cap_usd` and `style_used` went in favour of the generated types.
+- 2026-11-11: **T2-4 built** (39c34fa). "Research again" sits at the top right of the script, in `script-header.tsx`, with its hint and cost (from `prep_cap_usd`). The status line beside the title ("Made 2 days ago by Tom. Written with the team style.", "Searched ahead at 7:30 am.", "Written from our HubSpot copy.") replaces the card header's status line, and the 3-step bar moved there too. Greyed out while call prep is off, "Researching..." while it runs, "Try again" after a failure, full width on a phone. The footer's two Refresh buttons are gone.
+- 2026-11-11: **T2-3 built** (788f1c9). Still there?, Last talk and News sit in one row in the card's header, which doesn't scroll. Each is a button: value, detail and source marks; a press or Enter opens it in full, with linked sources, in a popover. On a phone, one-line rows at full width. Connections waits behind `connections`. While call prep is off: "Not checked" and "Call prep is off.", with the full sentence in the popover.
+  - **Notes for Track 3:** the header's still source marks copy the look of `SourceChip` (a local `Marks` in `before-you-dial.tsx`), because `guide-parts.tsx` is yours. `companies.test.tsx` changed in a few assertions (the header list, the status words, Research again); a merge there should only touch separate lines.
+  - **A small gap, as before:** the answers read `prep_enabled` from the facts. If a start returns `prep_off` while old facts still say on, they say "Call prep checks the web." The "Research again" hint does say it is off.
+
+- 2026-11-11: **Seam ready** (0288a9f, tag `v14-seam`). Track 3 can merge it. Where things went:
+  - `before-you-dial.tsx`: `BeforeYouDial` and its tiles. `sales-script.tsx`: `Step`, `Quiet` (exported, because `CallSide` uses it too), `SalesScript` and `SalesScriptPending`. `prep-card.tsx` keeps `SideSection`, `Fact` and `CallSide`.
+  - `script-header.tsx`: `ScriptHeader` (the title and the "Written from" line) and `SCRIPT_TITLE_ID`. The modal now draws the `<section aria-labelledby>` around `ScriptHeader` and `SalesScript`, so `SalesScript` is a plain `div` with the steps and the "left out" line.
+  - `use-guide.ts`: `useGuide({ script, labels, company, picking, person, caller, today, companyKey, contactId })`. The modal already passes `companyKey` and `contactId`, so Track 3 can read the line edits there without touching `prep-modal.tsx`.
+  - Checks: all 1,044 website tests pass with no test changed; types, lint and format pass; screenshots of a cold-call card before and after are byte-identical (1440px, light, the top and the scrolled end).
+- 2026-11-11: T2-1 baseline. Website tests: 78 files, 1,044 tests, all pass (42 s). `leadfinder_v14b` is a `pg_dump`/`pg_restore` copy of `leadfinder_v10` (at 0014). One index (`ix_memory_embedding`, HNSW) failed in the restore on Docker's small shared memory and was built again with `max_parallel_maintenance_workers=0`. The copy has no HubSpot contacts or calls, so browser checks use a cold call. Call prep is off there (no override), and the Track 2 backend starts with no Claude, HubSpot or Signal Hire keys, so a check can't spend money.
 
 ## Track 3: the script (session 3)
 
