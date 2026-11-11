@@ -3,8 +3,8 @@
 This plan makes call prep easier to read, easier to rerun and easier to make your own. The "Research again" button moves to where people look for it. The three answers (Still there?, Last talk, News) move into the card's header. News stops having a 90-day limit. The script gets better sales wording. And each salesperson can edit the script, with a style for themselves and a style for the team. Three Claude sessions build it at the same time, in one account, in three tracks that never touch the same files.
 
 - **Built by:** Al-khair Pama. **Signed off by:** Al-khair, for the code and for every design. Levi hasn't seen any of this (**TBC**, to be confirmed).
-- **Last updated:** 2026-11-11 (written from Al-khair's asks of 11 Nov; nothing built yet).
-- **Progress:** each track keeps its own count, at the top of its part. S0 and M1: 1 of 2 (S0 done).
+- **Last updated:** 2026-11-11 (M1 done: the three tracks joined on `plan-v14` and merged into `master`, on Al-khair's word ("all 3 tracks are done", 11 Nov); not pushed, not deployed).
+- **Progress:** each track keeps its own count, at the top of its part. S0 and M1: 2 of 2. Open after the merge: T1-5 (the paid prompt test) and Al-khair's looks at T2-3 to T2-5, T3-2, T3-5 and T3-6 (merged on his word before the looks).
 - **Sources:** the chat of 11 Nov (Al-khair and Claude), [projects/prep/PREP.md](../projects/prep/PREP.md), and the code in `engine/backend/apps/companies/` (`prep.py`, `api_preps.py`) and `engine/frontend/src/apps/companies/` (`prep-modal.tsx`, `prep-card.tsx`, `playbook.ts`).
 - **Comes after:** [PLAN-V13.md](PLAN-V13.md) (merged into `master`) and [PLAN-V10.md](PLAN-V10.md), which built call prep. Call prep stays off until Al-khair switches it on (PLAN-V10 E4). This plan doesn't switch it on.
 
@@ -171,7 +171,7 @@ Every style route answers with the whole style, so the website sets its cache fr
 
 ## Track 1: the backend (session 1)
 
-**Progress:** 4 of 6 steps done (T1-1 to T1-4, tag `v14-api`). T1-5 waits for Al-khair's word (it costs money); T1-6 needs the full backend run again.
+**Progress:** 5 of 6 steps done (T1-1 to T1-4, T1-6). T1-5 waits for Al-khair's word (it costs money).
 
 - [x] **T1-1. Own copy and a baseline.** Done 2026-11-11 (counts in the Log).
   - The worktree, the `leadfinder_v14a` database and the ports (see "How to work this plan").
@@ -206,7 +206,7 @@ Every style route answers with the whole style, so the website sets its cache fr
   - **Needs the names switch:** the web check only runs when HubSpot names may go to Claude (`hubspot_names_to_claude_ok`, Levi's OK from PLAN-V10 A2). Without it, use companies that come only from the Lead Finder (**TBC**), and say in the Log that "still there?" wasn't tested.
   - Check each script by hand: every line has a source, nothing is invented, the opener asks for time, the questions follow the order, a pushback has three beats, and the news has a date and its age.
   - **Done when:** the cost and time of each prep are in the Log, the 3 scripts are saved in `plan/shots/v14-t1/`, and Al-khair has read them.
-- [ ] **T1-6. Track 1 check.**
+- [x] **T1-6. Track 1 check.** Done 2026-11-11 in M1 (the full backend run on `plan-v14`), on Al-khair's word ("all 3 tracks are done", 11 Nov).
   - Backend tests (`RUN_GATES=1`), lint, types, `engine openapi` and `npm run types` (nothing should change).
   - **Done when:** all pass and Al-khair says Track 1 is ready to merge.
 
@@ -222,7 +222,7 @@ Newest first.
 
 ## Track 2: the card (session 2)
 
-**Progress:** 2 of 6 steps done (T2-1, T2-2). T2-3 to T2-6 are built, waiting for Al-khair's look and his "ready to merge".
+**Progress:** 3 of 6 steps done (T2-1, T2-2, T2-6). T2-3 to T2-5 are built and merged, waiting for Al-khair's look.
 
 - [x] **T2-1. Own copy and a baseline.** Done 2026-11-11: worktree `../contour-v14-t2`, database `leadfinder_v14b` (a copy of `leadfinder_v10`), 1,044 website tests pass.
   - The worktree, the `leadfinder_v14b` database and the ports.
@@ -260,7 +260,7 @@ Newest first.
   - Reads `date` on a news line. Before the `v14-api` tag it works from `mockApi`. After it, merge the tag and run `npm run types`.
   - **Files:** `before-you-dial.tsx`, tests.
   - **Done when:** tests cover a dated item, an undated item, a note as fallback and nothing at all, and Al-khair has looked.
-- [ ] **T2-6. Track 2 check.** Checks pass and the screenshots are taken (see the Log). Waiting for Al-khair's "ready to merge".
+- [x] **T2-6. Track 2 check.** Checks pass and the screenshots are taken (see the Log). Merged on Al-khair's word ("all 3 tracks are done", 11 Nov).
   - Website tests, lint, types and build.
   - A browser check of the card in each state, at 3 widths, light and dark, reduced motion.
   - **Done when:** all pass, the screenshots are in the Log, and Al-khair says Track 2 is ready to merge.
@@ -289,7 +289,7 @@ Newest first.
 
 ## Track 3: the script (session 3)
 
-**Progress:** 3 of 7 steps done (T3-1, T3-3, T3-4). T3-2, T3-5 and T3-6 are built, waiting for a look; T3-7's checks pass, waiting for Al-khair's word.
+**Progress:** 4 of 7 steps done (T3-1, T3-3, T3-4, T3-7). T3-2, T3-5 and T3-6 are built and merged, waiting for a look.
 
 - [x] **T3-1. Own copy and a baseline.**
   - The worktree, the `leadfinder_v14c` database and the ports.
@@ -326,7 +326,7 @@ Newest first.
   - **After the first save,** one small row: "Use this wording for all your scripts? **Make it my style**". It opens the style sheet with a note filled in from the line (for example: `Open like: "Hi Jason, it's Tom..."`). The person can change it first. Nothing is shared by this.
   - **Files:** `line-editor.tsx`, `sales-script.tsx`, `guided-questions.tsx`, tests.
   - **Done when:** an edit survives closing the card and Research again, "Copy script" copies it, Reset brings back the draft, it works by keyboard and on a phone, and Al-khair has looked.
-- [ ] **T3-7. Track 3 check.** Checks pass, waiting for Al-khair's word (6b60bfc).
+- [x] **T3-7. Track 3 check.** Checks pass (6b60bfc). Merged on Al-khair's word ("all 3 tracks are done", 11 Nov).
   - Website tests, lint, types and build.
   - A browser check of the script, the style sheet and the editor, at 3 widths, light and dark, reduced motion. Use an Admin account and a Staff account.
   - **Done when:** all pass, the screenshots are in the Log, and Al-khair says Track 3 is ready to merge.
@@ -347,7 +347,7 @@ Newest first.
 
 ## Merge (`merge v14`, on Al-khair's word)
 
-- [ ] **M1. Join the tracks.**
+- [x] **M1. Join the tracks.** Done 2026-11-11, on Al-khair's word ("all 3 tracks are done", 11 Nov). See the Log.
   - In the main repo on this laptop: merge `plan-v14-track1`, then `plan-v14-track2`, then `plan-v14-track3` into `plan-v14`.
   - Run `engine openapi` and `npm run types` again, instead of fixing generated files by hand.
   - Run all the tests, lint, types and build with `heavy.sh`. Then check the whole flow in the browser once, with call prep switched on in a copy of the database: open a card, edit a line, write a style, press Research again, copy the script.
@@ -392,4 +392,10 @@ Newest first.
 
 Newest first.
 
+- 2026-11-11: **M1 done, and `plan-v14` merged into `master`**, on Al-khair's word ("all 3 tracks are done please merge them all into one and then merge it to the main branch in a clean manner"). In the Track 1 worktree, switched to `plan-v14`: `plan-v14-track1` (17d140b), then `plan-v14-track2` (af61fa9), then `plan-v14-track3` (cb78f6b), each as a merge commit (cefea75, 4481b02, a232a0c), **no conflicts** (Tracks 2 and 3 touched no backend or `src/api/` file). `engine openapi` and `npm run types` changed nothing.
+  - **Checks on the merged code** with `heavy.sh`: website 83 files, **1,117 tests passed**; lint, types, build and Prettier clean. Backend with `RUN_GATES=1`: the first run had **27 errors**, all from tests that empty `core.users` without the two new tables (`test_first_admin.py`, `test_auth_admin.py`) and the fixture test that seeds every table (`test_fixtures.py`); fixed (660dcc3). The second run: **3,530 passed, 25 skipped, none failed** (13 min). The commit hook's fast tests pass.
+  - **Browser, the whole flow once** on the merged code: backend 8021 on `leadfinder_v14a` (migrated to 0015), **no Claude, HubSpot or Signal Hire key**, call prep switched on in that copy only (`PATCH /settings`), names off; website 5191; headless Chrome (Track 3's `card.mjs`). A cold call to Health Partners: the card with Who, Last talk and News in the header; a pencil edit saved as "Yours"; "Make it my style" filled Your style and saved it; "Research again" ran and failed cleanly on the missing key ("No Claude API key ... Press Try again"), so nothing was spent, and the edit stayed. 1440, 1280 and 390 wide, light and dark, reduced motion and once with motion: **no console errors, no sideways scroll**. Screenshots in this session's scratchpad (`m1/`), not in git: they show a real HubSpot client. "Copy script" with an edited line is covered by `use-guide.test.tsx`; the headless check can't read the clipboard.
+  - **Docs:** `engine/AGENTS.md` (news, the call technique, the edit and style layers, the card) and `projects/prep/PREP.md` (status, the card sketch, the screen rules). `CLAUDE.md` already lists this plan.
+  - **`master`:** fast-forwarded to `plan-v14` in the main folder. Before that, the main folder's uncommitted `CLAUDE.md` (the same text as `plan-v14`'s, only line endings differ) was put back, and its untracked `plan/PLAN-V14.md` (the S0 copy) removed; both are backed up in this session's scratchpad (`merge-backup-v14/`). `plan/PLAN-V1.md` keeps Al-khair's own uncommitted edit. **Not pushed, not deployed.** Before a deploy: the live database needs migration 0015, which the deploy's `migrate` job runs.
+  - **Open after the merge:** T1-5 (the paid prompt test, at most US$0.75, or US$1.50 with the old prompt too); Al-khair's looks at T2-3 to T2-5, T3-2, T3-5 and T3-6; Track 2's choice (the free script shows while Research again runs); a real Staff account check of the style sheet (Track 3, **TBC**); the questions for Levi under "Waiting on". The previews still running: Track 2 (8022, 5192), Track 3 (8023, 5193) and the merged one (8021, 5191); stop them and drop `leadfinder_v14a`, `_v14b` and `_v14c` when done.
 - 2026-11-11: Plan written from Al-khair's asks of 11 Nov. Nothing built yet.
