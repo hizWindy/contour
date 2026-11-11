@@ -155,34 +155,36 @@ Track 1 builds these. Tracks 2 and 3 read them. All routes sit under `/api/v1/co
 | `GET /script-edits?company_key=&contact_id=` | the person | Their own line edits for that call: `[{slot, text, updated_at}]` |
 | `PUT /script-edits` | the person | Saves one slot: `{company_key, contact_id (or null), slot, text}`, up to 400 characters |
 | `DELETE /script-edits?company_key=&contact_id=&slot=` | the person | Resets the slot to the draft |
-| `GET /script-style` | the person | `{mine, team: [{id, text, approved_by, decided_at}], suggestions: [...]}`. An Admin gets every waiting suggestion with its author. Anyone else gets their own, with the status. |
-| `PUT /script-style/mine` | the person | Saves Your style, up to 600 characters |
-| `POST /script-style/team` | the person | Suggests a note, up to 200 characters. An Admin's own note is active at once (**TBC**). |
-| `POST /script-style/team/{id}/approve`, `/reject` | Admin | Decides a suggestion |
-| `DELETE /script-style/team/{id}` | Admin | Retires an active note |
+| `GET /script-style` | the person | `{mine, mine_updated_at, team, suggestions, can_decide, mine_max_chars, team_max_chars, team_max_notes}`. `team` and `suggestions` are lists of `{id, text, status, suggested_by, decided_by, decided_at, created_at}`. An Admin gets every waiting suggestion with its author. Anyone else gets their own, waiting or rejected. |
+| `PUT /script-style/mine` | the person | Saves Your style, up to 600 characters. An empty text clears it. |
+| `POST /script-style/team` | the person | Suggests a note, up to 200 characters. An Admin's own note is active at once (**TBC**). 409 `team_style_full` at 8 active notes, `too_many_waiting` at 5 of yours waiting. |
+| `POST /script-style/team/{id}/approve`, `/reject` | Admin | Decides a suggestion. 409 `already_decided`. |
+| `DELETE /script-style/team/{id}` | Admin | Retires an active note. 409 `not_active`. |
+
+Every style route answers with the whole style, so the website sets its cache from the answer. A line or a note with an email address or a phone number gets 422 `contact_details`. A non-Admin gets 403 `admin_only`. The hooks are in `src/api/hooks/script.ts`: `useScriptEdits`, `useSaveScriptEdit`, `useResetScriptEdit`, `useScriptStyle`, `useSaveMyStyle`, `useSuggestTeamNote`, `useDecideTeamNote` and `useRetireTeamNote`.
 
 **Changes to what exists:**
-- A news line in a prep's script gains `date` (YYYY-MM-DD, or null). Code takes it from the page the line cites, and Claude isn't asked for it.
-- A prep gains `style_used`: `{mine: bool, team_notes: number}`. T1-3 adds the field. T1-4 fills it. It is kept in the prep's `facts` (no migration).
-- `GET /{key}/facts` gains `prep_cap_usd`, so the button can say what a rerun costs.
+- A news line in a prep's script gains `date` (YYYY-MM-DD, or null). Code takes it from the pages and saved notes the line cites, and Claude isn't asked for it. It is optional in the website's types (`NewsLine`), because a prep made before 11 Nov has none.
+- A prep gains `style_used`: `{mine: bool, team_notes: number}`. T1-3 adds the field. T1-4 fills it. It is kept in the prep's `facts` (no migration). It is optional in the website's types.
+- `GET /{key}/facts` gains `prep_cap_usd`, so the button can say what a rerun costs. It is a string, like `"0.25"`, as every money field is.
 - Starting a prep with `refresh` is unchanged.
 
 ## Track 1: the backend (session 1)
 
-**Progress:** 0 of 6 steps done.
+**Progress:** 3 of 6 steps done (T1-1 to T1-3, tag `v14-api`). T1-4 is next.
 
-- [ ] **T1-1. Own copy and a baseline.**
+- [x] **T1-1. Own copy and a baseline.** Done 2026-11-11 (counts in the Log).
   - The worktree, the `leadfinder_v14a` database and the ports (see "How to work this plan").
   - Run the backend tests once with `heavy.sh`, and note the counts.
   - **Done when:** the counts are in the Track 1 Log.
-- [ ] **T1-2. News with no window.**
+- [x] **T1-2. News with no window.** Done 2026-11-11 (295bc81).
   - Remove `NEWS_DAYS = 90` from `prep.py`: from the task sentence, the answer form's description ("Up to 3 news items from the last 90 days") and the module notes.
   - The task asks for the most recent news Claude can find about the company, however old, up to 3 items, newest first.
   - The system prompt gets one rule: a news item older than 90 days says how old it is ("a contract won in June"), and is not called recent.
   - Each news line gets `date`, taken by code from the cited page (the newest, if it cites several). Code sorts the lines newest first, with undated lines last.
   - **Files:** `apps/companies/prep.py`, `schemas.py`, tests.
   - **Done when:** tests with saved answers show that a 5-month-old page is kept, lines come out newest first with undated ones last, a line with no source is still removed, and no "90 days" is left in the prompt or the form.
-- [ ] **T1-3. The edits and style store, and its API.** Then the tag `v14-api`.
+- [x] **T1-3. The edits and style store, and its API.** Then the tag `v14-api`. Done 2026-11-11 (295bc81, tag `v14-api`).
   - Migration `0015`: two tables in the `companies` schema.
     - `script_edits`: user, company key, contact id (or empty), slot, text, updated at. One row for each user, call and slot.
     - `script_styles`: scope (`mine` or `team`), user, text, status (`active`, `suggested`, `rejected`, `retired`), decided by, decided at, created at. One active `mine` row for each user.
@@ -212,7 +214,10 @@ Track 1 builds these. Tracks 2 and 3 read them. All routes sit under `/api/v1/co
 
 Newest first.
 
-- Nothing yet.
+- 2026-11-11: **API ready** (tag `v14-api` on the plan commit after 295bc81). For Tracks 2 and 3: merge the tag, run `uv run engine migrate` on your database (migration 0015), and `npm run types` if your copy changed `openapi.json`. The exact shapes are in "The contract" (updated: `GET /script-style` gives `suggested_by` and `decided_by` instead of `approved_by`, plus `can_decide`, `mine_updated_at` and the limits; `prep_cap_usd` is a string). **One line in a shared test file:** `companies.test.tsx`'s `facts()` gained `prep_cap_usd: '0.25'`, because a field that is optional in the types fails there (it spreads a `Partial<PrepFacts>`). `NewsLine.date` and `PrepOut.style_used` are optional in the types, so old test data still type-checks. **Not finished:** the full backend run after the commit was stopped by Claude Code because the laptop ran low on memory; T1-6 runs it again. What ran clean on 295bc81: the commit hook's fast tests (2,644 passed, 28 skipped), and with the database `tests/companies`, `test_migrations.py`, `test_profiles.py` and `test_contract_routes.py` (all passed; the speed test passes alone).
+- 2026-11-11: **T1-3 done** (295bc81). Migration `0015_script_notes`: `companies.script_edits` (user, company key, contact id or "", slot, text) and `companies.script_styles` (scope `mine` or `team`, user, text, status, decided by and at). With sign-in off nobody is signed in, so rows have no user, and the unique indexes count "no user" as one person (`coalesce` on a zero id). The logic is in `apps/companies/script_notes.py`, the routes in `api_script.py` (mounted before `/{key}`). Limits: 400, 600 and 200 characters, 8 active team notes, and 5 waiting suggestions per person (new, to stop a flood). An email address or a phone number gets 422 `contact_details` (the facts pack's own `scrub` finds them). An Admin's own team note is active at once (**TBC**). The facts give `prep_cap_usd`; a prep gives `style_used` from its `facts` (empty until T1-4). Website: `src/api/hooks/script.ts`, the types in `types.ts`, two query keys. 7 tests in `tests/companies/test_script_notes.py`. Also: `tests/conftest.py` empties the two new tables, `test_contract_routes.py` lists the 9 routes, and the commit hook runs `python -m pytest` (as mypy already did), because Windows Application Control blocks a new venv's `pytest.exe`. The `engine` command is blocked the same way here, so `engine openapi` ran through `python -c "from core.cli import main ..."`.
+- 2026-11-11: **T1-2 done** (295bc81). No 90-day window: the task asks for "the most recent news about the company, however old", and the rules say an item more than three months old says when it happened and isn't called recent. Code dates each news line from the pages it cites and from saved notes (`memory` facts), the newest date; a date still to come counts as none. Lines are sorted newest first, undated last, then cut to 3. Prompt version `prep-3`. The backend's failure messages now say "Press Research again" (the button Track 2 renames). 1 new test.
+- 2026-11-11: **T1-1 done.** S0 first, on the go signal: `plan-v14` from `master` (aca6f9b), the plan commit f812923, made in a temporary worktree so the main folder stayed on `master`. Worktree `../contour-v14-t1` on `plan-v14-track1`; `engine/.env` with the database lines only; database `leadfinder_v14a` as a `pg_dump` and `pg_restore` copy of `leadfinder_v10` (at 0014); tests on `leadfinder_test_v14a` (`LEADFINDER_TEST_DB_SUFFIX=_v14a`). Baseline with `heavy.sh`: backend **3,465 passed, 68 skipped, 11 failed**. The failures weren't the base code's: 10 in `test_profiles.py` because the worktree had no `projects/leads/research/COMPANIES.xlsx` (a company list kept off GitHub, now copied in from the main folder), and my own `schemas.py` edit made while the run was going also broke them; and the speed test, which passes alone. The 68 skips are the gates (`RUN_GATES` not set).
 
 ## Track 2: the card (session 2)
 

@@ -4,14 +4,15 @@ Everyone with the Companies tick sees the HubSpot copy. A person who also has th
 sees its good leads that aren't in HubSpot yet, and its column and panel section. The server leaves
 those out for anyone else: hiding them in the browser would not be enough (PLAN-V10 B2).
 
-This file has the reads. The call prep routes are in api_preps.py.
+This file has the reads. The call prep routes are in api_preps.py, and the script edits and style
+notes (PLAN-V14) in api_script.py.
 """
 
 from typing import Annotated
 
 from fastapi import APIRouter, Path, Query
 
-from apps.companies import api_preps, store
+from apps.companies import api_preps, api_script, store
 from apps.companies.deals import DealState
 from apps.companies.deps import LeadsDep
 from apps.companies.schemas import (
@@ -114,8 +115,10 @@ async def search_companies(
     return await store.search(session, q, leads)
 
 
-# The prep routes have fixed paths (/preps/...), so they go before /{key}.
+# The prep and script routes have fixed paths (/preps/..., /script-edits, /script-style/...), so
+# they go before /{key}.
 router.include_router(api_preps.router)
+router.include_router(api_script.router)
 
 
 @router.get(

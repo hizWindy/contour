@@ -167,6 +167,7 @@ function facts(changes: Partial<PrepFacts> = {}): PrepFacts {
     people_status: 'ready',
     prep_enabled: true,
     names_ok: true,
+    prep_cap_usd: '0.25',
     ...changes,
   }
 }

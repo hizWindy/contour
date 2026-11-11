@@ -161,7 +161,7 @@ async def get_prep(
         raise prep_not_found()
     if is_stuck(prep, runner, datetime.now(UTC)):
         prep.status = "failed"
-        prep.error = "This prep stopped when the server restarted. Press Refresh to try again."
+        prep.error = "This prep stopped when the server restarted. Press Research again."
         prep.finished_at = datetime.now(UTC)
         await session.commit()
     return await _out(session, prep)
@@ -284,4 +284,5 @@ async def get_facts(
         prep_enabled=settings.prep_enabled,
         names_ok=settings.hubspot_names_to_claude_ok,
         people_ready=pack.company.people_status == "ready",
+        prep_cap_usd=settings.prep_cap_usd,
     )

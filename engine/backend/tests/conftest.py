@@ -68,6 +68,8 @@ os.environ["SESSION_COOKIE_SECURE"] = "false"
 get_settings.cache_clear()
 
 TEST_TABLES = (
+    "companies.script_edits",
+    "companies.script_styles",
     "companies.preps",
     "core.hubspot_calls",
     "core.hubspot_contacts",
