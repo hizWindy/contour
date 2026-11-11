@@ -39,8 +39,12 @@ from core.db.base import CORE_SCHEMA, Base
 SOURCES = ("export", "api")
 SYNC_MODES = ("full", "changes")
 SYNC_TRIGGERS = ("command", "website", "startup", "schedule")
-# running: reading or saving now. interrupted: the backend stopped while it ran.
-SYNC_STATUSES = ("running", "done", "failed", "interrupted")
+# running: reading or saving now. interrupted: the backend stopped while it ran. cancelled: a
+# person pressed Stop (PLAN-V15 T1-3).
+SYNC_STATUSES = ("running", "done", "failed", "interrupted", "cancelled")
+# What a running sync is doing: reading HubSpot, saving to our copy (one transaction), copying
+# contacts and calls, or rebuilding the company profiles.
+SYNC_PHASES = ("reading", "saving", "people", "profiles")
 # previewed: shown to a person, nothing written. writing: being written now. done: every step
 # landed. partial: some steps landed and some failed. failed: nothing landed. uncertain: a step
 # may or may not have landed (HubSpot didn't answer), so nothing more is sent until it is checked.
@@ -178,6 +182,7 @@ class HubSpotSync(Base):
         CheckConstraint(_in_list("mode", SYNC_MODES), name="mode"),
         CheckConstraint(_in_list("trigger", SYNC_TRIGGERS), name="trigger"),
         CheckConstraint(_in_list("status", SYNC_STATUSES), name="status"),
+        CheckConstraint(f"phase IS NULL OR {_in_list('phase', SYNC_PHASES)}", name="phase"),
         CheckConstraint("(status = 'running') = (finished_at IS NULL)", name="finished"),
         Index("ix_hubspot_syncs_started_at", text("started_at DESC")),
         # Only one sync runs at a time, whoever starts it (the website, the command, start-up).
@@ -214,6 +219,19 @@ class HubSpotSync(Base):
         DateTime(timezone=True), server_default=text("now()")
     )
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # PLAN-V15 T1-3. A running sync writes `heartbeat_at` every few seconds; a running row with
+    # an old (or no) heartbeat is left over from a stopped backend.
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancel_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    phase: Mapped[str | None] = mapped_column(String(16))  # SYNC_PHASES, None once finished
+    people_saved: Mapped[int] = _zero()  # contacts and calls saved
+    profiles_done: Mapped[int] = _zero()
+    profiles_total: Mapped[int] = _zero()
+    # Saved companies, but didn't rebuild their profiles (stopped, or the rebuild failed): the
+    # next sync rebuilds them all.
+    profiles_skipped: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("false")
+    )
 
 
 class HubSpotWrite(Base):

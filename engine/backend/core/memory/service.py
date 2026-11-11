@@ -1,6 +1,6 @@
 """Save text to memory, and search it by meaning."""
 
-from collections.abc import Collection, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any, cast
@@ -15,7 +15,11 @@ from core.memory.embedder import Embedder
 from core.memory.models import MemoryItem
 
 DELETE_CHUNK = 5000  # ids in one delete
-EMBED_BATCH = 512  # notes embedded and saved together
+# Notes embedded and saved together. Small enough that a stop (a cancelled HubSpot sync) waits
+# for one short batch, not a long one: an embedding batch can't be stopped part way (PLAN-V15).
+EMBED_BATCH = 64
+# Told how many notes are embedded so far, and how many in all.
+EmbedProgress = Callable[[int, int], Awaitable[None]]
 
 
 @dataclass(frozen=True)
@@ -190,6 +194,7 @@ async def replace_items_where(
     kind: str,
     meta_key: str,
     values: Collection[str],
+    progress: EmbedProgress | None = None,
 ) -> int:
     """Swaps the items of one app and kind whose `meta[meta_key]` is one of `values` for
     `notes`, and leaves every other item alone. Returns how many were saved.
@@ -206,7 +211,7 @@ async def replace_items_where(
                 MemoryItem.meta[meta_key].astext.in_(wanted[start : start + DELETE_CHUNK]),
             )
         )
-    await _embed_and_add(session, embedder, notes, app=app, kind=kind)
+    await _embed_and_add(session, embedder, notes, app=app, kind=kind, progress=progress)
     return len(notes)
 
 
@@ -217,9 +222,13 @@ async def _embed_and_add(
     *,
     app: str,
     kind: str,
+    progress: EmbedProgress | None = None,
 ) -> None:
     """Embeds and adds the notes a batch at a time, so 14,000 company profiles never sit in
-    memory as numbers all at once."""
+    memory as numbers all at once. `progress`, if given, hears how far it has got after each
+    batch (and 0 before the first)."""
+    if progress is not None:
+        await progress(0, len(notes))
     for start in range(0, len(notes), EMBED_BATCH):
         batch = notes[start : start + EMBED_BATCH]
         vectors = await embedder.embed_passages([note.content for note in batch])
@@ -227,6 +236,8 @@ async def _embed_and_add(
         await session.flush()
         for item in added:  # saved: the session needn't keep thousands of them in memory
             session.expunge(item)
+        if progress is not None:
+            await progress(start + len(batch), len(notes))
 
 
 def _add_all(
@@ -255,7 +266,13 @@ def _add_all(
 
 
 async def replace_items(
-    session: AsyncSession, embedder: Embedder, notes: list[Note], *, app: str, kind: str
+    session: AsyncSession,
+    embedder: Embedder,
+    notes: list[Note],
+    *,
+    app: str,
+    kind: str,
+    progress: EmbedProgress | None = None,
 ) -> int:
     """Swaps every item of one app and kind for `notes`. Returns how many were saved.
 
@@ -264,5 +281,5 @@ async def replace_items(
     the error goes up and the caller's rollback keeps the old items.
     """
     await delete_items(session, app=app, kind=kind)
-    await _embed_and_add(session, embedder, notes, app=app, kind=kind)
+    await _embed_and_add(session, embedder, notes, app=app, kind=kind, progress=progress)
     return len(notes)

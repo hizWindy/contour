@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.hubspot.models import HubSpotCompany, HubSpotDeal, HubSpotOffice
 from core.memory.embedder import Embedder
-from core.memory.service import Note, replace_items, replace_items_where
+from core.memory.service import EmbedProgress, Note, replace_items, replace_items_where
 
 PROFILE_APP = "hubspot"
 PROFILE_KIND = "company_profile"
@@ -224,8 +224,10 @@ async def rebuild_profiles(
     *,
     staff_multiplier: float = DEFAULT_STAFF_MULTIPLIER,
     company_ids: Collection[str] | None = None,
+    progress: EmbedProgress | None = None,
 ) -> int:
     """Replaces HubSpot company profiles in memory with new ones. Returns how many were built.
+    `progress`, if given, hears how many are embedded so far (the sync shows it, PLAN-V15).
 
     With no `company_ids`, every profile is replaced. With them, only those companies' profiles
     are (the sync passes the companies that changed): a company that is gone, or now has no name,
@@ -280,7 +282,9 @@ async def rebuild_profiles(
             )
         )
     if ids is None:
-        count = await replace_items(session, embedder, notes, app=PROFILE_APP, kind=PROFILE_KIND)
+        count = await replace_items(
+            session, embedder, notes, app=PROFILE_APP, kind=PROFILE_KIND, progress=progress
+        )
     else:
         count = await replace_items_where(
             session,
@@ -290,6 +294,7 @@ async def rebuild_profiles(
             kind=PROFILE_KIND,
             meta_key="hubspot_id",
             values=ids,
+            progress=progress,
         )
     await session.commit()
     return count
