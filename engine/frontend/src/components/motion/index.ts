@@ -9,6 +9,7 @@
  *   Reveal          content fades and rises 4px once, at most 8 items one after another
  *   RollingNumber   a number that rolls to its new value, in table digits
  *   usePress        the 0.98 press, for any m.* element
+ *   handleRovingKey the arrows, Home and End for a group that works like radio buttons
  *   useStill        true with reduced motion; useTransition picks INSTANT then
  *
  * Pages animate with `m.*` from 'motion/react' (never `motion.*`: MotionRoot is strict) and one of
@@ -18,6 +19,7 @@
 export { ChipGroup, type ChipGroupProps, type ChipOption } from './chip-group'
 export { MotionRoot } from './motion-root'
 export { Reveal, type RevealProps } from './reveal'
+export { focusRadio, handleRovingKey, rovingTarget } from './roving'
 export { RollingNumber, type RollingNumberProps } from './rolling-number'
 export { Segmented, type SegmentedOption, type SegmentedProps } from './segmented'
 export { EASE, INSTANT, REVEAL_MAX, REVEAL_STAGGER, springs, type SpringName } from './springs'
