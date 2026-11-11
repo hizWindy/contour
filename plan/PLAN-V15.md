@@ -338,7 +338,7 @@ Newest first.
 
 ## Track 2: the website (session 2)
 
-**Progress:** 2 of 7 steps done (T2-1, T2-2). T2-3 (2346cf9) and T2-4 (08ec5bc) are built, waiting for a look. T2-5 and T2-6 are built, waiting for a look. T2-7 (the browser check) is next.
+**Progress:** 3 of 7 steps done (T2-1, T2-2, T2-7). T2-3 to T2-6 are built and checked, waiting for Al-khair's look. **Ready to merge** (`plan-v15-track2`).
 
 - [x] **T2-1. Own copy and a baseline.** Done 2026-11-12 (no code change; see the Log).
   - The worktree, the `leadfinder_v15b` database and the ports.
@@ -414,7 +414,7 @@ Newest first.
   - **The sync tests move** from `companies.test.tsx` into the new `hubspot-sync.test.tsx` (see "How to work this plan"). The "sends full" check becomes "sends auto".
   - **Files:** `src/api/hooks/hubspot.ts`, `hubspot-sync.tsx`, `hubspot-sync.test.tsx` (new), the moved tests in `companies.test.tsx`, `admin/connection.tsx`, tests.
   - **Done when:** tests cover Stop in each phase and a 409 `not_running`, the button sends "auto", and Al-khair has looked.
-- [ ] **T2-7. Track 2 check.**
+- [x] **T2-7. Track 2 check.** Done 2026-11-12 (see the Log).
   - Website tests, lint, types and build.
   - **A browser check of each error case:**
     - offline (DevTools);
@@ -429,6 +429,15 @@ Newest first.
 
 Newest first.
 
+- 2026-11-12: **T2-7 done. Track 2 is ready to merge.** Final checks on `plan-v15-track2` (3726519 and this plan commit): website **89 files, 1,222 tests passed** (1 worker), types, lint, Prettier and the build clean. Open for Al-khair: a look at T2-3 to T2-6 (screenshots in `plan/shots/v15-t2/`), and the notes "For the look" below. For M1: the four `sync()` fields in `companies.test.tsx` (Track 3 has the exact lines), and a real account check of the account menu (**TBC**). The database `leadfinder_v15b` stays for M1; drop it after.
+- 2026-11-12: **T2-7, the browser check**, on the built site (`vite preview` on 5202) against the Track 2 backend (8032, `leadfinder_v15b` at 0016, no Claude or HubSpot key). Started from two temporary entries in the main folder's `.claude/launch.json`, removed after (the file is back as it was). Cases the backend can't make by itself (a 403, a 500, a timeout, a running sync) used test data in the page, like PLAN-V14's `card.mjs`.
+  - **Each case worked:** Not found (a real 404 for a missing lead, with the backend's real request id `4PCYQTJE` in the details); No access (403); a 500 on Rules with its words, its code and Try again, which loaded the page once the fault cleared; offline (the browser's own events: the Ochre bar, gone when back online); updating (every call a proxy page: the Cobalt bar with its countdown and the quiet card line, then back by itself in about 5 s with 21 rows); a timeout on Admin's "Check again" (after 20 s: "Contour took too long to answer. It may still have gone through…"); the backend really stopped (the preview proxy answers 502): a reload shows the full Updating page with no frame and no menu, and starting the backend again brought the frame and Results back by themselves in 11 s, with no reload; the Stop button on Companies ("Stopping…" with the button off, then "HubSpot sync stopped" with the contract's words).
+  - **Found and fixed (3726519):** after a deploy, the quiet preloader calls each page's loader, so a preload that failed reloaded the page someone was on (it could lose what they typed). The reload now happens only when the failed page is drawn. A test covers it. Then the new-version case worked: one reload on the page itself, then "Contour was updated" with Reload, menu kept.
+  - **Screenshots:** 34 in `plan/shots/v15-t2/` (git-ignored), from headless Chrome over the DevTools protocol (the pane was hidden): Connection lost, the offline bar, Updating and Not found at 1440, 1280 and 390 wide, light and dark; No access, the 500 with its details open, and a running and a stopping sync at 1440, light and dark; the phone's top bar after scrolling (still at the top, y=0); Tab reaching "Try again" with reduced motion. None scrolls sideways, and no page error was logged.
+  - **Not checked in the browser:** the account menu itself, because the track backend has sign-in off (the tests cover it: a `/auth/me` that fails once still ends with the menu; one that keeps failing shows Connection lost). A real Staff or Admin account check is **TBC** for M1. A real sync with Stop needs the HubSpot key (Track 1, T1-6).
+  - **For the look:** on Companies, "Stopping…" shows both in the status line and on the button.
+  - **Size:** the main file grew from 53.8 to 64.6 kB gzipped, but most of that moved from a separate start-up file (the error box and the toast library); all start-up JavaScript went from 231.3 to 235.5 kB gzipped (+4.2 kB).
+  - The clean copy `../contour-v15-t2-base` is removed (its `node_modules` link was undone first).
 - 2026-11-12: **T2-6 built**, waiting for a look. Merged `v15-api` (10ada26, from Track 1's message): no conflicts. Migration 0016 ran on `leadfinder_v15b` (with the main venv's Python, from this copy's `engine/backend`, after checking it read this copy's `engine/.env`). `npm run types` changed nothing. Built:
   - `useCancelHubSpotSync` in `src/api/hooks/hubspot.ts`. The phase words and the bar in a shared `src/components/hubspot/sync-progress.ts`: "Reading HubSpot: 4,200 of about 13,913 companies.", "Saving to our copy.", "Saving people (1,200).", "Updating profiles (3,400 of 13,900)."; the bar fills by phase (profiles 80 to 100), so it no longer sits at 95%.
   - Companies, "Sync with HubSpot": sends `auto`; Stop beside the progress; after a press "Stopping…" with the button off; then the toast "HubSpot sync stopped" with the backend's own last warning. A 409 `not_running` says "That sync had already finished" and reads the list again.
