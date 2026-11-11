@@ -1,8 +1,13 @@
-"""The Companies page's own table, in the companies schema (PLAN-V10 D3).
+"""The Companies page's own tables, in the companies schema (PLAN-V10 D3, PLAN-V14 T1-3).
 
 `companies.preps` keeps each call script with what it rested on, what it cost, and who asked. A
 prep for the same company and person is reused for `prep_reuse_days` (7, TBC), so a second person
-calling the same week pays nothing. Refresh makes a new one.
+calling the same week pays nothing. Research again (refresh) makes a new one.
+
+`companies.script_edits` keeps one person's own wording for a line of one call. It is private: the
+next person who opens the same prep sees the draft. `companies.script_styles` keeps the style
+notes: each person's own (`mine`), and the team's (`team`), which an Admin approves. Style notes
+go to Claude as style, never as facts.
 """
 
 import uuid
@@ -24,6 +29,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.sql.elements import TextClause
 
 import core.auth.models  # noqa: F401  (a prep points at core.users)
 from core.db.base import CORE_SCHEMA, Base
@@ -82,3 +88,83 @@ class Prep(Base):
         DateTime(timezone=True), server_default=text("now()")
     )
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+def _now() -> TextClause:
+    """`now()` for a server default. A class with a column named `text` can't call `text()`."""
+    return text("now()")
+
+
+SCRIPT_SCOPES: Final = ("mine", "team")
+STYLE_STATUSES: Final = ("active", "suggested", "rejected", "retired")
+# With sign-in off nobody is signed in, so an edit or a style has no user. The unique indexes
+# count "no user" as one person.
+NO_USER: Final = "'00000000-0000-0000-0000-000000000000'::uuid"
+
+
+class ScriptEdit(Base):
+    """One line of one call, in one person's own words (PLAN-V14 T1-3). Only they see it."""
+
+    __tablename__ = "script_edits"
+    __table_args__ = (
+        Index(
+            "ux_script_edits_slot",
+            text(f"coalesce(user_id, {NO_USER})"),
+            "company_key",
+            "contact_id",
+            "slot",
+            unique=True,
+        ),
+        {"schema": SCHEMA},
+    )
+    __mapper_args__ = {"eager_defaults": True}  # noqa: RUF012  (SQLAlchemy reads it)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey(f"{CORE_SCHEMA}.users.id", ondelete="CASCADE")
+    )
+    company_key: Mapped[str] = mapped_column(String(64))
+    contact_id: Mapped[str] = mapped_column(String(32), server_default="")  # "" for a cold call
+    slot: Mapped[str] = mapped_column(String(32))  # opener.0, question.2, goal ...
+    text: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=_now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=_now())
+
+
+class ScriptStyle(Base):
+    """A style note: one person's own (`mine`, one each), or one of the team's (PLAN-V14 T1-3).
+
+    A team note starts `suggested`; an Admin makes it `active` or `rejected`, and later `retired`.
+    """
+
+    __tablename__ = "script_styles"
+    __table_args__ = (
+        CheckConstraint(_in_list("scope", SCRIPT_SCOPES), name="scope"),
+        CheckConstraint(_in_list("status", STYLE_STATUSES), name="status"),
+        CheckConstraint("scope = 'team' OR status = 'active'", name="mine_is_active"),
+        Index(
+            "ux_script_styles_mine",
+            text(f"coalesce(user_id, {NO_USER})"),
+            unique=True,
+            postgresql_where=text("scope = 'mine'"),
+        ),
+        Index("ix_script_styles_team", "scope", "status"),
+        {"schema": SCHEMA},
+    )
+    __mapper_args__ = {"eager_defaults": True}  # noqa: RUF012  (SQLAlchemy reads it)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    scope: Mapped[str] = mapped_column(String(8))
+    # The owner of a `mine` note, or who suggested a team note. The website never deletes an
+    # account (it switches sign-in off), so a team note keeps its author.
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey(f"{CORE_SCHEMA}.users.id", ondelete="CASCADE")
+    )
+    text: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(16), server_default="active")
+    decided_by: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey(f"{CORE_SCHEMA}.users.id", ondelete="SET NULL")
+    )
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=_now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=_now())

@@ -315,6 +315,54 @@ async def test_a_prep_keeps_only_lines_with_a_real_source(
     assert [(note.url, note.subject) for note in notes] == [(NEWS_URL, "ABC Logistics")]
 
 
+async def test_news_has_no_age_limit_and_comes_newest_first(
+    world: World, settings: dict[str, Any], claude: FakeClaude, runner: PrepRunner
+) -> None:
+    """PLAN-V14 T1-2: the most recent news however old, dated by code from the pages it cites,
+    newest first and undated last. A page date still to come is a typo, so it counts as none."""
+    await people_and_calls(world)
+    today = datetime.now(UTC).date()
+    old_url = "https://www.afr.com/abc-logistics-opens-perth-depot"
+    typo_url = "https://example.com/abc-logistics-future"
+    undated_url = "https://example.com/abc-logistics-profile"
+
+    def page(page_id: str, url: str, when: str) -> AnswerPage:
+        return AnswerPage(id=page_id, url=url, title=f"Page {page_id}", date=when, summary="News.")
+
+    answer = an_answer(
+        news=[
+            line("A profile of ABC Logistics.", "W4"),
+            line("ABC Logistics opened a Perth depot in June.", "W2"),
+            line("A line with no source."),
+            line("A page dated next month.", "W3"),
+            line("ABC Logistics won a A$40M contract.", "W1"),
+        ],
+        pages=[
+            page("W1", NEWS_URL, (today - timedelta(days=20)).isoformat()),
+            page("W2", old_url, (today - timedelta(days=150)).isoformat()),
+            page("W3", typo_url, (today + timedelta(days=30)).isoformat()),
+            page("W4", undated_url, ""),
+        ],
+    )
+    claude.replies = [(answer, "0.09", [NEWS_URL, old_url, typo_url, undated_url])]
+    async with signed_in_as(world, "mia", ["companies"]) as client:
+        prep = await ask_and_finish(client, runner, contact_id="c1")
+    news = prep["script"]["news"]
+    # Five months old is kept. Newest first, then the undated ones in Claude's order, at most 3.
+    assert [(item["sources"], item["date"]) for item in news] == [
+        (["W1"], (today - timedelta(days=20)).isoformat()),
+        (["W2"], (today - timedelta(days=150)).isoformat()),
+        (["W4"], None),
+    ]
+    assert "A line with no source." not in {item["text"] for item in news}
+    asked = claude.asked[0]
+    assert "however old" in asked["prompt"]
+    assert "more than three months old" in asked["system"]
+    form = str(PrepAnswer.model_json_schema())
+    for text in (asked["prompt"], asked["system"], form):
+        assert "90 days" not in text and "last 90" not in text
+
+
 async def test_a_second_prep_within_7_days_costs_nothing(
     world: World, settings: dict[str, Any], claude: FakeClaude, runner: PrepRunner
 ) -> None:
