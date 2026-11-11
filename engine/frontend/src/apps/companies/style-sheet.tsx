@@ -367,8 +367,8 @@ function MineBox({
         id={`${id}-box`}
         value={text}
         rows={5}
-        // A filled-in note from a line may be checked first, so it starts focused.
-        autoFocus={Boolean(prefill)}
+        // The sheet focuses it when it opens with a note filled in from a line.
+        data-mine-box=""
         placeholder="Warm, short sentences. Use first names. Ask before you pitch."
         aria-describedby={`${id}-count`}
         aria-invalid={save.isError || text.length > max || undefined}
@@ -422,6 +422,15 @@ export function StyleSheet({ open, onOpenChange, prefill = null, onChanged }: St
       <SheetContent
         side="right"
         className="w-full gap-0 overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-md"
+        onOpenAutoFocus={(event) => {
+          // The sheet itself takes the focus, not Retire or Approve, so a stray Enter decides
+          // nothing. A note filled in from a line puts the focus in Your style, to check it.
+          event.preventDefault()
+          const sheet = event.currentTarget
+          if (!(sheet instanceof HTMLElement)) return
+          const mine = prefill ? sheet.querySelector<HTMLElement>('[data-mine-box]') : null
+          ;(mine ?? sheet).focus()
+        }}
       >
         <SheetHeader className="gap-1 pr-12">
           <SheetTitle>Script style</SheetTitle>

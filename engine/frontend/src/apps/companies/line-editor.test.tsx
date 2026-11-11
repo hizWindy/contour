@@ -231,6 +231,8 @@ describe('the line editor', () => {
     const sheet = await screen.findByRole('dialog', { name: 'Script style' })
     const mine = within(sheet).getByRole('textbox', { name: 'Your style' })
     expect(mine).toHaveValue('Open like: "Hi Jason, it\'s Mia. Quick one."')
+    // The focus is in the box, to check the note before saving it.
+    expect(mine).toHaveFocus()
     // Nothing is saved or shared until the person presses Save.
     expect(calls.some((call) => call.path === `${STYLE}/mine`)).toBe(false)
     expect(calls.some((call) => call.path === `${STYLE}/team`)).toBe(false)

@@ -220,6 +220,8 @@ describe('the Style row and the style sheet', () => {
     await user.click(await row())
     const open = await sheet()
 
+    // The sheet takes the focus, not Retire: a stray Enter decides nothing.
+    expect(open).toHaveFocus()
     const waiting = within(open).getByRole('list', { name: 'Waiting for a decision' })
     expect(within(waiting).getByText('Suggested by Tom Hale, 2 Nov 2026')).toBeInTheDocument()
     expect(within(waiting).getByRole('button', { name: /^Reject/ })).toBeInTheDocument()
