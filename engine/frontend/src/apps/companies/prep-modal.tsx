@@ -28,6 +28,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { isApiProblem } from '@/api/client'
 import { useCompany, useMe, usePrep, usePrepFacts, useStartPrep } from '@/api/hooks'
+import { toneInUse, useScriptStyle } from '@/api/hooks/script'
 import type { CompanyDetail, CompanyPerson } from '@/api/types'
 import { ErrorState } from '@/components/error-state'
 import { Pending } from '@/components/skeletons'
@@ -325,6 +326,11 @@ export function PrepModal({ target, onClose, onChangeTarget, onOpenCompany }: Pr
     contactId,
   })
 
+  // The tone in use, for "Written in a Friendly tone. Research again to use Direct." Unknown until
+  // the style loads, so no hint shows before then.
+  const styleNow = useScriptStyle().data
+  const toneNow = styleNow?.tone ? toneInUse(styleNow) : null
+
   const checking = !off && prep.data?.status === 'searching'
   const companyName =
     shown?.companyName || prep.data?.company_name || company.data?.name || 'Company'
@@ -463,6 +469,7 @@ export function PrepModal({ target, onClose, onChangeTarget, onOpenCompany }: Pr
                         running={checking || start.isPending}
                         stage={prep.data?.stage ?? 0}
                         failed={Boolean(problem) || prep.data?.status === 'failed'}
+                        toneNow={toneNow}
                         onResearch={() => {
                           ask(true)
                         }}

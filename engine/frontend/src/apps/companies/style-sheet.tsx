@@ -1,7 +1,9 @@
 /**
  * The script's style (PLAN-V14 T3-5): a "Style" row at the top of the script, and the side sheet it
- * opens, with two parts.
+ * opens, with three parts.
  *
+ * - **Tone** (PLAN-V15 T3-6): Friendly, Direct, Consultative or Formal, mine or the team's
+ *   default. An Admin also sets the team's default.
  * - **Team style:** the active notes, each with who approved it and when, and a box to suggest a
  *   note. An Admin also sees the waiting suggestions (Approve, Reject) and can retire an active
  *   note. Anyone else sees their own suggestions and what became of them.
@@ -15,14 +17,19 @@ import { useId, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { toApiProblem } from '@/api/client'
 import {
+  toneInUse,
   useDecideTeamNote,
   useRetireTeamNote,
   useSaveMyStyle,
+  useSaveMyTone,
+  useSaveTeamTone,
   useScriptStyle,
   useSuggestTeamNote,
+  type ToneKey,
 } from '@/api/hooks/script'
 import type { ScriptStyleOut } from '@/api/types'
 import { ErrorState } from '@/components/error-state'
+import { Segmented } from '@/components/motion'
 import { Pending, SkeletonLines } from '@/components/skeletons'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -37,7 +44,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { formatDate } from '@/lib/format'
 import { problemHint, toastProblem } from '@/lib/problems'
 import { cn } from '@/lib/utils'
-import { styleSummary, withNote } from './style-words'
+import { TONE_LABELS } from './playbook'
+import { styleRowWords, styleSummary, withNote } from './style-words'
 
 type StyleNote = ScriptStyleOut['team'][number]
 
@@ -62,10 +70,17 @@ export interface StyleRowProps {
   onOpen: () => void
 }
 
-/** "Style: Team (3 notes) and yours", at the top of the script. It opens the sheet. */
+/**
+ * "Tone: Direct · Team (3 notes) and yours", at the top of the script (PLAN-V15). It opens the
+ * sheet. Its name for a screen reader starts "Style:".
+ */
 export function StyleRow({ madeFrom, changedSince, onOpen }: StyleRowProps) {
   const style = useScriptStyle()
-  const summary = style.data ? styleSummary(style.data) : style.error ? 'Not loaded' : '...'
+  const data = style.data
+  const shown = data ? styleRowWords(data) : style.error ? 'Not loaded' : '...'
+  const name = data
+    ? `Style: ${styleSummary(data)}, tone ${TONE_LABELS[toneInUse(data)]}`
+    : `Style: ${shown}`
   const note =
     madeFrom === 'hubspot' ? "Used by call prep's scripts." : changedSince ? NOT_USED_YET : null
   return (
@@ -75,15 +90,12 @@ export function StyleRow({ madeFrom, changedSince, onOpen }: StyleRowProps) {
         variant="outline"
         size="sm"
         aria-haspopup="dialog"
-        aria-label={`Style: ${summary}`}
+        aria-label={name}
         onClick={onOpen}
         className="max-w-full"
       >
         <SlidersHorizontal aria-hidden="true" />
-        <span className="truncate">
-          <span className="text-muted-foreground">Style: </span>
-          {summary}
-        </span>
+        <span className="truncate">{shown}</span>
       </Button>
       {note ? (
         <span role="status" className="text-caption text-muted-foreground">
@@ -402,6 +414,107 @@ function MineBox({
   )
 }
 
+/**
+ * The tone preset (PLAN-V15 T3-6): four to pick from, mine or the team's default. An Admin also
+ * sets the team's default. A tone change starts no prep: the free script changes at once, and a
+ * script from call prep in another tone offers Research again.
+ */
+function ToneBox({
+  style,
+  labelledBy,
+  onChanged,
+}: {
+  style: ScriptStyleOut
+  labelledBy: string
+  onChanged: () => void
+}) {
+  const saveMine = useSaveMyTone()
+  const saveTeam = useSaveTeamTone()
+  const tone = style.tone
+  if (!tone) return null // a backend from before PLAN-V15
+  const inUse = toneInUse(style)
+  const label = (key: ToneKey): string =>
+    tone.choices.find((choice) => choice.key === key)?.label ?? TONE_LABELS[key]
+  const meaning = tone.choices.find((choice) => choice.key === inUse)?.line
+  const failed = saveMine.error ?? saveTeam.error
+  const busy = saveMine.isPending || saveTeam.isPending
+  const pickMine = (next: ToneKey | null) => {
+    saveTeam.reset()
+    saveMine.mutate(next, {
+      onSuccess: (saved) => {
+        toast(
+          next
+            ? `Your tone is ${label(next)}.`
+            : `You follow the team's tone: ${label(saved.tone?.team ?? tone.team)}.`,
+        )
+        onChanged()
+      },
+    })
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      <Segmented
+        aria-labelledby={labelledBy}
+        options={tone.choices.map((choice) => ({
+          value: choice.key,
+          label: choice.label,
+          disabled: busy,
+        }))}
+        value={inUse}
+        onChange={(next) => {
+          if (next !== inUse) pickMine(next)
+        }}
+      />
+      {meaning ? <p className="text-ui text-foreground">{meaning}</p> : null}
+      <p className="text-caption text-muted-foreground">
+        Team default: {label(tone.team)}
+        {tone.mine ? '' : '. You follow it.'}
+      </p>
+      {tone.mine || style.can_decide ? (
+        <div className="flex flex-wrap gap-2">
+          {tone.mine ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={busy}
+              onClick={() => {
+                pickMine(null)
+              }}
+            >
+              Use the team default
+            </Button>
+          ) : null}
+          {style.can_decide ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={busy || inUse === tone.team}
+              onClick={() => {
+                saveMine.reset()
+                saveTeam.mutate(inUse, {
+                  onSuccess: () => {
+                    toast(`The team's tone is ${label(inUse)}.`)
+                    onChanged()
+                  },
+                })
+              }}
+            >
+              Set as team default
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+      {failed ? (
+        <p role="alert" className="text-ui text-destructive">
+          {problemWords(failed)}
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
 export interface StyleSheetProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -449,6 +562,15 @@ export function StyleSheet({ open, onOpenChange, prefill = null, onChanged }: St
             </Pending>
           ) : (
             <>
+              {data.tone ? (
+                <Section
+                  id={`${id}-tone`}
+                  title="Tone"
+                  lead="How your scripts sound. It changes the wording, never the facts."
+                >
+                  <ToneBox style={data} labelledBy={`${id}-tone`} onChanged={onChanged} />
+                </Section>
+              ) : null}
               <Section
                 id={`${id}-team`}
                 title="Team style"

@@ -14,7 +14,9 @@ import {
 const texts = (lines: { text: string }[]): string[] => lines.map((line) => line.text)
 
 const TIME_ASK = 'Do you have two minutes, or is there a better time?'
-const AFTER_NO = 'After a second no, thank them and let it go.'
+/** The end of every tone line in the default tone: the preset's advice, then the rule after a no. */
+const AFTER_NO =
+  'Keep it friendly: a short greeting and plain words. After a second no, thank them and let it go.'
 
 /** A returning client, a company with a lease date and a cold call: the three cases of T3-2. */
 const RETURNING = (): CallGuide =>
@@ -357,7 +359,7 @@ describe('the script technique (PLAN-V14)', () => {
       text: `Warm. There is a deal in progress, so pick up where it stands. ${AFTER_NO}`,
       why: 'HubSpot: deal',
     })
-    const light = `Light. A cold call: keep it short and friendly, and listen more than you talk. ${AFTER_NO}`
+    const light = `Light. A cold call: keep it short, and listen more than you talk. ${AFTER_NO}`
     expect(LEASE_ONLY().tone).toMatchObject({ text: light, why: null })
     expect(COLD().tone).toMatchObject({ text: light, why: null })
     // An open deal is a returning client, even through the switchboard.
@@ -545,6 +547,85 @@ describe('the relationship stage (PLAN-V15)', () => {
     const guide = buildGuide({ company: old, person: JASON, caller: 'Mia', today: TODAY })
     expect(texts(guide.opener)[0]).toBe(
       "Hi Jason, it's Mia from Contour. We design and build offices.",
+    )
+  })
+})
+
+describe('the tone presets (PLAN-V15)', () => {
+  const written = (tone: 'friendly' | 'direct' | 'consultative' | 'formal', person = true) =>
+    buildGuide({
+      company: detail({ calls: [] }),
+      person: person ? JASON : null,
+      caller: 'Mia Wong',
+      today: TODAY,
+      tone,
+    })
+
+  it('changes the greeting, the time ask, the pushback and the close', () => {
+    const words = (tone: Parameters<typeof written>[0]) => {
+      const guide = written(tone)
+      return {
+        hello: guide.opener[0]?.text,
+        time: guide.opener[2]?.text,
+        pushback: guide.ifTheySay[0]?.answer.text.split('.')[0],
+        goal: guide.goal?.text,
+      }
+    }
+    expect(words('friendly')).toEqual({
+      hello: "Hi Jason, it's Mia from Contour.",
+      time: TIME_ASK,
+      pushback: "Sounds like the timing isn't right yet",
+      goal: 'Site visit.',
+    })
+    expect(words('direct')).toEqual({
+      hello: "Jason, it's Mia from Contour.",
+      time: 'Have you got two minutes?',
+      pushback: "Understood, the timing isn't right yet",
+      goal: 'Site visit. Ask for a day and time before you hang up.',
+    })
+    expect(words('consultative')).toEqual({
+      hello: "Hi Jason, it's Mia from Contour.",
+      time: 'Is now a good time for a few questions, or is there a better time?',
+      pushback: "It sounds like the timing isn't right yet",
+      goal: 'Site visit. Ask what they would want to get out of it.',
+    })
+    expect(words('formal')).toEqual({
+      hello: 'Good morning Jason Reeds, my name is Mia Wong, from Contour Commercial Interiors.',
+      time: 'Would you have two minutes to speak now, or would another time suit you better?',
+      pushback: "I understand that the timing isn't right yet",
+      goal: 'Site visit. Offer to confirm it in writing.',
+    })
+  })
+
+  it('greets the switchboard in the tone too, and the tone line gives its advice', () => {
+    expect(written('formal', false).opener[0]?.text).toBe(
+      'Good morning, my name is Mia Wong, from Contour Commercial Interiors. Could I speak to whoever looks after your office space?',
+    )
+    expect(written('direct', false).opener[0]?.text).toBe(
+      "It's Mia from Contour. Could I speak to whoever looks after your office space?",
+    )
+    expect(written('direct').tone?.text).toBe(
+      'Warm. There is a deal in progress, so pick up where it stands. Keep it direct: short sentences, the reason first, no small talk. After a second no, thank them and let it go.',
+    )
+    // The switchboard's goal is the same in every tone: a name and a time.
+    expect(written('formal', false).goal?.text).toBe(written('friendly', false).goal?.text)
+  })
+
+  it("uses Claude's own tone line when the script has one", () => {
+    const script = {
+      still_there: 'unknown',
+      still_there_note: null,
+      news: [],
+      opener: [],
+      why_now: [],
+      questions: [],
+      if_they_say: [],
+      goal: null,
+      dropped: 0,
+      tone_line: 'Direct and warm: they are a client, so get to the point.',
+    } as unknown as PrepScript
+    expect(guideFromPrep(script, new Map()).tone?.text).toBe(
+      'Direct and warm: they are a client, so get to the point.',
     )
   })
 })
