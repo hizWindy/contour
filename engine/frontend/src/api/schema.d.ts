@@ -6270,9 +6270,8 @@ export interface components {
             /**
              * People Saved
              * @description Contacts and calls saved
-             * @default 0
              */
-            people_saved: number;
+            people_saved?: number;
             /**
              * Phase
              * @description What it is doing while it runs: reading, saving, people or profiles
@@ -6281,23 +6280,20 @@ export interface components {
             /**
              * Profiles Done
              * @description Company profiles rebuilt so far
-             * @default 0
              */
-            profiles_done: number;
+            profiles_done?: number;
             /** Profiles Rebuilt */
             profiles_rebuilt: number;
             /**
              * Profiles Skipped
              * @description Companies were saved but their profiles weren't rebuilt
-             * @default false
              */
-            profiles_skipped: boolean;
+            profiles_skipped?: boolean;
             /**
              * Profiles Total
              * @description Company profiles this sync rebuilds
-             * @default 0
              */
-            profiles_total: number;
+            profiles_total?: number;
             /**
              * Started At
              * Format: date-time

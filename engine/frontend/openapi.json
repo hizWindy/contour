@@ -11484,7 +11484,6 @@
             "type": "integer"
           },
           "people_saved": {
-            "default": 0,
             "description": "Contacts and calls saved",
             "title": "People Saved",
             "type": "integer"
@@ -11508,7 +11507,6 @@
             "title": "Phase"
           },
           "profiles_done": {
-            "default": 0,
             "description": "Company profiles rebuilt so far",
             "title": "Profiles Done",
             "type": "integer"
@@ -11518,13 +11516,11 @@
             "type": "integer"
           },
           "profiles_skipped": {
-            "default": false,
             "description": "Companies were saved but their profiles weren't rebuilt",
             "title": "Profiles Skipped",
             "type": "boolean"
           },
           "profiles_total": {
-            "default": 0,
             "description": "Company profiles this sync rebuilds",
             "title": "Profiles Total",
             "type": "integer"

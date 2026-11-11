@@ -132,10 +132,33 @@ class SyncNotRunning(Exception):
     """The sync has already finished, so there is nothing to stop."""
 
 
+# Fields added in PLAN-V15 T1-3. The API always sends them, but the website's types leave them
+# optional, so test data written before they existed still type-checks.
+_ADDED_IN_V15 = (
+    "phase",
+    "heartbeat_at",
+    "cancel_requested_at",
+    "people_saved",
+    "profiles_done",
+    "profiles_total",
+    "profiles_skipped",
+)
+
+
+def _optional_in_types(schema: dict[str, Any]) -> None:
+    required = schema.get("required")
+    if isinstance(required, list):
+        schema["required"] = [name for name in required if name not in _ADDED_IN_V15]
+    # The website's type generator makes a field with a default required: these have none there.
+    for name, field_schema in schema.get("properties", {}).items():
+        if name in _ADDED_IN_V15 and isinstance(field_schema, dict):
+            field_schema.pop("default", None)
+
+
 class SyncOut(BaseModel):
     """One sync, for the website and the command."""
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, json_schema_extra=_optional_in_types)
 
     id: int
     mode: Mode
