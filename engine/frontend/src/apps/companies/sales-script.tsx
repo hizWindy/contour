@@ -4,17 +4,19 @@
  * T2-2, with no change. Its title and "Written from ..." line are in `script-header.tsx`.
  *
  * PLAN-V14 T3-4: the tone line sits above the steps, and lines are keyed by their slot, because a
- * person's edit may repeat another line's words.
+ * person's edit may repeat another line's words. T3-5: the "Style" row at the top opens the style
+ * sheet; after a style change it says "Not used yet" until a new script is made.
  */
 import { CornerDownRight, Flag, MessageCircle } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { Pending, SkeletonLines } from '@/components/skeletons'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatNumber } from '@/lib/format'
 import { GuideIconMark, GuideText, GuideWhy } from './guide-parts'
 import { GuidedQuestions } from './guided-questions'
 import type { CallGuide } from './playbook'
-import { lineSlot } from './script-layers'
+import { draftKey, lineSlot } from './script-layers'
+import { StyleRow, StyleSheet } from './style-sheet'
 
 function Step({
   n,
@@ -56,8 +58,26 @@ export function Quiet({ children }: { children: ReactNode }) {
 
 /** The script: opener, why now, guided questions, if they say and the goal. */
 export function SalesScript({ guide }: { guide: CallGuide }) {
+  const [styleOpen, setStyleOpen] = useState(false)
+  // The draft the style changed under: "Not used yet" until a new script replaces it.
+  const [changedOn, setChangedOn] = useState<string | null>(null)
+  const draft = useMemo(() => draftKey(guide), [guide])
   return (
     <div className="flex flex-col gap-4">
+      <StyleRow
+        madeFrom={guide.madeFrom}
+        changedSince={changedOn === draft}
+        onOpen={() => {
+          setStyleOpen(true)
+        }}
+      />
+      <StyleSheet
+        open={styleOpen}
+        onOpenChange={setStyleOpen}
+        onChanged={() => {
+          setChangedOn(draft)
+        }}
+      />
       {guide.tone ? (
         <p className="flex items-start gap-2 text-ui text-muted-foreground">
           <MessageCircle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />

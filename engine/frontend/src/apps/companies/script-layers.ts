@@ -43,6 +43,25 @@ export function lineSlot(section: ScriptSection, index: number, line: GuideLine)
   return line.edited?.slot ?? `${section}.${String(index)}`
 }
 
+/**
+ * The draft under a guide, as one string: it changes when a new script is made (Research again),
+ * but not when the person edits or resets a line, because an edited line keeps the draft's words.
+ */
+export function draftKey(guide: CallGuide): string {
+  // An edit past the draft's end has no draft words, so it adds nothing.
+  const words = (line: GuideLine): string | null => (line.edited ? line.edited.draft : line.text)
+  return [
+    guide.madeFrom,
+    ...guide.opener.map(words),
+    ...guide.whyNow.map(words),
+    ...guide.questions.map(words),
+    ...guide.ifTheySay.map((item) => words(item.answer)),
+    guide.goal ? words(guide.goal) : null,
+  ]
+    .filter((part): part is string => part !== null)
+    .join('\n')
+}
+
 /** The person's line over the draft's: their text, no sources, marked Yours. */
 function yours(slot: string, text: string, draft: GuideLine | undefined): GuideLine {
   return {
