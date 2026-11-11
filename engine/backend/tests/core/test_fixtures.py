@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import (
 )
 from sse_starlette.sse import AppStatus, EventSourceResponse
 
-from apps.companies.tables import Prep
+from apps.companies.tables import Prep, ScriptEdit, ScriptStyle
 from apps.lead_finder.tables import Lead, Rival, SignalHireDetails
 from core.auth.models import AuditEntry, User, UserSession
 from core.config import get_settings
@@ -115,6 +115,8 @@ async def fill_every_table(factory: async_sessionmaker[AsyncSession]) -> None:
                 HubSpotContact(hubspot_id="c1", hubspot_company_id="1", name="Pat Lee"),
                 HubSpotCall(hubspot_id="k1", hubspot_company_id="1", note="A call."),
                 Prep(company_key="1", company_name="Acme", made_by=person.id),
+                ScriptEdit(user_id=person.id, company_key="1", slot="goal", text="A visit."),
+                ScriptStyle(scope="mine", user_id=person.id, text="Short openers."),
                 HubSpotDeal(hubspot_deal_id="9", hubspot_company_id="1", name="Acme fit-out"),
                 RunEvent(run_id=run.id, seq=1, type="run_started", data={}),
                 Lead(

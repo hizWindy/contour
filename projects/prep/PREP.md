@@ -1,8 +1,8 @@
 # Call prep
 
-Last updated: 2026-11-09. **TBC** means to be confirmed.
+Last updated: 2026-11-11. **TBC** means to be confirmed.
 
-**Status (9 Nov):** built and tested on the branch `plan-v10` ([PLAN-V10](../../plan/PLAN-V10.md)), not merged or switched on yet. What works now, from our HubSpot copy: the Companies page, the company panel, the prep box, "Sync with HubSpot", and the prep card with a sales script and guided questions (free, written from the copy). Call prep's web check (news, "still there?") stays off until Al-khair switches it on. People and call history wait for HubSpot access to contacts. The questions for Levi are in [EMAIL.md](EMAIL.md).
+**Status (11 Nov):** PLAN-V10 built call prep, and [PLAN-V14](../../plan/PLAN-V14.md) refined it: "Research again", the three answers in the card's header, news with no age limit, the call technique in both scripts, and editable scripts with Your style and a team style. Both are merged into `master`, not deployed, and call prep is not switched on yet. The new prompt hasn't been tried on real companies (PLAN-V14 T1-5, paid, on Al-khair's word). What works now, from our HubSpot copy: the Companies page, the company panel, the prep box, "Sync with HubSpot", and the prep card with a sales script and guided questions (free, written from the copy). Call prep's web check (news, "still there?") stays off until Al-khair switches it on. People and call history wait for HubSpot access to contacts. The questions for Levi are in [EMAIL.md](EMAIL.md).
 
 Call prep tells a salesperson what they need to know before they ring someone. They type a person or a company, and get a short call script. It is the second project after the Lead Finder (Levi, 2 Nov meeting).
 
@@ -75,10 +75,10 @@ Vitera         Adelaide   Marcus   12 Sep
 ```
 ┌ [JR] Jason Reeds ──────────────────────────────────── ✕ ┐
 │      Head of Property · Vitera (opens the company)      │
-│      Ready from our HubSpot copy.                       │
-│ Before you dial                                         │
-│ [Still there?] [Last talk 12 Sep] [News] [Connections]  │
-│ Sales script                    │ Last time we talked   │
+│ [Still there?] [Last talk 12 Sep] [News · 5 months ago] │
+│ Sales script  Made 2 days ago  [Research again]         │
+│ Style: Team (2 notes) and yours │ Last time we talked   │
+│ Tone: warm, they know us        │                       │
 │ 1 Opener: "Hi Jason, it's Tom   │ the call note         │
 │   from Contour. We spoke on ... │ Quick facts           │
 │ 2 Why now: lease ends Mar 2028  │ [Company info]        │
@@ -88,13 +88,17 @@ Vitera         Adelaide   Marcus   12 Sep
 │       If they say "Delayed", ask: what changed?         │
 │ 4 If they say: "Not ready yet" -> the answer            │
 │ 5 Goal: book a site visit                               │
-│ +61 412 555 018 [Copy number]   [Copy script] [Refresh] │
+│ +61 412 555 018 [Copy number]   [Copy script]           │
 └─────────────────────────────────────────────────────────┘
 ```
 
 Rules for the screen:
 
-- **"Before you dial" first, in one line.** These are Levi's 4 questions. On a rushed call, that is all they read.
+- **The answers first, in the header.** Still there?, Last talk and News sit in one row under the name, and stay put while the script scrolls. These are Levi's questions; Connections waits for his customer list. On a rushed call, that is all they read.
+- **"Research again"** (it was Refresh) sits at the top of the script, with what it costs (up to the cap, US$0.25 **TBC**). It makes a new web check and a new script. While call prep is off it is greyed out and says why.
+- **News has no age limit.** The newest item shows with its date and age ("14 June 2026, 4 months ago"), so old news never looks fresh. With no web news, the newest saved note shows instead.
+- **The call technique** (Al-khair, 11 Nov; **TBC** with Levi): the opener asks for two minutes; questions go from their situation to what fixing it is worth; pushback gets three beats (name the feeling, agree with what is fair, ask one question); a tone line; a feeling only as a question; no pushing twice.
+- **Edit the script.** A pencil on each line saves your own wording for this call, seen only by you. It survives "Research again", "Copy script" copies it, and Reset brings back the draft. **Your style** (one note) and the **team style** (up to 8 notes, approved by an Admin) go into the next scripts as wording only, never as facts. Who approves team notes besides Admins is **TBC** with Levi.
 - **Fast, then complete.** The sales script and guided questions are written at once from our HubSpot copy (`playbook.ts`): free, and there even while call prep is off. With call prep on, its web check adds news and "still there?", and its own script fades in when ready (a few seconds; at once for a company searched ahead). The free script's wording is ours, from the prototype and Levi's questions (**TBC** with Levi).
 - **Guided questions.** Each says why it is asked, and what to ask next for each likely answer ("If they say 'Move', ask: who is helping you look?"). Tick one as you ask it, and the next one opens. The ticks aren't saved.
 - **Sync with HubSpot.** A button on the Companies page copies everything from HubSpot now (about 10 minutes, free), instead of waiting for the 6:00 sync. Its bar fills as it reads, and the list refreshes when it is done.
