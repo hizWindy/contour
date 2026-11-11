@@ -273,11 +273,14 @@ class RunManager:
         acquire_lock: Callable[[], Awaitable[bool]] | None = None,
         release_lock: Callable[[], Awaitable[None]] | None = None,
         progress_interval: float = DEFAULT_PROGRESS_SECONDS,
+        lock_alive: Callable[[], Awaitable[bool]] | None = None,
     ) -> None:
         """`acquire_lock` tries the Postgres advisory lock that keeps a second backend from
         running on the same database (True when taken). `release_lock` lets it go. Both are
         hooks so a test can pass fakes, or nothing. `progress_interval` is how often a running
-        run saves its totals and emits `progress` (only when they changed)."""
+        run saves its totals and emits `progress` (only when they changed). `lock_alive` says
+        whether the lock is still held (its connection answers); `lifecycle` asks it every 30
+        seconds (PLAN-V15 T1-6)."""
         self.session_factory = session_factory
         self.embedder = embedder
         self.claude_provider = claude_provider
@@ -286,6 +289,7 @@ class RunManager:
         self.kinds = dict(kinds)
         self.acquire_lock = acquire_lock
         self.release_lock = release_lock
+        self.lock_alive = lock_alive
         self.progress_interval = progress_interval
         self.events = EventBus(session_factory, is_active=self.is_active)
         self._active: dict[UUID, _Entry] = {}
@@ -414,8 +418,8 @@ class RunManager:
         if idempotency_key is not None and not 1 <= len(idempotency_key) <= IDEMPOTENCY_KEY_MAX:
             raise Problem(
                 422,
-                "The request isn't valid",
-                "Check the fields listed in errors.",
+                "Some fields need a fix",
+                "Look at the fields listed.",
                 errors=[
                     {
                         "field": "header.idempotency-key",

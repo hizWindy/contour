@@ -267,10 +267,21 @@ def test_the_backend_stays_inside_the_connections_the_smallest_database_allows(
     from_the_file: Settings,
 ) -> None:
     """The app's pool and its overflow, the run checkpoints' pool, and the one connection that
-    holds the one-backend lock."""
+    holds the one-backend lock. During a deploy the old and the new backend both hold theirs, and
+    the migration step opens one more (PLAN-V15 T1-6)."""
     settings = from_the_file
     opened = settings.db_pool_size + settings.db_max_overflow + POOL_MAX_SIZE + 1
-    assert opened <= SMALLEST_DATABASE_CONNECTIONS
+    assert opened == 9
+    assert 2 * opened + 1 <= SMALLEST_DATABASE_CONNECTIONS
+
+
+def test_the_backend_alerts_when_it_is_short_of_cpu_or_memory_or_keeps_restarting() -> None:
+    [backend] = spec()["services"]
+    rules = {alert["rule"]: alert for alert in backend["alerts"]}
+    assert set(rules) == {"CPU_UTILIZATION", "MEM_UTILIZATION", "RESTART_COUNT"}
+    assert all(alert["operator"] == "GREATER_THAN" for alert in rules.values())
+    assert {alert["rule"] for alert in spec()["alerts"]} >= {"DEPLOYMENT_FAILED"}
+    assert environment()["EMBEDDING_THREADS"] == "1"  # PLAN-V15 T1-4
 
 
 # --- No secret in the file ---------------------------------------------------------------------

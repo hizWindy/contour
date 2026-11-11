@@ -109,9 +109,9 @@ async def test_a_request_that_would_pass_the_cap_is_refused_before_it_holds_anyt
         assert limit.held_usd == D("1")  # the refused one held nothing
     error = refused.value
     assert (error.cap, error.spent, error.held) == (D("10"), D("8.50"), D("1"))
-    assert error.title == "Claude's daily limit is reached"
-    assert "US$8.50 was spent in the last 24 hours" in error.detail
-    assert "DAILY_CAP_USD" in error.detail
+    assert error.title == "Today's Claude limit is reached"
+    assert error.detail is not None and "An admin can raise the limit." in error.detail
+    assert "DAILY_CAP_USD" not in error.detail  # settings and numbers go to the log only
 
 
 async def test_the_exact_cap_is_allowed(log: Log, clock: Clock) -> None:
@@ -233,7 +233,7 @@ async def test_a_log_that_cant_be_read_sends_nothing(log: Log, clock: Clock) -> 
     with pytest.raises(ClaudeUnavailable) as caught:
         async with limit.reserve():
             pytest.fail("it was let in")
-    assert caught.value.title == "Can't check the daily limit"
+    assert caught.value.title == "Can't check today's Claude limit"
     assert "leadfinder" not in caught.value.detail  # the driver's text stays out
     assert limit.held_usd == 0
 
@@ -308,28 +308,121 @@ async def test_the_client_notes_what_a_request_cost_until_it_is_logged(
     assert shared.held_usd == 0
 
 
-async def test_the_sdk_never_retries_a_request(log: Log, clock: Clock) -> None:
-    calls: list[httpx2.Request] = []
+def sdk_answering(answers: list[httpx2.Response], calls: list[httpx2.Request]) -> Any:
+    """An SDK client whose HTTP answers are `answers`, in turn (the last one repeats)."""
+    import anthropic
 
     def handler(request: httpx2.Request) -> httpx2.Response:
         calls.append(request)
-        return httpx2.Response(
-            529, json={"type": "error", "error": {"type": "overloaded_error", "message": "busy"}}
-        )
+        return answers[min(len(calls), len(answers)) - 1]
 
-    import anthropic
-
-    sdk = anthropic.AsyncAnthropic(
+    return anthropic.AsyncAnthropic(
         api_key="test-key",
         http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(handler)),
-        max_retries=5,  # whatever it is given, the engine turns retries off
+        max_retries=5,  # whatever it is given, the engine turns the SDK's own retries off
     )
-    claude = AnthropicClaude(client=sdk, daily=cap(clock, limit="50", reserve="0.80"))
+
+
+def busy(status: int = 529, retry_after: str | None = None) -> httpx2.Response:
+    kind = "overloaded_error" if status == 529 else "rate_limit_error"
+    headers = {"retry-after": retry_after} if retry_after is not None else None
+    body = {"type": "error", "error": {"type": kind, "message": "busy"}}
+    return httpx2.Response(status, json=body, headers=headers)
+
+
+def answered(stop_reason: str = "end_turn") -> httpx2.Response:
+    from tests.core.test_claude import SEARCH, message
+
+    text = [{"type": "text", "text": '{"city": "Perth"}'}]
+    content = SEARCH if stop_reason == "pause_turn" else text
+    return httpx2.Response(
+        200, json=message(content, stop_reason=stop_reason).model_dump(mode="json")
+    )
+
+
+async def test_a_busy_answer_is_tried_twice_more_then_said_plainly(
+    log: Log, clock: Clock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """PLAN-V15 T1-6: 429 and 529 aren't billed, so the engine tries again (the SDK never does)."""
+    from core.claude import client as client_module
+
+    monkeypatch.setattr(client_module, "BUSY_WAIT_SECONDS", 0.0)
+    calls: list[httpx2.Request] = []
+    claude = AnthropicClaude(
+        client=sdk_answering([busy()], calls), daily=cap(clock, limit="50", reserve="0.80")
+    )
     with pytest.raises(ClaudeError) as caught:
         await claude.ask(system="s", prompt="p", form=Answer)
-    assert len(calls) == 1  # a retry would be billed again
-    assert "529" in caught.value.title
+    assert len(calls) == 3  # the first try and 2 more
+    assert (caught.value.title, caught.value.detail) == (
+        "Claude is busy right now",
+        "Try again in a minute.",
+    )
     assert json.loads(calls[0].content)["model"] == get_settings().claude_model
+
+
+async def test_a_busy_answer_then_a_good_one_is_a_good_answer(
+    log: Log, clock: Clock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from core.claude import client as client_module
+
+    monkeypatch.setattr(client_module, "BUSY_WAIT_MAX_SECONDS", 0.0)
+    calls: list[httpx2.Request] = []
+    claude = AnthropicClaude(
+        client=sdk_answering([busy(429, retry_after="60"), answered()], calls),
+        daily=cap(clock, limit="50", reserve="0.80"),
+    )
+    reply = await claude.ask(system="s", prompt="p", form=Answer)
+    assert reply.parsed == Answer(city="Perth") and len(calls) == 2
+
+
+def test_the_wait_claude_asks_for_is_kept_within_limits() -> None:
+    import anthropic
+
+    from core.claude.client import BUSY_WAIT_MAX_SECONDS, BUSY_WAIT_SECONDS, _retry_after
+
+    def error(retry_after: str | None) -> anthropic.APIStatusError:
+        request = httpx2.Request("POST", "https://api.anthropic.com/v1/messages")
+        headers = {"retry-after": retry_after} if retry_after is not None else None
+        return anthropic.RateLimitError(
+            "busy", response=httpx2.Response(429, headers=headers, request=request), body=None
+        )
+
+    assert _retry_after(error("3")) == 3.0
+    assert _retry_after(error("60")) == BUSY_WAIT_MAX_SECONDS  # 20 s at most
+    assert _retry_after(error(None)) == _retry_after(error("soon")) == BUSY_WAIT_SECONDS
+
+
+async def test_any_other_error_is_never_sent_again(log: Log, clock: Clock) -> None:
+    calls: list[httpx2.Request] = []
+    bad = httpx2.Response(
+        400, json={"type": "error", "error": {"type": "invalid_request_error", "message": "no"}}
+    )
+    claude = AnthropicClaude(client=sdk_answering([bad], calls))
+    with pytest.raises(ClaudeError) as caught:
+        await claude.ask(system="s", prompt="p", form=Answer)
+    assert len(calls) == 1  # a retry could be billed again
+    assert caught.value.title == "Claude couldn't answer"
+    assert "no" not in (caught.value.detail or "")  # what Claude said goes to the log only
+
+
+async def test_a_paused_turn_that_fails_later_still_counts_its_first_part(
+    log: Log, clock: Clock
+) -> None:
+    calls: list[httpx2.Request] = []
+    bad = httpx2.Response(
+        400, json={"type": "error", "error": {"type": "invalid_request_error", "message": "no"}}
+    )
+    limit = cap(clock, limit="50", reserve="0.80")
+    claude = AnthropicClaude(
+        client=sdk_answering([answered("pause_turn"), bad], calls), daily=limit
+    )
+    with pytest.raises(ClaudeError):
+        await claude.ask(system="s", prompt="p", form=Answer)
+    assert len(calls) == 2
+    # The paused first part was billed (10k in, 500 out, 2k cached, 1 search): it is noted.
+    assert sum(item.cost for item in limit._unlogged) == Decimal("0.060400")
+    assert limit.held_usd == 0
 
 
 # --- The real log (integration) -----------------------------------------------------------------

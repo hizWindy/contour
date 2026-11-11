@@ -1,11 +1,13 @@
 """The FastAPI app. Swagger is at /docs. All endpoints sit under /api/v1."""
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import APIRouter, Depends, FastAPI
 from fastapi.routing import APIRoute
+from starlette.types import ASGIApp
 
 from core.api import auth as auth_routes
 from core.api import health, hubspot, memory, people, runs, runs_read, searches
@@ -14,11 +16,13 @@ from core.api import settings as settings_routes
 from core.api.access import require_app
 from core.api.errors import PROBLEM_RESPONSES, add_error_handlers
 from core.api.guard import SessionGuard, document_sign_in
+from core.api.request_id import RequestIdMiddleware, install_log_ids
 from core.api.routes import api_routes
 from core.api.security import ProblemCORSMiddleware, add_security_layers
 from core.apps import load_apps
 from core.config import get_settings
 from core.db.engine import get_engine
+from core.health import loop_lag
 from core.health.traffic import ApiTraffic, TrafficMiddleware
 from core.hubspot import connection as hubspot_connection
 from core.logs import setup_logging
@@ -27,6 +31,7 @@ from core.runtime import disable_tracing
 from core.schedules import runtime as schedules
 
 API_PREFIX = "/api/v1"
+log = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -38,20 +43,37 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     it and takes it over in the background once the other one stops (PLAN-V8 B3).
     """
     try:
+        # A lost lock (the database restarted) stops the scheduler, and taking it back starts
+        # the background work again (PLAN-V15 T1-6).
+        lifecycle.when_engine_is_lost(app, stop=schedules.shut_down, restart=start_background_work)
         await lifecycle.startup(app)
         if lifecycle.waiting(app):
             lifecycle.take_over_later(app, then=start_background_work)
         else:
             await start_background_work(app)
+        loop_lag.start_watch(app)  # logs `loop_lag` when heavy work blocks the loop (PLAN-V15)
         yield
     finally:
         try:
+            await loop_lag.stop_watch(app)
+            await stop_apps(app)
             await lifecycle.stop_waiting(app)
             await schedules.shut_down(app)
             await hubspot_connection.shut_down(app)
             await lifecycle.shutdown(app)
         finally:
             await get_engine().dispose()
+
+
+async def stop_apps(app: FastAPI) -> None:
+    """Each project's own `on_shutdown` (PLAN-V15 T1-6). One that fails never stops the rest."""
+    for spec in getattr(app.state, "apps", ()):
+        if spec.on_shutdown is None:
+            continue
+        try:
+            await spec.on_shutdown(app)
+        except Exception:
+            log.exception("app_shutdown_failed", extra={"app": spec.name})
 
 
 async def start_background_work(app: FastAPI) -> None:
@@ -85,6 +107,12 @@ def document_problems(schema: dict[str, Any]) -> None:
 
 
 class EngineApp(FastAPI):
+    def build_middleware_stack(self) -> ASGIApp:
+        """The whole stack, wrapped in the request id (PLAN-V15 T1-2). Outside Starlette's own
+        error layer, so even a 500 carries the `X-Request-ID` header, and every log line of
+        the request (the crash's too) carries its id."""
+        return RequestIdMiddleware(super().build_middleware_stack())
+
     def openapi(self) -> dict[str, Any]:
         built_before = self.openapi_schema is not None
         schema = super().openapi()
@@ -108,6 +136,7 @@ def _check_operation_ids(app: FastAPI) -> None:
 def create_app() -> FastAPI:
     disable_tracing()  # first: prompts and answers must never reach LangSmith
     setup_logging()
+    install_log_ids()  # every log line of a request carries its id (PLAN-V15 T1-2)
     settings = get_settings()
     specs = load_apps(settings.apps)
     for spec in specs:

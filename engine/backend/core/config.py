@@ -211,6 +211,13 @@ class Settings(BaseSettings):
     db_pool_size: int = Field(10, ge=1, le=50)
     db_max_overflow: int = Field(10, ge=0, le=50)
     db_pool_timeout: float = Field(10, gt=0, le=120)  # seconds to wait for a free connection
+    # PLAN-V15 T1-6: limits on each of the app's database connections (not the migrations'), so
+    # a stuck query, a lock wait or a forgotten transaction ends instead of holding a connection
+    # for ever. 0 means no limit. The numbers are TBC. A HubSpot sync's save and a profile rebuild
+    # set longer ones for themselves.
+    db_statement_timeout_ms: int = Field(30_000, ge=0, le=3_600_000)
+    db_lock_timeout_ms: int = Field(10_000, ge=0, le=600_000)
+    db_idle_in_transaction_timeout_ms: int = Field(600_000, ge=0, le=86_400_000)
     langgraph_schema: str = "langgraph"  # Postgres schema for the run checkpoints
 
     # Projects to load, by folder name in apps/

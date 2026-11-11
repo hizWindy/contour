@@ -119,7 +119,7 @@ async def test_resend_is_tried_again_with_the_same_key_when_busy() -> None:
 async def test_a_refused_key_says_what_to_check() -> None:
     with pytest.raises(EmailNotSetUp) as caught:
         await send(["a@example.com"], "S", "T", sender=resend(lambda request: httpx2.Response(401)))
-    assert "EMAIL_API_KEY" in caught.value.detail
+    assert "the email key" in caught.value.detail  # plain words (PLAN-V15 T1-6)
     assert KEY not in str(caught.value)
 
 
@@ -133,9 +133,9 @@ async def test_no_connection_is_a_plain_error() -> None:
 
 def test_the_provider_comes_from_the_settings() -> None:
     assert get_sender(Settings(_env_file=None)).provider == "log"
-    with pytest.raises(EmailNotSetUp, match="EMAIL_API_KEY"):
+    with pytest.raises(EmailNotSetUp, match="add the email key"):
         get_sender(Settings(_env_file=None, email_provider="resend"))
-    with pytest.raises(EmailNotSetUp, match="EMAIL_FROM"):
+    with pytest.raises(EmailNotSetUp, match="sender address"):
         get_sender(Settings(_env_file=None, email_provider="resend", email_api_key=KEY))
     chosen = get_sender(
         Settings(
@@ -171,4 +171,4 @@ async def test_the_email_test_command_says_what_is_missing(monkeypatch: pytest.M
     monkeypatch.setattr(cli, "get_settings", lambda: settings)
     text, ok = await cli._email_test("al@example.com")
     assert not ok
-    assert "EMAIL_API_KEY" in text
+    assert "email key" in text

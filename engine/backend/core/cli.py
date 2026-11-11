@@ -84,6 +84,9 @@ def serve(reload: bool = False) -> int:
     proxy: dict[str, Any] = {
         "proxy_headers": behind_proxy,
         "forwarded_allow_ips": ",".join(settings.trusted_proxies) if behind_proxy else None,
+        # The app writes one `request_done` line per request, with its id and time (PLAN-V15
+        # T1-2), so uvicorn's own access line would only double the log.
+        "access_log": False,
     }
     if reload:
         # uvicorn's reloader runs the app in a child process on the selector loop.

@@ -50,7 +50,9 @@ log = logging.getLogger(__name__)
 # One transaction at a time changes the settings, so two changes can't each pass the check on
 # their own and then save a pair that fails it together. The other advisory lock keys:
 # 7_244_001 the checkpoint setup, 7_244_002 the one-backend lock that a running backend holds
-# for its whole life (so sharing it would make every settings change wait for ever).
+# for its whole life (so sharing it would make every settings change wait for ever). Call prep
+# (PLAN-V15 Track 3, apps/companies): 7_244_501 the team style notes' count, and 7_244_502 in
+# the two-key form with hashtext(company_key), one call prep web check per company.
 SETTINGS_LOCK = 7_244_003
 
 # Shown as read-only rows. They change only in engine/.env, then a restart.

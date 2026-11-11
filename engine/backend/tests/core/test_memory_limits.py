@@ -67,7 +67,7 @@ def problem_fields(response: httpx.Response) -> dict[str, str]:
     assert response.status_code == 422, response.text
     assert response.headers["content-type"].startswith("application/problem+json")
     body = response.json()
-    assert body["title"] == "The request isn't valid"
+    assert body["title"] == "Some fields need a fix"
     return {error["field"]: error["message"] for error in body["errors"]}
 
 

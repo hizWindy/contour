@@ -1,12 +1,12 @@
 """Save text to memory, and search it by meaning."""
 
-from collections.abc import Collection, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -15,7 +15,11 @@ from core.memory.embedder import Embedder
 from core.memory.models import MemoryItem
 
 DELETE_CHUNK = 5000  # ids in one delete
-EMBED_BATCH = 512  # notes embedded and saved together
+# Notes embedded and saved together. Small enough that a stop (a cancelled HubSpot sync) waits
+# for one short batch, not a long one: an embedding batch can't be stopped part way (PLAN-V15).
+EMBED_BATCH = 64
+# Told how many notes are embedded so far, and how many in all.
+EmbedProgress = Callable[[int, int], Awaitable[None]]
 
 
 @dataclass(frozen=True)
@@ -190,6 +194,7 @@ async def replace_items_where(
     kind: str,
     meta_key: str,
     values: Collection[str],
+    progress: EmbedProgress | None = None,
 ) -> int:
     """Swaps the items of one app and kind whose `meta[meta_key]` is one of `values` for
     `notes`, and leaves every other item alone. Returns how many were saved.
@@ -206,8 +211,83 @@ async def replace_items_where(
                 MemoryItem.meta[meta_key].astext.in_(wanted[start : start + DELETE_CHUNK]),
             )
         )
-    await _embed_and_add(session, embedder, notes, app=app, kind=kind)
+    await _embed_and_add(session, embedder, notes, app=app, kind=kind, progress=progress)
     return len(notes)
+
+
+async def replace_changed_items(
+    session: AsyncSession,
+    embedder: Embedder,
+    notes: list[Note],
+    *,
+    app: str,
+    kind: str,
+    meta_key: str,
+    scope: Collection[str] | None = None,
+    progress: EmbedProgress | None = None,
+) -> int:
+    """Brings the items of one app and kind in line with `notes`, one item for each value of
+    `meta[meta_key]`: all of them, or only those whose value is in `scope`. Returns how many
+    texts were embedded (PLAN-V15 T1-4).
+
+    Embedding is the slow part (about 14,000 company profiles), and most texts don't change from
+    one sync to the next. So an item whose text is the same keeps its embedding: only its
+    subject, address, date and meta are updated, if they changed. A new or changed text is
+    embedded and saved; an item with no note any more (or a second one for the same value) is
+    deleted. Like `replace_items`, it all happens in the caller's transaction: the caller
+    commits.
+    """
+    key = MemoryItem.meta[meta_key].astext
+    columns = (
+        MemoryItem.id,
+        key,
+        MemoryItem.content,
+        MemoryItem.subject,
+        MemoryItem.url,
+        MemoryItem.source_date,
+        MemoryItem.meta,
+    )
+    mine = (MemoryItem.app == app, MemoryItem.kind == kind)
+    rows: list[Any] = []
+    if scope is None:
+        rows = list(await session.execute(select(*columns).where(*mine)))
+    else:
+        wanted = list(dict.fromkeys(scope))
+        for start in range(0, len(wanted), DELETE_CHUNK):
+            chunk = wanted[start : start + DELETE_CHUNK]
+            rows += list(await session.execute(select(*columns).where(*mine, key.in_(chunk))))
+    existing: dict[str | None, Any] = {}
+    drop: list[UUID] = []
+    for row in rows:
+        if row[1] in existing:
+            drop.append(row[0])  # a second item for one value: only one is kept
+        else:
+            existing[row[1]] = row
+    to_embed: list[Note] = []
+    for note in notes:
+        meta = note.meta or {}
+        value = meta.get(meta_key)
+        old = existing.pop(None if value is None else str(value), None)
+        if old is not None and old[2] == note.content:
+            if (old[3], old[4], old[5], old[6]) != (note.subject, note.url, note.source_date, meta):
+                await session.execute(
+                    update(MemoryItem)
+                    .where(MemoryItem.id == old[0])
+                    .values(
+                        subject=note.subject, url=note.url, source_date=note.source_date, meta=meta
+                    )
+                )
+            continue
+        if old is not None:
+            drop.append(old[0])
+        to_embed.append(note)
+    drop += [row[0] for row in existing.values()]
+    for start in range(0, len(drop), DELETE_CHUNK):
+        await session.execute(
+            delete(MemoryItem).where(MemoryItem.id.in_(drop[start : start + DELETE_CHUNK]))
+        )
+    await _embed_and_add(session, embedder, to_embed, app=app, kind=kind, progress=progress)
+    return len(to_embed)
 
 
 async def _embed_and_add(
@@ -217,9 +297,13 @@ async def _embed_and_add(
     *,
     app: str,
     kind: str,
+    progress: EmbedProgress | None = None,
 ) -> None:
     """Embeds and adds the notes a batch at a time, so 14,000 company profiles never sit in
-    memory as numbers all at once."""
+    memory as numbers all at once. `progress`, if given, hears how far it has got after each
+    batch (and 0 before the first)."""
+    if progress is not None:
+        await progress(0, len(notes))
     for start in range(0, len(notes), EMBED_BATCH):
         batch = notes[start : start + EMBED_BATCH]
         vectors = await embedder.embed_passages([note.content for note in batch])
@@ -227,6 +311,8 @@ async def _embed_and_add(
         await session.flush()
         for item in added:  # saved: the session needn't keep thousands of them in memory
             session.expunge(item)
+        if progress is not None:
+            await progress(start + len(batch), len(notes))
 
 
 def _add_all(
@@ -255,7 +341,13 @@ def _add_all(
 
 
 async def replace_items(
-    session: AsyncSession, embedder: Embedder, notes: list[Note], *, app: str, kind: str
+    session: AsyncSession,
+    embedder: Embedder,
+    notes: list[Note],
+    *,
+    app: str,
+    kind: str,
+    progress: EmbedProgress | None = None,
 ) -> int:
     """Swaps every item of one app and kind for `notes`. Returns how many were saved.
 
@@ -264,5 +356,5 @@ async def replace_items(
     the error goes up and the caller's rollback keeps the old items.
     """
     await delete_items(session, app=app, kind=kind)
-    await _embed_and_add(session, embedder, notes, app=app, kind=kind)
+    await _embed_and_add(session, embedder, notes, app=app, kind=kind, progress=progress)
     return len(notes)

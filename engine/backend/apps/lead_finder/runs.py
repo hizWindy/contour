@@ -55,7 +55,7 @@ NOT_APPROVED_CODE = "hubspot_names_not_approved"
 NOT_APPROVED_TITLE = "HubSpot names aren't approved yet"
 NOT_APPROVED_DETAIL = (
     "This run sends the names of HubSpot companies to Claude, which waits for Levi's OK. "
-    "Once he agrees, set HUBSPOT_NAMES_TO_CLAUDE_OK=true in engine/.env and restart."
+    "Once he agrees, an admin switches it on."
 )
 
 type AnyParams = DiscoveryParams | WatchlistParams | CompanyParams | TestsetParams

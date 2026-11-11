@@ -80,9 +80,7 @@ def check_note_limits(body: MemoryIn, settings: Settings) -> None:
             }
         )
     if errors:
-        raise Problem(
-            422, "The request isn't valid", "Check the fields listed in errors.", errors=errors
-        )
+        raise Problem(422, "Some fields need a fix", "Look at the fields listed.", errors=errors)
 
 
 @router.post("", status_code=201, response_model=MemoryOut, summary="Save a note to memory")

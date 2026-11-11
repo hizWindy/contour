@@ -20,9 +20,16 @@ from core.hubspot.connection import (
     written_hook,
 )
 from core.hubspot.importer import ExportError, read_export
+from core.hubspot.profiles import RebuildRunning
 from core.hubspot.profiles import rebuild_profiles as build_profiles
 from core.hubspot.service import HubSpotSummary, ImportResult, save_export, summary
-from core.hubspot.sync import SyncAlreadyRunning, SyncOut, recent_syncs
+from core.hubspot.sync import (
+    SyncAlreadyRunning,
+    SyncNotFound,
+    SyncNotRunning,
+    SyncOut,
+    recent_syncs,
+)
 from core.hubspot.writer import (
     WriteInProgress,
     WriteNotFound,
@@ -35,7 +42,7 @@ from core.hubspot.writer import (
 KEY_MISSING = Problem(
     503,
     "HubSpot isn't connected",
-    "Set HUBSPOT_SERVICE_KEY in engine/.env, then restart the backend.",
+    "An admin needs to add the HubSpot key.",
     code="hubspot_key_missing",
 )
 
@@ -121,6 +128,35 @@ async def list_hubspot_syncs(
     return await recent_syncs(session, limit=limit)
 
 
+@router.post(
+    "/syncs/{sync_id}/cancel",
+    status_code=202,
+    response_model=SyncOut,
+    summary="Stop a running HubSpot sync",
+    description=(
+        "Saves the Stop on the sync, then stops it, within about 5 seconds when this backend "
+        "runs it. Stopped before its save, our copy doesn't change. Stopped after it, the "
+        "companies stay, and people and profiles update with the next sync. The answer is the "
+        "sync: `cancelled` once it has stopped, or still `running` with `cancel_requested_at` "
+        "while the other backend (during a deploy) stops it. Follow it with GET /hubspot/syncs."
+    ),
+)
+async def cancel_hubspot_sync(request: Request, sync_id: int) -> SyncOut:
+    try:
+        return await sync_runner(request.app).cancel(sync_id)
+    except SyncNotFound as error:
+        raise Problem(
+            404, "No such HubSpot sync", "Look at the list of syncs again.", code="sync_not_found"
+        ) from error
+    except SyncNotRunning as error:
+        raise Problem(
+            409,
+            "This sync has already finished",
+            "There is nothing to stop.",
+            code="not_running",
+        ) from error
+
+
 @router.get(
     "/writes",
     response_model=list[WriteOut],
@@ -181,14 +217,21 @@ async def import_export(
     result = await save_export(session, export)
     # The companies are saved. Their profiles (for possible matches and look-alikes) follow.
     try:
-        rebuilt = await build_profiles(session, embedder)
+        rebuilt = await build_profiles(session, embedder, wait=False)
+    except RebuildRunning as error:
+        raise Problem(
+            409,
+            "The companies were loaded, but another rebuild of the profiles is running",
+            "Press Rebuild profiles on the Admin page in a minute, so the new companies get "
+            "theirs.",
+            code="rebuild_running",
+        ) from error
     except Exception as error:  # the import itself worked, so say what is left to do
         log.exception("profiles_not_rebuilt_after_import")
         raise Problem(
             503,
             "The companies were loaded, but their profiles weren't built",
-            "Run the rebuild again from the Admin page, or with: uv run engine rebuild-profiles. "
-            "The reason is in the backend log.",
+            "Press Rebuild profiles on the Admin page.",
         ) from error
     return result.model_copy(update={"profiles_rebuilt": rebuilt})
 
@@ -209,4 +252,13 @@ async def get_summary(session: SessionDep) -> HubSpotSummary:
     ),
 )
 async def rebuild_profiles(session: SessionDep, embedder: EmbedderDep) -> RebuildResult:
-    return RebuildResult(profiles_rebuilt=await build_profiles(session, embedder))
+    try:
+        built = await build_profiles(session, embedder, wait=False)
+    except RebuildRunning as error:  # a second press, or a sync rebuilding them now
+        raise Problem(
+            409,
+            "The company profiles are being rebuilt now",
+            "Wait a minute, then look again.",
+            code="rebuild_running",
+        ) from error
+    return RebuildResult(profiles_rebuilt=built)

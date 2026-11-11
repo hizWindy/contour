@@ -261,7 +261,7 @@ def _problem(status: int, path: str) -> SignalHireError:
     `path` tells a 403 on a company call (the Company API is off) from a 403 on the search."""
     if status == 401:
         return SignalHireUnavailable(
-            "Signal Hire refused the key", "Check SIGNALHIRE_API_KEY in engine/.env."
+            "Signal Hire refused the key", "An admin needs to check the Signal Hire key."
         )
     if status == 402:
         return SignalHireOutOfQuota(

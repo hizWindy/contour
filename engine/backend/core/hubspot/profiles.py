@@ -16,6 +16,7 @@ cosine score between the two means something. Both builders call one private for
 Pure code here, except `rebuild_profiles`, which reads the HubSpot tables and writes memory.
 """
 
+import logging
 import re
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from typing import Any, Protocol
@@ -25,7 +26,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.hubspot.models import HubSpotCompany, HubSpotDeal, HubSpotOffice
 from core.memory.embedder import Embedder
-from core.memory.service import Note, replace_items, replace_items_where
+from core.memory.service import EmbedProgress, Note, replace_changed_items
+
+log = logging.getLogger(__name__)
 
 PROFILE_APP = "hubspot"
 PROFILE_KIND = "company_profile"
@@ -45,6 +48,11 @@ DEAL_DISSOLVED = "dissolved_deal"
 # Two rebuilds at once would each delete the old profiles and each add new ones: duplicates.
 # This lock (a Postgres advisory lock, held until the transaction ends) makes them take turns.
 REBUILD_LOCK = 7_244_411
+
+
+class RebuildRunning(Exception):
+    """Another rebuild holds the lock now, and the caller asked not to wait for it."""
+
 
 _METRO_BY_KEY = {city.casefold(): city for city in METRO_CITIES}
 _EMAIL = re.compile(r"\S+@\S+")
@@ -224,8 +232,14 @@ async def rebuild_profiles(
     *,
     staff_multiplier: float = DEFAULT_STAFF_MULTIPLIER,
     company_ids: Collection[str] | None = None,
+    progress: EmbedProgress | None = None,
+    wait: bool = True,
 ) -> int:
     """Replaces HubSpot company profiles in memory with new ones. Returns how many were built.
+    `progress`, if given, hears how many are embedded so far (the sync shows it, PLAN-V15).
+    Only profiles whose text changed are embedded again; the others keep theirs (PLAN-V15 T1-4).
+    With `wait=False`, a rebuild that is already running raises `RebuildRunning` at once,
+    instead of waiting for it (the website's button).
 
     With no `company_ids`, every profile is replaced. With them, only those companies' profiles
     are (the sync passes the companies that changed): a company that is gone, or now has no name,
@@ -237,7 +251,15 @@ async def rebuild_profiles(
     are deleted in the same transaction, so there are never duplicates. Commits.
     """
     # The lock comes first, so a second rebuild waits and then reads the data the first left.
-    await session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": REBUILD_LOCK})
+    # A rebuild is long and may wait for another one: it lifts the app's limits for itself.
+    await session.execute(text("SET LOCAL statement_timeout = '10min'"))
+    await session.execute(text("SET LOCAL lock_timeout = 0"))
+    if wait:
+        await session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": REBUILD_LOCK})
+    elif not await session.scalar(
+        text("SELECT pg_try_advisory_xact_lock(:key)"), {"key": REBUILD_LOCK}
+    ):
+        raise RebuildRunning
     ids = None if company_ids is None else sorted(set(company_ids))
     if ids is not None and not ids:
         await session.commit()
@@ -279,17 +301,16 @@ async def rebuild_profiles(
                 },
             )
         )
-    if ids is None:
-        count = await replace_items(session, embedder, notes, app=PROFILE_APP, kind=PROFILE_KIND)
-    else:
-        count = await replace_items_where(
-            session,
-            embedder,
-            notes,
-            app=PROFILE_APP,
-            kind=PROFILE_KIND,
-            meta_key="hubspot_id",
-            values=ids,
-        )
+    embedded = await replace_changed_items(
+        session,
+        embedder,
+        notes,
+        app=PROFILE_APP,
+        kind=PROFILE_KIND,
+        meta_key="hubspot_id",
+        scope=ids,
+        progress=progress,
+    )
+    log.info("profiles_rebuilt", extra={"profiles": len(notes), "embedded": embedded})
     await session.commit()
-    return count
+    return len(notes)

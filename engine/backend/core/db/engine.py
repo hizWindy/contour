@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
-from core.config import CONNECT_TIMEOUT_SECONDS, get_settings
+from core.config import CONNECT_TIMEOUT_SECONDS, Settings, get_settings
 
 
 @lru_cache
@@ -29,7 +29,23 @@ def get_engine() -> AsyncEngine:
         # row (`Key (company_key)=(Acme) already exists.`), so the log formatter hides that
         # line too (core/logs.py: hide_detail). Values can be company names, notes or keys.
         hide_parameters=True,
-        connect_args={"connect_timeout": CONNECT_TIMEOUT_SECONDS},
+        connect_args={
+            "connect_timeout": CONNECT_TIMEOUT_SECONDS,
+            "options": connection_limits(settings),
+        },
+    )
+
+
+def connection_limits(settings: Settings) -> str:
+    """The time limits every app connection starts with (PLAN-V15 T1-6): a statement, a wait
+    for a lock, and an open transaction that does nothing. Postgres ends the one that runs over,
+    and the request gets an error instead of hanging."""
+    return " ".join(
+        [
+            f"-c statement_timeout={settings.db_statement_timeout_ms}",
+            f"-c lock_timeout={settings.db_lock_timeout_ms}",
+            f"-c idle_in_transaction_session_timeout={settings.db_idle_in_transaction_timeout_ms}",
+        ]
     )
 
 

@@ -25,7 +25,11 @@ when, for Admin's Health tab, and `not_ready` turns it into the 503 the run rout
 words: during a deploy "Runs are restarting", not a fault.
 
 The lock lives on its own connection (autocommit), held for the life of the process. If that
-connection is lost, Postgres lets the lock go; the backend does not notice. TBC: watch it.
+connection is lost (a database restart or failover), Postgres lets the lock go, and a second
+backend could take it while this one still runs runs. So `watch_lock` asks the connection every
+`LOCK_CHECK_SECONDS` (PLAN-V15 T1-6). When it doesn't answer, this backend stops its run engine
+(running runs end `interrupted`, resumable) and the scheduler, logs `run_engine_lost`, and tries
+to take the lock back every few seconds, exactly as after a deploy.
 """
 
 import asyncio
@@ -60,6 +64,9 @@ ANOTHER_BACKEND = (
 )
 # In server mode, how often a backend that waits for the lock tries it again (PLAN-V8 B3).
 LOCK_RETRY_SECONDS = 5.0
+LOCK_CHECK_SECONDS = 30.0  # how often a backend that holds the lock checks it still does
+LOCK_CHECK_TIMEOUT_SECONDS = 10.0
+EngineWork = Callable[[FastAPI], Awaitable[None]]
 WAITING_FOR_LOCK = (
     "Another backend holds the run engine on this database (during a deploy, the old one). This "
     "one starts without it and takes it over when the other one stops."
@@ -105,6 +112,17 @@ class BackendLock:
         self._connection = connection
         return True
 
+    async def still_held(self) -> bool:
+        """True while the lock's connection answers: a lock lives as long as its connection."""
+        connection = self._connection
+        if connection is None:
+            return False
+        try:
+            await asyncio.wait_for(connection.execute("SELECT 1"), LOCK_CHECK_TIMEOUT_SECONDS)
+        except Exception:
+            return False
+        return True
+
     async def release(self) -> None:
         connection, self._connection = self._connection, None
         if connection is None:
@@ -144,6 +162,7 @@ def build(
         kinds=kinds_from_specs(app.state.apps),
         acquire_lock=backend_lock.acquire,
         release_lock=backend_lock.release,
+        lock_alive=backend_lock.still_held,
     )
 
 
@@ -202,7 +221,63 @@ async def _start_engine(app: FastAPI, manager: RunManager) -> bool:
     app.state.run_manager = manager
     app.state.run_engine_ready_at = datetime.now(UTC)
     log.info("run_engine_ready", extra={"recovered": recovered})
+    watch_lock(app, manager)
     return True
+
+
+def when_engine_is_lost(app: FastAPI, *, stop: EngineWork, restart: EngineWork) -> None:
+    """What to stop when the lock is lost (the scheduler), and what to start again once it is
+    taken back (the HubSpot copy and the scheduler). The lifespan says so before `startup`."""
+    app.state.run_engine_stop_work = stop
+    app.state.run_engine_restart_work = restart
+
+
+def watch_lock(app: FastAPI, manager: RunManager, *, every: float = LOCK_CHECK_SECONDS) -> None:
+    """Checks every `every` seconds that this backend still holds the lock (see the module
+    text). Only for a manager that can say so (`lock_alive`)."""
+    alive = manager.lock_alive
+    if alive is None:
+        return
+
+    async def watch() -> None:
+        while True:
+            await asyncio.sleep(every)
+            if await alive():
+                continue
+            log.error("run_engine_lost", extra={"reason": "the lock's connection didn't answer"})
+            await _lose_engine(app, manager)
+            return
+
+    _stop_watch(app)
+    app.state.run_engine_watch = asyncio.create_task(watch(), name="watch-run-engine-lock")
+
+
+async def _lose_engine(app: FastAPI, manager: RunManager) -> None:
+    """The lock is gone: no runs or schedules here until it is taken back."""
+    if getattr(app.state, "run_manager", None) is manager:
+        del app.state.run_manager  # new requests get a 503 from now on
+    app.state.run_engine_waiting = True
+    app.state.run_engine_waiting_since = datetime.now(UTC)
+    stop: EngineWork | None = getattr(app.state, "run_engine_stop_work", None)
+    if stop is not None:
+        with contextlib.suppress(Exception):
+            await stop(app)
+    with contextlib.suppress(Exception):
+        await manager.shutdown()  # runs end interrupted (resumable); the dead lock is let go
+    restart: EngineWork | None = getattr(app.state, "run_engine_restart_work", None)
+    take_over_later(app, then=restart or _nothing)
+
+
+async def _nothing(app: FastAPI) -> None:
+    return None
+
+
+def _stop_watch(app: FastAPI) -> None:
+    task: asyncio.Task[None] | None = getattr(app.state, "run_engine_watch", None)
+    if task is not None and task is not asyncio.current_task():
+        task.cancel()
+    if task is not None:
+        del app.state.run_engine_watch
 
 
 def waiting(app: FastAPI) -> bool:
@@ -325,6 +400,7 @@ def _runs_off(error: BaseException) -> None:
 
 async def shutdown(app: FastAPI) -> None:
     """Called once when the app stops. Safe when `startup` failed part way."""
+    _stop_watch(app)
     manager: RunManager | None = getattr(app.state, "run_manager", None)
     if manager is None:
         return

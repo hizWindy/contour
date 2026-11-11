@@ -18,7 +18,7 @@ from core.hubspot.models import (
 )
 from core.hubspot.service import save_export
 from core.hubspot.sync import (
-    STALE_MINUTES,
+    STALE_AFTER,
     SyncAlreadyRunning,
     SyncOut,
     SyncRunner,
@@ -284,7 +284,7 @@ async def test_only_one_sync_runs_at_a_time_and_a_left_over_one_is_cleared(
     async with session_factory() as other:
         row = await other.get(HubSpotSync, plan.id)
         assert row is not None
-        row.started_at = datetime.now(UTC) - timedelta(minutes=STALE_MINUTES + 1)
+        row.started_at = datetime.now(UTC) - STALE_AFTER - timedelta(minutes=1)
         await other.commit()
     again = await begin(session_factory, trigger="command", mode="auto", settings=SETTINGS)
     assert again.id != plan.id
@@ -325,7 +325,7 @@ async def test_the_runner_starts_in_the_background_and_says_when_no_key_is_set(
     )
     started = await runner.start(trigger="website")
     assert started.status == "running"
-    await runner._task  # type: ignore[misc]
+    await runner.wait(started.id)
     assert fake.closed
     done = await session.get(HubSpotSync, started.id)
     assert done is not None and done.status == "done"
@@ -354,7 +354,7 @@ async def test_a_sync_at_start_up_runs_only_when_the_last_one_is_old(
     )
     first = await runner.start_if_due()
     assert first is not None and first.trigger == "startup"
-    await runner._task  # type: ignore[misc]
+    await runner.wait(first.id)
     assert await runner.start_if_due() is None  # the last good one is minutes old
     never = SyncRunner(
         sessions=session_factory,

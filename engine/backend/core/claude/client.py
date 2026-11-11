@@ -8,6 +8,7 @@ run and request at once: the Claude gate (how many requests run together) and th
 much Claude may cost in 24 hours). `claude_holder` keeps the shared one.
 """
 
+import asyncio
 import logging
 from contextlib import AbstractAsyncContextManager, nullcontext
 from dataclasses import dataclass
@@ -35,6 +36,11 @@ log = logging.getLogger(__name__)
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
 MAX_TOKENS = 16_000
 MAX_CONTINUES = 3  # a long web-tool turn can pause; we resume it at most this many times
+# A busy answer (429 rate limit, 529 overloaded) is tried again at most this many times, after the
+# wait Claude asks for (`retry-after`), within limits. A busy answer isn't billed (PLAN-V15 T1-6).
+BUSY_RETRIES = 2
+BUSY_WAIT_SECONDS = 5.0  # when Claude names no wait
+BUSY_WAIT_MAX_SECONDS = 20.0
 FETCH_MAX_CONTENT_TOKENS = 20_000  # a fetched page is cut to this size before Claude reads it
 
 
@@ -226,23 +232,29 @@ class AnthropicClaude:
         continues = MAX_CONTINUES if max_continues is None else max(0, max_continues)
         responses: list[BetaMessage] = []
         async with self._gate.acquire(), self._hold():
-            for attempt in range(continues + 1):
-                if attempt > 0:
-                    if self._daily is not None and not await self._daily.has_room():
-                        log.warning("claude_continue_stopped", extra={"why": "daily limit"})
+            try:
+                for attempt in range(continues + 1):
+                    if attempt > 0:
+                        if self._daily is not None and not await self._daily.has_room():
+                            log.warning("claude_continue_stopped", extra={"why": "daily limit"})
+                            break
+                        if web is not None:
+                            # The turn's earlier searches count against the request's limits.
+                            # The API wants at least 1, so the last round may search once more.
+                            used = sum((_usage(r) for r in responses), Usage())
+                            search["max_uses"] = max(1, web.max_searches - used.web_searches)
+                            fetch["max_uses"] = max(1, web.max_fetches - used.web_fetches)
+                    response = await self._send(messages=messages, **params)
+                    responses.append(response)
+                    if response.stop_reason != "pause_turn":
                         break
-                    if web is not None:
-                        # The turn's earlier searches count against the request's limits. The API
-                        # wants at least 1, so the last round may search once more.
-                        used = sum((_usage(r) for r in responses), Usage())
-                        search["max_uses"] = max(1, web.max_searches - used.web_searches)
-                        fetch["max_uses"] = max(1, web.max_fetches - used.web_fetches)
-                response = await self._send(messages=messages, **params)
-                responses.append(response)
-                if response.stop_reason != "pause_turn":
-                    break
-                # Resume the paused turn: send it back as it is, with no new message.
-                messages = [*messages, {"role": "assistant", "content": response.content}]
+                    # Resume the paused turn: send it back as it is, with no new message.
+                    messages = [*messages, {"role": "assistant", "content": response.content}]
+            except BaseException:
+                # The parts already answered were billed: note them before the error goes up,
+                # so the daily limit never counts less than was spent (PLAN-V15 T1-6).
+                self._note_parts(responses)
+                raise
             reply = build_reply(responses, form)
             if self._daily is not None:
                 self._daily.note_spent(reply.cost_usd, reply.request_id)
@@ -252,44 +264,79 @@ class AnthropicClaude:
             log.info("claude_other_model", extra={"asked": chosen, "answered": reply.model})
         return reply
 
+    def _note_parts(self, responses: list[BetaMessage]) -> None:
+        if self._daily is None or not responses:
+            return
+        spent = sum((cost_usd(r.model, _usage(r)) for r in responses), Decimal(0))
+        self._daily.note_spent(spent, responses[0].id)
+
     def _hold(self) -> AbstractAsyncContextManager[None]:
         """The daily limit's check and hold for one request, or nothing without a daily limit."""
         return self._daily.reserve() if self._daily is not None else nullcontext()
 
     async def _send(self, **params: Any) -> BetaMessage:
-        try:
-            response: BetaMessage = await self._client.beta.messages.create(**params)
-            return response
-        except anthropic.AuthenticationError as error:
-            raise ClaudeUnavailable(
-                "Claude rejected the API key", "Check ANTHROPIC_API_KEY in engine/.env."
-            ) from error
-        except anthropic.PermissionDeniedError as error:
-            raise ClaudeUnavailable("The API key can't use this model", str(error)) from error
-        except anthropic.RateLimitError as error:
-            raise ClaudeError(
-                "Claude's rate limit was hit", "Wait a minute, then try again."
-            ) from error
-        except anthropic.APIStatusError as error:
-            raise ClaudeError(
-                f"Claude returned an error ({error.status_code})", error.message
-            ) from error
-        except anthropic.APITimeoutError as error:
-            # Not "unavailable": one slow request is no reason to stop a whole run.
-            raise ClaudeError(
-                "Claude took too long", "The request timed out. Try again in a moment."
-            ) from error
-        except anthropic.APIConnectionError as error:
-            raise ClaudeUnavailable(
-                "Can't reach Claude", "Check the internet connection."
-            ) from error
-        except TypeError as error:
-            # The SDK finds no key only when it sends, and says so with a TypeError.
-            if "authentication" not in str(error):
-                raise
-            raise ClaudeUnavailable(
-                "No Claude API key", "Add ANTHROPIC_API_KEY to engine/.env, then restart."
-            ) from error
+        """One request. A busy answer (429, or 529 overloaded) is tried again `BUSY_RETRIES`
+        times after the wait Claude asks for: it isn't billed (PLAN-V15 T1-6). Every other error
+        becomes a plain `ClaudeError`, and what Claude said goes to the log."""
+        for retry in range(BUSY_RETRIES + 1):
+            try:
+                response: BetaMessage = await self._client.beta.messages.create(**params)
+                return response
+            except anthropic.APIStatusError as error:
+                busy = isinstance(error, anthropic.RateLimitError) or error.status_code == 529
+                if not busy or retry == BUSY_RETRIES:
+                    raise plain_error(error) from error
+                wait = _retry_after(error)
+                log.warning(
+                    "claude_busy_retry", extra={"status": error.status_code, "wait_seconds": wait}
+                )
+                await asyncio.sleep(wait)
+            except anthropic.APIError as error:
+                raise plain_error(error) from error
+            except TypeError as error:
+                # The SDK finds no key only when it sends, and says so with a TypeError.
+                if "authentication" not in str(error):
+                    raise
+                log.error("claude_key_missing")
+                raise ClaudeUnavailable(
+                    "Claude isn't set up yet", "An admin needs to add the Claude key."
+                ) from error
+        raise AssertionError("unreachable")  # pragma: no cover - the loop returns or raises
+
+
+def _retry_after(error: anthropic.APIStatusError) -> float:
+    """How long Claude asks us to wait, within limits."""
+    try:
+        asked = float(error.response.headers.get("retry-after", ""))
+    except (TypeError, ValueError):
+        return BUSY_WAIT_SECONDS
+    return min(max(asked, 0.0), BUSY_WAIT_MAX_SECONDS)
+
+
+def plain_error(error: anthropic.APIError) -> ClaudeError:
+    """The error a person sees, in plain words (PLAN-V15 "Words for errors"). What Claude said
+    goes to the log, never to the screen."""
+    status = getattr(error, "status_code", None)
+    log.warning(
+        "claude_error",
+        extra={"kind": type(error).__name__, "status": status, "reason": str(error)[:300]},
+    )
+    if isinstance(error, anthropic.AuthenticationError):
+        return ClaudeUnavailable(
+            "Claude isn't set up correctly", "An admin needs to check the Claude key."
+        )
+    if isinstance(error, anthropic.PermissionDeniedError):
+        return ClaudeUnavailable(
+            "Claude isn't set up correctly", "An admin needs to check the Claude key and model."
+        )
+    if isinstance(error, anthropic.RateLimitError) or status == 529:
+        return ClaudeError("Claude is busy right now", "Try again in a minute.")
+    if isinstance(error, anthropic.APITimeoutError):
+        # Not "unavailable": one slow request is no reason to stop a whole run.
+        return ClaudeError("Claude took too long to answer", "Nothing was lost. Try again.")
+    if isinstance(error, anthropic.APIConnectionError):
+        return ClaudeUnavailable("Our server can't reach Claude", "Try again in a few minutes.")
+    return ClaudeError("Claude couldn't answer", "Try again in a minute.")
 
 
 def build_reply[T: BaseModel](responses: list[BetaMessage], form: type[T]) -> Reply[T]:
@@ -400,8 +447,9 @@ class ClaudeHolder:
             try:
                 self._claude = AnthropicClaude(settings=settings, gate=self._gate, daily=self.daily)
             except anthropic.AnthropicError as error:
+                log.error("claude_not_started", extra={"reason": type(error).__name__})
                 raise ClaudeUnavailable(
-                    "Can't start Claude", "Check ANTHROPIC_API_KEY in engine/.env."
+                    "Claude isn't set up correctly", "An admin needs to check the Claude key."
                 ) from error
         return self._claude
 

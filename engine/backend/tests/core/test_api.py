@@ -84,7 +84,7 @@ async def test_bad_request_lists_the_fields(client: httpx.AsyncClient) -> None:
     response = await client.post("/api/v1/memory", json={"kind": "gossip"})
     assert response.status_code == 422
     body = response.json()
-    assert body["title"] == "The request isn't valid"
+    assert body["title"] == "Some fields need a fix"
     fields = {error["field"] for error in body["errors"]}
     assert {"body.app", "body.kind", "body.content"} <= fields
 
@@ -110,5 +110,5 @@ async def test_health_says_when_the_database_is_down(
     response = await client.get("/api/v1/health")
     assert response.status_code == 503
     body = response.json()
-    assert body["title"] == "The database can't be reached"
-    assert "docker compose up -d" in body["detail"]
+    assert body["title"] == "Contour can't reach its database"
+    assert "docker" not in body["detail"]  # plain words (PLAN-V15 T1-6)
