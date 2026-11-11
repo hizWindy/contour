@@ -1,15 +1,20 @@
 """What the Companies routes take and give (PLAN-V10). The website's types come from these."""
 
 import uuid
+from collections.abc import Callable
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+from pydantic.config import JsonDict
 
 from apps.companies.deals import DealState, StageKind
 
 Source = Literal["hubspot", "lead"]
+# For a field named `date` with a default: in the class body the name `date` is the field by the
+# time the annotation is read, so the type needs a name of its own.
+DayOrNone = date | None
 SortKey = Literal["name", "staff", "lease", "last_talk"]
 SortOrder = Literal["asc", "desc"]
 PeopleStatus = Literal["ready", "waiting"]
@@ -17,6 +22,18 @@ PeopleStatus = Literal["ready", "waiting"]
 
 class Out(BaseModel):
     model_config = ConfigDict(json_schema_serialization_defaults_required=True)
+
+
+def optional_in_types(*names: str) -> Callable[[JsonDict], None]:
+    """Leaves these fields out of `required` in the website's types, so test data written before
+    they existed still type-checks. The API always sends them (PLAN-V14)."""
+
+    def drop(schema: JsonDict) -> None:
+        required = schema.get("required")
+        if isinstance(required, list):
+            schema["required"] = [name for name in required if name not in names]
+
+    return drop
 
 
 # --- The list ----------------------------------------------------------------------------------
@@ -233,6 +250,10 @@ class PrepFacts(Out):
     names_ok: bool = Field(
         description="False: no names go to Claude (Levi's OK pending), so there is no web check"
     )
+    prep_cap_usd: Decimal = Field(
+        Decimal("0.25"),
+        description="The most one prep may cost: what 'Research again' costs at most (PLAN-V14)",
+    )
 
 
 class ScriptLine(Out):
@@ -260,10 +281,27 @@ class GuidedQuestion(ScriptLine):
     )
 
 
+class NewsLine(ScriptLine):
+    """A news item, with the date of the newest dated source it cites (PLAN-V14 T1-2)."""
+
+    model_config = ConfigDict(
+        json_schema_serialization_defaults_required=True,
+        json_schema_extra=optional_in_types("date"),
+    )
+
+    date: DayOrNone = Field(
+        None,
+        description=(
+            "When it happened: the newest date of the web pages and saved notes it cites. "
+            "None when none of them has a date, or for a prep made before 11 Nov"
+        ),
+    )
+
+
 class PrepScript(Out):
     still_there: StillThere
     still_there_note: ScriptLine | None
-    news: list[ScriptLine]
+    news: list[NewsLine] = Field(description="Newest first, with undated items last")
     opener: list[ScriptLine]
     why_now: list[ScriptLine]
     questions: list[GuidedQuestion]
@@ -272,7 +310,19 @@ class PrepScript(Out):
     dropped: int = Field(description="Lines left out because they had no source")
 
 
+class StyleUsed(Out):
+    """Which style notes a script was written with (PLAN-V14). A free script uses none."""
+
+    mine: bool = Field(False, description="True when the asker's own style went in")
+    team_notes: int = Field(0, description="How many team style notes went in")
+
+
 class PrepOut(Out):
+    model_config = ConfigDict(
+        json_schema_serialization_defaults_required=True,
+        json_schema_extra=optional_in_types("style_used"),
+    )
+
     id: uuid.UUID
     company_key: str
     company_name: str
@@ -289,6 +339,11 @@ class PrepOut(Out):
     made_by: str | None = Field(description="Who asked, or None for the morning search ahead")
     created_at: datetime
     finished_at: datetime | None
+    style_used: StyleUsed = Field(
+        default_factory=StyleUsed,
+        description="The style notes the script was written with. None for a prep before 11 Nov "
+        "or one made with no notes",
+    )
 
 
 class PrepAsk(BaseModel):
@@ -308,3 +363,66 @@ class PrepChip(Out):
     kind: PrepKind
     status: PrepStatus
     created_at: datetime
+
+
+# --- Script edits and style notes (PLAN-V14 T1-3) ------------------------------------------------
+
+# opener.0, why_now.2, question.4, if_they_say.1 or goal. A list slot goes up to its longest list
+# (5 questions), so an edit past the end of a shorter new draft is kept.
+SLOT_PATTERN = r"^(?:(?:opener|why_now|question|if_they_say)\.[0-4]|goal)$"
+LINE_MAX_CHARS = 400
+MINE_MAX_CHARS = 600
+TEAM_MAX_CHARS = 200
+TEAM_MAX_NOTES = 8
+StyleStatus = Literal["active", "suggested", "rejected", "retired"]
+
+
+class ScriptEditIn(BaseModel):
+    company_key: str = Field(min_length=1, max_length=64)
+    contact_id: str | None = Field(None, max_length=32, description="None for a cold call")
+    slot: str = Field(pattern=SLOT_PATTERN, description="opener.0, why_now.1, question.2 ... goal")
+    text: str = Field(min_length=1, max_length=LINE_MAX_CHARS)
+
+
+class ScriptEditOut(Out):
+    """One line of one call in my own words. Only I see it."""
+
+    slot: str
+    text: str
+    updated_at: datetime
+
+
+class StyleNoteOut(Out):
+    id: uuid.UUID
+    text: str
+    status: StyleStatus
+    suggested_by: str | None = Field(description="Who wrote it, or None if they are gone")
+    decided_by: str | None = Field(description="The Admin who approved, rejected or retired it")
+    decided_at: datetime | None
+    created_at: datetime
+
+
+class ScriptStyleOut(Out):
+    """My style and the team's: what the next script is written with."""
+
+    mine: str = Field(description="Your style, or an empty string")
+    mine_updated_at: datetime | None
+    team: list[StyleNoteOut] = Field(description="The active team notes, oldest first")
+    suggestions: list[StyleNoteOut] = Field(
+        description=(
+            "Notes not active: an Admin gets every waiting one; anyone else gets their own, "
+            "waiting or rejected. Newest first"
+        )
+    )
+    can_decide: bool = Field(description="True for an Admin: may approve, reject and retire")
+    mine_max_chars: int = MINE_MAX_CHARS
+    team_max_chars: int = TEAM_MAX_CHARS
+    team_max_notes: int = TEAM_MAX_NOTES
+
+
+class StyleMineIn(BaseModel):
+    text: str = Field(max_length=MINE_MAX_CHARS, description="An empty text clears it")
+
+
+class StyleNoteIn(BaseModel):
+    text: str = Field(min_length=1, max_length=TEAM_MAX_CHARS)

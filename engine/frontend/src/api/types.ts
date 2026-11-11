@@ -107,6 +107,14 @@ export type PrepScript = Schemas['PrepScript']
 export type ScriptLine = Schemas['ScriptLine']
 export type PrepChip = Schemas['PrepChip']
 export type PrepAsk = Schemas['PrepAsk']
+// Script edits and style notes (PLAN-V14 T1-3).
+export type NewsLine = Schemas['NewsLine']
+export type StyleUsed = Schemas['StyleUsed']
+export type ScriptEditIn = Schemas['ScriptEditIn']
+export type ScriptEditOut = Schemas['ScriptEditOut']
+export type ScriptStyleOut = Schemas['ScriptStyleOut']
+export type StyleNoteOut = Schemas['StyleNoteOut']
+export type StyleNoteStatus = StyleNoteOut['status']
 
 /** The query string of an operation, by its operationId. */
 export type QueryOf<Name extends keyof operations> = operations[Name]['parameters']['query']
