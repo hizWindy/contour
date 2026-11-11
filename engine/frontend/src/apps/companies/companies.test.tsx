@@ -102,6 +102,12 @@ function detail(changes: Partial<CompanyDetail> = {}): CompanyDetail {
     calls: [],
     people_status: 'waiting',
     lead: null,
+    relationship: {
+      stage: 'open_deal',
+      since: null,
+      reason: 'Open deal: Perth fit-out, at Qualified Deal.',
+      source: 'HubSpot deal',
+    },
     ...changes,
   }
 }

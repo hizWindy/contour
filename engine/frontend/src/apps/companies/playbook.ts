@@ -13,7 +13,12 @@
  * what fixing it is worth (SPIN), then who else decides; each pushback answer names the feeling,
  * agrees with what is fair and asks one question; a tone line says warm for a returning client
  * and light for a cold call. A feeling is only ever a question. The wording is TBC with Levi.
+ *
+ * PLAN-V15 T3-4: the opener and the tone follow the company's relationship stage, which the
+ * backend works out (`company.relationship`), so the free script and Claude's agree. Only a cold
+ * call says what Contour does. A switchboard call that isn't cold asks for the last contact by name.
  */
+import type { Relationship, RelationshipStage } from '@/api/hooks/companies'
 import type {
   CompanyCall,
   CompanyDeal,
@@ -218,12 +223,36 @@ function openDeal(company: CompanyDetail): CompanyDeal | null {
   return company.deals.find((deal) => deal.state === 'open') ?? null
 }
 
-function isCustomer(company: CompanyDetail): boolean {
-  return (
-    company.deal === 'customer' ||
-    company.lifecycle_stage?.toLowerCase() === 'customer' ||
-    company.deals.some((deal) => deal.state === 'won')
-  )
+/** The deal in this state with the latest close date (undated ones last). */
+function newestDeal(company: CompanyDetail, state: CompanyDeal['state']): CompanyDeal | null {
+  const found = company.deals.filter((deal) => deal.state === state)
+  found.sort((a, b) => (b.close_date ?? '').localeCompare(a.close_date ?? ''))
+  return found[0] ?? null
+}
+
+/** A backend from before PLAN-V15 sends no stage: the script is written as for a cold call. */
+const NO_RELATIONSHIP: Relationship = { stage: 'cold', since: null, reason: '', source: '' }
+
+const FULL_MONTHS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+]
+
+/** "March", or "March 2025" when it isn't this year. */
+function monthWords(date: string, today: string): string {
+  const { year, month } = dateParts(date)
+  const name = FULL_MONTHS[month - 1] ?? ''
+  return year === dateParts(today).year ? name : `${name} ${String(year)}`
 }
 
 /** The newest call with this person, else the newest call with the company. */
@@ -275,8 +304,13 @@ interface Known {
   person: GuideInput['person']
   me: string
   today: string
+  /** Where we stand, from the backend (PLAN-V15 T3-3). */
+  relationship: Relationship
+  stage: RelationshipStage
   lease: Lease | null
+  /** The open deal, when the stage is an open deal. */
   deal: CompanyDeal | null
+  /** A customer or a past customer. */
   customer: boolean
   call: CompanyCall | null
   callDay: string | null
@@ -290,14 +324,18 @@ function know(input: GuideInput): Known {
   const call = lastCall(input.company, input.person)
   const callDay = call?.called_at ? call.called_at.slice(0, 10) : null
   const theirCall = Boolean(input.person && call && callDay && call.person === input.person.name)
+  const relationship = input.company.relationship ?? NO_RELATIONSHIP
+  const stage = relationship.stage
   return {
     company: input.company,
     person: input.person,
     me: input.caller?.trim() ? firstName(input.caller) : YOUR_NAME,
     today: input.today,
+    relationship,
+    stage,
     lease: nearestLease(input.company, input.today),
-    deal: openDeal(input.company),
-    customer: isCustomer(input.company),
+    deal: stage === 'open_deal' ? openDeal(input.company) : null,
+    customer: stage === 'customer' || stage === 'past_customer',
     call,
     callDay,
     theirCall,
@@ -305,35 +343,48 @@ function know(input: GuideInput): Known {
   }
 }
 
-/** Warm for a returning client (a customer, someone we've spoken to, an open deal), else light. */
+/** How to sound, by the relationship stage: warm for a returning client, light for a cold call. */
 function tone(known: Known): GuideLine {
-  const { customer, spoke, callDay, deal } = known
-  if (customer) {
-    return line(
-      `Warm. They are a client, so catch up before the questions. ${AFTER_NO}`,
-      'A Contour customer',
-      'customer',
-    )
+  const { stage, relationship } = known
+  const source = relationship.source || null
+  switch (stage) {
+    case 'open_deal':
+      return line(
+        `Warm. There is a deal in progress, so pick up where it stands. ${AFTER_NO}`,
+        'HubSpot: deal',
+        'deal',
+      )
+    case 'customer':
+      return line(
+        `Warm. They are a client, so catch up before the questions. ${AFTER_NO}`,
+        'A Contour customer',
+        'customer',
+      )
+    case 'past_customer':
+      return line(
+        `Warm. They were a client, so remind them of the work and catch up. ${AFTER_NO}`,
+        'A past Contour customer',
+        'customer',
+      )
+    case 'lost_deal':
+      return line(
+        `Warm and patient. The last deal didn't go ahead, so ask what has changed first. ${AFTER_NO}`,
+        source,
+        'deal',
+      )
+    case 'contacted':
+      return line(
+        `Warm. You have been in touch before, so pick up where you left off. ${AFTER_NO}`,
+        source,
+        'call',
+      )
+    default:
+      return line(
+        `Light. A cold call: keep it short and friendly, and listen more than you talk. ${AFTER_NO}`,
+        null,
+        'standard',
+      )
   }
-  if (spoke && callDay) {
-    return line(
-      `Warm. You have spoken before, so pick up where you left off. ${AFTER_NO}`,
-      `HubSpot call, ${fullDay(callDay)}`,
-      'call',
-    )
-  }
-  if (deal) {
-    return line(
-      `Warm. There is a deal in progress, so pick up where it stands. ${AFTER_NO}`,
-      'HubSpot: deal',
-      'deal',
-    )
-  }
-  return line(
-    `Light. A cold call: keep it short and friendly, and listen more than you talk. ${AFTER_NO}`,
-    null,
-    'standard',
-  )
 }
 
 function leaseWhy(lease: Lease): string {
@@ -342,9 +393,19 @@ function leaseWhy(lease: Lease): string {
 
 /** One sentence that gives the reason for the call, for the opener. */
 function hook(known: Known): GuideLine | null {
-  const { deal, lease, customer, company } = known
+  const { deal, lease, customer, company, stage } = known
   if (deal) {
     return line(`I wanted to follow up on ${deal.name}.`, 'HubSpot: deal', 'deal')
+  }
+  if (stage === 'lost_deal') {
+    const lost = newestDeal(company, 'lost')
+    return line(
+      lost
+        ? `Last time, the timing wasn't right for ${lost.name}, so I wanted to see what's changed.`
+        : "Last time, the timing wasn't right, so I wanted to see what's changed.",
+      'HubSpot: deal',
+      'deal',
+    )
   }
   if (lease && lease.months <= LEASE_REASON_MONTHS) {
     return line(
@@ -365,17 +426,86 @@ function hook(known: Known): GuideLine | null {
   return null
 }
 
-/** Who, then why, then ask for two minutes. */
+/** The person we last spoke with, for a switchboard call that isn't cold. */
+function lastContact(known: Known): { name: string; said: string; why: string } | null {
+  const { company, today } = known
+  const call = company.calls.find((item) => item.called_at && item.person)
+  if (call?.called_at && call.person) {
+    const day = call.called_at.slice(0, 10)
+    return {
+      name: call.person,
+      said: `We spoke in ${monthWords(day, today)}.`,
+      why: `HubSpot call, ${fullDay(day)}`,
+    }
+  }
+  const people = company.people.filter((item) => item.last_activity)
+  people.sort((a, b) => (b.last_activity ?? '').localeCompare(a.last_activity ?? ''))
+  const person = people[0]
+  if (person?.last_activity) {
+    return {
+      name: person.name,
+      said: `We were in touch in ${monthWords(person.last_activity.slice(0, 10), today)}.`,
+      why: 'HubSpot contact',
+    }
+  }
+  return null
+}
+
+/** What the hello adds after "it's Mia from Contour.", by the stage. Null: nothing to add. */
+function remember(known: Known): GuideLine | null {
+  const { stage, company, call, callDay, theirCall, spoke, relationship, today } = known
+  if (stage === 'past_customer') {
+    const won = newestDeal(company, 'won')
+    if (!won) return null
+    const year = won.close_date ? ` in ${won.close_date.slice(0, 4)}` : ''
+    return line(`We did your ${won.name}${year}.`, 'HubSpot: deal', 'customer')
+  }
+  if (theirCall && callDay && spoke) {
+    return line(`We spoke on ${dayMonth(callDay)}.`, `HubSpot call, ${fullDay(callDay)}`, 'call')
+  }
+  if (theirCall && callDay && call?.outcome && VOICEMAIL.test(call.outcome)) {
+    return line(
+      `We left you a message on ${dayMonth(callDay)}.`,
+      `HubSpot call, ${fullDay(callDay)}`,
+      'call',
+    )
+  }
+  if (stage !== 'contacted') return null
+  if (call?.person && callDay) {
+    return line(
+      `We spoke with ${call.person} on ${dayMonth(callDay)}.`,
+      `HubSpot call, ${fullDay(callDay)}`,
+      'call',
+    )
+  }
+  if (!relationship.since) return null
+  return line(
+    `We were last in touch in ${monthWords(relationship.since, today)}.`,
+    relationship.source || null,
+    'call',
+  )
+}
+
+/** Who, then why, then ask for two minutes. Only a cold call says what Contour does. */
 function opener(known: Known): GuideLine[] {
-  const { person, me, call, callDay, theirCall, spoke } = known
+  const { person, me, stage } = known
   const reason = hook(known)
   if (!person) {
+    const contact = stage === 'cold' ? null : lastContact(known)
+    const what = stage === 'cold' ? ' We design and build offices.' : ''
+    const ask = contact
+      ? line(
+          `Hi, it's ${me} from Contour. Could I speak to ${contact.name}? ${contact.said}`,
+          contact.why,
+          'call',
+        )
+      : line(
+          `Hi, it's ${me} from Contour.${what} Could I speak to whoever looks after your office space?`,
+          null,
+          'standard',
+        )
     return [
-      line(
-        `Hi, it's ${me} from Contour. We design and build offices. Could I speak to whoever looks after your office space?`,
-        null,
-        'standard',
-      ),
+      ask,
       line(
         `When you're put through: ${reason ? reason.text : NO_REASON}`,
         reason?.why ?? null,
@@ -384,33 +514,21 @@ function opener(known: Known): GuideLine[] {
       line(`Then: ${TIME_ASK}`, null, 'standard'),
     ]
   }
-  const first = firstName(person.name)
+  const hi = `Hi ${firstName(person.name)}, it's ${me} from Contour.`
+  const memory = remember(known)
   let hello: GuideLine
-  if (spoke && callDay) {
-    hello = line(
-      `Hi ${first}, it's ${me} from Contour. We spoke on ${dayMonth(callDay)}.`,
-      `HubSpot call, ${fullDay(callDay)}`,
-      'call',
-    )
-  } else if (theirCall && callDay && call?.outcome && VOICEMAIL.test(call.outcome)) {
-    hello = line(
-      `Hi ${first}, it's ${me} from Contour. We left you a message on ${dayMonth(callDay)}.`,
-      `HubSpot call, ${fullDay(callDay)}`,
-      'call',
-    )
-  } else {
-    hello = line(
-      `Hi ${first}, it's ${me} from Contour. We design and build offices.`,
-      null,
-      'standard',
-    )
-  }
+  if (stage === 'cold') hello = line(`${hi} We design and build offices.`, null, 'standard')
+  else if (memory) hello = line(`${hi} ${memory.text}`, memory.why, memory.icon)
+  else hello = line(hi, null, 'standard')
   return [hello, reason ?? line(NO_REASON, null, 'standard'), line(TIME_ASK, null, 'standard')]
 }
 
 function whyNow(known: Known): GuideLine[] {
-  const { company, lease, deal, today } = known
+  const { company, lease, deal, today, stage, relationship } = known
   const reasons: GuideLine[] = []
+  if (stage === 'lost_deal' && relationship.reason) {
+    reasons.push(line(relationship.reason, relationship.source || null, 'deal'))
+  }
   if (lease && lease.months <= LEASE_REASON_MONTHS) {
     reasons.push(
       line(
@@ -499,9 +617,9 @@ function theme(known: Known): Theme {
 
 /** Situation questions, in the order they are asked, and the one the theme needs. */
 function situation(known: Known, about: Theme): GuideQuestion[] {
-  const { company, lease, deal, callDay, theirCall, today } = known
+  const { company, lease, deal, callDay, theirCall, today, stage } = known
   const spokeQ =
-    theirCall && callDay
+    theirCall && callDay && stage !== 'cold'
       ? question(
           `Last time we spoke was on ${dayMonth(callDay)}. What has changed since then?`,
           `HubSpot call, ${fullDay(callDay)}`,

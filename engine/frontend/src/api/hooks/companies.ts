@@ -12,7 +12,11 @@ import {
 } from '@tanstack/react-query'
 import { api, unwrap } from '../client'
 import { queryKeys } from '../query'
-import type { PrepAsk, PrepOut, QueryOf } from '../types'
+import type { PrepAsk, PrepOut, QueryOf, Schemas } from '../types'
+
+/** Where we stand with a company (PLAN-V15 T3-3): both call scripts open from it. */
+export type Relationship = Schemas['Relationship']
+export type RelationshipStage = Relationship['stage']
 
 /** One company moves slowly (the HubSpot copy changes once a day), so a minute of fresh is fine. */
 const COMPANY_FRESH_MS = 60_000
