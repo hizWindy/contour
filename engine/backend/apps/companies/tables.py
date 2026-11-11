@@ -8,6 +8,9 @@ calling the same week pays nothing. Research again (refresh) makes a new one.
 next person who opens the same prep sees the draft. `companies.script_styles` keeps the style
 notes: each person's own (`mine`), and the team's (`team`), which an Admin approves. Style notes
 go to Claude as style, never as facts.
+
+`companies.script_prefs` keeps the tone presets (PLAN-V15 T3-5): each person's own, and the team's
+default.
 """
 
 import uuid
@@ -55,6 +58,14 @@ class Prep(Base):
         # The newest prep for a company and person: the reuse check, and the "Today" chips.
         Index("ix_preps_company_contact", "company_key", "contact_id", text("created_at DESC")),
         Index("ix_preps_made_by_created_at", "made_by", text("created_at DESC")),
+        # One prep searching for each call, so two clicks never pay twice (PLAN-V15 T3-2).
+        Index(
+            "ux_preps_searching",
+            "company_key",
+            text("coalesce(contact_id, '')"),
+            unique=True,
+            postgresql_where=text("status = 'searching'"),
+        ),
         {"schema": SCHEMA},
     )
     # Fetch server defaults (created_at) in the same statement, so async code never lazy-loads.
@@ -167,4 +178,30 @@ class ScriptStyle(Base):
     )
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=_now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=_now())
+
+
+TONES: Final = ("friendly", "direct", "consultative", "formal")
+
+
+class ScriptPref(Base):
+    """A tone preset (PLAN-V15 T3-5): one person's own (`mine`), or the team's default (`team`,
+    one row with no user). No row: the person follows the team, and the team is Friendly."""
+
+    __tablename__ = "script_prefs"
+    __table_args__ = (
+        CheckConstraint(_in_list("scope", SCRIPT_SCOPES), name="scope"),
+        CheckConstraint(_in_list("tone", TONES), name="tone"),
+        CheckConstraint("scope = 'mine' OR user_id IS NULL", name="team_has_no_user"),
+        Index("ux_script_prefs_who", "scope", text(f"coalesce(user_id, {NO_USER})"), unique=True),
+        {"schema": SCHEMA},
+    )
+    __mapper_args__ = {"eager_defaults": True}  # noqa: RUF012  (SQLAlchemy reads it)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    scope: Mapped[str] = mapped_column(String(8))
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey(f"{CORE_SCHEMA}.users.id", ondelete="CASCADE")
+    )
+    tone: Mapped[str] = mapped_column(String(16))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=_now())

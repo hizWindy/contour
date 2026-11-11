@@ -70,6 +70,7 @@ get_settings.cache_clear()
 TEST_TABLES = (
     "companies.script_edits",
     "companies.script_styles",
+    "companies.script_prefs",
     "companies.preps",
     "core.hubspot_calls",
     "core.hubspot_contacts",

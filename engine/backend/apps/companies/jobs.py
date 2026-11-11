@@ -23,6 +23,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI
 from sqlalchemy import exists, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from apps.companies.deals import CLOSED_STAGES
@@ -215,7 +216,12 @@ async def search_ahead(app: FastAPI, settings: Settings, now: datetime | None = 
                 prep.person_name = contact.name if contact else None
                 prep.person_title = contact.job_title if contact else None
             session.add(prep)
-            await session.commit()
+            try:
+                await session.commit()
+            except IntegrityError:  # someone started a prep for this call a moment ago
+                await session.rollback()
+                morning.skipped += 1
+                continue
             prep_id = prep.id
         context = PrepContext(
             # A HubSpot company's prep leaves the Lead Finder out, so everyone may reuse it.

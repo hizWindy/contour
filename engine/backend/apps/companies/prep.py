@@ -38,6 +38,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 from sqlalchemy import select
+from sqlalchemy import text as sql_text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from apps.companies.facts import (
@@ -82,7 +83,14 @@ MAX_FOLLOW_UPS = 3
 EM_DASH = chr(0x2014)  # the website shows no em dashes (DESIGN.md)
 EN_DASH = chr(0x2013)
 STUCK_MINUTES = 5  # a prep still "searching" after this, with no task behind it, has failed
+STUCK_ERROR = "This prep stopped when the server restarted. Press Research again."
 MAX_NEWS = 3
+# One web check per company at a time (PLAN-V15 T3-2): a second prep for the same company waits
+# for the first one's check, then writes from its notes. A Postgres advisory lock key, used with
+# the company (the keys in use are listed in core/prefs/service.py).
+WEB_CHECK_LOCK = 7_244_502
+WEB_WAIT_SECONDS = 120.0
+WEB_WAIT_POLL_SECONDS = 2.0
 
 # --- The answer form ---------------------------------------------------------------------------
 # No field may be null: Anthropic limits "null or a value" fields in strict forms (forms.py).
@@ -493,6 +501,45 @@ async def web_check_fresh(
     return found is not None
 
 
+async def web_check_running(session: AsyncSession, prep: Prep, now: datetime) -> bool:
+    """True when another prep for this company is doing its web check right now."""
+    found = await session.scalar(
+        select(Prep.id)
+        .where(
+            Prep.company_key == prep.company_key,
+            Prep.id != prep.id,
+            Prep.status == "searching",
+            Prep.facts["web"].astext == "true",
+            Prep.created_at >= now - timedelta(minutes=STUCK_MINUTES),
+        )
+        .limit(1)
+    )
+    return found is not None
+
+
+async def take_web_check(session: AsyncSession, prep: Prep, *, days: int) -> bool:
+    """True when this prep may search the web: no fresh check for the company, and no other prep
+    doing one now. If another is, it waits for it (up to WEB_WAIT_SECONDS) and then writes from
+    its notes. The choice is saved on the prep (`facts.web`) under a lock, so two preps that start
+    together never both pay for the web check."""
+    deadline = asyncio.get_running_loop().time() + WEB_WAIT_SECONDS
+    lock = sql_text("SELECT pg_advisory_xact_lock(CAST(:space AS integer), hashtext(:key))")
+    while True:
+        await session.execute(lock, {"space": WEB_CHECK_LOCK, "key": prep.company_key})
+        now = datetime.now(UTC)
+        if await web_check_fresh(session, prep.company_key, days=days, now=now):
+            await session.commit()  # lets the lock go
+            return False
+        if not await web_check_running(session, prep, now):
+            prep.facts = {**(prep.facts or {}), "web": True}
+            await session.commit()
+            return True
+        await session.commit()
+        if asyncio.get_running_loop().time() >= deadline:
+            return False
+        await asyncio.sleep(WEB_WAIT_POLL_SECONDS)
+
+
 class PrepRunner:
     """Runs preps in the background, one task each, and knows which are running."""
 
@@ -507,10 +554,13 @@ class PrepRunner:
         self._claude = claude
         self._embedder = embedder
         self._tasks: dict[uuid.UUID, asyncio.Task[None]] = {}
+        # Every prep `run` is working on, including the morning search ahead's, which it awaits
+        # itself rather than through `start`.
+        self._busy: set[uuid.UUID] = set()
 
     def running(self, prep_id: uuid.UUID) -> bool:
         task = self._tasks.get(prep_id)
-        return task is not None and not task.done()
+        return (task is not None and not task.done()) or prep_id in self._busy
 
     def start(self, prep_id: uuid.UUID, context: PrepContext) -> None:
         task = asyncio.create_task(self.run(prep_id, context), name=f"prep-{prep_id}")
@@ -524,6 +574,7 @@ class PrepRunner:
 
     async def run(self, prep_id: uuid.UUID, context: PrepContext) -> None:
         """Runs one prep to the end. It never raises: a problem fails the prep in plain words."""
+        self._busy.add(prep_id)
         try:
             await self._run(prep_id, context)
         except asyncio.CancelledError:
@@ -549,6 +600,8 @@ class PrepRunner:
                 prep_id,
                 "Something went wrong while writing the script. Press Research again.",
             )
+        finally:
+            self._busy.discard(prep_id)
 
     async def _fail(self, prep_id: uuid.UUID, why: str) -> None:
         async with self.sessions() as session:
@@ -606,11 +659,14 @@ class PrepRunner:
         return reply
 
     async def _run(self, prep_id: uuid.UUID, context: PrepContext) -> None:
-        now = datetime.now(UTC)
         async with self.sessions() as session:
             prep = await session.get(Prep, prep_id)
             if prep is None or prep.status != "searching":
                 return
+            # First, whether this prep searches the web: it may wait for another prep's check of
+            # the same company, so the facts are read after it, with that check's notes in them.
+            web = context.names_ok and await take_web_check(session, prep, days=context.reuse_days)
+            now = datetime.now(UTC)
             pack = await build_facts(session, prep.company_key, prep.contact_id, context.hooks, now)
             if pack is None:
                 raise _Plain("This company is no longer in the HubSpot copy or the Lead Finder.")
@@ -623,12 +679,9 @@ class PrepRunner:
                 "count": len(pack.facts),
                 "leads_used": pack.leads_used,
                 "names_ok": context.names_ok,
+                "web": web,
                 "style_used": {"mine": style.mine is not None, "team_notes": len(style.team)},
             }
-            fresh = await web_check_fresh(
-                session, prep.company_key, days=context.reuse_days, now=now
-            )
-            web = context.names_ok and not fresh
             prep.stage = 2  # the web check (or the smaller request) is running
             await session.commit()
 
@@ -712,3 +765,10 @@ def is_stuck(prep: Prep, runner: PrepRunner, now: datetime) -> bool:
         and not runner.running(prep.id)
         and prep.created_at < now - timedelta(minutes=STUCK_MINUTES)
     )
+
+
+def fail_stuck(prep: Prep, now: datetime) -> None:
+    """Marks a prep left searching by a restart as failed. The caller commits."""
+    prep.status = "failed"
+    prep.error = STUCK_ERROR
+    prep.finished_at = now

@@ -22,7 +22,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import ColumnElement, Select, func, select
+from sqlalchemy import ColumnElement, Select, delete, func, select
+from sqlalchemy import text as sql_text
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
@@ -34,12 +36,16 @@ from apps.companies.schemas import (
     ScriptStyleOut,
     StyleNoteOut,
 )
-from apps.companies.tables import ScriptEdit, ScriptStyle
+from apps.companies.tables import NO_USER, ScriptEdit, ScriptStyle
 from core.api.errors import Problem
 from core.auth.models import User
 from core.auth.sessions import AuthContext
 
 MAX_WAITING = 5  # suggestions one person may have waiting at once
+# Two Admins adding a team note at once count one after the other, so the team never passes 8
+# notes (PLAN-V15 T3-2). A Postgres advisory lock key (the keys in use: core/prefs/service.py).
+TEAM_NOTES_LOCK = 7_244_501
+WHO = sql_text(f"coalesce(user_id, {NO_USER})")  # the unique indexes' "user or nobody"
 
 
 # --- Who is asking ----------------------------------------------------------------------------
@@ -118,24 +124,25 @@ async def save_edit(
     text = clean(body.text)
     if not text:
         raise _empty()
-    query = _same_call(
-        select(ScriptEdit).where(_owned(ScriptEdit.user_id, user)),
-        body.company_key,
-        body.contact_id,
-    )
-    edit = await session.scalar(query.where(ScriptEdit.slot == body.slot))
-    if edit is None:
-        edit = ScriptEdit(
+    # One statement, so two first saves of the same line at once never clash (PLAN-V15 T3-2).
+    upsert = (
+        insert(ScriptEdit)
+        .values(
+            id=uuid.uuid4(),
             user_id=user,
             company_key=body.company_key,
             contact_id=body.contact_id or "",
             slot=body.slot,
             text=text,
         )
-        session.add(edit)
-    else:
-        edit.text = text
-        edit.updated_at = now
+        .on_conflict_do_update(
+            index_elements=[WHO, "company_key", "contact_id", "slot"],
+            set_={"text": text, "updated_at": now},
+        )
+        .returning(ScriptEdit)
+        .execution_options(populate_existing=True)
+    )
+    edit = (await session.scalars(upsert)).one()
     await session.commit()
     return _edit_out(edit)
 
@@ -224,15 +231,23 @@ async def save_mine(
     """Saves Your style. An empty text clears it."""
     user = user_of(auth)
     tidy = clean(text)
-    mine = await _my_style(session, user)
     if not tidy:
-        if mine is not None:
-            await session.delete(mine)
-    elif mine is None:
-        session.add(ScriptStyle(scope="mine", user_id=user, text=tidy, status="active"))
+        await session.execute(
+            delete(ScriptStyle).where(
+                _owned(ScriptStyle.user_id, user), ScriptStyle.scope == "mine"
+            )
+        )
     else:
-        mine.text = tidy
-        mine.updated_at = now
+        # One statement, so two first saves at once never clash (PLAN-V15 T3-2).
+        await session.execute(
+            insert(ScriptStyle)
+            .values(id=uuid.uuid4(), scope="mine", user_id=user, text=tidy, status="active")
+            .on_conflict_do_update(
+                index_elements=[WHO],
+                index_where=sql_text("scope = 'mine'"),
+                set_={"text": tidy, "updated_at": now},
+            )
+        )
     await session.commit()
     return await style_view(session, auth)
 
@@ -247,6 +262,9 @@ def _team_full() -> Problem:
 
 
 async def _active_count(session: AsyncSession) -> int:
+    """How many team notes are active. Takes the team notes' lock first, held until the commit,
+    so a second Admin's count waits for the first one's note."""
+    await session.execute(select(func.pg_advisory_xact_lock(TEAM_NOTES_LOCK)))
     count = await session.scalar(
         select(func.count())
         .select_from(ScriptStyle)
