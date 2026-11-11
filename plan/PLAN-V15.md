@@ -335,13 +335,13 @@ Newest first.
 
 ## Track 2: the website (session 2)
 
-**Progress:** 0 of 7 steps done.
+**Progress:** 2 of 7 steps done (T2-1, T2-2). T2-3 (2346cf9) and T2-4 (08ec5bc) are built, waiting for a look. T2-5 is built, waiting for a look. T2-6 waits for the tag `v15-api`.
 
-- [ ] **T2-1. Own copy and a baseline.**
+- [x] **T2-1. Own copy and a baseline.** Done 2026-11-12 (no code change; see the Log).
   - The worktree, the `leadfinder_v15b` database and the ports.
   - Run the website tests once with `heavy.sh`, and note the count.
   - **Done when:** the count is in the Track 2 Log.
-- [ ] **T2-2. The request layer.** Built against the contract with `mockApi`.
+- [x] **T2-2. The request layer.** Built against the contract with `mockApi`. Done 2026-11-12 (5e698bc).
   - **A time limit on every request** (`src/api/client.ts`): 20 seconds by default, 120 for uploads and CSV downloads, none for live run updates (SSE). The numbers are **TBC**. A request that runs out becomes code `timeout`.
   - **Tell the cases apart:**
     - `offline`: the browser says so (`navigator.onLine`);
@@ -357,7 +357,7 @@ Newest first.
   - **`/auth/me`** (`src/api/hooks/auth.ts`) retries on a network error, a timeout or a 5xx, like other reads. It is asked again when the connection comes back. This is the main fix for the profile menu.
   - **Files:** `src/api/client.ts`, `src/api/query.ts`, `src/api/hooks/auth.ts`, a new `src/api/connection.ts`, tests.
   - **Done when:** tests cover each case above, plus a `/auth/me` that fails once and then works.
-- [ ] **T2-3. The words.**
+- [ ] **T2-3. The words.** Built, waiting for a look (2346cf9).
   - **Every message** from the client fallbacks (`client.ts`), `src/lib/problems.ts` and `src/components/error-state.tsx` follows "Words for errors".
   - **422 messages:** Pydantic's field messages become plain words, like "Field required" to "fill this in".
   - **`ErrorState`:**
@@ -369,7 +369,7 @@ Newest first.
     - a test finds no command, file name or `localhost` in any message the website can show;
     - each status in "Words for errors" has a test;
     - Al-khair has looked.
-- [ ] **T2-4. Error pages and the connection bar.**
+- [ ] **T2-4. Error pages and the connection bar.** Built, waiting for a look and the browser check in T2-7 (08ec5bc).
   - **The connection bar:** a thin bar at the top of the app while the connection state isn't "online", instead of a red box in every card.
     - Offline: "You're offline…". Updating: "Contour is updating…", with a countdown.
     - It retries by itself: when the browser is back online, and every 10 seconds while updating, by asking the backend's health route.
@@ -389,7 +389,7 @@ Newest first.
     - each page and the bar show in the browser, at 3 widths, light and dark, by keyboard and with reduced motion;
     - the automatic retries work in tests;
     - Al-khair has looked.
-- [ ] **T2-5. The profile menu.**
+- [ ] **T2-5. The profile menu.** Built, waiting for a look (see the Log for the commit).
   - **No app without a user:** when `/auth/me` still fails after its retries, and it isn't a 401, the frame shows Connection lost or Updating, not the app without a menu (`src/shell/require-sign-in.tsx`). The sidebar never shows every module to someone whose access isn't known (`src/shell/visible-modules.ts`).
   - **On a phone,** the top bar stays at the top while the page scrolls. Built, waiting for a look.
   - `engine/DESIGN.md` says where the account sits now: the bottom of the left menu from 768px, the top bar below that.
@@ -426,7 +426,22 @@ Newest first.
 
 Newest first.
 
-- (empty)
+- 2026-11-12: **T2-5 built**, waiting for a look. Full run (1 worker): 1,203 passed, 3 failed, all three tests that drew Home or the app with no answer to "who is signed in" (the smoke test, the Home prefetch test) or answered 403 to it (a new router test); fixed, and they pass. What it does: the sign-in guard never shows the app without a user. When `/auth/me` still fails after its retries it shows Connection lost (offline, out of reach, no answer in time), Updating (a deploy) or the failed answer with its request id, each standalone (no frame), and each comes back by itself. Offline before the first answer (TanStack pauses the query) now says "You're offline" instead of a grey shape forever. A later check that fails keeps the app. A 404 from `/auth/me` means a backend with no sign-in routes, so sign-in is off. The menu, Home and Ctrl+K offer no project while access isn't known. The top bar stays at the top on a phone. `DESIGN.md` says where the account sits. Tests that drew Home or the command menu without answering "who is signed in" now answer it (Home behind the guard; the command menu's calls answer 404).
+- 2026-11-12: **For M1 and Track 3** (a message to Track 3 couldn't be sent: no other session was running). Shared website changes that call prep's tests may meet at the merge:
+  - A failed fetch is code `offline` or `unreachable` (was `network`), a timeout `timeout`, and a 502, 503 or 504 with no JSON `updating`. `toApiProblem` no longer turns a plain `TypeError` into "can't reach": it is "This page couldn't be shown" (`page_error`).
+  - `ErrorState` always has Try again and a folded "Details for support". For `offline`, `unreachable` or `updating` it is a quiet `role="status"` line, not a red `role="alert"` box.
+  - The website's own words live in `src/api/words.ts`; T3-7 can use `WORDS` after M1. Pydantic's 422 messages come out plain.
+  - `/auth/me` retries twice, and a 404 there means sign-in is off. The menu offers no project while "who is signed in" isn't known, so a test that draws a page with the menu must answer `/auth/me`.
+- 2026-11-12: **Memory:** about 0.5 GB free with three tracks running. A test worker ended with exit 134 in the T2-4 run, so two files (`error-pages.test.tsx`, `safe-href.test.ts`) didn't run there (both pass alone). Full runs now use `--maxWorkers=1`. Al-khair: stopping the old previews (8000 to 8023, 5173 to 5193) would free memory for all three tracks.
+- 2026-11-12: **T2-4 built** (08ec5bc), waiting for a look and the T2-7 browser check. The connection bar (`src/shell/connection-bar.tsx`) at the top of the page area: Ochre for offline and out of reach, Cobalt for updating, a countdown and "Try now", checks every 10 seconds, and the failed reads run again when the server is back. A card whose read failed for the connection shows a quiet grey line, not a red box. Full pages in `src/shell/error-pages/`: Connection lost, Updating, a failed answer with its request id, No access and Not found ("Go to Home"; "Start a run" went), and New version: a page whose code is gone reloads once by itself (a `sessionStorage` mark, one minute), then says "Contour was updated" with Reload. Offline, a page's code that couldn't come says "You're offline" and reloads when back. The lead and run pages throw 403 and 404 to the route's error page; the Results side panel keeps its box. `DESIGN.md` gains "Errors and the connection". Full run (2 workers): 1,127 passed, 1 failed (the old "can't be reached" guard test, replaced in T2-5).
+  - **For the look:** a failed change shown in a box (Start's "Start run", the run page's Stop) also gets the quiet line during an outage, and its Try again asks again for the reads on screen, not the change: the person presses the button again.
+- 2026-11-12: **T2-3 built** (2346cf9), waiting for a look. `ErrorState` always has Try again (it asks again for the failed reads on screen) and a folded "Details for support" (status, code, request id, time in local and UTC, page) with "Copy the details". Pydantic's field messages become plain words. A failed change in a toast gets change words: a timeout says "It may still have gone through. Reload the page to check before you try again." Admin no longer names `engine/.env` or `HUBSPOT_SERVICE_KEY` ("kept in the server's settings", "Set on the server"). `src/test/screen-words.test.ts` reads every on-screen string in the app (TypeScript's parser: strings, template text, JSX text; not comments or imports) and finds no command, settings file, local address, setting name or code file name. Full run: 1,182 passed, 1 failed (the same guard test).
+  - **For the look:** two words not in the plan's table: "That didn't work. Try again." for a status with no words of its own, and "This page couldn't be shown" for a bug inside a page.
+- 2026-11-12: **T2-2 done** (5e698bc). Full run on the commit: 1,136 passed, 1 failed (the guard test that expected the app to show when `/auth/me` can't be reached; T2-5 changes that on purpose). Time limits: `TIME_LIMITS` in `client.ts` (20 s; 120 s for an upload, the CSV, a review send and a lead's HubSpot send; 10 minutes for the profile rebuild, which embeds inside the request until T1-4), all **TBC**. The limit covers the wait for the answer to start, not the download of its body.
+- 2026-11-12: **T2-2 built** (5e698bc): the time limits, the failure kinds, the request id, the retries, the connection state (`src/api/connection.ts`) and `/auth/me` retried. The words live in a new `src/api/words.ts`, used by T2-3.
+- 2026-11-12: **T2-1 done.** Worktree `../contour-v15-t2` on `plan-v15-track2` (from `plan-v15` 9ff63aa). Database `leadfinder_v15b`, a copy of `leadfinder_v14a` at 0015; the HNSW index `ix_memory_embedding` failed in the restore (shared memory) and was built again with `max_parallel_maintenance_workers=0`. `engine/.env` holds the `POSTGRES_*` lines only (Track 1's note: `API_PORT` and `CORS_ORIGINS` there break 8 backend tests, so they go on the command line when a backend starts). `npm ci` done, `COMPANIES.xlsx` copied.
+  - **Baseline:** website **83 files, 1,117 tests passed** (115 s). The first try with the default workers ran out of memory (4 workers ended with exit 134, about 2 GB free), so runs use `--maxWorkers=2`.
+  - The runs go in a second, clean copy, `../contour-v15-t2-base` (detached, `node_modules` linked to Track 2's), so code can change in the main copy while a test run reads the snapshot. Remove it at the end of the track.
 
 ## Track 3: call prep (session 3)
 

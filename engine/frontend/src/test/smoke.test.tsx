@@ -1,9 +1,20 @@
 import { screen } from '@testing-library/react'
 import { createMemoryRouter } from 'react-router'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { App } from '@/App'
 import { routes } from '@/router'
 import { renderWithProviders } from './render'
+
+// No backend here: every call answers 404. "Who is signed in" then means no sign-in, so the app
+// shows (with no answer at all, it would say it can't reach the server, PLAN-V15 T2-5).
+beforeEach(() => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() =>
+      Promise.resolve(Response.json({ title: 'Not found', status: 404 }, { status: 404 })),
+    ),
+  )
+})
 
 describe('App', () => {
   it('starts on Home, inside the menu and the top bar', async () => {

@@ -157,7 +157,11 @@ describe('the router', () => {
     async (path, status, title) => {
       vi.stubGlobal(
         'fetch',
-        vi.fn(() => Promise.resolve(Response.json({ status }, { status }))),
+        vi.fn((request: Request) => {
+          // Only the run or lead answers so; "who is signed in" answers 404 (no sign-in).
+          const answer = DETAIL.test(new URL(request.url).pathname) ? status : 404
+          return Promise.resolve(Response.json({ status: answer }, { status: answer }))
+        }),
       )
       renderAt(path)
 

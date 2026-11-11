@@ -2,6 +2,7 @@ import { waitFor } from '@testing-library/react'
 import type { ComponentType } from 'react'
 import { Route, Routes } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
+import { queryKeys } from '@/api/query'
 import { routes } from '@/router'
 import { prefetchPage } from '@/shell/prefetch'
 import { createTestQueryClient, renderWithProviders } from '@/test/render'
@@ -66,6 +67,9 @@ describe('a page uses what is started for it while its code downloads (PLAN-V7 C
   it.each(PAGES)('$name', async ({ address, pattern, page }) => {
     const calls = stalledBackend()
     const client = createTestQueryClient()
+    // Every page sits behind the sign-in guard, so who is signed in is known before it draws
+    // (PLAN-V15 T2-5: Home offers no project while it isn't). Here: sign-in is off.
+    client.setQueryData(queryKeys.auth.me(), { state: 'off' })
     const Page = (await page()).default
     const [pathname = '/', search = ''] = address.split(/(?=\?)/)
 
@@ -88,8 +92,10 @@ describe('a page uses what is started for it while its code downloads (PLAN-V7 C
         expect(calls.get(key), key).toBe(1)
       }
     })
-    // ...and the page uses all of them: nothing was started for nothing.
+    // ...and the page uses all of them: nothing was started for nothing. (Who is signed in was
+    // known before the page, so it isn't one of them.)
     for (const query of client.getQueryCache().getAll()) {
+      if (query.queryKey[0] === 'auth') continue
       expect(query.getObserversCount(), JSON.stringify(query.queryKey)).toBeGreaterThan(0)
     }
   })

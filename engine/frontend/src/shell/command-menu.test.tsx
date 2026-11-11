@@ -1,6 +1,6 @@
 import { screen, waitFor } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { routes } from '@/router'
 import { renderWithProviders } from '@/test/render'
 
@@ -12,6 +12,17 @@ function renderAt(path: string) {
   const result = renderWithProviders(<RouterProvider router={router} />, { withRouter: false })
   return { ...result, router }
 }
+
+// The pages call the API; these tests are about the menu, so every call answers 404. That also
+// answers "who is signed in" (a 404 there means no sign-in), so the app frame shows.
+beforeEach(() => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() =>
+      Promise.resolve(Response.json({ title: 'Not found', status: 404 }, { status: 404 })),
+    ),
+  )
+})
 
 afterEach(() => {
   window.localStorage.clear()

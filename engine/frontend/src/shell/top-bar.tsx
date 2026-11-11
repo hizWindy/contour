@@ -20,6 +20,9 @@ const APP_NAME = 'Contour'
 /**
  * The bar above every page: the menu button, where you are (breadcrumbs), and the command menu.
  * It also keeps the browser tab's title in step with the page.
+ *
+ * On a phone it also holds the account menu, and it stays at the top while the page scrolls, so
+ * the account is always one tap away (PLAN-V15 T2-5).
  */
 export function TopBar() {
   const { toggleSidebar, open, isMobile, openMobile } = useSidebar()
@@ -32,7 +35,7 @@ export function TopBar() {
 
   const expanded = isMobile ? openMobile : open
   return (
-    <header className="flex h-14 shrink-0 items-center gap-2 border-b bg-background px-3 sm:gap-3 sm:px-4">
+    <header className="flex h-14 shrink-0 items-center gap-2 border-b bg-background px-3 max-md:sticky max-md:top-0 max-md:z-20 sm:gap-3 sm:px-4">
       <Button
         type="button"
         variant="ghost"

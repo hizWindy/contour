@@ -19,7 +19,7 @@ import {
   useQueryClient,
   type QueryClient,
 } from '@tanstack/react-query'
-import { api, isSignInNeeded, unwrap, type ApiProblem } from '../client'
+import { api, isApiProblem, isSignInNeeded, unwrap, type ApiProblem } from '../client'
 import { queryKeys, retryDelay, shouldRetry } from '../query'
 import type { Schemas } from '../types'
 
@@ -59,6 +59,8 @@ export function meQueryOptions() {
           : { state: 'signed_out', reason: null, detail: null }
       } catch (error) {
         if (isSignInNeeded(error)) return signedOutBy(error)
+        // A backend with no sign-in routes at all (before PLAN-V6) has no sign-in.
+        if (isApiProblem(error) && error.status === 404) return { state: 'off' }
         throw error
       }
     },

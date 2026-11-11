@@ -3,9 +3,21 @@ import { Route, Routes, useLocation } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
 import { melbourneDate } from '@/lib/format'
 import { PLANNED } from '@/modules'
+import type { SignIn } from '@/api/hooks/auth'
+import { queryKeys } from '@/api/query'
 import { mockApi } from '@/test/mock-api'
-import { renderWithProviders } from '@/test/render'
+import { createTestQueryClient, renderWithProviders } from '@/test/render'
 import HomePage from './home'
+
+/**
+ * Home always sits behind the sign-in guard, so who is signed in is known before it draws
+ * (PLAN-V15 T2-5: no project is offered while it isn't). Here: sign-in is off.
+ */
+function renderHome(signIn: SignIn = { state: 'off' }) {
+  const queryClient = createTestQueryClient()
+  queryClient.setQueryData(queryKeys.auth.me(), signIn)
+  return renderWithProviders(<HomePage />, { queryClient })
+}
 
 const RUN = {
   id: '11111111-2222-3333-4444-555555555555',
@@ -144,7 +156,7 @@ describe('the greeting on Home', () => {
 
   it('greets without a name where sign-in is off, and says when there are no runs', async () => {
     stubBackend({ runs: [] })
-    renderWithProviders(<HomePage />)
+    renderHome()
 
     expect(
       screen.getByRole('heading', { level: 1, name: /^Good (morning|afternoon|evening)$/ }),
@@ -156,7 +168,7 @@ describe('the greeting on Home', () => {
 describe('the Lead Finder card on Home', () => {
   it('counts the good leads and shows every result as a link to Results', async () => {
     stubBackend()
-    renderWithProviders(<HomePage />)
+    renderHome()
 
     const count = await within(leadFinder()).findByRole('link', {
       name: '12 good leads: open them in Results',
@@ -183,7 +195,7 @@ describe('the Lead Finder card on Home', () => {
 
   it('lists the four signs seen most, biggest first, each a link to Results', async () => {
     stubBackend()
-    renderWithProviders(<HomePage />)
+    renderHome()
 
     const signs = within(
       await within(leadFinder()).findByRole('region', { name: 'Signs seen most' }),
@@ -201,7 +213,7 @@ describe('the Lead Finder card on Home', () => {
 
   it('says which leads to start with: the best new good leads, with why now', async () => {
     const calls = stubBackend()
-    renderWithProviders(<HomePage />)
+    renderHome()
 
     const start = within(
       await within(leadFinder()).findByRole('region', { name: 'Start with these' }),
@@ -220,7 +232,7 @@ describe('the Lead Finder card on Home', () => {
 
   it('shows the last run and the one main button', async () => {
     stubBackend()
-    renderWithProviders(<HomePage />)
+    renderHome()
 
     expect(await within(leadFinder()).findByRole('link', { name: '2 hours ago' })).toHaveAttribute(
       'href',
@@ -235,7 +247,7 @@ describe('the Lead Finder card on Home', () => {
 
   it('says so plainly when there are no leads yet', async () => {
     stubBackend({ runs: [], results: [], triggers: [], leads: [] })
-    renderWithProviders(<HomePage />)
+    renderHome()
 
     expect(await within(leadFinder()).findByText('No leads yet.')).toBeInTheDocument()
     expect(
@@ -246,7 +258,7 @@ describe('the Lead Finder card on Home', () => {
 
   it('keeps its links when the backend cannot be reached', async () => {
     stubBackend({ fail: true })
-    renderWithProviders(<HomePage />)
+    renderHome()
 
     expect(
       await within(leadFinder()).findByText("Can't load the leads right now."),
@@ -273,7 +285,7 @@ function Where() {
 describe('the Companies card on Home', () => {
   it('counts the companies and says how fresh the HubSpot copy is', async () => {
     stubBackend()
-    renderWithProviders(<HomePage />)
+    renderHome()
 
     expect(await within(companies()).findByText('13,918')).toBeInTheDocument()
     expect(within(companies()).getByText(/clients and prospects/)).toBeInTheDocument()
@@ -285,11 +297,14 @@ describe('the Companies card on Home', () => {
 
   it('opens Companies with the name typed in the box', async () => {
     stubBackend()
+    const queryClient = createTestQueryClient()
+    queryClient.setQueryData(queryKeys.auth.me(), { state: 'off' } satisfies SignIn)
     const { user } = renderWithProviders(
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/companies" element={<Where />} />
       </Routes>,
+      { queryClient },
     )
 
     const box = within(companies()).getByRole('searchbox', {
@@ -313,7 +328,7 @@ describe('the Companies card on Home', () => {
         },
       ],
     })
-    renderWithProviders(<HomePage />)
+    renderHome()
 
     const prepped = within(
       await within(companies()).findByRole('region', { name: 'Prepped today' }),
@@ -328,7 +343,7 @@ describe('the Companies card on Home', () => {
 describe('Runs and cost on Home', () => {
   it('shows the spend over 30 days and a bar for each day with a run', async () => {
     stubBackend()
-    renderWithProviders(<HomePage />)
+    renderHome()
 
     expect(await within(cost()).findByText('US$42.81')).toBeInTheDocument()
     expect(within(cost()).getByText('8 runs since 13 Oct. Today US$8.42.')).toBeInTheDocument()
@@ -342,7 +357,7 @@ describe('Runs and cost on Home', () => {
 
   it('says so when there were no runs', async () => {
     stubBackend({ summary: { since: '2026-10-13', total_cost_usd: '0', total_runs: 0, days: [] } })
-    renderWithProviders(<HomePage />)
+    renderHome()
 
     expect(await within(cost()).findByText('No runs in the last 30 days.')).toBeInTheDocument()
   })
@@ -351,7 +366,7 @@ describe('Runs and cost on Home', () => {
 describe('the projects still to be developed on Home', () => {
   it('gives each project in the queue its own card, and lists the rest under Later', () => {
     stubBackend()
-    renderWithProviders(<HomePage />)
+    renderHome()
 
     const section = within(screen.getByRole('region', { name: 'To be developed' }))
     const queued = PLANNED.filter((project) => project.when)
