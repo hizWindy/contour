@@ -155,8 +155,8 @@ export class Connection {
 
 const connections = new WeakMap<QueryClient, Connection>()
 
-/** The reads that failed and are on screen now, asked again. */
-function runFailedReadsAgain(client: QueryClient): void {
+/** The reads that failed and are on screen now, asked again ("Try again" on an error box). */
+export function runFailedReadsAgain(client: QueryClient): void {
   void client.refetchQueries({
     type: 'active',
     predicate: (query) => query.state.status === 'error',

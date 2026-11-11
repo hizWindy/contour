@@ -50,8 +50,15 @@ export function serverWords(requestId: string | null): Words {
   }
 }
 
-/** The words for a status when the answer brought none of its own. */
-export function statusWords(status: number, requestId: string | null = null): Words | null {
+/** The words for a status (and the backend's code) when the answer brought none of its own. */
+export function statusWords(
+  status: number,
+  requestId: string | null = null,
+  code: string | null = null,
+): Words | null {
+  if (status === 503 && code === 'busy') {
+    return WORDS.busy
+  }
   switch (status) {
     case 400:
       return { title: "Contour couldn't read that", detail: 'Reload the page and try again.' }
@@ -75,9 +82,8 @@ export function statusWords(status: number, requestId: string | null = null): Wo
     case 501:
       return { title: "This part isn't ready yet", detail: "It's still being built." }
     case 502:
-    case 504:
-      return WORDS.updating
     case 503:
+    case 504:
       return WORDS.updating
     default:
       return status >= 500 ? serverWords(requestId) : null
@@ -110,7 +116,7 @@ const FIELD_WORDS: readonly [RegExp, (match: RegExpMatchArray) => string][] = [
   [/^Input should be a valid boolean/i, () => 'Pick yes or no.'],
   [/^Input should be a valid string/i, () => 'Enter some text.'],
   [/^Input should be a valid (list|array|set)/i, () => 'Pick one or more.'],
-  [/^Input should be a valid datetime/i, () => 'Enter a date and time.'],
+  [/^Input should be a valid (datetime|date or datetime)/i, () => 'Enter a date and time.'],
   [/^Input should be a valid date/i, () => 'Enter a date.'],
   [/^Input should be a valid time/i, () => 'Enter a time.'],
   [/^Input should be a valid UUID/i, () => "This id isn't valid. Reload the page and try again."],

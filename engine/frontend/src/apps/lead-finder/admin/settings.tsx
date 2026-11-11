@@ -2,8 +2,9 @@
  * Admin, Settings (PLAN-V13 T1-9): the limits, models and switches a person may change, in five
  * groups (Money, Claude, Runs, Why now, Call prep) with one group shown at a time, so a group fits
  * on one laptop screen. Each setting is one row: its name and one line, and the field. "Show the
- * details" adds the full words and the allowed range. The values only engine/.env can change are
- * under "Set in engine/.env".
+ * details" adds the full words and the allowed range. The values only the server's own settings
+ * (`engine/.env` on the laptop) can change are under "Set on the server" (PLAN-V15 T2-3: no file name
+ * on screen).
  *
  * Changes are saved together, all or nothing: a value the server refuses comes back beside its field
  * and nothing is saved. A changed setting can go back to its default. A change applies from the next
@@ -317,10 +318,10 @@ export default function AdminSettingsTab() {
       {fixed.length > 0 ? (
         <details className="rounded-lg border bg-card px-6 py-4 text-ui">
           <summary className="cursor-pointer font-semibold">
-            Set in engine/.env ({fixed.length})
+            Set on the server ({fixed.length})
           </summary>
           <p className="mt-1 text-caption text-muted-foreground">
-            These change only in engine/.env, then a restart.
+            These change only in the server's own settings, then a restart.
           </p>
           <dl className="mt-3 grid gap-x-6 gap-y-2 sm:grid-cols-[auto_1fr]">
             {fixed.map((field) => (

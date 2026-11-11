@@ -68,7 +68,7 @@ describe('the checks', () => {
     expect(checkForm(form({ every: '1.5' }), 200).every).toBe('Use a whole number, 1 or more.')
     expect(checkForm(form({ budget: '0.5' }), 200).budget).toBe('Use US$1 or more.')
     expect(checkForm(form({ budget: '250' }), 200).budget).toBe(
-      'Must be at most US$200. The ceiling in engine/.env is lower.',
+      'Must be at most US$200. The ceiling on the server is lower.',
     )
     expect(checkForm(form({ budget: '10.005' }), 200).budget).toBe('Use whole cents.')
   })

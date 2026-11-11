@@ -186,11 +186,12 @@ export function problemFromResponse(response: Response, body?: unknown): ApiProb
     })
   }
   // The backend's own words win. FastAPI's `{detail: "text"}` is accepted too.
-  const fallback = statusWords(status, requestId)
+  const code = asText(record.code)
+  const fallback = statusWords(status, requestId, code)
   return new ApiProblem({
     title: asText(record.title) ?? fallback?.title ?? "That didn't work",
     detail: asText(record.detail) ?? fallback?.detail ?? 'Try again.',
-    code: asText(record.code),
+    code,
     status,
     errors: readFieldErrors(record.errors ?? record.detail),
     run_id: asText(record.run_id),

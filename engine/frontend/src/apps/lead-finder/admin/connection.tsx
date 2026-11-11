@@ -122,7 +122,7 @@ export function ConnectionCard() {
     <Card>
       <CardHeader>
         <CardTitle className="text-section font-semibold">The connection</CardTitle>
-        <CardDescription>One key for every project, kept in engine/.env.</CardDescription>
+        <CardDescription>One key for every project, kept in the server's settings.</CardDescription>
         <CardAction>
           <Button
             type="button"
@@ -144,7 +144,11 @@ export function ConnectionCard() {
           <>
             <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 sm:grid-cols-[auto_1fr_auto_1fr]">
               <dt className="text-muted-foreground">Key</dt>
-              <dd>{data.key_set ? 'Set' : 'Missing: add HUBSPOT_SERVICE_KEY to engine/.env'}</dd>
+              <dd>
+                {data.key_set
+                  ? 'Set'
+                  : 'Missing: whoever runs the server adds the HubSpot key to its settings'}
+              </dd>
               <dt className="text-muted-foreground">Connected</dt>
               <dd>
                 {data.check.connected
