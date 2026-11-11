@@ -267,13 +267,14 @@ Newest first.
 
 ## Track 3: the script (session 3)
 
-**Progress:** 0 of 7 steps done.
+**Progress:** 2 of 7 steps done (T3-1, T3-3). T3-2 is built, waiting for a look. T3-4 waits for the `v14-seam` and `v14-api` tags.
 
-- [ ] **T3-1. Own copy and a baseline.**
+- [x] **T3-1. Own copy and a baseline.**
   - The worktree, the `leadfinder_v14c` database and the ports.
   - Run the website tests once with `heavy.sh`, and note the count.
   - **Done when:** the count is in the Track 3 Log.
-- [ ] **T3-2. The free script's words.** Starts at once; `playbook.ts` is only Track 3's.
+  - Done 2026-11-11 (no commit: the count is in the Log).
+- [ ] **T3-2. The free script's words.** Built, waiting for a look (64b4925). Starts at once; `playbook.ts` is only Track 3's.
   - Apply "The script technique" to the templates in `playbook.ts`: the opener asks for two minutes, the questions follow the order, each "If they say" answer has three beats, and the tone line follows the case (a returning client, or a cold call).
   - Every line keeps its source mark. A feeling is only a question.
   - **Files:** `playbook.ts`, `playbook.test.ts`.
@@ -282,6 +283,7 @@ Newest first.
   - `script-layers.ts`: `applyEdits(guide, edits)` puts a person's line edits over the draft by slot. It marks each edited line `edited`, drops its sources, keeps an edited slot past the draft's end after the draft's lines, and leaves the draft untouched when there are no edits.
   - **Files:** `script-layers.ts` and its tests.
   - **Done when:** tests prove each rule above, plus a reset (an edit removed) and a Research again with fewer lines.
+  - Done 2026-11-11 (6e088bf).
 - [ ] **T3-4. Take in the seam and the API.**
   - Wait for both tags: `v14-seam` and `v14-api`. If one is missing, stop and say "Waiting for the seam (T2-2)" or "Waiting for the API (T1-3)".
   - `git merge v14-seam`, then `git merge v14-api`. Run `uv run engine migrate` on `leadfinder_v14c`, and run the website tests with `heavy.sh`.
@@ -310,7 +312,10 @@ Newest first.
 
 Newest first.
 
-- Nothing yet.
+- 2026-11-11: **Waiting for the seam (T2-2) and the API (T1-3).** Neither `v14-seam` nor `v14-api` exists yet, so T3-4 stops here. Say `implement v14 track3` again once both tags exist.
+- 2026-11-11: **T3-3 done** (6e088bf). `script-layers.ts`: `applyEdits(guide, edits)` lays line edits over the draft by slot (`opener.N`, `why_now.N`, `question.N`, `if_they_say.N`, `goal`). An edited line keeps the draft's icon, has no `why` and no sources, and carries `edited: {slot, draft}` (the draft text it replaced, or null past the end), so the line editor knows where to save and what Reset brings back. A question keeps its follow-ups. An edit past the draft's end comes after the draft's lines, in slot order; past the end, a pushback answer has an empty "they say" (the contract stores only the answer's text). A blank edit or an unknown slot is ignored. No edits: the same guide object comes back. `lineSlot()` gives each shown line its slot. 10 tests, including a reset, Research again with fewer lines, and "Copy script" copying an edited line.
+- 2026-11-11: **T3-2 built, waiting for a look** (64b4925). The free script in `playbook.ts` follows "The script technique". **Opener:** who, why (a standard "I'm calling to see what's ahead for your office over the next year or two." when no fact gives one), then "Do you have two minutes, or is there a better time?" as its own line (on a switchboard call: "Then: ..."). **Questions** in a fixed order, all built on the strongest fact (an open deal, then a lease within 36 months, a poor office rating, growth, a customer, else standard): up to 2 situation questions, then the problem, what it costs, what fixing it is worth, and last "Who else is involved in decisions about the office?" (kept as its own line: `companies.test.tsx`, not Track 3's, checks it). So up to 6 questions, not 5. **Pushback** in three beats, like "Sounds like the timing isn't right yet. That's fair. With the lease ending in Jun 2027, could I check in again in Feb 2027?". **Tone line** (a new `tone` on `CallGuide`): warm for a customer, someone we've spoken to, or an open deal (even through the switchboard); light otherwise. It ends "After a second no, thank them and let it go." It shows in "Copy script" now and on the card after the seam (T3-4, `sales-script.tsx`). Claude's script has no tone in its answer form, so `guideTone()` gives it the same line (wired in T3-4). **Old news:** saved research over 90 days old says its age in its source line ("Saved research, 3 Jun 2026, 5 months ago"). A feeling is only a question ("Has that been hanging over the team?"). Tests: 27 in `playbook.test.ts`, each rule for a returning client, a company with a lease date and a cold call. Website: **1,063 passed**, types and lint clean. **Three sample scripts for Al-khair** in `plan/shots/v14-t3/t3-2-scripts.md` (in the Track 3 worktree; `plan/shots` is git-ignored). The wording is **TBC** with Levi.
+- 2026-11-11: **T3-1 done.** Worktree `../contour-v14-t3` on `plan-v14-track3` from `plan-v14` (f812923). `npm ci` in its `engine/frontend`. Database `leadfinder_v14c` in the Docker Postgres, a `pg_dump` and `pg_restore` copy of `leadfinder_v10` (26 tables, as the source). Its own `engine/.env` with the database lines only, `API_PORT=8023` and `CORS_ORIGINS=http://localhost:5193`. Baseline with `heavy.sh`, on the untouched base: website 78 files, **1,044 tests passed**. No backend started.
 
 ## Merge (`merge v14`, on Al-khair's word)
 
