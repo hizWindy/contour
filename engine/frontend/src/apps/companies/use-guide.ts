@@ -37,6 +37,20 @@ export interface UseGuideInput {
 
 const NO_EDITS: never[] = []
 
+export const NOTHING_SURE = 'Claude found nothing sure enough, so this is the free script.'
+export const EDITS_FAILED = "Your own lines couldn't be loaded, so the draft shows."
+
+/** Claude's script has at least one line left to say: not every line was dropped. */
+function hasLines(script: PrepScript): boolean {
+  return (
+    script.opener.length > 0 ||
+    script.why_now.length > 0 ||
+    script.questions.length > 0 ||
+    script.if_they_say.length > 0 ||
+    script.goal !== null
+  )
+}
+
 /** The guide, or null while the company loads or "Who are you calling?" is open. */
 export function useGuide({
   script,
@@ -65,19 +79,26 @@ export function useGuide({
           tone,
         }
       : null
-    if (script) {
+    if (script && hasLines(script)) {
       const guide = guideFromPrep(script, labels)
       return input && !guide.tone ? { ...guide, tone: guideTone(input) } : guide
     }
     if (!input || picking) return null
-    return buildGuide(input)
+    const free = buildGuide(input)
+    // Every line of Claude's was left out for having no source (PLAN-V15 T3-7).
+    return script ? { ...free, notices: [NOTHING_SURE] } : free
   }, [script, labels, company, picking, person, caller, today, tone])
 
   const mine = edits.data ?? NO_EDITS
+  const editsFailed = edits.isError
   return useMemo(() => {
     if (!draft) return null
     const shown = applyEdits(draft, mine)
+    const notices = [...(shown.notices ?? []), ...(editsFailed ? [EDITS_FAILED] : [])]
+    const withNotices = notices.length ? { ...shown, notices } : shown
     // The line editor saves to this call; while "Who are you calling?" is open there is none.
-    return companyKey && !picking ? { ...shown, call: { companyKey, contactId } } : shown
-  }, [draft, mine, companyKey, contactId, picking])
+    return companyKey && !picking
+      ? { ...withNotices, call: { companyKey, contactId } }
+      : withNotices
+  }, [draft, mine, editsFailed, companyKey, contactId, picking])
 }

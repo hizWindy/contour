@@ -28,6 +28,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { isApiProblem } from '@/api/client'
 import { useCompany, useMe, usePrep, usePrepFacts, useStartPrep } from '@/api/hooks'
+import { prepLost } from '@/api/hooks/companies'
 import { toneInUse, useScriptStyle } from '@/api/hooks/script'
 import type { CompanyDetail, CompanyPerson } from '@/api/types'
 import { ErrorState } from '@/components/error-state'
@@ -331,7 +332,9 @@ export function PrepModal({ target, onClose, onChangeTarget, onOpenCompany }: Pr
   const styleNow = useScriptStyle().data
   const toneNow = styleNow?.tone ? toneInUse(styleNow) : null
 
-  const checking = !off && prep.data?.status === 'searching'
+  // Status checks that keep failing stop the asking: the card says so, with Try again.
+  const lost = !off && prepLost(prep.data?.status, prep.failureCount)
+  const checking = !off && prep.data?.status === 'searching' && !lost
   const companyName =
     shown?.companyName || prep.data?.company_name || company.data?.name || 'Company'
   const personTitle = person?.title ?? null
@@ -442,15 +445,40 @@ export function PrepModal({ target, onClose, onChangeTarget, onOpenCompany }: Pr
                     }}
                   />
                 ) : prep.data?.status === 'failed' ? (
+                  // What happened and what to do come from the server, in one sentence each
+                  // (PLAN-V15 T3-7); the card says what it means for the script.
                   <div
                     role="alert"
                     className="flex items-start gap-2 rounded-lg border border-destructive bg-destructive-soft p-3 text-ui text-destructive-ink"
                   >
                     <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
                     <span>
-                      {prep.data.error ?? 'The web check failed.'} The script below is from our
-                      HubSpot copy. Press Try again.
+                      {prep.data.error ?? "Call prep couldn't finish. Try again."} The script below
+                      is from our HubSpot copy.
                     </span>
+                  </div>
+                ) : lost ? (
+                  <div
+                    role="alert"
+                    className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-destructive bg-destructive-soft p-3 text-ui text-destructive-ink"
+                  >
+                    <span className="flex min-w-0 flex-1 items-start gap-2">
+                      <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+                      <span>
+                        Lost touch with the server. The script below is from our HubSpot copy.
+                      </span>
+                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={prep.isFetching}
+                      onClick={() => {
+                        void prep.refetch()
+                      }}
+                    >
+                      Try again
+                    </Button>
                   </div>
                 ) : null}
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_19rem]">
@@ -470,6 +498,7 @@ export function PrepModal({ target, onClose, onChangeTarget, onOpenCompany }: Pr
                         stage={prep.data?.stage ?? 0}
                         failed={Boolean(problem) || prep.data?.status === 'failed'}
                         toneNow={toneNow}
+                        copyAt={facts.data?.copy_at ?? null}
                         onResearch={() => {
                           ask(true)
                         }}

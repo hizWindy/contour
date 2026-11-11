@@ -626,6 +626,31 @@ class PrepRunner:
         while self._tasks:
             await asyncio.gather(*list(self._tasks.values()), return_exceptions=True)
 
+    async def stop(self, *, wait_seconds: float = 5.0) -> list[uuid.UUID]:
+        """Stops every prep this runner started, for a clean shutdown (PLAN-V15 T3-7). Each is
+        failed in plain words ("Contour stopped while this prep was running. Try again."), and
+        what it had spent is logged, so a deploy never hides call prep's spending. A Claude
+        request cut off mid-way may still be billed (TBC): only what was recorded is logged."""
+        running = list(self._tasks.items())
+        for _, task in running:
+            task.cancel()
+        if running:
+            await asyncio.wait([task for _, task in running], timeout=wait_seconds)
+        stopped = [prep_id for prep_id, _ in running]
+        if stopped:
+            async with self.sessions() as session:
+                for prep_id in stopped:
+                    prep = await session.get(Prep, prep_id)
+                    log.info(
+                        "prep_stopped",
+                        extra={
+                            "prep_id": str(prep_id),
+                            "spent_usd": str(prep.cost_usd) if prep is not None else "0",
+                            "web_searches": prep.web_searches if prep is not None else 0,
+                        },
+                    )
+        return stopped
+
     async def run(self, prep_id: uuid.UUID, context: PrepContext) -> None:
         """Runs one prep to the end. It never raises: a problem fails the prep in plain words."""
         self._busy.add(prep_id)

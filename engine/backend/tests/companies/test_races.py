@@ -361,3 +361,29 @@ def test_0017_fails_stuck_preps_and_adds_the_index_and_the_tones(
         ).fetchall()
         assert ("ux_preps_searching",) not in indexes
     command.upgrade(config, "head")
+
+
+# --- A clean shutdown ---------------------------------------------------------------------------
+
+
+@pytest.mark.usefixtures("prep_on")
+async def test_a_shutdown_stops_running_preps_in_plain_words(
+    world: World, claude: GatedClaude, runner: PrepRunner, caplog: pytest.LogCaptureFixture
+) -> None:
+    from apps.companies.app import stop_preps
+
+    await people_and_calls(world)
+    async with signed_in_as(world, "mia", ["companies"]) as client:
+        started = await client.post(PREPS, json=CALL)
+        await claude.waiting.wait()  # the prep is waiting on Claude
+    with caplog.at_level("INFO", logger="apps.companies.prep"):
+        await stop_preps(world.app)
+    async with world.factory() as db:
+        done = await db.get(Prep, uuid.UUID(started.json()["id"]))
+    assert done is not None
+    assert done.status == "failed"
+    assert done.error == prep_module.STOPPED
+    assert (done.facts or {}).get("error_code") == "stopped"
+    assert any(record.message == "prep_stopped" for record in caplog.records)
+    assert not runner.running(done.id)
+    await stop_preps(world.app)  # nothing left: safe to call again

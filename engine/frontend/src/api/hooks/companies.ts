@@ -123,11 +123,27 @@ export function prepQueryOptions(id: string) {
   })
 }
 
+/**
+ * Status checks that fail this many times in a row stop the asking (PLAN-V15 T3-7): the card then
+ * says it lost touch with the server, with Try again, instead of "Researching..." for good.
+ */
+export const PREP_MISSES = 3
+
+/** Ask again in 2 seconds while it searches, until the checks fail `PREP_MISSES` times running. */
+export function prepPollMs(status: string | undefined, failures: number): number | false {
+  return status === 'searching' && failures < PREP_MISSES ? PREP_POLL_MS : false
+}
+
+/** A prep still searching, whose status checks keep failing. */
+export function prepLost(status: string | undefined, failures: number): boolean {
+  return status === 'searching' && failures >= PREP_MISSES
+}
+
 export function usePrep(id: string | undefined) {
   return useQuery({
     ...prepQueryOptions(id ?? ''),
     enabled: id !== undefined && id !== '',
-    refetchInterval: (query) => (query.state.data?.status === 'searching' ? PREP_POLL_MS : false),
+    refetchInterval: (query) => prepPollMs(query.state.data?.status, query.state.fetchFailureCount),
   })
 }
 

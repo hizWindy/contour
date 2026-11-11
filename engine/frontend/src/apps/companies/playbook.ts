@@ -99,6 +99,8 @@ export interface CallGuide {
   dropped: number
   /** The call its line edits are saved for (set by `useGuide`). Absent: the lines can't be edited. */
   call?: ScriptCall
+  /** One-line notes above the script (PLAN-V15 T3-7), like "Your own lines couldn't be loaded". */
+  notices?: string[]
 }
 
 export interface GuideInput {
