@@ -72,6 +72,13 @@ export interface GuideObjection {
   answer: GuideLine
 }
 
+/** The call a script is for: a person's line edits are saved per company and contact. */
+export interface ScriptCall {
+  companyKey: string
+  /** The contact being called, or null for a cold call. */
+  contactId: string | null
+}
+
 export interface CallGuide {
   /** hubspot: written here from our copy, free. claude: call prep's script, with its web check. */
   madeFrom: 'hubspot' | 'claude'
@@ -84,6 +91,8 @@ export interface CallGuide {
   goal: GuideLine | null
   /** Claude's lines left out because they had no source. Always 0 here. */
   dropped: number
+  /** The call its line edits are saved for (set by `useGuide`). Absent: the lines can't be edited. */
+  call?: ScriptCall
 }
 
 export interface GuideInput {

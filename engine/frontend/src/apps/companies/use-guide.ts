@@ -67,5 +67,10 @@ export function useGuide({
   }, [script, labels, company, picking, person, caller, today])
 
   const mine = edits.data ?? NO_EDITS
-  return useMemo(() => (draft ? applyEdits(draft, mine) : null), [draft, mine])
+  return useMemo(() => {
+    if (!draft) return null
+    const shown = applyEdits(draft, mine)
+    // The line editor saves to this call; while "Who are you calling?" is open there is none.
+    return companyKey && !picking ? { ...shown, call: { companyKey, contactId } } : shown
+  }, [draft, mine, companyKey, contactId, picking])
 }

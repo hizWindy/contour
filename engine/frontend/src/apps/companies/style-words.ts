@@ -14,6 +14,27 @@ export function styleSummary(style: Pick<ScriptStyleOut, 'mine' | 'team'>): stri
   return mine ? 'Yours' : 'None yet'
 }
 
+const NOTE_LEADS: Record<string, string> = {
+  opener: 'Open like',
+  why_now: 'Give the reason like',
+  question: 'Ask like',
+  if_they_say: 'Answer pushback like',
+  goal: 'Aim the call at',
+}
+const NOTE_QUOTE_CHARS = 160
+
+/**
+ * A style note from a line the person wrote, for "Make it my style": `Open like: "Hi Jason, it's
+ * Tom..."`. The quote is cut so the note stays short; the person can change it before saving.
+ */
+export function styleNoteFor(slot: string, text: string): string {
+  const lead = NOTE_LEADS[slot.split('.')[0] ?? ''] ?? 'Say it like'
+  const flat = text.trim().replace(/\s+/g, ' ')
+  const quote =
+    flat.length <= NOTE_QUOTE_CHARS ? flat : `${flat.slice(0, NOTE_QUOTE_CHARS - 3).trimEnd()}...`
+  return `${lead}: "${quote}"`
+}
+
 /** Adds a note to Your style, on a new line, unless it is already there. */
 export function withNote(mine: string, note: string | null | undefined): string {
   const add = note?.trim()
