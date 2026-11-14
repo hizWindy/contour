@@ -85,9 +85,8 @@ EDITABLE_KEYS: Final[list[str]] = [
     "prep_reuse_days",
     "model_prep",
     "search_ahead_cap_usd",
-    # Property Daily and Arealytics (PLAN-V16)
+    # Property Daily (PLAN-V16)
     "property_daily_enabled",
-    "arealytics_enabled",
     "source_pages_per_day",
     "source_pages_per_run",
     "property_lookup_days",
@@ -440,6 +439,8 @@ class Settings(BaseSettings):
     # Our connectors read each tool in a browser of their own (core/browser, core/sources), at a
     # slow pace, and stop for 24 hours at the first sign of a block.
     property_daily_enabled: StrictBool = False
+    # Arealytics has no connector: its site refused automated access, and Al-khair dropped it from
+    # PLAN-V16 (15 Nov). So this is env-only and off, and nothing reads Arealytics while it is.
     arealytics_enabled: StrictBool = False
     # Each tool's login (env-only secrets: engine/.env and the App Platform dashboard). Never
     # logged, and no route sends them. Empty means not set. The tests blank them.

@@ -94,4 +94,12 @@ async def test_the_stub_lookup_says_off_or_not_checked_from_the_switches() -> No
         settings=Settings(_env_file=None, property_daily_enabled=True),
     )
     assert on.checked.model_dump() == {"property_daily": "not_checked", "arealytics": "off"}
+    dropped = await reader.lookup_company(
+        None,  # type: ignore[arg-type]
+        "Sample Logistics Pty Ltd",
+        "Perth",
+        None,
+        settings=Settings(_env_file=None, arealytics_enabled=True),
+    )
+    assert dropped.checked.arealytics == "off"  # no connector, whatever the switch says
     assert await reader.recent_items(None, ["Perth"], datetime.now(UTC)) == []  # type: ignore[arg-type]

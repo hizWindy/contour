@@ -8,8 +8,10 @@ against them while Track 2 builds the connectors.
   older than `property_lookup_days`. It never raises: a problem is that tool's status, `error`.
 - `recent_items`: the new feed items for some cities, from our copy only. Free and fast.
 
-S0: both are stubs that read nothing. A tool is `off` while its switch is off, and `not_checked`
-while it is on. T2-7 gives them their real code.
+S0: both are stubs that read nothing. Property Daily is `off` while its switch is off, and
+`not_checked` while it is on. Arealytics is always `off`: it has no connector (its site refused
+automated access, and Al-khair dropped it from PLAN-V16 on 15 Nov). T2-7 gives them their real
+code.
 """
 
 import uuid
@@ -45,7 +47,7 @@ async def lookup_company(
     return CompanyProperty(
         checked=SourceChecks(
             property_daily=_untouched(in_use.property_daily_enabled),
-            arealytics=_untouched(in_use.arealytics_enabled),
+            arealytics="off",  # no connector: dropped from PLAN-V16 on 15 Nov
         )
     )
 

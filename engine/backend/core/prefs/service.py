@@ -102,11 +102,6 @@ TEXT: dict[str, tuple[str, str]] = {
         "Lets the Lead Finder read Property Daily: the daily feed, and a lookup when a company "
         "is researched. Off: nothing is read from it.",
     ),
-    "arealytics_enabled": (
-        "Arealytics is on",
-        "Lets the Lead Finder read Arealytics: leases that end soon, and a lookup when a company "
-        "is researched. Off: nothing is read from it.",
-    ),
     "source_pages_per_day": (
         "Pages a day, for each tool",
         "The most pages each tool may read in one day. A slow pace keeps the account safe. TBC.",
