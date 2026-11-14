@@ -14,6 +14,7 @@ anything outside the run context, so a run is testable with a fake Claude.
 """
 
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import select
@@ -21,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.lead_finder import prompts
 from apps.lead_finder.context import Focus
+from apps.lead_finder.goal import companies_needed, goal_note, recent_pass_rate
 from apps.lead_finder.params import (
     CompanyParams,
     DiscoveryParams,
@@ -260,6 +262,18 @@ async def estimate_discovery(ctx: EstimateContext[DiscoveryParams]) -> RunEstima
             found = await feed_candidates(session, ctx.params, rules, tools, datetime.now(UTC))
         feed = len(found)
     companies = min(ctx.caps.max_companies, slices * MAX_CANDIDATES + feed)
+    # How many leads (PLAN-V16 T1-9): a run a person starts stops once it has its goal, so it
+    # researches about the companies the goal needs at the recent pass rate, if it finds them.
+    # An automatic run aims for its share of the round's goal instead (goal.py).
+    goal: int | None = None
+    needed: int | None = None
+    if not ctx.scheduled:
+        asked = ctx.params.goal_leads
+        goal = asked if asked is not None else ctx.settings.manual_run_goal_leads
+        async with ctx.session() as session:
+            rate = await recent_pass_rate(session)
+        needed = companies_needed(goal, rate.rate)
+        companies = min(companies, needed)
     names = " and ".join(SOURCE_WORDS[tool] for tool in tools)
     items = f"{feed} new item" if feed == 1 else f"{feed} new items"
     if not slices:
@@ -278,7 +292,14 @@ async def estimate_discovery(ctx: EstimateContext[DiscoveryParams]) -> RunEstima
             f"Discovery searches {slices} city and trigger pairs, then researches up to "
             f"{companies} of the companies it finds. How many it finds isn't known in advance."
         )
-    return _estimate(ctx, companies, slices, warnings=[text])
+    estimate = _estimate(ctx, companies, slices, warnings=[text])
+    if goal is None or needed is None:
+        return estimate
+    costs, caps = ctx.unit_costs, ctx.caps
+    room = max(Decimal(0), caps.run_cap_usd - slices * costs.slice_usd)
+    by_money = int(room // costs.company_usd) if costs.company_usd > 0 else needed
+    note = goal_note(goal, needed, caps.max_companies, by_money, caps.run_cap_usd)
+    return estimate.model_copy(update={"companies_needed": needed, "goal_note": note})
 
 
 async def estimate_watchlist(ctx: EstimateContext[WatchlistParams]) -> RunEstimate:

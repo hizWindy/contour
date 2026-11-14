@@ -38,6 +38,9 @@ SinceDays = Literal[7, 14, 30]
 # Where discovery looks for companies (PLAN-V16 T1-8, the contract part 2)
 RunSource = Literal["web", "property_daily", "arealytics"]
 RUN_SOURCES: tuple[RunSource, ...] = ("web", "property_daily", "arealytics")
+# How many good leads a person may ask a run for (PLAN-V16 T1-9, the contract part 2)
+GOAL_LEADS_MIN = 1
+GOAL_LEADS_MAX = 100
 COMPANIES_MIN = 1
 COMPANIES_MAX = 25
 # The most places one run may name. The rules list 20, so this only stops a long list of repeats;
@@ -329,6 +332,19 @@ class _Discovery(Strict):
         ),
         examples=[["web", "property_daily"]],
     )
+    goal_leads: int | None = Field(
+        None,
+        ge=GOAL_LEADS_MIN,
+        le=GOAL_LEADS_MAX,
+        description=(
+            "Used by mode discovery only. How many good leads (a Pass or a Director review) a run "
+            "a person starts aims for, 1 to 100: it stops starting companies once it has them. "
+            "Left out, `manual_run_goal_leads` from the settings (see `goal_leads` in the run "
+            "options). An automatic run aims for its share of the round's goal instead. The "
+            "run's limits still apply: no limit rises by itself (PLAN-V16 T1-9)."
+        ),
+        examples=[20],
+    )
 
     @field_validator("cities")
     @classmethod
@@ -466,9 +482,9 @@ class LeadFinderRunParams(_Discovery, _Caps):
     """Every part with its default. The Start page shows these as the starting values.
 
     A real run uses the model of its mode (above), which refuses the parts it doesn't use. So
-    send only the parts of your mode: `cities`, `area`, `triggers`, `since_days` and `sources`
-    for discovery, `watchlist` for watchlist, `companies` and `recheck` for company, and `caps` for
-    every mode (testset has nothing else).
+    send only the parts of your mode: `cities`, `area`, `triggers`, `since_days`, `sources` and
+    `goal_leads` for discovery, `watchlist` for watchlist, `companies` and `recheck` for company,
+    and `caps` for every mode (testset has nothing else).
     """
 
     watchlist: WatchlistOptions = Field(

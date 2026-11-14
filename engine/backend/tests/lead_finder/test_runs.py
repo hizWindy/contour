@@ -24,7 +24,7 @@ from core.hubspot.models import HubSpotCompany, HubSpotDeal
 from core.hubspot.service import save_export
 from core.memory.models import MemoryItem
 from core.runs.manager import RunManager
-from core.runs.schemas import RunCreate
+from core.runs.schemas import RunCreate, RunOut
 from core.searches.models import SearchLog
 from tests.core.conftest import MemorySource
 from tests.core.runs_fakes import (
@@ -108,7 +108,15 @@ async def test_a_discovery_run_finds_merges_chooses_and_researches(
     run_id = await start(manager, "discovery", DISCOVERY)
     row = await finished(manager, session_factory, run_id)
 
-    assert (row.status, row.stop_reason, row.error) == ("done", None, None)
+    assert (row.status, row.error) == ("done", None)
+    # It aimed for 20 good leads (the default, PLAN-V16 T1-9) and found fewer: it says why
+    good = row.counts["good"]
+    assert row.stop_reason == (
+        f"Found {good} of 20 leads. Discovery found no more companies to research."
+    )
+    shown = RunOut.model_validate(row)
+    assert (shown.goal_leads, shown.good_leads) == (20, good)
+    assert shown.leads_by_source == {"web": 5, "property_daily": 0, "arealytics": 0}
     events = await stored_json(session_factory, run_id)
     assert of_type(events, "plan_ready") == [
         {"slices": 9, "companies": 0, "labels": of_type(events, "plan_ready")[0]["labels"]}
@@ -218,6 +226,17 @@ async def test_the_default_start_choice_fits_the_default_caps_and_ends_under_the
     manager = make_lf_manager(FakeClaude(scenario=sample_scenario()))
     estimate = await manager.estimate(RunCreate(app=APP, mode="discovery", params={}))
     assert (estimate.valid, estimate.slices, estimate.blocked) == (True, 8, None)
+    # How many leads (PLAN-V16 T1-9): 20 at 40% (no finished run yet) needs 50 companies. The
+    # money limit binds: US$20, less 8 searches at US$0.40, pays for 16 at US$1.00 a company.
+    assert estimate.companies_needed == 50
+    assert estimate.goal_note == (
+        "20 leads needs about 50 companies. This run's money limit (US$20) allows about 16. "
+        "An Admin can raise it in Settings."
+    )
+    scheduled = await manager.estimate(
+        RunCreate(app=APP, mode="discovery", params={}), scheduled=True
+    )
+    assert (scheduled.companies_needed, scheduled.goal_note) == (None, None)  # the round's goal
     run_id = await start(manager, "discovery", {})
     row = await finished(manager, session_factory, run_id)
     assert row.status == "done"
@@ -596,6 +615,8 @@ async def test_a_run_without_the_web_finds_its_companies_in_property_dailys_feed
     assert of_type(events, "merged") == [{"candidates": 1, "unique": 1}]
     (lead,) = await leads_of(session_factory, run_id)
     assert lead.company_key == company_key("Sample Logistics Pty Ltd")
+    shown = RunOut.model_validate(row)
+    assert shown.leads_by_source == {"web": 0, "property_daily": 1, "arealytics": 0}
     signs = [score["trigger"] for score in lead.card["triggers"]]
     assert any(s["id"] == "lease_ending" and s["source_url"] == link for s in signs)
     async with session_factory() as session:
@@ -612,3 +633,71 @@ async def test_a_run_that_names_a_tool_that_isnt_ready_is_refused(
     with pytest.raises(Problem) as refused:
         await start(manager, "discovery", {**DISCOVERY, "sources": ["web", "property_daily"]})
     assert (refused.value.status, refused.value.code) == (422, "source_not_ready")
+
+
+# --- How many leads (PLAN-V16 T1-9) -------------------------------------------------------------
+
+
+async def test_a_run_stops_starting_companies_once_it_has_its_goal(
+    make_lf_manager: MakeLeadFinderManager, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    claude = FakeClaude(scenario=sample_scenario())
+    manager = make_lf_manager(claude, settings=lf_settings(run_company_concurrency=1))
+    run_id = await start(manager, "discovery", {**DISCOVERY, "goal_leads": 2})
+    row = await finished(manager, session_factory, run_id)
+
+    assert (row.status, row.stop_reason) == ("done", None)  # it met its goal: no stop
+    assert (row.counts["goal"], row.counts["good"], row.counts["researched"]) == (2, 2, 2)
+    events = await stored_json(session_factory, run_id)
+    skipped = [e for e in of_type(events, "company_skipped") if "goal" in e["reason"]]
+    assert {e["reason"] for e in skipped} == {"the run reached its goal of 2 good leads"}
+    assert len(skipped) == 3  # the other 3 of the 5 it found were never started
+    shown = RunOut.model_validate(row)
+    assert (shown.goal_leads, shown.good_leads) == (2, 2)
+
+
+async def test_a_run_that_ends_short_at_the_company_limit_says_so(
+    make_lf_manager: MakeLeadFinderManager, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    manager = make_lf_manager(FakeClaude(scenario=sample_scenario()))
+    params = {**DISCOVERY, "goal_leads": 20, "caps": {"max_companies": 2}}
+    run_id = await start(manager, "discovery", params)
+    row = await finished(manager, session_factory, run_id)
+
+    assert row.status == "done"
+    assert row.counts["researched"] == 2
+    assert row.stop_reason == (
+        f"Found {row.counts['good']} of 20 leads. It researched the most companies one run may (2)."
+    )
+
+
+async def test_a_run_that_ends_short_at_the_money_limit_says_so(
+    make_lf_manager: MakeLeadFinderManager, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    """US$2 holds one discovery search (US$0.60 of its US$0.80 share), then not one company
+    (each holds US$2 when it starts)."""
+    manager = make_lf_manager(FakeClaude(scenario=sample_scenario()))
+    params = {
+        "cities": ["Melbourne"],
+        "triggers": ["lease_ending"],
+        "since_days": 30,
+        "goal_leads": 5,
+        "caps": {"run_cap_usd": "2.00"},
+    }
+    run_id = await start(manager, "discovery", params)
+    row = await finished(manager, session_factory, run_id)
+
+    assert row.status == "done"
+    assert row.stop_reason == "Found 0 of 5 leads. It stopped at the run limit (US$2)."
+    events = await stored_json(session_factory, run_id)
+    assert of_type(events, "cap_reached")[0]["kind"] == "run_cost"
+
+
+async def test_a_person_asks_for_1_to_100_leads(make_lf_manager: MakeLeadFinderManager) -> None:
+    manager = make_lf_manager(FakeClaude())
+    for wrong in (0, 101):
+        estimate = await manager.estimate(
+            RunCreate(app=APP, mode="discovery", params={"goal_leads": wrong})
+        )
+        assert not estimate.valid
+        assert [error.field for error in estimate.errors] == ["body.params.goal_leads"]

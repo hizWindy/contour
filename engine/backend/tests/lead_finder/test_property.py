@@ -477,22 +477,22 @@ def test_without_the_web_a_run_makes_no_web_searches() -> None:
 
 
 def test_the_start_page_sees_each_source_and_why_one_isnt_ready() -> None:
+    """By id, with `message`: the names Track 3 chose where the contract left one open."""
     options = source_options(lf_settings())
-    assert [(o.id, o.on, o.ready, o.sentence) for o in options] == [
-        ("web", True, True, None),
-        (
-            "property_daily",
+    assert {key: (o.on, o.ready, o.message) for key, o in options.items()} == {
+        "web": (True, True, None),
+        "property_daily": (
             False,
             False,
             "Property Daily is switched off. An Admin can switch it on.",
         ),
-        ("arealytics", False, False, "Arealytics isn't connected: it refused automated access."),
-    ]
+        "arealytics": (False, False, "Arealytics isn't connected: it refused automated access."),
+    }
     no_login = lf_settings(property_daily_enabled=True)
-    assert source_options(no_login)[1].sentence == (
+    assert source_options(no_login)["property_daily"].message == (
         "Property Daily has no login yet. An Admin needs to add one."
     )
-    assert source_options(lf_settings(**READY))[1].ready
+    assert source_options(lf_settings(**READY))["property_daily"].ready
 
 
 def test_a_source_is_named_once() -> None:

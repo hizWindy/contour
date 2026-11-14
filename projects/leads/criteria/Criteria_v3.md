@@ -261,6 +261,12 @@ Run four passes. Say plainly what couldn't be checked. Accuracy matters more tha
 - Check the lead list, the client list and past pursuits before adding a company. A repeat run updates a lead and doesn't duplicate it.
 - Score a lead again when a new sign or dampener appears, and say what changed since the last run.
 
+**How many leads (PLAN-V16 T1-9, 15 Nov). Our reading, TBC.**
+- **A run a person starts** says how many good leads it wants (Tier A or B: a Pass or a Director review), 1 to 100. The default is 20, a setting an Admin can change. The run stops starting companies once it has them. An automatic run aims for its share of the round's goal, as before.
+- **The limits still apply.** No limit rises by itself. Today a manual run may research 20 companies and spend US$20.
+- **The estimate tells the truth.** It works out the companies the goal needs from the pass rate of the last 5 runs (40% until there are any; never under 5%). Example: 20 leads at 40% needs about 50 companies. When the run's limits allow fewer, it names the limit that binds: "20 leads needs about 50 companies. This run's money limit (US$20) allows about 16. An Admin can raise it in Settings."
+- **A run that ends short says why:** "Found 12 of 20 leads. It stopped at the run limit (US$20)." Or "It researched the most companies one run may (20)", or "Discovery found no more companies to research".
+
 ## 9. Output
 
 Each run returns a ranked table of leads, then a one-page profile for every Tier A lead, then the excluded list and the watch list. Each lead shows:

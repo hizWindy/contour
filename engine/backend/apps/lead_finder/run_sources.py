@@ -77,18 +77,12 @@ def tool_readiness(settings: Settings) -> dict[RunSource, Readiness]:
     return found
 
 
-def source_options(settings: Settings) -> list[SourceOption]:
-    """The three sources for the Start page (`GET /lead-finder/run-options`)."""
-    return [
-        SourceOption(
-            id=source,
-            label=SOURCE_WORDS[source],
-            on=readiness.on,
-            ready=readiness.ready,
-            sentence=readiness.sentence,
-        )
+def source_options(settings: Settings) -> dict[RunSource, SourceOption]:
+    """The three sources for the Start page (`GET /lead-finder/run-options`), by id."""
+    return {
+        source: SourceOption(on=readiness.on, ready=readiness.ready, message=readiness.sentence)
         for source, readiness in tool_readiness(settings).items()
-    ]
+    }
 
 
 def picked_tools(

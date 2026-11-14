@@ -4,7 +4,13 @@ settings in force. Nothing here calls Claude."""
 from decimal import Decimal
 
 from apps.lead_finder.geo import CITY_CENTRES, NATIONAL_CENTRE
-from apps.lead_finder.params import COMPANIES_MAX, COMPANIES_MIN, LeadFinderRunParams
+from apps.lead_finder.params import (
+    COMPANIES_MAX,
+    COMPANIES_MIN,
+    GOAL_LEADS_MAX,
+    GOAL_LEADS_MIN,
+    LeadFinderRunParams,
+)
 from apps.lead_finder.rules import CITY_GROUPS, LeadFinderRules
 from apps.lead_finder.run_sources import source_options
 from apps.lead_finder.runs import MODES_NEEDING_APPROVAL, RUN_KINDS
@@ -12,6 +18,7 @@ from apps.lead_finder.schemas import (
     AreaOption,
     CityOption,
     CompaniesLimit,
+    GoalLeadsOption,
     ModeOption,
     OptionCaps,
     RunOptions,
@@ -105,5 +112,8 @@ def build_run_options(
             daily_left_usd=daily_left_usd,
         ),
         sources=source_options(settings),
+        goal_leads=GoalLeadsOption(
+            default=settings.manual_run_goal_leads, min=GOAL_LEADS_MIN, max=GOAL_LEADS_MAX
+        ),
         defaults=defaults,
     )

@@ -356,6 +356,9 @@ def test_run_counts_start_at_zero() -> None:
         "failed": 0,
         "by_result": {},
         "resumes": 0,
+        "goal": None,  # PLAN-V16 T1-9: how many leads a run aims for, and found
+        "good": 0,
+        "by_source": {},
     }
 
 

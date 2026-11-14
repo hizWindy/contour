@@ -229,6 +229,7 @@ class EstimateContext[P: BaseModel]:
     daily_left_usd: Decimal
     unit_costs: UnitCosts
     session_factory: async_sessionmaker[AsyncSession]
+    scheduled: bool = False  # the estimate of a run a schedule would start (PLAN-V16 T1-9)
 
     @asynccontextmanager
     async def session(self) -> AsyncIterator[AsyncSession]:

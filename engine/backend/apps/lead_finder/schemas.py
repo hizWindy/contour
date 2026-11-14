@@ -126,17 +126,23 @@ class OptionCaps(BaseModel):
 class SourceOption(BaseModel):
     """Where a discovery run can look for companies (PLAN-V16 T1-8, the contract part 2)."""
 
-    id: RunSource
-    label: str = Field(examples=["Property Daily"])
     on: bool = Field(description="The tool's switch. The web is always on.")
     ready: bool = Field(
         description="It can be used now: on, and with a login. A run may name only a ready one."
     )
-    sentence: str | None = Field(
+    message: str | None = Field(
         description="Why it isn't ready, in one plain sentence for the Start page. Empty when "
         "it is ready.",
         examples=["Property Daily is switched off. An Admin can switch it on."],
     )
+
+
+class GoalLeadsOption(BaseModel):
+    """ "How many leads" on the Start page (PLAN-V16 T1-9)."""
+
+    default: int = Field(description="`manual_run_goal_leads` from the settings", examples=[20])
+    min: int
+    max: int
 
 
 class RunOptions(BaseModel):
@@ -155,12 +161,16 @@ class RunOptions(BaseModel):
     )
     companies_limit: CompaniesLimit
     caps: OptionCaps
-    sources: list[SourceOption] = Field(
-        default_factory=list,
+    sources: dict[RunSource, SourceOption] = Field(
+        default_factory=dict,
         description=(
-            "Where discovery can look: the web, Property Daily and Arealytics, in that order "
-            "(PLAN-V16 T1-8). A run's `sources` left out uses every one that is ready."
+            "Where discovery can look, by id: `web`, `property_daily` and `arealytics` (PLAN-V16 "
+            "T1-8). A run's `sources` left out uses every one that is ready."
         ),
+    )
+    goal_leads: GoalLeadsOption = Field(
+        description="How many good leads a run a person starts may aim for, and the default "
+        "(PLAN-V16 T1-9)"
     )
     defaults: LeadFinderRunParams = Field(
         description=(
