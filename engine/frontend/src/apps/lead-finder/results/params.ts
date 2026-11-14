@@ -6,13 +6,31 @@
  * The address uses the API's own names (`result`, `city`, `min_score`, repeated keys for lists),
  * plus `view`, `sort`, `order`, `page` (from 1) and `lead`. A value that can't be read is ignored,
  * so a bad link still opens the page. Defaults are left out of the address.
+ *
+ * The tier (PLAN-V16 T3-5): the default view is Tier A and B, the good leads, so an address with no
+ * `tier` shows those, and `tier=all` shows every tier. The API gets the tiers spelled out either
+ * way, so the list never depends on what the server does with no tier.
  */
-import type { HubSpotStatus, LeadOrigin, LeadResult, LeadStatus, QueryOf } from '@/api/types'
+import type {
+  CityGroup,
+  Confidence,
+  HubSpotStatus,
+  LeadOrigin,
+  LeadResult,
+  LeadStatus,
+  QueryOf,
+  Tier,
+} from '@/api/types'
+import type { LeadsQueryV16 } from '@/api/v16'
 import {
+  CITY_GROUP_LABELS,
+  CONFIDENCE_LABELS,
   HUBSPOT_STATUS_LABELS,
   LEAD_STATUS_LABELS,
   ORIGIN_LABELS,
   RESULT_LABELS,
+  TIER_LABELS,
+  TIER_ORDER,
 } from '@/lib/labels'
 
 export type ResultsView = 'table' | 'map'
@@ -51,7 +69,28 @@ export const FIRST_ORDER: Record<SortKey, SortOrder> = {
   cost_usd: 'desc',
 }
 
+/** The default view: the good leads (the plan's choice 2). */
+export const DEFAULT_TIERS: readonly Tier[] = ['A', 'B']
+
+/** A city group a lead can be in. "All of Australia" is a way to search, not a lead's place. */
+export type LeadCityGroup = Exclude<CityGroup, 'national'>
+
+const LEAD_CITY_GROUPS: Record<LeadCityGroup, string> = {
+  priority: CITY_GROUP_LABELS.priority,
+  secondary: CITY_GROUP_LABELS.secondary,
+  capital: CITY_GROUP_LABELS.capital,
+  regional: CITY_GROUP_LABELS.regional,
+}
+
 export interface LeadFilters {
+  /** Tier A, B, C or Discard. Empty is every tier; the default is A and B. */
+  tier: Tier[]
+  confidence: Confidence[]
+  city_group: LeadCityGroup[]
+  /** Only leads with something from Property Daily or Arealytics. */
+  has_property: boolean
+  /** Only the leads an exclusion left out. */
+  excluded: boolean
   result: LeadResult[]
   city: string[]
   trigger: string[]
@@ -87,6 +126,11 @@ export interface ResultsState {
 }
 
 export const NO_FILTERS: LeadFilters = {
+  tier: [...DEFAULT_TIERS],
+  confidence: [],
+  city_group: [],
+  has_property: false,
+  excluded: false,
   result: [],
   city: [],
   trigger: [],
@@ -117,6 +161,8 @@ export const DEFAULT_STATE: ResultsState = {
 }
 
 const LIST_KEYS = [
+  'confidence',
+  'city_group',
   'result',
   'city',
   'trigger',
@@ -180,8 +226,18 @@ export function readResults(params: URLSearchParams): ResultsState {
   const sort = params.get('sort')
   const order = params.get('order')
   const page = wholeNumber(params.get('page'))
+  const tiers = oneOf(params.getAll('tier'), TIER_LABELS)
   const filters: LeadFilters = {
     ...NO_FILTERS,
+    tier: params.getAll('tier').includes('all')
+      ? []
+      : tiers.length > 0
+        ? TIER_ORDER.filter((tier) => tiers.includes(tier))
+        : [...DEFAULT_TIERS],
+    confidence: oneOf(params.getAll('confidence'), CONFIDENCE_LABELS),
+    city_group: oneOf(params.getAll('city_group'), LEAD_CITY_GROUPS),
+    has_property: params.get('has_property') === 'true',
+    excluded: params.get('excluded') === 'true',
     result: oneOf(params.getAll('result'), RESULT_LABELS),
     hubspot_status: oneOf(params.getAll('hubspot_status'), HUBSPOT_STATUS_LABELS),
     status: oneOf(params.getAll('status'), LEAD_STATUS_LABELS),
@@ -225,6 +281,13 @@ export function writeResults(state: ResultsState): URLSearchParams {
   if (filters.q.trim() !== '') {
     params.set('q', filters.q)
   }
+  if (filters.tier.length === 0) {
+    params.set('tier', 'all')
+  } else if (!isDefaultTiers(filters.tier)) {
+    for (const tier of filters.tier) {
+      params.append('tier', tier)
+    }
+  }
   for (const key of LIST_KEYS) {
     for (const value of filters[key]) {
       params.append(key, value)
@@ -251,6 +314,12 @@ export function writeResults(state: ResultsState): URLSearchParams {
   if (filters.facts_missing) {
     params.set('facts_missing', 'true')
   }
+  if (filters.has_property) {
+    params.set('has_property', 'true')
+  }
+  if (filters.excluded) {
+    params.set('excluded', 'true')
+  }
   if (state.sort !== DEFAULT_STATE.sort || state.order !== DEFAULT_STATE.order) {
     params.set('sort', state.sort)
     params.set('order', state.order)
@@ -267,9 +336,18 @@ export function writeResults(state: ResultsState): URLSearchParams {
   return params
 }
 
+/** True for the default view's tiers, A and B, in any order. */
+export function isDefaultTiers(tiers: readonly Tier[]): boolean {
+  return (
+    tiers.length === DEFAULT_TIERS.length && DEFAULT_TIERS.every((tier) => tiers.includes(tier))
+  )
+}
+
 /** How many filters are set (a list with values counts once). For "Clear filters". */
 export function activeFilterCount(filters: LeadFilters): number {
-  let count = 0
+  let count = isDefaultTiers(filters.tier) ? 0 : 1
+  if (filters.has_property) count += 1
+  if (filters.excluded) count += 1
   for (const key of LIST_KEYS) {
     if (filters[key].length > 0) {
       count += 1
@@ -292,9 +370,18 @@ export function activeFilterCount(filters: LeadFilters): number {
   return count
 }
 
+/** The filters every leads route takes, with PLAN-V16's (typed by hand until M1). */
+export type FilterQuery = NonNullable<QueryOf<'lead_facets'>> & LeadsQueryV16
+
 /** The filters as the API takes them: empty values left out. Facets and the map use these. */
-export function filterQuery(filters: LeadFilters): NonNullable<QueryOf<'lead_facets'>> {
-  const query: NonNullable<QueryOf<'lead_facets'>> = {}
+export function filterQuery(filters: LeadFilters): FilterQuery {
+  const query: FilterQuery = {}
+  // Every tier is spelled out too, so "every tier" never depends on the server's default.
+  query.tier = filters.tier.length > 0 ? [...filters.tier] : [...TIER_ORDER]
+  if (filters.confidence.length > 0) query.confidence = [...filters.confidence]
+  if (filters.city_group.length > 0) query.city_group = [...filters.city_group]
+  if (filters.has_property) query.has_property = true
+  if (filters.excluded) query.excluded = true
   if (filters.result.length > 0) query.result = [...filters.result]
   if (filters.city.length > 0) query.city = [...filters.city]
   if (filters.trigger.length > 0) query.trigger = [...filters.trigger]
@@ -331,7 +418,7 @@ export function filterQuery(filters: LeadFilters): NonNullable<QueryOf<'lead_fac
 }
 
 /** One page of the table, sorted. */
-export function listQuery(state: ResultsState): NonNullable<QueryOf<'list_leads'>> {
+export function listQuery(state: ResultsState): NonNullable<QueryOf<'list_leads'>> & LeadsQueryV16 {
   // The filters are the same on every leads route, so the facets' query fits the list's.
   return {
     ...filterQuery(state.filters),
@@ -343,7 +430,9 @@ export function listQuery(state: ResultsState): NonNullable<QueryOf<'list_leads'
 }
 
 /** The CSV: every lead that matches, in the table's order. */
-export function exportQuery(state: ResultsState): NonNullable<QueryOf<'export_leads'>> {
+export function exportQuery(
+  state: ResultsState,
+): NonNullable<QueryOf<'export_leads'>> & LeadsQueryV16 {
   return { ...filterQuery(state.filters), sort: state.sort, order: state.order }
 }
 

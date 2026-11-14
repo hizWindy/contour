@@ -3,8 +3,9 @@
  * the API's sort key, so the table's sort state and the address use the same word.
  *
  * The table shows what tells leads apart at a glance (PLAN-V6, E1): the company and where it came
- * from, the result, the score, the best sign and its date, the city, the HubSpot label with its
- * owner, and when it was researched. Everything else is one click away, on the lead card.
+ * from, the tier (PLAN-V16 T3-5), the result, the score, the best sign and its date, the city, the
+ * HubSpot label with its owner, and when it was researched. Everything else is one click away, on
+ * the lead card.
  *
  * The company name is a button: a click or Enter opens the lead card, through the row's own click.
  *
@@ -16,6 +17,7 @@ import { createColumnHelper } from '@tanstack/react-table'
 import type { LeadRow } from '@/api/types'
 import { HubSpotBadge } from '@/components/hubspot-badge'
 import { ResultBadge } from '@/components/result-badge'
+import { TierMark } from '@/components/tier-mark'
 import { formatDate, formatScore, UNKNOWN } from '@/lib/format'
 import { CompanyName, RowTick, type Tick } from './company-cell'
 
@@ -43,6 +45,13 @@ function companyColumn(tick?: Tick) {
 }
 
 const company = companyColumn()
+
+/** The tier, in words: the headline since PLAN-V16. The list is sorted by tier, then score. */
+const tier = help.accessor('tier', {
+  header: 'Tier',
+  enableSorting: false,
+  cell: (info) => <TierMark tier={info.getValue()} />,
+})
 
 const result = help.accessor('result', {
   header: 'Result',
@@ -111,19 +120,19 @@ const researched = help.accessor('created_at', {
 })
 
 /** The full table. */
-export const TABLE_COLUMNS = [company, result, score, sign, city, hubspot, researched]
+export const TABLE_COLUMNS = [company, tier, result, score, sign, city, hubspot, researched]
 
 /** The list beside the map: enough to tell the leads apart. */
-export const LIST_COLUMNS = [company, result, score, city]
+export const LIST_COLUMNS = [company, tier, result, score, city]
 
 /** The full table, with tick boxes on the review page. */
 export function tableColumns(tick?: Tick) {
   return tick
-    ? [companyColumn(tick), result, score, sign, city, hubspot, researched]
+    ? [companyColumn(tick), tier, result, score, sign, city, hubspot, researched]
     : TABLE_COLUMNS
 }
 
 /** The list beside the map, with tick boxes on the review page. */
 export function listColumns(tick?: Tick) {
-  return tick ? [companyColumn(tick), result, score, city] : LIST_COLUMNS
+  return tick ? [companyColumn(tick), tier, result, score, city] : LIST_COLUMNS
 }

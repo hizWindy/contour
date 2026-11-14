@@ -60,6 +60,7 @@ import {
   type LeadFilters,
   type ResultsState,
 } from './params'
+import { spreadOverCities } from './map-fit'
 
 const COMPACT_KEY = 'lead-finder.results.compact'
 
@@ -272,6 +273,8 @@ export default function ResultsPage() {
           activePointId={activeRow}
           onSelectPoint={openLead}
           approximate
+          // All of Australia when the leads are spread over cities, else the one city (T3-5).
+          wholeCountry={spreadOverCities(map.data?.items ?? [])}
           fitToPoints
         />
       )}
