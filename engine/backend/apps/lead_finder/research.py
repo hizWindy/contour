@@ -70,6 +70,16 @@ from apps.lead_finder.headcount import (
     wants_signalhire,
 )
 from apps.lead_finder.office_numbers import hubspot_staff, office_numbers
+from apps.lead_finder.output import (
+    Headcount,
+    Office,
+    Space,
+    WhatChanged,
+    headcount_of,
+    office_of,
+    space_of,
+    what_changed,
+)
 from apps.lead_finder.params import (
     NAME_MESSAGE,
     clean_typed_city,
@@ -378,6 +388,31 @@ class LeadCard(BaseModel):
         "T1-8): their records, newest first (at most 30), and each tool's status (found, "
         "not_found, off, error or not_checked). A tool that is off has no records here. Empty "
         "for a card made before it, and for a company too small to research.",
+    )
+    office: Office | None = Field(
+        default=None,
+        description="The current office (Levi's section 9, PLAN-V16 T1-10): the address from a "
+        "property tool, and the size, move-in date and lease end the rules used. Empty when "
+        "nothing about it is known, and for a card made before it.",
+    )
+    headcount: Headcount | None = Field(
+        default=None,
+        description="Local staff now and projected, each confirmed or estimated. Empty when "
+        "neither is known.",
+    )
+    space: Space | None = Field(
+        default=None, description="The space now and projected, at about 10 m² a person"
+    )
+    contour_angle: str | None = Field(
+        default=None, description="The strategic hook, like post-merger integration"
+    )
+    contact_roles: list[str] = Field(
+        default_factory=list, description="The likely roles to contact, best first. No names."
+    )
+    what_changed: WhatChanged | None = Field(
+        default=None,
+        description="This research against the last research of the same company: new, upgraded, "
+        "downgraded or unchanged, with one sentence. Empty for a card made before PLAN-V16 T1-10.",
     )
 
 
@@ -817,6 +852,7 @@ async def _judge_and_card(
         if entry is not None:
             sources.append(entry)
     verdict = judge(facts, hubspot, rules, job.today)
+    headcount = headcount_of(facts, rules)
     card = LeadCard(
         id=job.id,
         company=facts.name or job.company,
@@ -845,6 +881,20 @@ async def _judge_and_card(
         problems=job.problems,
         form_failed=job.form_failed,
         property=for_card(job.from_tools),
+        office=office_of(
+            facts,
+            sources,
+            job.from_tools,
+            metro,
+            verdict.office_m2,
+            verdict.office_m2_estimated,
+            rules,
+            job.today,
+        ),
+        headcount=headcount,
+        space=space_of(headcount, rules),
+        contour_angle=facts.contour_angle,
+        contact_roles=facts.contact_roles,
         research=ResearchCost(
             cost_usd=job.budget.spent_usd,
             cap_usd=job.budget.cap_usd,
@@ -856,7 +906,26 @@ async def _judge_and_card(
         prompt_version=versions(rules),
         created_at=now,
     )
+    # What changed since the last research of this company (PLAN-V16 T1-10). Free: one read.
+    before = await _last_card(session, company_key(request.company), job.id, context.is_test)
+    card = card.model_copy(
+        update={"what_changed": what_changed(card.model_dump(mode="json"), before, rules)}
+    )
     return card, hubspot, place, metro, profile_text
+
+
+async def _last_card(
+    session: AsyncSession, key: str, lead_id: uuid.UUID, is_test: bool
+) -> dict[str, Any] | None:
+    """The saved card of the newest other research of the same company, or None. A test-set lead
+    and a real one are kept apart, as in the lead list."""
+    found: dict[str, Any] | None = await session.scalar(
+        select(Lead.card)
+        .where(Lead.company_key == key, Lead.id != lead_id, Lead.is_test.is_(is_test))
+        .order_by(Lead.created_at.desc(), Lead.id)
+        .limit(1)
+    )
+    return found
 
 
 async def _why_now(session: AsyncSession, job: Job, claude: Claude, card: LeadCard) -> LeadCard:
@@ -1324,6 +1393,7 @@ def empty_facts(company: str, summary: str = "Nothing useful was found.") -> Com
         owner=unknown(),
         staff_in_city=unknown(),
         staff_from_linkedin=False,
+        staff_projected=unknown(),
         office_m2=unknown(),
         local_team_runs_project=unknown(),
         healthy=unknown(),
@@ -1342,6 +1412,8 @@ def empty_facts(company: str, summary: str = "Nothing useful was found.") -> Com
         fitout_contractors=[],
         talking_points=[],
         contact_role=None,
+        contact_roles=[],
+        contour_angle=None,
         decision_makers=[],
         summary=summary,
         opening_line=None,

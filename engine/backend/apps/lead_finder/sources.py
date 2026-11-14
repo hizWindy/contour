@@ -22,6 +22,7 @@ FACT_FIELDS = (
     "industry",
     "owner",
     "staff_in_city",
+    "staff_projected",
     "office_m2",
     "local_team_runs_project",
     "healthy",

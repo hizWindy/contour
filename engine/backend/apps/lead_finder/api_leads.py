@@ -19,11 +19,13 @@ from apps.lead_finder.context import Origin
 from apps.lead_finder.lead_store import SORT_COLUMNS, lead_conditions, newest_only
 from apps.lead_finder.rules import Result, load_rules
 from apps.lead_finder.schemas import (
+    CityGroupFilter,
     HubSpotStatus,
     LeadDetail,
     LeadFacets,
     LeadPage,
     LeadPatch,
+    LeadProfile,
     LeadSort,
     LeadStatus,
     MapOut,
@@ -31,6 +33,7 @@ from apps.lead_finder.schemas import (
     SimilarOut,
     SortOrder,
 )
+from apps.lead_finder.scoring import Confidence, Tier
 from apps.lead_finder.similar import similar_for
 from core.api.access import SignedInDep
 from core.api.deps import EmbedderDep, SessionDep
@@ -109,6 +112,26 @@ class LeadFilters(lead_store.LeadFilters):
             "the answer form. Re-check them."
         ),
     ] = False
+    tier: Annotated[
+        list[Tier] | None,
+        Query(description="A, B, C or discard (PLAN-V16). Left out: every lead. " + REPEAT),
+    ] = None
+    confidence: Annotated[list[Confidence] | None, Query(description=REPEAT)] = None
+    city_group: Annotated[
+        list[CityGroupFilter] | None,
+        Query(description="priority, secondary, capital or regional: the city's group. " + REPEAT),
+    ] = None
+    has_property: Annotated[
+        bool | None,
+        Query(description="true: only leads a property tool has a record of. false: the others."),
+    ] = None
+    excluded: Annotated[
+        bool | None,
+        Query(
+            description="true: only leads left out by an exclusion that nobody overrode. "
+            "false: the others."
+        ),
+    ] = None
 
 
 Filters = Annotated[LeadFilters, Depends()]
@@ -222,6 +245,25 @@ async def reject_reasons(
     days: Annotated[int, Query(ge=1, le=365, description="How many days back")] = 90,
 ) -> RejectReasonCounts:
     return await lead_store.reject_reason_counts(session, days)
+
+
+@router.get(
+    "/{lead_id}/profile",
+    response_model=LeadProfile,
+    summary="The one-page profile of a Tier A lead",
+    description=(
+        "Everything Levi's section 9 lists for a lead, in one answer, for the print view: the "
+        "tier, score and confidence, the headcount and space, the signs, the dampeners, the "
+        "current office, why now, the Contour angle, who to contact, the opener and what changed. "
+        "404 for an unknown lead, and 409 `not_tier_a` for a lead that isn't Tier A."
+    ),
+    responses={404: {"description": "No such lead"}, 409: {"description": "Not Tier A"}},
+)
+async def get_profile(session: SessionDep, lead_id: uuid.UUID) -> LeadProfile:
+    profile = await lead_store.get_profile(session, lead_id)
+    if profile is None:
+        raise Problem(404, *lead_store.NOT_FOUND)
+    return profile
 
 
 @router.get("/{lead_id}", response_model=LeadDetail, summary="One lead card")

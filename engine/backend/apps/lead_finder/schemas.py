@@ -14,10 +14,11 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic_core import PydanticCustomError
 
 from apps.lead_finder.context import Origin
+from apps.lead_finder.output import Headcount, Office, Space, WhatChanged
 from apps.lead_finder.params import AreaId, LeadFinderRunParams, RunSource
 from apps.lead_finder.research import LeadCard
 from apps.lead_finder.rules import Result
-from apps.lead_finder.scoring import Band
+from apps.lead_finder.scoring import Band, Confidence, Dampener, Excluded, Tier
 from core.api.models import OutModel, SafeText
 from core.hubspot.matching import Status
 from core.runs.schemas import RunStatus
@@ -49,6 +50,7 @@ CityKind = Literal["pass", "director_review"]
 CityGroupOption = Literal["priority", "secondary", "capital", "regional", "national"]
 TriggerGroup = Literal["main", "other", "weak"]
 LeadSort = Literal[
+    "tier",  # tier A first, then the score (PLAN-V16 T1-10)
     "score",
     "created_at",
     "updated_at",
@@ -184,6 +186,39 @@ class RunOptions(BaseModel):
 
 # --- Leads ----------------------------------------------------------------------------------
 
+CityGroupFilter = Literal["priority", "secondary", "capital", "regional"]
+
+
+class ProfileSign(BaseModel):
+    label: str
+    what_happened: str
+    date: str | None
+    url: str | None
+
+
+class LeadProfile(BaseModel):
+    """The one-page profile of a Tier A lead (Levi's section 9, PLAN-V16 T1-10): what each lead
+    shows, in one answer. Every value is the saved card's."""
+
+    id: UUID
+    company: str
+    city: str | None
+    tier: Tier
+    score: int
+    confidence: Confidence | None
+    confidence_why: str | None
+    sector: str | None
+    headcount: Headcount | None
+    space: Space | None
+    signs: list[ProfileSign]
+    dampeners: list[Dampener]
+    office: Office | None
+    why_now: str | None = Field(description="Why a property decision is likely soon, if written")
+    contour_angle: str | None
+    contact_roles: list[str]
+    opener: str | None
+    what_changed: WhatChanged | None
+
 
 class LeadRow(BaseModel):
     """One row of the results table."""
@@ -201,6 +236,18 @@ class LeadRow(BaseModel):
     )
     band: Band | None = Field(
         description="research_first (75 to 100), investigate (50 to 74) or nurture (under 50)"
+    )
+    tier: Tier | None = Field(
+        default=None,
+        description="A, B, C or discard (PLAN-V16 T1-6). Empty for a lead judged before it.",
+    )
+    confidence: Confidence | None = Field(default=None, description="high, medium or low")
+    excluded: Excluded | None = Field(
+        default=None,
+        description="Why the lead is left out (the same object as the card's), or empty",
+    )
+    has_property: bool = Field(
+        default=False, description="True when a property tool has a record of the company"
     )
     status: LeadStatus
     hubspot_status: HubSpotStatus

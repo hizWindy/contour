@@ -1156,3 +1156,42 @@ async def test_a_company_too_small_to_research_uses_no_lookup(
     assert card.summary.startswith("Too small")
     assert calls == []  # no pages spent on it
     assert card.property is None
+
+
+# --- The output (PLAN-V16 T1-10) ---------------------------------------------------------------
+
+
+async def test_the_card_has_the_office_the_headcount_the_space_and_what_changed(
+    session: AsyncSession,
+) -> None:
+    facts = make_facts(
+        office_since=fact("2015-03"),
+        staff_projected=fact(320, ASX, "estimated"),
+        contour_angle="growth planning",
+        contact_roles=["COO", "Head of Property"],
+    )
+    card = await research(session, FakeClaude(facts=facts))
+
+    assert card.office is not None
+    assert (card.office.area_m2, card.office.area_basis) == (2500, "confirmed")
+    assert card.office.since_words == "At this address since at least 2015."
+    assert (card.office.lease_end, card.office.source) == ("2028-03", "web_research")
+    assert card.headcount is not None
+    assert (card.headcount.now, card.headcount.projected) == (250, 320)
+    assert card.space is not None and card.space.projected_m2 == 3200
+    assert (card.contour_angle, card.contact_roles) == (
+        "growth planning",
+        ["COO", "Head of Property"],
+    )
+    assert card.what_changed is not None
+    assert card.what_changed.text == "New: the first research of this company."
+
+    again = await research(session, FakeClaude(facts=facts))  # the same company, the same facts
+    assert again.what_changed is not None
+    assert (again.what_changed.kind, again.what_changed.text) == (
+        "unchanged",
+        f"Unchanged: still Tier {again.tier}.",
+    )
+    dropped = await research(session, FakeClaude(facts=make_facts(triggers=[])))  # its sign is gone
+    assert dropped.what_changed is not None and dropped.what_changed.kind == "downgraded"
+    assert "a sign no longer counts" in dropped.what_changed.text

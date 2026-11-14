@@ -1,33 +1,6 @@
 {
   "components": {
     "schemas": {
-      "AccessPoints": {
-        "additionalProperties": false,
-        "properties": {
-          "contact_role": {
-            "minimum": 0.0,
-            "title": "Contact Role",
-            "type": "integer"
-          },
-          "customer_link": {
-            "minimum": 0.0,
-            "title": "Customer Link",
-            "type": "integer"
-          },
-          "hubspot_contact": {
-            "minimum": 0.0,
-            "title": "Hubspot Contact",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "contact_role",
-          "hubspot_contact",
-          "customer_link"
-        ],
-        "title": "AccessPoints",
-        "type": "object"
-      },
       "ApiTrafficOut": {
         "properties": {
           "endpoints": {
@@ -102,29 +75,6 @@
           "suburbs"
         ],
         "title": "AreaOption",
-        "type": "object"
-      },
-      "Bands": {
-        "additionalProperties": false,
-        "properties": {
-          "investigate": {
-            "exclusiveMinimum": 0.0,
-            "maximum": 100.0,
-            "title": "Investigate",
-            "type": "integer"
-          },
-          "research_first": {
-            "exclusiveMinimum": 0.0,
-            "maximum": 100.0,
-            "title": "Research First",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "research_first",
-          "investigate"
-        ],
-        "title": "Bands",
         "type": "object"
       },
       "Blocked": {
@@ -244,13 +194,31 @@
       },
       "Cities": {
         "additionalProperties": false,
+        "description": "Where a lead's office may be, for all of Australia (PLAN-V16 T1-2, Al-khair 15 Nov).\n\nEvery place in a group passes the location filter. The groups only change the city points of\nthe score. A place that isn't listed passes too, with the flag \"check the city\"\n(`scoring._city`). `national` is not a place: it is the name of the run choice that searches\nall of Australia at once, one search for each sign instead of one for each city.",
         "properties": {
-          "director_review": {
-            "items": {
-              "type": "string"
+          "groups": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
             },
-            "title": "Director Review",
-            "type": "array"
+            "propertyNames": {
+              "enum": [
+                "priority",
+                "secondary",
+                "capital",
+                "regional"
+              ]
+            },
+            "title": "Groups",
+            "type": "object"
+          },
+          "national": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "National",
+            "type": "string"
           },
           "no_city_director_signs": {
             "items": {
@@ -258,28 +226,11 @@
             },
             "title": "No City Director Signs",
             "type": "array"
-          },
-          "other_cities": {
-            "enum": [
-              "director_review",
-              "drop"
-            ],
-            "title": "Other Cities",
-            "type": "string"
-          },
-          "pass": {
-            "items": {
-              "type": "string"
-            },
-            "minItems": 1,
-            "title": "Pass",
-            "type": "array"
           }
         },
         "required": [
-          "pass",
-          "director_review",
-          "other_cities"
+          "groups",
+          "national"
         ],
         "title": "Cities",
         "type": "object"
@@ -293,8 +244,23 @@
             "title": "Areas",
             "type": "array"
           },
+          "group": {
+            "description": "priority (Melbourne, Adelaide, Perth), secondary (Sydney, Brisbane), capital, regional, or national: the choice `Australia`, which searches all of Australia at once and must be chosen alone",
+            "enum": [
+              "priority",
+              "secondary",
+              "capital",
+              "regional",
+              "national"
+            ],
+            "examples": [
+              "priority"
+            ],
+            "title": "Group",
+            "type": "string"
+          },
           "kind": {
-            "description": "pass: a result can pass. director_review: a Director looks.",
+            "description": "pass for every place since PLAN-V16 (every place in Australia can pass). director_review stays in the type for older clients and is no longer sent.",
             "enum": [
               "pass",
               "director_review"
@@ -322,11 +288,39 @@
         "required": [
           "name",
           "kind",
+          "group",
           "lat",
           "lng",
           "areas"
         ],
         "title": "CityOption",
+        "type": "object"
+      },
+      "CityPoints": {
+        "additionalProperties": false,
+        "properties": {
+          "other": {
+            "minimum": 0.0,
+            "title": "Other",
+            "type": "integer"
+          },
+          "priority": {
+            "minimum": 0.0,
+            "title": "Priority",
+            "type": "integer"
+          },
+          "secondary": {
+            "minimum": 0.0,
+            "title": "Secondary",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "priority",
+          "secondary",
+          "other"
+        ],
+        "title": "CityPoints",
         "type": "object"
       },
       "CompaniesLimit": {
@@ -983,6 +977,34 @@
             "description": "The role to contact first, like Head of Property, COO or CFO. No names. Empty if no note points to one.",
             "title": "Contact Role"
           },
+          "contact_roles": {
+            "description": "The likely roles to contact, best first, like CEO, COO, CFO, Head of People or Head of Property. Job titles only, never a person's name. Up to 5. Can be empty.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Contact Roles",
+            "type": "array"
+          },
+          "contour_angle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The strategic hook for an office fitout firm, in a few words, like post-merger integration, growth planning, consolidating sites, a long overdue refresh or return to office. Empty if the notes point to none.",
+            "title": "Contour Angle"
+          },
+          "dampeners": {
+            "description": "One entry for each of the four dampener checks in the instructions, found or not_found. Four entries, each id once.",
+            "items": {
+              "$ref": "#/components/schemas/DampenerFinding"
+            },
+            "title": "Dampeners",
+            "type": "array"
+          },
           "decision_makers": {
             "description": "Up to 3 people a note names as the company's current leaders, best first: the head of property, facilities or workplace, then the COO, the CFO, the CEO. Name and job title only, never an email or phone number. Can be empty.",
             "items": {
@@ -1083,6 +1105,10 @@
             "$ref": "#/components/schemas/Fact_int_",
             "description": "Staff at the office in that city"
           },
+          "staff_projected": {
+            "$ref": "#/components/schemas/Fact_int_",
+            "description": "Staff the office in that city is expected to have within about 24 months, only if a note says (a hiring plan, a merger, a consolidation). Null if no note says."
+          },
           "summary": {
             "description": "What happened, in one or two plain sentences",
             "title": "Summary",
@@ -1096,6 +1122,10 @@
             "title": "Talking Points",
             "type": "array"
           },
+          "tender_only": {
+            "$ref": "#/components/schemas/Fact_bool_",
+            "description": "true only if a note says the company buys its office fitouts solely through formal public tender portals (AusTender, Tenders VIC, Tenders WA, SA Tenders). false if a note says it buys some other way. Null if no note says."
+          },
           "tier_group": {
             "anyOf": [
               {
@@ -1105,7 +1135,7 @@
                 "type": "null"
               }
             ],
-            "description": "If the industry belongs to one of the tier groups in the instructions, that group's name exactly as written. Else empty.",
+            "description": "If the industry belongs to one of the priority sectors in the instructions, that sector's name exactly as written. Else empty.",
             "title": "Tier Group"
           },
           "triggers": {
@@ -1131,6 +1161,7 @@
           "owner",
           "staff_in_city",
           "staff_from_linkedin",
+          "staff_projected",
           "office_m2",
           "local_team_runs_project",
           "healthy",
@@ -1143,9 +1174,13 @@
           "growth_by",
           "office_since",
           "last_fitout",
+          "tender_only",
+          "dampeners",
           "fitout_contractors",
           "talking_points",
           "contact_role",
+          "contact_roles",
+          "contour_angle",
           "decision_makers",
           "summary",
           "opening_line"
@@ -1636,6 +1671,42 @@
         "title": "CompanyPerson",
         "type": "object"
       },
+      "CompanyProperty": {
+        "description": "Everything both tools know about one company's office, from our copy.",
+        "properties": {
+          "checked": {
+            "$ref": "#/components/schemas/SourceChecks"
+          },
+          "looked_up_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The last live lookup of either tool. None: never looked up",
+            "title": "Looked Up At"
+          },
+          "records": {
+            "description": "Newest first: by happened_on, else published_on, else lease_start",
+            "items": {
+              "$ref": "#/components/schemas/PropertyRecord"
+            },
+            "title": "Records",
+            "type": "array"
+          }
+        },
+        "required": [
+          "records",
+          "checked",
+          "looked_up_at"
+        ],
+        "title": "CompanyProperty",
+        "type": "object"
+      },
       "CompanyRow": {
         "properties": {
           "city": {
@@ -1920,30 +1991,21 @@
         "title": "CompanyStartedEvent",
         "type": "object"
       },
-      "CompetitionPoints": {
-        "additionalProperties": false,
-        "properties": {
-          "no_contractor_relationship": {
-            "minimum": 0.0,
-            "title": "No Contractor Relationship",
-            "type": "integer"
-          },
-          "no_rival_in_place": {
-            "minimum": 0.0,
-            "title": "No Rival In Place",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "no_rival_in_place",
-          "no_contractor_relationship"
-        ],
-        "title": "CompetitionPoints",
-        "type": "object"
-      },
       "Conflicts": {
         "additionalProperties": false,
         "properties": {
+          "date_gap_months": {
+            "maximum": 120.0,
+            "minimum": 1.0,
+            "title": "Date Gap Months",
+            "type": "integer"
+          },
+          "office_m2_gap_ratio": {
+            "exclusiveMinimum": 1.0,
+            "maximum": 20.0,
+            "title": "Office M2 Gap Ratio",
+            "type": "number"
+          },
           "staff_gap_ratio": {
             "exclusiveMinimum": 1.0,
             "maximum": 20.0,
@@ -1952,7 +2014,9 @@
           }
         },
         "required": [
-          "staff_gap_ratio"
+          "staff_gap_ratio",
+          "office_m2_gap_ratio",
+          "date_gap_months"
         ],
         "title": "Conflicts",
         "type": "object"
@@ -2031,8 +2095,23 @@
           "conflicts": {
             "$ref": "#/components/schemas/Conflicts"
           },
+          "dampeners": {
+            "items": {
+              "$ref": "#/components/schemas/DampenerRule"
+            },
+            "title": "Dampeners",
+            "type": "array"
+          },
           "data_sources": {
             "$ref": "#/components/schemas/DataSources"
+          },
+          "exclusions": {
+            "items": {
+              "$ref": "#/components/schemas/ExclusionRule"
+            },
+            "minItems": 1,
+            "title": "Exclusions",
+            "type": "array"
           },
           "fit": {
             "$ref": "#/components/schemas/Fit"
@@ -2120,6 +2199,8 @@
           "conflicts",
           "fitout",
           "industries",
+          "exclusions",
+          "dampeners",
           "fit",
           "office_age",
           "triggers",
@@ -2136,9 +2217,340 @@
         "title": "Criteria",
         "type": "object"
       },
+      "Dampener": {
+        "description": "One dampener on a lead (Levi's section 5, PLAN-V16 T1-5): a fact that lowers its score and\nnever removes the lead. Every dampener is listed, so a card says what was checked.\n\n`state` is `found`, `not_found` (the check ran and showed nothing: never written as \"none\") or\n`not_checked` (nobody could check, so it says nothing either way). A found dampener has its\nstrength, its evidence, its date and link when there are some, and what could reverse it.\n`waived` is a sentence when it is found but takes nothing off, with the reason.",
+        "properties": {
+          "can_reverse": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What could reverse it, like a contract's renewal date",
+            "title": "Can Reverse"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When it happened: YYYY-MM-DD or YYYY-MM",
+            "title": "Date"
+          },
+          "evidence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What shows it, in one plain sentence",
+            "title": "Evidence"
+          },
+          "id": {
+            "enum": [
+              "recent_fitout",
+              "outsourcing",
+              "competitor_tie",
+              "procurement",
+              "financial_stress"
+            ],
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "found",
+              "not_found",
+              "not_checked"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "strength": {
+            "anyOf": [
+              {
+                "enum": [
+                  "strong",
+                  "moderate"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "strong takes off 20 points and moderate 10. Empty unless found.",
+            "title": "Strength"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The page that says it",
+            "title": "Url"
+          },
+          "waived": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why a found dampener takes nothing off. Empty when it does.",
+            "title": "Waived"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "state"
+        ],
+        "title": "Dampener",
+        "type": "object"
+      },
+      "DampenerFinding": {
+        "description": "The answer to one of the four dampener checks (Levi's section 5, PLAN-V16 T1-5): a fact\nthat makes an office project less likely. Every check comes back `found` or `not_found`. \"Not\nfound\" is never written as \"none\": it only says the notes don't show it. The strength is not\nhere: the rules decide it.",
+        "properties": {
+          "can_reverse": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What could reverse it, like a contract's renewal date, or a new CEO who may change suppliers. Empty if no note says.",
+            "title": "Can Reverse"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When it happened or was signed: YYYY-MM-DD or YYYY-MM. Empty when it isn't known, or when not_found.",
+            "title": "Date"
+          },
+          "evidence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the note says, in one plain sentence. Empty when not_found.",
+            "title": "Evidence"
+          },
+          "id": {
+            "description": "One of the four check ids in the instructions",
+            "enum": [
+              "recent_fitout",
+              "outsourcing",
+              "competitor_tie",
+              "procurement"
+            ],
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only for procurement: which red flag, exactly as written in the instructions. Empty for the other checks.",
+            "title": "Kind"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The note link that says it. Only a link from the notes. Empty when not_found.",
+            "title": "Source Url"
+          },
+          "state": {
+            "description": "found: a note shows it. not_found: no note shows it. Never anything else.",
+            "enum": [
+              "found",
+              "not_found"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "state",
+          "evidence",
+          "date",
+          "source_url",
+          "kind",
+          "can_reverse"
+        ],
+        "title": "DampenerFinding",
+        "type": "object"
+      },
+      "DampenerPoints": {
+        "additionalProperties": false,
+        "properties": {
+          "moderate": {
+            "minimum": 0.0,
+            "title": "Moderate",
+            "type": "integer"
+          },
+          "strong": {
+            "minimum": 0.0,
+            "title": "Strong",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "strong",
+          "moderate"
+        ],
+        "title": "DampenerPoints",
+        "type": "object"
+      },
+      "DampenerRule": {
+        "additionalProperties": false,
+        "description": "A fact that lowers a lead's score, never removes it (Levi's section 5, PLAN-V16 T1-5).\n\nThe first four are searched for on purpose; financial stress comes from the `healthy` fact.\nThe code is `scoring._dampeners`. How much each takes off is `score.dampeners` (T1-6).\n\n- `recent_fitout`: a fitout or move in that city is strong within `strong_years` and moderate\n  from there to `moderate_years`. A fitout longer ago than that doesn't count. It takes\n  nothing off when the company's hiring would outgrow the space within `outgrow_months`\n  (his \"still list the lead\"). A date that isn't known counts as moderate.\n- `procurement`: `kinds` says which red flag is strong and which is moderate. A flag with no\n  kind gets `strength`.\n- `financial_stress`: `waived_by` are the signs that make it part of a consolidation that\n  creates a move, when it takes nothing off (his \"unless\").",
+        "properties": {
+          "id": {
+            "enum": [
+              "recent_fitout",
+              "outsourcing",
+              "competitor_tie",
+              "procurement",
+              "financial_stress"
+            ],
+            "title": "Id",
+            "type": "string"
+          },
+          "kinds": {
+            "additionalProperties": {
+              "enum": [
+                "strong",
+                "moderate"
+              ],
+              "type": "string"
+            },
+            "title": "Kinds",
+            "type": "object"
+          },
+          "label": {
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "meaning": {
+            "default": "",
+            "title": "Meaning",
+            "type": "string"
+          },
+          "moderate_years": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Moderate Years"
+          },
+          "outgrow_months": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outgrow Months"
+          },
+          "strength": {
+            "anyOf": [
+              {
+                "enum": [
+                  "strong",
+                  "moderate"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strength"
+          },
+          "strong_years": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strong Years"
+          },
+          "waived_by": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Waived By",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "label"
+        ],
+        "title": "DampenerRule",
+        "type": "object"
+      },
       "DataSources": {
         "additionalProperties": false,
-        "description": "Which source is main for which data (PLAN-V4 C2). In each list the first source with a value\nis the one the rules use, and the ones after it are the backup. Staff numbers have their own\nlist, `size.staff_sources`.",
+        "description": "Which source is main for which data (PLAN-V4 C2). In each list the first source with a value\nis the one the rules use, and the ones after it are the backup. Staff numbers have their own\nlist, `size.staff_sources`. The office's size, lease end and move-in date have theirs since\nPLAN-V16 T1-8.",
         "properties": {
           "company_details": {
             "items": {
@@ -2164,6 +2576,20 @@
             "title": "Decision Makers",
             "type": "array"
           },
+          "lease_end": {
+            "items": {
+              "enum": [
+                "property_daily",
+                "arealytics",
+                "hubspot",
+                "web_research"
+              ],
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Lease End",
+            "type": "array"
+          },
           "office_cities": {
             "items": {
               "enum": [
@@ -2175,12 +2601,43 @@
             "minItems": 1,
             "title": "Office Cities",
             "type": "array"
+          },
+          "office_m2": {
+            "items": {
+              "enum": [
+                "property_daily",
+                "arealytics",
+                "hubspot",
+                "web_research"
+              ],
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Office M2",
+            "type": "array"
+          },
+          "office_since": {
+            "items": {
+              "enum": [
+                "property_daily",
+                "arealytics",
+                "hubspot",
+                "web_research"
+              ],
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Office Since",
+            "type": "array"
           }
         },
         "required": [
           "company_details",
           "office_cities",
-          "decision_makers"
+          "decision_makers",
+          "office_m2",
+          "lease_end",
+          "office_since"
         ],
         "title": "DataSources",
         "type": "object"
@@ -2437,6 +2894,140 @@
         "title": "EventLog",
         "type": "object"
       },
+      "Excluded": {
+        "description": "Why a lead is left out and not scored (Levi's section 3). An excluded lead is a Drop. A\nperson with the Lead Finder tick can override it: `overridden_by` and `overridden_at` then say\nwho did it, and the lead is judged without the exclusion.",
+        "properties": {
+          "evidence": {
+            "description": "What says so, in one plain sentence",
+            "title": "Evidence",
+            "type": "string"
+          },
+          "label": {
+            "examples": [
+              "Law firm"
+            ],
+            "title": "Label",
+            "type": "string"
+          },
+          "overridden_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overridden At"
+          },
+          "overridden_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overridden By"
+          },
+          "reason_id": {
+            "examples": [
+              "law_firm"
+            ],
+            "title": "Reason Id",
+            "type": "string"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The page that says it, when there is one",
+            "title": "Url"
+          }
+        },
+        "required": [
+          "reason_id",
+          "label",
+          "evidence"
+        ],
+        "title": "Excluded",
+        "type": "object"
+      },
+      "ExclusionRule": {
+        "additionalProperties": false,
+        "description": "A kind of company that is left out and not scored (Levi's section 3, PLAN-V16 T1-3).\n\nThe code is `scoring._exclusion`. An excluded lead is a Drop that shows its reason and its\nevidence, and a person with the Lead Finder tick can override it: the lead is then judged\nagain without the exclusion.\n\n- `industry`: the company's `industry_group` (the answer form) is one of `industry_groups`.\n- `office_incidental`: the office doesn't matter to how the company works, in an industry of\n  `industries.check_office_size` (logistics, manufacturing, retail, hospitality...).\n- `tender_only`: a note says it buys its fitouts only through formal public tender portals.",
+        "properties": {
+          "flag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Flag"
+          },
+          "id": {
+            "pattern": "^[a-z][a-z_]*$",
+            "title": "Id",
+            "type": "string"
+          },
+          "industry_groups": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Industry Groups",
+            "type": "array"
+          },
+          "kind": {
+            "enum": [
+              "industry",
+              "office_incidental",
+              "tender_only"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "meaning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meaning"
+          },
+          "unless": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unless",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "kind"
+        ],
+        "title": "ExclusionRule",
+        "type": "object"
+      },
       "FacetValue": {
         "properties": {
           "count": {
@@ -2478,7 +3069,10 @@
               "city",
               "staff_in_city",
               "office_since",
-              "decision_makers"
+              "decision_makers",
+              "office_m2",
+              "lease_end",
+              "last_fitout"
             ],
             "title": "Fact",
             "type": "string"
@@ -2496,7 +3090,9 @@
             "enum": [
               "claude",
               "hubspot",
-              "signalhire"
+              "signalhire",
+              "property_daily",
+              "arealytics"
             ],
             "title": "Used",
             "type": "string"
@@ -2780,6 +3376,49 @@
         "title": "FieldError",
         "type": "object"
       },
+      "FilterResult": {
+        "description": "One of Levi's five filters (his section 2, PLAN-V16 T1-3). A fact nobody found is\n\"estimated\" and labelled, never a fail (choice 3): a lead fails a filter only when a fact we\nknow says so.",
+        "properties": {
+          "basis": {
+            "description": "One plain sentence on what it rests on, like 'about 1,200 m², estimated from staff'",
+            "title": "Basis",
+            "type": "string"
+          },
+          "id": {
+            "enum": [
+              "location",
+              "office_size",
+              "headcount",
+              "office_relevance",
+              "sector"
+            ],
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "state": {
+            "description": "pass: the facts meet it. estimated: not known, or only estimated, so a person may check. fail: a known fact says no.",
+            "enum": [
+              "pass",
+              "fail",
+              "estimated"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "state",
+          "basis"
+        ],
+        "title": "FilterResult",
+        "type": "object"
+      },
       "Fit": {
         "additionalProperties": false,
         "properties": {
@@ -2797,33 +3436,6 @@
           "healthy"
         ],
         "title": "Fit",
-        "type": "object"
-      },
-      "FitPoints": {
-        "additionalProperties": false,
-        "properties": {
-          "buys_strategy": {
-            "minimum": 0.0,
-            "title": "Buys Strategy",
-            "type": "integer"
-          },
-          "tier_1": {
-            "minimum": 0.0,
-            "title": "Tier 1",
-            "type": "integer"
-          },
-          "tier_2": {
-            "minimum": 0.0,
-            "title": "Tier 2",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "buys_strategy",
-          "tier_1",
-          "tier_2"
-        ],
-        "title": "FitPoints",
         "type": "object"
       },
       "Fitout": {
@@ -2861,6 +3473,34 @@
         "title": "FollowUp",
         "type": "object"
       },
+      "GoalLeadsOption": {
+        "description": "\"How many leads\" on the Start page (PLAN-V16 T1-9).",
+        "properties": {
+          "default": {
+            "description": "`manual_run_goal_leads` from the settings",
+            "examples": [
+              20
+            ],
+            "title": "Default",
+            "type": "integer"
+          },
+          "max": {
+            "title": "Max",
+            "type": "integer"
+          },
+          "min": {
+            "title": "Min",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "default",
+          "min",
+          "max"
+        ],
+        "title": "GoalLeadsOption",
+        "type": "object"
+      },
       "GuidedQuestion": {
         "description": "A question to ask on the call, with what to ask next for each likely answer.",
         "properties": {
@@ -2891,6 +3531,83 @@
           "follow_ups"
         ],
         "title": "GuidedQuestion",
+        "type": "object"
+      },
+      "Headcount": {
+        "description": "Local staff, now and projected.",
+        "properties": {
+          "now": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Now"
+          },
+          "now_basis": {
+            "anyOf": [
+              {
+                "enum": [
+                  "confirmed",
+                  "estimated"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Now Basis"
+          },
+          "projected": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Projected"
+          },
+          "projected_basis": {
+            "anyOf": [
+              {
+                "enum": [
+                  "confirmed",
+                  "estimated"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Projected Basis"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          }
+        },
+        "required": [
+          "now",
+          "projected",
+          "now_basis",
+          "projected_basis",
+          "source_url"
+        ],
+        "title": "Headcount",
         "type": "object"
       },
       "HealthDetails": {
@@ -3307,26 +4024,19 @@
             "title": "Director Review",
             "type": "array"
           },
-          "tier_1": {
+          "priority_sectors": {
             "items": {
               "type": "string"
             },
-            "title": "Tier 1",
-            "type": "array"
-          },
-          "tier_2": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Tier 2",
+            "minItems": 1,
+            "title": "Priority Sectors",
             "type": "array"
           }
         },
         "required": [
           "director_review",
           "check_office_size",
-          "tier_1",
-          "tier_2"
+          "priority_sectors"
         ],
         "title": "Industries",
         "type": "object"
@@ -3400,7 +4110,7 @@
                 "type": "null"
               }
             ],
-            "description": "research_first (75 to 100), investigate (50 to 74) or nurture (under 50)",
+            "description": "Before PLAN-V16 T1-6: research_first, investigate or nurture. Empty for a card made after it: it has a tier.",
             "title": "Band"
           },
           "checks": {
@@ -3415,6 +4125,35 @@
             "title": "Company",
             "type": "string"
           },
+          "confidence": {
+            "anyOf": [
+              {
+                "enum": [
+                  "high",
+                  "medium",
+                  "low"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "high, medium or low: how well the headcount, the signs and the dampener checks are sourced. Empty for a card made before PLAN-V16 T1-6.",
+            "title": "Confidence"
+          },
+          "confidence_why": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "One sentence that says why the confidence is what it is",
+            "title": "Confidence Why"
+          },
           "contact_role": {
             "anyOf": [
               {
@@ -3426,10 +4165,38 @@
             ],
             "title": "Contact Role"
           },
+          "contact_roles": {
+            "description": "The likely roles to contact, best first. No names.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Contact Roles",
+            "type": "array"
+          },
+          "contour_angle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The strategic hook, like post-merger integration",
+            "title": "Contour Angle"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
             "type": "string"
+          },
+          "dampeners": {
+            "description": "Every dampener (Levi's section 5): a fact that lowers the score and never removes the lead. Each is found, not_found (checked, nothing shown) or not_checked, with its strength, evidence, date, link and what could reverse it when found (PLAN-V16 T1-5). Empty for a card made before it.",
+            "items": {
+              "$ref": "#/components/schemas/Dampener"
+            },
+            "title": "Dampeners",
+            "type": "array"
           },
           "dropped": {
             "description": "Facts the source check removed, and why",
@@ -3438,6 +4205,17 @@
             },
             "title": "Dropped",
             "type": "array"
+          },
+          "excluded": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Excluded"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the lead is left out and not scored (Levi's section 3): a Drop with its reason, its evidence and its link. `overridden_by` is set when a person overrode it, and the lead was then judged without the exclusion. Empty when no exclusion applies."
           },
           "fact_sources": {
             "description": "Where a fact came from when it isn't plainly the web research's, with what the other sources said and a flag when they are far apart. A fact with no entry came from the web research alone.",
@@ -3449,6 +4227,14 @@
           },
           "facts": {
             "$ref": "#/components/schemas/CompanyFacts"
+          },
+          "filters": {
+            "description": "Levi's five filters (location, office size, headcount, office relevance and sector), each pass, fail or estimated, with what it rests on (PLAN-V16 T1-3). Empty for a card made before it.",
+            "items": {
+              "$ref": "#/components/schemas/FilterResult"
+            },
+            "title": "Filters",
+            "type": "array"
           },
           "fitout_aud": {
             "anyOf": [
@@ -3483,6 +4269,17 @@
             "title": "From Signalhire",
             "type": "array"
           },
+          "headcount": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Headcount"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Local staff now and projected, each confirmed or estimated. Empty when neither is known."
+          },
           "hubspot": {
             "$ref": "#/components/schemas/HubSpotOut"
           },
@@ -3498,6 +4295,17 @@
             },
             "title": "Notes",
             "type": "array"
+          },
+          "office": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Office"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The current office (Levi's section 9, PLAN-V16 T1-10): the address from a property tool, and the size, move-in date and lease end the rules used. Empty when nothing about it is known, and for a card made before it."
           },
           "office_m2": {
             "anyOf": [
@@ -3537,6 +4345,17 @@
             "title": "Prompt Version",
             "type": "string"
           },
+          "property": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CompanyProperty"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What Property Daily and Arealytics know about the company's office (PLAN-V16 T1-8): their records, newest first (at most 30), and each tool's status (found, not_found, off, error or not_checked). A tool that is off has no records here. Empty for a card made before it, and for a company too small to research."
+          },
           "research": {
             "$ref": "#/components/schemas/ResearchCost"
           },
@@ -3555,9 +4374,21 @@
             "type": "string"
           },
           "score": {
-            "description": "0 to 100: the points earned in the Profile's six parts.",
+            "description": "0 to 100, after the dampeners (Levi's section 6, PLAN-V16 T1-6). A card made before it has the Profile's six-part score.",
             "title": "Score",
             "type": "integer"
+          },
+          "score_before_dampeners": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The score before the dampeners took points off. Empty for a card made before PLAN-V16 T1-6.",
+            "title": "Score Before Dampeners"
           },
           "score_checked": {
             "anyOf": [
@@ -3568,11 +4399,11 @@
                 "type": "null"
               }
             ],
-            "description": "The most points the tool could judge, like 48 of 60. Empty for a Drop, and for a card made under version 1.",
+            "description": "Before PLAN-V16 T1-6: the most points the tool could judge, like 48 of 60. Empty for a card made after it.",
             "title": "Score Checked"
           },
           "score_parts": {
-            "description": "The six parts and their checks. Empty for a Drop, and for a card made under version 1.",
+            "description": "The three parts (Fit, Change and timing, Access) and their checks, before the dampeners. Empty for a Drop. A card made before PLAN-V16 T1-6 has the six parts.",
             "items": {
               "$ref": "#/components/schemas/ScorePart"
             },
@@ -3598,6 +4429,17 @@
             "title": "Signalhire People",
             "type": "array"
           },
+          "space": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Space"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The space now and projected, at about 10 m² a person"
+          },
           "stage": {
             "anyOf": [
               {
@@ -3614,12 +4456,41 @@
             "title": "Summary",
             "type": "string"
           },
+          "tier": {
+            "anyOf": [
+              {
+                "enum": [
+                  "A",
+                  "B",
+                  "C",
+                  "discard"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A (75 and over), B (55 to 74), C (40 to 54) or discard (under 40). Empty for a card made before PLAN-V16 T1-6.",
+            "title": "Tier"
+          },
           "triggers": {
             "items": {
               "$ref": "#/components/schemas/TriggerScore"
             },
             "title": "Triggers",
             "type": "array"
+          },
+          "what_changed": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WhatChanged"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "This research against the last research of the same company: new, upgraded, downgraded or unchanged, with one sentence. Empty for a card made before PLAN-V16 T1-10."
           },
           "why_it_fits": {
             "title": "Why It Fits",
@@ -3662,6 +4533,10 @@
           "result",
           "stage",
           "score",
+          "score_before_dampeners",
+          "tier",
+          "confidence",
+          "confidence_why",
           "score_parts",
           "score_checked",
           "band",
@@ -3690,7 +4565,17 @@
           "prompt_version",
           "created_at",
           "why_now",
-          "why_now_skipped"
+          "why_now_skipped",
+          "filters",
+          "excluded",
+          "dampeners",
+          "property",
+          "office",
+          "headcount",
+          "space",
+          "contour_angle",
+          "contact_roles",
+          "what_changed"
         ],
         "title": "LeadCard",
         "type": "object"
@@ -3712,7 +4597,7 @@
                 "type": "null"
               }
             ],
-            "description": "research_first (75 to 100), investigate (50 to 74) or nurture (under 50)",
+            "description": "Before PLAN-V16 T1-6: research_first, investigate or nurture. Empty for a card made after it: it has a tier.",
             "title": "Band"
           },
           "checks": {
@@ -3727,6 +4612,35 @@
             "title": "Company",
             "type": "string"
           },
+          "confidence": {
+            "anyOf": [
+              {
+                "enum": [
+                  "high",
+                  "medium",
+                  "low"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "high, medium or low: how well the headcount, the signs and the dampener checks are sourced. Empty for a card made before PLAN-V16 T1-6.",
+            "title": "Confidence"
+          },
+          "confidence_why": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "One sentence that says why the confidence is what it is",
+            "title": "Confidence Why"
+          },
           "contact_role": {
             "anyOf": [
               {
@@ -3738,10 +4652,38 @@
             ],
             "title": "Contact Role"
           },
+          "contact_roles": {
+            "description": "The likely roles to contact, best first. No names.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Contact Roles",
+            "type": "array"
+          },
+          "contour_angle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The strategic hook, like post-merger integration",
+            "title": "Contour Angle"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
             "type": "string"
+          },
+          "dampeners": {
+            "description": "Every dampener (Levi's section 5): a fact that lowers the score and never removes the lead. Each is found, not_found (checked, nothing shown) or not_checked, with its strength, evidence, date, link and what could reverse it when found (PLAN-V16 T1-5). Empty for a card made before it.",
+            "items": {
+              "$ref": "#/components/schemas/Dampener"
+            },
+            "title": "Dampeners",
+            "type": "array"
           },
           "dropped": {
             "description": "Facts the source check removed, and why",
@@ -3750,6 +4692,17 @@
             },
             "title": "Dropped",
             "type": "array"
+          },
+          "excluded": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Excluded"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the lead is left out and not scored (Levi's section 3): a Drop with its reason, its evidence and its link. `overridden_by` is set when a person overrode it, and the lead was then judged without the exclusion. Empty when no exclusion applies."
           },
           "fact_sources": {
             "description": "Where a fact came from when it isn't plainly the web research's, with what the other sources said and a flag when they are far apart. A fact with no entry came from the web research alone.",
@@ -3761,6 +4714,14 @@
           },
           "facts": {
             "$ref": "#/components/schemas/CompanyFacts"
+          },
+          "filters": {
+            "description": "Levi's five filters (location, office size, headcount, office relevance and sector), each pass, fail or estimated, with what it rests on (PLAN-V16 T1-3). Empty for a card made before it.",
+            "items": {
+              "$ref": "#/components/schemas/FilterResult"
+            },
+            "title": "Filters",
+            "type": "array"
           },
           "fitout_aud": {
             "anyOf": [
@@ -3795,6 +4756,17 @@
             "title": "From Signalhire",
             "type": "array"
           },
+          "headcount": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Headcount"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Local staff now and projected, each confirmed or estimated. Empty when neither is known."
+          },
           "hubspot": {
             "$ref": "#/components/schemas/HubSpotOut"
           },
@@ -3825,6 +4797,17 @@
             },
             "title": "Notes",
             "type": "array"
+          },
+          "office": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Office"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The current office (Levi's section 9, PLAN-V16 T1-10): the address from a property tool, and the size, move-in date and lease end the rules used. Empty when nothing about it is known, and for a card made before it."
           },
           "office_m2": {
             "anyOf": [
@@ -3880,6 +4863,17 @@
           "prompt_version": {
             "title": "Prompt Version",
             "type": "string"
+          },
+          "property": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CompanyProperty"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What Property Daily and Arealytics know about the company's office (PLAN-V16 T1-8): their records, newest first (at most 30), and each tool's status (found, not_found, off, error or not_checked). A tool that is off has no records here. Empty for a card made before it, and for a company too small to research."
           },
           "reject_note": {
             "anyOf": [
@@ -3950,9 +4944,21 @@
             "title": "Run Id"
           },
           "score": {
-            "description": "0 to 100: the points earned in the Profile's six parts.",
+            "description": "0 to 100, after the dampeners (Levi's section 6, PLAN-V16 T1-6). A card made before it has the Profile's six-part score.",
             "title": "Score",
             "type": "integer"
+          },
+          "score_before_dampeners": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The score before the dampeners took points off. Empty for a card made before PLAN-V16 T1-6.",
+            "title": "Score Before Dampeners"
           },
           "score_checked": {
             "anyOf": [
@@ -3963,11 +4969,11 @@
                 "type": "null"
               }
             ],
-            "description": "The most points the tool could judge, like 48 of 60. Empty for a Drop, and for a card made under version 1.",
+            "description": "Before PLAN-V16 T1-6: the most points the tool could judge, like 48 of 60. Empty for a card made after it.",
             "title": "Score Checked"
           },
           "score_parts": {
-            "description": "The six parts and their checks. Empty for a Drop, and for a card made under version 1.",
+            "description": "The three parts (Fit, Change and timing, Access) and their checks, before the dampeners. Empty for a Drop. A card made before PLAN-V16 T1-6 has the six parts.",
             "items": {
               "$ref": "#/components/schemas/ScorePart"
             },
@@ -3992,6 +4998,17 @@
             },
             "title": "Signalhire People",
             "type": "array"
+          },
+          "space": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Space"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The space now and projected, at about 10 m² a person"
           },
           "stage": {
             "anyOf": [
@@ -4019,6 +5036,24 @@
             "title": "Summary",
             "type": "string"
           },
+          "tier": {
+            "anyOf": [
+              {
+                "enum": [
+                  "A",
+                  "B",
+                  "C",
+                  "discard"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A (75 and over), B (55 to 74), C (40 to 54) or discard (under 40). Empty for a card made before PLAN-V16 T1-6.",
+            "title": "Tier"
+          },
           "triggers": {
             "items": {
               "$ref": "#/components/schemas/TriggerScore"
@@ -4041,6 +5076,17 @@
               }
             ],
             "title": "Useful"
+          },
+          "what_changed": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WhatChanged"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "This research against the last research of the same company: new, upgraded, downgraded or unchanged, with one sentence. Empty for a card made before PLAN-V16 T1-10."
           },
           "why_it_fits": {
             "title": "Why It Fits",
@@ -4083,6 +5129,10 @@
           "result",
           "stage",
           "score",
+          "score_before_dampeners",
+          "tier",
+          "confidence",
+          "confidence_why",
           "score_parts",
           "score_checked",
           "band",
@@ -4112,6 +5162,16 @@
           "created_at",
           "why_now",
           "why_now_skipped",
+          "filters",
+          "excluded",
+          "dampeners",
+          "property",
+          "office",
+          "headcount",
+          "space",
+          "contour_angle",
+          "contact_roles",
+          "what_changed",
           "status",
           "reject_reason",
           "reject_note",
@@ -4254,7 +5314,7 @@
       },
       "LeadFinderRunParams": {
         "additionalProperties": false,
-        "description": "Every part with its default. The Start page shows these as the starting values.\n\nA real run uses the model of its mode (above), which refuses the parts it doesn't use. So\nsend only the parts of your mode: `cities`, `area`, `triggers` and `since_days` for\ndiscovery, `watchlist` for watchlist, `companies` and `recheck` for company, and `caps` for\nevery mode (testset has nothing else).",
+        "description": "Every part with its default. The Start page shows these as the starting values.\n\nA real run uses the model of its mode (above), which refuses the parts it doesn't use. So\nsend only the parts of your mode: `cities`, `area`, `triggers`, `since_days`, `sources` and\n`goal_leads` for discovery, `watchlist` for watchlist, `companies` and `recheck` for company,\nand `caps` for every mode (testset has nothing else).",
         "properties": {
           "area": {
             "additionalProperties": {
@@ -4280,7 +5340,7 @@
             "description": "Used by every mode (discovery, watchlist, company, testset). Lower limits."
           },
           "cities": {
-            "description": "Used by mode discovery only. Cities to search, each once. The default is the three pass cities.",
+            "description": "Used by mode discovery only. Places to search, each once: any place in the rules (Melbourne, Adelaide, Perth, Sydney, Brisbane and the other cities and regional centres), or `[\"Australia\"]` alone, which searches all of Australia at once: one search for each sign, and the research finds each company's city. The default is Melbourne.",
             "examples": [
               [
                 "Melbourne",
@@ -4290,7 +5350,7 @@
             "items": {
               "type": "string"
             },
-            "maxItems": 8,
+            "maxItems": 24,
             "minItems": 1,
             "title": "Cities",
             "type": "array"
@@ -4303,6 +5363,23 @@
             "maxItems": 25,
             "title": "Companies",
             "type": "array"
+          },
+          "goal_leads": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Used by mode discovery only. How many good leads (a Pass or a Director review) a run a person starts aims for, 1 to 100: it stops starting companies once it has them. Left out, `manual_run_goal_leads` from the settings (see `goal_leads` in the run options). An automatic run aims for its share of the round's goal instead. The run's limits still apply: no limit rises by itself (PLAN-V16 T1-9).",
+            "examples": [
+              20
+            ],
+            "title": "Goal Leads"
           },
           "recheck": {
             "default": false,
@@ -4321,12 +5398,40 @@
             "title": "Since Days",
             "type": "integer"
           },
+          "sources": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "web",
+                    "property_daily",
+                    "arealytics"
+                  ],
+                  "type": "string"
+                },
+                "maxItems": 3,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Used by mode discovery only. Where discovery looks for companies: `web`, `property_daily` and `arealytics`, each once. Left out, every source that is ready (see `sources` in the run options). A tool that isn't ready is a 422 `source_not_ready`. Without `web`, the run makes no web searches for companies: they come from the tools' new items, free. The research of each company still uses every tool that is switched on (PLAN-V16 T1-8).",
+            "examples": [
+              [
+                "web",
+                "property_daily"
+              ]
+            ],
+            "title": "Sources"
+          },
           "triggers": {
             "description": "Used by mode discovery only. Trigger ids to look for, each once. The default is the main triggers.",
             "items": {
               "type": "string"
             },
-            "maxItems": 16,
+            "maxItems": 24,
             "minItems": 1,
             "title": "Triggers",
             "type": "array"
@@ -4342,6 +5447,8 @@
           "area",
           "triggers",
           "since_days",
+          "sources",
+          "goal_leads",
           "watchlist",
           "companies",
           "recheck"
@@ -4496,6 +5603,200 @@
         "title": "LeadPatch",
         "type": "object"
       },
+      "LeadProfile": {
+        "description": "The one-page profile of a Tier A lead (Levi's section 9, PLAN-V16 T1-10): what each lead\nshows, in one answer. Every value is the saved card's.",
+        "properties": {
+          "city": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "City"
+          },
+          "company": {
+            "title": "Company",
+            "type": "string"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "enum": [
+                  "high",
+                  "medium",
+                  "low"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "confidence_why": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence Why"
+          },
+          "contact_roles": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Contact Roles",
+            "type": "array"
+          },
+          "contour_angle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contour Angle"
+          },
+          "dampeners": {
+            "items": {
+              "$ref": "#/components/schemas/Dampener"
+            },
+            "title": "Dampeners",
+            "type": "array"
+          },
+          "headcount": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Headcount"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "office": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Office"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "opener": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opener"
+          },
+          "score": {
+            "title": "Score",
+            "type": "integer"
+          },
+          "sector": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sector"
+          },
+          "signs": {
+            "items": {
+              "$ref": "#/components/schemas/ProfileSign"
+            },
+            "title": "Signs",
+            "type": "array"
+          },
+          "space": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Space"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tier": {
+            "enum": [
+              "A",
+              "B",
+              "C",
+              "discard"
+            ],
+            "title": "Tier",
+            "type": "string"
+          },
+          "what_changed": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WhatChanged"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "why_now": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why a property decision is likely soon, if written",
+            "title": "Why Now"
+          }
+        },
+        "required": [
+          "id",
+          "company",
+          "city",
+          "tier",
+          "score",
+          "confidence",
+          "confidence_why",
+          "sector",
+          "headcount",
+          "space",
+          "signs",
+          "dampeners",
+          "office",
+          "why_now",
+          "contour_angle",
+          "contact_roles",
+          "opener",
+          "what_changed"
+        ],
+        "title": "LeadProfile",
+        "type": "object"
+      },
       "LeadRow": {
         "description": "One row of the results table.",
         "properties": {
@@ -4531,6 +5832,23 @@
             "title": "Company",
             "type": "string"
           },
+          "confidence": {
+            "anyOf": [
+              {
+                "enum": [
+                  "high",
+                  "medium",
+                  "low"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "high, medium or low",
+            "title": "Confidence"
+          },
           "contact_role": {
             "anyOf": [
               {
@@ -4551,10 +5869,27 @@
             "title": "Created At",
             "type": "string"
           },
+          "excluded": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Excluded"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the lead is left out (the same object as the card's), or empty"
+          },
           "form_failed": {
             "default": false,
             "description": "True when Claude couldn't fill in the answer form, so the facts are missing",
             "title": "Form Failed",
+            "type": "boolean"
+          },
+          "has_property": {
+            "default": false,
+            "description": "True when a property tool has a record of the company",
+            "title": "Has Property",
             "type": "boolean"
           },
           "hubspot_owner": {
@@ -4727,6 +6062,24 @@
               }
             ],
             "title": "Suburb"
+          },
+          "tier": {
+            "anyOf": [
+              {
+                "enum": [
+                  "A",
+                  "B",
+                  "C",
+                  "discard"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A, B, C or discard (PLAN-V16 T1-6). Empty for a lead judged before it.",
+            "title": "Tier"
           },
           "trigger_date": {
             "anyOf": [
@@ -5628,6 +6981,163 @@
         "title": "Objection",
         "type": "object"
       },
+      "Office": {
+        "description": "The current office, from the first source with a value (PLAN-V16 T1-8's order).",
+        "properties": {
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "From a property tool. The facts hold no address.",
+            "title": "Address"
+          },
+          "area_basis": {
+            "anyOf": [
+              {
+                "enum": [
+                  "confirmed",
+                  "estimated"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "estimated: worked out from staff or growth",
+            "title": "Area Basis"
+          },
+          "area_m2": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Area M2"
+          },
+          "building": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Building"
+          },
+          "fitout_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The firm that did the last fitout, if a note names it",
+            "title": "Fitout By"
+          },
+          "floor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Floor"
+          },
+          "lease_end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lease End"
+          },
+          "lease_end_basis": {
+            "anyOf": [
+              {
+                "enum": [
+                  "confirmed",
+                  "estimated"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lease End Basis"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A date or a year, like 2017",
+            "title": "Since"
+          },
+          "since_words": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "examples": [
+              "At this address since at least 2017."
+            ],
+            "title": "Since Words"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where it came from: property_daily, arealytics, hubspot or web_research",
+            "title": "Source"
+          }
+        },
+        "required": [
+          "address",
+          "building",
+          "floor",
+          "area_m2",
+          "area_basis",
+          "since",
+          "since_words",
+          "lease_end",
+          "lease_end_basis",
+          "fitout_by",
+          "source"
+        ],
+        "title": "Office",
+        "type": "object"
+      },
       "OfficeAge": {
         "additionalProperties": false,
         "properties": {
@@ -5664,6 +7174,11 @@
             "title": "Recent Move Years",
             "type": "integer"
           },
+          "tenure_fitout_years": {
+            "exclusiveMinimum": 0.0,
+            "title": "Tenure Fitout Years",
+            "type": "integer"
+          },
           "tenure_sign": {
             "pattern": "^[a-z][a-z_]*$",
             "title": "Tenure Sign",
@@ -5681,6 +7196,7 @@
           "just_moved_months",
           "tenure_years",
           "tenure_sign",
+          "tenure_fitout_years",
           "lease_guess_years"
         ],
         "title": "OfficeAge",
@@ -5714,13 +7230,43 @@
         "title": "OptionCaps",
         "type": "object"
       },
+      "OtherSigns": {
+        "additionalProperties": false,
+        "description": "Levi: \"other independent signs within 12 months: 8 each, at most 2\". The strongest sign is\ncounted apart, and so is the same sign twice. A sign with a date counts while it is\n`within_months` old (or still to come, like a lease end). A sign with no date counts too: an\nunknown date doesn't fail a lead (a long tenure has none by design).",
+        "properties": {
+          "at_most": {
+            "exclusiveMinimum": 0.0,
+            "title": "At Most",
+            "type": "integer"
+          },
+          "points_each": {
+            "minimum": 0.0,
+            "title": "Points Each",
+            "type": "integer"
+          },
+          "within_months": {
+            "exclusiveMinimum": 0.0,
+            "title": "Within Months",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "points_each",
+          "at_most",
+          "within_months"
+        ],
+        "title": "OtherSigns",
+        "type": "object"
+      },
       "OtherValue": {
         "properties": {
           "source": {
             "enum": [
               "claude",
               "hubspot",
-              "signalhire"
+              "signalhire",
+              "property_daily",
+              "arealytics"
             ],
             "title": "Source",
             "type": "string"
@@ -6957,6 +8503,48 @@
         "title": "ProblemDetails",
         "type": "object"
       },
+      "ProfileSign": {
+        "properties": {
+          "date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "what_happened": {
+            "title": "What Happened",
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "what_happened",
+          "date",
+          "url"
+        ],
+        "title": "ProfileSign",
+        "type": "object"
+      },
       "ProgressData": {
         "properties": {
           "claude_requests": {
@@ -7078,6 +8666,187 @@
         "title": "ProjectReadiness",
         "type": "object"
       },
+      "PropertyRecord": {
+        "description": "One fact a tool gave us about a company's office, with its link and date.",
+        "properties": {
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address"
+          },
+          "area_m2": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whole square metres",
+            "title": "Area M2"
+          },
+          "building": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Building"
+          },
+          "city": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "City"
+          },
+          "company": {
+            "description": "As the tool wrote it",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Company",
+            "type": "string"
+          },
+          "floor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "As written, like \"Level 12\" or \"12-14\"",
+            "title": "Floor"
+          },
+          "happened_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the move, lease or fitout happened",
+            "title": "Happened On"
+          },
+          "kind": {
+            "enum": [
+              "lease",
+              "move",
+              "requirement",
+              "fitout",
+              "building",
+              "occupier",
+              "news"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "lease_end": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lease End"
+          },
+          "lease_start": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lease Start"
+          },
+          "published_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the tool published the item",
+            "title": "Published On"
+          },
+          "read_at": {
+            "description": "When we read it",
+            "format": "date-time",
+            "title": "Read At",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "property_daily",
+              "arealytics"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "summary": {
+            "description": "One plain sentence, written by our code",
+            "examples": [
+              "Leased 1,400 m² on level 12 of 120 Collins Street, ending in June 2028."
+            ],
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Summary",
+            "type": "string"
+          },
+          "url": {
+            "description": "The page the fact came from",
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "kind",
+          "company",
+          "city",
+          "address",
+          "building",
+          "floor",
+          "area_m2",
+          "lease_start",
+          "lease_end",
+          "happened_on",
+          "published_on",
+          "summary",
+          "url",
+          "read_at"
+        ],
+        "title": "PropertyRecord",
+        "type": "object"
+      },
       "Queries": {
         "additionalProperties": false,
         "properties": {
@@ -7112,7 +8881,8 @@
                 "property",
                 "people",
                 "money",
-                "tenure"
+                "tenure",
+                "dampeners"
               ]
             },
             "title": "Company",
@@ -7127,12 +8897,20 @@
             },
             "title": "Discovery",
             "type": "object"
+          },
+          "source_groups": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SourceGroup"
+            },
+            "title": "Source Groups",
+            "type": "object"
           }
         },
         "required": [
           "areas",
           "discovery",
-          "company"
+          "company",
+          "source_groups"
         ],
         "title": "Queries",
         "type": "object"
@@ -7691,6 +9469,13 @@
         "additionalProperties": false,
         "description": "Rivals of a booming company (PLAN-V9 B5). The code is apps/lead_finder/rivals.py.",
         "properties": {
+          "also_after": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Also After",
+            "type": "array"
+          },
           "enabled": {
             "title": "Enabled",
             "type": "boolean"
@@ -7717,23 +9502,10 @@
             "pattern": "^[a-z][a-z_]*$",
             "title": "Sign",
             "type": "string"
-          },
-          "tiers": {
-            "items": {
-              "enum": [
-                "tier_1",
-                "tier_2"
-              ],
-              "type": "string"
-            },
-            "minItems": 1,
-            "title": "Tiers",
-            "type": "array"
           }
         },
         "required": [
           "enabled",
-          "tiers",
           "per_lead",
           "per_run",
           "max_searches",
@@ -8288,6 +10060,14 @@
             "title": "By Result",
             "type": "object"
           },
+          "by_source": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "Leads saved, by where discovery found them (web, property_daily, arealytics). A company two sources found counts for each.",
+            "title": "By Source",
+            "type": "object"
+          },
           "candidates": {
             "default": 0,
             "description": "Companies found, before duplicates are merged",
@@ -8304,6 +10084,24 @@
             "default": 0,
             "description": "Companies where research failed",
             "title": "Failed",
+            "type": "integer"
+          },
+          "goal": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The good leads the run aims for: a person's choice for a run they started, or the round's share for an automatic run. Empty: no goal.",
+            "title": "Goal"
+          },
+          "good": {
+            "default": 0,
+            "description": "Good leads saved so far: a Pass or a Director review",
+            "title": "Good",
             "type": "integer"
           },
           "researched": {
@@ -8358,7 +10156,10 @@
           "skipped",
           "failed",
           "by_result",
-          "resumes"
+          "resumes",
+          "goal",
+          "good",
+          "by_source"
         ],
         "title": "RunCounts",
         "type": "object"
@@ -8444,6 +10245,18 @@
             "title": "Companies Expected",
             "type": "integer"
           },
+          "companies_needed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The companies the goal needs at the recent pass rate (PLAN-V16 T1-9). Empty when the run has no goal of its own.",
+            "title": "Companies Needed"
+          },
           "cost_usd_high": {
             "default": "0",
             "description": "The worst case: every request in flight costs its full reserve",
@@ -8467,6 +10280,21 @@
             },
             "title": "Errors",
             "type": "array"
+          },
+          "goal_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "One sentence when the goal needs more companies than this run's limits allow, naming the limit that binds. Empty when the goal fits, or there is none.",
+            "examples": [
+              "20 leads needs about 50 companies. This run's company limit allows 20. An Admin can raise it in Settings."
+            ],
+            "title": "Goal Note"
           },
           "over_cap": {
             "default": false,
@@ -8504,7 +10332,9 @@
           "cap_usd",
           "daily_left_usd",
           "basis",
-          "over_cap"
+          "over_cap",
+          "companies_needed",
+          "goal_note"
         ],
         "title": "RunEstimate",
         "type": "object"
@@ -8746,6 +10576,10 @@
             "$ref": "#/components/schemas/LeadFinderRunParams",
             "description": "The starting values for every part of a run's `params`. The Start page must send only the parts of its mode in `POST /runs`: a part another mode owns is refused (422). Each part's description says which mode uses it. `caps` is used by every mode."
           },
+          "goal_leads": {
+            "$ref": "#/components/schemas/GoalLeadsOption",
+            "description": "How many good leads a run a person starts may aim for, and the default (PLAN-V16 T1-9)"
+          },
           "modes": {
             "items": {
               "$ref": "#/components/schemas/ModeOption"
@@ -8755,6 +10589,21 @@
           },
           "since_days": {
             "$ref": "#/components/schemas/SinceDaysOption"
+          },
+          "sources": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SourceOption"
+            },
+            "description": "Where discovery can look, by id: `web`, `property_daily` and `arealytics` (PLAN-V16 T1-8). A run's `sources` left out uses every one that is ready.",
+            "propertyNames": {
+              "enum": [
+                "web",
+                "property_daily",
+                "arealytics"
+              ]
+            },
+            "title": "Sources",
+            "type": "object"
           },
           "triggers": {
             "items": {
@@ -8779,6 +10628,7 @@
           "modes",
           "companies_limit",
           "caps",
+          "goal_leads",
           "defaults"
         ],
         "title": "RunOptions",
@@ -8862,10 +10712,38 @@
             ],
             "title": "Finished At"
           },
+          "goal_leads": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The good leads the run aims for (PLAN-V16 T1-9). Empty: no goal.",
+            "readOnly": true,
+            "title": "Goal Leads"
+          },
+          "good_leads": {
+            "description": "Good leads saved so far: a Pass or a Director review (Tier A or B)",
+            "readOnly": true,
+            "title": "Good Leads",
+            "type": "integer"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "leads_by_source": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "Leads saved, by where discovery found them: web, property_daily and arealytics, each always there for a Lead Finder run. A company two sources found counts for each.",
+            "readOnly": true,
+            "title": "Leads By Source",
+            "type": "object"
           },
           "mode": {
             "examples": [
@@ -8962,7 +10840,10 @@
           "cancel_requested_at",
           "created_at",
           "started_at",
-          "finished_at"
+          "finished_at",
+          "goal_leads",
+          "good_leads",
+          "leads_by_source"
         ],
         "title": "RunOut",
         "type": "object"
@@ -9728,22 +11609,8 @@
       },
       "Score": {
         "additionalProperties": false,
-        "description": "The Target Customer Profile's 100 points in six parts (Criteria_v2.md section 6).",
+        "description": "Levi's 100 points in three parts (his section 6, PLAN-V16 T1-6, Criteria_v3.md): Fit 30,\nChange and timing 50, Access 20. The dampeners then take points off, and the score sets the\ntier.",
         "properties": {
-          "access": {
-            "$ref": "#/components/schemas/AccessPoints"
-          },
-          "band_basis": {
-            "enum": [
-              "scaled",
-              "raw"
-            ],
-            "title": "Band Basis",
-            "type": "string"
-          },
-          "bands": {
-            "$ref": "#/components/schemas/Bands"
-          },
           "check_labels": {
             "additionalProperties": {
               "type": "string"
@@ -9751,21 +11618,42 @@
             "title": "Check Labels",
             "type": "object"
           },
-          "competition": {
-            "$ref": "#/components/schemas/CompetitionPoints"
+          "city": {
+            "$ref": "#/components/schemas/CityPoints"
           },
-          "fit": {
-            "$ref": "#/components/schemas/FitPoints"
+          "dampeners": {
+            "$ref": "#/components/schemas/DampenerPoints"
           },
           "lease_in_best_window": {
             "minimum": 0.0,
             "title": "Lease In Best Window",
             "type": "integer"
           },
-          "no_recent_move": {
+          "local_staff": {
+            "items": {
+              "$ref": "#/components/schemas/StaffStep"
+            },
+            "minItems": 1,
+            "title": "Local Staff",
+            "type": "array"
+          },
+          "no_lock_in": {
             "minimum": 0.0,
-            "title": "No Recent Move",
+            "title": "No Lock In",
             "type": "integer"
+          },
+          "office_constrained": {
+            "minimum": 0.0,
+            "title": "Office Constrained",
+            "type": "integer"
+          },
+          "office_relevance": {
+            "minimum": 0.0,
+            "title": "Office Relevance",
+            "type": "integer"
+          },
+          "other_signs": {
+            "$ref": "#/components/schemas/OtherSigns"
           },
           "parts": {
             "additionalProperties": {
@@ -9773,16 +11661,23 @@
             },
             "propertyNames": {
               "enum": [
-                "trigger",
-                "size",
-                "timing",
-                "access",
                 "fit",
-                "competition"
+                "change",
+                "access"
               ]
             },
             "title": "Parts",
             "type": "object"
+          },
+          "priority_sector": {
+            "minimum": 0.0,
+            "title": "Priority Sector",
+            "type": "integer"
+          },
+          "procurement": {
+            "minimum": 0.0,
+            "title": "Procurement",
+            "type": "integer"
           },
           "recency": {
             "items": {
@@ -9792,15 +11687,30 @@
             "title": "Recency",
             "type": "array"
           },
-          "size": {
-            "$ref": "#/components/schemas/SizePoints"
-          },
           "source": {
             "additionalProperties": {
               "type": "integer"
             },
             "title": "Source",
             "type": "object"
+          },
+          "strongest_sign": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "propertyNames": {
+              "enum": [
+                "very_high",
+                "high",
+                "medium",
+                "low"
+              ]
+            },
+            "title": "Strongest Sign",
+            "type": "object"
+          },
+          "tiers": {
+            "$ref": "#/components/schemas/Tiers"
           },
           "trigger_group": {
             "additionalProperties": {
@@ -9828,9 +11738,9 @@
             "title": "Unseen",
             "type": "array"
           },
-          "years_at_address": {
+          "warm_path": {
             "minimum": 0.0,
-            "title": "Years At Address",
+            "title": "Warm Path",
             "type": "integer"
           }
         },
@@ -9839,18 +11749,22 @@
           "check_labels",
           "trigger_group",
           "source",
-          "size",
           "recency",
           "undated",
           "lease_in_best_window",
-          "years_at_address",
-          "no_recent_move",
-          "access",
-          "fit",
-          "competition",
+          "local_staff",
+          "priority_sector",
+          "city",
+          "office_relevance",
+          "strongest_sign",
+          "other_signs",
+          "office_constrained",
+          "no_lock_in",
+          "procurement",
+          "warm_path",
           "unseen",
-          "bands",
-          "band_basis"
+          "dampeners",
+          "tiers"
         ],
         "title": "Score",
         "type": "object"
@@ -10574,6 +12488,39 @@
         "title": "SettingsPatch",
         "type": "object"
       },
+      "Sign": {
+        "additionalProperties": false,
+        "description": "A sign of an office change, and how strong it is (Levi's section 4, PLAN-V16 T1-4). The\ngroup it sits in (main, other, weak) says whether a run searches for it by default. The\nstrength says how much it counts in the score.",
+        "properties": {
+          "id": {
+            "pattern": "^[a-z][a-z_]*$",
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "strength": {
+            "enum": [
+              "very_high",
+              "high",
+              "medium",
+              "low"
+            ],
+            "title": "Strength",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "strength"
+        ],
+        "title": "Sign",
+        "type": "object"
+      },
       "SignalHireCompany": {
         "properties": {
           "fetched_at": {
@@ -11012,39 +12959,6 @@
         "title": "SizeLine",
         "type": "object"
       },
-      "SizePoints": {
-        "additionalProperties": false,
-        "properties": {
-          "confirmed_in_range": {
-            "minimum": 0.0,
-            "title": "Confirmed In Range",
-            "type": "integer"
-          },
-          "director": {
-            "minimum": 0.0,
-            "title": "Director",
-            "type": "integer"
-          },
-          "estimated_in_range": {
-            "minimum": 0.0,
-            "title": "Estimated In Range",
-            "type": "integer"
-          },
-          "growing_into_range": {
-            "minimum": 0.0,
-            "title": "Growing Into Range",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "confirmed_in_range",
-          "estimated_in_range",
-          "growing_into_range",
-          "director"
-        ],
-        "title": "SizePoints",
-        "type": "object"
-      },
       "SliceDoneData": {
         "properties": {
           "cost_usd": {
@@ -11212,6 +13126,41 @@
         "title": "SliceStartedEvent",
         "type": "object"
       },
+      "SourceChecks": {
+        "description": "Where each tool stands for this company.",
+        "properties": {
+          "arealytics": {
+            "default": "not_checked",
+            "enum": [
+              "found",
+              "not_found",
+              "off",
+              "error",
+              "not_checked"
+            ],
+            "title": "Arealytics",
+            "type": "string"
+          },
+          "property_daily": {
+            "default": "not_checked",
+            "enum": [
+              "found",
+              "not_found",
+              "off",
+              "error",
+              "not_checked"
+            ],
+            "title": "Property Daily",
+            "type": "string"
+          }
+        },
+        "required": [
+          "property_daily",
+          "arealytics"
+        ],
+        "title": "SourceChecks",
+        "type": "object"
+      },
       "SourceCounts": {
         "properties": {
           "api": {
@@ -11231,6 +13180,13 @@
       "SourceDomains": {
         "additionalProperties": false,
         "properties": {
+          "arealytics": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Arealytics",
+            "type": "array"
+          },
           "asx_or_official_news": {
             "items": {
               "type": "string"
@@ -11262,11 +13218,104 @@
         },
         "required": [
           "property_daily",
+          "arealytics",
           "asx_or_official_news",
           "job_ads",
           "blocked"
         ],
         "title": "SourceDomains",
+        "type": "object"
+      },
+      "SourceGroup": {
+        "additionalProperties": false,
+        "description": "One of the source groups Levi names (his section 7, PLAN-V16 T1-7), and the searches that\nreach it. On every run the research looks in each group.\n\n- `company`: searches for one company. They are added to the research angles in `angles`\n  (\"Searches you could start with\"), and need `{company}`.\n- `discovery`: searches for a slice of the discovery run. They are added to the signs in\n  `signs`, and can't name a company. A group no sign uses (a dampener's source) has none.",
+        "properties": {
+          "angles": {
+            "items": {
+              "enum": [
+                "property",
+                "people",
+                "money",
+                "tenure",
+                "dampeners"
+              ],
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Angles",
+            "type": "array"
+          },
+          "company": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Company",
+            "type": "array"
+          },
+          "discovery": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Discovery",
+            "type": "array"
+          },
+          "label": {
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "signs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Signs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "label",
+          "angles",
+          "company"
+        ],
+        "title": "SourceGroup",
+        "type": "object"
+      },
+      "SourceOption": {
+        "description": "Where a discovery run can look for companies (PLAN-V16 T1-8, the contract part 2).",
+        "properties": {
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it isn't ready, in one plain sentence for the Start page. Empty when it is ready.",
+            "examples": [
+              "Property Daily is switched off. An Admin can switch it on."
+            ],
+            "title": "Message"
+          },
+          "on": {
+            "description": "The tool's switch. The web is always on.",
+            "title": "On",
+            "type": "boolean"
+          },
+          "ready": {
+            "description": "It can be used now: on, and with a login. A run may name only a ready one.",
+            "title": "Ready",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "on",
+          "ready",
+          "message"
+        ],
+        "title": "SourceOption",
         "type": "object"
       },
       "SourceOut": {
@@ -11306,6 +13355,61 @@
           "page_age"
         ],
         "title": "SourceOut",
+        "type": "object"
+      },
+      "Space": {
+        "description": "The space at about 10 m² a person (`size.m2_per_staff`).",
+        "properties": {
+          "now_m2": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Now M2"
+          },
+          "projected_m2": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Projected M2"
+          }
+        },
+        "required": [
+          "now_m2",
+          "projected_m2"
+        ],
+        "title": "Space",
+        "type": "object"
+      },
+      "StaffStep": {
+        "additionalProperties": false,
+        "description": "Local staff of at least `from_staff` earn `points`. The highest step that fits counts.",
+        "properties": {
+          "from_staff": {
+            "exclusiveMinimum": 0.0,
+            "title": "From Staff",
+            "type": "integer"
+          },
+          "points": {
+            "minimum": 0.0,
+            "title": "Points",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "from_staff",
+          "points"
+        ],
+        "title": "StaffStep",
         "type": "object"
       },
       "StepResult": {
@@ -12059,6 +14163,37 @@
         "title": "TestSummary",
         "type": "object"
       },
+      "Tiers": {
+        "additionalProperties": false,
+        "description": "The lowest score of each tier. Under `c` is Discard.",
+        "properties": {
+          "a": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 100.0,
+            "title": "A",
+            "type": "integer"
+          },
+          "b": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 100.0,
+            "title": "B",
+            "type": "integer"
+          },
+          "c": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 100.0,
+            "title": "C",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "a",
+          "b",
+          "c"
+        ],
+        "title": "Tiers",
+        "type": "object"
+      },
       "ToneChoice": {
         "properties": {
           "key": {
@@ -12302,6 +14437,24 @@
             "title": "Source Points",
             "type": "integer"
           },
+          "strength": {
+            "anyOf": [
+              {
+                "enum": [
+                  "very_high",
+                  "high",
+                  "medium",
+                  "low"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "very_high, high, medium or low (Levi's section 4). Empty for a card made before PLAN-V16.",
+            "title": "Strength"
+          },
           "timing_points": {
             "default": 0,
             "description": "How recent, or how near the lease end",
@@ -12345,7 +14498,7 @@
           },
           "main": {
             "items": {
-              "$ref": "#/components/schemas/Item"
+              "$ref": "#/components/schemas/Sign"
             },
             "minItems": 1,
             "title": "Main",
@@ -12353,7 +14506,7 @@
           },
           "other": {
             "items": {
-              "$ref": "#/components/schemas/Item"
+              "$ref": "#/components/schemas/Sign"
             },
             "title": "Other",
             "type": "array"
@@ -12365,7 +14518,7 @@
           },
           "weak": {
             "items": {
-              "$ref": "#/components/schemas/Item"
+              "$ref": "#/components/schemas/Sign"
             },
             "title": "Weak",
             "type": "array"
@@ -12765,7 +14918,7 @@
                 "type": "null"
               }
             ],
-            "description": "Only the companies whose biggest office is in this city: one of the watchlist's cities (Melbourne, Adelaide, Perth). Missing: every city.",
+            "description": "Only the companies whose biggest office is in this city: one of the watchlist's cities (Melbourne, Adelaide, Perth, Sydney, Brisbane). Missing: every city.",
             "examples": [
               "Adelaide"
             ],
@@ -12938,6 +15091,33 @@
           "tbc"
         ],
         "title": "WatchlistRules",
+        "type": "object"
+      },
+      "WhatChanged": {
+        "properties": {
+          "kind": {
+            "enum": [
+              "new",
+              "upgraded",
+              "downgraded",
+              "unchanged"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "text": {
+            "examples": [
+              "Up from B to A: a new sign, a lease ending in 1 to 3 years."
+            ],
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "text"
+        ],
+        "title": "WhatChanged",
         "type": "object"
       },
       "WhenLine": {
@@ -18843,6 +21023,7 @@
               "default": "score",
               "description": "The column to sort by",
               "enum": [
+                "tier",
                 "score",
                 "created_at",
                 "updated_at",
@@ -19284,6 +21465,122 @@
               "title": "Facts Missing",
               "type": "boolean"
             }
+          },
+          {
+            "description": "A, B, C or discard (PLAN-V16). Left out: every lead. Repeat the key to match several values",
+            "in": "query",
+            "name": "tier",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "A",
+                      "B",
+                      "C",
+                      "discard"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A, B, C or discard (PLAN-V16). Left out: every lead. Repeat the key to match several values",
+              "title": "Tier"
+            }
+          },
+          {
+            "description": "Repeat the key to match several values",
+            "in": "query",
+            "name": "confidence",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Repeat the key to match several values",
+              "title": "Confidence"
+            }
+          },
+          {
+            "description": "priority, secondary, capital or regional: the city's group. Repeat the key to match several values",
+            "in": "query",
+            "name": "city_group",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "priority",
+                      "secondary",
+                      "capital",
+                      "regional"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "priority, secondary, capital or regional: the city's group. Repeat the key to match several values",
+              "title": "City Group"
+            }
+          },
+          {
+            "description": "true: only leads a property tool has a record of. false: the others.",
+            "in": "query",
+            "name": "has_property",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "true: only leads a property tool has a record of. false: the others.",
+              "title": "Has Property"
+            }
+          },
+          {
+            "description": "true: only leads left out by an exclusion that nobody overrode. false: the others.",
+            "in": "query",
+            "name": "excluded",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "true: only leads left out by an exclusion that nobody overrode. false: the others.",
+              "title": "Excluded"
+            }
           }
         ],
         "responses": {
@@ -19434,6 +21731,7 @@
               "default": "score",
               "description": "The column to sort by",
               "enum": [
+                "tier",
                 "score",
                 "created_at",
                 "updated_at",
@@ -19850,6 +22148,122 @@
               "description": "Only leads whose facts are missing, because Claude couldn't fill in the answer form. Re-check them.",
               "title": "Facts Missing",
               "type": "boolean"
+            }
+          },
+          {
+            "description": "A, B, C or discard (PLAN-V16). Left out: every lead. Repeat the key to match several values",
+            "in": "query",
+            "name": "tier",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "A",
+                      "B",
+                      "C",
+                      "discard"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A, B, C or discard (PLAN-V16). Left out: every lead. Repeat the key to match several values",
+              "title": "Tier"
+            }
+          },
+          {
+            "description": "Repeat the key to match several values",
+            "in": "query",
+            "name": "confidence",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Repeat the key to match several values",
+              "title": "Confidence"
+            }
+          },
+          {
+            "description": "priority, secondary, capital or regional: the city's group. Repeat the key to match several values",
+            "in": "query",
+            "name": "city_group",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "priority",
+                      "secondary",
+                      "capital",
+                      "regional"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "priority, secondary, capital or regional: the city's group. Repeat the key to match several values",
+              "title": "City Group"
+            }
+          },
+          {
+            "description": "true: only leads a property tool has a record of. false: the others.",
+            "in": "query",
+            "name": "has_property",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "true: only leads a property tool has a record of. false: the others.",
+              "title": "Has Property"
+            }
+          },
+          {
+            "description": "true: only leads left out by an exclusion that nobody overrode. false: the others.",
+            "in": "query",
+            "name": "excluded",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "true: only leads left out by an exclusion that nobody overrode. false: the others.",
+              "title": "Excluded"
             }
           }
         ],
@@ -20387,6 +22801,122 @@
               "title": "Facts Missing",
               "type": "boolean"
             }
+          },
+          {
+            "description": "A, B, C or discard (PLAN-V16). Left out: every lead. Repeat the key to match several values",
+            "in": "query",
+            "name": "tier",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "A",
+                      "B",
+                      "C",
+                      "discard"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A, B, C or discard (PLAN-V16). Left out: every lead. Repeat the key to match several values",
+              "title": "Tier"
+            }
+          },
+          {
+            "description": "Repeat the key to match several values",
+            "in": "query",
+            "name": "confidence",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Repeat the key to match several values",
+              "title": "Confidence"
+            }
+          },
+          {
+            "description": "priority, secondary, capital or regional: the city's group. Repeat the key to match several values",
+            "in": "query",
+            "name": "city_group",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "priority",
+                      "secondary",
+                      "capital",
+                      "regional"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "priority, secondary, capital or regional: the city's group. Repeat the key to match several values",
+              "title": "City Group"
+            }
+          },
+          {
+            "description": "true: only leads a property tool has a record of. false: the others.",
+            "in": "query",
+            "name": "has_property",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "true: only leads a property tool has a record of. false: the others.",
+              "title": "Has Property"
+            }
+          },
+          {
+            "description": "true: only leads left out by an exclusion that nobody overrode. false: the others.",
+            "in": "query",
+            "name": "excluded",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "true: only leads left out by an exclusion that nobody overrode. false: the others.",
+              "title": "Excluded"
+            }
           }
         ],
         "responses": {
@@ -20914,6 +23444,122 @@
               "description": "Only leads whose facts are missing, because Claude couldn't fill in the answer form. Re-check them.",
               "title": "Facts Missing",
               "type": "boolean"
+            }
+          },
+          {
+            "description": "A, B, C or discard (PLAN-V16). Left out: every lead. Repeat the key to match several values",
+            "in": "query",
+            "name": "tier",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "A",
+                      "B",
+                      "C",
+                      "discard"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A, B, C or discard (PLAN-V16). Left out: every lead. Repeat the key to match several values",
+              "title": "Tier"
+            }
+          },
+          {
+            "description": "Repeat the key to match several values",
+            "in": "query",
+            "name": "confidence",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Repeat the key to match several values",
+              "title": "Confidence"
+            }
+          },
+          {
+            "description": "priority, secondary, capital or regional: the city's group. Repeat the key to match several values",
+            "in": "query",
+            "name": "city_group",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "priority",
+                      "secondary",
+                      "capital",
+                      "regional"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "priority, secondary, capital or regional: the city's group. Repeat the key to match several values",
+              "title": "City Group"
+            }
+          },
+          {
+            "description": "true: only leads a property tool has a record of. false: the others.",
+            "in": "query",
+            "name": "has_property",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "true: only leads a property tool has a record of. false: the others.",
+              "title": "Has Property"
+            }
+          },
+          {
+            "description": "true: only leads left out by an exclusion that nobody overrode. false: the others.",
+            "in": "query",
+            "name": "excluded",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "true: only leads left out by an exclusion that nobody overrode. false: the others.",
+              "title": "Excluded"
             }
           }
         ],
@@ -21974,6 +24620,306 @@
           }
         ],
         "summary": "Send this lead to HubSpot, as previewed",
+        "tags": [
+          "Lead Finder",
+          "leads"
+        ]
+      }
+    },
+    "/lead-finder/leads/{lead_id}/override-exclusion": {
+      "post": {
+        "description": "For a lead a rule left out (Levi's exclusions: a law firm, a government department, a big bank...). Judges its saved facts again as if the rule didn't apply, and saves the new result and score. The card keeps `excluded`, now with who did it and when. Free: no search and no Claude. Answers 404 for an unknown lead, 409 `not_excluded` when no rule left it out, and 409 `already_overridden` when it was done before.",
+        "operationId": "override_exclusion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lead_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Lead Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeadDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Judge an excluded lead again, without its exclusion",
+        "tags": [
+          "Lead Finder",
+          "leads"
+        ]
+      }
+    },
+    "/lead-finder/leads/{lead_id}/profile": {
+      "get": {
+        "description": "Everything Levi's section 9 lists for a lead, in one answer, for the print view: the tier, score and confidence, the headcount and space, the signs, the dampeners, the current office, why now, the Contour angle, who to contact, the opener and what changed. 404 for an unknown lead, and 409 `not_tier_a` for a lead that isn't Tier A.",
+        "operationId": "get_profile",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lead_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Lead Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeadProfile"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No such lead"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Tier A"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "The one-page profile of a Tier A lead",
         "tags": [
           "Lead Finder",
           "leads"

@@ -373,3 +373,23 @@ def test_unranked_keeps_the_order_the_companies_came_in() -> None:
     decision = decide(companies, {}, [], RULES, Params(), TODAY, 2, SETTINGS, ranked=False)
     assert [c.name for c in decision.chosen] == ["Zed Co", "Best Co"]
     assert decision.over_limit_count == 1
+
+
+# --- A new sign on a saved lead (PLAN-V16 T1-10) ------------------------------------------------
+
+
+def test_a_new_sign_on_a_fresh_lead_judges_it_again() -> None:
+    """Both must hold: a sign the saved lead doesn't have, dated after that research."""
+    import dataclasses
+
+    saved = dataclasses.replace(lead("Acme", days_ago=10), trigger_ids=("fast_growth",))
+    newer = signal("merger_or_takeover", "2026-10-20")  # the lead was researched on 16 Oct
+    assert chosen_names([company("Acme", newer)], leads=[saved]) == ["Acme"]
+    same = signal("fast_growth", "2026-10-20")  # the same sign again: nothing new
+    assert chosen_names([company("Acme", same)], leads=[saved]) == []
+    older = signal("merger_or_takeover", "2026-10-01")  # it was there when we researched
+    assert chosen_names([company("Acme", older)], leads=[saved]) == []
+    no_date = signal("merger_or_takeover", None, published="2026-10-20")  # only the page is new
+    assert chosen_names([company("Acme", no_date)], leads=[saved]) == []
+    unknown = lead("Acme", days_ago=10)  # its signs aren't known here: the fresh rule stands
+    assert chosen_names([company("Acme", newer)], leads=[unknown]) == []

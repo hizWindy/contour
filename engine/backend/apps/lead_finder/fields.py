@@ -56,15 +56,23 @@ NEWER_FACTS = (
     "office_since",
     "last_fitout",
     "tender_only",  # PLAN-V16 T1-3
+    "staff_projected",  # PLAN-V16 T1-10
 )
-NEWER_LISTS = ("fitout_contractors", "talking_points", "decision_makers", "dampeners")
+NEWER_LISTS = (
+    "fitout_contractors",
+    "talking_points",
+    "decision_makers",
+    "dampeners",
+    "contact_roles",  # PLAN-V16 T1-10
+)
+MAX_CONTACT_ROLES = 5
 MAX_TALKING_POINTS = 3
 MAX_CONTRACTORS = 5
 MAX_LINE_CHARS = 200  # a talking point or a firm name: one line, cut after parsing
 MAX_EVIDENCE_CHARS = 300  # a dampener's evidence: one plain sentence, cut after parsing
 MAX_DECISION_MAKERS = 3
 MAX_NAME_CHARS = 120  # a person's name or job title: one line, cut after parsing
-NEWER_TEXTS: tuple[str, ...] = ("tier_group",)
+NEWER_TEXTS: tuple[str, ...] = ("tier_group", "contour_angle")
 
 
 def _one_line(text: str, limit: int) -> str:
@@ -192,6 +200,10 @@ class CompanyFacts(BaseModel):
     owner: Fact[str] = Field(description="Like 'ASX-listed, Australian' or 'Private, UK-owned'")
     staff_in_city: Fact[int] = Field(description="Staff at the office in that city")
     staff_from_linkedin: bool = Field(description="true if staff_in_city is a LinkedIn count")
+    staff_projected: Fact[int] = Field(
+        description="Staff the office in that city is expected to have within about 24 months, "
+        "only if a note says (a hiring plan, a merger, a consolidation). Null if no note says."
+    )
     office_m2: Fact[int] = Field(description="The office's floor area in square metres")
     local_team_runs_project: Fact[bool] = Field(
         description="The local team can run an office project, even if owned overseas"
@@ -250,6 +262,15 @@ class CompanyFacts(BaseModel):
         description="The role to contact first, like Head of Property, COO or CFO. No names. "
         "Empty if no note points to one."
     )
+    contact_roles: list[str] = Field(
+        description="The likely roles to contact, best first, like CEO, COO, CFO, Head of People "
+        "or Head of Property. Job titles only, never a person's name. Up to 5. Can be empty."
+    )
+    contour_angle: MaybeText = Field(
+        description="The strategic hook for an office fitout firm, in a few words, like "
+        "post-merger integration, growth planning, consolidating sites, a long overdue refresh "
+        "or return to office. Empty if the notes point to none."
+    )
     decision_makers: list[DecisionMaker] = Field(
         description="Up to 3 people a note names as the company's current leaders, best first: "
         "the head of property, facilities or workplace, then the COO, the CFO, the CEO. Name and "
@@ -267,6 +288,27 @@ class CompanyFacts(BaseModel):
         limit = MAX_TALKING_POINTS if info.field_name == "talking_points" else MAX_CONTRACTORS
         lines = (_one_line(line, MAX_LINE_CHARS) for line in value)
         return [line for line in lines if line][:limit]
+
+    @field_validator("contact_roles", mode="after")
+    @classmethod
+    def _few_roles(cls, value: list[str]) -> list[str]:
+        """Short job titles, each once, no contact details, at most five. Cut after parsing."""
+        kept: list[str] = []
+        for role in value:
+            line = _one_line(role, MAX_NAME_CHARS)
+            if (
+                not line
+                or _holds_contact_details(line)
+                or line.casefold() in {seen.casefold() for seen in kept}
+            ):
+                continue
+            kept.append(line)
+        return kept[:MAX_CONTACT_ROLES]
+
+    @field_validator("contour_angle", mode="after")
+    @classmethod
+    def _one_short_line(cls, value: str | None) -> str | None:
+        return _one_line(value, MAX_LINE_CHARS) or None if value else None
 
     @field_validator("decision_makers", mode="after")
     @classmethod

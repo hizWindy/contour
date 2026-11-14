@@ -126,6 +126,7 @@ ROUTES = [
     ("POST", f"{LF}/leads/{{lead_id}}/hubspot/send"),
     ("POST", f"{LF}/leads/{{lead_id}}/recheck"),
     ("POST", f"{LF}/leads/{{lead_id}}/override-exclusion"),
+    ("GET", f"{LF}/leads/{{lead_id}}/profile"),  # PLAN-V16 T1-10
     ("GET", f"{LF}/watchlist"),
     ("GET", f"{LF}/review/{{run_id}}"),
     ("POST", f"{LF}/review/status"),
@@ -363,12 +364,18 @@ def test_the_lead_filters_sort_and_paging_are_declared_on_the_list(schema: dict[
         "include_tests",
         "latest",
         "facts_missing",
+        "tier",
+        "confidence",
+        "city_group",
+        "has_property",
+        "excluded",
         "sort",
         "order",
         "limit",
         "offset",
     }
     assert set(parameters["sort"]["schema"]["enum"]) == {
+        "tier",  # PLAN-V16 T1-10
         "score",
         "created_at",
         "updated_at",

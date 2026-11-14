@@ -48,6 +48,8 @@ class ExistingLead:
     created_at: datetime
     updated_at: datetime | None = None  # when a person last changed it (the decision date)
     is_test: bool = False  # a lead of the test set: never counts
+    # The signs on the saved card (PLAN-V16 T1-10). None: not known, so no sign counts as new.
+    trigger_ids: tuple[str, ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -160,6 +162,7 @@ def _facts_of(company: Merged) -> CompanyFacts:
         owner=_unknown(),
         staff_in_city=_unknown(),
         staff_from_linkedin=False,
+        staff_projected=_unknown(),
         office_m2=_unknown(),
         local_team_runs_project=_unknown(),
         healthy=_unknown(),
@@ -187,6 +190,8 @@ def _facts_of(company: Merged) -> CompanyFacts:
         fitout_contractors=[],
         talking_points=[],
         contact_role=None,
+        contact_roles=[],
+        contour_angle=None,
         decision_makers=[],
         summary="",
         opening_line=None,
@@ -213,6 +218,26 @@ def _newer_signal(company: Merged, than: date) -> bool:
     return any((day := signal_day(signal)) is not None and day > than for signal in company.signals)
 
 
+def _made(lead: ExistingLead) -> datetime:
+    return lead.created_at
+
+
+def _new_sign(company: Merged, lead: ExistingLead) -> bool:
+    """True when discovery found a sign the saved lead doesn't have, dated after that research.
+    Both must hold, so the same news found again never pays for a second research: the sign's id
+    isn't one of the lead's signs, and the event's own date (not the page's) is after the day it
+    was researched. A lead whose signs aren't known here (`trigger_ids` None) has no new sign."""
+    if lead.trigger_ids is None:
+        return False
+    since = _day(lead.created_at)
+    return any(
+        signal.trigger_id not in lead.trigger_ids
+        and (day := parse_date(signal.date)) is not None
+        and day > since
+        for signal in company.signals
+    )
+
+
 def _lead_reason(
     company: Merged,
     leads: Sequence[ExistingLead],
@@ -224,7 +249,9 @@ def _lead_reason(
     real = [lead for lead in leads if not lead.is_test]
     if not recheck:
         fresh = [lead for lead in real if (today - _day(lead.created_at)).days < fresh_days]
-        if fresh:
+        # A new sign on a saved lead judges it again (PLAN-V16 T1-10): the company is researched
+        # even while memory is fresh.
+        if fresh and not _new_sign(company, max(fresh, key=_made)):
             newest = max(fresh, key=lambda lead: lead.created_at)
             age = max(0, (today - _day(newest.created_at)).days)
             unit = "day" if age == 1 else "days"

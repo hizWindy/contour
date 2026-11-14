@@ -345,7 +345,12 @@ async def _matches_and_leads(
         rows = (
             await session.execute(
                 select(
-                    Lead.company_key, Lead.status, Lead.created_at, Lead.updated_at, Lead.is_test
+                    Lead.company_key,
+                    Lead.status,
+                    Lead.created_at,
+                    Lead.updated_at,
+                    Lead.is_test,
+                    Lead.trigger_ids,
                 ).where(Lead.company_key.in_(keys), Lead.run_id.is_distinct_from(ctx.run_id))
             )
         ).all()
@@ -356,6 +361,7 @@ async def _matches_and_leads(
             created_at=row.created_at,
             updated_at=row.updated_at if row.updated_at != row.created_at else None,
             is_test=row.is_test,
+            trigger_ids=tuple(row.trigger_ids or ()),
         )
         for row in rows
     ]

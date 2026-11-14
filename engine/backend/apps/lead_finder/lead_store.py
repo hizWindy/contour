@@ -27,6 +27,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import (
     ColumnElement,
     Date,
+    and_,
     case,
     cast,
     delete,
@@ -41,11 +42,12 @@ from sqlalchemy.orm import aliased
 
 from apps.lead_finder.context import Origin
 from apps.lead_finder.geo import CITY_CENTRES, approximate_point
-from apps.lead_finder.research import APP
+from apps.lead_finder.research import APP, LeadCard
 from apps.lead_finder.rules import Result, load_rules
 from apps.lead_finder.sanitize import one_line, safe_http_url
 from apps.lead_finder.schemas import (
     REJECT_REASON_LABELS,
+    CityGroupFilter,
     DateRange,
     FacetValue,
     HubSpotStatus,
@@ -54,18 +56,21 @@ from apps.lead_finder.schemas import (
     LeadFacets,
     LeadPage,
     LeadPatch,
+    LeadProfile,
     LeadRow,
     LeadSort,
     LeadStatus,
     MapOut,
     MapPoint,
     PreviousLead,
+    ProfileSign,
     RejectReasonCount,
     RejectReasonCounts,
     RunFacet,
     SortOrder,
     TriggerFacet,
 )
+from apps.lead_finder.scoring import Confidence, Tier
 from apps.lead_finder.tables import REJECT_REASONS, Lead, Rival
 from core.api.errors import Problem
 from core.memory.embedder import Embedder
@@ -122,6 +127,12 @@ class LeadFilters:
     include_tests: bool = False
     latest: bool | None = None
     facts_missing: bool = False  # only leads whose answer form failed
+    # PLAN-V16 T1-10 (the contract, part 3)
+    tier: list[Tier] | None = None  # A, B, C or discard
+    confidence: list[Confidence] | None = None
+    city_group: list[CityGroupFilter] | None = None  # priority, secondary, capital or regional
+    has_property: bool | None = None  # a property tool has a record of the company
+    excluded: bool | None = None  # true: only leads left out by an exclusion nobody overrode
 
 
 # The names a facet leaves out of its own count.
@@ -149,6 +160,13 @@ RESULT_RANK = case(
     value=Lead.result,
     else_=len(RESULT_ORDER),
 )
+# Tier A first. A lead with no tier yet (judged before PLAN-V16 T1-6) comes last.
+TIER_ORDER: Final = ("A", "B", "C", "discard")
+TIER_RANK = case(
+    {name: rank for rank, name in enumerate(TIER_ORDER)},
+    value=Lead.tier,
+    else_=len(TIER_ORDER),
+)
 # A dict, so `sort` can only name a column listed here. Never build SQL from the text.
 SORT_COLUMNS: dict[str, Any] = {
     "score": Lead.score,
@@ -157,6 +175,7 @@ SORT_COLUMNS: dict[str, Any] = {
     "company": func.lower(Lead.company),
     "city": Lead.city,
     "result": RESULT_RANK,
+    "tier": TIER_RANK,
     "status": Lead.status,
     "hubspot_status": Lead.hubspot_status,
     "trigger_date": Lead.trigger_date,
@@ -226,6 +245,18 @@ def lead_conditions(
         where.append(Lead.company.icontains(filters.q, autoescape=True))
     if filters.facts_missing:
         where.append(_CARD["form_failed"].as_boolean().is_(True))
+    if filters.tier:
+        where.append(Lead.tier.in_(filters.tier))
+    if filters.confidence:
+        where.append(Lead.confidence.in_(filters.confidence))
+    if filters.city_group:
+        groups = load_rules().criteria.cities.groups
+        places = [place for group in filters.city_group for place in groups.get(group, [])]
+        where.append(Lead.city.in_(places))
+    if filters.has_property is not None:
+        where.append(_HAS_PROPERTY if filters.has_property else ~_HAS_PROPERTY)
+    if filters.excluded is not None:
+        where.append(_IS_EXCLUDED if filters.excluded else ~_IS_EXCLUDED)
     tests = [] if filters.include_tests else [Lead.is_test.is_(False)]
     where += tests
     if newest_only(filters):
@@ -252,6 +283,10 @@ def lead_conditions(
 def lead_order(sort: LeadSort, order: SortOrder) -> list[Any]:
     """ORDER BY <column> <direction> NULLS LAST, id. The id makes pages stable when values tie."""
     column = SORT_COLUMNS[sort]
+    if sort == "tier":  # best first is tier A, then the highest score (PLAN-V16 T1-10)
+        best = order == "desc"
+        score = Lead.score.desc() if best else Lead.score.asc()
+        return [column.asc() if best else column.desc(), score.nulls_last(), Lead.id]
     direction = column.desc() if order == "desc" else column.asc()
     return [direction.nulls_last(), Lead.id]
 
@@ -266,6 +301,8 @@ _ROW_COLUMNS: Final = (
     "result",
     "score",
     "score_checked",
+    "tier",
+    "confidence",
     "status",
     "hubspot_status",
     "trigger_id",
@@ -287,6 +324,13 @@ _ROW_COLUMNS: Final = (
     "updated_at",
 )
 _CARD: Any = Lead.card  # `Mapped[dict]`, but here it is indexed like JSON
+# A property tool has a record of the company: the card's `property.records` has a first item
+_HAS_PROPERTY: Any = _CARD[("property", "records", "0")].as_string().is_not(None)
+# Left out by an exclusion that nobody overrode (PLAN-V16 T1-3)
+_IS_EXCLUDED: Any = and_(
+    _CARD[("excluded", "reason_id")].as_string().is_not(None),
+    _CARD[("excluded", "overridden_by")].as_string().is_(None),
+)
 
 
 def trigger_labels() -> dict[str, str]:
@@ -348,6 +392,8 @@ def _row(data: Mapping[Any, Any], labels: Mapping[str, str]) -> LeadRow:
     values["reason"] = reason_of(data["result"], data["checks"], data["why_it_fits"])
     values["form_failed"] = bool(data["form_failed"])
     values["hubspot_owner"] = data["hubspot_owner"]
+    values["excluded"] = data["excluded"] if isinstance(data["excluded"], dict) else None
+    values["has_property"] = bool(data["has_property"])
     rules = load_rules()
     values["stage"] = rules.criteria.stages[data["result"]]
     # The score's bands ended with PLAN-V16 T1-6: a lead has a tier now (a later step lists it)
@@ -363,6 +409,8 @@ def _row_query() -> Any:
         _CARD["why_it_fits"].as_string().label("why_it_fits"),
         func.coalesce(_CARD["form_failed"].as_boolean(), False).label("form_failed"),
         _CARD["hubspot"]["owner"].as_string().label("hubspot_owner"),
+        _CARD["excluded"].label("excluded"),
+        func.coalesce(_HAS_PROPERTY, False).label("has_property"),
     )
 
 
@@ -569,6 +617,16 @@ EXPORT_COLUMNS: Final = (
     "status",
     "source_link",
     "created_at",
+    # PLAN-V16 T1-10 (Levi's section 9), added at the end so the older columns keep their place
+    "tier",
+    "confidence",
+    "dampeners_found",
+    "excluded",
+    "office_address",
+    "lease_end",
+    "contour_angle",
+    "contact_roles",
+    "what_changed",
 )
 BOM: Final = b"\xef\xbb\xbf"  # so Excel reads the file as UTF-8
 # A spreadsheet runs a cell that starts with one of these as a formula.
@@ -598,6 +656,15 @@ class ExportRow:
     status: str
     source_link: str | None
     created_at: datetime
+    tier: str | None = None
+    confidence: str | None = None
+    dampeners_found: str | None = None  # the labels of the dampeners found, "; " between them
+    excluded: str | None = None  # the exclusion's label
+    office_address: str | None = None
+    lease_end: str | None = None
+    contour_angle: str | None = None
+    contact_roles: str | None = None
+    what_changed: str | None = None
 
 
 def _cell(value: str | int | bool | date | datetime | None) -> str:
@@ -641,6 +708,15 @@ def render_csv(rows: Sequence[ExportRow]) -> bytes:
                 row.status,
                 row.source_link,
                 row.created_at,
+                row.tier,
+                row.confidence,
+                row.dampeners_found,
+                row.excluded,
+                row.office_address,
+                row.lease_end,
+                row.contour_angle,
+                row.contact_roles,
+                row.what_changed,
             )
         )
     return BOM + out.getvalue().encode("utf-8")
@@ -686,6 +762,15 @@ async def export_rows(
             Lead.status,
             source_link.label("source_link"),
             Lead.created_at,
+            Lead.tier,
+            Lead.confidence,
+            _CARD["dampeners"].label("dampeners"),
+            _CARD[("excluded", "label")].as_string().label("excluded"),
+            _CARD[("office", "address")].as_string().label("office_address"),
+            _CARD[("office", "lease_end")].as_string().label("lease_end"),
+            _CARD["contour_angle"].as_string().label("contour_angle"),
+            _CARD["contact_roles"].label("contact_roles"),
+            _CARD[("what_changed", "text")].as_string().label("what_changed"),
         )
         .where(*where)
         .order_by(*lead_order(sort, order))
@@ -709,6 +794,22 @@ async def export_rows(
             status=status,
             source_link=link if safe_http_url(link) else None,
             created_at=created_at,
+            tier=tier,
+            confidence=confidence,
+            dampeners_found="; ".join(
+                str(item.get("label") or item.get("id"))
+                for item in (dampeners if isinstance(dampeners, list) else [])
+                if isinstance(item, dict) and item.get("state") == "found"
+            )
+            or None,
+            excluded=excluded,
+            office_address=office_address,
+            lease_end=lease_end,
+            contour_angle=contour_angle,
+            contact_roles="; ".join(str(role) for role in roles)
+            if isinstance(roles, list) and roles
+            else None,
+            what_changed=changed,
         )
         for (
             company,
@@ -726,6 +827,15 @@ async def export_rows(
             status,
             link,
             created_at,
+            tier,
+            confidence,
+            dampeners,
+            excluded,
+            office_address,
+            lease_end,
+            contour_angle,
+            roles,
+            changed,
         ) in rows.all()
     ]
 
@@ -790,6 +900,53 @@ async def get_detail(session: AsyncSession, lead_id: uuid.UUID) -> LeadDetail | 
         "previous": previous,
     }
     return LeadDetail.model_validate({**lead.card, **extras})
+
+
+async def get_profile(session: AsyncSession, lead_id: uuid.UUID) -> LeadProfile | None:
+    """The one-page profile of a Tier A lead (Levi's section 9, PLAN-V16 T1-10), from its saved
+    card. None for an unknown id. Raises Problem 409 `not_tier_a` for a lead that isn't Tier A."""
+    lead = await session.scalar(
+        select(Lead).where(Lead.id == lead_id).execution_options(populate_existing=True)
+    )
+    if lead is None:
+        return None
+    card = LeadCard.model_validate(lead.card)
+    if card.tier != "A":
+        raise Problem(
+            409,
+            "Not a Tier A lead",
+            "The one-page profile is for Tier A leads. Open the lead card for this one.",
+            code="not_tier_a",
+        )
+    labels = trigger_labels()
+    return LeadProfile(
+        id=lead.id,
+        company=card.company,
+        city=lead.city,
+        tier=card.tier,
+        score=card.score,
+        confidence=card.confidence,
+        confidence_why=card.confidence_why,
+        sector=card.facts.tier_group or card.facts.industry.value,
+        headcount=card.headcount,
+        space=card.space,
+        signs=[
+            ProfileSign(
+                label=labels.get(score.trigger.id, score.trigger.id),
+                what_happened=score.trigger.what_happened,
+                date=score.trigger.date,
+                url=score.trigger.source_url if safe_http_url(score.trigger.source_url) else None,
+            )
+            for score in card.triggers
+        ],
+        dampeners=card.dampeners,
+        office=card.office,
+        why_now=card.why_now.reason if card.why_now is not None else None,
+        contour_angle=card.contour_angle,
+        contact_roles=card.contact_roles,
+        opener=card.opening_line,
+        what_changed=card.what_changed,
+    )
 
 
 # --- What a person does to a lead -------------------------------------------------------------
