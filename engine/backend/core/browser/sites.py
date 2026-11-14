@@ -6,7 +6,7 @@ the browser itself. Some paths are never opened at all, because opening them cha
 """
 
 from dataclasses import dataclass
-from urllib.parse import urlsplit
+from urllib.parse import parse_qsl, urlsplit
 
 from core.sources.types import SourceId
 
@@ -33,5 +33,8 @@ class Site:
         if not self.own_host(url):
             return False
         parts = urlsplit(url)
-        where = f"{parts.path}?{parts.query}".lower()
+        # The path and the names of the query's parts, never their values: a search for "Sample
+        # Payments Group" is not the payments page (the review before PLAN-V16's M1 found this)
+        names = "&".join(name for name, _ in parse_qsl(parts.query, keep_blank_values=True))
+        where = f"{parts.path}?{names}".lower()
         return not any(mark in where for mark in self.never_open)

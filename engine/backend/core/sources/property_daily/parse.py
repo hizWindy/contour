@@ -318,7 +318,10 @@ def _record(
         lease_end=place.lease_end if place and kind == "lease" else None,
         happened_on=happened_on,
         published_on=published_on,
-        summary=summary[:500],
+        # No email address or phone number survives in any text of a record, whatever line of the
+        # page it came from (the review before PLAN-V16's M1). A person's name can't be told from a
+        # firm's here: T2-5's real read must check the "Interior Designer" and "Builder" lines.
+        summary=scrub(summary)[:500],
         url=url,
         read_at=read_at,
     )

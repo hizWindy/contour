@@ -101,6 +101,8 @@ export const OPTIONS: RunOptions = {
     area: {},
     triggers: ['lease_ending'],
     since_days: 30,
+    sources: null,
+    goal_leads: null,
     caps: { run_cap_usd: null, max_companies: null },
     watchlist: {
       include_unlikely: true,

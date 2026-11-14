@@ -83,6 +83,33 @@ function CurrentOffice({ lead }: { lead: LeadDetail }) {
   )
 }
 
+/** A dampener's date is a day, a month ("2024-03") or a year: a month or a year is shown as it
+ * is, never as a made-up day. */
+function dampenerDate(value: string): string {
+  if (/^\d{4}$/.test(value)) {
+    return value
+  }
+  const month = /^(\d{4})-(\d{2})$/.exec(value)
+  if (month) {
+    const names = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ]
+    return `${names[Number(month[2]) - 1] ?? month[2]} ${month[1]}`
+  }
+  return formatDate(value)
+}
+
 export function PropertySection({ lead }: { lead: LeadDetail }) {
   const records = lead.property?.records ?? []
   return (
@@ -181,14 +208,16 @@ export function DampenersSection({ lead }: { lead: LeadDetail }) {
           {found.map((item) => (
             <li key={item.id} className="flex flex-col gap-0.5">
               <span className="font-semibold">{item.label}</span>
-              {item.strength ? (
+              {item.waived ? (
+                <span className="text-caption text-muted-foreground">{item.waived}</span>
+              ) : item.strength ? (
                 <span className="text-caption text-muted-foreground">
                   {STRENGTH_WORDS[item.strength]}
                 </span>
               ) : null}
               {item.evidence ? <span className="max-w-prose">{item.evidence}</span> : null}
               <span className="flex flex-wrap items-center gap-x-2 text-caption text-muted-foreground">
-                <span>{item.date ? formatDate(item.date) : 'Date not known'}</span>
+                <span>{item.date ? dampenerDate(item.date) : 'Date not known'}</span>
                 {item.url ? <SourceLink href={item.url} /> : null}
               </span>
               {item.can_reverse ? (

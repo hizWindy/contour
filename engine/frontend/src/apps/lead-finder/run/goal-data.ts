@@ -80,14 +80,19 @@ export function leadSources(run: Run): SourceCount[] {
 
 const TIER_RANK: Record<Tier, number> = { A: 0, B: 1, C: 2, discard: 3 }
 
+/** A lead judged before the tiers has none: it sorts last. */
+function rankOf(tier: LeadRow['tier']): number {
+  return tier ? TIER_RANK[tier] : 4
+}
+
 /** Best first: by tier, then by score. */
 export function byTierThenScore(a: LeadRow, b: LeadRow): number {
-  return TIER_RANK[a.tier] - TIER_RANK[b.tier] || b.score - a.score
+  return rankOf(a.tier) - rankOf(b.tier) || b.score - a.score
 }
 
 /** An exclusion a person overrode no longer leaves the company out. */
 export function isExcluded(lead: LeadRow): boolean {
-  return lead.excluded !== null && lead.excluded.overridden_by === null
+  return lead.excluded != null && lead.excluded.overridden_by === null
 }
 
 export interface RunLeadGroups {

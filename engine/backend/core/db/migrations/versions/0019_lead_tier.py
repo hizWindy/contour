@@ -9,8 +9,8 @@ rejudge --save` judges them again with the current rules and fills them in. Noth
 lead's result or score.
 
 Revision ID: 0019_lead_tier
-Revises: 0017_call_prep (Track 2's 0018_property_sources comes in between at the merge: one line
-here, the down_revision, changes then)
+Revises: 0018_property_sources (Track 2's tables; joined at M1, when this line and the
+down_revision changed from 0017_call_prep)
 Create Date: 2026-11-15
 """
 
@@ -20,7 +20,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "0019_lead_tier"
-down_revision: str | Sequence[str] | None = "0017_call_prep"
+down_revision: str | Sequence[str] | None = "0018_property_sources"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

@@ -457,6 +457,7 @@ def test_run_options_can_be_built_and_carry_the_defaults() -> None:
             daily_left_usd=Decimal("38.10"),
         ),
         goal_leads=schemas.GoalLeadsOption(default=20, min=1, max=100),
+        sources={"web": schemas.SourceOption(on=True, ready=True, message=None)},
         defaults=LeadFinderRunParams(),
     )
     dumped = options.model_dump(mode="json")

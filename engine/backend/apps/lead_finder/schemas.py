@@ -164,7 +164,6 @@ class RunOptions(BaseModel):
     companies_limit: CompaniesLimit
     caps: OptionCaps
     sources: dict[RunSource, SourceOption] = Field(
-        default_factory=dict,
         description=(
             "Where discovery can look, by id: `web`, `property_daily` and `arealytics` (PLAN-V16 "
             "T1-8). A run's `sources` left out uses every one that is ready."

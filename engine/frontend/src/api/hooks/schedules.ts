@@ -1,14 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, unwrap, type ApiProblem } from '../client'
 import { queryKeys } from '../query'
-import type {
-  LeadFinderRound,
-  LeadFinderRoundIn,
-  RunNow,
-  Schedule,
-  ScheduleEdit,
-  Schemas,
-} from '../types'
+import type { LeadFinderRound, LeadFinderRoundIn, RunNow, Schedule, ScheduleEdit } from '../types'
 
 const REFRESH_MS = 30_000
 
@@ -74,7 +67,7 @@ export function useLeadFinderRound() {
     queryKey: queryKeys.schedules.round(),
     queryFn: async ({ signal }) =>
       // Until PLAN-V16 M1: Brisbane and the rest of Australia are in `v16.ts`.
-      unwrap(await api.GET('/schedules/lead-finder', { signal })) as LeadFinderRound,
+      unwrap(await api.GET('/schedules/lead-finder', { signal })),
     refetchInterval: REFRESH_MS,
   })
 }
@@ -89,7 +82,7 @@ export function useSaveLeadFinderRound() {
   return useMutation<LeadFinderRound, ApiProblem, LeadFinderRoundIn>({
     mutationFn: async (body) =>
       // Until PLAN-V16 M1, like `useLeadFinderRound`: the contract's cities are the four.
-      unwrap(await api.PUT('/schedules/lead-finder', { body: body as Schemas['RoundIn'] })),
+      unwrap(await api.PUT('/schedules/lead-finder', { body })),
     onSuccess: (round) => {
       queryClient.setQueryData(queryKeys.schedules.round(), round)
       // The list only (its city rows changed); the plan itself is the answer above.

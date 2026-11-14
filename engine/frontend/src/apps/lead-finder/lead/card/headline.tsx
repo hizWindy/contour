@@ -112,7 +112,7 @@ export function TierHeadline({ lead }: { lead: LeadDetail }) {
   const change = lead.what_changed
   const mark = change ? CHANGE_MARKS[change.kind] : null
   const ChangeIcon = mark?.icon
-  const deducted = lead.score_before_dampeners - lead.score
+  const deducted = (lead.score_before_dampeners ?? lead.score) - lead.score
   return (
     <div data-slot="tier-headline" className="flex flex-col gap-1.5">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">

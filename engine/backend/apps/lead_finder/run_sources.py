@@ -13,9 +13,10 @@ the contract part 2).
   to a firm) is never a reason to look at a company. The merge then makes a company found by a tool
   and by the web one candidate.
 
-**At M1:** `core.sources.reader.source_availability` (Track 2) knows more than the settings: a tool
-paused for 24 hours after a block. `source_options` and `tool_readiness` then read it in place of
-`_from_settings`. The sentences are Track 2's own words.
+**Two ways to ask whether a tool is ready.** The Start page asks `live_source_options`, which reads
+`core.sources.reader.source_availability` (Track 2, joined at M1): it also knows a tool paused for
+24 hours after a block. The checks that must stay pure (a run's start, `picked_tools`) read the
+settings alone (`tool_readiness`): a paused tool still has our copy, and the feed reads only that.
 """
 
 from collections.abc import Sequence
@@ -34,7 +35,7 @@ from apps.lead_finder.steps.discover import WHAT_HAPPENED_MAX, Found
 from apps.lead_finder.steps.plan import is_national, run_cities
 from core.api.errors import Problem
 from core.config import Settings
-from core.sources.reader import recent_items
+from core.sources.reader import recent_items, source_availability
 from core.sources.types import SOURCE_IDS, FeedItem, SourceId
 
 FEED_SLICE: Final = "feed:{source}"  # the slice id of a company a tool's feed found
@@ -83,6 +84,25 @@ def source_options(settings: Settings) -> dict[RunSource, SourceOption]:
         source: SourceOption(on=readiness.on, ready=readiness.ready, message=readiness.sentence)
         for source, readiness in tool_readiness(settings).items()
     }
+
+
+async def live_source_options(
+    session: AsyncSession, settings: Settings
+) -> dict[RunSource, SourceOption]:
+    """The three sources for the Start page, from Track 2's own availability: the switch, the
+    login, and a pause after a block, each with its sentence."""
+    found: dict[RunSource, SourceOption] = {"web": SourceOption(on=True, ready=True, message=None)}
+    live = await source_availability(session, settings)
+    for tool in SOURCE_IDS:
+        state = live.get(tool)
+        if state is None:
+            fallback = _from_settings(settings, tool)
+            found[tool] = SourceOption(
+                on=fallback.on, ready=fallback.ready, message=fallback.sentence
+            )
+        else:
+            found[tool] = SourceOption(on=state.on, ready=state.ready, message=state.sentence)
+    return found
 
 
 def picked_tools(

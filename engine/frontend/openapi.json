@@ -10634,6 +10634,7 @@
           "modes",
           "companies_limit",
           "caps",
+          "sources",
           "goal_leads",
           "defaults"
         ],

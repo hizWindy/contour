@@ -10,6 +10,7 @@ from apps.lead_finder.params import (
     GOAL_LEADS_MAX,
     GOAL_LEADS_MIN,
     LeadFinderRunParams,
+    RunSource,
 )
 from apps.lead_finder.rules import CITY_GROUPS, LeadFinderRules
 from apps.lead_finder.run_sources import source_options
@@ -23,6 +24,7 @@ from apps.lead_finder.schemas import (
     OptionCaps,
     RunOptions,
     SinceDaysOption,
+    SourceOption,
     TriggerOption,
 )
 from core.config import Settings
@@ -44,8 +46,13 @@ def _areas(rules: LeadFinderRules, city: str) -> list[AreaOption]:
 
 
 def build_run_options(
-    rules: LeadFinderRules, settings: Settings, daily_left_usd: Decimal
+    rules: LeadFinderRules,
+    settings: Settings,
+    daily_left_usd: Decimal,
+    sources: dict[RunSource, SourceOption] | None = None,
 ) -> RunOptions:
+    """`sources`: what `run_sources.live_source_options` found (it reads the database). Left out,
+    the settings alone say which tool is ready."""
     cities = rules.criteria.cities
     # "Australia" comes first: one search for each sign for the whole country (PLAN-V16 T1-2). It
     # must be chosen alone, and its only area is the whole country.
@@ -111,7 +118,7 @@ def build_run_options(
             company_cap_usd=caps.company_cap_usd,
             daily_left_usd=daily_left_usd,
         ),
-        sources=source_options(settings),
+        sources=sources if sources is not None else source_options(settings),
         goal_leads=GoalLeadsOption(
             default=settings.manual_run_goal_leads, min=GOAL_LEADS_MIN, max=GOAL_LEADS_MAX
         ),

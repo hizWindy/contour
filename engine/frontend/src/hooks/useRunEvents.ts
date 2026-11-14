@@ -218,7 +218,7 @@ export function useRunEvents(
             params: { path: { run_id: runId } },
             signal: controller.signal,
           }),
-        ) as Run
+        )
       } catch (error) {
         if (disposed || isAbort(error)) {
           return

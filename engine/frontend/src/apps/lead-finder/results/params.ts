@@ -21,7 +21,6 @@ import type {
   QueryOf,
   Tier,
 } from '@/api/types'
-import type { LeadsQueryV16 } from '@/api/v16'
 import {
   CITY_GROUP_LABELS,
   CONFIDENCE_LABELS,
@@ -56,6 +55,7 @@ export const SORT_KEYS: readonly SortKey[] = [
 
 /** A column's first click: words A to Z, numbers and dates biggest or newest first. */
 export const FIRST_ORDER: Record<SortKey, SortOrder> = {
+  tier: 'desc',
   score: 'desc',
   created_at: 'desc',
   updated_at: 'desc',
@@ -370,8 +370,8 @@ export function activeFilterCount(filters: LeadFilters): number {
   return count
 }
 
-/** The filters every leads route takes, with PLAN-V16's (typed by hand until M1). */
-export type FilterQuery = NonNullable<QueryOf<'lead_facets'>> & LeadsQueryV16
+/** The filters every leads route takes, with PLAN-V16's. */
+export type FilterQuery = NonNullable<QueryOf<'lead_facets'>>
 
 /** The filters as the API takes them: empty values left out. Facets and the map use these. */
 export function filterQuery(filters: LeadFilters): FilterQuery {
@@ -418,7 +418,7 @@ export function filterQuery(filters: LeadFilters): FilterQuery {
 }
 
 /** One page of the table, sorted. */
-export function listQuery(state: ResultsState): NonNullable<QueryOf<'list_leads'>> & LeadsQueryV16 {
+export function listQuery(state: ResultsState): NonNullable<QueryOf<'list_leads'>> {
   // The filters are the same on every leads route, so the facets' query fits the list's.
   return {
     ...filterQuery(state.filters),
@@ -430,9 +430,7 @@ export function listQuery(state: ResultsState): NonNullable<QueryOf<'list_leads'
 }
 
 /** The CSV: every lead that matches, in the table's order. */
-export function exportQuery(
-  state: ResultsState,
-): NonNullable<QueryOf<'export_leads'>> & LeadsQueryV16 {
+export function exportQuery(state: ResultsState): NonNullable<QueryOf<'export_leads'>> {
   return { ...filterQuery(state.filters), sort: state.sort, order: state.order }
 }
 

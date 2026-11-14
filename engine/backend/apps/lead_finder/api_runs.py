@@ -12,6 +12,7 @@ from fastapi import APIRouter, Query, Request, Response
 
 from apps.lead_finder.options import build_run_options
 from apps.lead_finder.rules import load_rules
+from apps.lead_finder.run_sources import live_source_options
 from apps.lead_finder.runs import not_approved
 from apps.lead_finder.sanitize import clean_company_name
 from apps.lead_finder.schemas import RunOptions, TestPage, TestReport
@@ -46,7 +47,8 @@ def _run_location(request: Request, run: RunOut) -> str:
 )
 async def get_run_options(session: SessionDep, settings: SettingsDep) -> RunOptions:
     left = daily_left(settings.daily_cap_usd, await spent_last_24h(session))
-    return build_run_options(load_rules(), settings, left)
+    sources = await live_source_options(session, settings)
+    return build_run_options(load_rules(), settings, left, sources)
 
 
 @router.post(

@@ -21,6 +21,9 @@ function run(over: Partial<Parameters<typeof runLine>[0]> = {}): Parameters<type
       slices_done: 0,
       slices_failed: 0,
       unique: 0,
+      goal: null,
+      good: 0,
+      by_source: {},
     },
     ...over,
   }

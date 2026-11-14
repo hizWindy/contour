@@ -7,7 +7,7 @@ import {
 } from '@tanstack/react-query'
 import { api, isMissing, unwrap, type ApiProblem } from '../client'
 import { queryKeys } from '../query'
-import type { QueryOf, Run, RunCreate, RunEstimate, RunPage } from '../types'
+import type { QueryOf, Run, RunCreate } from '../types'
 
 /** One run. The key is `queryKeys.runs.detail(runId)`. */
 export function runQueryOptions(runId: string) {
@@ -15,9 +15,7 @@ export function runQueryOptions(runId: string) {
     queryKey: queryKeys.runs.detail(runId),
     queryFn: async ({ signal }) =>
       // Until PLAN-V16 M1: the goal and the sources of the leads are in `v16.ts`.
-      unwrap(
-        await api.GET('/runs/{run_id}', { params: { path: { run_id: runId } }, signal }),
-      ) as Run,
+      unwrap(await api.GET('/runs/{run_id}', { params: { path: { run_id: runId } }, signal })),
   })
 }
 
@@ -44,7 +42,7 @@ export function runsQueryOptions(query: QueryOf<'list_runs'> = {}) {
     queryKey: queryKeys.runs.list(query),
     queryFn: async ({ signal }) =>
       // Until PLAN-V16 M1, like `runQueryOptions`.
-      unwrap(await api.GET('/runs', { params: { query }, signal })) as RunPage,
+      unwrap(await api.GET('/runs', { params: { query }, signal })),
   })
 }
 
@@ -92,7 +90,7 @@ export function useEstimateRun(body: RunCreate | null) {
     queryKey: queryKeys.runs.estimate(body),
     queryFn: async ({ signal }) =>
       // Until PLAN-V16 M1: `companies_needed` and `goal_note` are in `v16.ts`.
-      unwrap(await api.POST('/runs/estimate', { body: body as RunCreate, signal })) as RunEstimate,
+      unwrap(await api.POST('/runs/estimate', { body: body as RunCreate, signal })),
     enabled: body !== null,
     placeholderData: keepPreviousData,
     // An estimate is a quick calculation, and the answer changes with the settings and history.
@@ -117,7 +115,7 @@ export function useCreateRun() {
           body,
           params: { header: idempotencyKey ? { 'idempotency-key': idempotencyKey } : {} },
         }),
-      ) as Run,
+      ),
     onSuccess: (run) => {
       queryClient.setQueryData(queryKeys.runs.detail(run.id), run)
       void queryClient.invalidateQueries({ queryKey: queryKeys.runs.lists() })
@@ -131,9 +129,7 @@ export function useCancelRun() {
   return useMutation<Run, ApiProblem, string>({
     mutationFn: async (runId) =>
       // Until PLAN-V16 M1, like `runQueryOptions`.
-      unwrap(
-        await api.POST('/runs/{run_id}/cancel', { params: { path: { run_id: runId } } }),
-      ) as Run,
+      unwrap(await api.POST('/runs/{run_id}/cancel', { params: { path: { run_id: runId } } })),
     onSuccess: (run) => {
       queryClient.setQueryData(queryKeys.runs.detail(run.id), run)
       void queryClient.invalidateQueries({ queryKey: queryKeys.runs.lists() })
@@ -147,9 +143,7 @@ export function useResumeRun() {
   return useMutation<Run, ApiProblem, string>({
     mutationFn: async (runId) =>
       // Until PLAN-V16 M1, like `runQueryOptions`.
-      unwrap(
-        await api.POST('/runs/{run_id}/resume', { params: { path: { run_id: runId } } }),
-      ) as Run,
+      unwrap(await api.POST('/runs/{run_id}/resume', { params: { path: { run_id: runId } } })),
     onSuccess: (run) => {
       queryClient.setQueryData(queryKeys.runs.detail(run.id), run)
       void queryClient.invalidateQueries({ queryKey: queryKeys.runs.lists() })

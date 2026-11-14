@@ -20,6 +20,9 @@ const COUNTS = {
   failed: 0,
   by_result: {},
   resumes: 0,
+  goal: null,
+  good: 0,
+  by_source: {},
 }
 
 function run(changes: Partial<Run> = {}): Run {

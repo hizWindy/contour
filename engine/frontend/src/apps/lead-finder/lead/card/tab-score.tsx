@@ -79,7 +79,7 @@ function Filters({ lead }: { lead: LeadDetail }) {
 
 /** "92 before the dampeners; they took off 10 points." Nothing when none was found. */
 function Dampened({ lead }: { lead: LeadDetail }) {
-  const deducted = lead.score_before_dampeners - lead.score
+  const deducted = (lead.score_before_dampeners ?? lead.score) - lead.score
   if (deducted <= 0) {
     return null
   }

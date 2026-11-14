@@ -464,8 +464,8 @@ function RulesLoaded({ rules }: { rules: Rules }) {
               <Row key={rule.id} label={rule.label} tbc={tbc}>
                 <span className="text-caption">
                   {dampenerWords(rule)}
-                  {rule.waived_by.length > 0
-                    ? `, unless it comes with ${list(rule.waived_by.map(signLabel))}`
+                  {(rule.waived_by ?? []).length > 0
+                    ? `, unless it comes with ${list((rule.waived_by ?? []).map(signLabel))}`
                     : ''}
                 </span>
               </Row>
@@ -588,7 +588,7 @@ function RulesLoaded({ rules }: { rules: Rules }) {
             </Row>
             <Row label="Rivals of a booming company" rule="rivals" tbc={tbc}>
               {c.rivals.enabled
-                ? `up to ${String(c.rivals.per_lead)} a lead, ${String(c.rivals.per_run)} a run, for a good lead in a priority sector${c.rivals.also_after.length > 0 ? ` or with ${list(c.rivals.also_after.map(signLabel))}` : ''}`
+                ? `up to ${String(c.rivals.per_lead)} a lead, ${String(c.rivals.per_run)} a run, for a good lead in a priority sector${(c.rivals.also_after ?? []).length > 0 ? ` or with ${list((c.rivals.also_after ?? []).map(signLabel))}` : ''}`
                 : 'Switched off'}
             </Row>
           </Section>

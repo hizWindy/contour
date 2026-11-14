@@ -256,7 +256,17 @@ class _Engine:
         page = await self._page(site)
         timeout = self.worker.action_seconds * 1000
         response = await page.goto(url, wait_until="domcontentloaded", timeout=timeout)
+        await self._stay_on_site(site, page)
         return await self._seen(page, response.status if response else None)
+
+    async def _stay_on_site(self, site: Site, page: Page) -> None:
+        """A redirect can end on another host: the route handler sees only the first address of a
+        redirect chain. So the address the page ended on is checked too, and a page that left the
+        site's own hosts is emptied and refused (found by the review before PLAN-V16's M1)."""
+        if site.own_host(page.url):
+            return
+        await page.goto("about:blank")
+        raise NotAllowed(f"{site.id} was sent to an address it may not open")
 
     async def _fill_and_submit(
         self, site: Site, url: str, fields: Mapping[str, str], submit: str
@@ -264,11 +274,13 @@ class _Engine:
         page = await self._page(site)
         timeout = self.worker.action_seconds * 1000
         await page.goto(url, wait_until="domcontentloaded", timeout=timeout)
+        await self._stay_on_site(site, page)  # never type a login into another host's page
         for selector, value in fields.items():
             await page.fill(selector, value, timeout=timeout)
         async with page.expect_navigation(wait_until="domcontentloaded", timeout=timeout) as info:
             await page.click(submit, timeout=timeout)
         response = await info.value
+        await self._stay_on_site(site, page)
         return await self._seen(page, response.status if response else None)
 
     async def _seen(self, page: Page, status: int | None) -> Seen:

@@ -8,9 +8,8 @@ import {
 } from '@tanstack/react-query'
 import { melbourneDate } from '@/lib/format'
 import { api, isMissing, unwrap, type ApiProblem } from '../client'
-import { apiV16 } from '../v16-client'
 import { CACHE_TIMES, queryKeys } from '../query'
-import type { LeadDetail, LeadPage, LeadPatch, QueryOf, Run } from '../types'
+import type { LeadDetail, LeadPatch, QueryOf, Run } from '../types'
 
 /** A page of leads for the results table. */
 export function leadsQueryOptions(query: QueryOf<'list_leads'> = {}) {
@@ -18,7 +17,7 @@ export function leadsQueryOptions(query: QueryOf<'list_leads'> = {}) {
     queryKey: queryKeys.leads.list(query),
     queryFn: async ({ signal }) =>
       // Until PLAN-V16 M1: the tier, confidence and exclusion of a row are in `v16.ts`.
-      unwrap(await api.GET('/lead-finder/leads', { params: { query }, signal })) as LeadPage,
+      unwrap(await api.GET('/lead-finder/leads', { params: { query }, signal })),
   })
 }
 
@@ -103,7 +102,7 @@ export function leadQueryOptions(leadId: string) {
           params: { path: { lead_id: leadId } },
           signal,
         }),
-      ) as LeadDetail,
+      ),
   })
 }
 
@@ -158,7 +157,7 @@ export function usePatchLead() {
           params: { path: { lead_id: leadId } },
           body: patch,
         }),
-      ) as LeadDetail,
+      ),
     onSuccess: (lead) => {
       queryClient.setQueryData(queryKeys.leads.detail(lead.id), lead)
       refreshLeads(queryClient)
@@ -175,7 +174,7 @@ export function useOverrideExclusion() {
   return useMutation<LeadDetail, ApiProblem, string>({
     mutationFn: async (leadId) =>
       unwrap(
-        await apiV16.POST('/lead-finder/leads/{lead_id}/override-exclusion', {
+        await api.POST('/lead-finder/leads/{lead_id}/override-exclusion', {
           params: { path: { lead_id: leadId } },
         }),
       ),
@@ -196,7 +195,7 @@ export function useRecheckLead() {
         await api.POST('/lead-finder/leads/{lead_id}/recheck', {
           params: { path: { lead_id: leadId } },
         }),
-      ) as Run,
+      ),
     onSuccess: (run) => {
       queryClient.setQueryData(queryKeys.runs.detail(run.id), run)
       void queryClient.invalidateQueries({ queryKey: queryKeys.runs.lists() })

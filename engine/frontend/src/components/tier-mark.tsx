@@ -10,7 +10,13 @@ import type { Confidence, Tier } from '@/api/types'
 import { CONFIDENCE_LABELS, isTier, TIER_ACTIONS, TIER_LABELS } from '@/lib/labels'
 import { cn } from '@/lib/utils'
 
-export function TierMark({ tier, className }: { tier: Tier; className?: string }) {
+export function TierMark({
+  tier,
+  className,
+}: {
+  tier: Tier | null | undefined
+  className?: string
+}) {
   // A lead saved before tiers, not yet judged again, has none: it says so instead of breaking.
   if (!isTier(tier)) {
     return <span className={cn('text-muted-foreground', className)}>Not ranked yet</span>
@@ -37,9 +43,9 @@ export function TierLine({
   confidence,
   className,
 }: {
-  tier: Tier
+  tier: Tier | null | undefined
   score: number
-  confidence: Confidence
+  confidence: Confidence | null | undefined
   className?: string
 }) {
   if (!isTier(tier)) {
@@ -54,7 +60,7 @@ export function TierLine({
       <span className="font-semibold">{score}</span>
       <Dot />
       <span className="sr-only">, </span>
-      <span>{CONFIDENCE_LABELS[confidence]}</span>
+      <span>{confidence ? CONFIDENCE_LABELS[confidence] : 'Not rated'}</span>
       <span className="sr-only"> confidence</span>
     </span>
   )

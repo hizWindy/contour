@@ -127,7 +127,9 @@ export const DAMPENERS: LeadDetail['dampeners'] = [
     can_reverse: null,
   },
   {
-    id: 'older_fitout',
+    // The backend has one fitout dampener with two strengths. This second row keeps the
+    // page's two labels, under another real id.
+    id: 'financial_stress',
     label: 'A fitout or move 3 to 5 years ago',
     state: 'found',
     strength: 'moderate',
@@ -306,6 +308,7 @@ export function makeLead(changes: Partial<LeadDetail> = {}): LeadDetail {
       owner: fact('ASX-listed, Australian'),
       staff_in_city: fact(250),
       staff_from_linkedin: false,
+      staff_projected: fact(null),
       office_m2: fact(2500),
       local_team_runs_project: fact(true),
       healthy: fact(true),
@@ -319,9 +322,13 @@ export function makeLead(changes: Partial<LeadDetail> = {}): LeadDetail {
       tier_group: null,
       office_since: fact(null),
       last_fitout: fact(null),
+      tender_only: fact(null),
+      dampeners: [],
       fitout_contractors: [],
       talking_points: [],
       contact_role: 'Head of Property',
+      contact_roles: [],
+      contour_angle: null,
       decision_makers: [],
       summary: "Acme's Melbourne lease ends in 2028.",
       opening_line: null,

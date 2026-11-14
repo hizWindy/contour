@@ -4,8 +4,9 @@
  * Pure data and small helpers, so the view stays about layout and the tests can read them.
  */
 import type { useRules } from '@/api/hooks'
-import type { SignStrength } from '@/api/types'
-import type { DampenerRule } from '@/api/v16'
+import type { Schemas, SignStrength } from '@/api/types'
+
+type DampenerRule = Schemas['DampenerRule']
 
 export type Rules = NonNullable<ReturnType<typeof useRules>['data']>
 export type Criteria = Rules['criteria']
@@ -127,7 +128,7 @@ export function dampenerWords(rule: DampenerRule): string {
         : ''
     return `Strong within ${String(rule.strong_years)} years, moderate up to ${String(rule.moderate_years)}${outgrow}`
   }
-  const kinds = Object.entries(rule.kinds)
+  const kinds = Object.entries(rule.kinds ?? {})
   if (kinds.length > 0) {
     const of = (strength: string) =>
       kinds
