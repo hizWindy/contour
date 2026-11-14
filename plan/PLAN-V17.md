@@ -660,7 +660,7 @@ Newest first.
 
 ## Track 3: the website (session 3)
 
-**Progress:** Stage A 1 of 8. Stage B 0 of 4. Every step is `frontend-agent` work, follows `engine/DESIGN.md` and "The screens, and how they move", uses the `ui-build` skill, and builds against the contract with `mockApi`.
+**Progress:** Stage A 2 of 8. Stage B 0 of 4. Every step is `frontend-agent` work, follows `engine/DESIGN.md` and "The screens, and how they move", uses the `ui-build` skill, and builds against the contract with `mockApi`.
 
 ### Stage A: call notes
 
@@ -681,6 +681,7 @@ Newest first.
   - `TickIn`: a tick that draws once.
   - Each follows reduced motion (`useStill`), uses the kit's springs, and has a test in `motion.test.tsx`.
   - **Done when:** the tests pass, the design-lint test passes (nothing loops), and the late motion file's size is in the Log.
+  - Done 2026-11-15 (`73a72d0`). Lint, types, and the motion and design-lint tests pass (2 files, 120 tests). Motion's late file is unchanged: 14 kB gzip of its own, adding 32 kB, as in T3-1. It was measured on this branch just before the new files went in. `features.ts` didn't change and no page uses the parts yet. T3-4's bundle check measures it again. Four design questions wait for Al-khair (Log).
 
 - [ ] **T3-4. The mic** (only if T3-2 said yes; else the typing-only version).
   - A Web Worker (`stt.worker.ts`) holds the model and the library. Nothing of it is in the first visit.
@@ -743,6 +744,19 @@ Newest first.
 ### Track 3 Log
 
 Newest first.
+
+- 2026-11-15: **T3-3 done** (`73a72d0`). The parts, for the next steps:
+  - `PushView` takes `viewKey` and `direction` (`forward` or `back`). The caller moves the focus at once: into the note's text box going forward, back to Log call going back.
+  - `ListExit` holds `ListExitItem` rows. With more than 50 rows, or reduced motion, nothing moves.
+  - `LevelMeter` takes `level` (0 to 1) and `label` (default "Listening"). The bars use the text colour.
+  - `TickIn` is always `aria-hidden`: the word beside it ("Logged") says it.
+  - Nothing has been seen in a browser yet. T3-8 checks it at each width, in both themes and at 4x slowdown.
+- 2026-11-15: **Waiting for Al-khair's look (T3-3's design questions):**
+  1. Add the level meter line to DESIGN.md's "Motion"? Five bars follow the mic's level as `scaleY`. Silence is still, so it isn't a loop. Reduced motion: a still dot and the word.
+  2. Add the in-panel push line? Log call comes into the panel like a phone app's next screen. The panel keeps its size.
+  3. The tick draws its line (Motion's `pathLength`), which bends "only `transform` and `opacity` move" for one 16px part. The other way: it scales and fades in like ChipGroup's tick.
+  4. A card leaving the batch moves 8px to the right, toward the Logged tab. The plan doesn't say which way.
+  5. The meter is in the text colour. The accent ("live") is allowed too.
 
 - 2026-11-15: **T3-1 done.** The numbers are in the step. The bundle report ran on the main folder's website code (`master`, the same as `437a2ee`), so nothing half-built from T3-3 could get into the baseline.
 
