@@ -213,14 +213,15 @@ async def test_the_choose_rules_skip_open_deals_and_fresh_leads(
 async def test_the_default_start_choice_fits_the_default_caps_and_ends_under_them(
     make_lf_manager: MakeLeadFinderManager, session_factory: async_sessionmaker[AsyncSession]
 ) -> None:
-    """The Start page's defaults: Melbourne and the six main signs, 6 slices (PLAN-V9 C4)."""
+    """The Start page's defaults: Melbourne and the eight main signs, 8 slices (PLAN-V9 C4; the
+    capital raise and tenant advisor signs joined the six in PLAN-V16 T1-4)."""
     manager = make_lf_manager(FakeClaude(scenario=sample_scenario()))
     estimate = await manager.estimate(RunCreate(app=APP, mode="discovery", params={}))
-    assert (estimate.valid, estimate.slices, estimate.blocked) == (True, 6, None)
+    assert (estimate.valid, estimate.slices, estimate.blocked) == (True, 8, None)
     run_id = await start(manager, "discovery", {})
     row = await finished(manager, session_factory, run_id)
     assert row.status == "done"
-    assert row.counts["slices"] == 6
+    assert row.counts["slices"] == 8
     await assert_totals_match_log(session_factory, run_id)
     assert row.cost_usd <= D("20")
 

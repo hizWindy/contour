@@ -81,8 +81,8 @@ def manager(
     return make_lf_manager(FakeClaude(), kinds=waiting_kinds(gate), settings=lf_settings(**limits))
 
 
-# An automatic run's limit of US$50, under a typical run at the placeholder prices (US$62.40:
-# 6 searches at US$0.40 and 60 companies at US$1.00), so a test can see a run refused.
+# An automatic run's limit of US$50, under a typical run at the placeholder prices (US$83.20:
+# 8 searches at US$0.40 and 80 companies at US$1.00), so a test can see a run refused.
 LOW = [{"scheduled_run_cap_usd": Decimal("50")}]
 
 
@@ -159,7 +159,7 @@ async def test_a_typical_run_above_the_run_limit_does_not_start(
     reason = await refused(context_for(manager, schedule))
 
     assert (
-        "A typical run costs about US$62.40, which is more than the run limit of US$50.00."
+        "A typical run costs about US$83.20, which is more than the run limit of US$50.00."
         in reason
     )
     assert "US$1.00 a company, a default" in reason  # where the number came from
