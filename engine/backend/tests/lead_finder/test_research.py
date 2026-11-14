@@ -201,7 +201,8 @@ async def test_the_card_lists_every_dampener_and_what_the_answer_found(
         "JLL names it as a client.",
         ASX,
     )
-    assert card.result == "pass"  # a dampener never removes the lead
+    # No rule fails and nothing is excluded, but it costs points: 72 - 10 (the lock-in check) - 20
+    assert (card.score, card.tier, card.result) == (42, "C", "watch")
     saved = await session.scalar(select(Lead.card).where(Lead.id == card.id))
     assert saved is not None
     assert [(item["id"], item["state"]) for item in saved["dampeners"]][:2] == [
@@ -277,7 +278,8 @@ async def test_a_company_that_just_moved_is_a_watch_and_says_why(session: AsyncS
     card = await research(session, FakeClaude(facts=make_facts(office_since=fact("2026-06"))))
     assert card.result == "watch"
     assert card.why_it_fits.endswith(
-        "Result: Watch. Because: Moved in June 2026, so probably not in the market yet."
+        "Result: Watch. Because: Moved in June 2026, so probably not in the market yet; "
+        "Tier C, a score of 52 (from 40 to 54): watch for a new sign."
     )
 
 
