@@ -94,14 +94,14 @@ def on_site(host: str, domains: Iterable[str]) -> bool:
 
 
 def source_kind(url: str, criteria: Criteria, company_domain: str | None = None) -> str:
-    """property_daily, asx_or_official_news, other_news, job_ads, or blocked."""
+    """property_daily, arealytics, asx_or_official_news, other_news, job_ads, or blocked."""
     host = host_of(url)
     domains = criteria.source_domains
     if on_site(host, domains.blocked):
         return BLOCKED
     if company_domain and on_site(host, [company_domain]):
         return "asx_or_official_news"  # the company's own website or announcements
-    for kind in ("property_daily", "asx_or_official_news", "job_ads"):
+    for kind in ("property_daily", "arealytics", "asx_or_official_news", "job_ads"):
         if on_site(host, getattr(domains, kind)):
             return kind
     return "other_news"

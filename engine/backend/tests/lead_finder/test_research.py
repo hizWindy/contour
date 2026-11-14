@@ -223,6 +223,26 @@ async def test_an_answer_with_no_page_behind_it_is_not_checked_and_says_so(
     ) in card.dropped
 
 
+async def test_each_angle_asks_the_source_groups_levi_names(session: AsyncSession) -> None:
+    """His section 7 (PLAN-V16 T1-7): the sites are in the searches the angles start with."""
+    claude = FakeClaude()
+    await research(session, claude)
+    prompts = {r.step: r.prompt for r in claude.requests if r.step.startswith("search:")}
+    assert (
+        "- Acme Software ACCC acquisitions register notified acquisition" in prompts["search:money"]
+    )
+    assert "- Acme Software Melbourne lease The Urban Developer" in prompts["search:property"]
+    assert "- Acme Software office fitout ArchitectureAU" in prompts["search:property"]
+    assert "- Acme Software jobs SEEK Melbourne" in prompts["search:people"]
+    assert "- Acme Software annual report 2026" in prompts["search:people"]
+    assert "- Acme Software AusTender or state tender portal fitout" in prompts["search:dampeners"]
+    assert "- Acme Software Office Snapshots new office" in prompts["search:dampeners"]
+    assert (
+        "- Acme Software JLL CBRE Cushman and Wakefield Colliers client case study"
+        in (prompts["search:dampeners"])
+    )
+
+
 async def test_a_tenure_research_asks_the_office_questions_in_place_of_property(
     session: AsyncSession,
 ) -> None:
@@ -240,6 +260,8 @@ async def test_a_tenure_research_asks_the_office_questions_in_place_of_property(
     tenure = next(r for r in claude.requests if r.step == "search:tenure")
     assert "Angle: tenure. Find facts about its office in that city" in tenure.prompt
     assert "- Acme Software Melbourne office address" in tenure.prompt
+    assert "- how long has Acme Software been at its Melbourne office address" in tenure.prompt
+    assert "- Acme Software contact page Melbourne address Wayback Machine" in tenure.prompt
     gaps = next(r for r in claude.requests if r.step == "search:gaps")
     assert "when it moved into its current office in that city" in gaps.prompt
 

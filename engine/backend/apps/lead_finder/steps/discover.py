@@ -155,9 +155,17 @@ def discover_request(rules: LeadFinderRules, slice_: Slice, since_days: int, tod
         "month_year": today.strftime("%B %Y"),
         "company": "",
     }
+    # The sign's own searches, then the source groups Levi names for it (PLAN-V16 T1-7)
+    templates = [
+        *rules.queries.discovery[slice_.trigger_id],
+        *(
+            template
+            for group in rules.queries.groups_for_sign(slice_.trigger_id)
+            for template in group.discovery
+        ),
+    ]
     searches = "\n".join(
-        f"- {' '.join(template.format(**values).split())}"
-        for template in rules.queries.discovery[slice_.trigger_id]
+        f"- {' '.join(template.format(**values).split())}" for template in templates
     )
     focus = ", ".join(focus_places(rules, slice_.city, slice_.area))
     # The national search (PLAN-V16 T1-2) has no city: the answer form's `city` says where each

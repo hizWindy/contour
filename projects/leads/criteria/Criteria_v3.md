@@ -228,6 +228,13 @@ On every run, search each source group, and record which source supports each fa
 - **Arealytics:** buildings, office sizes and leases in Melbourne, Perth and Sydney.
 - Both rank first as sources. A program reads them at a slow pace, and stops at the first sign of a block. See [PLAN-V16](../../../plan/PLAN-V16.md), "The green light, and the risk that stays".
 
+**How we apply this (TBC).**
+- **Each group has searches** in `queries.yaml` (`source_groups`). The backend won't start if one of the ten is missing or has none. A group has searches for one company, and, when a sign uses it, searches for a discovery run.
+- **A research angle asks its groups.** Their searches are added to the ones the angle starts with, so each one names the site Levi names. Money asks mergers, funding and sector growth. People asks hiring, leadership and company facts. Property asks leases, recent fitouts and company facts. A lease and tenure run asks the leases group, with the tenure search. The dampener check asks recent fitouts, outsourcing and procurement.
+- **A discovery run asks the groups of its sign.** Example: a merger run adds the ACCC register, AFR Street Talk and ASX scheme searches. These are suggestions to Claude. They don't raise the search limits.
+- **The two property tools rank first** among sources: Property Daily, then Arealytics (our order). The rank orders signs against each other. It is no longer points of the score.
+- **Claude's web tool never reads either tool's site.** Both are on the blocked list. Only our connector reads them (T1-8). **TBC with Al-khair and Levi:** whether Claude may read Arealytics's public pages.
+
 ## 8. Research method
 
 Run four passes. Say plainly what couldn't be checked. Accuracy matters more than volume: 10 well-evidenced leads beat 50 guesses.

@@ -289,7 +289,27 @@ def test_property_daily_is_a_blocked_site() -> None:
     assert source_kind("https://news.propertydaily.com.au/x", CRITERIA) == "blocked"
     assert source_kind("https://notpropertydaily.com.au/x", CRITERIA) == "other_news"
     assert "propertydaily.com.au" in CRITERIA.source_domains.blocked
-    assert CRITERIA.source_domains.property_daily == []  # the list of kept sources stays empty
+    # The kind list names the tool's own site, for the facts our connector reads (T1-8). The
+    # blocked list still wins, so Claude's web tool never reads it (PLAN-V16 T1-7).
+    assert CRITERIA.source_domains.property_daily == ["propertydaily.com.au"]
+
+
+def test_arealytics_ranks_with_property_daily_above_news() -> None:
+    """Levi (PLAN-V16 T1-7): both property tools rank first. Claude never reads either."""
+    assert CRITERIA.sources_rank[:2] == ["property_daily", "arealytics"]
+    assert CRITERIA.score.source["arealytics"] == CRITERIA.score.source["property_daily"] == 10
+    assert CRITERIA.score.source["arealytics"] > CRITERIA.score.source["asx_or_official_news"]
+    assert CRITERIA.source_domains.arealytics == ["arealytics.com.au"]
+    assert "arealytics.com.au" in CRITERIA.source_domains.blocked
+    assert source_kind("https://www.arealytics.com.au/building/1", CRITERIA) == "blocked"
+
+
+def test_a_fact_that_cites_arealytics_is_dropped_even_if_it_was_read() -> None:
+    page = "https://app.arealytics.com.au/building/42"
+    facts = make_facts(office_m2=fact(2500, page))
+    checked = check_sources(facts, [*SEEN, page], CRITERIA)
+    assert checked.facts.office_m2.value is None
+    assert checked.dropped[0].startswith("office_m2: blocked site")
 
 
 def test_a_fact_from_property_daily_is_dropped_even_if_it_was_read() -> None:

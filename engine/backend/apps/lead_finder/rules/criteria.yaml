@@ -324,16 +324,22 @@ never_suggest:
   dissolved_deal_wait_months: 12
   do_not_contact: true
 
-sources_rank: [property_daily, asx_or_official_news, other_news, job_ads]
+# The two property tools rank first (Levi, PLAN-V16 T1-7). A fact our connector reads from one of
+# them counts as confirmed, and the sign it gives ranks above news (T1-8).
+sources_rank: [property_daily, arealytics, asx_or_official_news, other_news, job_ads]
 
 # Which websites count as which kind of source. A site matches its subdomains too.
 # Anything not listed is other_news. The company's own website counts as official.
 source_domains:
-  property_daily: [] # off in version 1
+  # The tools' own sites. They are on the blocked list too, so Claude's web tool never reads them
+  # (PLAN-V16 choice 8): these two lists only name the kind of a fact our connector reads (T1-8).
+  property_daily: [propertydaily.com.au]
+  arealytics: [arealytics.com.au]
   asx_or_official_news: [asx.com.au, gov.au, wgea.gov.au, abr.business.gov.au, asic.gov.au]
   job_ads: [seek.com.au, indeed.com, jora.com, linkedin.com, glassdoor.com]
   blocked: # sites we never read: contact-data sellers (personal data), and Property Daily
-    - propertydaily.com.au # off until its terms allow a program to read it (TBC with Levi)
+    - propertydaily.com.au # only our connector reads it, never Claude's web tool (PLAN-V16 T1-7)
+    - arealytics.com.au # its data stays out of Claude until Arealytics approves (PLAN-V16 choice 8)
     - zoominfo.com
     - rocketreach.co
     - signalhire.com
@@ -365,7 +371,7 @@ score:
   # How signs, and companies found by discovery, are ranked against each other. These are not
   # points of a lead's score: the strength of its strongest sign is (strongest_sign below).
   trigger_group: { main: 15, other: 10, weak: 4 }
-  source: { property_daily: 10, asx_or_official_news: 8, other_news: 5, job_ads: 2 }
+  source: { property_daily: 10, arealytics: 10, asx_or_official_news: 8, other_news: 5, job_ads: 2 }
   recency: # how long ago a sign happened
     - { within_days: 30, points: 6 }
     - { within_days: 90, points: 4 }
@@ -487,7 +493,9 @@ tbc:
   - key: dampeners
     note: Levi's section 5 (PLAN-V16 T1-5). The five dampeners and which are strong or moderate are his, and so is "found or not found, never none". Our reading, for Levi to confirm. (1) His "moderate to strong" procurement flags are strong for a tender portal or offshore or central global buying, and moderate for lowest-price tenders or design and build bought apart. A flag with no kind is moderate. (2) A fitout or move with no date counts as moderate. (3) His "still list the lead if hiring would outgrow the space within 24 months" means the dampener takes nothing off, when the company plans to hire a lot and says it will need more space than it has now by a date inside 24 months. (4) His "unless it is part of a consolidation that creates a move" is a merger or takeover sign, or an office consolidation sign. (5) In version 2, a company in administration or cutting staff fast was a Drop. It is a strong dampener now (T1-6), no longer a Drop. The check adds up to 3 web searches a company on top of `company_max_searches`, so a researched company may use 3 more than that setting says. The money limits are the same.
   - key: source_domains
-    note: First draft. The test set will show which sites matter.
+    note: First draft. The test set will show which sites matter. Since PLAN-V16 T1-7 the two property tools have their own kind, and both sites are on the blocked list too, so Claude's web tool never reads them. Property Daily's terms need written approval before a program stores or reads it, and Arealytics's data stays out of Claude until Arealytics approves (choice 8). The kind is for facts our connector reads (T1-8). Whether Claude may read Arealytics's public pages is for Al-khair and Levi.
+  - key: sources_rank
+    note: Levi, PLAN-V16 T1-7. Both property tools rank first, Property Daily then Arealytics (our order). They rank signs against each other. They are no longer points of a lead's score. Source quality is in the confidence.
   - key: score
     note: Levi's three parts and every check's points are his (section 6, PLAN-V16 T1-6), and so are the tiers (A 75+, B 55 to 74, C 40 to 54, Discard under 40) and the deductions (strong 20, moderate 10). The points are the score before the dampeners. They replace the Profile's six parts. Our readings, TBC. (1) 50 to 99 local staff earns 2 (Levi, 9 Nov, 50+ still fits), and 100 to 149 earns 5. Local staff means the larger of the staff now and the staff the office size or a growth plan points to (10 m2 a person). (2) A place other than the five he names earns 1 for the city (our choice 5). (3) The office matters to how it works is the fact office_matters. (4) Favourable procurement is the booster buys_strategy (direct engagement and a values strategy), and a red flag found by the procurement check cancels it. (5) The office is constrained or ending is 8 or more years at the address, or a lease that ends in 3 years. Overflow space and split sites can't be judged yet. (6) A warm path in can't be judged yet. It needs HubSpot contacts and board lists, so nobody earns its 4 points and the best score is 96. (7) For other independent signs, any sign that counts, other than the strongest and the same sign twice, with a date in the last 12 months or still to come, or with no date (an unknown date doesn't fail a lead). (8) No outsourcing deal or lock-in earns its 10 only when both checks ran and found nothing. A card made before the dampener check has not been checked, so it earns 0 there until it is researched again. (9) Version 2's source points (Property Daily 10, official 8, news 5, job ads 2) no longer count in the score. Source quality is in the confidence now. They still rank signs against each other.
   - key: score.tiers

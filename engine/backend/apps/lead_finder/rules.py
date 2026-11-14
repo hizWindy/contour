@@ -396,6 +396,7 @@ class NeverSuggest(Strict):
 
 class SourceDomains(Strict):
     property_daily: list[str]
+    arealytics: list[str]
     asx_or_official_news: list[str]
     job_ads: list[str]
     blocked: list[str]
@@ -699,10 +700,61 @@ class Criteria(Strict):
 # --- queries.yaml -----------------------------------------------------------------------
 
 
+SOURCE_GROUP_IDS: tuple[str, ...] = (
+    "mergers",
+    "funding",
+    "hiring",
+    "leases_and_tenure",
+    "recent_fitouts",
+    "outsourcing",
+    "leadership",
+    "sector_growth",
+    "procurement",
+    "company_facts",
+)
+Angle = Literal["property", "people", "money", "tenure", "dampeners"]
+
+
+class SourceGroup(Strict):
+    """One of the source groups Levi names (his section 7, PLAN-V16 T1-7), and the searches that
+    reach it. On every run the research looks in each group.
+
+    - `company`: searches for one company. They are added to the research angles in `angles`
+      ("Searches you could start with"), and need `{company}`.
+    - `discovery`: searches for a slice of the discovery run. They are added to the signs in
+      `signs`, and can't name a company. A group no sign uses (a dampener's source) has none.
+    """
+
+    label: str = Field(min_length=1)
+    angles: list[Angle] = Field(min_length=1)
+    signs: list[str] = Field(default_factory=list)
+    company: list[str] = Field(min_length=1)
+    discovery: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def check_group(self) -> Self:
+        if bool(self.signs) != bool(self.discovery):
+            raise ValueError("a group with signs needs discovery searches, and the other way round")
+        if any("{company}" not in template for template in self.company):
+            raise ValueError("a group's company searches must name the {company}")
+        if any("{company}" in template for template in self.discovery):
+            raise ValueError("a group's discovery searches can't name a {company}")
+        return self
+
+
 class Queries(Strict):
     areas: dict[str, dict[Literal["cbd", "inner"], list[str]]]
     discovery: dict[str, list[str]]
     company: dict[Literal["property", "people", "money", "tenure", "dampeners"], list[str]]
+    source_groups: dict[str, SourceGroup]
+
+    def groups_for_angle(self, angle: str) -> list[SourceGroup]:
+        """The source groups a company's research asks in this angle."""
+        return [group for group in self.source_groups.values() if angle in group.angles]
+
+    def groups_for_sign(self, sign_id: str) -> list[SourceGroup]:
+        """The source groups discovery asks for this sign."""
+        return [group for group in self.source_groups.values() if sign_id in group.signs]
 
     @model_validator(mode="after")
     def check_templates(self) -> Self:
@@ -715,8 +767,15 @@ class Queries(Strict):
                 f"The dampeners angle needs 1 to {MAX_DAMPENER_SEARCHES} search templates: it is "
                 "limited to that many searches a company"
             )
+        if tuple(self.source_groups) != SOURCE_GROUP_IDS:
+            raise ValueError(
+                "source_groups needs Levi's ten groups, in this order: "
+                + ", ".join(SOURCE_GROUP_IDS)
+            )
         templates = [t for group in self.discovery.values() for t in group]
         templates += [t for group in self.company.values() for t in group]
+        for group in self.source_groups.values():
+            templates += [*group.company, *group.discovery]
         for template in templates:
             names = {field for _, field, _, _ in string.Formatter().parse(template) if field}
             unknown = names - PLACEHOLDERS
@@ -857,6 +916,13 @@ class LeadFinderRules(Strict):
         unknown = sorted(set(self.queries.discovery) - trigger_ids)
         if unknown:
             raise ValueError(f"Discovery templates for unknown triggers: {', '.join(unknown)}")
+        for group_id, group in self.queries.source_groups.items():
+            missing_signs = sorted(set(group.signs) - trigger_ids)
+            if missing_signs:
+                raise ValueError(
+                    f"source_groups.{group_id} has signs that aren't searchable: "
+                    f"{', '.join(missing_signs)}"
+                )
         cities = self.criteria.cities.every
         no_areas = [city for city in cities if city not in self.queries.areas]
         if no_areas:

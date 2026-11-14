@@ -302,6 +302,140 @@ def test_every_trigger_has_search_templates() -> None:
     assert "rival_growth" not in rules.queries.discovery
 
 
+def test_every_source_group_levi_names_has_a_search() -> None:
+    """His section 7 (PLAN-V16 T1-7): ten groups, and at least one search for each."""
+    groups = load_rules().queries.source_groups
+    assert list(groups) == [
+        "mergers",
+        "funding",
+        "hiring",
+        "leases_and_tenure",
+        "recent_fitouts",
+        "outsourcing",
+        "leadership",
+        "sector_growth",
+        "procurement",
+        "company_facts",
+    ]
+    for group_id, group in groups.items():
+        assert group.company, group_id  # a search for one company
+        assert group.angles, group_id  # asked by at least one research angle
+        assert bool(group.signs) == bool(group.discovery), group_id  # a sign's search needs one
+
+
+def test_the_sites_levi_names_are_in_the_searches() -> None:
+    groups = load_rules().queries.source_groups
+    text = " ".join(t for group in groups.values() for t in [*group.company, *group.discovery])
+    for site in (
+        "ACCC acquisitions register",
+        "AFR Street Talk",
+        "Crunchbase",
+        "SmartCompany",
+        "Startup Daily",
+        "SEEK",
+        "The Urban Developer",
+        "AFR Commercial Real Estate",
+        "Wayback Machine",
+        "ArchitectureAU",
+        "Office Snapshots",
+        "JLL CBRE Cushman and Wakefield Colliers",
+        "AusTender",
+        "ASIC",
+        "WGEA",
+        "Infrastructure Australia",
+    ):
+        assert site in text, site
+
+
+def test_a_research_angle_asks_the_groups_that_name_it() -> None:
+    queries = load_rules().queries
+    assert [g.label for g in queries.groups_for_angle("money")] == [
+        "Mergers and acquisitions",
+        "Funding and growth",
+        "Sector growth",
+    ]
+    assert [g.label for g in queries.groups_for_angle("dampeners")] == [
+        "Recent fitouts",
+        "Outsourcing and competitor ties",
+        "Procurement",
+    ]
+    tenure = [g.label for g in queries.groups_for_angle("tenure")]
+    assert tenure == ["Leases, moves and tenure"]
+
+
+def test_a_sign_asks_the_groups_that_name_it() -> None:
+    queries = load_rules().queries
+    assert [g.label for g in queries.groups_for_sign("fast_growth")] == [
+        "Funding and growth",
+        "Hiring",
+    ]
+    assert queries.groups_for_sign("long_tenure") == []  # it has no search
+
+
+def test_a_missing_source_group_stops_start_up(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    text = (rules_dir / "queries.yaml").read_text(encoding="utf-8")
+    start = text.index("  procurement:\n    label: Procurement")
+    end = text.index("  company_facts:")
+    (rules_dir / "queries.yaml").write_text(text[:start] + text[end:], encoding="utf-8")
+    with pytest.raises(ValidationError, match="source_groups needs Levi's ten groups"):
+        read_rules(rules_dir)
+
+
+def test_a_group_with_no_search_stops_start_up(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    text = (rules_dir / "queries.yaml").read_text(encoding="utf-8")
+    start = text.index("  outsourcing:\n")
+    block_end = text.index("  leadership:\n")
+    block = text[start:block_end]
+    emptied = block[: block.index("    company:\n")] + "    company: []\n"
+    (rules_dir / "queries.yaml").write_text(
+        text[:start] + emptied + text[block_end:], encoding="utf-8"
+    )
+    with pytest.raises(ValidationError, match="company"):
+        read_rules(rules_dir)
+
+
+def test_a_group_with_signs_needs_discovery_searches(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    text = (rules_dir / "queries.yaml").read_text(encoding="utf-8")
+    start = text.index("  leadership:\n")
+    end = text.index("  sector_growth:\n")
+    block = text[start:end]
+    without = block[: block.index("    discovery:\n")]
+    (rules_dir / "queries.yaml").write_text(text[:start] + without + text[end:], encoding="utf-8")
+    with pytest.raises(ValidationError, match="a group with signs needs discovery searches"):
+        read_rules(rules_dir)
+
+
+def test_a_group_can_only_name_a_sign_that_has_a_search(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    edit(rules_dir / "queries.yaml", "    signs: [new_ceo]\n", "    signs: [rival_growth]\n")
+    with pytest.raises(ValidationError, match=r"source_groups\.leadership has signs that aren't"):
+        read_rules(rules_dir)
+
+
+def test_the_two_kinds_of_search_name_the_company_or_not(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    edit(
+        rules_dir / "queries.yaml",
+        '      - "{company} jobs SEEK {city}"\n',
+        '      - "jobs on SEEK in {city}"\n',
+    )
+    with pytest.raises(ValidationError, match=r"company searches must name the \{company\}"):
+        read_rules(rules_dir)
+    other = tmp_path / "other"
+    other.mkdir()
+    rules_dir = copy_rules(other)
+    edit(
+        rules_dir / "queries.yaml",
+        '      - "SEEK {city} company hiring many office roles {year}"\n',
+        '      - "{company} SEEK {city} hiring {year}"\n',
+    )
+    with pytest.raises(ValidationError, match="discovery searches can't name a "):
+        read_rules(rules_dir)
+
+
 def test_discovery_searches_look_for_plans_not_openings() -> None:
     """PLAN-V11 B4 (Levi, 9 Nov): news of an office that has already opened comes too late."""
     discovery = load_rules().queries.discovery
@@ -376,7 +510,10 @@ def test_a_missing_dampeners_angle_stops_start_up(tmp_path: Path) -> None:
     rules_dir = copy_rules(tmp_path)
     text = (rules_dir / "queries.yaml").read_text(encoding="utf-8")
     start = text.index("  # PLAN-V16 T1-5")
-    (rules_dir / "queries.yaml").write_text(text[:start].rstrip() + "\n", encoding="utf-8")
+    end = text.index("# Levi's source groups")
+    (rules_dir / "queries.yaml").write_text(
+        text[:start].rstrip() + "\n\n" + text[end:], encoding="utf-8"
+    )
     with pytest.raises(ValidationError, match="the property, people, money, tenure and dampeners"):
         read_rules(rules_dir)
 

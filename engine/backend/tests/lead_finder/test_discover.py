@@ -102,8 +102,40 @@ async def test_the_request_is_the_templates_the_city_the_trigger_the_places_and_
         "Searches you could start with:\n"
         "- Melbourne office lease expiry 2026 tenant\n"
         "- Melbourne company relocating head office\n"
-        "- Melbourne office lease renewal refurbishment"
+        "- Melbourne office lease renewal refurbishment\n"
+        # then Levi's source group for this sign (PLAN-V16 T1-7): leases, moves and tenure
+        "- The Urban Developer Melbourne office lease signed or expiring 2026\n"
+        "- AFR Commercial Real Estate Melbourne tenant relocating 2026\n"
+        "- Melbourne building redevelopment approval office tenants 2026\n"
+        "- Melbourne landlord leasing announcement office tenant 2026"
     )
+
+
+SIGNS_WITH_A_SOURCE_GROUP = sorted(
+    {sign for group in RULES.queries.source_groups.values() for sign in group.signs}
+)
+
+
+@pytest.mark.parametrize("sign", SIGNS_WITH_A_SOURCE_GROUP)
+def test_each_sign_also_asks_the_source_groups_levi_names_for_it(sign: str) -> None:
+    """His section 7 (PLAN-V16 T1-7): the sign's own searches, then its groups' searches."""
+    text = discover_request(RULES, a_slice("Perth", sign), 30, TODAY)
+    values = {
+        "city": "Perth",
+        "area": "Perth",
+        "year": 2026,
+        "month_year": "October 2026",
+        "company": "",
+    }
+    groups = RULES.queries.groups_for_sign(sign)
+    assert groups
+    for group in groups:
+        for template in group.discovery:
+            assert f"- {template.format(**values)}" in text
+    for template in RULES.queries.discovery[sign]:  # its own come first
+        assert text.index(template.format(**values)) < text.index(
+            groups[0].discovery[0].format(**values)
+        )
 
 
 async def test_the_area_and_the_days_change_the_focus_and_the_dates() -> None:
@@ -117,7 +149,11 @@ async def test_the_area_and_the_days_change_the_focus_and_the_dates() -> None:
         "\n"
         "Searches you could start with:\n"
         "- Adelaide company merger announced October 2026\n"
-        "- ASX takeover Adelaide headquartered company"
+        "- ASX takeover Adelaide headquartered company\n"
+        # then Levi's source group for this sign: mergers and acquisitions
+        "- ACCC acquisitions register notified acquisition Adelaide 2026\n"
+        "- AFR Street Talk Adelaide company merger or takeover 2026\n"
+        "- ASX announcement scheme of arrangement Adelaide 2026"
     )
 
 
@@ -167,7 +203,7 @@ def test_a_template_that_asks_for_a_company_gets_an_empty_text_and_does_not_cras
     )
     rules = RULES.model_copy(update={"queries": queries})
     text = discover_request(rules, a_slice("Perth", "new_ceo"), 30, TODAY)
-    assert text.endswith("- Perth Perth")  # empty company, then the city, then {area} = city
+    assert "\n- Perth Perth\n" in text  # empty company, then the city, then {area} = city
 
 
 async def test_the_request_has_one_ask_with_the_web_tools_the_model_and_one_continue() -> None:

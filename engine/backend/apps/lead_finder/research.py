@@ -1199,6 +1199,11 @@ def _angle_prompt(angle: SearchAngle, job: Job) -> str:
         "month_year": job.today.strftime("%B %Y"),
     }
     templates = job.rules.queries.company[angle]
+    # Levi's source groups for this angle (PLAN-V16 T1-7): the sites he names
+    templates = [
+        *templates,
+        *(t for group in job.rules.queries.groups_for_angle(angle) for t in group.company),
+    ]
     examples = "\n".join(f"- {t.format(**values)}" for t in templates)
     return (
         f"{_hints(job)}\n\n"
