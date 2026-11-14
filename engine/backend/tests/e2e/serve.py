@@ -161,8 +161,14 @@ def sample_world(today: date) -> tuple[dict[tuple[str, str], list[Any]], dict[st
         "Sample Studio": facts(
             "Sample Studio", "Melbourne", staff_in_city=fact(30), office_m2=fact(300)
         ),
-        # No sign of an office change found: watch.
-        "Sample Analytics": facts("Sample Analytics", "Melbourne", triggers=[]),
+        # No sign of an office change found: watch. A priority sector keeps its score in Tier C
+        # (46: fit 30, access 16), so it isn't a Discard (PLAN-V16 T1-6).
+        "Sample Analytics": facts(
+            "Sample Analytics",
+            "Melbourne",
+            triggers=[],
+            tier_group="Technology and telecommunications",
+        ),
         # Between the two size bands: director review.
         "Sample Health": facts(
             "Sample Health", "Adelaide", staff_in_city=fact(85), office_m2=fact(850)

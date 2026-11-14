@@ -133,14 +133,14 @@ async def test_a_card_whose_form_failed_gets_no_why_now(session: AsyncSession) -
 
 
 async def test_a_spent_budget_skips_it_with_a_line_in_the_problems(session: AsyncSession) -> None:
-    # 3 angles at US$0.12 and a form at US$0.70: US$1.06 of a US$1.00 cap is spent
+    # 4 angles at US$0.12 and a form at US$0.70: US$1.18 of a US$1.00 cap is spent
     claude = FakeClaude(extract_cost=Decimal("0.70"))
     settings = why_on(company_cap_usd=Decimal("1.00"), request_reserve_usd=Decimal("0.10"))
     card = await research(session, claude, settings=settings)
     assert card.result == "pass"
     assert "why" not in claude.calls
     assert (card.why_now, card.why_now_skipped) == (None, "budget")
-    assert "Why now: skipped. Spent $1.06 of the $1.00 cap." in card.problems
+    assert "Why now: skipped. Spent $1.18 of the $1.00 cap." in card.problems
 
 
 async def test_a_made_up_year_is_removed(session: AsyncSession) -> None:

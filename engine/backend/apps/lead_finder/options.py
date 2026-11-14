@@ -3,14 +3,22 @@ settings in force. Nothing here calls Claude."""
 
 from decimal import Decimal
 
-from apps.lead_finder.geo import CITY_CENTRES
-from apps.lead_finder.params import COMPANIES_MAX, COMPANIES_MIN, LeadFinderRunParams
-from apps.lead_finder.rules import LeadFinderRules
+from apps.lead_finder.geo import CITY_CENTRES, NATIONAL_CENTRE
+from apps.lead_finder.params import (
+    COMPANIES_MAX,
+    COMPANIES_MIN,
+    GOAL_LEADS_MAX,
+    GOAL_LEADS_MIN,
+    LeadFinderRunParams,
+)
+from apps.lead_finder.rules import CITY_GROUPS, LeadFinderRules
+from apps.lead_finder.run_sources import source_options
 from apps.lead_finder.runs import MODES_NEEDING_APPROVAL, RUN_KINDS
 from apps.lead_finder.schemas import (
     AreaOption,
     CityOption,
     CompaniesLimit,
+    GoalLeadsOption,
     ModeOption,
     OptionCaps,
     RunOptions,
@@ -24,29 +32,45 @@ AREA_LABELS = {"cbd": "CBD", "inner": "Inner suburbs", "all": "Whole city"}
 
 
 def _areas(rules: LeadFinderRules, city: str) -> list[AreaOption]:
+    """The parts of a city a person may pick. A part with no suburbs listed (a regional centre has
+    only a CBD) is left out, so the page never offers an empty choice."""
     known = rules.queries.areas.get(city, {})
-    return [
-        AreaOption(id="cbd", label=AREA_LABELS["cbd"], suburbs=list(known.get("cbd", []))),
-        AreaOption(id="inner", label=AREA_LABELS["inner"], suburbs=list(known.get("inner", []))),
-        AreaOption(id="all", label=AREA_LABELS["all"], suburbs=[]),
+    parts = [
+        AreaOption(id=area, label=AREA_LABELS[area], suburbs=list(known.get(area, [])))
+        for area in ("cbd", "inner")
+        if known.get(area)
     ]
+    return [*parts, AreaOption(id="all", label=AREA_LABELS["all"], suburbs=[])]
 
 
 def build_run_options(
     rules: LeadFinderRules, settings: Settings, daily_left_usd: Decimal
 ) -> RunOptions:
     cities = rules.criteria.cities
+    # "Australia" comes first: one search for each sign for the whole country (PLAN-V16 T1-2). It
+    # must be chosen alone, and its only area is the whole country.
     city_options = [
         CityOption(
-            name=name,
-            kind=kind,
-            lat=CITY_CENTRES[name][0],
-            lng=CITY_CENTRES[name][1],
-            areas=_areas(rules, name),
-        )
-        for kind, names in (("pass", cities.pass_), ("director_review", cities.director_review))
-        for name in names
-        if name in CITY_CENTRES
+            name=cities.national,
+            kind="pass",
+            group="national",
+            lat=NATIONAL_CENTRE[0],
+            lng=NATIONAL_CENTRE[1],
+            areas=[AreaOption(id="all", label="Whole country", suburbs=[])],
+        ),
+        *(
+            CityOption(
+                name=name,
+                kind="pass",
+                group=group,
+                lat=CITY_CENTRES[name][0],
+                lng=CITY_CENTRES[name][1],
+                areas=_areas(rules, name),
+            )
+            for group in CITY_GROUPS
+            for name in cities.groups[group]
+            if name in CITY_CENTRES
+        ),
     ]
     triggers = rules.criteria.triggers
     defaults = LeadFinderRunParams()
@@ -86,6 +110,10 @@ def build_run_options(
             max_companies=caps.max_companies,
             company_cap_usd=caps.company_cap_usd,
             daily_left_usd=daily_left_usd,
+        ),
+        sources=source_options(settings),
+        goal_leads=GoalLeadsOption(
+            default=settings.manual_run_goal_leads, min=GOAL_LEADS_MIN, max=GOAL_LEADS_MAX
         ),
         defaults=defaults,
     )

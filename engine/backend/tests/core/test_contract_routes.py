@@ -128,6 +128,8 @@ ROUTES = [
     ("POST", f"{LF}/leads/{{lead_id}}/hubspot/preview"),
     ("POST", f"{LF}/leads/{{lead_id}}/hubspot/send"),
     ("POST", f"{LF}/leads/{{lead_id}}/recheck"),
+    ("POST", f"{LF}/leads/{{lead_id}}/override-exclusion"),
+    ("GET", f"{LF}/leads/{{lead_id}}/profile"),  # PLAN-V16 T1-10
     ("GET", f"{LF}/watchlist"),
     ("GET", f"{LF}/review/{{run_id}}"),
     ("POST", f"{LF}/review/status"),
@@ -365,12 +367,18 @@ def test_the_lead_filters_sort_and_paging_are_declared_on_the_list(schema: dict[
         "include_tests",
         "latest",
         "facts_missing",
+        "tier",
+        "confidence",
+        "city_group",
+        "has_property",
+        "excluded",
         "sort",
         "order",
         "limit",
         "offset",
     }
     assert set(parameters["sort"]["schema"]["enum"]) == {
+        "tier",  # PLAN-V16 T1-10
         "score",
         "created_at",
         "updated_at",
@@ -523,6 +531,8 @@ def test_every_part_of_the_run_params_says_which_mode_uses_it(schema: dict[str, 
         "area",
         "triggers",
         "since_days",
+        "sources",
+        "goal_leads",
         "caps",
         "watchlist",
         "companies",
@@ -533,6 +543,8 @@ def test_every_part_of_the_run_params_says_which_mode_uses_it(schema: dict[str, 
         "area": "discovery",
         "triggers": "discovery",
         "since_days": "discovery",
+        "sources": "discovery",
+        "goal_leads": "discovery",
         "watchlist": "watchlist",
         "companies": "company",
         "recheck": "company",
@@ -1828,8 +1840,13 @@ async def test_research_still_works_through_the_endpoint_and_the_new_leads_route
         card = response.json()
         assert card["result"] == "pass"
         # What each source said, as a summary, with its link (one note per angle in the sample).
-        assert len(card["notes"]) == 4
-        assert {note["angle"] for note in card["notes"]} == {"property", "people", "money"}
+        assert len(card["notes"]) == 5
+        assert {note["angle"] for note in card["notes"]} == {
+            "property",
+            "people",
+            "money",
+            "dampeners",
+        }
         assert all(note["url"].startswith("https://") for note in card["notes"])
         assert card["hubspot"]["candidates"] == []
 

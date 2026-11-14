@@ -15,7 +15,9 @@ from apps.lead_finder.steps.plan import (
     check_discovery_size,
     discovery_reserve_usd,
     focus_places,
+    is_national,
     make_slices,
+    run_cities,
     slice_job_id,
     watchlist_batches,
 )
@@ -40,18 +42,24 @@ def with_areas(areas: dict[str, dict[str, list[str]]]) -> LeadFinderRules:
 # --- Slices ---------------------------------------------------------------------------------
 
 
-def test_the_default_run_is_one_city_times_the_six_main_signs() -> None:
+SIX_SIGNS = [
+    "lease_ending",
+    "merger_or_takeover",
+    "big_new_contract",
+    "fast_growth",
+    "new_to_australia",
+    "hot_industry_growth",
+]
+# The two new high signs of Levi's section 4 (PLAN-V16 T1-4) are main signs, so a default run
+# searches 8
+EIGHT_SIGNS = [*SIX_SIGNS, "capital_raise", "tenant_advisor"]
+
+
+def test_the_default_run_is_one_city_times_the_eight_main_signs() -> None:
     slices = make_slices(DiscoveryParams(), RULES)
-    assert len(slices) == 6
-    assert [s.city for s in slices] == ["Melbourne"] * 6
-    assert [s.trigger_id for s in slices] == [
-        "lease_ending",
-        "merger_or_takeover",
-        "big_new_contract",
-        "fast_growth",
-        "new_to_australia",
-        "hot_industry_growth",
-    ]
+    assert len(slices) == 8
+    assert [s.city for s in slices] == ["Melbourne"] * 8
+    assert [s.trigger_id for s in slices] == EIGHT_SIGNS
 
 
 def test_three_cities_go_city_by_city() -> None:
@@ -68,6 +76,44 @@ def test_the_first_default_slice_is_melbournes_lease_ending() -> None:
         area="all",
         label="Melbourne: lease ending",
     )
+
+
+def test_a_national_run_of_six_signs_plans_six_slices() -> None:
+    """PLAN-V16 T1-2: all of Australia is one search for each sign, not one for each place (20
+    places x 6 signs would be 120). With the default signs it is 8."""
+    params = DiscoveryParams(cities=["Australia"], triggers=SIX_SIGNS)
+    slices = make_slices(params, RULES)
+    assert len(slices) == len(params.triggers) == 6
+    default = DiscoveryParams(cities=["Australia"])
+    assert [s.trigger_id for s in make_slices(default, RULES)] == EIGHT_SIGNS
+    assert {s.city for s in slices} == {"Australia"}
+    assert {s.area for s in slices} == {"all"}
+    assert slices[0] == Slice(
+        id="australia:lease_ending",
+        trigger_id="lease_ending",
+        city="Australia",
+        area="all",
+        label="Australia: lease ending",
+    )
+    assert is_national(params, RULES)
+    assert not is_national(DiscoveryParams(cities=["Perth"]), RULES)
+
+
+def test_a_national_run_may_find_companies_in_every_place_and_a_city_run_only_in_its_own() -> None:
+    assert run_cities(DiscoveryParams(cities=["Australia"]), RULES) == RULES.criteria.cities.every
+    assert run_cities(DiscoveryParams(cities=["Perth", "Sydney"]), RULES) == ["Perth", "Sydney"]
+
+
+def test_a_national_slice_focuses_on_the_whole_country() -> None:
+    assert focus_places(RULES, "Australia", "all") == ["Australia"]
+    assert area_text(RULES, "Australia", "all") == "Australia"
+
+
+def test_a_new_place_is_searched_by_its_cbd() -> None:
+    params = DiscoveryParams(cities=["Geelong"], area={"Geelong": "cbd"}, triggers=["fast_growth"])
+    (only,) = make_slices(params, RULES)
+    assert only.label == "Geelong (CBD): fast growth"
+    assert focus_places(RULES, "Geelong", "cbd") == ["Geelong CBD"]
 
 
 def test_a_slice_follows_the_order_the_person_gave() -> None:
@@ -109,7 +155,7 @@ def test_the_inner_label_says_inner_suburbs() -> None:
 
 
 def test_the_full_params_model_works_too() -> None:
-    assert len(make_slices(LeadFinderRunParams(), RULES)) == 6
+    assert len(make_slices(LeadFinderRunParams(), RULES)) == 8
 
 
 def test_sydney_is_a_slice_like_any_city() -> None:

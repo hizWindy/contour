@@ -2,7 +2,9 @@
 
 The steps, in order:
 1. Memory first: reuse fresh notes about this company, so we don't pay to find them again. Then
-   Signal Hire's details for the company, when it is switched on: Claude gets them as hints.
+   Signal Hire's details for the company, when it is switched on: Claude gets them as hints. Then
+   what Property Daily and Arealytics know about its office (PLAN-V16 T1-8, `property.py`): free,
+   and Claude gets a tool's facts as hints only while that tool's `..._to_claude_ok` is on.
 2. Search: one Claude request per angle (property, people, money) that memory didn't cover. A
    lease and tenure run (`ResearchContext.focus`, PLAN-V11 C2) asks the tenure angle's office
    questions in place of property, and a missing move-in date is one of its gaps in step 4.
@@ -13,7 +15,9 @@ The steps, in order:
 4. Gap check: if the city, size or a trigger is missing, one more targeted search. Then stop.
 5. Match HubSpot. Signal Hire's checked name, website and industry are applied first. HubSpot,
    Signal Hire and the research each give a staff number, and the first source in
-   `size.staff_sources` wins (the others stay on the card). Apply the rules and the score.
+   `size.staff_sources` wins (the others stay on the card). The office's size, lease end and
+   move-in date come from the first source in `data_sources` (the property tools, HubSpot, then the
+   research), and the records add their own signs. Apply the rules and the score.
 6. Why now (PLAN-V12, while `why_now_enabled` is on): for a Pass, a Watch or a Director review,
    one short Claude request with no web search writes why to call now (apps/lead_finder/why.py).
    It comes after the judging, so it never changes the result or the score. Then save the card,
@@ -34,7 +38,8 @@ What a run relies on:
 - No database connection is held while Claude works: the memory read ends its transaction first.
   The same goes for Signal Hire: the transaction ends before it is asked.
 - A failure at Signal Hire is a line in the problems. It never stops a lead or a run
-  (apps/lead_finder/headcount.py, signalhire_company.py).
+  (apps/lead_finder/headcount.py, signalhire_company.py). The same goes for the property tools'
+  lookup, and no connection is held while it reads a site.
 """
 
 import asyncio
@@ -64,14 +69,32 @@ from apps.lead_finder.headcount import (
     wants_people,
     wants_signalhire,
 )
-from apps.lead_finder.office_numbers import fill_gaps, hubspot_staff, office_numbers
+from apps.lead_finder.office_numbers import hubspot_staff, office_numbers
+from apps.lead_finder.output import (
+    Headcount,
+    Office,
+    Space,
+    WhatChanged,
+    headcount_of,
+    office_of,
+    space_of,
+    what_changed,
+)
 from apps.lead_finder.params import (
     NAME_MESSAGE,
     clean_typed_city,
     clean_typed_domain,
 )
 from apps.lead_finder.prompts import Prompt, extract_prompt, research_prompt, versions, why_prompt
-from apps.lead_finder.rules import LeadFinderRules, Result
+from apps.lead_finder.property import (
+    apply_office_sources,
+    for_card,
+    hidden_sources,
+    lookup_problems,
+    office_hint_lines,
+    record_signs,
+)
+from apps.lead_finder.rules import MAX_DAMPENER_SEARCHES, LeadFinderRules, Result
 from apps.lead_finder.sanitize import (
     clean_company_name,
     clean_domain,
@@ -82,10 +105,17 @@ from apps.lead_finder.sanitize import (
 )
 from apps.lead_finder.scoring import (
     JUST_MOVED,
+    TIER_CHECK,
     Band,
+    Confidence,
+    Dampener,
+    Excluded,
+    FilterResult,
     RuleCheck,
     ScorePart,
+    Tier,
     TriggerScore,
+    Verdict,
     city_of,
     judge,
     parse_date,
@@ -98,7 +128,6 @@ from apps.lead_finder.sourcing import (
     apply_company_details,
     check_offices,
     choose_staff,
-    hubspot_filled,
     people_source,
 )
 from apps.lead_finder.tables import LIMITS, Lead, clip, company_key
@@ -121,13 +150,17 @@ from core.memory.service import recent, remember_many
 from core.searches.service import log_reply
 from core.signalhire.client import SignalHire, get_signalhire
 from core.signalhire.details import SignalHireCompany
+from core.sources.reader import lookup_company
+from core.sources.types import CompanyProperty
 
 APP = "lead_finder"
-SearchAngle = Literal["property", "people", "money", "tenure"]
-ANGLES: tuple[SearchAngle, ...] = ("property", "people", "money")
+SearchAngle = Literal["property", "people", "money", "tenure", "dampeners"]
+# The dampeners angle (PLAN-V16 T1-5) looks on purpose for what makes an office project less
+# likely. It has its own search allowance, on top of `company_max_searches` (see `_search`).
+ANGLES: tuple[SearchAngle, ...] = ("property", "people", "money", "dampeners")
 # The lease and tenure run (PLAN-V11 C2) asks the office questions in place of the property angle,
 # so a company costs the same as a growth research.
-TENURE_ANGLES: tuple[SearchAngle, ...] = ("tenure", "people", "money")
+TENURE_ANGLES: tuple[SearchAngle, ...] = ("tenure", "people", "money", "dampeners")
 TENURE_GAP = "when it moved into its current office in that city, and any move or fitout since"
 ANGLE_FOCUS = {
     "property": "its offices: where they are, how big (m² or floors), who owns the building, "
@@ -142,6 +175,13 @@ ANGLE_FOCUS = {
     "tenure": "its office in that city: the street address it is at now, when it moved in there "
     "(the year, and the month if a page says), and any move, fitout or refit there since. Also "
     "the lease and when it ends, and how big the office is",
+    "dampeners": "anything that makes a new office project less likely: a fitout or a move into "
+    "a new office in that city in the last 5 years (and when), a global or national real estate "
+    "outsourcing deal (JLL, CBRE, Cushman & Wakefield, Colliers or a similar firm names it as a "
+    "client), a known tie to a design and build competitor (2 or more of its projects, or a "
+    "panel or global agreement), and red flags in how it buys fitouts (a formal tender portal, "
+    "offshore or central global buying, lowest-price tenders, design and build bought apart). "
+    "If you find nothing for one of these, say nothing about it",
 }
 FORM_FAILED_SUMMARY = (
     "The facts are missing: Claude couldn't fill in the answer form. Re-check this lead."
@@ -223,20 +263,42 @@ class LeadCard(BaseModel):
         default=None,
         description="The Profile's stage for the result. Empty for a card made under version 1.",
     )
-    score: int = Field(description="0 to 100: the points earned in the Profile's six parts.")
+    score: int = Field(
+        description="0 to 100, after the dampeners (Levi's section 6, PLAN-V16 T1-6). A card made "
+        "before it has the Profile's six-part score."
+    )
+    score_before_dampeners: int | None = Field(
+        default=None,
+        description="The score before the dampeners took points off. Empty for a card made "
+        "before PLAN-V16 T1-6.",
+    )
+    tier: Tier | None = Field(
+        default=None,
+        description="A (75 and over), B (55 to 74), C (40 to 54) or discard (under 40). Empty for "
+        "a card made before PLAN-V16 T1-6.",
+    )
+    confidence: Confidence | None = Field(
+        default=None,
+        description="high, medium or low: how well the headcount, the signs and the dampener "
+        "checks are sourced. Empty for a card made before PLAN-V16 T1-6.",
+    )
+    confidence_why: str | None = Field(
+        default=None, description="One sentence that says why the confidence is what it is"
+    )
     score_parts: list[ScorePart] = Field(
         default_factory=list,
-        description="The six parts and their checks. Empty for a Drop, and for a card made "
-        "under version 1.",
+        description="The three parts (Fit, Change and timing, Access) and their checks, before "
+        "the dampeners. Empty for a Drop. A card made before PLAN-V16 T1-6 has the six parts.",
     )
     score_checked: int | None = Field(
         default=None,
-        description="The most points the tool could judge, like 48 of 60. Empty for a Drop, "
-        "and for a card made under version 1.",
+        description="Before PLAN-V16 T1-6: the most points the tool could judge, like 48 of 60. "
+        "Empty for a card made after it.",
     )
     band: Band | None = Field(
         default=None,
-        description="research_first (75 to 100), investigate (50 to 74) or nurture (under 50)",
+        description="Before PLAN-V16 T1-6: research_first, investigate or nurture. Empty for a "
+        "card made after it: it has a tier.",
     )
     summary: str
     why_it_fits: str
@@ -301,6 +363,57 @@ class LeadCard(BaseModel):
         "budget (the company's money ran out) or failed. Empty when there is one, or for a card "
         "made before it.",
     )
+    filters: list[FilterResult] = Field(
+        default_factory=list,
+        description="Levi's five filters (location, office size, headcount, office relevance and "
+        "sector), each pass, fail or estimated, with what it rests on (PLAN-V16 T1-3). Empty for "
+        "a card made before it.",
+    )
+    excluded: Excluded | None = Field(
+        default=None,
+        description="Why the lead is left out and not scored (Levi's section 3): a Drop with its "
+        "reason, its evidence and its link. `overridden_by` is set when a person overrode it, and "
+        "the lead was then judged without the exclusion. Empty when no exclusion applies.",
+    )
+    dampeners: list[Dampener] = Field(
+        default_factory=list,
+        description="Every dampener (Levi's section 5): a fact that lowers the score and never "
+        "removes the lead. Each is found, not_found (checked, nothing shown) or not_checked, "
+        "with its strength, evidence, date, link and what could reverse it when found "
+        "(PLAN-V16 T1-5). Empty for a card made before it.",
+    )
+    property: CompanyProperty | None = Field(
+        default=None,
+        description="What Property Daily and Arealytics know about the company's office (PLAN-V16 "
+        "T1-8): their records, newest first (at most 30), and each tool's status (found, "
+        "not_found, off, error or not_checked). A tool that is off has no records here. Empty "
+        "for a card made before it, and for a company too small to research.",
+    )
+    office: Office | None = Field(
+        default=None,
+        description="The current office (Levi's section 9, PLAN-V16 T1-10): the address from a "
+        "property tool, and the size, move-in date and lease end the rules used. Empty when "
+        "nothing about it is known, and for a card made before it.",
+    )
+    headcount: Headcount | None = Field(
+        default=None,
+        description="Local staff now and projected, each confirmed or estimated. Empty when "
+        "neither is known.",
+    )
+    space: Space | None = Field(
+        default=None, description="The space now and projected, at about 10 m² a person"
+    )
+    contour_angle: str | None = Field(
+        default=None, description="The strategic hook, like post-merger integration"
+    )
+    contact_roles: list[str] = Field(
+        default_factory=list, description="The likely roles to contact, best first. No names."
+    )
+    what_changed: WhatChanged | None = Field(
+        default=None,
+        description="This research against the last research of the same company: new, upgraded, "
+        "downgraded or unchanged, with one sentence. Empty for a card made before PLAN-V16 T1-10.",
+    )
 
 
 @dataclass
@@ -336,6 +449,8 @@ class Job:
     early_staff: StaffReading | None = None
     early_city: str | None = None
     too_small: str | None = None  # why the research stopped before Claude (PLAN-V9 B2)
+    # What the property tools know (PLAN-V16 T1-8), read before the search. None: not looked up
+    from_tools: CompanyProperty | None = None
 
     @property
     def company(self) -> str:
@@ -382,8 +497,13 @@ async def research_company(
         rules=rules,
         settings=settings,
         context=context,
+        # The dampener check's searches (at most 3) are on top of `company_max_searches`, so the
+        # three angles and the gap check keep the allowance the Settings page shows. The money
+        # limit above is what stops a company's cost.
         budget=Budget(
-            cap, settings.company_max_searches, request_reserve_usd=settings.request_reserve_usd
+            cap,
+            settings.company_max_searches + MAX_DAMPENER_SEARCHES,
+            request_reserve_usd=settings.request_reserve_usd,
         ),
         today=today or now.date(),
         credits=(
@@ -408,6 +528,10 @@ async def research_company(
         card = await _why_now(session, job, claude, card)  # a Drop: says why, asks nothing
         await _save(session, embedder, job, card, hubspot, key, place, metro, profile_text)
         return card
+
+    # 1d. What Property Daily and Arealytics know about its office (PLAN-V16 T1-8). Free, and only
+    # for a company that will be researched, so a too-small one uses no pages.
+    job.from_tools = await _property_lookup(session, job)
 
     # 2. Search the angles memory didn't cover. A lease and tenure run asks the office questions
     # first, in place of the property angle (PLAN-V11 C2).
@@ -501,6 +625,7 @@ async def refill_lead(
     if not job.notes:
         return None
     await _company_details(session, job, None, now, may_pay=False)  # a saved copy only: no credit
+    job.from_tools = old.property  # the records the research saved: no new lookup (PLAN-V16 T1-8)
     try:
         facts, dropped = await _fill_form(job, claude, extract_prompt(rules))
     finally:
@@ -607,6 +732,7 @@ async def why_now_for_lead(
         rules=rules,
         today=today or now.date(),
         now=now,
+        hidden=hidden_sources(settings),
     )
     for number, reply in enumerate(outcome.replies):
         log_reply(
@@ -699,11 +825,14 @@ async def _judge_and_card(
         fuzzy_min=settings.match_fuzzy_min,
         profile_min=settings.match_profile_min,
     )
-    # HubSpot's move-in year and lease end fill gaps the research left, and never overwrite.
+    # The office's size, lease end and move-in date: the first source in `data_sources` that has
+    # one (the property tools, HubSpot, then the research), and the signs the records show
+    # (PLAN-V16 T1-8). The others stay on the card.
     numbers = await office_numbers(session, hubspot.hubspot_id, metro)
-    before_hubspot = facts
-    facts, from_hubspot = fill_gaps(facts, numbers, rules, job.today)
-    sources.extend(hubspot_filled(before_hubspot, facts))
+    office = apply_office_sources(facts, job.from_tools, numbers, metro, rules, job.today)
+    facts, from_hubspot = office.facts, office.from_hubspot
+    sources.extend(office.entries)
+    facts = record_signs(facts, job.from_tools, context.signals, metro, rules, job.today)
     website = facts.website.value or request.website
     staff, from_signalhire, signalhire_people = await _signalhire_step(
         session, job, facts, metro, website, signalhire
@@ -723,24 +852,14 @@ async def _judge_and_card(
         if entry is not None:
             sources.append(entry)
     verdict = judge(facts, hubspot, rules, job.today)
+    headcount = headcount_of(facts, rules)
     card = LeadCard(
         id=job.id,
         company=facts.name or job.company,
-        result=verdict.result,
-        stage=verdict.stage,
-        score=verdict.score,
-        score_parts=verdict.parts,
-        score_checked=verdict.score_checked or None,
-        band=verdict.band,
+        **verdict_fields(verdict),
         summary=facts.summary,
-        why_it_fits=_why(verdict.checks, verdict.result),
         contact_role=facts.contact_role,
         opening_line=facts.opening_line,
-        checks=verdict.checks,
-        triggers=verdict.triggers,
-        office_m2=verdict.office_m2,
-        office_m2_estimated=verdict.office_m2_estimated,
-        fitout_aud=verdict.fitout_aud,
         facts=facts,
         hubspot=HubSpotOut(**asdict(hubspot)),
         notes=[
@@ -761,6 +880,21 @@ async def _judge_and_card(
         dropped=dropped,
         problems=job.problems,
         form_failed=job.form_failed,
+        property=for_card(job.from_tools),
+        office=office_of(
+            facts,
+            sources,
+            job.from_tools,
+            metro,
+            verdict.office_m2,
+            verdict.office_m2_estimated,
+            rules,
+            job.today,
+        ),
+        headcount=headcount,
+        space=space_of(headcount, rules),
+        contour_angle=facts.contour_angle,
+        contact_roles=facts.contact_roles,
         research=ResearchCost(
             cost_usd=job.budget.spent_usd,
             cap_usd=job.budget.cap_usd,
@@ -772,7 +906,26 @@ async def _judge_and_card(
         prompt_version=versions(rules),
         created_at=now,
     )
+    # What changed since the last research of this company (PLAN-V16 T1-10). Free: one read.
+    before = await _last_card(session, company_key(request.company), job.id, context.is_test)
+    card = card.model_copy(
+        update={"what_changed": what_changed(card.model_dump(mode="json"), before, rules)}
+    )
     return card, hubspot, place, metro, profile_text
+
+
+async def _last_card(
+    session: AsyncSession, key: str, lead_id: uuid.UUID, is_test: bool
+) -> dict[str, Any] | None:
+    """The saved card of the newest other research of the same company, or None. A test-set lead
+    and a real one are kept apart, as in the lead list."""
+    found: dict[str, Any] | None = await session.scalar(
+        select(Lead.card)
+        .where(Lead.company_key == key, Lead.id != lead_id, Lead.is_test.is_(is_test))
+        .order_by(Lead.created_at.desc(), Lead.id)
+        .limit(1)
+    )
+    return found
 
 
 async def _why_now(session: AsyncSession, job: Job, claude: Claude, card: LeadCard) -> LeadCard:
@@ -796,6 +949,7 @@ async def _why_now(session: AsyncSession, job: Job, claude: Claude, card: LeadCa
         today=job.today,
         now=datetime.now(UTC),
         on_reply=job.context.on_reply,
+        hidden=hidden_sources(job.settings),
     )
     for number, reply in enumerate(outcome.replies):
         job.replies.append(("why" if number == 0 else "why:retry", reply))
@@ -818,12 +972,21 @@ async def _why_now(session: AsyncSession, job: Job, claude: Claude, card: LeadCa
 
 
 async def _search(job: Job, claude: Claude, prompts: list[tuple[str, str]]) -> None:
-    """One Claude request per angle, side by side. Notes with unseen links are dropped."""
+    """One Claude request per angle, side by side. Notes with unseen links are dropped.
+
+    Four angles start together, but the company's money holds fit only three at once (the cap is
+    US$2.50 and each running request holds US$0.80). So a request waits for a hold
+    (`acquire_request`) until an earlier one ends and its hold shrinks to its real cost.
+    """
     settings = job.settings
 
     async def one(angle: str, prompt: str) -> tuple[str, Reply[AngleNotes] | None]:
         try:
-            granted = job.budget.reserve_searches(settings.searches_per_request)
+            # The dampener check is limited to Levi's 3 searches, whatever the setting says
+            wanted = settings.searches_per_request
+            if angle == "dampeners":
+                wanted = min(wanted, MAX_DAMPENER_SEARCHES)
+            granted = await job.budget.acquire_request(wanted)
         except BudgetSpent as stop:
             job.problems.append(f"{angle}: skipped. {stop}.")
             return angle, None
@@ -909,6 +1072,33 @@ async def _company_details(
         if owned is not None:
             await owned.aclose()
     job.problems.extend(job.lookup.problems)
+
+
+async def _property_lookup(session: AsyncSession, job: Job) -> CompanyProperty | None:
+    """Step 1d: what Property Daily and Arealytics know about the company's office (PLAN-V16
+    T1-8), from our copy, or from a tool live when its copy is old and the tool is on. Free: no
+    Claude request. The lookup never raises (its contract), and a lead never stops for it: a tool
+    that failed is one line in the problems. The live pages count against the run's
+    `source_pages_per_run`. No connection of ours is held while it reads a site."""
+    await session.rollback()
+    try:
+        found = await lookup_company(
+            session,
+            job.company,
+            job.request.city,
+            job.request.website,
+            run_id=job.context.run_id,
+            settings=job.settings,
+        )
+    except Exception:  # its contract says it never raises; a lead never stops for it anyway
+        log.exception("property_lookup_failed", extra={"company": job.company})
+        job.problems.append(
+            "Property Daily and Arealytics: the lookup didn't work this time, so this lead was "
+            "judged without them."
+        )
+        return None
+    job.problems.extend(lookup_problems(found))
+    return found
 
 
 async def _signalhire_step(
@@ -1139,9 +1329,14 @@ def _angle_prompt(angle: SearchAngle, job: Job) -> str:
         "month_year": job.today.strftime("%B %Y"),
     }
     templates = job.rules.queries.company[angle]
+    # Levi's source groups for this angle (PLAN-V16 T1-7): the sites he names
+    templates = [
+        *templates,
+        *(t for group in job.rules.queries.groups_for_angle(angle) for t in group.company),
+    ]
     examples = "\n".join(f"- {t.format(**values)}" for t in templates)
     return (
-        f"{_hints(job)}\n\n"
+        f"{_hints(job)}{_property_hints(job)}\n\n"
         f"Angle: {angle}. Find facts about {ANGLE_FOCUS[angle]}.\n"
         "Also note the company's website, industry and owner (for example ASX-listed, or "
         "owned overseas) if you see them.\n\n"
@@ -1149,9 +1344,19 @@ def _angle_prompt(angle: SearchAngle, job: Job) -> str:
     )
 
 
+def _property_hints(job: Job) -> str:
+    """The office now from each property tool Claude may read (PLAN-V16 T1-8), for the search
+    prompts only: the address, the floors, the m² and the lease dates, as data. Empty when there is
+    nothing, or no tool may go to Claude."""
+    city = job.request.city
+    metro = city_of(city, job.rules) if city else None
+    lines = office_hint_lines(job.from_tools, metro, job.rules, job.settings, job.today)
+    return "\n\n" + "\n".join(lines) if lines else ""
+
+
 def _gap_prompt(missing: list[str], job: Job) -> str:
     return (
-        f"{_hints(job)}\n\n"
+        f"{_hints(job)}{_property_hints(job)}\n\n"
         f"Earlier research didn't find these facts: {', '.join(missing)}.\n"
         "Search for these facts only. If you still can't find one, return no note for it."
     )
@@ -1188,6 +1393,7 @@ def empty_facts(company: str, summary: str = "Nothing useful was found.") -> Com
         owner=unknown(),
         staff_in_city=unknown(),
         staff_from_linkedin=False,
+        staff_projected=unknown(),
         office_m2=unknown(),
         local_team_runs_project=unknown(),
         healthy=unknown(),
@@ -1201,20 +1407,81 @@ def empty_facts(company: str, summary: str = "Nothing useful was found.") -> Com
         tier_group=None,
         office_since=unknown(),
         last_fitout=unknown(),
+        tender_only=unknown(),
+        dampeners=[],
         fitout_contractors=[],
         talking_points=[],
         contact_role=None,
+        contact_roles=[],
+        contour_angle=None,
         decision_makers=[],
         summary=summary,
         opening_line=None,
     )
 
 
+def verdict_fields(verdict: Verdict) -> dict[str, Any]:
+    """The card fields a verdict decides: the one place that lists them, so a lead judged again (an
+    override, a re-judge) and a lead just researched can't disagree about what a verdict sets."""
+    return {
+        "result": verdict.result,
+        "stage": verdict.stage,
+        "score": verdict.score,
+        "score_before_dampeners": verdict.score_before_dampeners,
+        "tier": verdict.tier,
+        "confidence": verdict.confidence,
+        "confidence_why": verdict.confidence_why,
+        "score_parts": verdict.parts,
+        "score_checked": None,  # the points the tool could judge: before PLAN-V16 T1-6
+        "band": None,
+        "why_it_fits": _why(verdict.checks, verdict.result),
+        "checks": verdict.checks,
+        "triggers": verdict.triggers,
+        "office_m2": verdict.office_m2,
+        "office_m2_estimated": verdict.office_m2_estimated,
+        "fitout_aud": verdict.fitout_aud,
+        "filters": verdict.filters,
+        "excluded": verdict.excluded,
+        "dampeners": verdict.dampeners,
+    }
+
+
+def apply_verdict(card: LeadCard, verdict: Verdict) -> LeadCard:
+    """The card with a new verdict's fields. The Why now is cleared when the lead is no longer what
+    it was written for: it is written again by `why-now` or a re-check (PLAN-V12)."""
+    changes = verdict_fields(verdict)
+    if verdict.result != card.result:
+        changes |= {"why_now": None, "why_now_skipped": None}
+    return card.model_copy(update=changes)
+
+
+def verdict_columns(card: LeadCard) -> dict[str, Any]:
+    """The lead row's columns that copy what a verdict decides, and the card itself."""
+    trigger_ids = list(dict.fromkeys(score.trigger.id for score in card.triggers))
+    best = card.triggers[0].trigger if card.triggers else None
+    return {
+        "office_m2": card.office_m2,
+        "office_m2_estimated": card.office_m2_estimated,
+        "result": card.result,
+        "score": card.score,
+        "score_checked": card.score_checked,
+        "tier": card.tier,
+        "confidence": card.confidence,
+        "trigger_id": trigger_ids[0] if trigger_ids else None,
+        "trigger_ids": trigger_ids,
+        "trigger_date": parse_date(best.date) if best else None,
+        "card": card.model_dump(mode="json"),
+    }
+
+
 def _why(checks: list[RuleCheck], result: Result) -> str:
     parts = [f"{c.rule}: {c.detail}" for c in checks if c.rule in ("City", "Size", "Office")]
     # A company that just moved is a Watch whatever else it shows, so that reason comes first (B3)
     moved = [c.detail for c in checks if c.rule == JUST_MOVED and result == "watch"]
-    reasons = [*moved, *(c.detail for c in checks if c.outcome in ("fail", "director"))]
+    # The tier says why a good lead is only a Watch, or a Drop (PLAN-V16 T1-6)
+    tier = [c.detail for c in checks if c.rule == TIER_CHECK]
+    reasons = [*moved, *(c.detail for c in checks if c.outcome in ("fail", "director")), *tier]
+    reasons = list(dict.fromkeys(reasons))
     label = result.replace("_", " ").capitalize()
     because = f" Because: {'; '.join(reasons)}." if reasons and result != "pass" else ""
     return f"{'. '.join(parts)}. Result: {label}.{because}"
@@ -1284,8 +1551,6 @@ def _lead_values(
 ) -> dict[str, Any]:
     """The lead row: the card, and copies of what the website filters and sorts by."""
     facts = card.facts
-    trigger_ids = list(dict.fromkeys(score.trigger.id for score in card.triggers))
-    best = card.triggers[0].trigger if card.triggers else None
     industry = facts.industry.value if isinstance(facts.industry.value, str) else None
     staff = facts.staff_in_city.value
     website = facts.website.value if isinstance(facts.website.value, str) else None
@@ -1302,18 +1567,10 @@ def _lead_values(
         "industry": clip(industry, LIMITS["lead.industry"]),
         "industry_group": clip(facts.industry_group, LIMITS["lead.industry_group"]),
         "staff_in_city": staff if isinstance(staff, int) and not isinstance(staff, bool) else None,
-        "office_m2": card.office_m2,
-        "office_m2_estimated": card.office_m2_estimated,
-        "result": card.result,
-        "score": card.score,
-        "score_checked": card.score_checked,
-        "trigger_id": trigger_ids[0] if trigger_ids else None,
-        "trigger_ids": trigger_ids,
-        "trigger_date": parse_date(best.date) if best else None,
+        **verdict_columns(card),
         "contact_role": clip(card.contact_role, LIMITS["lead.contact_role"]),
         "hubspot_status": hubspot.status,
         "hubspot_id": hubspot.hubspot_id,
-        "card": card.model_dump(mode="json"),
         "cost_usd": card.research.cost_usd,
         "web_searches": card.research.web_searches,
         "rules_version": card.rules_version,

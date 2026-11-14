@@ -177,6 +177,7 @@ def test_results_rank_pass_first_then_director_review_watch_drop() -> None:
 
 def test_the_sort_names_are_a_fixed_list() -> None:
     assert set(lead_store.SORT_COLUMNS) == {
+        "tier",
         "score",
         "created_at",
         "updated_at",

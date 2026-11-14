@@ -2,8 +2,9 @@
 can be judged by its score.
 
 - `load_testset()` reads `testset.yaml`. A company may say what result it expects
-  (`expect.results`), but only where the rules make it certain (Canva in Sydney is never a pass).
-  The rest have no expectation (**TBC** until a person checks the first real run).
+  (`expect.results`), but only where the rules make it certain. Since PLAN-V16 T1-2 none is (Canva
+  in Sydney used to be never a pass, and now Sydney can pass). The rest have no expectation
+  (**TBC** until a person checks the first real run).
 - A test set run is an ordinary run of mode `testset`: its leads are marked `is_test`, so they stay
   out of the results and never count as "already researched".
 - `list_testset_runs` gives one summary for each past run, newest first, so scores can be

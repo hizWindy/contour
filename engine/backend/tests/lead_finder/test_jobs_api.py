@@ -57,8 +57,8 @@ def manager(
     return make_lf_manager(FakeClaude(), kinds=waiting_kinds(gate), settings=lf_settings(**limits))
 
 
-# An automatic run's limit of US$50, under a typical run at the placeholder prices (US$62.40:
-# 6 searches at US$0.40 and 60 companies at US$1.00), so a test can see a run refused.
+# An automatic run's limit of US$50, under a typical run at the placeholder prices (US$83.20:
+# 8 searches at US$0.40 and 80 companies at US$1.00), so a test can see a run refused.
 LOW = [{"scheduled_run_cap_usd": Decimal("50")}]
 
 
@@ -110,15 +110,16 @@ async def test_the_page_reads_the_default_schedule_with_its_estimate(
     assert item["name"] == "Find new leads: Melbourne"
     assert item["when"] == "Every 2 weeks on Monday at 7:00 am"
     assert item["enabled"] is False and item["next_run_at"] is None
-    assert item["summary"] == ("Searches Melbourne for the 6 main signs, looking back 14 days.")
+    assert item["summary"] == ("Searches Melbourne for the 8 main signs, looking back 14 days.")
     assert item["estimate"] == {
         "valid": True,
         "problem": None,
-        # 6 searches at US$0.15, and 60 companies at US$0.30: the most 6 searches can find,
-        # since an automatic run has no company limit of its own (9 Nov)
-        "typical_usd": "18.90",
+        # 8 searches at US$0.15, and 80 companies at US$0.30: the most 8 searches can find,
+        # since an automatic run has no company limit of its own (9 Nov). It was 6 searches and
+        # 60 companies (US$18.90) until PLAN-V16 T1-4 added two main signs.
+        "typical_usd": "25.20",
         "worst_usd": "150.00",  # the automatic run's own limit stops it there
-        "per_month_usd": "41.10",  # 18.90 x 30.4375 / 14 days, rounded up
+        "per_month_usd": "54.79",  # 25.20 x 30.4375 / 14 days, rounded up
         "cap_usd": "150.00",
         "daily_left_usd": "150.00",
         "basis": (
@@ -133,7 +134,7 @@ async def test_without_past_prices_an_automatic_run_still_fits_its_limit(
 ) -> None:
     estimate = (await the_item(client))["estimate"]
     assert estimate["valid"] is True
-    assert estimate["typical_usd"] == "62.40"  # the placeholder prices
+    assert estimate["typical_usd"] == "83.20"  # the placeholder prices
     assert estimate["problem"] is None  # under the automatic run's US$150
 
 
@@ -144,9 +145,9 @@ async def test_without_past_prices_the_page_says_a_run_over_the_limit_would_not_
     estimate = (await the_item(client))["estimate"]
 
     assert estimate["valid"] is True  # the choices are fine
-    assert estimate["typical_usd"] == "62.40"  # the placeholder prices
+    assert estimate["typical_usd"] == "83.20"  # the placeholder prices
     assert estimate["problem"].startswith(
-        "A typical run costs about US$62.40, which is more than the run limit of US$50.00."
+        "A typical run costs about US$83.20, which is more than the run limit of US$50.00."
     )
     assert "US$1.00 a company, a default" in estimate["problem"]
 
@@ -164,9 +165,9 @@ async def test_adding_three_cities_is_saved_and_fits_an_automatic_run(
     assert answer.status_code == 200, answer.text
     item = answer.json()
     assert item["summary"] == (
-        "Searches Melbourne, Adelaide, Perth and Sydney for the 6 main signs, looking back 14 days."
+        "Searches Melbourne, Adelaide, Perth and Sydney for the 8 main signs, looking back 14 days."
     )
-    # 24 searches x US$0.60 = US$14.40 fits discovery's share of US$150 (US$60). A run a person
+    # 32 searches x US$0.60 = US$19.20 fits discovery's share of US$150 (US$60). A run a person
     # starts with the same choices would be too large (13 searches at most).
     assert item["estimate"]["valid"] is True
     assert item["estimate"]["problem"] is None
@@ -176,7 +177,7 @@ async def test_choices_are_checked_and_saved_cleaned(client: httpx.AsyncClient) 
     saved = await change(client, {"settings": {"cities": ["perth"], "since_days": 7}})
     assert saved.status_code == 200, saved.text
     assert saved.json()["settings"] == {"cities": ["Perth"], "since_days": 7}
-    assert saved.json()["summary"] == ("Searches Perth for the 6 main signs, looking back 7 days.")
+    assert saved.json()["summary"] == ("Searches Perth for the 8 main signs, looking back 7 days.")
 
 
 @pytest.mark.parametrize(
@@ -240,14 +241,14 @@ async def test_switching_on_then_run_now_starts_a_run_the_runs_list_marks(
 async def test_run_now_over_the_limit_says_why_and_starts_nothing(
     client: httpx.AsyncClient, session_factory: Factory
 ) -> None:
-    item = await the_item(client)  # no past prices: the default run looks like US$62.40
+    item = await the_item(client)  # no past prices: the default run looks like US$83.20
 
     answer = await client.post(f"{URL}/{item['id']}/run")
 
     assert answer.status_code == 200
     body = answer.json()
     assert body["status"] == "skipped" and body["ref"] is None
-    assert body["reason"].startswith("A typical run costs about US$62.40, which is more than")
+    assert body["reason"].startswith("A typical run costs about US$83.20, which is more than")
     assert await all_runs(session_factory) == []
     assert (await the_item(client))["last_error"] == body["reason"]
 

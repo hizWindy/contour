@@ -14,10 +14,11 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic_core import PydanticCustomError
 
 from apps.lead_finder.context import Origin
-from apps.lead_finder.params import AreaId, LeadFinderRunParams
+from apps.lead_finder.output import Headcount, Office, Space, WhatChanged
+from apps.lead_finder.params import AreaId, LeadFinderRunParams, RunSource
 from apps.lead_finder.research import LeadCard
 from apps.lead_finder.rules import Result
-from apps.lead_finder.scoring import Band
+from apps.lead_finder.scoring import Band, Confidence, Dampener, Excluded, Tier
 from core.api.models import OutModel, SafeText
 from core.hubspot.matching import Status
 from core.runs.schemas import RunStatus
@@ -45,8 +46,11 @@ REJECT_REASON_LABELS: dict[str, str] = {
 }
 RivalStatus = Literal["pending", "used", "skipped"]
 CityKind = Literal["pass", "director_review"]
+# The city groups of criteria.yaml (PLAN-V16 T1-2), and `national` for the all-of-Australia choice
+CityGroupOption = Literal["priority", "secondary", "capital", "regional", "national"]
 TriggerGroup = Literal["main", "other", "weak"]
 LeadSort = Literal[
+    "tier",  # tier A first, then the score (PLAN-V16 T1-10)
     "score",
     "created_at",
     "updated_at",
@@ -76,7 +80,14 @@ class AreaOption(BaseModel):
 class CityOption(BaseModel):
     name: str = Field(examples=["Melbourne"])
     kind: CityKind = Field(
-        description="pass: a result can pass. director_review: a Director looks."
+        description="pass for every place since PLAN-V16 (every place in Australia can pass). "
+        "director_review stays in the type for older clients and is no longer sent."
+    )
+    group: CityGroupOption = Field(
+        description="priority (Melbourne, Adelaide, Perth), secondary (Sydney, Brisbane), capital, "
+        "regional, or national: the choice `Australia`, which searches all of Australia at once "
+        "and must be chosen alone",
+        examples=["priority"],
     )
     lat: float = Field(description="The centre of the city, approximate")
     lng: float
@@ -114,6 +125,28 @@ class OptionCaps(BaseModel):
     daily_left_usd: Decimal
 
 
+class SourceOption(BaseModel):
+    """Where a discovery run can look for companies (PLAN-V16 T1-8, the contract part 2)."""
+
+    on: bool = Field(description="The tool's switch. The web is always on.")
+    ready: bool = Field(
+        description="It can be used now: on, and with a login. A run may name only a ready one."
+    )
+    message: str | None = Field(
+        description="Why it isn't ready, in one plain sentence for the Start page. Empty when "
+        "it is ready.",
+        examples=["Property Daily is switched off. An Admin can switch it on."],
+    )
+
+
+class GoalLeadsOption(BaseModel):
+    """ "How many leads" on the Start page (PLAN-V16 T1-9)."""
+
+    default: int = Field(description="`manual_run_goal_leads` from the settings", examples=[20])
+    min: int
+    max: int
+
+
 class RunOptions(BaseModel):
     """Everything the Start page needs to draw itself."""
 
@@ -130,6 +163,17 @@ class RunOptions(BaseModel):
     )
     companies_limit: CompaniesLimit
     caps: OptionCaps
+    sources: dict[RunSource, SourceOption] = Field(
+        default_factory=dict,
+        description=(
+            "Where discovery can look, by id: `web`, `property_daily` and `arealytics` (PLAN-V16 "
+            "T1-8). A run's `sources` left out uses every one that is ready."
+        ),
+    )
+    goal_leads: GoalLeadsOption = Field(
+        description="How many good leads a run a person starts may aim for, and the default "
+        "(PLAN-V16 T1-9)"
+    )
     defaults: LeadFinderRunParams = Field(
         description=(
             "The starting values for every part of a run's `params`. The Start page must send "
@@ -141,6 +185,39 @@ class RunOptions(BaseModel):
 
 
 # --- Leads ----------------------------------------------------------------------------------
+
+CityGroupFilter = Literal["priority", "secondary", "capital", "regional"]
+
+
+class ProfileSign(BaseModel):
+    label: str
+    what_happened: str
+    date: str | None
+    url: str | None
+
+
+class LeadProfile(BaseModel):
+    """The one-page profile of a Tier A lead (Levi's section 9, PLAN-V16 T1-10): what each lead
+    shows, in one answer. Every value is the saved card's."""
+
+    id: UUID
+    company: str
+    city: str | None
+    tier: Tier
+    score: int
+    confidence: Confidence | None
+    confidence_why: str | None
+    sector: str | None
+    headcount: Headcount | None
+    space: Space | None
+    signs: list[ProfileSign]
+    dampeners: list[Dampener]
+    office: Office | None
+    why_now: str | None = Field(description="Why a property decision is likely soon, if written")
+    contour_angle: str | None
+    contact_roles: list[str]
+    opener: str | None
+    what_changed: WhatChanged | None
 
 
 class LeadRow(BaseModel):
@@ -159,6 +236,18 @@ class LeadRow(BaseModel):
     )
     band: Band | None = Field(
         description="research_first (75 to 100), investigate (50 to 74) or nurture (under 50)"
+    )
+    tier: Tier | None = Field(
+        default=None,
+        description="A, B, C or discard (PLAN-V16 T1-6). Empty for a lead judged before it.",
+    )
+    confidence: Confidence | None = Field(default=None, description="high, medium or low")
+    excluded: Excluded | None = Field(
+        default=None,
+        description="Why the lead is left out (the same object as the card's), or empty",
+    )
+    has_property: bool = Field(
+        default=False, description="True when a property tool has a record of the company"
     )
     status: LeadStatus
     hubspot_status: HubSpotStatus

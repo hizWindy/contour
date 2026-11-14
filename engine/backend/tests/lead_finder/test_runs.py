@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from apps.lead_finder.runs import NOT_APPROVED_CODE
 from apps.lead_finder.tables import Lead, company_key
-from apps.lead_finder.testing import report_of_testset
+from apps.lead_finder.testing import TestExpect, TestSet, load_testset, report_of_testset
 from core.api.errors import Problem
 from core.config import ENGINE_DIR
 from core.hubspot.importer import read_export
@@ -24,7 +24,7 @@ from core.hubspot.models import HubSpotCompany, HubSpotDeal
 from core.hubspot.service import save_export
 from core.memory.models import MemoryItem
 from core.runs.manager import RunManager
-from core.runs.schemas import RunCreate
+from core.runs.schemas import RunCreate, RunOut
 from core.searches.models import SearchLog
 from tests.core.conftest import MemorySource
 from tests.core.runs_fakes import (
@@ -108,7 +108,15 @@ async def test_a_discovery_run_finds_merges_chooses_and_researches(
     run_id = await start(manager, "discovery", DISCOVERY)
     row = await finished(manager, session_factory, run_id)
 
-    assert (row.status, row.stop_reason, row.error) == ("done", None, None)
+    assert (row.status, row.error) == ("done", None)
+    # It aimed for 20 good leads (the default, PLAN-V16 T1-9) and found fewer: it says why
+    good = row.counts["good"]
+    assert row.stop_reason == (
+        f"Found {good} of 20 leads. Discovery found no more companies to research."
+    )
+    shown = RunOut.model_validate(row)
+    assert (shown.goal_leads, shown.good_leads) == (20, good)
+    assert shown.leads_by_source == {"web": 5, "property_daily": 0, "arealytics": 0}
     events = await stored_json(session_factory, run_id)
     assert of_type(events, "plan_ready") == [
         {"slices": 9, "companies": 0, "labels": of_type(events, "plan_ready")[0]["labels"]}
@@ -213,14 +221,26 @@ async def test_the_choose_rules_skip_open_deals_and_fresh_leads(
 async def test_the_default_start_choice_fits_the_default_caps_and_ends_under_them(
     make_lf_manager: MakeLeadFinderManager, session_factory: async_sessionmaker[AsyncSession]
 ) -> None:
-    """The Start page's defaults: Melbourne and the six main signs, 6 slices (PLAN-V9 C4)."""
+    """The Start page's defaults: Melbourne and the eight main signs, 8 slices (PLAN-V9 C4; the
+    capital raise and tenant advisor signs joined the six in PLAN-V16 T1-4)."""
     manager = make_lf_manager(FakeClaude(scenario=sample_scenario()))
     estimate = await manager.estimate(RunCreate(app=APP, mode="discovery", params={}))
-    assert (estimate.valid, estimate.slices, estimate.blocked) == (True, 6, None)
+    assert (estimate.valid, estimate.slices, estimate.blocked) == (True, 8, None)
+    # How many leads (PLAN-V16 T1-9): 20 at 40% (no finished run yet) needs 50 companies. The
+    # money limit binds: US$20, less 8 searches at US$0.40, pays for 16 at US$1.00 a company.
+    assert estimate.companies_needed == 50
+    assert estimate.goal_note == (
+        "20 leads needs about 50 companies. This run's money limit (US$20) allows about 16. "
+        "An Admin can raise it in Settings."
+    )
+    scheduled = await manager.estimate(
+        RunCreate(app=APP, mode="discovery", params={}), scheduled=True
+    )
+    assert (scheduled.companies_needed, scheduled.goal_note) == (None, None)  # the round's goal
     run_id = await start(manager, "discovery", {})
     row = await finished(manager, session_factory, run_id)
     assert row.status == "done"
-    assert row.counts["slices"] == 6
+    assert row.counts["slices"] == 8
     await assert_totals_match_log(session_factory, run_id)
     assert row.cost_usd <= D("20")
 
@@ -266,7 +286,13 @@ async def test_a_recheck_searches_again_even_with_fresh_memory(
     third = make_lf_manager(again)
     params = {**companies("Acme Software"), "recheck": True}
     await finished(third, session_factory, await start(third, "company", params))
-    assert sorted(again.calls) == ["extract", "search:money", "search:people", "search:property"]
+    assert sorted(again.calls) == [
+        "extract",
+        "search:dampeners",
+        "search:money",
+        "search:people",
+        "search:property",
+    ]
 
 
 async def test_the_test_set_run_marks_its_leads_and_reports_against_expectations(
@@ -283,6 +309,17 @@ async def test_the_test_set_run_marks_its_leads_and_reports_against_expectations
     assert all(lead.is_test for lead in leads)
 
     report = await report_of_testset(session, run_id)
+    # No company's result is certain since PLAN-V16 T1-2 (Canva in Sydney can pass now)
+    assert (report.summary.companies, report.summary.expected) == (10, 0)
+    assert {item.ok for item in report.items} == {None}
+
+    # The matching itself, with an expectation put on Canva for this test
+    certain = TestExpect(results=["director_review", "watch", "drop"])
+    companies = [
+        company.model_copy(update={"expect": certain}) if company.name == "Canva" else company
+        for company in load_testset().companies
+    ]
+    report = await report_of_testset(session, run_id, TestSet(companies=companies))
     assert (report.summary.companies, report.summary.expected) == (10, 1)
     canva = next(item for item in report.items if item.name == "Canva")
     assert canva.expected == ["director_review", "watch", "drop"]
@@ -310,9 +347,10 @@ async def test_a_watchlist_run_waits_for_the_ok_to_send_hubspot_names(
     estimate = await manager.estimate(RunCreate(app=APP, mode="watchlist", params={}))
     assert estimate.valid
     assert estimate.blocked is not None and estimate.blocked.code == NOT_APPROVED_CODE
-    # 47 on the export's watch list at 100+ staff (EXPORT.md), 52 at 50+ (PLAN-V11 B2)
-    assert estimate.companies_expected == 52
-    assert "52 companies, but the run limit is 20." in " ".join(estimate.warnings)
+    # 47 on the export's watch list at 100+ staff (EXPORT.md), 52 at 50+ (PLAN-V11 B2), and 55 with
+    # Sydney and Brisbane counted too (PLAN-V16 T1-2)
+    assert estimate.companies_expected == 55
+    assert "55 companies, but the run limit is 20." in " ".join(estimate.warnings)
 
 
 @pytest.mark.skipif(not EXPORT.exists(), reason="the HubSpot export is not in the repo")
@@ -341,7 +379,7 @@ async def test_a_watchlist_run_skips_the_dissolved_deal_and_keeps_the_watch_orde
     dissolved = {e["name"] for e in skipped if (e.get("reason") or "").startswith("Deal dissolved")}
     assert dissolved == {"Patties Food Group", "Online Lead Management", "Baker Bleu"}
     over = next(e for e in skipped if e.get("count"))
-    assert over["count"] == 52 - 3 - 3
+    assert over["count"] == 55 - 3 - 3  # 52 in the document's three cities, 55 with five
     leads = await leads_of(session_factory, run_id)
     assert len(leads) == 3
     assert {lead.origin for lead in leads} == {"hubspot"}
@@ -510,3 +548,156 @@ async def test_every_search_of_a_run_is_counted_once(
     assert orphans == 0  # every Claude request of the run carries the run id
     row = await assert_totals_match_log(session_factory, run_id)
     assert row.claude_requests == len(await searches_of(session_factory, run_id))
+
+
+# --- Discovery from Property Daily's feed (PLAN-V16 T1-8) ----------------------------------------
+
+
+async def test_a_run_without_the_web_finds_its_companies_in_property_dailys_feed(
+    make_lf_manager: MakeLeadFinderManager,
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from datetime import date
+
+    from apps.lead_finder import run_sources
+    from core.sources.types import FeedItem
+
+    link = "https://www.spatialgroup.com.au/cgi-bin/report.cgi?id=101"
+    item = FeedItem(
+        source="property_daily",
+        kind="lease",
+        company="Sample Logistics Pty Ltd",
+        city="Melbourne",
+        address="120 Collins Street, Melbourne VIC 3000",
+        lease_end=date(2028, 6, 30),
+        published_on=date(2026, 10, 20),
+        summary="Sample Logistics Pty Ltd's lease at 120 Collins Street ends in June 2028.",
+        url=link,
+        read_at=datetime(2026, 10, 20, tzinfo=UTC),
+        sign_id="lease_ending",
+    )
+    asked: list[list[str]] = []
+
+    async def recent(session: AsyncSession, cities: Any, since: datetime) -> list[FeedItem]:
+        asked.append(list(cities or []))
+        return [item]
+
+    monkeypatch.setattr(run_sources, "recent_items", recent)
+    ready = lf_settings(
+        property_daily_enabled=True,
+        property_daily_username="someone",
+        property_daily_password="something",
+    )
+    claude = FakeClaude()
+    manager = make_lf_manager(claude, settings=ready)
+    params = {
+        "cities": ["Melbourne"],
+        "triggers": ["lease_ending"],
+        "since_days": 30,
+        "sources": ["property_daily"],
+    }
+    estimate = await manager.estimate(RunCreate(app=APP, mode="discovery", params=params))
+    assert (estimate.valid, estimate.slices, estimate.companies_expected) == (True, 0, 1)
+    assert estimate.warnings[0] == (
+        "Discovery makes no web search. It reads 1 new item from Property Daily, and "
+        "researches up to 1 of them."
+    )
+    asked.clear()
+    run_id = await start(manager, "discovery", params)
+    row = await finished(manager, session_factory, run_id)
+
+    assert (row.status, row.error) == ("done", None)
+    assert "discover" not in claude.calls  # no web search for companies: free
+    assert asked == [["Melbourne"]]
+    events = await stored_json(session_factory, run_id)
+    assert of_type(events, "plan_ready") == [{"slices": 0, "companies": 1, "labels": []}]
+    assert of_type(events, "merged") == [{"candidates": 1, "unique": 1}]
+    (lead,) = await leads_of(session_factory, run_id)
+    assert lead.company_key == company_key("Sample Logistics Pty Ltd")
+    shown = RunOut.model_validate(row)
+    assert shown.leads_by_source == {"web": 0, "property_daily": 1, "arealytics": 0}
+    signs = [score["trigger"] for score in lead.card["triggers"]]
+    assert any(s["id"] == "lease_ending" and s["source_url"] == link for s in signs)
+    async with session_factory() as session:
+        noted = await session.scalar(
+            select(func.count()).select_from(MemoryItem).where(MemoryItem.url == link)
+        )
+    assert noted == 0  # a tool's item is never a note Claude reads
+
+
+async def test_a_run_that_names_a_tool_that_isnt_ready_is_refused(
+    make_lf_manager: MakeLeadFinderManager,
+) -> None:
+    manager = make_lf_manager(FakeClaude())
+    with pytest.raises(Problem) as refused:
+        await start(manager, "discovery", {**DISCOVERY, "sources": ["web", "property_daily"]})
+    assert (refused.value.status, refused.value.code) == (422, "source_not_ready")
+
+
+# --- How many leads (PLAN-V16 T1-9) -------------------------------------------------------------
+
+
+async def test_a_run_stops_starting_companies_once_it_has_its_goal(
+    make_lf_manager: MakeLeadFinderManager, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    claude = FakeClaude(scenario=sample_scenario())
+    manager = make_lf_manager(claude, settings=lf_settings(run_company_concurrency=1))
+    run_id = await start(manager, "discovery", {**DISCOVERY, "goal_leads": 2})
+    row = await finished(manager, session_factory, run_id)
+
+    assert (row.status, row.stop_reason) == ("done", None)  # it met its goal: no stop
+    assert (row.counts["goal"], row.counts["good"], row.counts["researched"]) == (2, 2, 2)
+    events = await stored_json(session_factory, run_id)
+    skipped = [e for e in of_type(events, "company_skipped") if "goal" in e["reason"]]
+    assert {e["reason"] for e in skipped} == {"the run reached its goal of 2 good leads"}
+    assert len(skipped) == 3  # the other 3 of the 5 it found were never started
+    shown = RunOut.model_validate(row)
+    assert (shown.goal_leads, shown.good_leads) == (2, 2)
+
+
+async def test_a_run_that_ends_short_at_the_company_limit_says_so(
+    make_lf_manager: MakeLeadFinderManager, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    manager = make_lf_manager(FakeClaude(scenario=sample_scenario()))
+    params = {**DISCOVERY, "goal_leads": 20, "caps": {"max_companies": 2}}
+    run_id = await start(manager, "discovery", params)
+    row = await finished(manager, session_factory, run_id)
+
+    assert row.status == "done"
+    assert row.counts["researched"] == 2
+    assert row.stop_reason == (
+        f"Found {row.counts['good']} of 20 leads. It researched the most companies one run may (2)."
+    )
+
+
+async def test_a_run_that_ends_short_at_the_money_limit_says_so(
+    make_lf_manager: MakeLeadFinderManager, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    """US$2 holds one discovery search (US$0.60 of its US$0.80 share), then not one company
+    (each holds US$2 when it starts)."""
+    manager = make_lf_manager(FakeClaude(scenario=sample_scenario()))
+    params = {
+        "cities": ["Melbourne"],
+        "triggers": ["lease_ending"],
+        "since_days": 30,
+        "goal_leads": 5,
+        "caps": {"run_cap_usd": "2.00"},
+    }
+    run_id = await start(manager, "discovery", params)
+    row = await finished(manager, session_factory, run_id)
+
+    assert row.status == "done"
+    assert row.stop_reason == "Found 0 of 5 leads. It stopped at the run limit (US$2)."
+    events = await stored_json(session_factory, run_id)
+    assert of_type(events, "cap_reached")[0]["kind"] == "run_cost"
+
+
+async def test_a_person_asks_for_1_to_100_leads(make_lf_manager: MakeLeadFinderManager) -> None:
+    manager = make_lf_manager(FakeClaude())
+    for wrong in (0, 101):
+        estimate = await manager.estimate(
+            RunCreate(app=APP, mode="discovery", params={"goal_leads": wrong})
+        )
+        assert not estimate.valid
+        assert [error.field for error in estimate.errors] == ["body.params.goal_leads"]

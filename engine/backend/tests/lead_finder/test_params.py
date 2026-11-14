@@ -36,14 +36,14 @@ def first_error(model: type[BaseModel], data: dict[str, Any]) -> dict[str, Any]:
     return dict(caught.value.errors()[0])
 
 
-def test_the_defaults_are_the_pass_cities_and_the_main_triggers() -> None:
+def test_the_defaults_are_the_first_priority_city_and_the_main_triggers() -> None:
     params = LeadFinderRunParams()
     rules = load_rules().criteria
-    assert rules.cities.pass_ == ["Melbourne", "Adelaide", "Perth"]
+    assert rules.cities.groups["priority"] == ["Melbourne", "Adelaide", "Perth"]
     assert params.cities == ["Melbourne"]  # one city at a time since PLAN-V9 C4
     # The main signs a search can look for: not the old office's, which the code adds (PLAN-V11 C1)
     assert params.triggers == [t.id for t in rules.triggers.main if t.id != "long_tenure"]
-    assert len(params.triggers) == 6
+    assert len(params.triggers) == 8  # 6, and capital_raise and tenant_advisor (PLAN-V16 T1-4)
     assert params.since_days == 30
     assert params.area == {}
     assert params.companies == []
@@ -60,9 +60,23 @@ def test_defaults_are_not_shared_between_instances() -> None:
     assert LeadFinderRunParams().cities == ["Melbourne"]
 
 
-def test_sydney_is_allowed_as_a_director_review_city() -> None:
-    assert "Sydney" in known_cities()
-    assert DiscoveryParams(cities=["Sydney"]).cities == ["Sydney"]
+def test_every_place_in_australia_is_allowed() -> None:
+    """PLAN-V16 T1-2: Sydney is a secondary city now, and so are the other places."""
+    assert known_cities() == load_rules().criteria.cities.every
+    for place in ("Sydney", "Brisbane", "Darwin", "Geelong"):
+        assert place in known_cities()
+        assert DiscoveryParams(cities=[place]).cities == [place]
+    assert DiscoveryParams(cities=["gold coast", "CAIRNS"]).cities == ["Gold Coast", "Cairns"]
+
+
+def test_all_of_australia_is_one_choice_that_stands_alone() -> None:
+    assert DiscoveryParams(cities=["australia"]).cities == ["Australia"]
+    assert "Australia" not in known_cities()  # a run choice, not a place
+    error = first_error(DiscoveryParams, {"cities": ["Australia", "Perth"]})
+    assert error["loc"] == ("cities",)
+    assert "Choose it alone" in error["msg"]
+    error = first_error(DiscoveryParams, {"cities": ["Australia"], "area": {"Australia": "cbd"}})
+    assert error["loc"] == ("area",)  # it has no CBD or inner suburbs of its own
 
 
 def test_a_city_is_matched_to_the_rules_spelling() -> None:
@@ -78,7 +92,7 @@ def test_a_city_can_be_listed_only_once() -> None:
 def test_an_unknown_city_is_refused_and_the_message_lists_the_choices() -> None:
     error = first_error(DiscoveryParams, {"cities": ["Atlantis"]})
     assert error["loc"] == ("cities",)
-    assert error["msg"].startswith("Unknown city Atlantis. Choose from: Melbourne")
+    assert error["msg"].startswith("Unknown city Atlantis. Choose from: Australia, Melbourne")
 
 
 def test_there_must_be_at_least_one_city_and_one_trigger() -> None:
@@ -320,10 +334,11 @@ def test_a_watchlist_run_is_a_growth_run_unless_it_asks_for_tenure() -> None:
 def test_the_city_is_one_of_the_watchlists_cities_spelt_like_the_rules() -> None:
     assert WatchlistOptions().city is None
     assert WatchlistOptions(city=" adelaide ").city == "Adelaide"
-    for bad in ("Sydney", "Brisbane", "Nowhere"):  # Sydney goes to a Director, uncounted here
+    assert WatchlistOptions(city="brisbane").city == "Brisbane"  # PLAN-V16 T1-2: counted since
+    for bad in ("Darwin", "Nowhere"):  # a place the watchlist doesn't count staff in
         error = first_error(WatchlistOptions, {"city": bad})
         assert (error["loc"], error["type"]) == (("city",), "city")
-        assert "Choose from: Melbourne, Adelaide, Perth" in error["msg"]
+        assert "Choose from: Melbourne, Adelaide, Perth, Sydney, Brisbane" in error["msg"]
 
 
 def test_industries_are_tidied_and_listed_once() -> None:

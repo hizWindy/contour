@@ -3,8 +3,10 @@
 # apps/lead_finder/watchlist.py. The backend checks this file at start-up. All of it is TBC
 # with Levi, so every key has a note at the bottom.
 
-# Staff is counted in these cities only. They must be cities listed in criteria.yaml.
-count_cities: [Melbourne, Adelaide, Perth]
+# Staff is counted in these cities only. They must be cities listed in criteria.yaml. PLAN-V16
+# T1-2 added Sydney and Brisbane, the secondary cities. The other places can follow once HubSpot
+# has offices there (TBC).
+count_cities: [Melbourne, Adelaide, Perth, Sydney, Brisbane]
 
 staff:
   missing: unknown # no LinkedIn staff number: listed as unknown, never filled from Employees
@@ -40,7 +42,7 @@ not_office_based:
 
 tbc:
   - key: count_cities
-    note: Staff is counted in the three pass cities only. Question 6 asks if it should be the whole company.
+    note: Staff is counted in the three priority cities and the two secondary ones (Sydney and Brisbane, added in PLAN-V16 T1-2). The other places in criteria.yaml follow when HubSpot has offices there. Question 6 asks if it should be the whole company.
   - key: staff.missing
     note: A missing LinkedIn number stays unknown. The Employees column is often the whole company, so it is never used (BG&E Resources today).
   - key: staff.staff_max_applies_to_director

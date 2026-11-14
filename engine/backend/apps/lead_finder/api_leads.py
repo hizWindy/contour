@@ -14,16 +14,18 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Response
 
-from apps.lead_finder import lead_store
+from apps.lead_finder import lead_store, override
 from apps.lead_finder.context import Origin
 from apps.lead_finder.lead_store import SORT_COLUMNS, lead_conditions, newest_only
-from apps.lead_finder.rules import Result
+from apps.lead_finder.rules import Result, load_rules
 from apps.lead_finder.schemas import (
+    CityGroupFilter,
     HubSpotStatus,
     LeadDetail,
     LeadFacets,
     LeadPage,
     LeadPatch,
+    LeadProfile,
     LeadSort,
     LeadStatus,
     MapOut,
@@ -31,7 +33,9 @@ from apps.lead_finder.schemas import (
     SimilarOut,
     SortOrder,
 )
+from apps.lead_finder.scoring import Confidence, Tier
 from apps.lead_finder.similar import similar_for
+from core.api.access import SignedInDep
 from core.api.deps import EmbedderDep, SessionDep
 from core.api.errors import Problem
 from core.api.models import INT32_MAX, OFFSET_MAX, SafeText
@@ -108,6 +112,26 @@ class LeadFilters(lead_store.LeadFilters):
             "the answer form. Re-check them."
         ),
     ] = False
+    tier: Annotated[
+        list[Tier] | None,
+        Query(description="A, B, C or discard (PLAN-V16). Left out: every lead. " + REPEAT),
+    ] = None
+    confidence: Annotated[list[Confidence] | None, Query(description=REPEAT)] = None
+    city_group: Annotated[
+        list[CityGroupFilter] | None,
+        Query(description="priority, secondary, capital or regional: the city's group. " + REPEAT),
+    ] = None
+    has_property: Annotated[
+        bool | None,
+        Query(description="true: only leads a property tool has a record of. false: the others."),
+    ] = None
+    excluded: Annotated[
+        bool | None,
+        Query(
+            description="true: only leads left out by an exclusion that nobody overrode. "
+            "false: the others."
+        ),
+    ] = None
 
 
 Filters = Annotated[LeadFilters, Depends()]
@@ -223,6 +247,25 @@ async def reject_reasons(
     return await lead_store.reject_reason_counts(session, days)
 
 
+@router.get(
+    "/{lead_id}/profile",
+    response_model=LeadProfile,
+    summary="The one-page profile of a Tier A lead",
+    description=(
+        "Everything Levi's section 9 lists for a lead, in one answer, for the print view: the "
+        "tier, score and confidence, the headcount and space, the signs, the dampeners, the "
+        "current office, why now, the Contour angle, who to contact, the opener and what changed. "
+        "404 for an unknown lead, and 409 `not_tier_a` for a lead that isn't Tier A."
+    ),
+    responses={404: {"description": "No such lead"}, 409: {"description": "Not Tier A"}},
+)
+async def get_profile(session: SessionDep, lead_id: uuid.UUID) -> LeadProfile:
+    profile = await lead_store.get_profile(session, lead_id)
+    if profile is None:
+        raise Problem(404, *lead_store.NOT_FOUND)
+    return profile
+
+
 @router.get("/{lead_id}", response_model=LeadDetail, summary="One lead card")
 async def get_lead(lead_id: uuid.UUID, session: SessionDep) -> LeadDetail:
     detail = await lead_store.get_detail(session, lead_id)
@@ -261,3 +304,28 @@ async def patch_lead(
 )
 async def similar_leads(lead_id: uuid.UUID, session: SessionDep) -> SimilarOut:
     return await similar_for(session, lead_id)
+
+
+@router.post(
+    "/{lead_id}/override-exclusion",
+    response_model=LeadDetail,
+    summary="Judge an excluded lead again, without its exclusion",
+    description=(
+        "For a lead a rule left out (Levi's exclusions: a law firm, a government department, a "
+        "big bank...). Judges its saved facts again as if the rule didn't apply, and saves the "
+        "new result and score. The card keeps `excluded`, now with who did it and when. Free: "
+        "no search and no Claude. Answers 404 for an unknown lead, 409 `not_excluded` when no "
+        "rule left it out, and 409 `already_overridden` when it was done before."
+    ),
+)
+async def override_exclusion(
+    lead_id: uuid.UUID, session: SessionDep, auth: SignedInDep
+) -> LeadDetail:
+    by = (auth.user.name or auth.user.email) if auth is not None else "a person on this computer"
+    card = await override.override_exclusion(session, lead_id, by, load_rules())
+    if card is None:
+        raise Problem(404, *lead_store.NOT_FOUND)
+    detail = await lead_store.get_detail(session, lead_id)
+    if detail is None:  # the lead was deleted a moment ago
+        raise Problem(404, *lead_store.NOT_FOUND)
+    return detail

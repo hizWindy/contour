@@ -13,6 +13,8 @@ other modes hand the graph the companies they already know. Nothing here calls C
 anything outside the run context, so a run is testable with a fake Claude.
 """
 
+from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import select
@@ -20,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.lead_finder import prompts
 from apps.lead_finder.context import Focus
+from apps.lead_finder.goal import companies_needed, goal_note, recent_pass_rate
 from apps.lead_finder.params import (
     CompanyParams,
     DiscoveryParams,
@@ -29,6 +32,12 @@ from apps.lead_finder.params import (
 )
 from apps.lead_finder.rules import load_rules
 from apps.lead_finder.run_email import run_finished
+from apps.lead_finder.run_sources import (
+    SOURCE_WORDS,
+    check_sources,
+    feed_candidates,
+    picked_tools,
+)
 from apps.lead_finder.schemas import WatchItem
 from apps.lead_finder.steps.discover import MAX_CANDIDATES
 from apps.lead_finder.steps.plan import check_discovery_size, make_slices
@@ -82,6 +91,7 @@ def not_approved() -> Problem:
 
 
 def check_discovery(params: DiscoveryParams, settings: Settings, caps: RunCaps) -> None:
+    check_sources(params, settings)  # a tool it names must be ready (PLAN-V16 T1-8)
     check_discovery_size(params, settings, caps)
 
 
@@ -241,14 +251,55 @@ def _estimate(
 
 
 async def estimate_discovery(ctx: EstimateContext[DiscoveryParams]) -> RunEstimate:
-    slices = len(make_slices(ctx.params, load_rules()))
-    # A slice keeps at most 10 companies; how many it finds isn't known before the run.
-    companies = min(ctx.caps.max_companies, slices * MAX_CANDIDATES)
-    warnings = [
-        f"Discovery searches {slices} city and trigger pairs, then researches up to "
-        f"{companies} of the companies it finds. How many it finds isn't known in advance."
-    ]
-    return _estimate(ctx, companies, slices, warnings=warnings)
+    rules = load_rules()
+    slices = len(make_slices(ctx.params, rules))
+    # The property tools' new items are in our copy, so they are counted now, free (PLAN-V16
+    # T1-8). A slice keeps at most 10 companies; how many it finds isn't known before the run.
+    tools = picked_tools(ctx.params, ctx.settings)
+    feed = 0
+    if tools:
+        async with ctx.session() as session:
+            found = await feed_candidates(session, ctx.params, rules, tools, datetime.now(UTC))
+        feed = len(found)
+    companies = min(ctx.caps.max_companies, slices * MAX_CANDIDATES + feed)
+    # How many leads (PLAN-V16 T1-9): a run a person starts stops once it has its goal, so it
+    # researches about the companies the goal needs at the recent pass rate, if it finds them.
+    # An automatic run aims for its share of the round's goal instead (goal.py).
+    goal: int | None = None
+    needed: int | None = None
+    if not ctx.scheduled:
+        asked = ctx.params.goal_leads
+        goal = asked if asked is not None else ctx.settings.manual_run_goal_leads
+        async with ctx.session() as session:
+            rate = await recent_pass_rate(session)
+        needed = companies_needed(goal, rate.rate)
+        companies = min(companies, needed)
+    names = " and ".join(SOURCE_WORDS[tool] for tool in tools)
+    items = f"{feed} new item" if feed == 1 else f"{feed} new items"
+    if not slices:
+        text = (
+            f"Discovery makes no web search. It reads {items} from {names}, and "
+            f"researches up to {companies} of them."
+        )
+    elif tools:
+        text = (
+            f"Discovery searches {slices} city and trigger pairs and reads {items} from "
+            f"{names}, then researches up to {companies} of the companies it finds. How many the "
+            "searches find isn't known in advance."
+        )
+    else:
+        text = (
+            f"Discovery searches {slices} city and trigger pairs, then researches up to "
+            f"{companies} of the companies it finds. How many it finds isn't known in advance."
+        )
+    estimate = _estimate(ctx, companies, slices, warnings=[text])
+    if goal is None or needed is None:
+        return estimate
+    costs, caps = ctx.unit_costs, ctx.caps
+    room = max(Decimal(0), caps.run_cap_usd - slices * costs.slice_usd)
+    by_money = int(room // costs.company_usd) if costs.company_usd > 0 else needed
+    note = goal_note(goal, needed, caps.max_companies, by_money, caps.run_cap_usd)
+    return estimate.model_copy(update={"companies_needed": needed, "goal_note": note})
 
 
 async def estimate_watchlist(ctx: EstimateContext[WatchlistParams]) -> RunEstimate:

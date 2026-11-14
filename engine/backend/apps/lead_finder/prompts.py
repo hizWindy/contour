@@ -9,7 +9,7 @@ from functools import lru_cache
 from pathlib import Path
 from string import Template
 
-from apps.lead_finder.rules import LeadFinderRules
+from apps.lead_finder.rules import SEARCHED_DAMPENER_IDS, LeadFinderRules
 
 PROMPTS_DIR = Path(__file__).resolve().parent / "prompts"
 
@@ -55,13 +55,34 @@ def extract_prompt(rules: LeadFinderRules) -> Prompt:
     triggers = "\n".join(f"- {t.id}: {t.label}" for t in criteria.claude_triggers)
     boosters = "\n".join(f"- {b.id}: {b.label}" for b in criteria.boosters)
     industries = criteria.industries
-    groups = [*industries.director_review, *industries.check_office_size]
-    tiers = [*industries.tier_1, *industries.tier_2]
+    # The groups that are left out say what they mean, so Claude files a company in the right one
+    # (PLAN-V16 T1-3: an industry super fund is no not-for-profit, a mid-tier bank is no big one)
+    meaning = {
+        group: rule.meaning
+        for rule in criteria.exclusions
+        if rule.meaning
+        for group in rule.industry_groups
+    }
+    groups = [
+        *industries.director_review,
+        *criteria.exclusion_groups,
+        *industries.check_office_size,
+    ]
+    sectors = industries.priority_sectors
+    # The four dampener checks Claude answers (Levi's section 5, PLAN-V16 T1-5), in plain words
+    dampeners = "\n".join(
+        f"- {rule.id}: {rule.meaning}"
+        for rule in criteria.dampeners
+        if rule.id in SEARCHED_DAMPENER_IDS
+    )
     text = Template(template).substitute(
         triggers=triggers,
         boosters=boosters,
-        industry_groups="\n".join(f"- {g}" for g in groups),
-        tier_groups="\n".join(f"- {g}" for g in tiers),
+        dampeners=dampeners,
+        industry_groups="\n".join(
+            f"- {g}: {meaning[g]}" if g in meaning else f"- {g}" for g in groups
+        ),
+        priority_sectors="\n".join(f"- {g}" for g in sectors),
     )
     # The lists come from the rules, so their version is part of this prompt's version.
     return Prompt("extract", text, f"{version}+{rules.version[:6]}")

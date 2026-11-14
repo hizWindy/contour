@@ -58,9 +58,17 @@ async def test_the_run_options_have_everything_the_start_page_draws(
     assert response.status_code == 200
     body = response.json()
     cities = {city["name"]: city for city in body["cities"]}
-    assert list(cities) == ["Melbourne", "Adelaide", "Perth", "Sydney"]
-    assert cities["Sydney"]["kind"] == "director_review"
-    assert cities["Melbourne"]["kind"] == "pass"
+    # All of Australia (PLAN-V16 T1-2): the national choice first, then 20 places in four groups
+    assert list(cities)[:6] == ["Australia", "Melbourne", "Adelaide", "Perth", "Sydney", "Brisbane"]
+    assert len(cities) == 21
+    assert {city["kind"] for city in cities.values()} == {"pass"}  # no place goes to a Director
+    groups = {name: city["group"] for name, city in cities.items()}
+    assert groups["Australia"] == "national"
+    assert groups["Melbourne"] == groups["Perth"] == "priority"
+    assert groups["Sydney"] == groups["Brisbane"] == "secondary"
+    assert groups["Darwin"] == "capital" and groups["Geelong"] == "regional"
+    assert [area["id"] for area in cities["Australia"]["areas"]] == ["all"]
+    assert [area["id"] for area in cities["Geelong"]["areas"]] == ["cbd", "all"]  # no inner list
     assert round(cities["Perth"]["lat"], 2) == -31.95
     areas = {area["id"]: area for area in cities["Melbourne"]["areas"]}
     assert list(areas) == ["cbd", "inner", "all"]
@@ -73,6 +81,8 @@ async def test_the_run_options_have_everything_the_start_page_draws(
         "fast_growth",
         "new_to_australia",
         "hot_industry_growth",
+        "capital_raise",  # PLAN-V16 T1-4
+        "tenant_advisor",
     ]
     # The rivals' sign and the old office's (PLAN-V11 C1) are made by the code, never searched for
     offered = {t["id"] for t in body["triggers"]}
@@ -81,7 +91,13 @@ async def test_the_run_options_have_everything_the_start_page_draws(
     modes = {mode["mode"]: mode for mode in body["modes"]}
     assert modes["watchlist"]["needs_approval"] is True
     assert modes["watchlist"]["approved"] is False  # no OK from Levi in the test settings
-    assert body["watchlist_cities"] == ["Melbourne", "Adelaide", "Perth"]  # PLAN-V11 C3
+    assert body["watchlist_cities"] == [  # PLAN-V11 C3, and Sydney and Brisbane since PLAN-V16
+        "Melbourne",
+        "Adelaide",
+        "Perth",
+        "Sydney",
+        "Brisbane",
+    ]
     assert body["defaults"]["watchlist"]["focus"] == "growth"
     assert modes["discovery"]["approved"] is True
     assert body["companies_limit"] == {"min": 1, "max": 25}
@@ -140,7 +156,8 @@ async def test_the_test_set_starts_lists_and_reports(
     listed = (await client.get(f"{LF}/tests")).json()
     assert listed["total"] == 1
     summary: dict[str, Any] = listed["items"][0]
-    assert (summary["run_id"], summary["companies"], summary["expected"]) == (run_id, 10, 1)
+    # No company's result is certain since PLAN-V16 T1-2 (Canva in Sydney can pass now)
+    assert (summary["run_id"], summary["companies"], summary["expected"]) == (run_id, 10, 0)
 
     report = (await client.get(f"{LF}/tests/{run_id}")).json()
     assert len(report["items"]) == 10

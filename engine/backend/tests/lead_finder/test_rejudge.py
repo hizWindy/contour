@@ -3,6 +3,9 @@
 from datetime import date
 from typing import Any
 
+import pytest
+
+from apps.lead_finder import cli
 from apps.lead_finder.rejudge import rejudge, table
 from apps.lead_finder.rules import load_rules
 from tests.lead_finder.samples import fact, make_facts
@@ -51,7 +54,7 @@ def test_an_older_card_is_judged_by_the_current_rules() -> None:
     card = version_1_card(office_m2=fact(None), staff_in_city=fact(99))
     item = rejudge("Acme Software", "director_review", 70, card, RULES, TODAY)
     assert item.now.result == "pass"  # 99 staff meets the hint (version 1 sent it to a Director)
-    assert item.now.score_checked > 0
+    assert item.now.tier in ("A", "B", "C", "discard")
     assert item.now.stage == "Active prospect"
     assert (item.was_result, item.was_score) == ("director_review", 70)
 
@@ -78,7 +81,13 @@ def test_a_dropped_small_company_may_no_longer_be_dropped() -> None:
     card = version_1_card(office_m2=fact(None), staff_in_city=fact(60))
     item = rejudge("Small Co", "drop", 0, card, RULES, TODAY)
     assert item.now.result == "pass"  # 50+ staff fits (Levi, 9 Nov, PLAN-V11 B2)
-    assert item.now.band is not None
+    assert item.now.score_before_dampeners > 0  # it is scored again, not dropped for good
+
+
+def test_saving_a_rejudge_asks_for_yes_first(capsys: pytest.CaptureFixture[str]) -> None:
+    assert cli.main(["rejudge", "--save"]) == 1
+    out = capsys.readouterr().out
+    assert "changes the saved leads" in out and "--yes" in out
 
 
 def test_a_pass_under_the_staff_floor_becomes_a_drop() -> None:
@@ -96,4 +105,5 @@ def test_the_table_lists_each_lead_and_counts_the_moves() -> None:
     text = table(items)
     assert "Acme Software" in text and "Same Co" in text
     assert "Size: Director review to met" in text
-    assert text.endswith("2 leads, 1 with a different result.")
+    assert "2 leads, 1 with a different result." in text
+    assert text.endswith("By tier: A 0, B 2, C 0, discard 0.")

@@ -16,7 +16,9 @@ value is plain text (`Company: Acme Software`) or a JSON string
 
 What each request costs (fixed, so a test can add the numbers up):
 
-    search angle   US$0.10 + US$0.01 for each web search it makes (2 searches, so US$0.12)
+    search angle   US$0.10 + US$0.01 for each web search it makes (2 searches, so US$0.12).
+                   A company has four angles since PLAN-V16 T1-5: property, people, money and the
+                   dampener check, so its searches cost US$0.48.
     extract        US$0.04
     discover       US$0.08 + US$0.01 for each web search it makes (3 searches, so US$0.11)
     why            US$0.03, no web search
@@ -39,9 +41,12 @@ from pydantic import BaseModel
 
 from apps.lead_finder.fields import (
     AngleNotes,
+    BoosterFound,
     Candidate,
     Candidates,
     CompanyFacts,
+    DampenerCheck,
+    DampenerFinding,
     Fact,
     Note,
     TriggerFound,
@@ -91,8 +96,65 @@ def fact(value: Any, url: str | None = NEWS, label: str = "confirmed") -> Fact[A
     return Fact(value=value, source_url=url, source_date="2026-10-01", label=label)
 
 
+DAMPENER_CHECKS: tuple[DampenerCheck, ...] = (
+    "recent_fitout",
+    "outsourcing",
+    "competitor_tie",
+    "procurement",
+)
+
+
+def no_dampeners(*, except_for: Sequence[DampenerCheck] = ()) -> list[DampenerFinding]:
+    """Claude's answer when none of the four checks shows anything: every one `not_found`. A check
+    named in `except_for` is left out, as when an answer misses it."""
+    return [
+        DampenerFinding(
+            id=check,
+            state="not_found",
+            evidence=None,
+            date=None,
+            source_url=None,
+            kind=None,
+            can_reverse=None,
+        )
+        for check in DAMPENER_CHECKS
+        if check not in except_for
+    ]
+
+
+def found_dampener(
+    check: DampenerCheck,
+    evidence: str = "A note shows it.",
+    *,
+    date: str | None = None,
+    url: str | None = NEWS,
+    kind: str | None = None,
+    can_reverse: str | None = None,
+) -> DampenerFinding:
+    """One check Claude found."""
+    return DampenerFinding(
+        id=check,
+        state="found",
+        evidence=evidence,
+        date=date,
+        source_url=url,
+        kind=kind,
+        can_reverse=can_reverse,
+    )
+
+
+def with_dampeners(*found: DampenerFinding) -> list[DampenerFinding]:
+    """All four checks answered: the ones given found, the rest not found."""
+    given = {finding.id for finding in found}
+    return [
+        *found,
+        *(finding for finding in no_dampeners() if finding.id not in given),
+    ]
+
+
 def make_facts(**changes: Any) -> CompanyFacts:
-    """A company that passes every rule: Melbourne, 2,500 m², a fresh lease trigger."""
+    """A company that passes every rule: Melbourne, 2,500 m², a fresh lease trigger. All four
+    dampener checks were answered, and none shows anything."""
     base = CompanyFacts(
         name="Acme Software",
         website=fact("acme.com.au", SITE),
@@ -102,6 +164,7 @@ def make_facts(**changes: Any) -> CompanyFacts:
         owner=fact("ASX-listed, Australian", ASX),
         staff_in_city=fact(250),
         staff_from_linkedin=False,
+        staff_projected=fact(None),
         office_m2=fact(2500),
         local_team_runs_project=fact(True, SITE),
         healthy=fact(True, ASX),
@@ -114,18 +177,28 @@ def make_facts(**changes: Any) -> CompanyFacts:
                 label="confirmed",
             )
         ],
-        boosters=[],
+        boosters=[
+            BoosterFound(
+                id="buys_strategy",
+                evidence="Acme talks about culture and hybrid work, and hires firms directly.",
+                source_url=NEWS,
+            )
+        ],
         expected_move=fact("2027", NEWS, "estimated"),
         growth_plan=fact(None),
         size_needed_m2=fact(None),
         growth_by=fact(None),
-        office_matters=fact(None),
+        office_matters=fact(True),
         tier_group=None,
         office_since=fact(None),
         last_fitout=fact(None),
+        tender_only=fact(None),
+        dampeners=no_dampeners(),
         fitout_contractors=[],
         talking_points=[],
         contact_role="Head of Property",
+        contact_roles=[],
+        contour_angle=None,
         decision_makers=[],
         summary="Acme's Melbourne lease ends in 2028 and it is looking for a bigger office.",
         opening_line="Congratulations on the growth. Is a new office on the cards?",
@@ -146,6 +219,14 @@ ANGLE_NOTES = {
         Note(claim="Acme is run from its Melbourne head office.", url=SITE, published=None),
     ],
     "money": [Note(claim="Acme won a $50M contract.", url=ASX, published="2026-09-20")],
+    # PLAN-V16 T1-5: the dampeners angle. The fake's answer shows nothing against Acme
+    "dampeners": [
+        Note(
+            claim="No fitout, outsourcing deal or tender notice was found for Acme.",
+            url=NEWS,
+            published="2026-10-01",
+        )
+    ],
     # PLAN-V11 C2: the lease and tenure run's office questions
     "tenure": [
         Note(

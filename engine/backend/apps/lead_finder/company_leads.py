@@ -6,6 +6,8 @@
   (PLAN-V9 C3; writing waits on PLAN-V5 F1 to F3). Which leads show is **TBC** with Levi.
 - **The Lead Finder column:** the newest research of each HubSpot company, whatever its result.
 - **The panel's section:** the lead's result, score, summary and best sign, with a link to its card.
+  Call prep sends that sign to Claude, so a sign from a property tool whose `..._to_claude_ok`
+  switch is off is passed over for the next one (PLAN-V16 T1-8).
 
 The Companies page asks for these only for people with the Lead Finder tick. Test-set leads never
 show.
@@ -19,8 +21,11 @@ from sqlalchemy import Text, cast, func, select
 from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from apps.lead_finder.property import hidden_link, hidden_sources
+from apps.lead_finder.rules import LeadFinderRules, load_rules
 from apps.lead_finder.tables import Lead
 from core.company_leads import AnySelect, CompanyLeadInfo, CompanyLeads
+from core.prefs.service import effective_settings
 
 GOOD = ("pass", "director_review")
 RESULT_WORDS = {
@@ -85,11 +90,29 @@ def by_hubspot() -> AnySelect:
     )
 
 
-def _sign(card: dict[str, Any]) -> tuple[str | None, date | None]:
+def _sign(
+    card: dict[str, Any],
+    hidden: frozenset[str] = frozenset(),
+    rules: LeadFinderRules | None = None,
+) -> tuple[str | None, date | None]:
+    """The best sign (the first on the card) and its date. A sign whose link is on the site of a
+    property tool in `hidden` is passed over: call prep sends this sign to Claude."""
     triggers = card.get("triggers") or []
-    if not triggers or not isinstance(triggers[0], dict):
+    found: dict[str, Any] | None = None
+    for item in triggers:
+        if not isinstance(item, dict):
+            break
+        trigger = item.get("trigger") or {}
+        link = trigger.get("source_url")
+        if rules is not None and hidden_link(
+            link if isinstance(link, str) else None, hidden, rules
+        ):
+            continue
+        found = trigger
+        break
+    if found is None:
         return None, None
-    trigger = triggers[0].get("trigger") or {}
+    trigger = found
     text = trigger.get("what_happened")
     when = trigger.get("date")
     parsed: date | None = None
@@ -116,7 +139,7 @@ async def detail(
     if lead is None:
         return None
     card = lead.card or {}
-    sign, sign_date = _sign(card)
+    sign, sign_date = _sign(card, hidden_sources(await effective_settings(session)), load_rules())
     return CompanyLeadInfo(
         lead_id=lead.id,
         result=lead.result,

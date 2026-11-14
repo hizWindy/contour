@@ -74,7 +74,9 @@ def test_the_file_starts_with_a_byte_order_mark_and_the_columns_of_the_design() 
     header = data.decode("utf-8-sig").split("\r\n")[0]
     assert header == (
         "company,source,result,stage,score,points_checked,city,trigger,trigger_date,industry,"
-        "office_m2,office_m2_estimated,hubspot_status,status,source_link,created_at"
+        "office_m2,office_m2_estimated,hubspot_status,status,source_link,created_at,"
+        "tier,confidence,dampeners_found,excluded,office_address,lease_end,contour_angle,"
+        "contact_roles,what_changed"
     )
     assert header.split(",") == list(EXPORT_COLUMNS)
 
@@ -103,6 +105,16 @@ def test_a_row_is_written_in_plain_forms() -> None:
         "status": "new",
         "source_link": "https://www.afr.com/property/acme",
         "created_at": "2026-10-26T12:30:00+11:00",  # Melbourne time
+        # PLAN-V16 T1-10: empty for a row that has none
+        "tier": "",
+        "confidence": "",
+        "dampeners_found": "",
+        "excluded": "",
+        "office_address": "",
+        "lease_end": "",
+        "contour_angle": "",
+        "contact_roles": "",
+        "what_changed": "",
     }
 
 
