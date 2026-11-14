@@ -256,14 +256,16 @@ def _city(facts: CompanyFacts, rules: LeadFinderRules) -> RuleCheck:
             detail = "New to Australia, but no Australian city is named yet: a Director decides"
             return RuleCheck(rule="City", outcome="director", detail=detail)
         return RuleCheck(rule="City", outcome="unknown", detail="City not known")
+    # All of Australia (PLAN-V16 T1-2): any place on our list passes, whatever its group. A place
+    # that isn't on the list passes too, with a flag, so a person checks the city.
     city = city_of(place, rules)
-    if city in cities.pass_:
+    if city is not None and cities.group_of(city) is not None:
         return RuleCheck(rule="City", outcome="ok", detail=city)
-    if city in cities.director_review:
-        return RuleCheck(rule="City", outcome="director", detail=f"{city}: a Director decides")
-    if cities.other_cities == "drop":
-        return RuleCheck(rule="City", outcome="fail", detail=f"{place} is outside our cities")
-    return RuleCheck(rule="City", outcome="director", detail=f"{place}: a Director decides")
+    return RuleCheck(
+        rule="City",
+        outcome="flag",
+        detail=f"{place} isn't one of the places we list. Check the city",
+    )
 
 
 def _size(facts: CompanyFacts, rules: LeadFinderRules, today: date) -> SizeJudgement:

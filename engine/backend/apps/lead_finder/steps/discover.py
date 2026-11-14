@@ -160,10 +160,19 @@ def discover_request(rules: LeadFinderRules, slice_: Slice, since_days: int, tod
         for template in rules.queries.discovery[slice_.trigger_id]
     )
     focus = ", ".join(focus_places(rules, slice_.city, slice_.area))
+    # The national search (PLAN-V16 T1-2) has no city: the answer form's `city` says where each
+    # company's office is, and the code keeps only the places the rules list.
+    where = (
+        "This search covers all of Australia. For each company, give the Australian city of the "
+        "office in city, only if the page says it.\n"
+        if slice_.city == rules.criteria.cities.national
+        else ""
+    )
     return (
         f"City: {json_text(slice_.city, 60)}\n"
         f"Trigger: {json_text(slice_.trigger_id, 60)} ({label})\n"
         f"Focus on: {focus}\n"
+        f"{where}"
         f"Only events from the last {since_days} days (today is {today.isoformat()}).\n\n"
         f"Searches you could start with:\n{searches}"
     )
@@ -354,14 +363,7 @@ async def discover_slice(
         if blocked_domains is not None
         else tuple(criteria.source_domains.blocked)
     )
-    run_cities = (
-        list(cities)
-        if cities is not None
-        else [
-            *criteria.cities.pass_,
-            *criteria.cities.director_review,
-        ]
-    )
+    run_cities = list(cities) if cities is not None else criteria.cities.every
     prefix = f"{slice_.label}: "
 
     def failed(text: str, reply: Reply[Candidates] | None = None) -> DiscoverResult:

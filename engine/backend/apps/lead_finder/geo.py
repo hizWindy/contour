@@ -21,7 +21,28 @@ CITY_CENTRES: dict[str, Point] = {
     "Adelaide": (-34.9285, 138.6007),
     "Perth": (-31.9505, 115.8605),
     "Sydney": (-33.8688, 151.2093),
+    # All of Australia (PLAN-V16 T1-2): the other places in criteria.yaml `cities`
+    "Brisbane": (-27.4698, 153.0251),
+    "Canberra": (-35.2809, 149.1300),
+    "Hobart": (-42.8821, 147.3272),
+    "Darwin": (-12.4634, 130.8456),
+    "Gold Coast": (-27.9680, 153.4130),  # Southport, the business centre
+    "Newcastle": (-32.9283, 151.7817),
+    "Sunshine Coast": (-26.6590, 153.0900),  # Maroochydore
+    "Wollongong": (-34.4278, 150.8931),
+    "Geelong": (-38.1499, 144.3617),
+    "Townsville": (-19.2590, 146.8169),
+    "Cairns": (-16.9186, 145.7781),
+    "Toowoomba": (-27.5598, 151.9507),
+    "Ballarat": (-37.5622, 143.8503),
+    "Bendigo": (-36.7570, 144.2794),
+    "Launceston": (-41.4332, 147.1441),
+    "Mackay": (-21.1411, 149.1861),
 }
+
+# The middle of the country, for the "All of Australia" choice on the Start page. It is not a place
+# a lead can be in, so it is not in CITY_CENTRES.
+NATIONAL_CENTRE: Point = (-25.2744, 133.7751)
 
 SUBURB_CENTRES: dict[str, dict[str, Point]] = {
     "Melbourne": {
@@ -55,6 +76,30 @@ SUBURB_CENTRES: dict[str, dict[str, Point]] = {
         "Pyrmont": (-33.8700, 151.1950),
         "Surry Hills": (-33.8830, 151.2110),
     },
+    "Brisbane": {
+        "Brisbane CBD": (-27.4698, 153.0251),
+        "Fortitude Valley": (-27.4575, 153.0360),
+        "South Brisbane": (-27.4810, 153.0170),
+        "Milton": (-27.4690, 153.0050),
+    },
+    "Canberra": {"Canberra CBD": (-35.2809, 149.1300)},
+    "Hobart": {"Hobart CBD": (-42.8821, 147.3272)},
+    "Darwin": {"Darwin CBD": (-12.4634, 130.8456)},
+    "Gold Coast": {
+        "Southport": (-27.9680, 153.4130),
+        "Surfers Paradise": (-28.0023, 153.4300),
+    },
+    "Newcastle": {"Newcastle CBD": (-32.9283, 151.7817)},
+    "Sunshine Coast": {"Maroochydore": (-26.6590, 153.0900)},
+    "Wollongong": {"Wollongong CBD": (-34.4278, 150.8931)},
+    "Geelong": {"Geelong CBD": (-38.1499, 144.3617)},
+    "Townsville": {"Townsville CBD": (-19.2590, 146.8169)},
+    "Cairns": {"Cairns CBD": (-16.9186, 145.7781)},
+    "Toowoomba": {"Toowoomba CBD": (-27.5598, 151.9507)},
+    "Ballarat": {"Ballarat CBD": (-37.5622, 143.8503)},
+    "Bendigo": {"Bendigo CBD": (-36.7570, 144.2794)},
+    "Launceston": {"Launceston CBD": (-41.4332, 147.1441)},
+    "Mackay": {"Mackay CBD": (-21.1411, 149.1861)},
 }
 
 # The shift, in degrees: about 220 m at a suburb, about 1.1 km when only the city is known.

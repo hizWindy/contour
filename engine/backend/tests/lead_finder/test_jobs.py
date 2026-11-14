@@ -114,7 +114,9 @@ def test_the_signs_are_the_main_signs_and_the_cities_every_city() -> None:
     # If the rules change the main signs, this fails: whether the schedules follow is a decision
     # (a new sign changes what a run costs).
     assert list(SCHEDULED_SIGNS) == default_triggers()
-    assert list(SCHEDULED_CITIES) == known_cities()
+    # The schedules cover the first places of the rules (Melbourne, Adelaide, Perth, Sydney). All of
+    # Australia has more places (PLAN-V16 T1-2); the schedules for them are T1-11.
+    assert list(SCHEDULED_CITIES) == known_cities()[: len(SCHEDULED_CITIES)]
     assert default_cities() == ["Melbourne"]  # the Start page also starts with one city
 
 
@@ -133,8 +135,10 @@ def test_each_citys_choices_make_a_valid_run_inside_the_default_limits(city: str
 def test_all_4_cities_in_one_run_are_too_large_for_the_default_limits() -> None:
     # Why there is one schedule for each city: 24 searches, and at most 13 fit.
     settings = Settings(_env_file=None)
-    params = DiscoveryParams(cities=known_cities(), triggers=list(SCHEDULED_SIGNS), since_days=14)
-    assert len(known_cities()) == 4
+    params = DiscoveryParams(
+        cities=list(SCHEDULED_CITIES), triggers=list(SCHEDULED_SIGNS), since_days=14
+    )
+    assert len(SCHEDULED_CITIES) == 4
     with pytest.raises(Problem) as refused:
         check_discovery_size(params, settings, make_caps(settings))
     assert refused.value.code == "discovery_too_large"

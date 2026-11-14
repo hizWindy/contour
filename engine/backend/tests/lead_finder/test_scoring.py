@@ -166,7 +166,7 @@ def test_an_unknown_size_is_not_known_yet() -> None:
     ("changes", "result", "stage"),
     [
         ({}, "pass", "Active prospect"),
-        ({"city": fact("Sydney")}, "director_review", "Active prospect"),
+        ({"office_m2": fact(7000)}, "director_review", "Active prospect"),  # over the top limit
         ({"triggers": []}, "watch", "Target account"),
         ({"healthy": fact(False)}, "drop", "Not a target"),
     ],
@@ -261,9 +261,10 @@ def test_a_watch_by_size_stays_a_watch_in_sydney() -> None:
     assert result.result == "watch"
 
 
-def test_60_staff_in_sydney_go_to_a_director_since_9_nov() -> None:
+def test_60_staff_in_sydney_pass_since_plan_v16() -> None:
+    """Sydney was a Director's decision until PLAN-V16 T1-2: Levi's notes call it secondary."""
     result = verdict(office_m2=fact(None), staff_in_city=fact(60), city=fact("Sydney"))
-    assert result.result == "director_review"
+    assert result.result == "pass"
 
 
 def test_a_known_office_keeps_todays_rule_whatever_the_staff() -> None:
@@ -364,13 +365,32 @@ def test_office_size_limits(m2: int, expected: str) -> None:
         ("Melbourne", "pass"),
         ("Cremorne, VIC", "pass"),
         ("West Perth", "pass"),
-        ("Sydney", "director_review"),
-        ("North Sydney", "director_review"),
-        ("Brisbane", "director_review"),
+        # All of Australia (PLAN-V16 T1-2): any place on the list passes, Sydney included
+        ("Sydney", "pass"),
+        ("North Sydney", "pass"),
+        ("Brisbane", "pass"),
+        ("Darwin", "pass"),
+        ("Geelong VIC", "pass"),
+        ("Hobart", "pass"),
+        ("Surfers Paradise", "pass"),
+        ("Albury", "pass"),  # not on the list: it still passes, with a flag (below)
     ],
 )
 def test_cities(place: str, expected: str) -> None:
     assert verdict(city=fact(place)).result == expected
+
+
+@pytest.mark.parametrize("place", ["Brisbane", "Darwin", "Geelong", "Mackay"])
+def test_a_place_on_the_list_passes_the_location_check(place: str) -> None:
+    (check,) = [c for c in verdict(city=fact(place)).checks if c.rule == "City"]
+    assert (check.outcome, check.detail) == ("ok", place)
+
+
+def test_a_place_that_is_not_listed_passes_with_a_check_the_city_flag() -> None:
+    (check,) = [c for c in verdict(city=fact("Albury NSW")).checks if c.rule == "City"]
+    assert check.outcome == "flag"
+    assert "Check the city" in check.detail
+    assert "Albury NSW" in check.detail
 
 
 def test_no_trigger_means_watch() -> None:
@@ -578,8 +598,8 @@ def test_a_fitout_4_months_ago_counts_too_and_says_so() -> None:
 
 
 def test_a_director_review_that_just_moved_is_a_watch() -> None:
-    assert verdict(city=fact("Sydney")).result == "director_review"
-    assert verdict(city=fact("Sydney"), office_since=fact("2026-06")).result == "watch"
+    assert verdict(office_m2=fact(7000)).result == "director_review"
+    assert verdict(office_m2=fact(7000), office_since=fact("2026-06")).result == "watch"
 
 
 def test_a_year_alone_counts_from_1_july() -> None:

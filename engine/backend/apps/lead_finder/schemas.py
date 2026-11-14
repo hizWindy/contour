@@ -45,6 +45,8 @@ REJECT_REASON_LABELS: dict[str, str] = {
 }
 RivalStatus = Literal["pending", "used", "skipped"]
 CityKind = Literal["pass", "director_review"]
+# The city groups of criteria.yaml (PLAN-V16 T1-2), and `national` for the all-of-Australia choice
+CityGroupOption = Literal["priority", "secondary", "capital", "regional", "national"]
 TriggerGroup = Literal["main", "other", "weak"]
 LeadSort = Literal[
     "score",
@@ -76,7 +78,14 @@ class AreaOption(BaseModel):
 class CityOption(BaseModel):
     name: str = Field(examples=["Melbourne"])
     kind: CityKind = Field(
-        description="pass: a result can pass. director_review: a Director looks."
+        description="pass for every place since PLAN-V16 (every place in Australia can pass). "
+        "director_review stays in the type for older clients and is no longer sent."
+    )
+    group: CityGroupOption = Field(
+        description="priority (Melbourne, Adelaide, Perth), secondary (Sydney, Brisbane), capital, "
+        "regional, or national: the choice `Australia`, which searches all of Australia at once "
+        "and must be chosen alone",
+        examples=["priority"],
     )
     lat: float = Field(description="The centre of the city, approximate")
     lng: float

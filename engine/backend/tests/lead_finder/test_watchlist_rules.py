@@ -14,6 +14,8 @@ from apps.lead_finder.rules import (
     read_rules,
 )
 
+COUNT_CITIES = "count_cities: [Melbourne, Adelaide, Perth, Sydney, Brisbane]"  # as in the file
+
 
 def copy_rules(target: Path) -> Path:
     for name in RULE_FILES:
@@ -34,7 +36,8 @@ def test_the_watchlist_file_is_one_of_the_rules_files() -> None:
 
 def test_the_watchlist_rules_match_the_spec() -> None:
     rules = load_rules().watchlist
-    assert rules.count_cities == ["Melbourne", "Adelaide", "Perth"]
+    # The three cities of EXPORT.md, and Sydney and Brisbane since PLAN-V16 T1-2
+    assert rules.count_cities == ["Melbourne", "Adelaide", "Perth", "Sydney", "Brisbane"]
     assert rules.staff.missing == "unknown"
     assert rules.staff.staff_max_applies_to_director is False
     assert list(rules.director_industries) == [
@@ -152,18 +155,25 @@ def test_a_count_city_must_be_a_criteria_city(tmp_path: Path) -> None:
     rules_dir = copy_rules(tmp_path)
     edit(
         rules_dir / "watchlist.yaml",
-        "count_cities: [Melbourne, Adelaide, Perth]",
-        "count_cities: [Melbourne, Hobart]",
+        COUNT_CITIES,
+        "count_cities: [Melbourne, Atlantis]",
     )
-    with pytest.raises(ValidationError, match="doesn't: Hobart"):
+    with pytest.raises(ValidationError, match="doesn't: Atlantis"):
         read_rules(rules_dir)
+
+
+def test_any_place_in_the_criteria_can_be_a_count_city(tmp_path: Path) -> None:
+    """PLAN-V16 T1-2: the places beyond the first five can follow when HubSpot has offices there."""
+    rules_dir = copy_rules(tmp_path)
+    edit(rules_dir / "watchlist.yaml", COUNT_CITIES, "count_cities: [Melbourne, Hobart, Darwin]")
+    assert read_rules(rules_dir).watchlist.count_cities == ["Melbourne", "Hobart", "Darwin"]
 
 
 def test_a_count_city_may_not_repeat(tmp_path: Path) -> None:
     rules_dir = copy_rules(tmp_path)
     edit(
         rules_dir / "watchlist.yaml",
-        "count_cities: [Melbourne, Adelaide, Perth]",
+        COUNT_CITIES,
         "count_cities: [Melbourne, Perth, Melbourne]",
     )
     with pytest.raises(ValidationError, match="lists a city twice: Melbourne"):
@@ -174,7 +184,7 @@ def test_count_cities_may_not_be_empty(tmp_path: Path) -> None:
     rules_dir = copy_rules(tmp_path)
     edit(
         rules_dir / "watchlist.yaml",
-        "count_cities: [Melbourne, Adelaide, Perth]",
+        COUNT_CITIES,
         "count_cities: []",
     )
     with pytest.raises(ValidationError):

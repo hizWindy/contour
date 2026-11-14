@@ -37,12 +37,50 @@ GuessYears = Annotated[StrictInt, Field(ge=1, le=15)]
 # --- criteria.yaml ----------------------------------------------------------------------
 
 
+CityGroup = Literal["priority", "secondary", "capital", "regional"]
+CITY_GROUPS: tuple[CityGroup, ...] = ("priority", "secondary", "capital", "regional")
+
+
 class Cities(Strict):
-    pass_: list[str] = Field(alias="pass", min_length=1)
-    director_review: list[str]
-    other_cities: Literal["director_review", "drop"]
+    """Where a lead's office may be, for all of Australia (PLAN-V16 T1-2, Al-khair 15 Nov).
+
+    Every place in a group passes the location filter. The groups only change the city points of
+    the score. A place that isn't listed passes too, with the flag "check the city"
+    (`scoring._city`). `national` is not a place: it is the name of the run choice that searches
+    all of Australia at once, one search for each sign instead of one for each city.
+    """
+
+    groups: dict[CityGroup, list[str]]
+    national: str = Field(min_length=1, max_length=40)
     # A lead with one of these signs and no known city goes to a Director, not to Watch (PLAN-V9 B3)
     no_city_director_signs: list[str] = Field(default_factory=list)
+
+    @property
+    def every(self) -> list[str]:
+        """Every place, the priority group first."""
+        return [city for group in CITY_GROUPS for city in self.groups[group]]
+
+    def group_of(self, city: str) -> CityGroup | None:
+        """The group a place is in, or None when it isn't listed."""
+        for group in CITY_GROUPS:
+            if city in self.groups[group]:
+                return group
+        return None
+
+    @model_validator(mode="after")
+    def check_groups(self) -> Self:
+        if set(self.groups) != set(CITY_GROUPS):
+            raise ValueError("cities.groups needs priority, secondary, capital and regional")
+        empty = [group for group in CITY_GROUPS if not self.groups[group]]
+        if empty:
+            raise ValueError(f"cities.groups has no place in: {', '.join(empty)}")
+        every = self.every
+        repeated = sorted({city for city in every if every.count(city) > 1})
+        if repeated:
+            raise ValueError(f"A place is listed twice in cities.groups: {', '.join(repeated)}")
+        if self.national in every:
+            raise ValueError("cities.national is a run choice. It can't also be a place")
+        return self
 
 
 StaffSource = Literal["hubspot", "headcount_tool", "linkedin", "web_research"]
@@ -552,7 +590,7 @@ class LeadFinderRules(Strict):
     @model_validator(mode="after")
     def check_watchlist(self) -> Self:
         criteria, watchlist = self.criteria, self.watchlist
-        every_city = [*criteria.cities.pass_, *criteria.cities.director_review]
+        every_city = criteria.cities.every
         outside = [c for c in watchlist.count_cities if c not in every_city]
         if outside:
             raise ValueError(
@@ -589,7 +627,7 @@ class LeadFinderRules(Strict):
         unknown = sorted(set(self.queries.discovery) - trigger_ids)
         if unknown:
             raise ValueError(f"Discovery templates for unknown triggers: {', '.join(unknown)}")
-        cities = [*self.criteria.cities.pass_, *self.criteria.cities.director_review]
+        cities = self.criteria.cities.every
         no_areas = [city for city in cities if city not in self.queries.areas]
         if no_areas:
             raise ValueError(f"No areas in queries.yaml for: {', '.join(no_areas)}")

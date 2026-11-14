@@ -35,6 +35,9 @@ AreaId = Literal["cbd", "inner", "all"]  # the part of a city to look in; "all" 
 SinceDays = Literal[7, 14, 30]
 COMPANIES_MIN = 1
 COMPANIES_MAX = 25
+# The most places one run may name. The rules list 20, so this only stops a long list of repeats;
+# how many slices fit is checked by `steps/plan.check_discovery_size`.
+CITIES_MAX = 24
 WATCHLIST_LIMIT_MAX = 200
 WATCHLIST_INDUSTRIES_MAX = 20  # a lease and tenure run's industries (PLAN-V11 C2)
 INDUSTRY_MAX_CHARS = 120
@@ -46,9 +49,14 @@ _PLACE_CHARS = re.compile(r"[^\W\d_](?:[^\W\d_]|[ '\u2019.,-])*")
 
 
 def known_cities() -> list[str]:
-    """Every city the rules know: the pass cities, then the Director review ones."""
-    cities = load_rules().criteria.cities
-    return [*cities.pass_, *cities.director_review]
+    """Every place the rules know, the priority group first (`criteria.cities.groups`). The
+    national choice is not one of them: see `national_name`."""
+    return load_rules().criteria.cities.every
+
+
+def national_name() -> str:
+    """The name of the run choice that searches all of Australia at once ("Australia")."""
+    return load_rules().criteria.cities.national
 
 
 def known_trigger_ids() -> list[str]:
@@ -58,10 +66,11 @@ def known_trigger_ids() -> list[str]:
 
 
 def default_cities() -> list[str]:
-    """The first pass city (Melbourne). Runs go one city at a time since PLAN-V9 C4 (one schedule
-    for each city), and the 6 main signs in all 3 pass cities would make 18 searches, more than the
-    default limits allow (13). Adelaide, Perth and Sydney are a person's choice."""
-    return list(load_rules().criteria.cities.pass_[:1])
+    """The first priority city (Melbourne). Runs go one city at a time since PLAN-V9 C4 (one
+    schedule for each city), and the 6 main signs in all 3 priority cities would make 18 searches,
+    more than the default limits allow (13). Every other place, and all of Australia, are a
+    person's choice."""
+    return load_rules().criteria.cities.groups["priority"][:1]
 
 
 def default_triggers() -> list[str]:
@@ -203,7 +212,7 @@ class WatchlistOptions(Strict):
         max_length=PLACE_MAX_CHARS,
         description=(
             "Only the companies whose biggest office is in this city: one of the watchlist's "
-            "cities (Melbourne, Adelaide, Perth). Missing: every city."
+            "cities (Melbourne, Adelaide, Perth, Sydney, Brisbane). Missing: every city."
         ),
         examples=["Adelaide"],
     )
@@ -264,10 +273,13 @@ class _Discovery(Strict):
     cities: list[str] = Field(
         default_factory=default_cities,
         min_length=1,
-        max_length=8,
+        max_length=CITIES_MAX,
         description=(
-            "Used by mode discovery only. Cities to search, each once. "
-            "The default is the three pass cities."
+            "Used by mode discovery only. Places to search, each once: any place in the rules "
+            "(Melbourne, Adelaide, Perth, Sydney, Brisbane and the other cities and regional "
+            'centres), or `["Australia"]` alone, which searches all of Australia at once: one '
+            "search for each sign, and the research finds each company's city. The default is "
+            "Melbourne."
         ),
         examples=[["Melbourne", "Adelaide"]],
     )
@@ -300,7 +312,8 @@ class _Discovery(Strict):
     @field_validator("cities")
     @classmethod
     def _cities(cls, value: list[str]) -> list[str]:
-        known = known_cities()
+        national = national_name()
+        known = [national, *known_cities()]
         cleaned: list[str] = []
         for city in value:
             match = clean_city(city, known)
@@ -315,6 +328,12 @@ class _Discovery(Strict):
                     "city", "List each city once ({city} is there twice)", {"city": match}
                 )
             cleaned.append(match)
+        if national in cleaned and len(cleaned) > 1:
+            raise PydanticCustomError(
+                "city",
+                "{national} is a search of its own. Choose it alone, or choose places",
+                {"national": national},
+            )
         return cleaned
 
     @field_validator("triggers")

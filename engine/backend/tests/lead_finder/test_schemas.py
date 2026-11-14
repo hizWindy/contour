@@ -429,6 +429,7 @@ def test_run_options_can_be_built_and_carry_the_defaults() -> None:
             CityOption(
                 name="Melbourne",
                 kind="pass",
+                group="priority",
                 lat=-37.8136,
                 lng=144.9631,
                 areas=[
@@ -461,6 +462,7 @@ def test_run_options_can_be_built_and_carry_the_defaults() -> None:
     assert dumped["caps"]["daily_left_usd"] == "38.10"
     assert dumped["defaults"]["cities"] == ["Melbourne"]  # one city at a time (PLAN-V9 C4)
     assert dumped["cities"][0]["areas"][0]["id"] == "cbd"
+    assert dumped["cities"][0]["group"] == "priority"
     assert RunOptions.model_validate(dumped) == options
 
 

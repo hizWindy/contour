@@ -121,6 +121,46 @@ async def test_the_area_and_the_days_change_the_focus_and_the_dates() -> None:
     )
 
 
+def test_the_national_request_says_australia_and_asks_for_each_companys_city() -> None:
+    """PLAN-V16 T1-2: the searches say "Australia" in place of a city, and Claude is told to give
+    each company's own city."""
+    national = Slice(
+        id="australia:lease_ending",
+        trigger_id="lease_ending",
+        city="Australia",
+        area="all",
+        label="Australia: lease ending",
+    )
+    text = discover_request(RULES, national, 30, TODAY)
+    assert text.startswith('City: "Australia"\n')
+    assert "Focus on: Australia\n" in text
+    assert "This search covers all of Australia." in text
+    assert "give the Australian city of the office in city" in text
+    assert "- Australia office lease expiry 2026 tenant" in text
+    # A request for one city has no such line
+    assert "all of Australia" not in discover_request(RULES, a_slice(), 30, TODAY)
+
+
+async def test_a_national_slice_keeps_the_city_claude_names_when_it_is_a_listed_place() -> None:
+    claude = finds(
+        candidate("Hobart Hydro", city="Hobart"),
+        candidate("Nowhere Pty", city="Atlantis"),
+        key=("lease_ending", "Australia"),
+    )
+    national = Slice(
+        id="australia:lease_ending",
+        trigger_id="lease_ending",
+        city="Australia",
+        area="all",
+        label="Australia: lease ending",
+    )
+    result = await discover(claude, slice_=national, cities=RULES.criteria.cities.every)
+    assert [(c.name, c.city) for c in result.candidates] == [
+        ("Hobart Hydro", "Hobart"),
+        ("Nowhere Pty", None),  # not a place the rules list: the research finds the city
+    ]
+
+
 def test_a_template_that_asks_for_a_company_gets_an_empty_text_and_does_not_crash() -> None:
     queries = RULES.queries.model_copy(
         update={"discovery": {**RULES.queries.discovery, "new_ceo": ["{company} {city} {area}"]}}

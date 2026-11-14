@@ -61,7 +61,12 @@ from apps.lead_finder.steps.choose import (  # noqa: E402
 from apps.lead_finder.steps.company import research_one  # noqa: E402
 from apps.lead_finder.steps.discover import Found, discover_slice  # noqa: E402
 from apps.lead_finder.steps.merge import Merged, merge  # noqa: E402
-from apps.lead_finder.steps.plan import Slice, make_slices, slice_job_id  # noqa: E402
+from apps.lead_finder.steps.plan import (  # noqa: E402
+    Slice,
+    make_slices,
+    run_cities,
+    slice_job_id,
+)
 from apps.lead_finder.steps.state import (  # noqa: E402
     CompanyTask,
     RunCtx,
@@ -116,7 +121,9 @@ async def plan(state: State, runtime: Runtime[RunCtx]) -> dict[str, Any]:
     rivals = []
     if setup.enabled and setup.per_run > 0:
         async with ctx.session() as session:
-            pending = await pending_for_run(session, ctx.params.cities, setup.per_run)
+            pending = await pending_for_run(
+                session, run_cities(ctx.params, run.rules), setup.per_run
+            )
         rivals = [rival_found(item, setup.sign) for item in pending]
     await ctx.emit_event(
         PlanReadyData(slices=len(slices), companies=len(rivals), labels=[s.label for s in slices])
@@ -181,7 +188,7 @@ async def discover(task: SliceTask, runtime: Runtime[RunCtx]) -> dict[str, Any]:
                     day_of(task["today"]),
                     blocked_domains=run.rules.criteria.source_domains.blocked,
                     on_reply=ctx.totals.add_reply,
-                    cities=params.cities,
+                    cities=run_cities(params, run.rules),
                 )
             except BudgetSpent as stop:  # the daily limit
                 await run.stop("daily", str(stop) or "Claude's daily limit is reached")
@@ -365,7 +372,13 @@ async def choose(state: State, runtime: Runtime[RunCtx]) -> dict[str, Any]:
             for company in decision.chosen
         ]
         if mode == "discovery":
-            await _mark_rivals(ctx, run.rules.criteria.rivals.sign, merged, decision)
+            await _mark_rivals(
+                ctx,
+                run.rules.criteria.rivals.sign,
+                merged,
+                decision,
+                run_cities(ctx.params, run.rules),
+            )
     counts = ctx.totals.counts
     counts.chosen = len(chosen)
     for name, reason in skipped:
@@ -380,10 +393,10 @@ async def choose(state: State, runtime: Runtime[RunCtx]) -> dict[str, Any]:
 
 
 async def _mark_rivals(
-    ctx: RunContext[Any], sign: str, merged: list[Merged], decision: Any
+    ctx: RunContext[Any], sign: str, merged: list[Merged], decision: Any, cities: list[str]
 ) -> None:
     """The rivals this run chose are used; the ones a rule skipped are skipped. The ones the company
-    limit left out stay pending for the next run (PLAN-V9 B5)."""
+    limit left out stay pending for the next run (PLAN-V9 B5). `cities` are the run's places."""
     rivals = {
         company.key for company in merged if any(s.trigger_id == sign for s in company.signals)
     }
@@ -397,7 +410,7 @@ async def _mark_rivals(
             ctx.run_id,
             used_keys=used,
             skipped_keys=skipped,
-            cities=list(ctx.params.cities),
+            cities=cities,
         )
         await session.commit()
 

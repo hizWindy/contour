@@ -37,6 +37,22 @@ CITY_STATE = {
     "Perth": "WA",
     "Sydney": "NSW",
     "Brisbane": "QLD",
+    # All of Australia (PLAN-V16 T1-2): the other places in criteria.yaml `cities`
+    "Canberra": "ACT",
+    "Hobart": "TAS",
+    "Darwin": "NT",
+    "Gold Coast": "QLD",
+    "Newcastle": "NSW",
+    "Sunshine Coast": "QLD",
+    "Wollongong": "NSW",
+    "Geelong": "VIC",
+    "Townsville": "QLD",
+    "Cairns": "QLD",
+    "Toowoomba": "QLD",
+    "Ballarat": "VIC",
+    "Bendigo": "VIC",
+    "Launceston": "TAS",
+    "Mackay": "QLD",
 }
 RESULT_WORDS = {
     "pass": "Pass",

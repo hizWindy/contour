@@ -8,7 +8,7 @@ value. Each default saves its city, the signs, the look-back and its own company
 
 **The four default schedules:** one for each city, every 2 weeks at 7:00 am Melbourne time, on
 different days of the same fortnight: Melbourne on Monday, Adelaide on Tuesday, Perth on Wednesday
-and Sydney on Thursday (Sydney's leads still go to a Director). All are **off**: each run costs
+and Sydney on Thursday (a secondary city, so its leads can pass). All are **off**: each run costs
 money, so Al-khair switches them on. Each searches its city for the 6 main signs (6 searches),
 looks back 14 days, the time between two runs, so no day is missed and none is read twice. **TBC**
 with Levi (the days, the time and the signs).
@@ -78,7 +78,7 @@ CITY_DAYS: tuple[tuple[str, int], ...] = (
     ("Melbourne", 0),  # 0 is Monday
     ("Adelaide", 1),
     ("Perth", 2),
-    ("Sydney", 3),  # Sydney's leads still go to a Director
+    ("Sydney", 3),  # a secondary city: its leads can pass (PLAN-V16 T1-2)
 )
 SCHEDULED_CITIES = tuple(city for city, _ in CITY_DAYS)
 SCHEDULED_SIGNS = (

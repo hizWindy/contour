@@ -16,6 +16,41 @@ areas:
   Sydney:
     cbd: [Sydney CBD]
     inner: [North Sydney, Barangaroo, Pyrmont, Surry Hills]
+  # All of Australia (PLAN-V16 T1-2): the other places in criteria.yaml cities. Each has a CBD area
+  # for the map and the search. Brisbane, a secondary city, has inner suburbs too.
+  Brisbane:
+    cbd: [Brisbane CBD]
+    inner: [Fortitude Valley, South Brisbane, Milton]
+  Canberra:
+    cbd: [Canberra CBD]
+  Hobart:
+    cbd: [Hobart CBD]
+  Darwin:
+    cbd: [Darwin CBD]
+  Gold Coast:
+    cbd: [Southport, Surfers Paradise]
+  Newcastle:
+    cbd: [Newcastle CBD]
+  Sunshine Coast:
+    cbd: [Maroochydore]
+  Wollongong:
+    cbd: [Wollongong CBD]
+  Geelong:
+    cbd: [Geelong CBD]
+  Townsville:
+    cbd: [Townsville CBD]
+  Cairns:
+    cbd: [Cairns CBD]
+  Toowoomba:
+    cbd: [Toowoomba CBD]
+  Ballarat:
+    cbd: [Ballarat CBD]
+  Bendigo:
+    cbd: [Bendigo CBD]
+  Launceston:
+    cbd: [Launceston CBD]
+  Mackay:
+    cbd: [Mackay CBD]
 
 # Discovery: one slice is one trigger in one city.
 # PLAN-V11 B4 (Levi, 9 Nov): search for plans, not openings. News of an office that has already

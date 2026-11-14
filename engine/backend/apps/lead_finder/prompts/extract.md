@@ -7,7 +7,7 @@ Rules for every fact:
 - If no note supports a fact, set its value to null, and its link, date and label to empty text. Unknown is better than wrong.
 
 What each fact means:
-- city: the city of the office this lead is about. Pick the office in Melbourne, Adelaide or Perth if there is one.
+- city: the Australian city of the office this lead is about. If the notes are about one office, that office. If the company has several, pick one in Melbourne, Adelaide or Perth if there is one, then Sydney or Brisbane. An overseas or interstate company that announces an office in an Australian city counts for that city.
 - staff_in_city: staff at that office, not the whole company. Set staff_from_linkedin to true if the number is a LinkedIn count.
 - office_m2: the floor area of that office in square metres.
 - local_team_runs_project: true if an Australian head office or local leader runs property decisions, even when the owner is overseas.

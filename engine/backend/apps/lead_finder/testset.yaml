@@ -47,7 +47,6 @@ companies:
   - name: Canva
     city: Sydney
     website: canva.com
-    why: A Sydney company. Should go to Director review for its city.
-    # Certain from the rules: Sydney is a Director review city, so never a pass.
-    expect:
-      results: [director_review, watch, drop]
+    why: A Sydney company. Tests a secondary city: Sydney can pass since PLAN-V16 T1-2.
+    # No "expect": until then Sydney was a Director review city, so the result was certain (never
+    # a pass). Now any place passes, so a person checks the card.

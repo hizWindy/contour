@@ -26,8 +26,12 @@ def edit(path: Path, old: str, new: str) -> None:
 
 def test_rules_match_the_criteria_documents() -> None:
     criteria = load_rules().criteria
-    assert criteria.cities.pass_ == ["Melbourne", "Adelaide", "Perth"]
-    assert criteria.cities.director_review == ["Sydney"]
+    cities = criteria.cities  # all of Australia in four groups (PLAN-V16 T1-2, Criteria_v3.md)
+    assert cities.groups["priority"] == ["Melbourne", "Adelaide", "Perth"]
+    assert cities.groups["secondary"] == ["Sydney", "Brisbane"]
+    assert cities.groups["capital"] == ["Canberra", "Hobart", "Darwin"]
+    assert len(cities.groups["regional"]) == 12
+    assert cities.national == "Australia"
     size = criteria.size
     assert (size.staff_min, size.staff_hint_min, size.staff_max) == (50, 50, 600)  # PLAN-V11 B2
     assert size.grow_into_range_months == 24
@@ -63,6 +67,47 @@ def test_rules_match_the_criteria_documents() -> None:
     office_age = criteria.office_age
     assert (office_age.tenure_years, office_age.tenure_sign) == (8, "long_tenure")  # PLAN-V11 C1
     assert criteria.never_suggest.dissolved_deal_wait_months == 12
+
+
+def test_every_place_has_a_group_and_a_search_area() -> None:
+    """All of Australia (PLAN-V16 T1-2): 20 places in four groups, each with a CBD to search."""
+    rules = load_rules()
+    cities = rules.criteria.cities
+    assert len(cities.every) == len(set(cities.every)) == 20
+    for place in cities.every:
+        assert cities.group_of(place) is not None, place
+        assert rules.queries.areas[place]["cbd"], place
+    assert cities.group_of("Albury") is None  # not listed: it still passes, with a flag
+    assert cities.national not in cities.every
+
+
+def test_a_place_in_two_groups_stops_start_up(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    edit(
+        rules_dir / "criteria.yaml",
+        "capital: [Canberra, Hobart, Darwin]",
+        "capital: [Hobart, Sydney]",
+    )
+    with pytest.raises(ValidationError, match=r"listed twice in cities.groups: Sydney"):
+        read_rules(rules_dir)
+
+
+def test_the_national_name_cannot_also_be_a_place(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    edit(rules_dir / "criteria.yaml", "national: Australia", "national: Perth")
+    with pytest.raises(ValidationError, match=r"cities.national is a run choice"):
+        read_rules(rules_dir)
+
+
+def test_a_place_with_no_search_area_stops_start_up(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    edit(
+        rules_dir / "criteria.yaml",
+        "capital: [Canberra, Hobart, Darwin]",
+        "capital: [Canberra, Hobart, Darwin, Albury]",
+    )
+    with pytest.raises(ValidationError, match=r"No areas in queries.yaml for: Albury"):
+        read_rules(rules_dir)
 
 
 def test_just_moved_longer_than_recent_stops_start_up(tmp_path: Path) -> None:
