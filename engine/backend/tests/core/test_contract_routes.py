@@ -98,6 +98,9 @@ ROUTES = [
     ("PUT", f"{API}/schedules/lead-finder"),
     ("PATCH", f"{API}/schedules/{{schedule_id}}"),
     ("POST", f"{API}/schedules/{{schedule_id}}/run"),
+    ("GET", f"{API}/sources"),  # Property Daily and Arealytics (PLAN-V16 T2-8)
+    ("POST", f"{API}/sources/{{source_id}}/check"),
+    ("POST", f"{API}/sources/{{source_id}}/resume"),
     ("POST", f"{API}/hubspot/import"),
     ("GET", f"{API}/hubspot/summary"),
     ("POST", f"{API}/hubspot/profiles/rebuild"),

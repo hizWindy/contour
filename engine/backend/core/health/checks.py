@@ -425,6 +425,90 @@ async def check_email(ctx: Context) -> Finding:
     return email_finding(ctx.settings)
 
 
+# --- The tools (PLAN-V16 T2-8) ---------------------------------------------------------------
+
+AREALYTICS_OFF = "Arealytics isn't connected: its site refused automated access (15 Nov)."
+AREALYTICS_NEXT = "It waits on an API or written approval from Arealytics."
+
+
+@dataclass(frozen=True)
+class SourceFacts:
+    on: bool
+    has_login: bool
+    paused_until: datetime | None
+    pause_words: str | None
+    problem_words: str | None
+    problem_at: datetime | None
+    last_read: datetime | None
+    pages_today: int
+    pages_limit: int
+    records: int
+
+
+def property_daily_finding(facts: SourceFacts, now: datetime) -> Finding:
+    if not facts.on:
+        return Finding(
+            "off",
+            "Property Daily is switched off, so nothing is read from it.",
+            "Switch it on in Settings once its login is ready.",
+        )
+    if not facts.has_login:
+        return Finding(
+            "problem",
+            "Property Daily is on, but no login is set, so nothing can be read.",
+            "Add PROPERTY_DAILY_USERNAME and PROPERTY_DAILY_PASSWORD to the server's settings "
+            "and restart the backend.",
+        )
+    if facts.paused_until is not None and facts.paused_until > now:
+        return Finding(
+            "problem",
+            f"Paused until {when_text(facts.paused_until, now)}. {facts.pause_words or ''}".strip(),
+            "Check the site by hand, then press Resume on the Sources tab.",
+        )
+    usage = f"{facts.pages_today:,} of {facts.pages_limit:,} pages today, "
+    usage += f"{plural(facts.records, 'fact')} in our copy."
+    if facts.problem_at is not None and (
+        facts.last_read is None or facts.problem_at > facts.last_read
+    ):
+        return Finding(
+            "problem",
+            f"{facts.problem_words or 'The last page had a problem.'} {usage}",
+            "Press Check now on the Sources tab. " + SEE_THE_LOG,
+        )
+    if facts.last_read is None:
+        return Finding("ok", f"On, and not read yet. {usage}")
+    return Finding("ok", f"Last read {when_text(facts.last_read, now)}. {usage}")
+
+
+async def check_property_daily(ctx: Context) -> Finding:
+    from core.api.sources import PROBLEM_WORDS
+    from core.browser.reader import start_of_day
+    from core.prefs.service import effective_settings
+    from core.sources import store
+
+    async with ctx.sessions() as session:
+        settings = await effective_settings(session)
+        state = await store.get_state(session, "property_daily")
+        facts = SourceFacts(
+            on=settings.property_daily_enabled,
+            has_login=settings.property_daily_username is not None
+            and settings.property_daily_password is not None,
+            paused_until=state.paused_until if state else None,
+            pause_words=PROBLEM_WORDS.get(state.pause_reason or "") if state else None,
+            problem_words=PROBLEM_WORDS.get(state.last_problem or "") if state else None,
+            problem_at=state.last_problem_at if state and state.last_problem else None,
+            last_read=await store.last_good_read(session, "property_daily"),
+            pages_today=await store.pages_since(session, "property_daily", start_of_day(ctx.now)),
+            pages_limit=settings.source_pages_per_day,
+            records=await store.count_records(session, "property_daily"),
+        )
+    return property_daily_finding(facts, ctx.now)
+
+
+async def check_arealytics(ctx: Context) -> Finding:
+    return Finding("off", AREALYTICS_OFF, AREALYTICS_NEXT)
+
+
 # --- Schedules --------------------------------------------------------------------------------
 
 
@@ -710,6 +794,8 @@ def all_checks(ctx: Context) -> list[Check]:
         Check("hubspot", "HubSpot", lambda: check_hubspot(ctx)),
         Check("signalhire", "Signal Hire", lambda: check_signalhire(ctx)),
         Check("email", "Email", lambda: check_email(ctx)),
+        Check("property_daily", "Property Daily", lambda: check_property_daily(ctx)),
+        Check("arealytics", "Arealytics", lambda: check_arealytics(ctx)),
         Check("runs", "Runs", lambda: check_runs(ctx)),
         Check("schedules", "Schedules", lambda: check_schedules(ctx)),
         Check("api", "API", lambda: check_api(ctx)),

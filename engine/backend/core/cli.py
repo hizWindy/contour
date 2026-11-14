@@ -186,6 +186,86 @@ async def _import_hubspot(path: Path) -> str:
 STATE_MARKS = {"yes": "yes", "no": "NO ", "unknown": "?  "}
 
 
+async def _sources_check() -> tuple[str, bool]:
+    """Signs in to each tool that is on, and opens its home page (PLAN-V16 T2-8). Free."""
+    from core.api.sources import PROBLEM_WORDS
+    from core.browser.reader import PageProblem, SourcePaused, SourceStopped
+    from core.db.engine import get_sessionmaker
+    from core.prefs.service import effective_settings
+    from core.sources.service import availability, close_sources, get_sources
+
+    async with get_sessionmaker()() as session:
+        settings = await effective_settings(session)
+        ready = (await availability(session, settings))["property_daily"]
+    lines = ["Arealytics: not connected (its site refused automated access)."]
+    if not ready.ready:
+        lines.insert(0, f"Property Daily: not checked. {ready.sentence}")
+        return "\n".join(lines), not ready.on
+    try:
+        seen = await get_sources().check(settings)
+        lines.insert(0, f"Property Daily: signed in, and its home page opened ({seen.title}).")
+        return "\n".join(lines), True
+    except (SourcePaused, PageProblem) as stop:
+        reason = stop.reason if isinstance(stop, SourcePaused) else stop.outcome
+        lines.insert(0, f"Property Daily: {PROBLEM_WORDS.get(reason, 'the check failed.')}")
+        return "\n".join(lines), False
+    except SourceStopped:
+        lines.insert(0, "Property Daily: no login is set.")
+        return "\n".join(lines), False
+    finally:
+        await close_sources()
+
+
+async def _sources_lookup(name: str, city: str | None) -> tuple[str, bool]:
+    """One live lookup of one company in Property Daily, printed and saved (PLAN-V16 T2-8)."""
+    from datetime import UTC, datetime
+
+    from core.api.sources import PROBLEM_WORDS
+    from core.browser.reader import PageProblem, SourcePaused, SourceStopped
+    from core.db.engine import get_sessionmaker
+    from core.hubspot.matching import clean_name
+    from core.prefs.service import effective_settings
+    from core.sources import store
+    from core.sources.service import availability, close_sources, get_sources
+
+    factory = get_sessionmaker()
+    async with factory() as session:
+        settings = await effective_settings(session)
+        ready = (await availability(session, settings))["property_daily"]
+    if not ready.ready:
+        return f"Not looked up. {ready.sentence}", False
+    try:
+        found = await get_sources().lookup(settings, name, city)
+    except (SourcePaused, PageProblem) as stop:
+        reason = stop.reason if isinstance(stop, SourcePaused) else stop.outcome
+        return f"Not looked up: {PROBLEM_WORDS.get(reason, 'the lookup failed.')}", False
+    except SourceStopped:
+        return "Not looked up: no login is set.", False
+    finally:
+        await close_sources()
+    async with factory.begin() as session:
+        new = await store.save_records(session, found.records, via="lookup")
+        await store.save_lookup(
+            session,
+            source="property_daily",
+            company_key=clean_name(name),
+            company=name,
+            city=city,
+            status="found" if found.found else "not_found",
+            records=len(found.records),
+            at=datetime.now(UTC),
+            run_id=None,
+        )
+    lines = [
+        f"{name}{f' ({city})' if city else ''}: {len(found.records)} facts from "
+        f"{found.pages} pages, {new} new in our copy."
+    ]
+    if found.website:
+        lines.append(f"Website: {found.website}")
+    lines += [f"- {item.record.kind}: {item.record.summary}" for item in found.records]
+    return "\n".join(lines), True
+
+
 async def _hubspot_check() -> tuple[str, bool]:
     """Which permissions the HubSpot key has, and what each project can do. Free, read only."""
     from core.apps import load_apps
@@ -576,6 +656,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     rename_cmd.add_argument("--user", required=True, help="The account's email or username")
     rename_cmd.add_argument("--name", required=True, help='The new name, like "Al-khair M. Pama"')
     commands.add_parser("sign-out-everyone", help="End every session of every account.")
+    commands.add_parser(
+        "sources-check",
+        help="Sign in to Property Daily if it is on, and open its home page (free).",
+    )
+    lookup_cmd = commands.add_parser(
+        "sources-lookup", help="Look one company up in Property Daily now, and print what it has."
+    )
+    lookup_cmd.add_argument("company", help='The company name, like "Sample Logistics"')
+    lookup_cmd.add_argument("--city", default=None, help="Its city, like Perth")
     email_cmd = commands.add_parser(
         "email-test", help="Send one test email (the log provider only writes it to the log)."
     )
@@ -629,6 +718,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0 if ok else 1
         elif args.command == "rename":
             text, ok = asyncio.run(_rename(args.user, args.name), loop_factory=loop_factory())
+            print(text, file=sys.stdout if ok else sys.stderr)
+            return 0 if ok else 1
+        elif args.command == "sources-check":
+            text, ok = asyncio.run(_sources_check(), loop_factory=loop_factory())
+            print(text, file=sys.stdout if ok else sys.stderr)
+            return 0 if ok else 1
+        elif args.command == "sources-lookup":
+            text, ok = asyncio.run(
+                _sources_lookup(args.company, args.city), loop_factory=loop_factory()
+            )
             print(text, file=sys.stdout if ok else sys.stderr)
             return 0 if ok else 1
         elif args.command == "sign-out-everyone":
