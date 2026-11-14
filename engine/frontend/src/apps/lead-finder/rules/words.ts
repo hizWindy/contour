@@ -4,6 +4,8 @@
  * Pure data and small helpers, so the view stays about layout and the tests can read them.
  */
 import type { useRules } from '@/api/hooks'
+import type { SignStrength } from '@/api/types'
+import type { DampenerRule } from '@/api/v16'
 
 export type Rules = NonNullable<ReturnType<typeof useRules>['data']>
 export type Criteria = Rules['criteria']
@@ -12,8 +14,10 @@ export type TbcNote = Criteria['tbc'][number]
 /** The sections, in page order. The segmented control at the top jumps to them. */
 export const SECTIONS = [
   { value: 'cities', label: 'Cities' },
+  { value: 'filters', label: 'Filters' },
   { value: 'size', label: 'Size' },
   { value: 'signs', label: 'Signs' },
+  { value: 'dampeners', label: 'Dampeners' },
   { value: 'timing', label: 'Timing' },
   { value: 'score', label: 'Score' },
   { value: 'industries', label: 'Industries' },
@@ -37,6 +41,14 @@ export const CHANGED: Record<string, string> = {
 
 /** A rule key, in plain words, for the "Waiting on Levi" list. Unknown keys show as they are. */
 export const KEY_WORDS: Record<string, string> = {
+  // PLAN-V16
+  'cities.groups': 'The city groups',
+  'cities.national': 'All of Australia, one search for each sign',
+  exclusions: 'Who is left out',
+  dampeners: 'The dampeners',
+  'industries.director_review': 'Industries a Director decides',
+  'triggers.other': 'How strong each sign is',
+  'office_age.tenure_fitout_years': 'An old office: no fitout there for',
   'size.staff_counted_in': 'Staff counted in the city or the company',
   'size.m2_per_staff': 'Office size from staff',
   'size.staff_min': 'Staff that fits',
@@ -82,6 +94,49 @@ export const KEY_WORDS: Record<string, string> = {
 
 export function keyWords(key: string): string {
   return KEY_WORDS[key] ?? key
+}
+
+/** How strong a sign is (Levi's section 4), strongest first. */
+export const SIGN_STRENGTHS: readonly { id: SignStrength; label: string; hint: string }[] = [
+  { id: 'very_high', label: 'Very high', hint: 'the strongest signs' },
+  { id: 'high', label: 'High', hint: '' },
+  { id: 'medium', label: 'Medium', hint: '' },
+  { id: 'low', label: 'Low', hint: 'they support other signs' },
+]
+
+/** The red flags of procurement, in words. */
+export const PROCUREMENT_WORDS: Record<string, string> = {
+  tender_portal: 'a formal tender portal',
+  offshore_buying: 'offshore or central global buying',
+  lowest_price: 'lowest-price tenders',
+  separate_design_and_build: 'design and build bought apart',
+}
+
+/**
+ * How much a dampener takes off, in words: "Strong", or for a fitout "strong within 3 years,
+ * moderate up to 5", or for procurement which red flag is which.
+ */
+export function dampenerWords(rule: DampenerRule): string {
+  if (rule.strong_years !== null && rule.moderate_years !== null) {
+    const outgrow =
+      rule.outgrow_months !== null
+        ? `. Nothing off when hiring would outgrow the space within ${String(rule.outgrow_months)} months`
+        : ''
+    return `Strong within ${String(rule.strong_years)} years, moderate up to ${String(rule.moderate_years)}${outgrow}`
+  }
+  const kinds = Object.entries(rule.kinds)
+  if (kinds.length > 0) {
+    const of = (strength: string) =>
+      kinds
+        .filter(([, value]) => value === strength)
+        .map(([kind]) => PROCUREMENT_WORDS[kind] ?? kind.replace(/_/g, ' '))
+    const parts = [
+      of('strong').length > 0 ? `strong for ${list(of('strong'))}` : '',
+      of('moderate').length > 0 ? `moderate for ${list(of('moderate'))}` : '',
+    ].filter(Boolean)
+    return `${parts.join('; ')}`.replace(/^./, (first) => first.toUpperCase())
+  }
+  return rule.strength === 'strong' ? 'Strong' : rule.strength === 'moderate' ? 'Moderate' : ''
 }
 
 export const SOURCE_WORDS: Record<string, string> = {

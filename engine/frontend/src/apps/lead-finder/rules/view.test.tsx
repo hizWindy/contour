@@ -5,17 +5,84 @@ import { renderWithProviders } from '@/test/render'
 import RulesView from './view'
 import { list, partChecks, SECTIONS } from './words'
 
-/** The rules as the API gives them today (11 Nov), cut to what the page reads. */
+/**
+ * The rules as the API gives them (11 Nov), with PLAN-V16's parts as Track 1 built them (T1-2 to
+ * T1-5, 15 Nov), cut to what the page reads.
+ */
 const RULES = {
   version: 'abc123',
   criteria: {
     label: "Draft version 2, 30 Oct 2026, with Levi's 9 Nov changes",
     cities: {
-      pass: ['Melbourne', 'Adelaide', 'Perth'],
-      director_review: ['Sydney'],
-      other_cities: 'director_review',
+      groups: {
+        priority: ['Melbourne', 'Adelaide', 'Perth'],
+        secondary: ['Sydney', 'Brisbane'],
+        capital: ['Canberra', 'Hobart', 'Darwin'],
+        regional: ['Gold Coast', 'Geelong'],
+      },
+      national: 'Australia',
       no_city_director_signs: ['new_to_australia'],
     },
+    exclusions: [
+      {
+        id: 'government',
+        label: 'Government department or agency',
+        kind: 'industry',
+        industry_groups: ['Government'],
+        meaning: 'a government department or agency',
+        unless: ['government-owned'],
+        flag: 'A government-owned or commercialised body. Flagged, not left out',
+      },
+      {
+        id: 'law_firm',
+        label: 'Law firm',
+        kind: 'industry',
+        industry_groups: ['Law firms'],
+        meaning: 'a law firm',
+        unless: [],
+        flag: null,
+      },
+    ],
+    dampeners: [
+      {
+        id: 'recent_fitout',
+        label: 'A fitout or move in that city in the last 5 years',
+        meaning: 'A note says the company moved or fitted out.',
+        strength: null,
+        strong_years: 3,
+        moderate_years: 5,
+        outgrow_months: 24,
+        kinds: {},
+        waived_by: [],
+      },
+      {
+        id: 'procurement',
+        label: 'Procurement red flags',
+        meaning: 'A red flag in how it buys fitouts.',
+        strength: 'moderate',
+        strong_years: null,
+        moderate_years: null,
+        outgrow_months: null,
+        kinds: {
+          tender_portal: 'strong',
+          offshore_buying: 'strong',
+          lowest_price: 'moderate',
+          separate_design_and_build: 'moderate',
+        },
+        waived_by: [],
+      },
+      {
+        id: 'financial_stress',
+        label: 'Financial stress',
+        meaning: '',
+        strength: 'strong',
+        strong_years: null,
+        moderate_years: null,
+        outgrow_months: null,
+        kinds: {},
+        waived_by: ['restructure'],
+      },
+    ],
     size: {
       staff_min: 50,
       staff_hint_min: 50,
@@ -57,12 +124,24 @@ const RULES = {
     },
     triggers: {
       main: [
-        { id: 'lease_ending', label: 'Lease ending in 1 to 3 years, or a relocation' },
-        { id: 'new_to_australia', label: 'An overseas company opening its first office here' },
-        { id: 'long_tenure', label: 'At the same address for 8 or more years' },
+        {
+          id: 'lease_ending',
+          label: 'Lease ending in 1 to 3 years, or a relocation',
+          strength: 'very_high',
+        },
+        {
+          id: 'new_to_australia',
+          label: 'An overseas company opening its first office here',
+          strength: 'high',
+        },
+        {
+          id: 'long_tenure',
+          label: 'At the same address for 8 or more years',
+          strength: 'very_high',
+        },
       ],
-      other: [{ id: 'restructure', label: 'Restructure' }],
-      weak: [{ id: 'rival_growth', label: 'A rival of a booming company' }],
+      other: [{ id: 'restructure', label: 'Restructure', strength: 'medium' }],
+      weak: [{ id: 'rival_growth', label: 'A rival of a booming company', strength: 'low' }],
       recent_months: 12,
       window_years: 3,
       best_window_years: [1, 3],
@@ -178,8 +257,13 @@ describe('Rules', () => {
       expect(document.getElementById(`rules-${section.value}`)).not.toBeNull()
     }
     expect(screen.getByText(/^Version/)).toHaveTextContent('Version abc123')
-    // Cities
+    // Cities: the four groups and all of Australia (PLAN-V16)
     expect(screen.getByText('Melbourne, Adelaide and Perth')).toBeInTheDocument()
+    expect(screen.getByText('Sydney and Brisbane')).toBeInTheDocument()
+    expect(screen.getByText('Canberra, Hobart and Darwin')).toBeInTheDocument()
+    expect(row('cities.national')).toHaveTextContent(
+      'One search for each sign, in place of the cities',
+    )
     expect(row('cities.no_city_director_signs')).toHaveTextContent(
       'Director review, when the sign is "An overseas company opening its first office here"',
     )
@@ -219,19 +303,19 @@ describe('Rules', () => {
     expect(within(size).getByText('50 to 74')).toBeInTheDocument()
   })
 
-  it('groups the signs as Claude reads them, with their code names', async () => {
+  it('groups the signs by strength, marks the ones searched by default, with their code names', async () => {
     mockApi({ '/api/v1/lead-finder/rules': RULES })
     renderWithProviders(<RulesView />)
     const signs = await screen.findByText('Signs of an office change')
     const card = signs.closest('[data-section]') as HTMLElement
-    expect(within(card).getByText('Main')).toBeInTheDocument()
-    expect(within(card).getByText('Boosters')).toBeInTheDocument()
-    expect(within(card).getByText('Other')).toBeInTheDocument()
-    expect(within(card).getByText('Weak')).toBeInTheDocument()
+    for (const strength of ['Very high', 'High', 'Medium', 'Low', 'Boosters']) {
+      expect(within(card).getByText(strength)).toBeInTheDocument()
+    }
     expect(
       within(card).getByText('Lease ending in 1 to 3 years, or a relocation'),
     ).toBeInTheDocument()
-    expect(within(card).getByText('lease_ending')).toBeInTheDocument()
+    expect(within(card).getByText('searched by default · lease_ending')).toBeInTheDocument()
+    expect(within(card).getByText('restructure')).toBeInTheDocument()
     expect(within(card).getByText('Talks about culture or hybrid work')).toBeInTheDocument()
     expect(within(card).getByText('A rival of a booming company')).toBeInTheDocument()
     // The new sign of 9 Nov carries its mark
@@ -320,5 +404,36 @@ describe('Rules', () => {
     expect(list(['a'])).toBe('a')
     expect(list(['a', 'b'])).toBe('a and b')
     expect(list(['a', 'b', 'c'])).toBe('a, b and c')
+  })
+})
+
+describe('Rules for PLAN-V16 (T3-6)', () => {
+  it('lists the five filters and who is left out, with the ones flagged instead', async () => {
+    mockApi({ '/api/v1/lead-finder/rules': RULES })
+    renderWithProviders(<RulesView />)
+    const title = await screen.findByText('Filters and exclusions')
+    const card = title.closest('[data-section]') as HTMLElement
+    for (const filter of ['Location', 'Office size', 'Headcount', 'Office relevance', 'Sector']) {
+      expect(within(card).getByText(filter)).toBeInTheDocument()
+    }
+    expect(card).toHaveTextContent('1,000 m² or more, now or within 24 months')
+    expect(within(card).getByText('Law firm')).toBeInTheDocument()
+    expect(
+      within(card).getByText('Not left out: A government-owned or commercialised body'),
+    ).toBeInTheDocument()
+  })
+
+  it('says how much each dampener takes off', async () => {
+    mockApi({ '/api/v1/lead-finder/rules': RULES })
+    renderWithProviders(<RulesView />)
+    const title = await screen.findByText('Dampeners', { selector: '[data-slot=card-title]' })
+    const card = title.closest('[data-section]') as HTMLElement
+    expect(card).toHaveTextContent(
+      'Strong within 3 years, moderate up to 5. Nothing off when hiring would outgrow the space within 24 months',
+    )
+    expect(card).toHaveTextContent(
+      'Strong for a formal tender portal and offshore or central global buying; moderate for lowest-price tenders and design and build bought apart',
+    )
+    expect(card).toHaveTextContent('Strong, unless it comes with Restructure')
   })
 })

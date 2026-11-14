@@ -279,6 +279,65 @@ export interface ToolList {
   items: ToolOut[]
 }
 
+// The rules (GET /lead-finder/rules), as Track 1 committed them (T1-2 to T1-5, 15 Nov). The score
+// and the tiers (T1-6) aren't built yet: the Rules page reads them when they are.
+
+export type LeadCityGroup = Exclude<CityGroup, 'national'>
+
+export interface CitiesRule {
+  /** Every place in a group passes the location filter; the group sets the city points. */
+  groups: Record<LeadCityGroup, string[]>
+  /** The run choice that searches all of Australia at once: "Australia". Not a place. */
+  national: string
+  no_city_director_signs: string[]
+}
+
+/** A kind of company left out and not scored (Levi's section 3). */
+export interface ExclusionRule {
+  id: string
+  label: string
+  kind: 'industry' | 'office_incidental' | 'tender_only'
+  industry_groups: string[]
+  meaning: string | null
+  /** Words in the company's industry or owner that mean it is not one: flagged, not left out. */
+  unless: string[]
+  flag: string | null
+}
+
+export type SignStrength = 'very_high' | 'high' | 'medium' | 'low'
+
+export type SignRule = Schemas['Item'] & { strength: SignStrength }
+
+/** A fact that lowers the score, never removes the lead (Levi's section 5). */
+export interface DampenerRule {
+  id: string
+  label: string
+  meaning: string
+  strength: DampenerStrength | null
+  /** A fitout or move: strong within this many years, moderate up to `moderate_years`. */
+  strong_years: number | null
+  moderate_years: number | null
+  /** It takes nothing off when hiring would outgrow the space within this many months. */
+  outgrow_months: number | null
+  /** Procurement: which red flag is strong and which moderate. */
+  kinds: Record<string, DampenerStrength>
+  /** Signs that make it part of a consolidation that creates a move, so it takes nothing off. */
+  waived_by: string[]
+}
+
+export type Criteria = Omit<Schemas['Criteria'], 'cities' | 'triggers'> & {
+  cities: CitiesRule
+  exclusions: ExclusionRule[]
+  dampeners: DampenerRule[]
+  triggers: Omit<Schemas['Triggers'], 'main' | 'other' | 'weak'> & {
+    main: SignRule[]
+    other: SignRule[]
+    weak: SignRule[]
+  }
+}
+
+export type LeadFinderRules = Omit<Schemas['LeadFinderRules'], 'criteria'> & { criteria: Criteria }
+
 // The automatic round (T1-11): Brisbane and the rest of Australia join the four cities. The rest
 // of Australia is sent as `Australia`, like a run's national search (TBC with Track 1).
 
