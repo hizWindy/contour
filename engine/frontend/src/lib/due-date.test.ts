@@ -122,7 +122,15 @@ describe('readDueDate', () => {
   })
 
   it('says only what it truly can not read', () => {
-    for (const text of ['soon', 'whenever', '31/11', '13/13', '24 smarch', 'next blursday', '0 days']) {
+    for (const text of [
+      'soon',
+      'whenever',
+      '31/11',
+      '13/13',
+      '24 smarch',
+      'next blursday',
+      '0 days',
+    ]) {
       expect(readDueDate(text, WEDNESDAY), text).toEqual({ kind: 'unreadable' })
     }
   })
