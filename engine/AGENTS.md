@@ -241,6 +241,7 @@ Commands, from `backend/`: `uv run engine hubspot-check` (which scopes the key h
 [PLAN-V10](../plan/PLAN-V10.md). A project of its own, `apps/companies` (routes under `/companies`, schema `companies`, the "Companies" tick). Its spec is [PREP.md](../projects/prep/PREP.md).
 
 - **The list** reads our HubSpot copy. Search, filters, sort and paging run in SQL (a page of 13,913 companies takes 35 to 75 ms, the prep box 40 ms, with no trigram index).
+- **The screen** (`frontend/src/apps/companies/index.tsx`): "Prep" on every row, or P, opens call prep in a narrow side panel (`prep-sheet.tsx`), and the list stays usable beside it. A row click opens the company's record in a dialog in the middle (`company-dialog.tsx`).
 - **Another project's companies** come through `AppSpec.company_leads` (`core/company_leads.py`): SELECTs the Companies page joins and pages in the database, and a panel section. The Lead Finder's (`apps/lead_finder/company_leads.py`) adds its good leads that aren't in HubSpot yet (the newest research of each company decides). Only people with that project's tick get those rows and fields: the server leaves them out for everyone else.
 - **Two projects:** a core list that names no project (runs, the search log, memory) shows the projects this person may use (`AppAccess.allowed`), and refuses someone who may use none.
 - **The facts pack** (`facts.py`) is everything we know about a company and a person, each fact with an id (F1, F2 ...) and a source. It is free.

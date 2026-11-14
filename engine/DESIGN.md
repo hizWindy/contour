@@ -2,7 +2,7 @@
 
 How the Lead Finder website looks and behaves. This file is the one to update. It started as a copy of the design system section in [PLAN-V1.md](../plan/PLAN-V1.md) (25 Oct 2026).
 
-Last updated: 14 Nov 2026 (rules added from the design principles).
+Last updated: 15 Nov 2026 (call prep moved to a side panel on Companies; 14 Nov: rules added from the design principles).
 
 The general principles behind these rules, with their sources, are in [design/principles/](../design/principles/README.md). A rule taken from there names it, like "(principles 03 #14)": library item 03, point 14. Where a principle and this file disagree, this file wins until it is changed. The `frontend-agent` (`.claude/agents/frontend-agent.md`) works from both.
 
@@ -129,6 +129,7 @@ Sizes are in rem, so browser zoom works. Nothing is smaller than 13px. Sentence 
   - Each card's icon tile carries its project colour (Eucalyptus, Heath); Runs and cost has a Stone tile. Links to another page end in an arrow (→), never ↗, which would mean another site. The cards fade and rise once, one after another; the bars grow once. With reduced motion, everything is simply there.
 - **Width:** up to 1440px. Tables and the map can use the full width.
 - **List and detail:** clicking a result opens its lead card in a side panel, so the list stays in view. Each card also has its own page and link.
+  - **Companies is the other way round,** because call prep is the job done all day: "Prep" on every row (or P on the active row) opens the prep card in a side panel, 576px wide, one column in the order of the call, and the list stays usable beside it. The company's record, the long read, opens in a dialog in the middle (768px). One of them at a time.
 - **Map page:** the map and the list sit side by side, with a divider you can drag.
 - **Screens:** the site works at every width, from a phone (360px) to a wide laptop.
   - **Laptop (1024px and up):** the menu is open, and a page may use two columns.
@@ -173,7 +174,7 @@ Smooth and quick, like a well-made phone app (PLAN-V13, 11 Nov 2026). Motion sho
 - **Speed budget:** no animation in a table of more than 50 rows. Motion's features load through `LazyMotion` at the app's root (`MotionRoot`), late and in a file of their own: the first screen draws without them, and they arrive right after, so the main file stays small. Pages use the small `m.*` components and bring no features of their own. No dropped frames at 4x CPU slowdown in Chrome's performance panel on the Schedules control, a tab switch and the Companies table.
 - **Reduced motion:** if your computer asks for it, everything changes at once. `MotionConfig` follows the setting, and the base CSS turns transitions off.
 - **Loading:** content fades in. No shimmer and no bouncing dots, so shadcn's Skeleton is used without its pulse. A page that is loading shows the shape of what is coming (the rows of a table, a card, a detail page, the menu and top bar of the app), still and grey, and only after 200 ms, so a quick answer never flashes grey blocks (`src/components/skeletons.tsx`, `src/shell/shell-skeleton.tsx`). The skeleton keeps the real content's size, so nothing jumps when it arrives, and a screen reader hears one line ("Loading the leads.") in a hidden status, never the grey blocks. A click on a page whose code is still on its way dims the page you are leaving after 200 ms (`aria-busy`, 150ms), the way a table dims while its next page loads.
-- **The call prep modal** (PLAN-V10) rises 8px as it fades in, and a new person in it cross-fades in 150ms while the modal keeps its size.
+- **The call prep panel** (PLAN-V10) slides in from the right over 250ms and out in 150ms, and a new person or company in it cross-fades in 150ms while the panel keeps its size. The company dialog rises 8px as it fades in.
 - **Second exception, waiting for an OK (TBC):** the sign-in avatar reacts to the form. Its eyes follow the login as it is typed (150ms), it shakes its head once after a wrong try (0.6s) and waves once after a sign-out (1.8s). Nothing loops, and reduced motion keeps it still (the face still changes).
 - **One exception, waiting for an OK (TBC):** the sign-in page's contour lines draw once, over 1.6s, when the page opens. They never loop, and reduced motion turns them off.
 
