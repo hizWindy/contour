@@ -12,7 +12,7 @@ GitHub is outside the laptop. Anything pushed or written there can be copied or 
 - **The remote** is `origin`: `https://github.com/hizWindy/contour.git`.
 - **Pushing** works through git's own sign-in on this laptop.
 - **The `gh` CLI** is installed (2.103.3) but not signed in. Al-khair signs in himself: `! gh auth login` in Claude Code. Never ask for, read or store a token.
-- **Public or private** is **TBC** (to be confirmed). Until it is known, write every push, title and comment as if anyone can read it.
+- **The repo is private** (the AI Brain project notes, not re-checked on 14 Nov). Still write every push, title and comment as if it could leak: a private repo can be shared or made public later.
 - **No GitHub Actions** (no `.github/` folder). The checks run on the laptop: the pre-commit hook, and the `merge-check` skill before a merge.
 - **Pushing doesn't deploy.** App Platform's `deploy_on_push` is false: someone presses Deploy.
 
