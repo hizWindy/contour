@@ -32,4 +32,5 @@ Last updated: 2026-11-15. **TBC** means to be confirmed.
 ## Status and next step
 
 - Not installed. Not built.
-- Next: once Property Daily says yes, build the connector behind its switch. We can build it before then and keep it off.
+- [PLAN-V16.md](../plan/PLAN-V16.md) Track 2 builds it: the browser (T2-3), the Property Daily connector (T2-5), the Arealytics connector (T2-6) and the container (T2-9).
+- Levi gave the green light on 2026-11-15 (as Al-khair reports), for both tools. The limits above are the vendors' terms, and the risk stays Levi's call.

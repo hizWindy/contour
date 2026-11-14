@@ -37,6 +37,9 @@ From the [terms](https://www.propertydaily.com.au/terms-and-conditions/) and [FA
 
 ## Status and next step
 
-- Off. Our rule says it stays off until the terms allow a program to read it ([AGENTS.md](../engine/AGENTS.md)).
-- Next: Levi (the account holder) asks The Spatial Group for written OK to use the data in an internal tool, and whether they offer a feed or API. Not sent yet.
-- Al-khair gets his own login, not Levi's.
+- Levi gave the green light to read it with a program on 2026-11-15 (as Al-khair reports). The Spatial Group hasn't been asked.
+- [PLAN-V16.md](../plan/PLAN-V16.md) builds the connector. It stays behind its switch until Al-khair turns it on.
+- The FAQ says sign-in also works with a username and password, so the program can sign in by itself.
+- It also has an online database of past and current leads, and "MarketView" (a table of a whole market). PLAN-V16 step T2-2 maps these pages.
+- Still recommended: Levi asks The Spatial Group for written OK and a feed or API. Not sent yet.
+- The connector needs a login of its own, not Levi's or Al-khair's.

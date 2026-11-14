@@ -46,5 +46,6 @@ Without both, use it by hand only: look up a company's lease when preparing a ca
 
 ## Status and next step
 
-- Not connected. Contour's access: **TBC**.
-- Next: confirm with Levi whether Contour subscribes. If so, ask Arealytics about API pricing and AI approval.
+- Levi gave the green light to read it with a program on 2026-11-15 (as Al-khair reports). He says it has building records, some office sizes, and leases in Melbourne, Perth and Sydney. Arealytics hasn't been asked.
+- [PLAN-V16.md](../plan/PLAN-V16.md) builds the connector, behind a switch. Its terms still ban scripts (4.3) and AI use (5.2 to 5.7), so the plan keeps its data out of Claude and reads at a slow pace.
+- Still recommended: Levi asks Arealytics for API pricing and written approval. With an API, the browser isn't needed.
