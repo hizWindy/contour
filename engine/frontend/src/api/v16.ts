@@ -153,10 +153,12 @@ export type DampenerStrength = 'strong' | 'moderate'
 
 /** A fact that lowers the score (Levi's section 5). It never removes the lead. */
 export interface Dampener {
+  /** recent_fitout, outsourcing, competitor_tie, procurement or financial_stress (Track 1's T1-5). */
   id: string
   label: string
   state: DampenerState
-  strength: DampenerStrength
+  /** How much it takes off: strong 20, moderate 10. Empty unless found (Track 1's T1-5). */
+  strength: DampenerStrength | null
   evidence: string | null
   date: string | null
   url: string | null

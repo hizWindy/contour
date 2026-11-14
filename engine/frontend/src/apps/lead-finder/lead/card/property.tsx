@@ -181,9 +181,11 @@ export function DampenersSection({ lead }: { lead: LeadDetail }) {
           {found.map((item) => (
             <li key={item.id} className="flex flex-col gap-0.5">
               <span className="font-semibold">{item.label}</span>
-              <span className="text-caption text-muted-foreground">
-                {STRENGTH_WORDS[item.strength]}
-              </span>
+              {item.strength ? (
+                <span className="text-caption text-muted-foreground">
+                  {STRENGTH_WORDS[item.strength]}
+                </span>
+              ) : null}
               {item.evidence ? <span className="max-w-prose">{item.evidence}</span> : null}
               <span className="flex flex-wrap items-center gap-x-2 text-caption text-muted-foreground">
                 <span>{item.date ? formatDate(item.date) : 'Date not known'}</span>

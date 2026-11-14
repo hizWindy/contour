@@ -134,7 +134,7 @@ function Dampeners({ lead }: { lead: LeadDetail }) {
           {item.state === 'found' ? (
             <>
               <span className="font-semibold">{`${item.label}.`}</span>{' '}
-              {`${STRENGTH_WORDS[item.strength]}.${item.evidence ? ` ${item.evidence}` : ''}`}{' '}
+              {`${item.strength ? `${STRENGTH_WORDS[item.strength]}.` : ''}${item.evidence ? ` ${item.evidence}` : ''}`}{' '}
               {item.url ? <SourceLink href={item.url} /> : null}
             </>
           ) : (
