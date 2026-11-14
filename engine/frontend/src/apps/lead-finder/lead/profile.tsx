@@ -196,7 +196,7 @@ export function Profile({ lead }: { lead: LeadDetail }) {
         </p>
       </header>
 
-      <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+      <div className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2 print:grid-cols-2">
         <Part title="Why now">
           {whyNow.filter(Boolean).map((sentence) => (
             <p key={sentence}>{sentence}</p>
