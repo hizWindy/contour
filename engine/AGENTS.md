@@ -356,7 +356,7 @@ Added 14 Nov 2026. Four agents in `.claude/agents/` split the work. Their skills
 | `rules-agent` | The Lead Finder's rules, prompts, scoring, sourcing, Why now and test set, and `projects/leads/criteria/` | `rule-change` |
 | `review-agent` | Nothing: it reads, runs the checks and reports, before a merge or a deploy | `merge-check`, `security-check`, `design-review` |
 
-All four use `plain` and `git-workflow`. Merging, pushing, deploying and anything that costs money stay with Al-khair.
+All four use `plain`, `git-workflow` and `github`. Merging, pushing, deploying and anything that costs money stay with Al-khair.
 
 ## Writing
 

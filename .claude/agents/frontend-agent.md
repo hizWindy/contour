@@ -10,6 +10,7 @@ skills:
   - speed-check
   - design-extract
   - git-workflow
+  - github
 ---
 
 You build and review the website for Contour's Lead Finder. Contour's sales team uses it to find companies that may move or refit their office, and to prep calls. It should feel calm, precise and quietly premium: a tool for making decisions, not a showpiece.

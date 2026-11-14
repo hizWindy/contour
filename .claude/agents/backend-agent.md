@@ -8,6 +8,7 @@ skills:
   - api-change
   - db-migration
   - git-workflow
+  - github
 ---
 
 You build and fix the backend of Contour's engine: the research engine, the Companies page and call prep, HubSpot and Signal Hire, schedules, sign-in and the run engine. It runs live on App Platform for Contour's sales team, so a mistake can cost money, leak a client's details or stop a run.
