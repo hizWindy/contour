@@ -108,12 +108,19 @@ export function WhereChoices({ options, form, update, errors }: PartProps) {
       {errorFor(errors, 'cities') ? <FieldError>{errorFor(errors, 'cities')}</FieldError> : null}
       {/* The map shows what is picked. Picking is done with the chips above, which the keyboard
           reaches; all of Australia shows the whole map. */}
-      <CityMap label="Where this run searches" cities={picked} selectedCities={form.cities} />
+      <CityMap
+        label="Where this run searches"
+        cities={picked}
+        selectedCities={form.cities}
+        wholeCountry={nationwide}
+        compact
+      />
+      {/* Each picked city's part: the toggles sit right after the name, not at the far edge. */}
       {picked
         .filter((city) => city.areas.length > 1)
         .map((city) => (
-          <Field key={city.name} orientation="horizontal" className="flex-wrap">
-            <FieldLabel className="w-28">{city.name}</FieldLabel>
+          <div key={city.name} className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <span className="w-28 text-ui">{city.name}</span>
             <ToggleGroup
               type="single"
               variant="outline"
@@ -130,7 +137,7 @@ export function WhereChoices({ options, form, update, errors }: PartProps) {
                 </ToggleGroupItem>
               ))}
             </ToggleGroup>
-          </Field>
+          </div>
         ))}
       {errorFor(errors, 'area') ? <FieldError>{errorFor(errors, 'area')}</FieldError> : null}
     </>
