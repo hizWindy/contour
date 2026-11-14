@@ -223,7 +223,8 @@ export function NoteView({
 
   return (
     <div data-slot="note-view" className="flex h-full flex-col" onKeyDown={onKeyDown}>
-      <header className="flex items-start gap-2 border-b p-5 pr-14 max-sm:p-4 max-sm:pt-[max(1rem,env(safe-area-inset-top))] max-sm:pr-14">
+      {/* A plain block, not a header element: inside the panel that would read as a second banner. */}
+      <div className="flex items-start gap-2 border-b p-5 pr-14 max-sm:p-4 max-sm:pt-[max(1rem,env(safe-area-inset-top))] max-sm:pr-14">
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -248,7 +249,7 @@ export function NoteView({
             {whoLine(companyName, person)}
           </PanelDescription>
         </div>
-      </header>
+      </div>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 max-sm:p-4">
         <div className="flex flex-col gap-6">
           {onPhone ? (

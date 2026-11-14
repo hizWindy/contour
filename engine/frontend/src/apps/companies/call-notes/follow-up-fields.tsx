@@ -62,7 +62,7 @@ export function FollowUpFields({
         type="button"
         variant="ghost"
         size="sm"
-        className="-ml-2 w-fit text-muted-foreground"
+        className="-ml-2 w-fit text-muted-foreground touch:h-11"
         onClick={() => {
           setAdding(true)
           onChange({ subject: '', when: '' })
@@ -95,7 +95,7 @@ export function FollowUpFields({
           type="button"
           variant="ghost"
           size="sm"
-          className="-mr-2 text-muted-foreground"
+          className="-mr-2 text-muted-foreground touch:h-11"
           onClick={() => {
             setAdding(false)
             onChange(null)
