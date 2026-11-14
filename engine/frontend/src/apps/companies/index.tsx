@@ -7,6 +7,9 @@
  *   Back shows the same list.
  * - "Prep" on every row (or P on the active row) opens call prep in a narrow panel on the right.
  *   The list stays usable beside it, so the next row's Prep switches the panel to that company.
+ * - With call notes on (PLAN-V17 T3-5), L on the active row opens the panel straight into Log
+ *   call's note view, for the person the panel is on if it is that company already. "Log call" on
+ *   the company's record does the same, and asks who the call was with.
  * - A click on a row opens the company's record in a dialog in the middle. J and K move through
  *   the rows, Enter opens the active one and Esc closes what is open. A pointer resting on a row,
  *   or focus moving to it, loads the company first, so both open filled.
@@ -21,6 +24,7 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router'
 import { companyQueryOptions, useCompanies, useCompanyFacets } from '@/api/hooks'
+import { useCallNoteOptions } from '@/api/hooks/call-notes'
 import type { CompanyDetail, CompanyPerson, CompanyRow } from '@/api/types'
 import { DataTable, DensityToggle } from '@/components/data-table'
 import { EmptyState } from '@/components/empty-state'
@@ -157,6 +161,21 @@ export default function CompaniesPage() {
       person: person ? { id: person.id, name: person.name, title: person.title } : null,
     })
   }
+  // L on a row: the note view. A panel already on that company keeps its person (and prep).
+  const logRow = useCallback((row: CompanyRow): void => {
+    setActive(row.key)
+    setPrep((current) =>
+      current?.companyKey === row.key
+        ? { ...current, note: true }
+        : { companyKey: row.key, companyName: row.name, person: null, note: true },
+    )
+  }, [])
+  // "Log call" in the company's dialog: the dialog closes first, and the view asks who.
+  const logCall = (company: CompanyDetail): void => {
+    closeCompany()
+    setPrep({ companyKey: company.key, companyName: company.name, person: null, note: true })
+  }
+  const notesOn = useCallNoteOptions().data?.enabled === true
 
   const companies = useCompanies(listQuery(state))
   const facets = useCompanyFacets()
@@ -168,16 +187,16 @@ export default function CompaniesPage() {
     [leadsShown, prepRow, openCompany],
   )
   const rows = page?.items
-  // P on the active row: the same as its Prep button.
-  const rowLetters = useMemo(
-    () => ({
-      p: (key: string) => {
-        const row = rows?.find((item) => item.key === key)
-        if (row) prepRow(row)
-      },
-    }),
-    [rows, prepRow],
-  )
+  // P on the active row: the same as its Prep button. L (call notes on): Log call for it.
+  const rowLetters = useMemo(() => {
+    const onRow = (open: (row: CompanyRow) => void) => (key: string) => {
+      const row = rows?.find((item) => item.key === key)
+      if (row) open(row)
+    }
+    const letters: Record<string, (key: string) => void> = { p: onRow(prepRow) }
+    if (notesOn) letters.l = onRow(logRow)
+    return letters
+  }, [rows, prepRow, logRow, notesOn])
   const filtered = activeFilterCount(state.filters) > 0
   const activeRow = state.company ?? active
 
@@ -289,6 +308,7 @@ export default function CompaniesPage() {
         onClose={closeCompany}
         onOpenFullPage={openFullPage}
         onPrep={prepCall}
+        onLogCall={logCall}
         rows={page?.items}
       />
       <PrepSheet

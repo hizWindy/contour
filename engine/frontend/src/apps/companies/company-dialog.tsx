@@ -14,11 +14,16 @@
  * On a phone (PLAN-V10 G1) it fills the screen. Its header stays at the top with the close button
  * while the sections scroll, and "Prep a call" is a full-width button at the bottom, where a thumb
  * reaches it.
+ *
+ * With call notes on (PLAN-V17 T3-5), "Log call" sits beside "Prep a call", for a call that
+ * wasn't prepped: it closes this and opens Log call's note view in the prep panel, which asks who
+ * the call was with.
  */
-import { ExternalLink, Maximize2, PhoneCall, XIcon } from 'lucide-react'
+import { ExternalLink, Maximize2, NotebookPen, PhoneCall, XIcon } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { useCompany } from '@/api/hooks'
+import { useCallNoteOptions } from '@/api/hooks/call-notes'
 import type { CompanyDetail, CompanyPerson, CompanyRow } from '@/api/types'
 import { ErrorState } from '@/components/error-state'
 import { Button } from '@/components/ui/button'
@@ -34,6 +39,7 @@ import { safeHref } from '@/lib/safe-href'
 import { melbourneDate } from '@/lib/format'
 import { PHONE, useMediaQuery } from '@/lib/use-media-query'
 import { cn } from '@/lib/utils'
+import { LOG_CALL } from './call-notes/words'
 import { CompanyView, CompanyViewPending, QuickBoxes } from './company-view'
 import { focusMovedOn } from './focus'
 import { NotInHubSpot } from './marks'
@@ -78,12 +84,14 @@ function isPlainClick(event: React.MouseEvent): boolean {
 export interface CompanyActionsProps {
   company: Pick<CompanyDetail, 'key' | 'name' | 'hubspot_url'>
   onPrep?: () => void
+  /** "Log call", for a call that wasn't prepped. Without it (call notes off), no button. */
+  onLogCall?: () => void
   /** "Open full page", and what a plain click on it does (the panel closes first). */
   fullPage?: { onOpen?: (key: string) => void }
 }
 
-/** "Prep a call", "Open in HubSpot" and "Open full page". */
-export function CompanyActions({ company, onPrep, fullPage }: CompanyActionsProps) {
+/** "Prep a call", "Log call", "Open in HubSpot" and "Open full page". */
+export function CompanyActions({ company, onPrep, onLogCall, fullPage }: CompanyActionsProps) {
   const hubspot = safeHref(company.hubspot_url)
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -91,6 +99,12 @@ export function CompanyActions({ company, onPrep, fullPage }: CompanyActionsProp
         <Button type="button" size="sm" onClick={onPrep}>
           <PhoneCall aria-hidden="true" />
           Prep a call
+        </Button>
+      ) : null}
+      {onLogCall ? (
+        <Button type="button" variant="outline" size="sm" onClick={onLogCall}>
+          <NotebookPen aria-hidden="true" />
+          {LOG_CALL}
         </Button>
       ) : null}
       {hubspot ? (
@@ -128,6 +142,8 @@ export interface CompanyDialogProps {
   onOpenFullPage?: (key: string) => void
   /** "Prep a call": for the company (person null), or for one of its people. */
   onPrep?: (company: CompanyDetail, person: CompanyPerson | null) => void
+  /** "Log call", shown only while call notes are on. */
+  onLogCall?: (company: CompanyDetail) => void
   /** The rows on screen. The company's own row shows while the rest loads. */
   rows?: readonly CompanyRow[]
 }
@@ -137,6 +153,7 @@ export function CompanyDialog({
   onClose,
   onOpenFullPage,
   onPrep,
+  onLogCall,
   rows,
 }: CompanyDialogProps) {
   // While the dialog fades out, it keeps showing the company it had.
@@ -153,6 +170,13 @@ export function CompanyDialog({
     onPrep && company.data
       ? () => {
           onPrep(company.data, null)
+        }
+      : undefined
+  const notesOn = useCallNoteOptions(onLogCall !== undefined).data?.enabled === true
+  const logCompany =
+    onLogCall && notesOn && company.data
+      ? () => {
+          onLogCall(company.data)
         }
       : undefined
   return (
@@ -214,8 +238,9 @@ export function CompanyDialog({
           {known ? (
             <CompanyActions
               company={known}
-              // On a phone "Prep a call" is the big button at the bottom instead.
+              // On a phone "Prep a call" and "Log call" are the buttons at the bottom instead.
               onPrep={phone ? undefined : prepCompany}
+              onLogCall={phone ? undefined : logCompany}
               fullPage={{ onOpen: onOpenFullPage }}
             />
           ) : null}
@@ -250,11 +275,17 @@ export function CompanyDialog({
           )}
         </div>
         {phone && onPrep ? (
-          <div className="border-t bg-popover p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <div className="flex gap-2 border-t bg-popover p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            {logCompany ? (
+              <Button type="button" variant="outline" size="lg" onClick={logCompany}>
+                <NotebookPen aria-hidden="true" />
+                {LOG_CALL}
+              </Button>
+            ) : null}
             <Button
               type="button"
               size="lg"
-              className="w-full"
+              className="min-w-0 flex-1"
               disabled={!prepCompany}
               onClick={prepCompany}
             >
