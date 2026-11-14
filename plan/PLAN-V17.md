@@ -660,11 +660,11 @@ Newest first.
 
 ## Track 3: the website (session 3)
 
-**Progress:** Stage A 0 of 8. Stage B 0 of 4. Every step is `frontend-agent` work, follows `engine/DESIGN.md` and "The screens, and how they move", uses the `ui-build` skill, and builds against the contract with `mockApi`.
+**Progress:** Stage A 1 of 8. Stage B 0 of 4. Every step is `frontend-agent` work, follows `engine/DESIGN.md` and "The screens, and how they move", uses the `ui-build` skill, and builds against the contract with `mockApi`.
 
 ### Stage A: call notes
 
-- [ ] **T3-1. Own copy and a baseline.** Make the worktree. Run lint, types, the tests and the build once. Note the counts and the first-visit size from `node scripts/bundle-report.js`.
+- [x] **T3-1. Own copy and a baseline.** Make the worktree. Run lint, types, the tests and the build once. Note the counts and the first-visit size from `node scripts/bundle-report.js`. Done 2026-11-15 (`437a2ee`, the website unchanged from `master`): lint 0 warnings, types pass, tests 90 files and 1,246 passed (203 s, one worker). The build: `tsc -b` passes, and the bundle report's build passes. First visit: JavaScript 230 kB gzip (717 kB raw) in 30 files, CSS 23 kB gzip. Motion's late file adds 32 kB gzip (14 kB of its own). Opening Companies adds 72 kB.
 
 - [ ] **T3-2. Is the free mic good enough?** Needs Al-khair at the keyboard. Free.
   - Read the current Transformers.js docs first (the Whisper models, Web Workers, WebGPU and its fallback). Don't build from memory.
@@ -743,6 +743,8 @@ Newest first.
 ### Track 3 Log
 
 Newest first.
+
+- 2026-11-15: **T3-1 done.** The numbers are in the step. The bundle report ran on the main folder's website code (`master`, the same as `437a2ee`), so nothing half-built from T3-3 could get into the baseline.
 
 - 2026-11-15: **For Track 2: the names Track 3 chose** where the contract left them open. They are in `engine/frontend/src/api/v17.ts` (commit `8c4d767`). A different name is fine: M1's type check finds it.
   - `GET /call-notes/options`: `enabled`, `ai_enabled`, `sending_ready`, `waiting_for` (the sentence, or none), `outcomes` (the names, in order), `fields` (each `id`, `label`, `kind`: `date` or `number`), `soft_seconds`, `max_chars`.
