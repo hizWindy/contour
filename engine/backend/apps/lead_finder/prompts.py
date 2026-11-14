@@ -9,7 +9,7 @@ from functools import lru_cache
 from pathlib import Path
 from string import Template
 
-from apps.lead_finder.rules import LeadFinderRules
+from apps.lead_finder.rules import SEARCHED_DAMPENER_IDS, LeadFinderRules
 
 PROMPTS_DIR = Path(__file__).resolve().parent / "prompts"
 
@@ -69,9 +69,16 @@ def extract_prompt(rules: LeadFinderRules) -> Prompt:
         *industries.check_office_size,
     ]
     tiers = [*industries.tier_1, *industries.tier_2]
+    # The four dampener checks Claude answers (Levi's section 5, PLAN-V16 T1-5), in plain words
+    dampeners = "\n".join(
+        f"- {rule.id}: {rule.meaning}"
+        for rule in criteria.dampeners
+        if rule.id in SEARCHED_DAMPENER_IDS
+    )
     text = Template(template).substitute(
         triggers=triggers,
         boosters=boosters,
+        dampeners=dampeners,
         industry_groups="\n".join(
             f"- {g}: {meaning[g]}" if g in meaning else f"- {g}" for g in groups
         ),

@@ -71,7 +71,7 @@ from apps.lead_finder.params import (
     clean_typed_domain,
 )
 from apps.lead_finder.prompts import Prompt, extract_prompt, research_prompt, versions, why_prompt
-from apps.lead_finder.rules import LeadFinderRules, Result
+from apps.lead_finder.rules import MAX_DAMPENER_SEARCHES, LeadFinderRules, Result
 from apps.lead_finder.sanitize import (
     clean_company_name,
     clean_domain,
@@ -83,6 +83,7 @@ from apps.lead_finder.sanitize import (
 from apps.lead_finder.scoring import (
     JUST_MOVED,
     Band,
+    Dampener,
     Excluded,
     FilterResult,
     RuleCheck,
@@ -126,11 +127,13 @@ from core.signalhire.client import SignalHire, get_signalhire
 from core.signalhire.details import SignalHireCompany
 
 APP = "lead_finder"
-SearchAngle = Literal["property", "people", "money", "tenure"]
-ANGLES: tuple[SearchAngle, ...] = ("property", "people", "money")
+SearchAngle = Literal["property", "people", "money", "tenure", "dampeners"]
+# The dampeners angle (PLAN-V16 T1-5) looks on purpose for what makes an office project less
+# likely. It has its own search allowance, on top of `company_max_searches` (see `_search`).
+ANGLES: tuple[SearchAngle, ...] = ("property", "people", "money", "dampeners")
 # The lease and tenure run (PLAN-V11 C2) asks the office questions in place of the property angle,
 # so a company costs the same as a growth research.
-TENURE_ANGLES: tuple[SearchAngle, ...] = ("tenure", "people", "money")
+TENURE_ANGLES: tuple[SearchAngle, ...] = ("tenure", "people", "money", "dampeners")
 TENURE_GAP = "when it moved into its current office in that city, and any move or fitout since"
 ANGLE_FOCUS = {
     "property": "its offices: where they are, how big (m² or floors), who owns the building, "
@@ -145,6 +148,13 @@ ANGLE_FOCUS = {
     "tenure": "its office in that city: the street address it is at now, when it moved in there "
     "(the year, and the month if a page says), and any move, fitout or refit there since. Also "
     "the lease and when it ends, and how big the office is",
+    "dampeners": "anything that makes a new office project less likely: a fitout or a move into "
+    "a new office in that city in the last 5 years (and when), a global or national real estate "
+    "outsourcing deal (JLL, CBRE, Cushman & Wakefield, Colliers or a similar firm names it as a "
+    "client), a known tie to a design and build competitor (2 or more of its projects, or a "
+    "panel or global agreement), and red flags in how it buys fitouts (a formal tender portal, "
+    "offshore or central global buying, lowest-price tenders, design and build bought apart). "
+    "If you find nothing for one of these, say nothing about it",
 }
 FORM_FAILED_SUMMARY = (
     "The facts are missing: Claude couldn't fill in the answer form. Re-check this lead."
@@ -316,6 +326,13 @@ class LeadCard(BaseModel):
         "reason, its evidence and its link. `overridden_by` is set when a person overrode it, and "
         "the lead was then judged without the exclusion. Empty when no exclusion applies.",
     )
+    dampeners: list[Dampener] = Field(
+        default_factory=list,
+        description="Every dampener (Levi's section 5): a fact that lowers the score and never "
+        "removes the lead. Each is found, not_found (checked, nothing shown) or not_checked, "
+        "with its strength, evidence, date, link and what could reverse it when found "
+        "(PLAN-V16 T1-5). Empty for a card made before it.",
+    )
 
 
 @dataclass
@@ -397,8 +414,13 @@ async def research_company(
         rules=rules,
         settings=settings,
         context=context,
+        # The dampener check's searches (at most 3) are on top of `company_max_searches`, so the
+        # three angles and the gap check keep the allowance the Settings page shows. The money
+        # limit above is what stops a company's cost.
         budget=Budget(
-            cap, settings.company_max_searches, request_reserve_usd=settings.request_reserve_usd
+            cap,
+            settings.company_max_searches + MAX_DAMPENER_SEARCHES,
+            request_reserve_usd=settings.request_reserve_usd,
         ),
         today=today or now.date(),
         credits=(
@@ -822,12 +844,21 @@ async def _why_now(session: AsyncSession, job: Job, claude: Claude, card: LeadCa
 
 
 async def _search(job: Job, claude: Claude, prompts: list[tuple[str, str]]) -> None:
-    """One Claude request per angle, side by side. Notes with unseen links are dropped."""
+    """One Claude request per angle, side by side. Notes with unseen links are dropped.
+
+    Four angles start together, but the company's money holds fit only three at once (the cap is
+    US$2.50 and each running request holds US$0.80). So a request waits for a hold
+    (`acquire_request`) until an earlier one ends and its hold shrinks to its real cost.
+    """
     settings = job.settings
 
     async def one(angle: str, prompt: str) -> tuple[str, Reply[AngleNotes] | None]:
         try:
-            granted = job.budget.reserve_searches(settings.searches_per_request)
+            # The dampener check is limited to Levi's 3 searches, whatever the setting says
+            wanted = settings.searches_per_request
+            if angle == "dampeners":
+                wanted = min(wanted, MAX_DAMPENER_SEARCHES)
+            granted = await job.budget.acquire_request(wanted)
         except BudgetSpent as stop:
             job.problems.append(f"{angle}: skipped. {stop}.")
             return angle, None
@@ -1206,6 +1237,7 @@ def empty_facts(company: str, summary: str = "Nothing useful was found.") -> Com
         office_since=unknown(),
         last_fitout=unknown(),
         tender_only=unknown(),
+        dampeners=[],
         fitout_contractors=[],
         talking_points=[],
         contact_role=None,
@@ -1233,6 +1265,7 @@ def verdict_fields(verdict: Verdict) -> dict[str, Any]:
         "fitout_aud": verdict.fitout_aud,
         "filters": verdict.filters,
         "excluded": verdict.excluded,
+        "dampeners": verdict.dampeners,
     }
 
 

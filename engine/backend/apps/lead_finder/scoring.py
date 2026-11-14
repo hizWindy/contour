@@ -13,12 +13,20 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
 from decimal import Decimal
-from typing import Literal
+from typing import Literal, NamedTuple
 
 from pydantic import BaseModel, Field
 
-from apps.lead_finder.fields import CompanyFacts, TriggerFound
-from apps.lead_finder.rules import ExclusionRule, LeadFinderRules, Result, Strength
+from apps.lead_finder.fields import CompanyFacts, DampenerFinding, TriggerFound
+from apps.lead_finder.rules import (
+    DampenerId,
+    DampenerRule,
+    DampenerStrength,
+    ExclusionRule,
+    LeadFinderRules,
+    Result,
+    Strength,
+)
 from apps.lead_finder.sources import host_of, source_kind
 from core.hubspot.matching import CandidateReason, HubSpotMatch
 
@@ -127,6 +135,35 @@ class Excluded(BaseModel):
     overridden_at: datetime | None = None
 
 
+DampenerStatus = Literal["found", "not_found", "not_checked"]
+
+
+class Dampener(BaseModel):
+    """One dampener on a lead (Levi's section 5, PLAN-V16 T1-5): a fact that lowers its score and
+    never removes the lead. Every dampener is listed, so a card says what was checked.
+
+    `state` is `found`, `not_found` (the check ran and showed nothing: never written as "none") or
+    `not_checked` (nobody could check, so it says nothing either way). A found dampener has its
+    strength, its evidence, its date and link when there are some, and what could reverse it.
+    `waived` is a sentence when it is found but takes nothing off, with the reason."""
+
+    id: DampenerId
+    label: str
+    state: DampenerStatus
+    strength: DampenerStrength | None = Field(
+        default=None, description="strong takes off 20 points and moderate 10. Empty unless found."
+    )
+    evidence: str | None = Field(default=None, description="What shows it, in one plain sentence")
+    date: str | None = Field(default=None, description="When it happened: YYYY-MM-DD or YYYY-MM")
+    url: str | None = Field(default=None, description="The page that says it")
+    can_reverse: str | None = Field(
+        default=None, description="What could reverse it, like a contract's renewal date"
+    )
+    waived: str | None = Field(
+        default=None, description="Why a found dampener takes nothing off. Empty when it does."
+    )
+
+
 class Verdict(BaseModel):
     result: Result
     stage: str  # the Profile's stage for the result: Active prospect, Target account...
@@ -141,6 +178,7 @@ class Verdict(BaseModel):
     band: Band | None = None
     filters: list[FilterResult] = Field(default_factory=list)  # Levi's five (PLAN-V16 T1-3)
     excluded: Excluded | None = None  # the exclusion that applies, or that a person overrode
+    dampeners: list[Dampener] = Field(default_factory=list)  # every one, as the rules list them
 
 
 @dataclass(frozen=True)
@@ -258,6 +296,7 @@ def judge(
         band=band,
         filters=_filters(facts, rules, city_check, sized, excluded),
         excluded=excluded,
+        dampeners=_dampeners(facts, rules, today, sized, triggers),
     )
 
 
@@ -758,6 +797,237 @@ def with_tenure_sign(facts: CompanyFacts, history: History, rules: LeadFinderRul
         label=since.label or "confirmed",
     )
     return facts.model_copy(update={"triggers": [*others, sign]})
+
+
+# --- Dampeners (Levi's section 5, PLAN-V16 T1-5) -------------------------------------------------
+
+
+class _Event(NamedTuple):
+    """A fitout or a move that has happened, from the facts the form already holds or from
+    Claude's dampener answer."""
+
+    when: date
+    when_text: str | None
+    evidence: str
+    url: str | None
+    can_reverse: str | None
+
+
+def _dampeners(
+    facts: CompanyFacts,
+    rules: LeadFinderRules,
+    today: date,
+    sized: SizeJudgement,
+    triggers: list[TriggerScore],
+) -> list[Dampener]:
+    """Every dampener the rules list: found, not found, or not checked, in the rules' order.
+
+    The four Levi has searched for come from Claude's answer (`facts.dampeners`). A fitout or a
+    move, and a buyer that uses tender portals only, also show in facts the form holds already, so
+    they count too, and a card never says "not found" beside a fitout it shows elsewhere. Financial
+    stress reads `healthy`. "Not checked" is a check nobody ran, like a card made before this rule
+    or a search the run skipped: it says nothing either way. Points come off in the score (T1-6).
+    """
+    answers: dict[str, DampenerFinding] = {finding.id: finding for finding in facts.dampeners}
+    signs = {score.trigger.id for score in triggers}
+    results: list[Dampener] = []
+    for rule in rules.criteria.dampeners:
+        answer = answers.get(rule.id)
+        if rule.id == "recent_fitout":
+            results.append(_recent_fitout(rule, facts, rules, today, sized, answer))
+        elif rule.id == "procurement":
+            results.append(_procurement(rule, facts, answer))
+        elif rule.id == "financial_stress":
+            results.append(_financial_stress(rule, facts, rules, signs))
+        else:
+            results.append(_searched(rule, answer))
+    return results
+
+
+def _found(
+    rule: DampenerRule, answer: DampenerFinding, strength: DampenerStrength | None
+) -> Dampener:
+    return Dampener(
+        id=rule.id,
+        label=rule.label,
+        state="found",
+        strength=strength,
+        evidence=answer.evidence or rule.label,
+        date=answer.date,
+        url=answer.source_url,
+        can_reverse=answer.can_reverse,
+    )
+
+
+def _searched(rule: DampenerRule, answer: DampenerFinding | None) -> Dampener:
+    """An outsourcing deal or a tie to a competitor: only Claude's answer says."""
+    if answer is None:
+        return Dampener(id=rule.id, label=rule.label, state="not_checked")
+    if answer.state == "not_found":
+        return Dampener(id=rule.id, label=rule.label, state="not_found")
+    return _found(rule, answer, rule.strength)
+
+
+def _procurement(
+    rule: DampenerRule, facts: CompanyFacts, answer: DampenerFinding | None
+) -> Dampener:
+    """A red flag in Claude's answer, and a company that buys fitouts only through tender portals
+    (the fact the exclusion reads). When a person overrides that exclusion the lead is judged
+    without it, and this is what still counts against it. The stronger flag wins."""
+    flags: list[Dampener] = []
+    if answer is not None and answer.state == "found":
+        flags.append(_found(rule, answer, rule.kinds.get(answer.kind or "", rule.strength)))
+    if facts.tender_only.value is True:
+        flags.append(
+            Dampener(
+                id=rule.id,
+                label=rule.label,
+                state="found",
+                strength=rule.kinds.get("tender_portal", rule.strength),
+                evidence="A note says it buys its office fitouts only through formal public "
+                "tender portals.",
+                date=facts.tender_only.source_date,
+                url=facts.tender_only.source_url,
+            )
+        )
+    if flags:
+        return max(flags, key=lambda flag: flag.strength == "strong")  # the answer wins a tie
+    state: DampenerStatus = "not_found" if answer is not None else "not_checked"
+    return Dampener(id=rule.id, label=rule.label, state=state)
+
+
+def _financial_stress(
+    rule: DampenerRule, facts: CompanyFacts, rules: LeadFinderRules, signs: set[str]
+) -> Dampener:
+    """From the `healthy` fact: false when a note says it is in administration or cutting staff
+    fast. Levi: unless it is part of a consolidation that creates a move, so then it takes
+    nothing off."""
+    healthy = facts.healthy
+    if healthy.value is None:
+        return Dampener(id=rule.id, label=rule.label, state="not_checked")
+    if healthy.value:
+        return Dampener(id=rule.id, label=rule.label, state="not_found")
+    labels = {sign.id: sign.label for sign in rules.criteria.triggers.every}
+    reasons = [labels.get(sign, sign) for sign in rule.waived_by if sign in signs]
+    return Dampener(
+        id=rule.id,
+        label=rule.label,
+        state="found",
+        strength=rule.strength,
+        evidence="A note says it is in administration, or cutting staff fast.",
+        date=healthy.source_date,
+        url=healthy.source_url,
+        waived=(
+            f"Takes nothing off: it is part of a consolidation that creates a move ({reasons[0]})."
+            if reasons
+            else None
+        ),
+    )
+
+
+def _recent_fitout(
+    rule: DampenerRule,
+    facts: CompanyFacts,
+    rules: LeadFinderRules,
+    today: date,
+    sized: SizeJudgement,
+    answer: DampenerFinding | None,
+) -> Dampener:
+    """A fitout or move in that city: strong in the last `strong_years`, moderate up to
+    `moderate_years`, and nothing after that. The move-in, the last fitout and Claude's answer all
+    count, and the newest one decides (the answer wins a tie). An answer with no date counts as
+    moderate. A date to come isn't a fitout yet. It takes nothing off when hiring would outgrow
+    the space within `outgrow_months` (Levi: still list the lead). PLAN-V11's rule that a move in
+    the last 12 months is a Watch stays in `judge`: it is this dampener's strongest case."""
+    assert rule.strong_years is not None and rule.moderate_years is not None
+    assert rule.outgrow_months is not None
+    undated: DampenerFinding | None = None
+    events: list[_Event] = []
+    if answer is not None and answer.state == "found":
+        when = parse_date(answer.date)
+        if when is None:
+            undated = answer
+        elif when <= today:
+            events.append(
+                _Event(
+                    when,
+                    answer.date,
+                    answer.evidence or rule.label,
+                    answer.source_url,
+                    answer.can_reverse,
+                )
+            )
+    for fact, words in (
+        (facts.office_since, "Moved into its current office in"),
+        (facts.last_fitout, "Last fitout in"),
+    ):
+        when = parse_date(fact.value)
+        if when is not None and when <= today:
+            text = f"{words} {month_year(fact.value)}."
+            events.append(_Event(when, fact.value, text, fact.source_url, None))
+
+    newest = max(events, key=lambda event: event.when, default=None)
+    strength: DampenerStrength | None = None
+    if newest is not None:
+        years_ago = (today - newest.when).days / DAYS_PER_YEAR
+        if years_ago <= rule.moderate_years:
+            strength = "strong" if years_ago <= rule.strong_years else "moderate"
+    outgrows = _outgrows(facts, rules, today, sized, rule.outgrow_months)
+    waived = f"Takes nothing off: {outgrows}." if outgrows else None
+    if newest is not None and strength is not None:
+        return Dampener(
+            id=rule.id,
+            label=rule.label,
+            state="found",
+            strength=strength,
+            evidence=newest.evidence,
+            date=newest.when_text,
+            url=newest.url,
+            can_reverse=newest.can_reverse,
+            waived=waived,
+        )
+    if undated is not None:  # found, but we can't say how long ago
+        return Dampener(
+            id=rule.id,
+            label=rule.label,
+            state="found",
+            strength="moderate",
+            evidence=f"{undated.evidence or rule.label} (date not known)",
+            url=undated.source_url,
+            can_reverse=undated.can_reverse,
+            waived=waived,
+        )
+    # Nothing in the last `moderate_years`. It was checked if Claude answered, or a date is known
+    looked = answer is not None or newest is not None
+    return Dampener(id=rule.id, label=rule.label, state="not_found" if looked else "not_checked")
+
+
+def _outgrows(
+    facts: CompanyFacts,
+    rules: LeadFinderRules,
+    today: date,
+    sized: SizeJudgement,
+    months: int,
+) -> str | None:
+    """When the company's hiring would outgrow its office within `months` (Levi's section 5): it
+    plans to hire a lot, says it will need more space than it has now, and by a date inside the
+    window. A sentence that says so, or None. The office now is its known floor area, or about 10
+    m² a person (as the size rule works it out)."""
+    needed = facts.size_needed_m2.value
+    when = parse_date(facts.growth_by.value)
+    if facts.growth_plan.value is not True or needed is None or when is None:
+        return None
+    now = facts.office_m2.value
+    if now is None and sized.staff is not None:
+        now = round(sized.staff * rules.criteria.size.m2_per_staff)
+    if now is None or needed <= now:
+        return None
+    if when > today + timedelta(days=round(months * DAYS_PER_MONTH)):
+        return None
+    return (
+        f"it says it will need about {needed:,} m² by {facts.growth_by.value}, "
+        f"more than the {now:,} m² it has now"
+    )
 
 
 def _triggers(facts: CompanyFacts, rules: LeadFinderRules, today: date) -> list[TriggerScore]:

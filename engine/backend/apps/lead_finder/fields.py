@@ -17,7 +17,7 @@ from pydantic import (
 )
 
 Label = Literal["confirmed", "estimated", "guessed"]
-Angle = Literal["property", "people", "money", "tenure", "gaps"]
+Angle = Literal["property", "people", "money", "tenure", "dampeners", "gaps"]
 
 
 def _empty_is_unknown(value: Any) -> Any:
@@ -57,10 +57,11 @@ NEWER_FACTS = (
     "last_fitout",
     "tender_only",  # PLAN-V16 T1-3
 )
-NEWER_LISTS = ("fitout_contractors", "talking_points", "decision_makers")
+NEWER_LISTS = ("fitout_contractors", "talking_points", "decision_makers", "dampeners")
 MAX_TALKING_POINTS = 3
 MAX_CONTRACTORS = 5
 MAX_LINE_CHARS = 200  # a talking point or a firm name: one line, cut after parsing
+MAX_EVIDENCE_CHARS = 300  # a dampener's evidence: one plain sentence, cut after parsing
 MAX_DECISION_MAKERS = 3
 MAX_NAME_CHARS = 120  # a person's name or job title: one line, cut after parsing
 NEWER_TEXTS: tuple[str, ...] = ("tier_group",)
@@ -120,6 +121,48 @@ class BoosterFound(BaseModel):
     id: str = Field(description="One of the booster ids in the instructions")
     evidence: str = Field(description="One plain sentence")
     source_url: str
+
+
+DampenerCheck = Literal["recent_fitout", "outsourcing", "competitor_tie", "procurement"]
+DampenerState = Literal["found", "not_found"]
+
+
+class DampenerFinding(BaseModel):
+    """The answer to one of the four dampener checks (Levi's section 5, PLAN-V16 T1-5): a fact
+    that makes an office project less likely. Every check comes back `found` or `not_found`. "Not
+    found" is never written as "none": it only says the notes don't show it. The strength is not
+    here: the rules decide it."""
+
+    id: DampenerCheck = Field(description="One of the four check ids in the instructions")
+    state: DampenerState = Field(
+        description="found: a note shows it. not_found: no note shows it. Never anything else."
+    )
+    evidence: MaybeText = Field(
+        description="What the note says, in one plain sentence. Empty when not_found."
+    )
+    date: MaybeText = Field(
+        description="When it happened or was signed: YYYY-MM-DD or YYYY-MM. Empty when it isn't "
+        "known, or when not_found."
+    )
+    source_url: MaybeText = Field(
+        description="The note link that says it. Only a link from the notes. Empty when not_found."
+    )
+    kind: MaybeText = Field(
+        description="Only for procurement: which red flag, exactly as written in the "
+        "instructions. Empty for the other checks."
+    )
+    can_reverse: MaybeText = Field(
+        description="What could reverse it, like a contract's renewal date, or a new CEO who may "
+        "change suppliers. Empty if no note says."
+    )
+
+    @field_validator("evidence", "can_reverse", mode="after")
+    @classmethod
+    def _one_sentence(cls, value: str | None) -> str | None:
+        """One line, cut after parsing: a long answer must not throw away a paid reply."""
+        if not value:
+            return None
+        return _one_line(value, MAX_EVIDENCE_CHARS) or None
 
 
 class DecisionMaker(BaseModel):
@@ -189,6 +232,10 @@ class CompanyFacts(BaseModel):
         description="true only if a note says the company buys its office fitouts solely through "
         "formal public tender portals (AusTender, Tenders VIC, Tenders WA, SA Tenders). false if a "
         "note says it buys some other way. Null if no note says."
+    )
+    dampeners: list[DampenerFinding] = Field(
+        description="One entry for each of the four dampener checks in the instructions, "
+        "found or not_found. Four entries, each id once."
     )
     fitout_contractors: list[str] = Field(
         description="Names of design or fitout firms that did this company's office, only if a "

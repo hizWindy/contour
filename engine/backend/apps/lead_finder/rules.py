@@ -21,7 +21,11 @@ RULES_DIR = Path(__file__).resolve().parent / "rules"
 RULE_FILES = ("criteria", "queries", "hubspot_map", "watchlist")
 PLACEHOLDERS = {"city", "area", "company", "year", "month_year"}
 # The search angles for one company. tenure is the lease and tenure run's office questions (C2).
-ANGLES = {"property", "people", "money", "tenure"}
+# dampeners looks for the facts that make an office project less likely (PLAN-V16 T1-5).
+ANGLES = {"property", "people", "money", "tenure", "dampeners"}
+# Levi's dampener search is "up to 3 web searches a company" (the plan, T1-5). The research gives it
+# this many on top of `company_max_searches`, so the old angles and the gap check keep their own.
+MAX_DAMPENER_SEARCHES = 3
 
 
 class Strict(BaseModel):
@@ -210,6 +214,74 @@ class ExclusionRule(Strict):
             raise ValueError(f"exclusion {self.id}: only an industry exclusion has groups or words")
         if bool(self.unless) != bool(self.flag):
             raise ValueError(f"exclusion {self.id}: `unless` and `flag` go together")
+        return self
+
+
+DampenerId = Literal[
+    "recent_fitout", "outsourcing", "competitor_tie", "procurement", "financial_stress"
+]
+DAMPENER_IDS: tuple[DampenerId, ...] = (
+    "recent_fitout",
+    "outsourcing",
+    "competitor_tie",
+    "procurement",
+    "financial_stress",
+)
+# The four Levi has searched for on purpose. Financial stress comes from the `healthy` fact.
+SEARCHED_DAMPENER_IDS: tuple[DampenerId, ...] = DAMPENER_IDS[:4]
+DampenerStrength = Literal["strong", "moderate"]
+
+
+class DampenerRule(Strict):
+    """A fact that lowers a lead's score, never removes it (Levi's section 5, PLAN-V16 T1-5).
+
+    The first four are searched for on purpose; financial stress comes from the `healthy` fact.
+    The code is `scoring._dampeners`. How much each takes off is `score.dampeners` (T1-6).
+
+    - `recent_fitout`: a fitout or move in that city is strong within `strong_years` and moderate
+      from there to `moderate_years`. A fitout longer ago than that doesn't count. It takes
+      nothing off when the company's hiring would outgrow the space within `outgrow_months`
+      (his "still list the lead"). A date that isn't known counts as moderate.
+    - `procurement`: `kinds` says which red flag is strong and which is moderate. A flag with no
+      kind gets `strength`.
+    - `financial_stress`: `waived_by` are the signs that make it part of a consolidation that
+      creates a move, when it takes nothing off (his "unless").
+    """
+
+    id: DampenerId
+    label: str = Field(min_length=1)
+    # What Claude is asked to look for, in plain words. The four searched checks need it.
+    meaning: str = ""
+    strength: DampenerStrength | None = None
+    strong_years: int | None = Field(default=None, gt=0)
+    moderate_years: int | None = Field(default=None, gt=0)
+    outgrow_months: int | None = Field(default=None, gt=0)
+    kinds: dict[str, DampenerStrength] = Field(default_factory=dict)
+    waived_by: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def check_rule(self) -> Self:
+        if self.kinds and self.id != "procurement":
+            raise ValueError(f"{self.id} has no kinds: only procurement does")
+        if self.waived_by and self.id != "financial_stress":
+            raise ValueError(f"{self.id} can't be waived: only financial_stress can")
+        if self.id in SEARCHED_DAMPENER_IDS and not self.meaning:
+            raise ValueError(f"{self.id} needs a meaning: it is what Claude is asked to look for")
+        missing = [kind for kind in self.kinds if kind not in self.meaning]
+        if missing:
+            raise ValueError(f"procurement's meaning must name each kind: {', '.join(missing)}")
+        timing = (self.strong_years, self.moderate_years, self.outgrow_months)
+        if self.id == "recent_fitout":
+            if self.strength is not None or None in timing:
+                raise ValueError(
+                    "recent_fitout needs strong_years, moderate_years and outgrow_months, "
+                    "and no strength"
+                )
+            assert self.strong_years is not None and self.moderate_years is not None
+            if self.strong_years >= self.moderate_years:
+                raise ValueError("recent_fitout: strong_years must be below moderate_years")
+        elif self.strength is None or any(value is not None for value in timing):
+            raise ValueError(f"{self.id} needs a strength and no years or months")
         return self
 
 
@@ -465,6 +537,7 @@ class Criteria(Strict):
     fitout: Fitout
     industries: Industries
     exclusions: list[ExclusionRule] = Field(min_length=1)
+    dampeners: list[DampenerRule]
     fit: Fit
     office_age: OfficeAge
     triggers: Triggers
@@ -501,6 +574,22 @@ class Criteria(Strict):
                 f"or is in two exclusions: {', '.join(clashing)}"
             )
         return self
+
+    @model_validator(mode="after")
+    def check_dampeners(self) -> Self:
+        if [rule.id for rule in self.dampeners] != list(DAMPENER_IDS):
+            raise ValueError(f"dampeners needs these, in this order: {', '.join(DAMPENER_IDS)}")
+        signs = {sign.id for sign in self.triggers.every}
+        unknown = sorted({sign for rule in self.dampeners for sign in rule.waived_by} - signs)
+        if unknown:
+            raise ValueError(
+                f"dampeners waived_by has signs that aren't triggers: {', '.join(unknown)}"
+            )
+        return self
+
+    def dampener(self, dampener_id: str) -> DampenerRule:
+        """The rule of one dampener. Start-up checked that every id exists."""
+        return next(rule for rule in self.dampeners if rule.id == dampener_id)
 
     @model_validator(mode="after")
     def check_sources(self) -> Self:
@@ -579,12 +668,19 @@ class Criteria(Strict):
 class Queries(Strict):
     areas: dict[str, dict[Literal["cbd", "inner"], list[str]]]
     discovery: dict[str, list[str]]
-    company: dict[Literal["property", "people", "money", "tenure"], list[str]]
+    company: dict[Literal["property", "people", "money", "tenure", "dampeners"], list[str]]
 
     @model_validator(mode="after")
     def check_templates(self) -> Self:
         if set(self.company) != ANGLES:
-            raise ValueError("company templates need the property, people, money and tenure angles")
+            raise ValueError(
+                "company templates need the property, people, money, tenure and dampeners angles"
+            )
+        if not 1 <= len(self.company["dampeners"]) <= MAX_DAMPENER_SEARCHES:
+            raise ValueError(
+                f"The dampeners angle needs 1 to {MAX_DAMPENER_SEARCHES} search templates: it is "
+                "limited to that many searches a company"
+            )
         templates = [t for group in self.discovery.values() for t in group]
         templates += [t for group in self.company.values() for t in group]
         for template in templates:

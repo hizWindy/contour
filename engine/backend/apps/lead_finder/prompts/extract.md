@@ -30,6 +30,15 @@ For a trigger's date, give when it happened. For lease_ending, give when the lea
 Boosters make a lead stronger. Use these ids only:
 $boosters
 
+Dampeners are facts that make an office project less likely. Return one entry in dampeners for each of these four checks, each id once:
+$dampeners
+
+For each entry:
+- state is "found" only if a note shows it. Then give the evidence in one plain sentence, the note's link exactly as written, and the date it happened or was signed ("2025-03" or "2025-03-14"; empty if no note says).
+- Otherwise state is "not_found", and the evidence, link, date, kind and can_reverse are empty text. "not_found" means no note shows it. Never write "none" or "no".
+- can_reverse is what could reverse a found dampener, like a contract's renewal date, or a new CEO who may change suppliers. Empty if no note says.
+- kind is only for procurement, and empty for the others.
+
 Industry groups. If the company's industry belongs to one, put that group's name in industry_group, exactly as written (the words after a colon say what the group means: they are not part of the name). Otherwise empty text.
 $industry_groups
 

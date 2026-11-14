@@ -130,7 +130,17 @@ A dampener lowers a lead's score. It never removes the lead. Search for each one
 - When one is found, record the evidence and the date, and say whether anything could reverse it. Examples: an agreement's renewal date, or a new CEO who may change suppliers.
 - **"Not found" is not "none".** The first four rows are checked on every lead that passes the filters. Having no evidence is written as "not found".
 - **TBC, our reading of "moderate to strong".** A tender portal, or offshore or central global buying, is strong. A lowest-price history, or design and build bought apart, is moderate.
-- **TBC, financial stress.** In version 2, a company in administration or cutting staff fast was a Drop. Levi's notes make it a dampener, so it is now a strong one.
+- **TBC, financial stress.** In version 2, a company in administration or cutting staff fast was a Drop. Levi's notes make it a dampener, so it is now a strong one. The old Drop stays until the new score is built.
+
+**How we apply this (TBC):**
+- **Five dampeners, six rows.** The two fitout rows are one dampener with two strengths: strong up to 3 years ago, moderate from 3 to 5 years. A fitout longer ago than 5 years doesn't count.
+- **Every lead lists all five.** Each is **found**, **not found** (the check ran and showed nothing) or **not checked** (nobody could check: a lead made before this rule, or a search that was skipped). A check that is not checked says nothing either way.
+- **The search.** The research has a fourth angle, `dampeners`, with up to 3 web searches a company. They are on top of the 12 the Settings page allows, so a company may use 3 more. The money limits are the same. Claude answers each of the four checks `found` or `not_found`, and a found one needs a page we read. Without one, it goes back to "not checked".
+- **Facts we already hold count too.** The move-in date and the last fitout feed the first dampener, and a company that buys fitouts only through tender portals feeds procurement. So a card never says "not found" beside a fitout it shows elsewhere.
+- **A fitout with no date** counts as moderate, and says "date not known".
+- **Outgrow rule.** A found dampener takes nothing off when the company plans to hire a lot, says it will need more space than it has now, and needs it within 24 months. The card still shows it as found, with the reason. This is our reading of "still list the lead".
+- **Consolidation.** Financial stress takes nothing off when the company has a merger or takeover sign, or an office consolidation sign.
+- **Not built yet.** The points (20 off for strong, 10 for moderate) come with the new score (T1-6). Until then a dampener is shown and doesn't change the result.
 
 ## 6. Scoring
 

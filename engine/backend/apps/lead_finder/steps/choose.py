@@ -183,6 +183,7 @@ def _facts_of(company: Merged) -> CompanyFacts:
         office_since=_unknown(),
         last_fitout=_unknown(),
         tender_only=_unknown(),
+        dampeners=[],
         fitout_contractors=[],
         talking_points=[],
         contact_role=None,

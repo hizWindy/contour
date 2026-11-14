@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import Any
 from urllib.parse import SplitResult, urlsplit
 
-from apps.lead_finder.fields import CompanyFacts, Fact
+from apps.lead_finder.fields import CompanyFacts, DampenerFinding, Fact
 from apps.lead_finder.rules import Criteria
 from apps.lead_finder.sanitize import clean_domain, one_line, safe_http_url
 
@@ -194,6 +194,26 @@ def check_sources(
         else:
             boosters.append(booster)
 
+    # A dampener check comes back found or not_found (Levi's section 5). "Found" stands only with
+    # a page we read, like any fact; without one the check goes back to "not checked", never to
+    # "not found", because nobody showed that. "Not found" claims nothing, so it keeps no text and
+    # no link. Each check once, and a procurement flag must be one the rules name.
+    kinds = criteria.dampener("procurement").kinds
+    findings: list[DampenerFinding] = []
+    for finding in facts.dampeners:
+        if any(kept.id == finding.id for kept in findings):
+            continue
+        if finding.state == "not_found":
+            nothing = dict.fromkeys(("evidence", "date", "source_url", "kind", "can_reverse"))
+            findings.append(finding.model_copy(update=nothing))
+            continue
+        issue = problem(finding.source_url)
+        if issue:
+            dropped.append(f"dampener {finding.id}: {issue}. Marked not checked.")
+            continue
+        kind = finding.kind if finding.id == "procurement" and finding.kind in kinds else None
+        findings.append(finding.model_copy(update={"kind": kind}))
+
     # A decision maker needs a page we read, like any fact. Never a LinkedIn page: profiles sit
     # behind a login, so a name "from LinkedIn" was not read there. The message names no one.
     people = []
@@ -206,7 +226,12 @@ def check_sources(
         else:
             people.append(person)
 
-    update |= {"triggers": triggers, "boosters": boosters, "decision_makers": people}
+    update |= {
+        "triggers": triggers,
+        "boosters": boosters,
+        "decision_makers": people,
+        "dampeners": findings,
+    }
     return CheckedFacts(facts=facts.model_copy(update=update), dropped=dropped)
 
 

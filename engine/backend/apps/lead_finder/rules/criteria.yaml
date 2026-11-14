@@ -164,6 +164,40 @@ exclusions:
     label: Buys its fitouts only through formal public tender portals
     kind: tender_only # the fact tender_only is true: AusTender, Tenders VIC, Tenders WA, SA Tenders
 
+# Dampeners (Levi's section 5, PLAN-V16 T1-5, Criteria_v3.md): facts that lower a lead's score and
+# never remove it. The first four are searched for on purpose (the research angle `dampeners`), and
+# each comes back found or not_found: the code never writes "none". Financial stress comes from the
+# `healthy` fact. How many points each takes off is in `score.dampeners` (T1-6). The strengths are
+# Levi's. Which procurement flag is strong or moderate is our reading (TBC).
+dampeners:
+  - id: recent_fitout # a fitout or move in that city: strong in the last 3 years, moderate 3 to 5 years ago
+    label: A fitout or move in that city in the last 5 years
+    meaning: A note says the company moved into a new office, or fitted out or refitted its office, in that city in the last 5 years. Give the date. A move or fitout still to come is not one.
+    strong_years: 3
+    moderate_years: 5
+    outgrow_months: 24 # Levi: still list the lead if hiring would outgrow the space within 24 months
+  - id: outsourcing
+    label: A global or national real estate outsourcing deal
+    meaning: A press release or case study from JLL, CBRE, Cushman & Wakefield, Colliers or a similar firm names the company as a client of a global or national real estate outsourcing deal.
+    strength: strong
+  - id: competitor_tie
+    label: A known tie to a competitor
+    meaning: A design and build firm or an architect has delivered 2 or more of the company's projects, or holds a panel or global agreement with it. Name the firm in the evidence.
+    strength: moderate
+  - id: procurement
+    label: Procurement red flags
+    meaning: A note shows a red flag in how the company buys fitouts. Give the red flag as the kind, exactly one of these. tender_portal is a formal tender portal for fitouts. offshore_buying is offshore or central global buying. lowest_price is a history of lowest-price tenders. separate_design_and_build is design and build bought apart.
+    strength: moderate # Levi: moderate to strong. A flag with no kind is moderate
+    kinds:
+      tender_portal: strong
+      offshore_buying: strong
+      lowest_price: moderate
+      separate_design_and_build: moderate
+  - id: financial_stress
+    label: Financial stress
+    strength: strong # layoffs, profit warnings, administration or a hiring freeze
+    waived_by: [office_consolidation, merger_or_takeover] # Levi: unless part of a consolidation that creates a move
+
 fit:
   local_team_runs_project: true
   healthy: true # not in administration, and not cutting staff fast
@@ -441,6 +475,8 @@ tbc:
     note: The strengths are Levi's (section 4, PLAN-V16 T1-4). Where his notes are silent, version 2's other signs (new business unit, new facility, underperforming workplace) are medium, and the weak signs (culture change, hiring push, a rival of a booming company) are low. That is our reading. A strength is how much a sign counts in the score (T1-6). The group (main, other, weak) is only which signs a run searches for by default.
   - key: office_age.tenure_fitout_years
     note: Levi's section 4 (PLAN-V16 T1-4), long tenure. 8 or more years at the address, a company that is stable or growing, and no known fitout there in the last 5 years. A year is enough for the move-in ("at this address since at least 2017"). Ten or more years is the strongest, so T1-6 gives it more points in the score.
+  - key: dampeners
+    note: Levi's section 5 (PLAN-V16 T1-5). The five dampeners and which are strong or moderate are his, and so is "found or not found, never none". Our reading, for Levi to confirm. (1) His "moderate to strong" procurement flags are strong for a tender portal or offshore or central global buying, and moderate for lowest-price tenders or design and build bought apart. A flag with no kind is moderate. (2) A fitout or move with no date counts as moderate. (3) His "still list the lead if hiring would outgrow the space within 24 months" means the dampener takes nothing off, when the company plans to hire a lot and says it will need more space than it has now by a date inside 24 months. (4) His "unless it is part of a consolidation that creates a move" is a merger or takeover sign, or an office consolidation sign. (5) In version 2, a company in administration or cutting staff fast was a Drop. It is a strong dampener now, and the old Drop stays until the new score (T1-6). The check adds up to 3 web searches a company on top of `company_max_searches`, so a researched company may use 3 more than that setting says. The money limits are the same.
   - key: source_domains
     note: First draft. The test set will show which sites matter.
   - key: score

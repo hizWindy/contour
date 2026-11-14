@@ -19,7 +19,7 @@ from apps.lead_finder.api import claude_dependency
 from apps.lead_finder.context import CreditMeter, ResearchContext
 from apps.lead_finder.fields import DecisionMaker
 from apps.lead_finder.research import LeadCard, ResearchRequest, refill_lead, research_company
-from apps.lead_finder.rules import LeadFinderRules, load_rules
+from apps.lead_finder.rules import MAX_DAMPENER_SEARCHES, LeadFinderRules, load_rules
 from apps.lead_finder.tables import Lead
 from core.api.app import create_app
 from core.claude.client import ClaudeError
@@ -42,14 +42,17 @@ from tests.lead_finder.conftest import lf_settings
 from tests.lead_finder.samples import (
     ACME_INFO,
     ACME_SOFTWARE,
+    ASX,
     CULTURE_AMP,
     SITE,
     FakeClaude,
     FakeSignalHire,
     fact,
+    found_dampener,
     make_facts,
     rules_with_signalhire,
     rules_without_signalhire,
+    with_dampeners,
 )
 
 pytestmark = pytest.mark.integration
@@ -88,22 +91,92 @@ async def count(session: AsyncSession, model: type, **where: object) -> int:
     return await session.scalar(statement) or 0
 
 
-async def test_research_searches_three_angles_and_saves_everything(session: AsyncSession) -> None:
+async def test_research_searches_four_angles_and_saves_everything(session: AsyncSession) -> None:
+    """Three angles, and the dampener check on top of them (PLAN-V16 T1-5)."""
     claude = FakeClaude()
     card = await research(session, claude)
 
-    assert sorted(claude.calls) == ["extract", "search:money", "search:people", "search:property"]
+    assert sorted(claude.calls) == [
+        "extract",
+        "search:dampeners",
+        "search:money",
+        "search:people",
+        "search:property",
+    ]
     assert card.result == "pass"
     assert card.score == 51  # see test_scoring: a good lead with nothing found for fit or rivals
     assert (card.score_checked, card.band) == (77, "investigate")
-    assert card.research.cost_usd == Decimal("0.400000")  # 3 searches x $0.12 + $0.04
-    assert card.research.web_searches == 6
+    # 4 searches x $0.12 + $0.04. The dampener check adds one search request, $0.12 here (it was
+    # $0.40 with three angles): the extra cost PLAN-V16 T1-5 asked to be measured on the fake
+    assert card.research.cost_usd == Decimal("0.520000")
+    assert card.research.web_searches == 8
     assert card.hubspot.status == "new"
     assert card.dropped == []
-    assert await count(session, SearchLog, job_id=card.id) == 4
+    assert await count(session, SearchLog, job_id=card.id) == 5
     assert await count(session, Lead) == 1
-    assert await count(session, MemoryItem, kind="source_note") == 4
+    assert await count(session, MemoryItem, kind="source_note") == 5
     assert await count(session, MemoryItem, kind="company_profile") == 1
+
+
+async def test_the_dampener_check_has_its_own_three_searches_and_its_own_prompt(
+    session: AsyncSession,
+) -> None:
+    claude = FakeClaude()
+    await research(session, claude)
+    dampeners = next(r for r in claude.requests if r.step == "search:dampeners")
+    assert dampeners.web is not None and dampeners.web.max_searches == 3  # Levi: up to 3
+    assert "Angle: dampeners. Find facts about anything that makes a new office project" in (
+        dampeners.prompt
+    )
+    assert "- Acme Software office fitout Melbourne" in dampeners.prompt  # the rules' searches
+    assert "JLL OR CBRE OR Colliers" in dampeners.prompt
+    form = next(r for r in claude.requests if r.step == "extract")
+    assert '"angle": "dampeners"' in form.prompt  # its notes reach the answer form
+    assert "- recent_fitout: A note says the company moved into a new office" in form.system
+    assert 'Never write "none" or "no".' in form.system
+
+
+async def test_the_card_lists_every_dampener_and_what_the_answer_found(
+    session: AsyncSession,
+) -> None:
+    answers = with_dampeners(
+        found_dampener("outsourcing", "JLL names it as a client.", date="2025-02", url=ASX)
+    )
+    card = await research(session, FakeClaude(facts=make_facts(dampeners=answers)))
+
+    assert {item.id: item.state for item in card.dampeners} == {
+        "recent_fitout": "not_found",
+        "outsourcing": "found",
+        "competitor_tie": "not_found",
+        "procurement": "not_found",
+        "financial_stress": "not_found",
+    }
+    outsourcing = card.dampeners[1]
+    assert (outsourcing.strength, outsourcing.evidence, outsourcing.url) == (
+        "strong",
+        "JLL names it as a client.",
+        ASX,
+    )
+    assert card.result == "pass"  # a dampener never removes the lead
+    saved = await session.scalar(select(Lead.card).where(Lead.id == card.id))
+    assert saved is not None
+    assert [(item["id"], item["state"]) for item in saved["dampeners"]][:2] == [
+        ("recent_fitout", "not_found"),
+        ("outsourcing", "found"),
+    ]
+
+
+async def test_an_answer_with_no_page_behind_it_is_not_checked_and_says_so(
+    session: AsyncSession,
+) -> None:
+    claim = found_dampener("outsourcing", "A claim.", url="https://invented.example.com/page")
+    card = await research(session, FakeClaude(facts=make_facts(dampeners=[claim])))
+
+    assert [item.state for item in card.dampeners][:2] == ["not_checked", "not_checked"]
+    assert (
+        "dampener outsourcing: link not among the pages read (https://invented.example.com/page). "
+        "Marked not checked."
+    ) in card.dropped
 
 
 async def test_a_tenure_research_asks_the_office_questions_in_place_of_property(
@@ -113,7 +186,13 @@ async def test_a_tenure_research_asks_the_office_questions_in_place_of_property(
     claude = FakeClaude()  # the Acme sample has no move-in date
     await research(session, claude, context=ResearchContext(focus="tenure"))
     searches = sorted(call for call in claude.calls if call.startswith("search:"))
-    assert searches == ["search:gaps", "search:money", "search:people", "search:tenure"]
+    assert searches == [
+        "search:dampeners",
+        "search:gaps",
+        "search:money",
+        "search:people",
+        "search:tenure",
+    ]
     tenure = next(r for r in claude.requests if r.step == "search:tenure")
     assert "Angle: tenure. Find facts about its office in that city" in tenure.prompt
     assert "- Acme Software Melbourne office address" in tenure.prompt
@@ -142,17 +221,17 @@ async def test_researching_again_uses_memory_and_costs_less(session: AsyncSessio
     second = await research(session, claude, ACME.model_copy(update={"company": "acme software"}))
 
     assert claude.calls == ["extract"]
-    assert second.research.angles_from_memory == ["money", "people", "property"]
+    assert second.research.angles_from_memory == ["dampeners", "money", "people", "property"]
     assert second.research.cost_usd < first.research.cost_usd
     assert second.result == first.result
-    assert await count(session, MemoryItem, kind="source_note") == 4  # no duplicates
+    assert await count(session, MemoryItem, kind="source_note") == 5  # no duplicates
 
 
 async def test_use_memory_false_searches_again(session: AsyncSession) -> None:
     await research(session, FakeClaude())
     claude = FakeClaude()
     await research(session, claude, ACME.model_copy(update={"use_memory": False}))
-    assert len(claude.calls) == 4
+    assert len(claude.calls) == 5
 
 
 async def test_the_gap_check_runs_one_more_search_then_stops(session: AsyncSession) -> None:
@@ -620,10 +699,11 @@ async def test_an_open_deal_in_hubspot_is_dropped(session: AsyncSession) -> None
 
 
 async def test_the_search_cap_stops_research_cleanly(session: AsyncSession) -> None:
-    settings = get_settings().model_copy(update={"company_max_searches": 3})
+    """The cap is the setting plus the dampener check's own 3 searches (PLAN-V16 T1-5)."""
+    settings = get_settings().model_copy(update={"company_max_searches": 1})
     claude = FakeClaude()
     card = await research(session, claude, settings=settings)
-    assert card.research.web_searches <= 3
+    assert card.research.web_searches <= 1 + MAX_DAMPENER_SEARCHES
     assert any("skipped" in problem for problem in card.problems)
 
 
@@ -683,8 +763,8 @@ async def test_decision_makers_from_pages_read_reach_the_saved_card(session: Asy
     assert saved is not None
     assert [p["name"] for p in saved["facts"]["decision_makers"]] == ["Jane Citizen"]
     # The names stay on the card: the search costs and the search log don't change.
-    assert card.research.cost_usd == Decimal("0.400000")
-    assert await count(session, SearchLog, job_id=card.id) == 4
+    assert card.research.cost_usd == Decimal("0.520000")
+    assert await count(session, SearchLog, job_id=card.id) == 5
 
 
 # --- A failed answer form is shown, not hidden (PLAN-V4 B4) --------------------------------------

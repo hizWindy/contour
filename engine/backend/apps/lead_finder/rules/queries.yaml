@@ -115,9 +115,10 @@ discovery:
   hiring_push:
     - "{city} company hiring push {year}"
 
-# Watchlist: each company is searched from three angles: property, people and money. A lease and
-# tenure run (Old offices on Start a run, PLAN-V11 C2) asks the tenure angle's office questions in
-# place of the property angle: the address, since when, and any move or fitout since.
+# Watchlist: each company is searched from three angles: property, people and money, and then the
+# dampeners (PLAN-V16 T1-5). A lease and tenure run (Old offices on Start a run, PLAN-V11 C2) asks
+# the tenure angle's office questions in place of the property angle: the address, since when, and
+# any move or fitout since.
 company:
   property:
     - "{company} {city} office lease"
@@ -134,3 +135,9 @@ company:
     - "{company} {city} office address"
     - "{company} moved office {city}"
     - "{company} office fitout"
+  # PLAN-V16 T1-5 (Levi's section 5): the dampeners are searched for on purpose, because a missed
+  # one gives a false lead. At most 3 searches a company (MAX_DAMPENER_SEARCHES in rules.py).
+  dampeners:
+    - "{company} office fitout {city}"
+    - "{company} JLL OR CBRE OR Colliers corporate real estate"
+    - "{company} tender fitout"

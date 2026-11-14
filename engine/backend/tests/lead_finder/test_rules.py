@@ -9,7 +9,14 @@ from pydantic import ValidationError
 
 from apps.lead_finder.params import default_triggers, known_trigger_ids
 from apps.lead_finder.prompts import extract_prompt
-from apps.lead_finder.rules import RULE_FILES, RULES_DIR, load_rules, read_rules, rules_version
+from apps.lead_finder.rules import (
+    MAX_DAMPENER_SEARCHES,
+    RULE_FILES,
+    RULES_DIR,
+    load_rules,
+    read_rules,
+    rules_version,
+)
 
 
 def copy_rules(target: Path) -> Path:
@@ -305,15 +312,161 @@ def test_discovery_searches_look_for_plans_not_openings() -> None:
     assert "{city} company plans to double staff {year}" in discovery["fast_growth"]
 
 
-def test_watchlist_searches_from_three_angles_and_the_tenure_questions() -> None:
-    """A lease and tenure run asks the tenure angle in place of property (PLAN-V11 C2)."""
+def test_watchlist_searches_from_three_angles_the_tenure_questions_and_the_dampeners() -> None:
+    """A lease and tenure run asks the tenure angle in place of property (PLAN-V11 C2). The
+    dampeners angle is searched on purpose in every research (PLAN-V16 T1-5)."""
     company = load_rules().queries.company
-    assert set(company) == {"property", "people", "money", "tenure"}
+    assert set(company) == {"property", "people", "money", "tenure", "dampeners"}
     assert company["tenure"] == [
         "{company} {city} office address",
         "{company} moved office {city}",
         "{company} office fitout",
     ]
+    assert company["dampeners"] == [
+        "{company} office fitout {city}",
+        "{company} JLL OR CBRE OR Colliers corporate real estate",
+        "{company} tender fitout",
+    ]
+
+
+def test_the_dampeners_are_levis_five_in_his_order() -> None:
+    """His section 5: a fitout or move (strong in 3 years, moderate to 5), an outsourcing deal, a
+    tie to a competitor, procurement red flags and financial stress."""
+    criteria = load_rules().criteria
+    assert [rule.id for rule in criteria.dampeners] == [
+        "recent_fitout",
+        "outsourcing",
+        "competitor_tie",
+        "procurement",
+        "financial_stress",
+    ]
+    fitout = criteria.dampener("recent_fitout")
+    assert (fitout.strong_years, fitout.moderate_years, fitout.outgrow_months) == (3, 5, 24)
+    assert criteria.dampener("outsourcing").strength == "strong"
+    assert criteria.dampener("competitor_tie").strength == "moderate"
+    procurement = criteria.dampener("procurement")
+    assert procurement.kinds == {
+        "tender_portal": "strong",
+        "offshore_buying": "strong",
+        "lowest_price": "moderate",
+        "separate_design_and_build": "moderate",
+    }
+    stress = criteria.dampener("financial_stress")
+    assert stress.strength == "strong"
+    assert stress.waived_by == ["office_consolidation", "merger_or_takeover"]
+
+
+def test_the_dampener_search_is_limited_to_three_searches_a_company() -> None:
+    assert MAX_DAMPENER_SEARCHES == 3
+    assert 1 <= len(load_rules().queries.company["dampeners"]) <= MAX_DAMPENER_SEARCHES
+
+
+def test_a_fourth_dampener_search_stops_start_up(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    edit(
+        rules_dir / "queries.yaml",
+        '    - "{company} tender fitout"\n',
+        '    - "{company} tender fitout"\n    - "{company} outsourcing"\n',
+    )
+    with pytest.raises(ValidationError, match="dampeners angle needs 1 to 3 search templates"):
+        read_rules(rules_dir)
+
+
+def test_a_missing_dampeners_angle_stops_start_up(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    text = (rules_dir / "queries.yaml").read_text(encoding="utf-8")
+    start = text.index("  # PLAN-V16 T1-5")
+    (rules_dir / "queries.yaml").write_text(text[:start].rstrip() + "\n", encoding="utf-8")
+    with pytest.raises(ValidationError, match="the property, people, money, tenure and dampeners"):
+        read_rules(rules_dir)
+
+
+def test_a_dampener_missing_or_out_of_order_stops_start_up(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    edit(rules_dir / "criteria.yaml", "id: outsourcing", "id: competitor_tie")
+    with pytest.raises(ValidationError, match="dampeners needs these, in this order"):
+        read_rules(rules_dir)
+
+
+def test_a_dampener_without_a_strength_stops_start_up(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    edit(
+        rules_dir / "criteria.yaml",
+        "    strength: strong\n  - id: competitor_tie",
+        "  - id: competitor_tie",
+    )
+    with pytest.raises(ValidationError, match="outsourcing needs a strength"):
+        read_rules(rules_dir)
+
+
+def test_the_fitout_dampener_needs_its_years_and_no_strength(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    edit(rules_dir / "criteria.yaml", "    outgrow_months: 24", "    strength: strong")
+    with pytest.raises(ValidationError, match="recent_fitout needs strong_years"):
+        read_rules(rules_dir)
+
+
+def test_the_strong_years_stay_under_the_moderate_years(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    edit(rules_dir / "criteria.yaml", "strong_years: 3", "strong_years: 6")
+    with pytest.raises(ValidationError, match="strong_years must be below moderate_years"):
+        read_rules(rules_dir)
+
+
+def test_only_procurement_has_kinds(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    edit(
+        rules_dir / "criteria.yaml",
+        "    strength: strong\n  - id: competitor_tie",
+        "    strength: strong\n    kinds: {x: strong}\n  - id: competitor_tie",
+    )
+    with pytest.raises(ValidationError, match="outsourcing has no kinds"):
+        read_rules(rules_dir)
+
+
+def test_only_financial_stress_can_be_waived(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    edit(
+        rules_dir / "criteria.yaml",
+        "    strength: strong\n  - id: competitor_tie",
+        "    strength: strong\n    waived_by: [office_consolidation]\n  - id: competitor_tie",
+    )
+    with pytest.raises(ValidationError, match="outsourcing can't be waived"):
+        read_rules(rules_dir)
+
+
+def test_a_dampener_waiver_must_be_a_sign(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    edit(rules_dir / "criteria.yaml", "waived_by: [office_consolidation,", "waived_by: [made_up,")
+    with pytest.raises(ValidationError, match="waived_by has signs that aren't triggers: made_up"):
+        read_rules(rules_dir)
+
+
+def test_a_searched_dampener_needs_a_meaning(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    text = (rules_dir / "criteria.yaml").read_text(encoding="utf-8")
+    start = text.index("    meaning: A press release or case study")
+    end = text.index("\n", start) + 1
+    (rules_dir / "criteria.yaml").write_text(text[:start] + text[end:], encoding="utf-8")
+    with pytest.raises(ValidationError, match="outsourcing needs a meaning"):
+        read_rules(rules_dir)
+
+
+def test_a_procurement_kind_must_be_named_in_its_meaning(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    edit(rules_dir / "criteria.yaml", "lowest_price is a history", "the cheapest bid is a history")
+    with pytest.raises(ValidationError, match="meaning must name each kind: lowest_price"):
+        read_rules(rules_dir)
+
+
+def test_the_extract_prompt_asks_for_the_four_dampener_checks() -> None:
+    text = extract_prompt(load_rules()).text
+    for check in ("recent_fitout", "outsourcing", "competitor_tie", "procurement"):
+        assert f"- {check}: " in text
+    assert "- financial_stress: " not in text  # it comes from the `healthy` fact
+    assert "tender_portal" in text and "separate_design_and_build" in text
+    assert 'Never write "none" or "no".' in text
+    assert "$dampeners" not in text
 
 
 def test_unconfirmed_rules_are_listed() -> None:

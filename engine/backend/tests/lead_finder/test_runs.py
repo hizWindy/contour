@@ -267,7 +267,13 @@ async def test_a_recheck_searches_again_even_with_fresh_memory(
     third = make_lf_manager(again)
     params = {**companies("Acme Software"), "recheck": True}
     await finished(third, session_factory, await start(third, "company", params))
-    assert sorted(again.calls) == ["extract", "search:money", "search:people", "search:property"]
+    assert sorted(again.calls) == [
+        "extract",
+        "search:dampeners",
+        "search:money",
+        "search:people",
+        "search:property",
+    ]
 
 
 async def test_the_test_set_run_marks_its_leads_and_reports_against_expectations(
