@@ -728,9 +728,7 @@ describe('Results by tier (PLAN-V16 T3-5)', () => {
     const table = await screen.findByRole('table', { name: 'Leads' })
     expect(within(table).getByRole('columnheader', { name: 'Tier' })).toBeInTheDocument()
     // "A" on screen; a screen reader hears what the tier asks for too.
-    expect((await within(table).findByText('A')).closest('td')).toHaveTextContent(
-      'A, pursue now',
-    )
+    expect((await within(table).findByText('A')).closest('td')).toHaveTextContent('A, pursue now')
   })
 
   it('a picked tier is a chip, and taking the last one away shows every tier', async () => {
