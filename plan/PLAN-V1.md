@@ -11,7 +11,7 @@ The step-by-step plan to build the Company Lead Finder ([LEADS.md](../projects/l
 ## In short
 
 - **What we build:** the research engine (the backend that finds and checks companies) and a website to start research, review results and send leads to HubSpot.
-- **How it runs:** you start a run by hand. Results show in the backend first, then on the website. You click "Send to HubSpot" for each good lead. Nothing is sent automatically.
+- **How it runs:** you start a run by hand. Results show in the backend first, then on the website. You click "Send to HubSpot" for each good lead. Nothing is sent automatically.****
 - **Memory:** pgvector remembers everything the engine reads. It searches less, matches HubSpot better and can find look-alike companies.
 - **Rules and reuse:** the criteria live in settings files, so Levi's changes need no code change. The engine's core is shared, so a future project adds its own folder and reuses the rest.
 - **Order:** the engine and its endpoints first, tested in the backend. Then HubSpot matching, the website and the HubSpot button.
