@@ -3,8 +3,44 @@
  * a status reads the same in a badge, a table, a filter and a feed line. Sentence case, no
  * abbreviations (DESIGN.md, "Words on screen").
  */
-import type { HubSpotStatus, LeadOrigin, LeadResult, LeadStatus, RunStatus } from '@/api/types'
+import type {
+  CityGroup,
+  HubSpotStatus,
+  LeadOrigin,
+  LeadResult,
+  LeadStatus,
+  RunSourceId,
+  RunStatus,
+} from '@/api/types'
 import { humanise } from './format'
+
+/**
+ * The four city groups (PLAN-V16 T1-2), in the order the Start page and the filters show them.
+ * `national` is "All of Australia", which comes before them on its own.
+ */
+export const CITY_GROUP_ORDER: readonly Exclude<CityGroup, 'national'>[] = [
+  'priority',
+  'secondary',
+  'capital',
+  'regional',
+]
+
+export const CITY_GROUP_LABELS: Record<CityGroup, string> = {
+  priority: 'Priority',
+  secondary: 'Secondary',
+  capital: 'Capitals',
+  regional: 'Regional',
+  national: 'All of Australia',
+}
+
+/** Where a run looks for companies (PLAN-V16), in the order every page shows them. */
+export const RUN_SOURCE_ORDER: readonly RunSourceId[] = ['web', 'property_daily', 'arealytics']
+
+export const RUN_SOURCE_LABELS: Record<RunSourceId, string> = {
+  web: 'The web',
+  property_daily: 'Property Daily',
+  arealytics: 'Arealytics',
+}
 
 /** Best first. The order of a legend and of the `result` sort. */
 export const RESULT_ORDER: readonly LeadResult[] = ['pass', 'director_review', 'watch', 'drop']

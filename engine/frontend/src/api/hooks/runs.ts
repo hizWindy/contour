@@ -7,7 +7,7 @@ import {
 } from '@tanstack/react-query'
 import { api, isMissing, unwrap, type ApiProblem } from '../client'
 import { queryKeys } from '../query'
-import type { QueryOf, Run, RunCreate } from '../types'
+import type { QueryOf, Run, RunCreate, RunEstimate } from '../types'
 
 /** One run. The key is `queryKeys.runs.detail(runId)`. */
 export function runQueryOptions(runId: string) {
@@ -86,7 +86,8 @@ export function useEstimateRun(body: RunCreate | null) {
   return useQuery({
     queryKey: queryKeys.runs.estimate(body),
     queryFn: async ({ signal }) =>
-      unwrap(await api.POST('/runs/estimate', { body: body as RunCreate, signal })),
+      // Until PLAN-V16 M1: `companies_needed` and `goal_note` are in `v16.ts`.
+      unwrap(await api.POST('/runs/estimate', { body: body as RunCreate, signal })) as RunEstimate,
     enabled: body !== null,
     placeholderData: keepPreviousData,
     // An estimate is a quick calculation, and the answer changes with the settings and history.

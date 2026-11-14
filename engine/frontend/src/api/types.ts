@@ -2,8 +2,12 @@
  * Short names for the types the pages use most. They all come from `schema.d.ts`, which
  * `npm run types` generates from `openapi.json`. Nothing here is written by hand, so a change in
  * the backend contract shows up as a type error here and in the pages.
+ *
+ * Until PLAN-V16's M1, the types its contract changes come from `v16.ts` instead (marked "V16"
+ * below). M1 points each back at `Schemas[...]` and deletes `v16.ts`.
  */
 import type { components, operations, paths } from './schema'
+import type * as V16 from './v16'
 
 export type { components, operations, paths }
 export type Schemas = components['schemas']
@@ -14,7 +18,8 @@ export type RunStatus = Run['status']
 export type RunCaps = Schemas['RunCaps']
 export type RunCounts = Schemas['RunCounts']
 export type RunCreate = Schemas['RunCreate']
-export type RunEstimate = Schemas['RunEstimate']
+export type RunEstimate = V16.RunEstimate // V16
+export type RunSourceId = V16.RunSourceId // V16
 export type RunPage = Schemas['RunPage']
 export type RunSummary = Schemas['RunSummary']
 export type EventLog = Schemas['EventLog']
@@ -43,8 +48,9 @@ export type HubSpotStatus = LeadRow['hubspot_status']
 export type LeadOrigin = LeadRow['origin']
 
 // Lead Finder
-export type RunOptions = Schemas['RunOptions']
-export type CityOption = Schemas['CityOption']
+export type RunOptions = V16.RunOptions // V16
+export type CityOption = V16.CityOption // V16
+export type CityGroup = V16.CityGroup // V16
 
 // Settings, searches, memory, HubSpot, tests
 export type SettingsOut = Schemas['SettingsOut']

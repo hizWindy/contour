@@ -1,6 +1,7 @@
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { api, unwrap } from '../client'
 import { CACHE_TIMES, queryKeys } from '../query'
+import type { RunOptions } from '../types'
 
 /**
  * Everything the Start page needs: cities, triggers, modes, caps and the default parameters. The
@@ -9,7 +10,9 @@ import { CACHE_TIMES, queryKeys } from '../query'
 export function runOptionsQueryOptions() {
   return queryOptions({
     queryKey: queryKeys.runOptions.all,
-    queryFn: async ({ signal }) => unwrap(await api.GET('/lead-finder/run-options', { signal })),
+    queryFn: async ({ signal }) =>
+      // Until PLAN-V16 M1: the city groups, the goal and the sources are in `v16.ts`.
+      unwrap(await api.GET('/lead-finder/run-options', { signal })) as RunOptions,
   })
 }
 
