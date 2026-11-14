@@ -43,6 +43,10 @@ function makeRow(changes: Partial<LeadRow> = {}): LeadRow {
     trigger_label: 'Lease ending in 1 to 3 years',
     useful: null,
     web_searches: 6,
+    tier: 'B',
+    confidence: 'medium',
+    excluded: null,
+    has_property: false,
     ...changes,
   }
 }
@@ -202,7 +206,7 @@ describe('the results page', () => {
       within(table)
         .getAllByRole('columnheader')
         .map((header) => header.textContent),
-    ).toEqual(['Company', 'Result', 'Score', 'Best sign', 'City', 'HubSpot', 'Researched'])
+    ).toEqual(['Company', 'Tier', 'Result', 'Score', 'Best sign', 'City', 'HubSpot', 'Researched'])
     const rows = within(table).getAllByRole('row').slice(1)
     expect(rows).toHaveLength(2)
     expect(within(rows[0]).getByText('Acme Software')).toBeInTheDocument()
@@ -393,7 +397,7 @@ describe('the results page', () => {
     await user.click(await screen.findByRole('button', { name: 'Acme Software' }))
     const panel = await screen.findByRole('dialog', { name: 'Acme Software' })
     expect(await within(panel).findByRole('tablist', { name: 'Lead details' })).toBeInTheDocument()
-    expect(within(panel).getByText('Score 51 of 77 checked')).toBeInTheDocument()
+    expect(panel.querySelector('[data-slot="tier-headline"]')).toHaveTextContent(/Tier B.*score 51/)
     expect(within(panel).getByRole('link', { name: 'Open the full page' })).toHaveAttribute(
       'href',
       `/leads/${LEAD_ID}`,
@@ -425,7 +429,8 @@ describe('the results page', () => {
 
     const panel = await screen.findByRole('dialog', { name: 'Acme Software' })
     expect(within(panel).getByText('Software, Melbourne')).toBeInTheDocument()
-    expect(within(panel).getByText('Score 51 of 77 checked')).toBeInTheDocument()
+    // The row's own tier line shows while the card loads (PLAN-V16).
+    expect(panel).toHaveTextContent(/Tier B.*score 51.*Medium confidence/)
     expect(within(panel).getByText('Loading the lead.')).toBeInTheDocument()
     expect(within(panel).queryByRole('tablist')).toBeNull()
   })
@@ -520,7 +525,7 @@ describe('the results page', () => {
     await user.click(open)
     const sheet = await screen.findByRole('dialog', { name: 'Filters' })
     expect(
-      within(sheet).getByRole('region', { name: 'Result, city and source' }),
+      within(sheet).getByRole('region', { name: 'Tier, result, city and source' }),
     ).toBeInTheDocument()
     await user.click(within(sheet).getByRole('button', { name: 'Filter by Result' }))
     await user.click(await screen.findByRole('option', { name: /^Watch/ }))
@@ -694,5 +699,81 @@ describe('the results page', () => {
     renderResults()
     expect(await screen.findByText(HOSTILE)).toBeInTheDocument()
     expect(document.querySelector('img')).toBeNull()
+  })
+})
+
+describe('Results by tier (PLAN-V16 T3-5)', () => {
+  it('opens on Tier A and B, asks for them, and says so with a way to see every tier', async () => {
+    const backend = mockApi()
+    const { user } = renderResults()
+    await screen.findByRole('table', { name: 'Leads' })
+
+    expect(lastQuery(backend, '/leads').getAll('tier')).toEqual(['A', 'B'])
+    expect(lastQuery(backend, '/leads/facets').getAll('tier')).toEqual(['A', 'B'])
+    expect(screen.getByText('Showing Tier A and B, the good leads.')).toBeInTheDocument()
+    expect(address().toString()).toBe('')
+
+    await user.click(screen.getByRole('button', { name: 'Show every tier' }))
+
+    await waitFor(() => {
+      expect(lastQuery(backend, '/leads').getAll('tier')).toEqual(['A', 'B', 'C', 'discard'])
+    })
+    expect(address().get('tier')).toBe('all')
+    expect(screen.queryByText('Showing Tier A and B, the good leads.')).toBeNull()
+  })
+
+  it('shows each lead tier in its own column', async () => {
+    mockApi({ rows: [makeRow({ tier: 'A', score: 82 })] })
+    renderResults()
+    const table = await screen.findByRole('table', { name: 'Leads' })
+    expect(within(table).getByRole('columnheader', { name: 'Tier' })).toBeInTheDocument()
+    // "A" on screen; a screen reader hears what the tier asks for too.
+    expect((await within(table).findByText('A')).closest('td')).toHaveTextContent('A, pursue now')
+  })
+
+  it('a picked tier is a chip, and taking the last one away shows every tier', async () => {
+    const backend = mockApi()
+    const { user } = renderResults('?tier=C')
+    await screen.findByRole('table', { name: 'Leads' })
+    expect(lastQuery(backend, '/leads').getAll('tier')).toEqual(['C'])
+    const chips = screen.getByRole('list', { name: 'Filters in use' })
+    await user.click(within(chips).getByRole('button', { name: 'Remove Tier: C' }))
+    await waitFor(() => {
+      expect(address().get('tier')).toBe('all')
+    })
+  })
+
+  it('filters by confidence, city group, property record and exclusion', async () => {
+    const backend = mockApi()
+    renderResults('?confidence=low&city_group=regional&has_property=true&tier=all&excluded=true')
+    await screen.findByRole('table', { name: 'Leads' })
+    const query = lastQuery(backend, '/leads')
+    expect(query.getAll('confidence')).toEqual(['low'])
+    expect(query.getAll('city_group')).toEqual(['regional'])
+    expect(query.get('has_property')).toBe('true')
+    expect(query.get('excluded')).toBe('true')
+    const chips = screen.getByRole('list', { name: 'Filters in use' })
+    for (const words of [
+      'Confidence: Low',
+      'Cities: Regional',
+      'Has a property record',
+      'Only excluded leads',
+    ]) {
+      expect(within(chips).getByText(words)).toBeInTheDocument()
+    }
+  })
+
+  it('"Only excluded leads" shows every tier with it, since an excluded lead has none', async () => {
+    const backend = mockApi()
+    const { user } = renderResults()
+    await screen.findByRole('table', { name: 'Leads' })
+    await user.click(screen.getByRole('button', { name: 'Filters' }))
+    await user.click(await screen.findByRole('checkbox', { name: 'Only excluded leads' }))
+    await waitFor(() => {
+      expect(lastQuery(backend, '/leads').get('excluded')).toBe('true')
+    })
+    expect(lastQuery(backend, '/leads').getAll('tier')).toEqual(['A', 'B', 'C', 'discard'])
+    expect(address().get('excluded')).toBe('true')
+    expect(address().get('tier')).toBe('all')
   })
 })

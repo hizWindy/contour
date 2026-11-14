@@ -106,3 +106,23 @@ describe('the number on the Filters button', () => {
     expect(panelFilterCount(NO_FILTERS, false)).toBe(0)
   })
 })
+
+describe('the tier chips (PLAN-V16 T3-5)', () => {
+  it('has no chip for the default view (A and B) or for every tier', () => {
+    expect(activeChips(NO_FILTERS)).toEqual([])
+    expect(activeChips({ ...NO_FILTERS, tier: [] })).toEqual([])
+  })
+
+  it('has a chip for each other tier, and the last one taken away shows every tier', () => {
+    const chips = activeChips({ ...NO_FILTERS, tier: ['C'] })
+    expect(chips.map((chip) => chip.label)).toEqual(['Tier: C'])
+    expect(chips[0]?.remove).toEqual({ tier: [] })
+  })
+
+  it('counts the tier on the Filters button only on a phone, and only when not the default', () => {
+    expect(panelFilterCount(NO_FILTERS, false)).toBe(0)
+    expect(panelFilterCount({ ...NO_FILTERS, tier: ['C'] }, false)).toBe(1)
+    expect(panelFilterCount({ ...NO_FILTERS, tier: ['C'] }, true)).toBe(0)
+    expect(panelFilterCount({ ...NO_FILTERS, has_property: true, excluded: true }, true)).toBe(2)
+  })
+})

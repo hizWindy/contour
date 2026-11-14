@@ -17,16 +17,18 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { formatNumber, pluralise } from '@/lib/format'
-import { resultLabel } from '@/lib/labels'
+import { CITY_GROUP_LABELS, CITY_GROUP_ORDER, resultLabel } from '@/lib/labels'
 import { cn } from '@/lib/utils'
 import { ScoreBar } from './score-bar'
 import {
   CHANGED,
+  dampenerWords,
   keyWords,
   list,
   NAME_CHECK_WORDS,
   RANK_WORDS,
   SECTIONS,
+  SIGN_STRENGTHS,
   sources,
   tbcByKey,
   type Rules,
@@ -132,14 +134,20 @@ function Sign({
   item,
   rule,
   tbc,
+  searched = false,
 }: {
   item: { id: string; label: string }
   rule?: string
   tbc: Map<string, TbcNote>
+  /** A main sign: a run looks for it unless a person unticks it. */
+  searched?: boolean
 }) {
   return (
     <Row label={item.label} rule={rule} tbc={tbc}>
-      <span className="text-caption text-muted-foreground">{item.id}</span>
+      <span className="text-caption text-muted-foreground">
+        {searched ? 'searched by default · ' : ''}
+        {item.id}
+      </span>
     </Row>
   )
 }
@@ -245,9 +253,9 @@ function RulesLoaded({ rules }: { rules: Rules }) {
   const waiting = [...c.tbc, ...watchlist.tbc]
   const main = useRef<HTMLDivElement>(null)
 
-  const signLabel = (id: string) =>
-    [...c.triggers.main, ...c.triggers.other, ...c.triggers.weak].find((t) => t.id === id)?.label ??
-    id
+  const everySign = [...c.triggers.main, ...c.triggers.other, ...c.triggers.weak]
+  const mainIds = new Set(c.triggers.main.map((item) => item.id))
+  const signLabel = (id: string) => everySign.find((t) => t.id === id)?.label ?? id
   const watchBand = c.size.staff_hint_min > c.size.staff_floor
 
   return (
@@ -265,16 +273,19 @@ function RulesLoaded({ rules }: { rules: Rules }) {
             id="cities"
             index={0}
             title="Cities"
-            description="Where a company's office has to be."
+            description="All of Australia. Every place passes; the group sets the city points."
+            tbc={tbc.get('cities.groups')}
           >
-            <Row label="Can pass" tbc={tbc}>
-              {list(c.cities.pass)}
+            {CITY_GROUP_ORDER.map((group) => (
+              <Row key={group} label={CITY_GROUP_LABELS[group]} tbc={tbc}>
+                <span className="text-caption">{list(c.cities.groups[group])}</span>
+              </Row>
+            ))}
+            <Row label="Any other place in Australia" tbc={tbc}>
+              Passes, flagged to check the city
             </Row>
-            <Row label="Director review" tbc={tbc}>
-              {list(c.cities.director_review) || 'None'}
-            </Row>
-            <Row label="Any other city" tbc={tbc}>
-              {c.cities.other_cities === 'drop' ? 'Dropped' : 'Director review'}
+            <Row label="All of Australia" rule="cities.national" tbc={tbc}>
+              One search for each sign, in place of the cities
             </Row>
             <Row label="Overseas, no city named yet" rule="cities.no_city_director_signs" tbc={tbc}>
               {(c.cities.no_city_director_signs ?? []).length
@@ -284,8 +295,47 @@ function RulesLoaded({ rules }: { rules: Rules }) {
           </Section>
 
           <Section
-            id="size"
+            id="filters"
             index={1}
+            title="Filters and exclusions"
+            description="Five filters before the score. An unknown fact is estimated and labelled, never a fail."
+            tbc={tbc.get('exclusions')}
+          >
+            <Row label="Location" tbc={tbc}>
+              Any place in Australia
+            </Row>
+            <Row label="Office size" tbc={tbc}>
+              {formatNumber(c.size.office_m2_min)} m² or more, now or within{' '}
+              {c.size.grow_into_range_months} months
+            </Row>
+            <Row label="Headcount" tbc={tbc}>
+              Staff in the city, not the whole company (see Size)
+            </Row>
+            <Row label="Office relevance" tbc={tbc}>
+              The office matters to how the company works
+            </Row>
+            <Row label="Sector" tbc={tbc}>
+              Not one that is left out (below)
+            </Row>
+            <SignGroup
+              title="Left out"
+              hint="not scored, each with its reason; a person can override"
+            >
+              {c.exclusions.map((rule) => (
+                <Row key={rule.id} label={rule.label} tbc={tbc}>
+                  <span className="text-caption text-muted-foreground">
+                    {rule.flag
+                      ? `Not left out: ${rule.flag.replace(/\. Flagged, not left out$/, '')}`
+                      : rule.id}
+                  </span>
+                </Row>
+              ))}
+            </SignGroup>
+          </Section>
+
+          <Section
+            id="size"
+            index={2}
             title="Size"
             description="The office that fits, and the staff that stand in for it when the size is unknown."
           >
@@ -365,16 +415,28 @@ function RulesLoaded({ rules }: { rules: Rules }) {
 
           <Section
             id="signs"
-            index={2}
+            index={3}
             title="Signs of an office change"
-            description="Each sign as Claude reads it, with its code name. A main sign can make a Pass; the others add to it."
-            tbc={tbc.get('triggers')}
+            description="Each sign by how strong it is (Levi's section 4), as Claude reads it. A run looks for the main ones unless a person unticks them."
+            tbc={tbc.get('triggers.other') ?? tbc.get('triggers')}
           >
-            <SignGroup title="Main" hint={`${c.triggers.main.length}`}>
-              {c.triggers.main.map((item) => (
-                <Sign key={item.id} item={item} rule={`triggers.main.${item.id}`} tbc={tbc} />
-              ))}
-            </SignGroup>
+            {SIGN_STRENGTHS.map((strength) => {
+              const signs = everySign.filter((item) => item.strength === strength.id)
+              if (signs.length === 0) return null
+              return (
+                <SignGroup key={strength.id} title={strength.label} hint={strength.hint}>
+                  {signs.map((item) => (
+                    <Sign
+                      key={item.id}
+                      item={item}
+                      rule={`triggers.main.${item.id}`}
+                      tbc={tbc}
+                      searched={mainIds.has(item.id)}
+                    />
+                  ))}
+                </SignGroup>
+              )
+            })}
             <SignGroup title="Boosters" hint="evidence that lifts the score">
               {c.boosters.map((item) => (
                 <Sign
@@ -385,16 +447,6 @@ function RulesLoaded({ rules }: { rules: Rules }) {
                 />
               ))}
             </SignGroup>
-            <SignGroup title="Other" hint="worth less than a main sign">
-              {c.triggers.other.map((item) => (
-                <Sign key={item.id} item={item} tbc={tbc} />
-              ))}
-            </SignGroup>
-            <SignGroup title="Weak" hint="ranks after real news">
-              {c.triggers.weak.map((item) => (
-                <Sign key={item.id} item={item} tbc={tbc} />
-              ))}
-            </SignGroup>
             <p className="pt-3 text-caption text-muted-foreground">
               The old office&apos;s sign ({c.office_age.tenure_years}+ years at the same address)
               comes from the office dates, never from a search.
@@ -402,8 +454,27 @@ function RulesLoaded({ rules }: { rules: Rules }) {
           </Section>
 
           <Section
+            id="dampeners"
+            index={4}
+            title="Dampeners"
+            description="Facts that lower the score and never remove the lead. A check that found nothing says not found, never none."
+            tbc={tbc.get('dampeners')}
+          >
+            {c.dampeners.map((rule) => (
+              <Row key={rule.id} label={rule.label} tbc={tbc}>
+                <span className="text-caption">
+                  {dampenerWords(rule)}
+                  {rule.waived_by.length > 0
+                    ? `, unless it comes with ${list(rule.waived_by.map(signLabel))}`
+                    : ''}
+                </span>
+              </Row>
+            ))}
+          </Section>
+
+          <Section
             id="timing"
-            index={3}
+            index={5}
             title="Timing"
             description="How old an event can be, and what the office's age says."
           >
@@ -453,33 +524,31 @@ function RulesLoaded({ rules }: { rules: Rules }) {
 
           <Section
             id="score"
-            index={4}
+            index={6}
             title="Score"
-            description="Six parts that add up to 100. Point at a part to see its checks."
+            description="Three parts that add up to 100, then the dampeners, then the tier. Point at a part to see its checks."
             tbc={tbc.get('score')}
           >
             <div className="py-2">
               <ScoreBar score={c.score} />
             </div>
-            <Row label="Research first" tbc={tbc}>
-              {c.score.bands.research_first} to 100
+            <Row label="Tier A: pursue now" rule="score.tiers" tbc={tbc}>
+              {c.score.tiers.a} to 100
             </Row>
-            <Row label="Investigate" tbc={tbc}>
-              {c.score.bands.investigate} to {c.score.bands.research_first - 1}
+            <Row label="Tier B: nurture" tbc={tbc}>
+              {c.score.tiers.b} to {c.score.tiers.a - 1}
             </Row>
-            <Row label="Nurture" tbc={tbc}>
-              under {c.score.bands.investigate}
+            <Row label="Tier C: watch" tbc={tbc}>
+              {c.score.tiers.c} to {c.score.tiers.b - 1}
             </Row>
-            <Row label="The bands use" rule="score.band_basis" tbc={tbc}>
-              {c.score.band_basis === 'scaled'
-                ? 'the points scaled to the points checked'
-                : 'the raw points'}
+            <Row label="Discard: not listed" tbc={tbc}>
+              under {c.score.tiers.c}
             </Row>
-            <Row label="Years at the same address" rule="score.years_at_address" tbc={tbc}>
-              {c.score.years_at_address} points
+            <Row label="A strong dampener takes off" rule="score.dampeners" tbc={tbc}>
+              {c.score.dampeners.strong} points
             </Row>
-            <Row label="No recent move or fitout" rule="score.no_recent_move" tbc={tbc}>
-              {c.score.no_recent_move} points
+            <Row label="A moderate dampener takes off" tbc={tbc}>
+              {c.score.dampeners.moderate} points
             </Row>
             {Object.entries(c.stages).map(([result, stage]) => (
               <Row key={result} label={`${resultLabel(result)} in HubSpot`} tbc={tbc}>
@@ -490,15 +559,12 @@ function RulesLoaded({ rules }: { rules: Rules }) {
 
           <Section
             id="industries"
-            index={5}
+            index={7}
             title="Industries and fit"
-            description="Which industries score, which get a Director, and which get an office check."
+            description="Which sectors score, which get a Director, and which get an office check."
           >
-            <Row label="Tier 1" rule="industries.tier_1" tbc={tbc}>
-              <span className="text-caption">{list(c.industries.tier_1)}</span>
-            </Row>
-            <Row label="Tier 2" rule="industries.tier_2" tbc={tbc}>
-              <span className="text-caption">{list(c.industries.tier_2)}</span>
+            <Row label="Priority sectors" rule="industries.priority_sectors" tbc={tbc}>
+              <span className="text-caption">{list(c.industries.priority_sectors)}</span>
             </Row>
             <Row label="Director review" tbc={tbc}>
               <span className="text-caption">{list(c.industries.director_review)}</span>
@@ -522,14 +588,14 @@ function RulesLoaded({ rules }: { rules: Rules }) {
             </Row>
             <Row label="Rivals of a booming company" rule="rivals" tbc={tbc}>
               {c.rivals.enabled
-                ? `up to ${c.rivals.per_lead} a lead, ${c.rivals.per_run} a run, in ${list(c.rivals.tiers.map((t) => t.replace('_', ' ')))}`
+                ? `up to ${String(c.rivals.per_lead)} a lead, ${String(c.rivals.per_run)} a run, for a good lead in a priority sector${c.rivals.also_after.length > 0 ? ` or with ${list(c.rivals.also_after.map(signLabel))}` : ''}`
                 : 'Switched off'}
             </Row>
           </Section>
 
           <Section
             id="never"
-            index={6}
+            index={8}
             title="Never suggest"
             description="Companies a run leaves out, whatever their signs."
           >
@@ -553,7 +619,7 @@ function RulesLoaded({ rules }: { rules: Rules }) {
 
           <Section
             id="sources"
-            index={7}
+            index={9}
             title="Sources"
             description="Which source is main for which fact, how strong each kind of source is, and the sites never read."
             tbc={tbc.get('source_domains')}

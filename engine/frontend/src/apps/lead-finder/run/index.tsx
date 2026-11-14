@@ -40,7 +40,10 @@ import { formatDateTime, formatNumber, formatTime, shortId } from '@/lib/format'
 import { isTerminalRunStatus, RESULT_ORDER, RUN_MODE_LABELS } from '@/lib/labels'
 import { cn } from '@/lib/utils'
 import { GoodLeadsLine } from '../good-leads'
-import { FunnelLine, RunCompanies, RunCostSplit, RunSetupCard } from './details'
+import { goodLeads } from '../good-leads-data'
+import { FunnelLine, RunCostSplit, RunLeads, RunSetupCard } from './details'
+import { GoalBlock, LeadSourcesLine } from './goal'
+import { goalProgress } from './goal-data'
 
 const TONE_ICON: Record<FeedTone, LucideIcon> = {
   info: Info,
@@ -120,6 +123,14 @@ function RunView({ runId, run }: { runId: string; run: Run }) {
   const stopping = (cancel.isPending || final.cancel_requested_at !== null) && !ended
   const canResume = status === 'interrupted' || status === 'failed'
   const byResult = RESULT_ORDER.filter((result) => (counts.by_result[result] ?? 0) > 0)
+  // The goal of good leads (PLAN-V16 T3-3): the live results while it runs, then the backend's
+  // own count. Its "ended short" line says why, so the stop reason isn't repeated under it.
+  const goal = goalProgress(
+    { ...final, status },
+    ended ? final.good_leads : goodLeads(counts),
+    ended,
+  )
+  const whyShown = goal?.state === 'short'
 
   // A company finished: the list of companies and the cost split read it again.
   const researched = counts.researched
@@ -194,6 +205,7 @@ function RunView({ runId, run }: { runId: string; run: Run }) {
               <CardTitle className="text-section font-semibold">Progress</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
+              {goal ? <GoalBlock progress={goal} /> : null}
               {progress ? (
                 <div className="flex flex-col gap-2">
                   <Progress value={progress.value} aria-label="Progress" />
@@ -214,6 +226,7 @@ function RunView({ runId, run }: { runId: string; run: Run }) {
                 <Stat label="Failed" value={formatNumber(counts.failed)} />
               </dl>
               <FunnelLine counts={counts} />
+              <LeadSourcesLine run={final} />
               {byResult.length > 0 ? (
                 <ul aria-label="Results so far" className="flex flex-wrap gap-2">
                   {byResult.map((result) => (
@@ -224,10 +237,10 @@ function RunView({ runId, run }: { runId: string; run: Run }) {
                   ))}
                 </ul>
               ) : null}
-              {final.stop_reason && !final.error ? (
+              {final.stop_reason && !final.error && !whyShown ? (
                 <p className="text-ui text-muted-foreground">Stopped early: {final.stop_reason}</p>
               ) : null}
-              {state.capReached ? (
+              {state.capReached && !whyShown ? (
                 <p className="flex items-start gap-2 text-ui text-review-ink">
                   <TriangleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
                   {state.capReached.detail}
@@ -236,7 +249,7 @@ function RunView({ runId, run }: { runId: string; run: Run }) {
             </CardContent>
           </Card>
 
-          <RunCompanies runId={runId} className="max-lg:order-4" />
+          <RunLeads runId={runId} className="max-lg:order-4" />
 
           <Card className="max-lg:order-5">
             <CardHeader>
@@ -294,7 +307,7 @@ function RunView({ runId, run }: { runId: string; run: Run }) {
             <CardContent className="flex flex-col gap-3 text-ui">
               <CostMeter cost={cost} cap={caps.run_cap_usd} status={status} />
               <p>
-                Good leads (Pass or Director review):{' '}
+                Good leads (Tier A or B):{' '}
                 <GoodLeadsLine counts={counts} cost={cost} className="font-semibold" />
               </p>
               <p className="text-caption text-muted-foreground">

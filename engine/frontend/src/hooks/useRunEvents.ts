@@ -212,12 +212,13 @@ export function useRunEvents(
       controller = new AbortController()
       let run: Run
       try {
+        // Until PLAN-V16 M1: the run's new fields are in `v16.ts`.
         run = unwrap(
           await api.GET('/runs/{run_id}', {
             params: { path: { run_id: runId } },
             signal: controller.signal,
           }),
-        )
+        ) as Run
       } catch (error) {
         if (disposed || isAbort(error)) {
           return

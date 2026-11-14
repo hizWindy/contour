@@ -173,6 +173,10 @@ const LEAD_ROW = {
   updated_at: '2026-11-09T09:10:00Z',
   run_id: RUN_ID,
   contact_role: null,
+  tier: 'A',
+  confidence: 'high',
+  excluded: null,
+  has_property: false,
 }
 
 function reviewApi(writeEnabled: boolean): Call[] {

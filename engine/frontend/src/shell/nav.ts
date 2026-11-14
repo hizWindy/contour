@@ -7,6 +7,7 @@
  */
 import {
   Activity,
+  Building2,
   CalendarClock,
   Database,
   FileSearch,
@@ -168,6 +169,13 @@ export const ADMIN_TABS: readonly NavItem[] = [
     icon: Upload,
     keywords: ['import', 'watchlist'],
     purpose: 'The connection, the syncs and the writes.',
+  },
+  {
+    to: '/admin/sources',
+    label: 'Sources',
+    icon: Building2,
+    keywords: ['property daily', 'arealytics', 'leases', 'tools', 'browser'],
+    purpose: 'The property tools: on or off, signed in, pages read.',
   },
   {
     to: '/admin/people',

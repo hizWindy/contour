@@ -133,6 +133,10 @@ export const queryKeys = {
   health: {
     all: ['health'] as const,
   },
+  /** Property Daily and Arealytics, for Admin's Sources tab (PLAN-V16 T3-6). */
+  sources: {
+    all: ['sources'] as const,
+  },
   leads: {
     all: ['leads'] as const,
     lists: () => ['leads', 'list'] as const,

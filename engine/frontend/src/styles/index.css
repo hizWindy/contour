@@ -386,3 +386,20 @@
   stroke: var(--primary);
   stroke-width: 3;
 }
+
+/*
+  Printing (PLAN-V16 T3-7): a lead's one-page profile prints on A4, with a margin the printer can
+  reach. Colours print as on screen in light mode; links stay plain text with their host.
+*/
+@page {
+  size: A4;
+  margin: 12mm;
+}
+
+@media print {
+  /* Paper is the page: no tinted background, even with background graphics on. */
+  html,
+  body {
+    background: transparent;
+  }
+}

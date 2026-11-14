@@ -6,9 +6,17 @@
  * the exact values from before. Reject asks for a reason from a fixed list (PLAN-V9 D1). Re-check costs money, so it asks first and has no Undo. Send to
  * HubSpot previews first and writes once only (send-lead.tsx).
  */
-import { Bookmark, BookmarkCheck, RefreshCw, ThumbsDown, ThumbsUp, XCircle } from 'lucide-react'
+import {
+  Bookmark,
+  BookmarkCheck,
+  Printer,
+  RefreshCw,
+  ThumbsDown,
+  ThumbsUp,
+  XCircle,
+} from 'lucide-react'
 import { useState } from 'react'
-import { useNavigate } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { toast } from 'sonner'
 import { usePatchLead, useRecheckLead } from '@/api/hooks'
 import type { LeadDetail, LeadPatch } from '@/api/types'
@@ -171,6 +179,15 @@ export function Actions({ lead }: { lead: LeadDetail }) {
           Not useful
         </Button>
       </div>
+      {/* Levi's one-page profile, for a Tier A lead (PLAN-V16 T3-7). */}
+      {lead.tier === 'A' ? (
+        <Button asChild type="button" size="sm" variant="ghost">
+          <Link to={`/leads/${lead.id}/profile`}>
+            <Printer aria-hidden="true" />
+            Print the profile
+          </Link>
+        </Button>
+      ) : null}
 
       <RejectDialog
         open={rejecting}

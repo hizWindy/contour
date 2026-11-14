@@ -5,19 +5,24 @@
  *   limits), when it ran and for how long, and the rules and prompt versions it used.
  * - `RunCostSplit`: where the money went: finding companies vs researching them, and the average
  *   per company researched. Read from the run's search log.
- * - `RunCompanies`: every company the run researched, best first, each opening its lead card.
+ * - `RunLeads`: the companies the run researched, as Levi's section 9 lists them (PLAN-V16
+ *   T3-3): the ranked leads (Tier A and B, best first), then the excluded ones with each reason,
+ *   then the watch list (Tier C). Each opens its lead card. Discarded leads (under 40) are counted,
+ *   with a link to them in Results.
  * - `FunnelLine`: searches, finds, companies after merging, chosen, researched, in one line.
  */
 import { createColumnHelper } from '@tanstack/react-table'
-import { useNavigate } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { useLeads, useRunOptions, useSearches } from '@/api/hooks'
 import type { LeadRow, Run, RunCounts } from '@/api/types'
-import { DataTable } from '@/components/data-table'
+import { DataTable, type DataTableProps } from '@/components/data-table'
 import { Money } from '@/components/money'
 import { ResultBadge } from '@/components/result-badge'
+import { TierMark } from '@/components/tier-mark'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatNumber, pluralise } from '@/lib/format'
 import { costSplit, logIsPartial, setupLines, timingLines, type DetailLine } from './details-data'
+import { groupRunLeads } from './goal-data'
 
 const LOG_LIMIT = 200
 
@@ -96,7 +101,8 @@ export function RunCostSplit({ runId, researched }: { runId: string; researched:
 }
 
 const help = createColumnHelper<LeadRow>()
-const columns = [
+
+const companyColumn = () =>
   help.accessor('company', {
     header: 'Company',
     enableSorting: false,
@@ -108,53 +114,169 @@ const columns = [
         {info.getValue()}
       </button>
     ),
-  }),
-  help.accessor('result', {
-    header: 'Result',
-    enableSorting: false,
-    cell: (info) => <ResultBadge result={info.getValue()} />,
-  }),
-  help.accessor('score', {
-    header: 'Score',
-    enableSorting: false,
-    meta: { align: 'right', className: 'tabular-nums' },
-  }),
+  })
+
+const cityColumn = () =>
   help.accessor('city', {
     header: 'City',
     enableSorting: false,
     meta: { hideBelow: 'sm' },
     cell: (info) => info.getValue() ?? 'Unknown',
+  })
+
+const scoreColumn = () =>
+  help.accessor('score', {
+    header: 'Score',
+    enableSorting: false,
+    meta: { align: 'right', className: 'tabular-nums' },
+  })
+
+type Columns = DataTableProps<LeadRow>['columns']
+
+const RANKED = [
+  companyColumn(),
+  help.accessor('tier', {
+    header: 'Tier',
+    enableSorting: false,
+    cell: (info) => <TierMark tier={info.getValue()} />,
   }),
+  scoreColumn(),
+  help.accessor('result', {
+    header: 'Result',
+    enableSorting: false,
+    meta: { hideBelow: 'sm' },
+    cell: (info) => <ResultBadge result={info.getValue()} />,
+  }),
+  cityColumn(),
   help.accessor('cost_usd', {
     header: 'Cost',
     enableSorting: false,
-    meta: { align: 'right' },
+    meta: { align: 'right', hideBelow: 'sm' },
     cell: (info) => <Money value={info.getValue()} />,
   }),
 ]
 
-export function RunCompanies({ runId, className }: { runId: string; className?: string }) {
+const EXCLUDED = [
+  companyColumn(),
+  help.accessor((row) => row.excluded?.label ?? '', {
+    id: 'reason',
+    header: 'Why it was left out',
+    enableSorting: false,
+    // A reason can be long: it wraps instead of widening the table on a phone.
+    meta: { className: 'min-w-40 whitespace-normal' },
+  }),
+  cityColumn(),
+]
+
+const WATCH = [companyColumn(), scoreColumn(), cityColumn()]
+
+function LeadGroup({
+  id,
+  title,
+  about,
+  rows,
+  columns,
+  onOpen,
+}: {
+  id: string
+  title: string
+  about: string
+  rows: LeadRow[]
+  columns: Columns
+  onOpen: (leadId: string) => void
+}) {
+  return (
+    <section aria-labelledby={id} className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-baseline gap-x-2">
+        <h3 id={id} className="text-ui font-semibold">
+          {title}
+        </h3>
+        <span className="text-caption text-muted-foreground tabular-nums">
+          {formatNumber(rows.length)}
+        </span>
+      </div>
+      <p className="text-caption text-muted-foreground">{about}</p>
+      <DataTable
+        label={title}
+        columns={columns}
+        data={rows}
+        getRowId={(row) => row.id}
+        compact
+        onOpenRow={onOpen}
+        empty={<span className="text-muted-foreground">None yet.</span>}
+      />
+    </section>
+  )
+}
+
+export function RunLeads({ runId, className }: { runId: string; className?: string }) {
   const navigate = useNavigate()
   const leads = useLeads({ run_id: runId, sort: 'score', order: 'desc', limit: 100 })
   const items = leads.data?.items ?? []
+  const groups = groupRunLeads(items)
+  const open = (leadId: string): void => {
+    void navigate(`/leads/${leadId}`)
+  }
   return (
     <Card className={className}>
       <CardHeader>
-        <CardTitle className="text-section font-semibold">Companies researched</CardTitle>
+        <CardTitle className="text-section font-semibold">Leads from this run</CardTitle>
       </CardHeader>
-      <CardContent>
-        <DataTable
-          label="Companies this run researched"
-          columns={columns}
-          data={items}
-          getRowId={(row) => row.id}
-          compact
-          onOpenRow={(id) => {
-            void navigate(`/leads/${id}`)
-          }}
-          loading={leads.isFetching && items.length === 0}
-          empty={<span className="text-muted-foreground">No company researched yet.</span>}
-        />
+      <CardContent className="flex flex-col gap-6">
+        {items.length === 0 ? (
+          <DataTable
+            label="Leads from this run"
+            columns={RANKED}
+            data={items}
+            getRowId={(row) => row.id}
+            compact
+            loading={leads.isFetching}
+            empty={<span className="text-muted-foreground">No company researched yet.</span>}
+          />
+        ) : (
+          <>
+            <LeadGroup
+              id="run-ranked"
+              title="Ranked leads"
+              about="Tier A and B, best first: the good leads."
+              rows={groups.ranked}
+              columns={RANKED}
+              onOpen={open}
+            />
+            {groups.excluded.length > 0 ? (
+              <LeadGroup
+                id="run-excluded"
+                title="Excluded"
+                about="Left out by the rules, each with its reason. Open one to override it."
+                rows={groups.excluded}
+                columns={EXCLUDED}
+                onOpen={open}
+              />
+            ) : null}
+            {groups.watch.length > 0 ? (
+              <LeadGroup
+                id="run-watch"
+                title="Watch"
+                about="Tier C: watch for a new sign."
+                rows={groups.watch}
+                columns={WATCH}
+                onOpen={open}
+              />
+            ) : null}
+            {groups.discarded > 0 ? (
+              <p className="text-caption text-muted-foreground">
+                {pluralise(groups.discarded, 'company', 'companies')} scored under 40 and{' '}
+                {groups.discarded === 1 ? 'is' : 'are'} not listed.{' '}
+                <Link
+                  className="text-link underline-offset-4 hover:underline"
+                  to={`/results?run_id=${encodeURIComponent(runId)}&tier=discard`}
+                >
+                  See {groups.discarded === 1 ? 'it' : 'them'} in Results
+                </Link>
+              </p>
+            ) : null}
+          </>
+        )}
       </CardContent>
     </Card>
   )

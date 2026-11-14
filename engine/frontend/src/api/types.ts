@@ -2,20 +2,25 @@
  * Short names for the types the pages use most. They all come from `schema.d.ts`, which
  * `npm run types` generates from `openapi.json`. Nothing here is written by hand, so a change in
  * the backend contract shows up as a type error here and in the pages.
+ *
+ * Until PLAN-V16's M1, the types its contract changes come from `v16.ts` instead (marked "V16"
+ * below). M1 points each back at `Schemas[...]` and deletes `v16.ts`.
  */
 import type { components, operations, paths } from './schema'
+import type * as V16 from './v16'
 
 export type { components, operations, paths }
 export type Schemas = components['schemas']
 
 // Runs
-export type Run = Schemas['RunOut']
+export type Run = V16.Run // V16
 export type RunStatus = Run['status']
 export type RunCaps = Schemas['RunCaps']
 export type RunCounts = Schemas['RunCounts']
 export type RunCreate = Schemas['RunCreate']
-export type RunEstimate = Schemas['RunEstimate']
-export type RunPage = Schemas['RunPage']
+export type RunEstimate = V16.RunEstimate // V16
+export type RunSourceId = V16.RunSourceId // V16
+export type RunPage = V16.RunPage // V16
 export type RunSummary = Schemas['RunSummary']
 export type EventLog = Schemas['EventLog']
 
@@ -29,9 +34,9 @@ export type ProblemDetails = Schemas['ProblemDetails']
 export type FieldError = Schemas['FieldError']
 
 // Leads
-export type LeadRow = Schemas['LeadRow']
-export type LeadDetail = Schemas['LeadDetail']
-export type LeadPage = Schemas['LeadPage']
+export type LeadRow = V16.LeadRow // V16
+export type LeadDetail = V16.LeadDetail // V16
+export type LeadPage = V16.LeadPage // V16
 export type LeadFacets = Schemas['LeadFacets']
 export type LeadPatch = Schemas['LeadPatch']
 export type MapPoint = Schemas['MapPoint']
@@ -43,8 +48,26 @@ export type HubSpotStatus = LeadRow['hubspot_status']
 export type LeadOrigin = LeadRow['origin']
 
 // Lead Finder
-export type RunOptions = Schemas['RunOptions']
-export type CityOption = Schemas['CityOption']
+export type RunOptions = V16.RunOptions // V16
+export type CityOption = V16.CityOption // V16
+export type CityGroup = V16.CityGroup // V16
+export type LeadFinderRules = V16.LeadFinderRules // V16
+export type SignStrength = V16.SignStrength // V16
+export type Tier = V16.Tier // V16
+export type Confidence = V16.Confidence // V16
+export type Exclusion = V16.Exclusion // V16
+// The lead card's new parts (PLAN-V16 contract parts 1 and 3)
+export type PropertySource = V16.PropertySource // V16
+export type SourceStatus = V16.SourceStatus // V16
+export type PropertyRecord = V16.PropertyRecord // V16
+export type RecordKind = V16.RecordKind // V16
+export type Office = V16.Office // V16
+export type ChangeKind = V16.ChangeKind // V16
+export type FilterState = V16.FilterState // V16
+export type DampenerStrength = V16.DampenerStrength // V16
+// Sources for Admin (PLAN-V16 contract part 4)
+export type ToolOut = V16.ToolOut // V16
+export type ToolList = V16.ToolList // V16
 
 // Settings, searches, memory, HubSpot, tests
 export type SettingsOut = Schemas['SettingsOut']
@@ -73,9 +96,9 @@ export type Schedule = Schemas['ScheduleOut']
 export type ScheduleEstimate = Schemas['ScheduleEstimate']
 export type ScheduleEdit = Schemas['ScheduleEdit']
 export type RunNow = Schemas['RunNow']
-export type LeadFinderRound = Schemas['RoundOut']
-export type LeadFinderRoundIn = Schemas['RoundIn']
-export type RoundCity = Schemas['RoundCityOut']
+export type LeadFinderRound = V16.RoundOut // V16
+export type LeadFinderRoundIn = V16.RoundIn // V16
+export type RoundCity = V16.RoundCityPlan // V16
 
 // Health (PLAN-V13 T1-2)
 export type HealthDetails = Schemas['HealthDetails']

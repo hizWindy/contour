@@ -8,13 +8,16 @@
 import type { LeadFacets } from '@/api/types'
 import { formatDate, formatDateTime, formatNumber, humanise } from '@/lib/format'
 import {
+  CITY_GROUP_LABELS,
+  CONFIDENCE_LABELS,
   HUBSPOT_STATUS_LABELS,
   LEAD_STATUS_LABELS,
   ORIGIN_LABELS,
   RESULT_LABELS,
   RUN_MODE_LABELS,
+  TIER_LABELS,
 } from '@/lib/labels'
-import { NO_FILTERS, type LeadFilters } from './params'
+import { isDefaultTiers, NO_FILTERS, type LeadFilters } from './params'
 
 export interface FilterChip {
   /** Unique among the chips, stable while the filter stays. */
@@ -93,6 +96,21 @@ function rangeLabel(
   return `${title}: ${upTo} ${show(until ?? '')}`
 }
 
+/**
+ * The tier chips (PLAN-V16 T3-5). The default view, A and B, has none: the line under the bar says
+ * so instead. Every tier has none either. Taking the last tier away shows every tier.
+ */
+function tierChips(filters: LeadFilters): FilterChip[] {
+  if (filters.tier.length === 0 || isDefaultTiers(filters.tier)) {
+    return []
+  }
+  return filters.tier.map((tier) => ({
+    key: `tier:${tier}`,
+    label: `Tier: ${TIER_LABELS[tier]}`,
+    remove: { tier: filters.tier.filter((item) => item !== tier) },
+  }))
+}
+
 /** Every filter in use, as chips, in the order of the bar and then the panel. */
 export function activeChips(filters: LeadFilters, facets?: LeadFacets): FilterChip[] {
   const chips: FilterChip[] = []
@@ -100,6 +118,7 @@ export function activeChips(filters: LeadFilters, facets?: LeadFacets): FilterCh
   if (q !== '') {
     chips.push({ key: 'q', label: `Name: ${q}`, remove: { q: '' } })
   }
+  chips.push(...tierChips(filters))
   for (const key of LIST_ORDER) {
     const picked: readonly string[] = filters[key]
     for (const value of picked) {
@@ -163,6 +182,30 @@ export function activeChips(filters: LeadFilters, facets?: LeadFacets): FilterCh
       remove: { facts_missing: false },
     })
   }
+  for (const value of filters.confidence) {
+    chips.push({
+      key: `confidence:${value}`,
+      label: `Confidence: ${CONFIDENCE_LABELS[value]}`,
+      remove: { confidence: filters.confidence.filter((item) => item !== value) },
+    })
+  }
+  for (const value of filters.city_group) {
+    chips.push({
+      key: `city_group:${value}`,
+      label: `Cities: ${CITY_GROUP_LABELS[value]}`,
+      remove: { city_group: filters.city_group.filter((item) => item !== value) },
+    })
+  }
+  if (filters.has_property) {
+    chips.push({
+      key: 'has_property',
+      label: 'Has a property record',
+      remove: { has_property: false },
+    })
+  }
+  if (filters.excluded) {
+    chips.push({ key: 'excluded', label: 'Only excluded leads', remove: { excluded: false } })
+  }
   return chips
 }
 
@@ -172,10 +215,15 @@ export function activeChips(filters: LeadFilters, facets?: LeadFacets): FilterCh
  * itself, so `inBar` leaves them out; on a phone every filter but the search is in the panel.
  */
 export function panelFilterCount(filters: LeadFilters, inBar: boolean): number {
-  const barKeys: readonly (keyof LeadFilters)[] = inBar ? ['result', 'city', 'origin'] : []
+  const barKeys: readonly (keyof LeadFilters)[] = inBar ? ['tier', 'result', 'city', 'origin'] : []
   let count = 0
   for (const key of Object.keys(NO_FILTERS) as (keyof LeadFilters)[]) {
     if (key === 'q' || barKeys.includes(key)) continue
+    if (key === 'tier') {
+      // The tier counts when it isn't the default view (A and B).
+      if (!isDefaultTiers(filters.tier)) count += 1
+      continue
+    }
     if (key === 'created_until' && filters.created_since !== null) continue // one date range
     if (key === 'office_m2_max' && filters.office_m2_min !== null) continue // one size range
     const value = filters[key]

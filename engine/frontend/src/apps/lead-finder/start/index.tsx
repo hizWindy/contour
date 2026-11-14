@@ -8,6 +8,9 @@
  *   what is left of today's limit. A choice the server refuses is shown beside its field.
  * - Start is safe to double-click: the same choices send the same Idempotency-Key, so a second
  *   click returns the first run instead of starting another.
+ * - Finding new leads (PLAN-V16 T3-2) searches all of Australia or cities in four groups, says how
+ *   many good leads to find, and where to look (the web and the two property tools). Those parts
+ *   are in `discovery.tsx`.
  */
 import { CircleAlert, MapPinned, Play } from 'lucide-react'
 import { useMemo, useRef, useState, type ReactNode } from 'react'
@@ -15,7 +18,6 @@ import { useNavigate } from 'react-router'
 import { fieldErrorMap, newIdempotencyKey, toApiProblem } from '@/api/client'
 import { useCreateRun, useEstimateRun, useRunOptions } from '@/api/hooks'
 import type { RunCreate, RunOptions } from '@/api/types'
-import { CityMap } from '@/components/city-map'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -47,15 +49,17 @@ import {
 import { Input } from '@/components/ui/input'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useDebounced } from '@/hooks/useDebounced'
+import { GoalChoice, SourceChoices, WhereChoices } from './discovery'
 import {
   bodyOf,
   EMPTY_ROW,
   errorFor,
   estimateErrors,
+  goalError,
   initialForm,
+  readySources,
   serverMode,
   tenureSummary,
-  type Area,
   type CompanyRow,
   type Mode,
   type StartForm,
@@ -79,10 +83,25 @@ const MODE_WORDS: Record<Mode, { title: string; about: string }> = {
   company: { title: 'Companies by name', about: 'Research the companies you type in.' },
 }
 
+/**
+ * The signs' groups, in this order. PLAN-V16 T1-4 gives each sign a strength (very high to low);
+ * until the backend sends those, the old groups (main, other, weak) show. A group the page doesn't
+ * know yet comes last, under its own name, so no sign is ever hidden.
+ */
 const GROUP_WORDS: Record<string, string> = {
+  very_high: 'Very strong signs',
+  high: 'Strong signs',
+  medium: 'Medium signs',
+  low: 'Weak signs',
   main: 'Main signs',
   other: 'Other signs',
   weak: 'Weak signs',
+}
+
+function signGroups(options: RunOptions): string[] {
+  const seen = [...new Set(options.triggers.map((trigger) => trigger.group as string))]
+  const known = Object.keys(GROUP_WORDS).filter((group) => seen.includes(group))
+  return [...known, ...seen.filter((group) => !(group in GROUP_WORDS))]
 }
 
 function toggle(list: string[], value: string): string[] {
@@ -110,7 +129,8 @@ function StartFormView({ options }: { options: RunOptions }) {
     setForm((current) => ({ ...current, ...changes }))
   }
 
-  const body = useMemo(() => bodyOf(form), [form])
+  const ready = useMemo(() => readySources(options), [options])
+  const body = useMemo(() => bodyOf(form, ready), [form, ready])
   const bodyKey = JSON.stringify(body)
   const settledKey = useDebounced(bodyKey, 300)
   const settledBody = useMemo(() => JSON.parse(settledKey) as RunCreate, [settledKey])
@@ -126,13 +146,15 @@ function StartFormView({ options }: { options: RunOptions }) {
   const settling = settledKey !== bodyKey || estimate.isFetching
   // An old offices run asks once more before it spends (PLAN-V11 C3).
   const [confirming, setConfirming] = useState(false)
+  // "How many leads" is checked here, before the server sees it (PLAN-V16 T3-2).
+  const goalProblem = goalError(form, options)
 
   const reason: string | null =
     mode && mode.needs_approval && !mode.approved
       ? (result?.blocked?.message ?? "This kind of run waits for Levi's OK.")
       : result?.blocked
         ? result.blocked.message
-        : result && !result.valid
+        : (result && !result.valid) || goalProblem
           ? 'Fix the choices marked in red first.'
           : !result
             ? 'Working out what it would cost.'
@@ -190,52 +212,16 @@ function StartFormView({ options }: { options: RunOptions }) {
         {form.mode === 'discovery' ? (
           <>
             <Section title="Where">
-              <CityMap
-                label="Cities to search"
-                cities={options.cities}
-                selectedCities={form.cities}
-                onToggleCity={(city) => {
-                  update({ cities: toggle(form.cities, city) })
-                }}
-              />
-              {errorFor(errors, 'cities') ? (
-                <FieldError>{errorFor(errors, 'cities')}</FieldError>
-              ) : null}
-              {options.cities
-                .filter((city) => form.cities.includes(city.name))
-                .map((city) => (
-                  <Field key={city.name} orientation="horizontal" className="flex-wrap">
-                    <FieldLabel className="w-28">{city.name}</FieldLabel>
-                    <ToggleGroup
-                      type="single"
-                      variant="outline"
-                      size="sm"
-                      value={form.area[city.name] ?? 'all'}
-                      onValueChange={(value) => {
-                        if (value) update({ area: { ...form.area, [city.name]: value as Area } })
-                      }}
-                      aria-label={`Part of ${city.name}`}
-                    >
-                      {city.areas.map((area) => (
-                        <ToggleGroupItem key={area.id} value={area.id}>
-                          {area.label}
-                        </ToggleGroupItem>
-                      ))}
-                    </ToggleGroup>
-                  </Field>
-                ))}
-              {errorFor(errors, 'area') ? (
-                <FieldError>{errorFor(errors, 'area')}</FieldError>
-              ) : null}
+              <WhereChoices options={options} form={form} update={update} errors={errors} />
             </Section>
 
             <Section title="Signs of an office change">
-              {(['main', 'other', 'weak'] as const).map((group) => {
+              {signGroups(options).map((group) => {
                 const items = options.triggers.filter((trigger) => trigger.group === group)
                 if (items.length === 0) return null
                 return (
                   <FieldSet key={group}>
-                    <FieldLegend variant="label">{GROUP_WORDS[group]}</FieldLegend>
+                    <FieldLegend variant="label">{GROUP_WORDS[group] ?? group}</FieldLegend>
                     <div className="grid gap-2 sm:grid-cols-2">
                       {items.map((trigger) => {
                         const id = `trigger-${trigger.id}`
@@ -281,6 +267,17 @@ function StartFormView({ options }: { options: RunOptions }) {
                   ))}
                 </ToggleGroup>
               </Field>
+            </Section>
+
+            <Section title="Leads to find">
+              <GoalChoice
+                form={form}
+                update={update}
+                errors={errors}
+                estimate={result}
+                goalProblem={goalProblem}
+              />
+              <SourceChoices options={options} form={form} update={update} errors={errors} />
             </Section>
           </>
         ) : null}

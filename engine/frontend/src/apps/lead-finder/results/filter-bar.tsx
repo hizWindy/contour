@@ -44,6 +44,10 @@ import {
 import { useDebounced } from '@/hooks/useDebounced'
 import { formatDate, formatDateTime, formatNumber, humanise, pluralise } from '@/lib/format'
 import {
+  CITY_GROUP_LABELS,
+  CITY_GROUP_ORDER,
+  CONFIDENCE_LABELS,
+  CONFIDENCE_ORDER,
   HUBSPOT_STATUS_LABELS,
   LEAD_STATUS_LABELS,
   ORIGIN_LABELS,
@@ -51,12 +55,15 @@ import {
   RESULT_LABELS,
   RESULT_ORDER,
   RUN_MODE_LABELS,
+  TIER_ACTIONS,
+  TIER_LABELS,
+  TIER_ORDER,
 } from '@/lib/labels'
 import { PHONE, useMediaQuery } from '@/lib/use-media-query'
 import { cn } from '@/lib/utils'
 import { activeChips, panelFilterCount } from './chips'
 import { loadCalendar } from './lazy-parts'
-import { dateOf, dayOf, oneOf, type LeadFilters } from './params'
+import { dateOf, dayOf, isDefaultTiers, oneOf, type LeadFilters } from './params'
 
 // The calendar library is big, so the calendar is a file of its own (PLAN-V7 D1). Results asks for
 // it when the browser is idle, and a date filter asks again when it is pointed at or opened.
@@ -259,7 +266,19 @@ function listed(values: LeadFacets['city'] | undefined, picked: readonly string[
   )
 }
 
-/** Result, City and Source: in the bar on a laptop, at the top of the panel on a phone. */
+/** "A: pursue now": each tier with what it asks for (PLAN-V16). */
+const TIER_OPTIONS: Option[] = TIER_ORDER.map((tier) => ({
+  value: tier,
+  label: `${TIER_LABELS[tier]}: ${TIER_ACTIONS[tier].toLowerCase()}`,
+}))
+
+/** The four city groups a lead can be in. */
+const CITY_GROUP_OPTIONS: Option[] = CITY_GROUP_ORDER.map((group) => ({
+  value: group,
+  label: CITY_GROUP_LABELS[group],
+}))
+
+/** Tier, Result, City and Source: in the bar on a laptop, at the top of the panel on a phone. */
 function MainFilters({
   filters,
   facets,
@@ -268,6 +287,17 @@ function MainFilters({
 }: ControlsProps & { block?: boolean }) {
   return (
     <>
+      <PickList
+        title="Tier"
+        block={block}
+        options={TIER_OPTIONS}
+        picked={filters.tier}
+        onChange={(values) => {
+          // Clearing the tiers shows every tier.
+          const picked = oneOf(values, TIER_LABELS)
+          onChange({ tier: TIER_ORDER.filter((tier) => picked.includes(tier)) })
+        }}
+      />
       <PickList
         title="Result"
         block={block}
@@ -308,6 +338,27 @@ function PanelFilters({ filters, facets, onChange }: ControlsProps) {
       : 'Office size in square metres.'
   return (
     <>
+      <Group title="Confidence and place">
+        <PickList
+          title="Confidence"
+          block
+          options={fixed(CONFIDENCE_LABELS, CONFIDENCE_ORDER)}
+          picked={filters.confidence}
+          onChange={(values) => {
+            onChange({ confidence: oneOf(values, CONFIDENCE_LABELS) })
+          }}
+        />
+        <PickList
+          title="City group"
+          block
+          options={CITY_GROUP_OPTIONS}
+          picked={filters.city_group}
+          onChange={(values) => {
+            const picked = new Set(values)
+            onChange({ city_group: CITY_GROUP_ORDER.filter((group) => picked.has(group)) })
+          }}
+        />
+      </Group>
       <Group title="The company">
         <PickList
           title="Sign"
@@ -471,8 +522,56 @@ function PanelFilters({ filters, facets, onChange }: ControlsProps) {
             Only leads with facts missing (re-check them)
           </FieldLabel>
         </Field>
+        <Field orientation="horizontal">
+          <Checkbox
+            id="results-has-property"
+            checked={filters.has_property}
+            onCheckedChange={(checked) => {
+              onChange({ has_property: checked === true })
+            }}
+          />
+          <FieldLabel htmlFor="results-has-property" className="font-normal">
+            Only leads with a property record
+          </FieldLabel>
+        </Field>
+        <Field orientation="horizontal">
+          <Checkbox
+            id="results-excluded"
+            checked={filters.excluded}
+            onCheckedChange={(checked) => {
+              // An excluded lead isn't scored, so it is in no tier: show every tier with it.
+              onChange(checked === true ? { excluded: true, tier: [] } : { excluded: false })
+            }}
+          />
+          <FieldLabel htmlFor="results-excluded" className="font-normal">
+            Only excluded leads
+          </FieldLabel>
+        </Field>
       </Group>
     </>
+  )
+}
+
+/** The default view in one line, under the bar: Tier A and B, and the way to see every tier. */
+function TierNote({ filters, onChange }: Pick<ControlsProps, 'filters' | 'onChange'>) {
+  if (!isDefaultTiers(filters.tier)) {
+    return null
+  }
+  return (
+    <p className="flex flex-wrap items-center gap-x-2 text-caption text-muted-foreground">
+      Showing Tier A and B, the good leads.
+      <Button
+        type="button"
+        variant="link"
+        size="xs"
+        className="h-auto p-0 text-caption"
+        onClick={() => {
+          onChange({ tier: [] })
+        }}
+      >
+        Show every tier
+      </Button>
+    </p>
   )
 }
 
@@ -585,7 +684,7 @@ export function FilterBar({ filters, facets, onChange, onClear, total, trailing 
         </SheetHeader>
         <div className="flex flex-col gap-6 px-4 pb-4">
           {phone ? (
-            <Group title="Result, city and source">
+            <Group title="Tier, result, city and source">
               <MainFilters {...controls} block />
             </Group>
           ) : null}
@@ -624,6 +723,7 @@ export function FilterBar({ filters, facets, onChange, onClear, total, trailing 
         ) : null}
       </div>
       <FilterChips {...controls} onClear={onClear} />
+      <TierNote filters={filters} onChange={onChange} />
     </div>
   )
 }
