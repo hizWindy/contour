@@ -15,3 +15,11 @@ plan/shots/
 
 # Design references from other websites
 inspirations/
+
+# Design references from other websites, in design/ (kept here, not on GitHub).
+# The notes, the index and Contour's own Home draft are tracked.
+design/*
+!design/principles/
+!design/Home, bento@2x.png
+design/principles/**/source.*
+design/principles/**/frames/

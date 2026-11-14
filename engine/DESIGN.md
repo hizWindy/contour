@@ -2,6 +2,10 @@
 
 How the Lead Finder website looks and behaves. This file is the one to update. It started as a copy of the design system section in [PLAN-V1.md](../plan/PLAN-V1.md) (25 Oct 2026).
 
+Last updated: 14 Nov 2026 (rules added from the design principles).
+
+The general principles behind these rules, with their sources, are in [design/principles/](../design/principles/README.md). A rule taken from there names it, like "(principles 03 #14)": library item 03, point 14. Where a principle and this file disagree, this file wins until it is changed. The `frontend-agent` (`.claude/agents/frontend-agent.md`) works from both.
+
 ## Direction
 
 - **Feel:** calm, precise and quietly premium, like Contour's own website. It's a tool for making decisions, not a showpiece.
@@ -17,6 +21,9 @@ How the Lead Finder website looks and behaves. This file is the one to update. I
 3. **Prevent mistakes.** The cost shows before you run, and a preview shows before you send. Reject and Watch can be undone.
 4. **Show less, reveal more.** The table comes first, then a side panel, then the full card. Advanced options stay folded away.
 5. **Same thing, same look.** Each result has one badge, and each action has one place, on every page.
+6. **Explain the numbers.** A count or a chart that needs reading gets one plain sentence: what it means and where to act. Home's opening line is the model: "9 leads are worth a look. Today's run checked 4 companies in Perth and added 1 to watch." (principles 05)
+7. **One main thing, one main action.** The most important number is the biggest thing on the screen, and a screen, card or dialog has one Navy button: the next step. Other actions are quieter. Whether every current screen meets this is **TBC**. (principles 03 #7, #10; 02 #15)
+8. **Fast is part of the look.** A click answers within 200ms, and the main content shows within 2.5 seconds. See "Speed". (principles 07)
 
 ## Colour
 
@@ -98,17 +105,22 @@ Where a company came from (From HubSpot, Found, Typed) is a quiet mark, not a ba
 
 Sizes are in rem, so browser zoom works. Nothing is smaller than 13px. Sentence case everywhere, with no all-caps labels.
 
+- **Line breaks:** headings balance their lines (`text-wrap: balance`), and paragraphs avoid a lone word on the last line (`text-wrap: pretty`). (principles 01 #12)
+- **Line length:** reading text, like the lead card summary, stops at about 65 characters a line (`max-w-prose`). Tables and forms are not reading text. (principles 01 #15)
+
 ## Space, shape and depth
 
 - **Spacing** on an 8-point scale: 8, 16, 24, 32, 48 and 64px.
 - **One radius:** 10px (shadcn's `--radius: 0.625rem`). Small parts use shadcn's smaller steps. No pills: buttons and badges are never fully round.
 - **Flat surfaces,** separated by 1px borders. Only things that float, like menus and dialogs, get a soft shadow.
 - **Table rows** are 48px, or 40px in compact mode, with a toggle in the table toolbar.
+- **Nested corners:** a rounded box inside another takes the outer radius minus the gap between them, so the curves run parallel. Example: inside a 10px card with 4px padding, the inner box is 6px. (principles 03 #14)
+- **Group with space before boxes:** inside a card, group with space and 1px dividers. A card inside a card is the last resort. (principles 03 #8)
 
 ## Layout
 
 - **App frame:** a left sidebar that folds to icons, a top bar with breadcrumbs and the command menu, then the page. The account menu (your initials and name, opening to your details and "Sign out"; it shows only where sign-in is on) sits at the bottom of the left menu from 768px wide (folded to icons on a tablet, it is your initials, with the name in a tooltip), and at the end of the top bar below 768px, where the top bar stays at the top while the page scrolls (PLAN-V15 T2-5). The app never shows without knowing who you are: if "who is signed in" can't be answered, a full page says why ("Errors and the connection"), and the menu offers no project until it is known. The sidebar has Home at the top, one group per project (its name, then its pages), a "To be developed" group in quieter text, folded into one row that starts closed and opens by itself on one of its pages (each opens a page saying what the project will do), and the shared Admin at the bottom. Folded to icons, the group names hide and the page icons stay.
-- **Home** (the "bento" Home, 11 Nov 2026, from Al-khair's draft in `inspirations/`): the date, a greeting by first name ("Good morning, Al-khair", the page's `h1`) and one sentence from each project (the Lead Finder says what its last run did). Faint contour lines sit behind the greeting, from a tablet up: decoration only. Then a grid of cards from `src/modules.ts`:
+- **Home** (the "bento" Home, 11 Nov 2026, from Al-khair's draft, now `design/Home, bento@2x.png`): the date, a greeting by first name ("Good morning, Al-khair", the page's `h1`) and one sentence from each project (the Lead Finder says what its last run did). Faint contour lines sit behind the greeting, from a tablet up: decoration only. Then a grid of cards from `src/modules.ts`:
   - **Lead Finder** (two columns wide, two rows tall on a laptop): its good leads in large digits, every lead by result as one bar with the result badges as its legend (each a link to Results), the four signs seen most (the biggest lit in the accent), "Start with these" (the three best good leads still new, each with its sign and date), and the last run beside the one main button, "Start a run".
   - **Companies:** the count, how fresh the HubSpot copy is, a box that opens Companies with the name typed in its search, and the calls prepped today (or, in the serif voice, "No calls prepped today.").
   - **Runs and cost** (shared, like the Admin tab it opens): the spend over 30 days and a bar for each of the newest 8 days with a run, today's lit in the accent.
@@ -133,6 +145,7 @@ Sizes are in rem, so browser zoom works. Nothing is smaller than 13px. Sentence 
 | Jump anywhere, or run an action (Ctrl+K) | Command |
 | Results table | Data Table, built on TanStack Table |
 | Filters | Popover with Command for multi-select, Calendar for dates, Toggle Group |
+| Pick one from many (a company, an owner) | A combobox: Popover with Command, filtering as you type (principles 01 #17) |
 | Lead card | Sheet, Tabs, Collapsible for the rule-by-rule reasons, Hover Card for source previews |
 | Send to HubSpot | Alert Dialog, showing the preview |
 | Feedback after an action | Sonner toasts, with Undo |
@@ -152,6 +165,8 @@ Smooth and quick, like a well-made phone app (PLAN-V13, 11 Nov 2026). Motion sho
 - **Leaving is quicker than arriving:** anything that closes goes in 150ms on the one curve, so closing feels instant. A sheet slides out, a dialog fades out, a chip's tick fades.
 - **Only `transform` and `opacity` move.** Nothing animates its height, a shadow, a blur, or a colour over a big area. A colour change on a small part (a switch's track, a chip's border) uses the one curve, `cubic-bezier(0.4, 0, 0.2, 1)`, at 150ms, and a dialog's fade 250ms.
 - **The indicator slides:** the selected tab's underline, the segmented control's highlight and the selected menu item move from the old place to the new (`TabIndicator`, `Segmented`; `layoutId` in Motion).
+- **Menus grow from where they open:** a popover, menu or tooltip scales from its trigger, using Radix's transform origin (like `origin-(--radix-popover-content-transform-origin)`). (principles 01 #10)
+- **What you use all day barely moves:** the menu's rows and table rows never stagger or reveal. Only the selection indicator moves. (principles 02 #20)
 - **A press feels physical:** a button, a chip or a tile shrinks to 0.98 while it is held (`usePress`, through Motion's `whileTap`, never a CSS `active:scale` class). It springs back on release. Hover still never grows or moves anything: it changes the border, background or opacity.
 - **Content reveals once:** a card or a list fades and rises 4px when it first shows (`Reveal`), at most 8 items one after another, 40ms apart. A number that changes rolls to its new value in table digits (`RollingNumber`). A chart's bars grow once from the baseline when the page opens, as a `scaleY` transform (never an animated height), and not at all with reduced motion (Admin's Runs and cost, PLAN-V13 T1-8).
 - **A live run** shows a filling progress bar and a still dot. Nothing pulses, spins or loops, ever.
@@ -162,10 +177,29 @@ Smooth and quick, like a well-made phone app (PLAN-V13, 11 Nov 2026). Motion sho
 - **Second exception, waiting for an OK (TBC):** the sign-in avatar reacts to the form. Its eyes follow the login as it is typed (150ms), it shakes its head once after a wrong try (0.6s) and waves once after a sign-out (1.8s). Nothing loops, and reduced motion keeps it still (the face still changes).
 - **One exception, waiting for an OK (TBC):** the sign-in page's contour lines draw once, over 1.6s, when the page opens. They never loop, and reduced motion turns them off.
 
+## Actions and forms
+
+- **Act at once, undo after.** An action that can be undone (Reject, Watch, ticking a task) shows its result at once, with an Undo toast. If the server says no, the result rolls back and a toast says why. Whether each action does this today is **TBC**. (principles 01 #6; 04 #2, #5)
+- **A real confirmation** is only for what can't be undone or leaves Contour: Send to HubSpot (an Alert Dialog with the preview), and starting a run that costs money (the cost shows first). Never "Are you sure?" for something an Undo can fix.
+- **Fields forgive.** A field accepts any reasonable way of typing a value and stores one strict form. "$1.5M", "1,500,000" and "1.5m" are the same budget, and "300 staff" and "300" are the same count. Only a value it truly can't read gets an error, in plain words. Which fields do this today is **TBC**. (principles 02 #18)
+- **Long forms group:** about 5 to 7 fields to a group, each group with a title. (principles 02 #16)
+
+## Speed
+
+From principles 07 (a Strapi article, updated June 2026), with Google's targets added.
+
+- **Targets** (Google's Core Web Vitals, "good" when 75% of visits meet them): the main content shows within 2.5 seconds (LCP), a click or key answers within 200ms (INP), and the layout barely jumps (CLS 0.1 or less). Use INP, not the older FID.
+- **Where it's measured:** Lighthouse on the production build, on Home, Results and Companies. Starting numbers are **TBC**: nothing has been measured against these targets yet.
+- **First-visit budget:** the JavaScript of the first visit, from `node scripts/bundle-report.js`. The number is **TBC**: set it from the first measurement. After that, a library that grows the first visit needs a reason.
+- **Already in this file:** page code loads per page, Motion loads late (`LazyMotion`), skeletons keep the real size so nothing jumps, text shows in a system font until the fonts load, and tables of more than 50 rows don't animate.
+- **Typed searches** wait about 250ms after the last key before asking the server. Cached data shows at once and refreshes quietly (React Query). (principles 07 #12; 04 #6)
+- **Server settings** (compression, HTTP/2, cache headers) belong to App Platform. What it does by default is **TBC**.
+
 ## Icons
 
 - Lucide, the set shadcn uses: outline, a 1.5px line, 16px in tables and buttons, 20px in the sidebar.
 - An icon always has a label or a tooltip.
+- **Optical centre:** an icon that looks off-centre in its box, like a play triangle or an arrow, is nudged by eye, not left on the grid. (principles 01 #2; 03 #17)
 
 ## Words on screen
 
@@ -173,6 +207,8 @@ Smooth and quick, like a well-made phone app (PLAN-V13, 11 Nov 2026). Motion sho
 - Estimates look like estimates: "about 3,000 m²", with the label "estimated".
 - Errors say what happened and what to do next: "HubSpot didn't answer. Nothing was sent. Try again in a minute."
 - Empty states use the serif voice: "No leads yet. Start a run to see companies here."
+- Titles say exactly what they show: "Leads to call this week", not "Insights". (principles 03 #9)
+- Say it once: a status or a label shows once per item, not as a badge and again in the text. (principles 03 #2)
 - No em dashes, no hype, and no "AI-powered".
 
 ## Errors and the connection
@@ -213,6 +249,7 @@ PLAN-V15 (12 Nov 2026). The words for every case are in `src/api/words.ts` ("Wor
 - The accent on a button fill, a result, a status, a selected row or a large area.
 - Colour as the only signal.
 - Lorem ipsum, or made-up data on real screens.
+- Badges or tags that say nothing, and italics for decoration. (principles 03 #1, #3)
 
 ## Check before showing any screen
 
@@ -224,6 +261,18 @@ PLAN-V15 (12 Nov 2026). The words for every case are in `src/api/words.ts` ("Wor
 6. Motion: springs from the kit, only `transform` and `opacity` move, leaving is 150ms, nothing loops, and with reduced motion everything changes at once. No animation in a table of more than 50 rows.
 7. Checked at 1440px, 1280px and 390px, in light and dark.
 8. No banned item, and no em dash anywhere, including tooltips and page titles.
+9. Any number or chart that needs reading has its plain sentence, and the screen has one Navy button.
+10. Nothing jumps while it loads, and a click answers within 200ms. After a big change, run the `speed-check` skill.
+
+## Ideas waiting for a decision
+
+From the design principles. None of these is a rule yet (**TBC**). Al-khair decides.
+
+- **Change badges** on Home's numbers, like "+3 vs last run": a badge with the 10px radius, not a pill. (principles 05)
+- **"Driven by" chips** that name the causes beside a lead's result, in the "Why now" section of [PLAN-V12](../plan/PLAN-V12.md). (principles 05)
+- **A range control** (`Segmented`: 7, 30 or 90 days) on Runs and cost. (principles 05)
+- **A funnel of leads over time** (found, called, meeting), only if the date of each step is stored. Home's split of results is not a funnel: those are outcomes, not stages. (principles 05)
+- **A shared element move:** a company's name travels from the table into its lead card. (principles 01 #20)
 
 ## Tokens for shadcn
 
