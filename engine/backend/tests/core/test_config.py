@@ -47,6 +47,7 @@ ENV_ONLY = [
     "arealytics_username",
     "arealytics_password",
     "source_page_wait_seconds",
+    "browser_channel",
 ]
 CHOICE_KEYS = {
     "claude_model",

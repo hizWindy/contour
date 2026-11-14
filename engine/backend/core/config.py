@@ -456,6 +456,9 @@ class Settings(BaseSettings):
     # between these two. Env-only, like the ceilings: a faster pace puts the account at risk.
     # In engine/.env: SOURCE_PAGE_WAIT_SECONDS=4,9
     source_page_wait_seconds: Annotated[tuple[float, float], NoDecode] = (4.0, 9.0)
+    # Which browser drives the tools (env-only). auto: Playwright's own Chromium, except on Windows,
+    # where Application Control blocks it (this laptop, 15 Nov), so the installed Chrome is used.
+    browser_channel: Literal["auto", "chromium", "chrome", "msedge"] = "auto"
     source_pages_per_day: int = Field(300, ge=1, le=1000)  # the most pages a day, for each tool
     source_pages_per_run: int = Field(60, ge=0, le=300)  # live lookup pages one run may use
     property_lookup_days: int = Field(30, ge=1, le=365)  # a company's lookup is reused this long
