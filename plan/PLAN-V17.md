@@ -552,11 +552,11 @@ Newest first.
 
 ## Track 2: Companies backend (session 2)
 
-**Progress:** Stage A 0 of 9. Stage B 0 of 7. Every step is `backend-agent` work.
+**Progress:** Stage A 1 of 9. Stage B 0 of 7. Every step is `backend-agent` work.
 
 ### Stage A: call notes
 
-- [ ] **T2-1. Own copy and a baseline.** Make the worktree and the database. Run the backend tests once and note the counts.
+- [x] **T2-1. Own copy and a baseline.** Make the worktree and the database. Run the backend tests once and note the counts. Done 2026-11-15: worktree `../contour-v17-t2` (branch `plan-v17-track2`, from `437a2ee`), database `leadfinder_v17b` (a copy of the dev database at `0017_call_prep`). Baseline (see the Log).
 
 - [ ] **T2-2. The table.** Migration `0021_call_notes`, in the `companies` schema.
   - `companies.call_notes`: who made it, the company, the person, the prep it came from (or none), the text, the source, when the call was, the status, what the sorter made, the rep's edits, what it cost, the write it became (`core.hubspot_writes`), and the times.
@@ -657,6 +657,10 @@ Newest first.
 ### Track 2 Log
 
 Newest first.
+
+- 2026-11-15, T2-1: baseline on `437a2ee` (S0 and its tick), in a clean copy with its own test database (`RUN_GATES=1`): 3,643 passed, 25 skipped, 1 failed. The failure is `test_companies_speed` (a Companies page against its time limit), the same one S0 saw on `master`: this laptop's load, not the code. 8 min 51 s.
+- 2026-11-15, start: V17 Track 2 started on Al-khair's `implement v17 track2`. S0 was made by Track 3 (`0df133e`). Messages: the only session `ListAgents` showed (`contour-dc`) is V16 Track 1, not V17. It says V16 joins `master` first, so at M1 V17's `0020` re-points its `down_revision` to V16's newest (`0019`). Track 1 and Track 3 don't show in `ListAgents`, so this Log is how Track 2 tells them things.
+- 2026-11-15, for Track 1 (T1-5): `StepResult.step` in `core/hubspot/writer.py` accepts only `company`, `note` and `list`. The activity steps (`call`, `fields`, `task:1`, `note`) need it widened. Until then Track 2's tests build fake write results with `model_construct`. Track 2 reads a held field (changed in HubSpot since the rep looked) from `plan.fields`: `write` false, HubSpot's new value in `current`.
 
 ## Track 3: the website (session 3)
 
