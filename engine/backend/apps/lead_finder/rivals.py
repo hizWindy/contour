@@ -101,11 +101,21 @@ class RivalSearch:
 
 
 def wants_rivals(
-    rules: LeadFinderRules, result: str, tier_group: str | None, city: str | None
+    rules: LeadFinderRules,
+    result: str,
+    tier_group: str | None,
+    city: str | None,
+    signs: Sequence[str] = (),
 ) -> bool:
-    """True for a good lead in a tier the rules name (`rivals.tiers`), in a known city."""
+    """True for a good lead in a known city that is in a tier the rules name (`rivals.tiers`), or
+    that has a sign they name (`rivals.also_after`): Levi's competitor sweep runs after a sector
+    tailwind sign too (PLAN-V16 T1-4), whatever the lead's sector."""
     setup = rules.criteria.rivals
-    if not setup.enabled or result not in GOOD_RESULTS or not tier_group or not city:
+    if not setup.enabled or result not in GOOD_RESULTS or not city:
+        return False
+    if any(sign in setup.also_after for sign in signs):
+        return True
+    if not tier_group:
         return False
     industries = rules.criteria.industries
     tiers = {"tier_1": industries.tier_1, "tier_2": industries.tier_2}

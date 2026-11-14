@@ -128,12 +128,12 @@ def test_each_citys_choices_make_a_valid_run_inside_the_default_limits(city: str
     assert params.area == {}  # the whole city
     assert params.caps.run_cap_usd is None  # the run limit in Settings applies
     assert params.caps.max_companies is None  # the automatic run's limits in Settings apply
-    assert len(make_slices(params, load_rules())) == 6
+    assert len(make_slices(params, load_rules())) == 8  # the 8 main signs (PLAN-V16 T1-4)
     check_discovery_size(params, settings, make_caps(settings, scheduled=True))
 
 
 def test_all_4_cities_in_one_run_are_too_large_for_the_default_limits() -> None:
-    # Why there is one schedule for each city: 24 searches, and at most 13 fit.
+    # Why there is one schedule for each city: 32 searches, and at most 13 fit.
     settings = Settings(_env_file=None)
     params = DiscoveryParams(
         cities=list(SCHEDULED_CITIES), triggers=list(SCHEDULED_SIGNS), since_days=14
@@ -142,7 +142,7 @@ def test_all_4_cities_in_one_run_are_too_large_for_the_default_limits() -> None:
     with pytest.raises(Problem) as refused:
         check_discovery_size(params, settings, make_caps(settings))
     assert refused.value.code == "discovery_too_large"
-    assert "24 searches is too many (the most that fit is 13)" in str(refused.value.extra)
+    assert "32 searches is too many (the most that fit is 13)" in str(refused.value.extra)
 
 
 def test_the_look_back_is_the_time_between_two_runs() -> None:

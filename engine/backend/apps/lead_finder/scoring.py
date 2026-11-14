@@ -18,7 +18,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from apps.lead_finder.fields import CompanyFacts, TriggerFound
-from apps.lead_finder.rules import ExclusionRule, LeadFinderRules, Result
+from apps.lead_finder.rules import ExclusionRule, LeadFinderRules, Result, Strength
 from apps.lead_finder.sources import host_of, source_kind
 from core.hubspot.matching import CandidateReason, HubSpotMatch
 
@@ -49,6 +49,11 @@ class RuleCheck(BaseModel):
 class TriggerScore(BaseModel):
     trigger: TriggerFound
     group: Group
+    strength: Strength | None = Field(
+        default=None,
+        description="very_high, high, medium or low (Levi's section 4). Empty for a card made "
+        "before PLAN-V16.",
+    )
     source_kind: str
     points: int = Field(description="Group, source and timing together. It ranks the triggers.")
     group_points: int = Field(default=0, description="The trigger part of the score")
@@ -647,6 +652,9 @@ class History:
     # A move or fitout in the last `office_age.just_moved_months` (PLAN-V11 B3). A date still to
     # come doesn't count. None when neither date is known.
     just_moved: bool | None = None
+    # How many years ago the last fitout was, when one is known (Levi's long tenure rule asks for
+    # none in the last 5 years)
+    fitout_years_ago: float | None = None
 
 
 def office_history(facts: CompanyFacts, rules: LeadFinderRules, today: date) -> History:
@@ -667,6 +675,7 @@ def office_history(facts: CompanyFacts, rules: LeadFinderRules, today: date) -> 
             if days_ago is None
             else 0 <= days_ago < round(age.just_moved_months * DAYS_PER_MONTH)
         ),
+        fitout_years_ago=(today - fitout).days / DAYS_PER_YEAR if fitout else None,
     )
 
 
@@ -708,14 +717,21 @@ def _history_check(
     return RuleCheck(rule="Office history", outcome=outcome, detail=". ".join(sentences))
 
 
-def has_long_tenure(history: History, rules: LeadFinderRules) -> bool:
-    """An old office (Levi, 9 Nov, PLAN-V11 C1): at the same address for `office_age.tenure_years`
-    or more, with no move or fitout known since the move-in. A fitout before the move-in was part
-    of the move, so it doesn't count."""
+def has_long_tenure(history: History, rules: LeadFinderRules, healthy: bool | None = None) -> bool:
+    """An old office (Levi's section 4, PLAN-V16 T1-4, from PLAN-V11 C1): at the same address for
+    `office_age.tenure_years` or more, stable or growing, with no known fitout there in the last
+    `office_age.tenure_fitout_years`. An exact move-in date isn't needed: a year is enough ("at
+    this address since at least 2017"). A fitout before the move-in was part of the move, and a
+    fitout longer ago than the limit doesn't stop it. A company that is cutting staff fast or in
+    administration (`healthy` is false) isn't stable, so it has no tenure sign."""
     age = rules.criteria.office_age
+    if healthy is False:
+        return False
     if history.since is None or history.years_at is None or history.years_at < age.tenure_years:
         return False
-    return history.fitout is None or history.fitout <= history.since
+    if history.fitout is None or history.fitout <= history.since:
+        return True
+    return (history.fitout_years_ago or 0) >= age.tenure_fitout_years
 
 
 def with_tenure_sign(facts: CompanyFacts, history: History, rules: LeadFinderRules) -> CompanyFacts:
@@ -724,7 +740,7 @@ def with_tenure_sign(facts: CompanyFacts, history: History, rules: LeadFinderRul
     the years at the address earn their own Timing points. Its link is the move-in's source."""
     sign_id = rules.criteria.office_age.tenure_sign
     others = [trigger for trigger in facts.triggers if trigger.id != sign_id]
-    if not has_long_tenure(history, rules):
+    if not has_long_tenure(history, rules, facts.healthy.value):
         if len(others) == len(facts.triggers):
             return facts
         return facts.model_copy(update={"triggers": others})
@@ -733,8 +749,9 @@ def with_tenure_sign(facts: CompanyFacts, history: History, rules: LeadFinderRul
     sign = TriggerFound(
         id=sign_id,
         what_happened=(
-            f"At this address since {month_year(since.value)} ({years} years), "
-            "with no known office project since."
+            f"At this address since at least {month_year(since.value)} ({years} years), "
+            "with no known fitout there in the last "
+            f"{rules.criteria.office_age.tenure_fitout_years} years."
         ),
         date=None,
         source_url=since.source_url or "",
@@ -791,6 +808,7 @@ def _triggers(facts: CompanyFacts, rules: LeadFinderRules, today: date) -> list[
             TriggerScore(
                 trigger=trigger,
                 group=group,
+                strength=criteria.triggers.strength_of(trigger.id),
                 source_kind=kind,
                 points=group_points + timing + source_points,
                 group_points=group_points,

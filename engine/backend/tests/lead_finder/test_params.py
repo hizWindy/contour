@@ -43,7 +43,7 @@ def test_the_defaults_are_the_first_priority_city_and_the_main_triggers() -> Non
     assert params.cities == ["Melbourne"]  # one city at a time since PLAN-V9 C4
     # The main signs a search can look for: not the old office's, which the code adds (PLAN-V11 C1)
     assert params.triggers == [t.id for t in rules.triggers.main if t.id != "long_tenure"]
-    assert len(params.triggers) == 6
+    assert len(params.triggers) == 8  # 6, and capital_raise and tenant_advisor (PLAN-V16 T1-4)
     assert params.since_days == 30
     assert params.area == {}
     assert params.companies == []

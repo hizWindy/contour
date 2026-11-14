@@ -85,10 +85,34 @@ def test_rivals_are_looked_for_only_for_a_good_lead_in_a_tier(
     assert wants_rivals(RULES, result, tier, city) is wanted
 
 
+@pytest.mark.parametrize(
+    ("result", "tier", "city", "signs", "wanted"),
+    [
+        # A sector tailwind sign starts the competitor sweep, whatever the lead's sector
+        ("pass", None, "Melbourne", ["hot_industry_growth"], True),
+        ("director_review", "Retail", "Perth", ["lease_ending", "hot_industry_growth"], True),
+        ("pass", None, "Melbourne", ["lease_ending"], False),
+        ("pass", None, "Melbourne", [], False),
+        # Still only a good lead, and only in a known city
+        ("watch", None, "Melbourne", ["hot_industry_growth"], False),
+        ("drop", None, "Melbourne", ["hot_industry_growth"], False),
+        ("pass", None, None, ["hot_industry_growth"], False),
+        # A priority tier needs no sign
+        ("pass", "Energy and infrastructure", "Melbourne", ["lease_ending"], True),
+    ],
+)
+def test_the_competitor_sweep_also_follows_a_sector_tailwind_sign(
+    result: str, tier: str | None, city: str | None, signs: list[str], wanted: bool
+) -> None:
+    """Levi's section 4 (PLAN-V16 T1-4): a sector tailwind triggers a competitor sweep."""
+    assert wants_rivals(RULES, result, tier, city, signs) is wanted
+
+
 def test_switching_rivals_off_in_the_rules_stops_them() -> None:
     off = RULES.criteria.rivals.model_copy(update={"enabled": False})
     rules = RULES.model_copy(update={"criteria": RULES.criteria.model_copy(update={"rivals": off})})
     assert not wants_rivals(rules, "pass", "Energy and infrastructure", "Melbourne")
+    assert not wants_rivals(rules, "pass", None, "Melbourne", ["hot_industry_growth"])
 
 
 def test_a_pending_rival_carries_the_weak_sign_into_the_run() -> None:

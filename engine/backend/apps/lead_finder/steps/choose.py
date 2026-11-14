@@ -28,7 +28,7 @@ from typing import Any
 
 from apps.lead_finder.context import Signal
 from apps.lead_finder.fields import CompanyFacts, Fact, TriggerFound
-from apps.lead_finder.rules import Item, LeadFinderRules
+from apps.lead_finder.rules import LeadFinderRules, Sign
 from apps.lead_finder.scoring import DAYS_PER_YEAR, Group, judge, parse_date
 from apps.lead_finder.sources import source_kind
 from apps.lead_finder.steps.merge import Merged
@@ -70,7 +70,7 @@ class Decision:
 
 def _group_of(rules: LeadFinderRules, trigger_id: str) -> Group | None:
     triggers = rules.criteria.triggers
-    groups: tuple[tuple[Group, list[Item]], ...] = (
+    groups: tuple[tuple[Group, list[Sign]], ...] = (
         ("main", triggers.main),
         ("other", triggers.other),
         ("weak", triggers.weak),

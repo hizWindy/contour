@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from apps.lead_finder.runs import NOT_APPROVED_CODE
 from apps.lead_finder.tables import Lead, company_key
-from apps.lead_finder.testing import report_of_testset
+from apps.lead_finder.testing import TestExpect, TestSet, load_testset, report_of_testset
 from core.api.errors import Problem
 from core.config import ENGINE_DIR
 from core.hubspot.importer import read_export
@@ -283,6 +283,17 @@ async def test_the_test_set_run_marks_its_leads_and_reports_against_expectations
     assert all(lead.is_test for lead in leads)
 
     report = await report_of_testset(session, run_id)
+    # No company's result is certain since PLAN-V16 T1-2 (Canva in Sydney can pass now)
+    assert (report.summary.companies, report.summary.expected) == (10, 0)
+    assert {item.ok for item in report.items} == {None}
+
+    # The matching itself, with an expectation put on Canva for this test
+    certain = TestExpect(results=["director_review", "watch", "drop"])
+    companies = [
+        company.model_copy(update={"expect": certain}) if company.name == "Canva" else company
+        for company in load_testset().companies
+    ]
+    report = await report_of_testset(session, run_id, TestSet(companies=companies))
     assert (report.summary.companies, report.summary.expected) == (10, 1)
     canva = next(item for item in report.items if item.name == "Canva")
     assert canva.expected == ["director_review", "watch", "drop"]

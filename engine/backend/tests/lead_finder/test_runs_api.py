@@ -81,6 +81,8 @@ async def test_the_run_options_have_everything_the_start_page_draws(
         "fast_growth",
         "new_to_australia",
         "hot_industry_growth",
+        "capital_raise",  # PLAN-V16 T1-4
+        "tenant_advisor",
     ]
     # The rivals' sign and the old office's (PLAN-V11 C1) are made by the code, never searched for
     offered = {t["id"] for t in body["triggers"]}
@@ -154,7 +156,8 @@ async def test_the_test_set_starts_lists_and_reports(
     listed = (await client.get(f"{LF}/tests")).json()
     assert listed["total"] == 1
     summary: dict[str, Any] = listed["items"][0]
-    assert (summary["run_id"], summary["companies"], summary["expected"]) == (run_id, 10, 1)
+    # No company's result is certain since PLAN-V16 T1-2 (Canva in Sydney can pass now)
+    assert (summary["run_id"], summary["companies"], summary["expected"]) == (run_id, 10, 0)
 
     report = (await client.get(f"{LF}/tests/{run_id}")).json()
     assert len(report["items"]) == 10

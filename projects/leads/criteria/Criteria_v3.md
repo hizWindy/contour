@@ -107,6 +107,13 @@ A sign is evidence that a property decision is coming. One strong sign earns a l
 
 Tenure is a very high sign on its own. Any growth sign on top makes it a strong lead. An exact move-in date isn't needed. Evidence that the company has been at the address for at least 8 years is enough. Write it as "at this address since at least 2017".
 
+**How we apply this (TBC):**
+- **Search signs.** A run searches the main signs by default. They are now 8: lease ending, merger or acquisition, big contract, fast growth, new market entry, sector tailwind, capital raise and tenant advisor. Long tenure has no search: the code adds it from the office dates. Version 2 searched 6, so each city's run does 2 more searches.
+- **18 months.** A sign counts if it happened in the last 18 months. It was 12. A lease sign counts while the lease end is up to 3 years away. A sign that is 12 to 18 months old counts, but earns no recency points.
+- **Long tenure** needs a fitout longer ago than 5 years, or none known. In version 2 any fitout after the move-in stopped it. A company that is cutting staff fast or in administration is not stable, so it gets no tenure sign.
+- **The competitor check** runs for a good lead in a priority sector, and now for a good lead with a sector tailwind sign, whatever its sector.
+- **Signs his notes don't list** keep their version 2 groups and get the strength we judged: new business unit, new facility and underperforming workplace are medium. Culture change, hiring push and rival growth are low.
+
 ## 5. Dampeners
 
 A dampener lowers a lead's score. It never removes the lead. Search for each one on purpose, because a missed dampener gives a false lead.

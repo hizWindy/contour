@@ -46,6 +46,8 @@ def test_rules_match_the_criteria_documents() -> None:
         "new_to_australia",  # PLAN-V9 B3
         "hot_industry_growth",  # PLAN-V9 B4
         "long_tenure",  # PLAN-V11 C1
+        "capital_raise",  # PLAN-V16 T1-4, Levi's section 4
+        "tenant_advisor",  # PLAN-V16 T1-4
     ]
     assert [t.id for t in criteria.triggers.other] == [
         "office_consolidation",
@@ -60,13 +62,82 @@ def test_rules_match_the_criteria_documents() -> None:
         "culture_change",
         "hiring_push",
         "rival_growth",  # PLAN-V9 B5
+        "growth_list",  # PLAN-V16 T1-4
     ]
     assert criteria.triggers.consultant_window_months == 18
+    assert criteria.triggers.recent_months == 18  # Levi's section 4: ignore anything older
     assert (criteria.office_age.due_years, criteria.office_age.recent_move_years) == (5, 3)
     assert criteria.office_age.just_moved_months == 12  # PLAN-V11 B3
     office_age = criteria.office_age
     assert (office_age.tenure_years, office_age.tenure_sign) == (8, "long_tenure")  # PLAN-V11 C1
     assert criteria.never_suggest.dissolved_deal_wait_months == 12
+
+
+def test_every_sign_has_the_strength_levi_gave_it() -> None:
+    """Levi's section 4 (PLAN-V16 T1-4): very high, high, medium or low. The ids stay."""
+    triggers = load_rules().criteria.triggers
+    by_strength = {
+        strength: [sign.id for sign in triggers.every if sign.strength == strength]
+        for strength in ("very_high", "high", "medium", "low")
+    }
+    assert by_strength["very_high"] == ["lease_ending", "long_tenure"]
+    assert by_strength["high"] == [
+        "merger_or_takeover",
+        "big_new_contract",
+        "fast_growth",
+        "new_to_australia",
+        "capital_raise",
+        "tenant_advisor",
+    ]
+    assert by_strength["medium"] == [
+        "hot_industry_growth",
+        "office_consolidation",
+        "return_to_office",
+        "restructure",
+        "new_ceo",
+        "new_business_unit",
+        "new_facility",
+        "underperforming_workplace",
+    ]
+    assert by_strength["low"] == ["culture_change", "hiring_push", "rival_growth", "growth_list"]
+    assert triggers.strength_of("capital_raise") == "high"
+    assert triggers.strength_of("no_such_sign") is None
+
+
+def test_a_sign_without_a_strength_stops_start_up(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    edit(
+        rules_dir / "criteria.yaml",
+        "      strength: low # low on its own",
+        "      # low on its own",
+    )
+    with pytest.raises(ValidationError, match="strength"):
+        read_rules(rules_dir)
+
+
+def test_a_made_up_strength_stops_start_up(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    edit(
+        rules_dir / "criteria.yaml",
+        "strength: low # low on its own",
+        "strength: huge # low on its own",
+    )
+    with pytest.raises(ValidationError, match="strength"):
+        read_rules(rules_dir)
+
+
+def test_the_competitor_sweep_also_follows_a_sector_tailwind() -> None:
+    rivals = load_rules().criteria.rivals
+    assert rivals.also_after == ["hot_industry_growth"]
+
+
+def test_the_sweep_signs_must_be_signs(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    edit(
+        rules_dir / "criteria.yaml", "also_after: [hot_industry_growth]", "also_after: [moon_base]"
+    )
+    with pytest.raises(ValidationError, match=r"rivals.also_after has signs that aren't triggers"):
+        read_rules(rules_dir)
 
 
 def test_every_place_has_a_group_and_a_search_area() -> None:

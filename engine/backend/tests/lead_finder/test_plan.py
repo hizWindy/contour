@@ -42,18 +42,24 @@ def with_areas(areas: dict[str, dict[str, list[str]]]) -> LeadFinderRules:
 # --- Slices ---------------------------------------------------------------------------------
 
 
-def test_the_default_run_is_one_city_times_the_six_main_signs() -> None:
+SIX_SIGNS = [
+    "lease_ending",
+    "merger_or_takeover",
+    "big_new_contract",
+    "fast_growth",
+    "new_to_australia",
+    "hot_industry_growth",
+]
+# The two new high signs of Levi's section 4 (PLAN-V16 T1-4) are main signs, so a default run
+# searches 8
+EIGHT_SIGNS = [*SIX_SIGNS, "capital_raise", "tenant_advisor"]
+
+
+def test_the_default_run_is_one_city_times_the_eight_main_signs() -> None:
     slices = make_slices(DiscoveryParams(), RULES)
-    assert len(slices) == 6
-    assert [s.city for s in slices] == ["Melbourne"] * 6
-    assert [s.trigger_id for s in slices] == [
-        "lease_ending",
-        "merger_or_takeover",
-        "big_new_contract",
-        "fast_growth",
-        "new_to_australia",
-        "hot_industry_growth",
-    ]
+    assert len(slices) == 8
+    assert [s.city for s in slices] == ["Melbourne"] * 8
+    assert [s.trigger_id for s in slices] == EIGHT_SIGNS
 
 
 def test_three_cities_go_city_by_city() -> None:
@@ -74,10 +80,12 @@ def test_the_first_default_slice_is_melbournes_lease_ending() -> None:
 
 def test_a_national_run_of_six_signs_plans_six_slices() -> None:
     """PLAN-V16 T1-2: all of Australia is one search for each sign, not one for each place (20
-    places x 6 signs would be 120)."""
-    params = DiscoveryParams(cities=["Australia"])
+    places x 6 signs would be 120). With the default signs it is 8."""
+    params = DiscoveryParams(cities=["Australia"], triggers=SIX_SIGNS)
     slices = make_slices(params, RULES)
     assert len(slices) == len(params.triggers) == 6
+    default = DiscoveryParams(cities=["Australia"])
+    assert [s.trigger_id for s in make_slices(default, RULES)] == EIGHT_SIGNS
     assert {s.city for s in slices} == {"Australia"}
     assert {s.area for s in slices} == {"all"}
     assert slices[0] == Slice(
@@ -147,7 +155,7 @@ def test_the_inner_label_says_inner_suburbs() -> None:
 
 
 def test_the_full_params_model_works_too() -> None:
-    assert len(make_slices(LeadFinderRunParams(), RULES)) == 6
+    assert len(make_slices(LeadFinderRunParams(), RULES)) == 8
 
 
 def test_sydney_is_a_slice_like_any_city() -> None:

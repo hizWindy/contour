@@ -81,6 +81,18 @@ discovery:
     - "{city} energy transition company expansion {year}"
     - "{city} defence contractor plans new office {year}"
     - "{city} critical minerals company expansion {year}"
+  # PLAN-V16 T1-4 (Levi's section 4): a capital raise, a tenant advisor and a growth list. Their
+  # sources are in his section 7 (AFR, SmartCompany, Startup Daily, Crunchbase, leasing news).
+  capital_raise:
+    - "{city} company raises Series B funding {year}"
+    - "{city} private equity investment growth capital {month_year}"
+    - "{city} company IPO plans ASX listing {year}"
+  tenant_advisor:
+    - "{city} company appoints tenant representative office search {year}"
+    - "{city} company seeking new office space leasing {month_year}"
+  growth_list:
+    - "AFR Fast 100 {year} {city} company"
+    - "Deloitte Technology Fast 50 {year} {city}"
   office_consolidation:
     - "{city} company consolidating offices into one headquarters"
   return_to_office:

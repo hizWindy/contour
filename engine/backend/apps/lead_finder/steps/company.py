@@ -126,7 +126,8 @@ async def _rivals(
     rules = run.rules
     place = card.facts.city.value if isinstance(card.facts.city.value, str) else task["city"]
     city = city_of(place, rules) if place else None
-    if not wants_rivals(rules, card.result, card.facts.tier_group, city):
+    signs = [score.trigger.id for score in card.triggers]
+    if not wants_rivals(rules, card.result, card.facts.tier_group, city, signs):
         return 0
     assert city is not None  # wants_rivals says no without a city
     left = ctx.caps.company_cap_usd - spent

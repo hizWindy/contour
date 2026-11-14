@@ -9,7 +9,7 @@ value. Each default saves its city, the signs, the look-back and its own company
 **The four default schedules:** one for each city, every 2 weeks at 7:00 am Melbourne time, on
 different days of the same fortnight: Melbourne on Monday, Adelaide on Tuesday, Perth on Wednesday
 and Sydney on Thursday (a secondary city, so its leads can pass). All are **off**: each run costs
-money, so Al-khair switches them on. Each searches its city for the 6 main signs (6 searches),
+money, so Al-khair switches them on. Each searches its city for the 8 main signs (8 searches),
 looks back 14 days, the time between two runs, so no day is missed and none is read twice. **TBC**
 with Levi (the days, the time and the signs).
 
@@ -88,6 +88,10 @@ SCHEDULED_SIGNS = (
     "fast_growth",
     "new_to_australia",
     "hot_industry_growth",
+    # PLAN-V16 T1-4: the two new high signs of Levi's section 4 are main signs now, so each city's
+    # run searches 8 signs, not 6 (about US$0.8 more for the searches, TBC)
+    "capital_raise",
+    "tenant_advisor",
 )
 LOOK_BACK_DAYS = 14
 AT = time(7, 0)

@@ -38,6 +38,8 @@ COMPANIES_MAX = 25
 # The most places one run may name. The rules list 20, so this only stops a long list of repeats;
 # how many slices fit is checked by `steps/plan.check_discovery_size`.
 CITIES_MAX = 24
+# The most signs one run may name. The rules have 18 that a search can look for (PLAN-V16 T1-4)
+TRIGGERS_MAX = 24
 WATCHLIST_LIMIT_MAX = 200
 WATCHLIST_INDUSTRIES_MAX = 20  # a lease and tenure run's industries (PLAN-V11 C2)
 INDUSTRY_MAX_CHARS = 120
@@ -67,7 +69,7 @@ def known_trigger_ids() -> list[str]:
 
 def default_cities() -> list[str]:
     """The first priority city (Melbourne). Runs go one city at a time since PLAN-V9 C4 (one
-    schedule for each city), and the 6 main signs in all 3 priority cities would make 18 searches,
+    schedule for each city), and the 8 main signs in all 3 priority cities would make 24 searches,
     more than the default limits allow (13). Every other place, and all of Australia, are a
     person's choice."""
     return load_rules().criteria.cities.groups["priority"][:1]
@@ -295,7 +297,7 @@ class _Discovery(Strict):
     triggers: list[str] = Field(
         default_factory=default_triggers,
         min_length=1,
-        max_length=16,
+        max_length=TRIGGERS_MAX,
         description=(
             "Used by mode discovery only. Trigger ids to look for, each once. "
             "The default is the main triggers."

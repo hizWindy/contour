@@ -222,6 +222,9 @@ class OfficeAge(Strict):
     # tenure sign: the code adds it from the office dates, never Claude (PLAN-V11 C1)
     tenure_years: int = Field(gt=0)
     tenure_sign: str = Field(pattern=r"^[a-z][a-z_]*$")
+    # Levi's section 4 (PLAN-V16 T1-4): "no known fitout at that address in the last 5 years". A
+    # fitout longer ago than this doesn't stop the tenure sign, and the move-in's own doesn't count.
+    tenure_fitout_years: int = Field(gt=0)
     # The lead card's Why now guesses a lease end as the move-in year plus this many years, from
     # the first to the second (PLAN-V12 B1). It never changes a result or a score.
     lease_guess_years: tuple[GuessYears, GuessYears]
@@ -248,18 +251,41 @@ class Item(Strict):
     label: str = Field(min_length=1)
 
 
+Strength = Literal["very_high", "high", "medium", "low"]
+STRENGTHS: tuple[Strength, ...] = ("very_high", "high", "medium", "low")
+STRENGTH_WORDS: dict[Strength, str] = {
+    "very_high": "very high",
+    "high": "high",
+    "medium": "medium",
+    "low": "low",
+}
+
+
+class Sign(Item):
+    """A sign of an office change, and how strong it is (Levi's section 4, PLAN-V16 T1-4). The
+    group it sits in (main, other, weak) says whether a run searches for it by default. The
+    strength says how much it counts in the score."""
+
+    strength: Strength
+
+
 class Triggers(Strict):
     window_years: int = Field(gt=0)
     best_window_years: tuple[int, int]
+    # A sign older than this is ignored, unless it is a lease or tenure date (Levi: 18 months)
     recent_months: int = Field(gt=0)
     consultant_window_months: int = Field(gt=0)
-    main: list[Item] = Field(min_length=1)
-    other: list[Item]
-    weak: list[Item]
+    main: list[Sign] = Field(min_length=1)
+    other: list[Sign]
+    weak: list[Sign]
 
     @property
-    def every(self) -> list[Item]:
+    def every(self) -> list[Sign]:
         return [*self.main, *self.other, *self.weak]
+
+    def strength_of(self, sign_id: str) -> Strength | None:
+        """How strong a sign is, or None for an id the rules don't know."""
+        return next((sign.strength for sign in self.every if sign.id == sign_id), None)
 
     @model_validator(mode="after")
     def check_triggers(self) -> Self:
@@ -282,6 +308,9 @@ class Rivals(Strict):
     per_run: int = Field(ge=0, le=20)
     max_searches: int = Field(ge=1, le=5)
     sign: str = Field(pattern=r"^[a-z][a-z_]*$")
+    # Levi's competitor sweep (section 4, PLAN-V16 T1-4): it also runs for a good lead with one of
+    # these signs, whatever its sector: a sector tailwind lifts the companies around it
+    also_after: list[str] = Field(default_factory=list)
 
 
 class NeverSuggest(Strict):
@@ -496,6 +525,13 @@ class Criteria(Strict):
     def check_rival_sign(self) -> Self:
         if self.rivals.sign not in {trigger.id for trigger in self.triggers.weak}:
             raise ValueError(f"rivals.sign {self.rivals.sign!r} must be a weak trigger")
+        unknown = sorted(set(self.rivals.also_after) - {t.id for t in self.triggers.every})
+        if unknown:
+            raise ValueError(
+                f"rivals.also_after has signs that aren't triggers: {', '.join(unknown)}"
+            )
+        if self.rivals.sign in self.rivals.also_after:
+            raise ValueError("rivals.also_after can't hold the rivals' own sign")
         return self
 
     @model_validator(mode="after")

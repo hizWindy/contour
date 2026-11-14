@@ -428,6 +428,58 @@ def test_old_or_finished_triggers_dont_count() -> None:
     assert verdict(triggers=[trigger("lease_ending", "2031-01")]).result == "watch"
 
 
+@pytest.mark.parametrize(
+    ("when", "counts"),
+    [
+        ("2026-10-20", True),
+        ("2025-09-01", True),  # 13 months: 12 months was the limit until PLAN-V16 T1-4
+        ("2025-05-01", True),  # 17 months
+        ("2025-04-01", False),  # 19 months: older than Levi's 18
+        ("2024-05", False),
+    ],
+)
+def test_a_sign_older_than_18_months_is_ignored(when: str, counts: bool) -> None:
+    """Levi's section 4: ignore anything older than 18 months, unless it is a lease or tenure
+    date. The lease sign (a date to come) and the tenure sign (no date) are not held to it."""
+    result = verdict(triggers=[trigger("merger_or_takeover", when)])
+    assert (len(result.triggers) == 1) is counts
+    assert (result.result == "pass") is counts
+
+
+def test_an_old_sign_that_still_counts_earns_no_recency_points() -> None:
+    (merger,) = verdict(triggers=[trigger("merger_or_takeover", "2025-09-01")]).triggers
+    assert merger.timing_points == 0  # recency steps stop at a year
+
+
+def test_a_lease_date_is_not_held_to_the_18_months() -> None:
+    far = verdict(triggers=[trigger("lease_ending", "2028-03")])
+    assert [score.trigger.id for score in far.triggers] == ["lease_ending"]
+    assert verdict(triggers=[trigger("lease_ending", "2024-03")]).triggers == []  # already ended
+
+
+def test_each_sign_on_the_card_says_how_strong_it_is() -> None:
+    result = verdict(
+        triggers=[
+            trigger("capital_raise", "2026-10-01"),
+            trigger("culture_change", "2026-10-01"),
+            trigger("lease_ending", "2028-03"),
+            trigger("new_ceo", "2026-10-01"),
+        ]
+    )
+    assert {score.trigger.id: score.strength for score in result.triggers} == {
+        "lease_ending": "very_high",
+        "capital_raise": "high",
+        "new_ceo": "medium",
+        "culture_change": "low",
+    }
+
+
+def test_the_new_signs_are_signs_like_the_others() -> None:
+    for sign in ("capital_raise", "tenant_advisor", "growth_list"):
+        result = verdict(triggers=[trigger(sign, "2026-10-10")])
+        assert [score.trigger.id for score in result.triggers] == [sign]
+
+
 def test_an_official_source_scores_higher_than_news() -> None:
     news = verdict(triggers=[trigger("big_new_contract", "2026-10-01", NEWS)])
     asx = verdict(triggers=[trigger("big_new_contract", "2026-10-01", ASX)])
@@ -651,7 +703,8 @@ def test_9_years_with_no_fitout_gets_the_old_office_sign() -> None:
     assert sign is not None
     assert sign.group == "main"
     assert sign.trigger.what_happened == (
-        "At this address since June 2017 (9 years), with no known office project since."
+        "At this address since at least June 2017 (9 years), "
+        "with no known fitout there in the last 5 years."
     )
     assert (sign.trigger.date, sign.trigger.source_url) == (None, NEWS)  # the move-in's source
     assert sign.timing_points == 1  # undated: the years at the address earn their own points
@@ -669,6 +722,42 @@ def test_6_years_has_no_old_office_sign() -> None:
     assert old_office(verdict(triggers=[], office_since=fact("2020-06"))) is None
 
 
+def test_levis_tenure_rule_looks_only_at_the_last_5_years_for_a_fitout() -> None:
+    """Section 4 (PLAN-V16 T1-4): 8+ years at the address and no known fitout there in the last 5
+    years. A fitout longer ago than that doesn't stop the sign."""
+    moved = fact("2012")  # at the address 14 years
+    inside = verdict(triggers=[], office_since=moved, last_fitout=fact("2022-01"))  # 4.8 years ago
+    assert old_office(inside) is None
+    outside = verdict(triggers=[], office_since=moved, last_fitout=fact("2021-06"))  # 5.4 years
+    assert old_office(outside) is not None
+    long_ago = verdict(triggers=[], office_since=moved, last_fitout=fact("2016"))  # 10 years ago
+    assert old_office(long_ago) is not None
+
+
+def test_an_exact_move_in_date_is_not_needed_a_year_is_enough() -> None:
+    """Levi: "at this address since at least 2017" is enough."""
+    result = verdict(triggers=[], office_since=fact("2017"))  # a year alone counts from 1 July
+    sign = old_office(result)
+    assert sign is not None
+    assert sign.trigger.what_happened.startswith("At this address since at least 2017 (9 years)")
+
+
+def test_8_years_is_the_edge_of_the_tenure_sign() -> None:
+    assert old_office(verdict(triggers=[], office_since=fact("2018-10-01"))) is not None  # 8.07
+    assert old_office(verdict(triggers=[], office_since=fact("2018-11-01"))) is None  # 7.99
+
+
+def test_a_company_that_is_not_stable_has_no_tenure_sign() -> None:
+    """The company must be stable or growing (no layoffs, losses or contraction)."""
+    stable = verdict(triggers=[], office_since=fact("2012"), healthy=fact(True))
+    assert old_office(stable) is not None
+    unhealthy = verdict(triggers=[], office_since=fact("2012"), healthy=fact(False))
+    assert old_office(unhealthy) is None  # and it is a Drop for being unhealthy anyway
+    assert (
+        old_office(verdict(triggers=[], office_since=fact("2012"), healthy=fact(None))) is not None
+    )
+
+
 def test_a_fitout_before_the_move_in_was_part_of_the_move() -> None:
     result = verdict(triggers=[], office_since=fact("2017-06"), last_fitout=fact("2017-03"))
     assert old_office(result) is not None
@@ -679,7 +768,9 @@ def test_claude_never_gives_the_old_office_sign() -> None:
     assert old_office(verdict(triggers=[claimed])) is None
     result = verdict(triggers=[claimed], office_since=fact("2017-06"))
     assert [score.trigger.id for score in result.triggers] == ["long_tenure"]
-    assert result.triggers[0].trigger.what_happened.startswith("At this address since June 2017")
+    assert result.triggers[0].trigger.what_happened.startswith(
+        "At this address since at least June 2017"
+    )
 
 
 def test_real_news_ranks_above_the_old_office_sign() -> None:

@@ -179,6 +179,9 @@ office_age:
   # office dates, never Claude, and it has no discovery search.
   tenure_years: 8
   tenure_sign: long_tenure
+  # Levi's section 4 (PLAN-V16 T1-4): "no known fitout at that address in the last 5 years". A fitout
+  # longer ago than this doesn't stop the sign, and the move-in's own doesn't count.
+  tenure_fitout_years: 5
   # The lead card's "Why now" (PLAN-V12 B1) guesses when a lease may end from the move-in year: the
   # move-in year plus 5 to 7 years. Always marked "estimated", with its working. It never changes a
   # result or a score.
@@ -187,53 +190,85 @@ office_age:
 triggers:
   window_years: 3
   best_window_years: [1, 3]
-  recent_months: 12 # an event, like a merger, counts if it happened in the last 12 months
+  recent_months: 18 # Levi's section 4 (PLAN-V16 T1-4): ignore a sign older than this, unless it is a lease or tenure date. Was 12
   consultant_window_months: 18 # the Profile: a consultant is usually appointed this long before the project. The lead card says so as text, because the tool can't see it
+  # Each sign has a strength (Levi's section 4, PLAN-V16 T1-4): very_high, high, medium or low. The
+  # strength is how much it counts in the score (T1-6). The group (main, other, weak) is only which
+  # signs a run searches for by default: the main ones. The ids stay, so old leads keep their signs.
   main:
     - id: lease_ending
       label: Lease ending in 1 to 3 years, or a relocation
+      strength: very_high
     - id: merger_or_takeover # PLAN-V11 B1, Levi 9 Nov: even with an old office, a merger can still lead to a move
       label: Merger or acquisition
+      strength: high
     - id: big_new_contract # PLAN-V11 B1, Levi 9 Nov: "about 100 more office staff" was too specific
       label: Big new contract or project award that means a large increase in office staff
+      strength: high
     - id: fast_growth
       label: Fast or planned headcount growth, like many job ads, big funding or growth news
+      strength: high # Levi: a hiring surge, open roles of 25% or more of the local staff
     - id: new_to_australia # PLAN-V9 B3, Levi 5 Nov. Its size comes from the staff or office it announces here
       label: An overseas company opening its first or a much bigger office in an Australian city
+      strength: high
     - id: hot_industry_growth # PLAN-V9 B4, Levi 2 Nov. Its searches name the industries (queries.yaml)
       label: Growing because its industry is booming, like the energy transition, defence or critical minerals
+      strength: medium # Levi calls it a sector tailwind. A good lead with it also starts the competitor sweep (rivals.also_after)
     - id: long_tenure # PLAN-V11 C1, Levi 9 Nov. Added by the code from the office dates (office_age.tenure_years), so it has no search
-      label: At the same address for 8 or more years, with no known office project in that time
+      label: At the same address for 8 or more years, with no known fitout there in the last 5 years
+      strength: very_high # Levi: 10 or more years is the strongest (T1-6 gives it more points)
+    - id: capital_raise # PLAN-V16 T1-4, Levi's section 4. New
+      label: Capital raise or funding, like a Series B or later, private equity, an IPO or a big debt raise, with growth plans
+      strength: high
+    - id: tenant_advisor # PLAN-V16 T1-4, Levi's section 4. New. Property Daily's "requirement" items are this sign too (T1-8)
+      label: Appoints a tenant representation agent, or is in leasing news as looking for space
+      strength: high
   other:
     - id: office_consolidation
       label: Merging several offices into one
+      strength: medium
     - id: return_to_office
       label: Return to office
+      strength: medium
     - id: restructure
       label: Restructure
+      strength: medium
     - id: new_ceo # the id stays, so old leads keep their label. Moved up from weak in version 2
       label: Leadership change that changes direction or strategy
+      strength: medium
     - id: new_business_unit
       label: New business unit
+      strength: medium # Levi's notes don't list it: version 2's other signs stay medium (TBC)
     - id: new_facility
       label: New engineering, project or manufacturing facility with a big office part
+      strength: medium
     - id: underperforming_workplace
       label: Underperforming workplace, or a major business or industry change
+      strength: medium
   weak:
     - id: culture_change
       label: Culture change
+      strength: low
     - id: hiring_push # the id stays. The label is the Profile's wording
       label: Pressure on talent, client experience or productivity, like a hiring push
+      strength: low
     - id: rival_growth # PLAN-V9 B5. It has no search: it comes from the rivals table (below)
       label: A rival of a booming company
+      strength: low
+    - id: growth_list # PLAN-V16 T1-4, Levi's section 4. New: AFR Fast 100, Deloitte Technology Fast 50 and the like
+      label: On a growth list, like the AFR Fast 100 or the Deloitte Technology Fast 50
+      strength: low # low on its own: it supports other signs
 
 # Rivals of a booming company (PLAN-V9 B5, Levi 2 Nov). When a lead in one of these tiers is a Pass or
 # a Director review, one Claude web search names up to per_lead Australian rivals with an office in
 # the same city. The next discovery run for that city adds up to per_run of them to its list, with
 # the weak sign below, so real news still ranks first. Set enabled to false to stop it.
+# Levi's competitor sweep (section 4): it also runs for a good lead with a sector tailwind sign,
+# whatever its sector (`also_after`, PLAN-V16 T1-4).
 rivals:
   enabled: true
   tiers: [tier_1, tier_2]
+  also_after: [hot_industry_growth]
   per_lead: 5
   per_run: 5
   max_searches: 2 # web searches in the one request (about US$0.05 to US$0.10, TBC)
@@ -391,9 +426,9 @@ tbc:
   - key: triggers
     note: Version 2 adds three triggers (new facility, new business unit, underperforming workplace) and moves the leadership change up from weak to other, counting only when strategy changes. All from the Profile and Levi's brief, none confirmed.
   - key: triggers.main
-    note: PLAN-V9 adds new_to_australia (Levi, 5 Nov) and hot_industry_growth (Levi, 2 Nov) to the main signs, so the schedules look for them. Whether they are main signs is for Levi.
+    note: PLAN-V9 adds new_to_australia (Levi, 5 Nov) and hot_industry_growth (Levi, 2 Nov) to the main signs, so the schedules look for them. Whether they are main signs is for Levi. PLAN-V16 T1-4 adds capital_raise and tenant_advisor (Levi's section 4, both high), so a default run searches 8 signs, not 6, and each city's schedule too.
   - key: rivals
-    note: Our proposal (PLAN-V9 B5). Whether rivals with no news of their own are wanted is for Levi (PLAN-V9 A3). At most 5 a run, and the weak sign ranks them after real news.
+    note: Our proposal (PLAN-V9 B5). Whether rivals with no news of their own are wanted is for Levi (PLAN-V9 A3). At most 5 a run, and the weak sign ranks them after real news. Levi's competitor sweep (section 4) also runs after a sector tailwind sign (also_after, PLAN-V16 T1-4), whatever the lead's sector.
   - key: cities.groups
     note: Al-khair asked for all of Australia (15 Nov, PLAN-V16 T1-2). Levi's notes name Melbourne, Adelaide and Perth as priority and Sydney and Brisbane as secondary. The capitals (Canberra, Hobart, Darwin) and the 12 regional centres are our list, and so is the rule that any place passes. A place not on the list passes too, with the flag "check the city". Sydney is no longer a Director's decision, because his notes call it secondary.
   - key: cities.national
@@ -401,7 +436,11 @@ tbc:
   - key: cities.no_city_director_signs
     note: Our proposal (PLAN-V9 B3). An overseas company new to Australia with no Australian city named yet goes to a Director, not to Watch.
   - key: triggers.recent_months
-    note: Our proposal. How old an event can be and still count as a trigger.
+    note: Levi's section 4 (PLAN-V16 T1-4) says to ignore a sign older than 18 months, unless it is a lease or tenure date. It was 12 months, our guess. The score's "other signs within 12 months" keeps its own 12 (T1-6).
+  - key: triggers.other
+    note: The strengths are Levi's (section 4, PLAN-V16 T1-4). Where his notes are silent, version 2's other signs (new business unit, new facility, underperforming workplace) are medium, and the weak signs (culture change, hiring push, a rival of a booming company) are low. That is our reading. A strength is how much a sign counts in the score (T1-6). The group (main, other, weak) is only which signs a run searches for by default.
+  - key: office_age.tenure_fitout_years
+    note: Levi's section 4 (PLAN-V16 T1-4), long tenure. 8 or more years at the address, a company that is stable or growing, and no known fitout there in the last 5 years. A year is enough for the move-in ("at this address since at least 2017"). Ten or more years is the strongest, so T1-6 gives it more points in the score.
   - key: source_domains
     note: First draft. The test set will show which sites matter.
   - key: score
