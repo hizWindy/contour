@@ -1826,8 +1826,13 @@ async def test_research_still_works_through_the_endpoint_and_the_new_leads_route
         card = response.json()
         assert card["result"] == "pass"
         # What each source said, as a summary, with its link (one note per angle in the sample).
-        assert len(card["notes"]) == 4
-        assert {note["angle"] for note in card["notes"]} == {"property", "people", "money"}
+        assert len(card["notes"]) == 5
+        assert {note["angle"] for note in card["notes"]} == {
+            "property",
+            "people",
+            "money",
+            "dampeners",
+        }
         assert all(note["url"].startswith("https://") for note in card["notes"])
         assert card["hubspot"]["candidates"] == []
 

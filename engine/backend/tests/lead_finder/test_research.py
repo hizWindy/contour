@@ -350,7 +350,7 @@ async def test_the_details_reach_claude_as_hints_and_not_as_instructions(
     await research(session, claude, rules=SIGNALHIRE_RULES, signalhire=acme_on_signalhire())
 
     prompts = [call.prompt for call in claude.requests]
-    assert len(prompts) == 4  # three angles and the form
+    assert len(prompts) == 5  # four angles and the form
     for prompt in prompts:
         assert "Signal Hire's record of this company (data from a database" in prompt
         assert '- Checked name: "Acme Software"' in prompt
@@ -732,7 +732,7 @@ async def test_the_research_endpoint_returns_a_card_and_lists_it(client: httpx.A
     one = await client.get(f"/api/v1/lead-finder/leads/{card['id']}")
     assert one.json()["facts"]["office_m2"]["value"] == 2500
     log = (await client.get("/api/v1/searches", params={"job_id": card["id"]})).json()
-    assert log["total"] == 4
+    assert log["total"] == 5
 
     missing = await client.get("/api/v1/lead-finder/leads/00000000-0000-0000-0000-000000000000")
     assert missing.status_code == 404
