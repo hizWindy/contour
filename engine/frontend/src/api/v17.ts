@@ -25,13 +25,7 @@ export type CallNoteSource = 'mic' | 'typed' | 'transcript'
  * uncertain: HubSpot may or may not have one step, and a person decides.
  */
 export type CallNoteStatus =
-  | 'sorting'
-  | 'to_confirm'
-  | 'sending'
-  | 'logged'
-  | 'partial'
-  | 'failed'
-  | 'uncertain'
+  'sorting' | 'to_confirm' | 'sending' | 'logged' | 'partial' | 'failed' | 'uncertain'
 
 /** The tabs on Activity, and the `state` filter of GET /call-notes. */
 export type CallNoteState = 'to_confirm' | 'logged' | 'needs_look'
@@ -271,11 +265,21 @@ interface Errors {
   422: Problem
 }
 
-interface Operation<Out, Body = never, Path = never, Query = never, Header = never> {
-  parameters: { query?: Query; header?: Header; path: Path; cookie?: never }
-  requestBody: [Body] extends [never] ? never : { content: { 'application/json': Body } }
+/*
+  The same shape openapi-typescript writes: a route with no path parameters has `path?: never`,
+  and one with no body has `requestBody?: never`. (A required `path: never` made every call to such
+  a route fail to type-check: found in T3-5.)
+*/
+type PathPart<Path> = [Path] extends [never] ? { path?: never } : { path: Path }
+
+type BodyPart<Body> = [Body] extends [never]
+  ? { requestBody?: never }
+  : { requestBody: { content: { 'application/json': Body } } }
+
+type Operation<Out, Body = never, Path = never, Query = never, Header = never> = {
+  parameters: { query?: Query; header?: Header; cookie?: never } & PathPart<Path>
   responses: { 200: Json<Out> } & Errors
-}
+} & BodyPart<Body>
 
 interface NoContent<Path> {
   parameters: { query?: never; header?: never; path: Path; cookie?: never }
@@ -298,7 +302,8 @@ export interface V17Paths {
   '/companies/call-notes': {
     parameters: NoParameters
     get: Operation<CallNotePage, never, never, CallNoteQuery>
-    post: Operation<CallNoteOut, CallNoteIn, never, never, { 'Idempotency-Key'?: string }>
+    // Lower case, as the backend's generated contract writes headers (see `create_run`).
+    post: Operation<CallNoteOut, CallNoteIn, never, never, { 'idempotency-key'?: string | null }>
   }
   '/companies/call-notes/summary': { parameters: NoParameters; get: Operation<CallNoteSummary> }
   '/companies/call-notes/preview': {
@@ -326,6 +331,10 @@ export interface V17Paths {
   '/hubspot/owners': { parameters: NoParameters; get: Operation<HubSpotOwnerList> }
   '/people/{id}/hubspot-owner': {
     parameters: NoParameters
-    put: Operation<Schemas['PersonOut'] & { hubspot_owner?: HubSpotOwnerLink | null }, HubSpotOwnerIn, Id>
+    put: Operation<
+      Schemas['PersonOut'] & { hubspot_owner?: HubSpotOwnerLink | null },
+      HubSpotOwnerIn,
+      Id
+    >
   }
 }

@@ -180,6 +180,10 @@ export const queryKeys = {
     edits: (key: string, contactId: string | null) =>
       ['companies', 'edits', key, contactId ?? null] as const,
     style: () => ['companies', 'style'] as const,
+    /** Call notes (PLAN-V17): every query about them, the switches and limits, the counts. */
+    callNotes: () => ['companies', 'call-notes'] as const,
+    callNoteOptions: () => ['companies', 'call-notes', 'options'] as const,
+    callNoteSummary: () => ['companies', 'call-notes', 'summary'] as const,
   },
   hubspot: {
     all: ['hubspot'] as const,
