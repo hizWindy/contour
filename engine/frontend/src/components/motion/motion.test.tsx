@@ -1,30 +1,38 @@
-import { act, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { m } from 'motion/react'
+import { domMax, LazyMotion, m } from 'motion/react'
 import { useState, type ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { REDUCED_MOTION } from '@/lib/use-media-query'
 import {
   ChipGroup,
   INSTANT,
+  LevelMeter,
+  LIST_EXIT_MAX,
+  ListExit,
+  ListExitItem,
   MotionRoot,
   PRESS_SCALE,
+  PushView,
   Reveal,
   REVEAL_MAX,
   RollingNumber,
   Segmented,
   springs,
   TabIndicator,
+  TickIn,
   usePress,
   useStill,
   useTransition,
+  type PushDirection,
 } from '.'
 import { handleRovingKey, nextEnabled, rovingTarget } from './roving'
 
 /*
-  The motion kit (PLAN-V13 T2-4). jsdom has no layout and no animation frames, so these tests
-  prove what a browser cannot be trusted to show: the roles and names a screen reader gets, the
-  keyboard, what changes on a click, and that reduced motion takes every animation away.
+  The motion kit (PLAN-V13 T2-4). jsdom has no layout, and a plain render here has no animation
+  (motion's features arrive late, see MotionRoot), so these tests prove what a browser cannot be
+  trusted to show: the roles and names a screen reader gets, the keyboard, what changes on a
+  click, and that reduced motion takes every animation away.
 */
 
 function wrap(ui: ReactNode) {
@@ -374,5 +382,309 @@ describe('RollingNumber', () => {
     askForReducedMotion()
     wrap(<Harness value={7} />)
     expect(document.querySelector('[data-slot=rolling-number] .sr-only')).toHaveTextContent('7')
+  })
+})
+
+/*
+  The four parts for call notes (PLAN-V17 T3-3). A leaving view or row stays for its exit only
+  once motion's features are there, and MotionRoot loads them a moment after the app starts. So
+  `wrapMoving` renders with the features already loaded, as the app is by the time anyone presses
+  anything. Then a move really runs, frame by frame, but jsdom has no layout: these tests prove
+  where a move starts, where it ends, and what a view or a row is while it leaves (inert, or
+  hidden at once with reduced motion), not the path it takes on screen.
+*/
+
+/** motion's features, there from the start. */
+function WithFeatures({ children }: { children: ReactNode }) {
+  return (
+    <MotionRoot>
+      <LazyMotion features={domMax} strict>
+        {children}
+      </LazyMotion>
+    </MotionRoot>
+  )
+}
+
+function wrapMoving(ui: ReactNode) {
+  return render(ui, { wrapper: WithFeatures })
+}
+
+function PushHarness() {
+  const [view, setView] = useState<{ key: string; direction: PushDirection }>({
+    key: 'script',
+    direction: 'forward',
+  })
+  return (
+    <>
+      <button type="button" onClick={() => setView({ key: 'note', direction: 'forward' })}>
+        Log call
+      </button>
+      <button type="button" onClick={() => setView({ key: 'script', direction: 'back' })}>
+        Back
+      </button>
+      <PushView viewKey={view.key} direction={view.direction} className="min-h-0 flex-1">
+        {view.key === 'script' ? <p>The script</p> : <textarea aria-label="Note" />}
+      </PushView>
+    </>
+  )
+}
+
+/** The views in the box now, in order: the leaving one first. */
+function views(): HTMLElement[] {
+  return [...document.querySelectorAll<HTMLElement>('[data-slot=push-view] > [data-view]')]
+}
+
+function viewNames(list = views()): (string | undefined)[] {
+  return list.map((view) => view.dataset.view)
+}
+
+describe('PushView', () => {
+  it('shows the first view at once, in a box that clips the slide sideways', () => {
+    wrapMoving(<PushHarness />)
+    expect(document.querySelector('[data-slot=push-view]')).toHaveClass(
+      'relative',
+      'overflow-x-clip',
+      'min-h-0',
+      'flex-1',
+    )
+    expect(viewNames()).toEqual(['script'])
+    const [script] = views()
+    expect(script).not.toHaveAttribute('inert')
+    // The first view doesn't move in: the panel around it does.
+    expect(script).toHaveStyle({ opacity: '1' })
+  })
+
+  it('forward: the new view starts 24px to the right, faded, and the old one leaves, inert', async () => {
+    wrapMoving(<PushHarness />)
+    fireEvent.click(screen.getByRole('button', { name: 'Log call' }))
+    expect(viewNames()).toEqual(['script', 'note'])
+    const [script, note] = views()
+    expect(script).toHaveAttribute('inert')
+    expect(note).not.toHaveAttribute('inert')
+    // Where it starts, before the first frame.
+    expect(note).toHaveStyle({ opacity: '0', transform: 'translateX(24px)' })
+    expect(screen.getByRole('textbox', { name: 'Note' })).toBeInTheDocument()
+    // Then the old view is gone, and the box holds one view.
+    await waitFor(() => {
+      expect(viewNames()).toEqual(['note'])
+    })
+  })
+
+  it('back, pressed half way: the script comes back as the same element, and the note leaves', async () => {
+    wrapMoving(<PushHarness />)
+    const [script] = views()
+    fireEvent.click(screen.getByRole('button', { name: 'Log call' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+    const [again, note] = views()
+    // The same element, so its spring carries on from where it is and nothing jumps.
+    expect(again).toBe(script)
+    expect(again).not.toHaveAttribute('inert')
+    expect(note?.dataset.view).toBe('note')
+    expect(note).toHaveAttribute('inert')
+    await waitFor(() => {
+      expect(views()).toEqual([script])
+    })
+  })
+
+  it('simply swaps with reduced motion: only the new view shows, at once, where it ends', async () => {
+    askForReducedMotion()
+    wrapMoving(<PushHarness />)
+    fireEvent.click(screen.getByRole('button', { name: 'Log call' }))
+    const shown = views().filter((view) => !view.hidden)
+    expect(viewNames(shown)).toEqual(['note'])
+    expect(shown[0]).toHaveStyle({ opacity: '1' })
+    expect(shown[0]?.style.transform).not.toContain('translate')
+    await waitFor(() => {
+      expect(viewNames()).toEqual(['note'])
+    })
+  })
+})
+
+function ListHarness({ count = 3 }: { count?: number }) {
+  const [rows, setRows] = useState(() =>
+    Array.from({ length: count }, (_, index) => `Call ${index + 1}`),
+  )
+  return (
+    <ListExit aria-label="Calls to confirm" className="flex flex-col gap-3">
+      {rows.map((row) => (
+        <ListExitItem key={row}>
+          <span>{row}</span>
+          <button type="button" onClick={() => setRows((now) => now.filter((r) => r !== row))}>
+            Leave out {row}
+          </button>
+        </ListExitItem>
+      ))}
+    </ListExit>
+  )
+}
+
+/** The rows a person can see now, by name. A row hidden at once is not one of them. */
+function rowNames(): (string | null | undefined)[] {
+  return screen.getAllByRole('listitem').map((row) => row.firstElementChild?.textContent)
+}
+
+/** Every row in the list, hidden or not. */
+function allRows(): NodeListOf<HTMLLIElement> {
+  return document.querySelectorAll<HTMLLIElement>('[data-slot=list-exit] > li')
+}
+
+describe('ListExit', () => {
+  it('is a list of rows, set up so a leaving row can be pinned where it was', () => {
+    wrapMoving(<ListHarness />)
+    expect(screen.getByRole('list', { name: 'Calls to confirm' })).toHaveClass(
+      'relative',
+      'flex',
+      'flex-col',
+      'gap-3',
+    )
+    expect(rowNames()).toEqual(['Call 1', 'Call 2', 'Call 3'])
+  })
+
+  it('keeps a leaving row while it fades, inert, and then it is gone', async () => {
+    wrapMoving(<ListHarness />)
+    fireEvent.click(screen.getByRole('button', { name: 'Leave out Call 2' }))
+    const rows = screen.getAllByRole('listitem')
+    expect(rows).toHaveLength(3)
+    expect(rows[1]).toHaveTextContent('Call 2')
+    expect(rows[1]).toHaveAttribute('inert')
+    expect(rows[0]).not.toHaveAttribute('inert')
+    expect(rows[2]).not.toHaveAttribute('inert')
+    await waitFor(() => {
+      expect(rowNames()).toEqual(['Call 1', 'Call 3'])
+    })
+    expect(allRows()).toHaveLength(2)
+  })
+
+  it('moves nothing in a list of more than 50 rows: a leaving row is gone at once', async () => {
+    // 52 rows, so 51 are left after one goes: still more than 50.
+    wrapMoving(<ListHarness count={LIST_EXIT_MAX + 2} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Leave out Call 2' }))
+    expect(rowNames()).toHaveLength(LIST_EXIT_MAX + 1)
+    expect(rowNames()).not.toContain('Call 2')
+    await waitFor(() => {
+      expect(allRows()).toHaveLength(LIST_EXIT_MAX + 1)
+    })
+  })
+
+  it('moves nothing with reduced motion: a leaving row is gone at once', async () => {
+    askForReducedMotion()
+    wrapMoving(<ListHarness />)
+    fireEvent.click(screen.getByRole('button', { name: 'Leave out Call 2' }))
+    expect(rowNames()).toEqual(['Call 1', 'Call 3'])
+    await waitFor(() => {
+      expect(allRows()).toHaveLength(2)
+    })
+  })
+})
+
+/** Each bar's scaleY now, read from the transform motion writes ("none" is 1). */
+function meterScales(): number[] {
+  return [...document.querySelectorAll<HTMLElement>('[data-slot=level-bar]')].map((bar) => {
+    if (bar.style.transform === 'none') {
+      return 1
+    }
+    const match = /^scaleY\(([\d.]+)\)$/.exec(bar.style.transform)
+    return match ? Number(match[1]) : Number.NaN
+  })
+}
+
+/** The bars for one level, drawn fresh, so no spring is on its way. */
+function scalesAt(level: number): number[] {
+  const { unmount } = wrap(<LevelMeter level={level} />)
+  const scales = meterScales()
+  unmount()
+  return scales
+}
+
+function expectScales(actual: number[], expected: number[]) {
+  expect(actual).toHaveLength(expected.length)
+  expected.forEach((scale, bar) => {
+    expect(actual[bar]).toBeCloseTo(scale)
+  })
+}
+
+describe('LevelMeter', () => {
+  it('shows five bars hidden from screen readers, and the word, and announces nothing', () => {
+    wrap(<LevelMeter level={0.4} />)
+    const meter = document.querySelector('[data-slot=level-meter]')
+    const bars = meter?.querySelectorAll('[data-slot=level-bar]') ?? []
+    expect(bars).toHaveLength(5)
+    expect(bars[0]?.parentElement).toHaveAttribute('aria-hidden', 'true')
+    expect(screen.getByText('Listening')).toBeVisible()
+    expect(meter).not.toHaveAttribute('aria-live')
+    expect(meter).not.toHaveAttribute('role')
+    expect(meter?.querySelector('[aria-live], [role=status], [role=alert], [role=log]')).toBeNull()
+  })
+
+  it("turns the level into each bar's height from the bottom: its own share, never under 15%", () => {
+    const silent = scalesAt(0)
+    expect(silent).toEqual([0.15, 0.15, 0.15, 0.15, 0.15])
+    const loud = scalesAt(1)
+    expectScales(loud, [0.575, 0.83, 1, 0.83, 0.575])
+    expectScales(scalesAt(0.5), [0.3625, 0.49, 0.575, 0.49, 0.3625])
+    // Held to 0 to 1, and a level that isn't a number is silence.
+    expect(scalesAt(3)).toEqual(loud)
+    expect(scalesAt(-1)).toEqual(silent)
+    expect(scalesAt(Number.NaN)).toEqual(silent)
+    wrap(<LevelMeter level={0} />)
+    for (const bar of document.querySelectorAll('[data-slot=level-bar]')) {
+      expect(bar).toHaveClass('origin-bottom')
+    }
+  })
+
+  it('follows a new level on its spring, and settles there', async () => {
+    const { rerender } = wrapMoving(<LevelMeter level={0} />)
+    rerender(<LevelMeter level={1} />)
+    await waitFor(() => {
+      expectScales(meterScales(), [0.575, 0.83, 1, 0.83, 0.575])
+    })
+  })
+
+  it('never moves by itself: with the same level, every bar stays where it is', async () => {
+    wrapMoving(<LevelMeter level={0.5} />)
+    const before = meterScales()
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 150))
+    })
+    expect(meterScales()).toEqual(before)
+  })
+
+  it('is a still dot and the same word with reduced motion', () => {
+    askForReducedMotion()
+    wrap(<LevelMeter level={0.8} />)
+    const meter = document.querySelector('[data-slot=level-meter]')
+    expect(meter?.querySelector('[data-slot=level-bar]')).toBeNull()
+    expect(meter?.querySelector('svg.lucide-circle-dot')).toHaveAttribute('aria-hidden', 'true')
+    expect(screen.getByText('Listening')).toBeVisible()
+  })
+})
+
+describe('TickIn', () => {
+  it('starts with no line, and is hidden from screen readers', () => {
+    wrap(<TickIn />)
+    const tick = document.querySelector('[data-slot=tick-in]')
+    expect(tick).toHaveAttribute('aria-hidden', 'true')
+    const path = tick?.querySelector('path')
+    expect(path).toHaveAttribute('stroke-dasharray', '0 1')
+    expect(path).toHaveStyle({ opacity: '0' })
+  })
+
+  it('draws once, and a new render never draws it again', async () => {
+    const { rerender } = wrapMoving(<TickIn />)
+    const path = document.querySelector('[data-slot=tick-in] path')
+    await waitFor(() => {
+      expect(path).toHaveAttribute('stroke-dasharray', '1 1')
+    })
+    rerender(<TickIn className="text-pass-ink" />)
+    expect(document.querySelector('[data-slot=tick-in] path')).toBe(path)
+    expect(path).toHaveAttribute('stroke-dasharray', '1 1')
+  })
+
+  it('is simply there with reduced motion', () => {
+    askForReducedMotion()
+    wrap(<TickIn />)
+    const path = document.querySelector('[data-slot=tick-in] path')
+    expect(path).toHaveAttribute('stroke-dasharray', '1 1')
+    expect(path).not.toHaveStyle({ opacity: '0' })
   })
 })

@@ -8,6 +8,10 @@
  *   TabIndicator    the sliding underline for tabs
  *   Reveal          content fades and rises 4px once, at most 8 items one after another
  *   RollingNumber   a number that rolls to its new value, in table digits
+ *   PushView        one view replaces another in a box that keeps its size, forward and back
+ *   ListExit        a list whose rows leave: the row fades, the rows under it glide up
+ *   LevelMeter      five bars that follow the mic's level, still at silence
+ *   TickIn          a tick that draws once, when it mounts
  *   usePress        the 0.98 press, for any m.* element
  *   handleRovingKey the arrows, Home and End for a group that works like radio buttons
  *   useStill        true with reduced motion; useTransition picks INSTANT then
@@ -17,12 +21,22 @@
  * gets no animation.
  */
 export { ChipGroup, type ChipGroupProps, type ChipOption } from './chip-group'
+export { LevelMeter, type LevelMeterProps } from './level-meter'
+export {
+  LIST_EXIT_MAX,
+  ListExit,
+  ListExitItem,
+  type ListExitItemProps,
+  type ListExitProps,
+} from './list-exit'
 export { MotionRoot } from './motion-root'
+export { PushView, type PushDirection, type PushViewProps } from './push-view'
 export { Reveal, type RevealProps } from './reveal'
 export { focusRadio, handleRovingKey, rovingTarget } from './roving'
 export { RollingNumber, type RollingNumberProps } from './rolling-number'
 export { Segmented, type SegmentedOption, type SegmentedProps } from './segmented'
 export { EASE, INSTANT, REVEAL_MAX, REVEAL_STAGGER, springs, type SpringName } from './springs'
 export { TabIndicator, type TabIndicatorProps } from './tab-indicator'
+export { TickIn, type TickInProps } from './tick-in'
 export { PRESS_SCALE, usePress } from './use-press'
 export { useStill, useTransition } from './use-still'
