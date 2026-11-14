@@ -5,8 +5,8 @@ This plan makes the Lead Finder search all of Australia, read Property Daily and
 **TBC** means to be confirmed.
 
 - **Built by:** Al-khair Pama. **Signed off by:** Al-khair for the code and every screen. Levi gave the green light to use Playwright, Property Daily and Arealytics (15 Nov, as Al-khair reports). He confirms the rules marked **TBC**.
-- **Last updated:** 2026-11-15 (written; nothing built yet).
-- **Progress:** each track keeps its own count, at the top of its part. S0: 1 of 1. M1 to M5: 0 of 5.
+- **Last updated:** 2026-11-15 (the three tracks built and joined on `plan-v16`; M2, the deploy and the docs are open).
+- **Progress:** each track keeps its own count, at the top of its part. S0: 1 of 1. M1 to M5: 1 of 5 (M1 done; M3 is in the Log when `master` has moved).
 - **Sources:**
   - Al-khair's asks (15 Nov chat);
   - Levi's refinement notes (`documents/lead-finder-docs/LEVI_LEAD_FINDER_REFINEMENT.MD`, kept off GitHub);
@@ -616,7 +616,7 @@ Newest first.
 
 ## Merge and deploy
 
-- [ ] **M1. Join the tracks** (`merge v16`, on Al-khair's word).
+- [x] **M1. Join the tracks** (`merge v16`, on Al-khair's word). Done 2026-11-15 (ff22472; see the Log).
   - Run the `merge-check` skill first. It must say Ready.
   - In a worktree on `plan-v16`: merge Track 2, then Track 1, then Track 3, each with `--no-ff`.
   - The known joins: `0019`'s `down_revision` becomes `0018_property_sources`; keep both sides in `test_contract_routes.py`; run `uv run engine openapi` and `npm run types`; replace Track 3's hand-written types with the generated ones.
@@ -679,4 +679,5 @@ Newest first.
 
 Newest first.
 
+- 2026-11-15: **M1 done: the three tracks are joined on `plan-v16`** (merges c025114, cb8b51c, e94e60d, then the join fixes ff22472), on Al-khair's word in chat ("merge all of the tracks into 1 branch and then merge that 1 branch to the main branch"). **Merge check: Ready with notes.** Every Track 1 step is ticked. Track 2 has T2-5's real read open (Al-khair runs it himself) and T2-6 dropped (Arealytics). Track 3 has T3-4 and T3-6 built and waiting for his look. Worktrees clean; no secret, `COMPANIES.xlsx`, shot or `PLAN-V1.md` in any commit; the one new package is `playwright`. An independent review (the review agent) found no Blocker and gave both Track 2 and Track 3 "Ready with notes". **The joins:** one migration head (`0019_lead_tier`, after `0018_property_sources`); `SCHEMA-0019.md` drawn and `--check` passes; the Start page's sources read Track 2's `source_availability`; `openapi.json` and `schema.d.ts` made again; the website reads the generated types (`v16.ts` and `v16-client.ts` are gone, about 40 type mismatches fixed, 15 casts dropped). **Fixed from the review:** a redirect to another host is refused (`core/browser/worker.py`, not yet tested in a browser); the never-open list no longer matches a searched company's name; emails and phone numbers are scrubbed from a record's summary; a waived dampener shows its reason; a month-only date shows as a month. **Checks on the joined branch** (`heavy.sh`): backend Ruff, format and mypy clean (354 files); all backend tests with `RUN_GATES=1`: **4,128 passed, 25 skipped, 1 failed**: the speed gate `tests/companies/test_companies_speed.py`, which fails only on a brand-new test database (no planner statistics yet: 552 ms against 300) and **passes** with the same code on an established one (3.4 s), as it does on both track branches; so 4,129 pass. Website: lint, types and Prettier clean, **95 files, 1,327 tests pass**, the build passes, 657 kB of JavaScript gzipped in 95 files (656 kB on Track 3). **Open, before Property Daily is switched on:** T2-5's real read; a person's name on a designer or builder line can't be told from a firm's (check it in the real read); the redirect fix wants a browser test. **Open for later:** the website doesn't call `GET /lead-finder/leads/{id}/profile` (its print page reads the lead card); the speed gate should run `ANALYZE` after it fills a new database. **Not done, on purpose:** M2 (the paid checks need Al-khair's own words), pushing, deploying (M4) and the docs (M5). `rejudge --save` was not run.
 - 2026-11-15: Plan written from Al-khair's asks, Levi's refinement notes and his green light for the tools (as Al-khair reports). Nothing built yet.
