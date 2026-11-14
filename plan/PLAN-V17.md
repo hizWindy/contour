@@ -744,6 +744,19 @@ Newest first.
 
 Newest first.
 
+- 2026-11-15: **For Track 2: the names Track 3 chose** where the contract left them open. They are in `engine/frontend/src/api/v17.ts` (commit `8c4d767`). A different name is fine: M1's type check finds it.
+  - `GET /call-notes/options`: `enabled`, `ai_enabled`, `sending_ready`, `waiting_for` (the sentence, or none), `outcomes` (the names, in order), `fields` (each `id`, `label`, `kind`: `date` or `number`), `soft_seconds`, `max_chars`.
+  - `GET /call-notes`: `{ total, items }`, with `limit` and `offset`, like `CompanyPage`.
+  - `CallNoteOut.steps`: each `{ step, status, words }`, and `status` is `pending`, `done`, `failed`, `uncertain` or `skipped`. `tasks[].owner` is a name, or none for the rep. `made_by` is a name.
+  - `PATCH /call-notes/{id}`: `summary`, `outcome`, `contact_id`, `changes` (each `id` or none, `field`, `office`, `value`), `tasks` (each `id` or none, `subject`, `due`, `due_words`, `kind`), `left_out`. The two lists replace the old ones.
+  - `POST /call-notes/preview` answers `{ items, sending_ready, waiting_for, totals: { calls, tasks, changes } }`. `POST /call-notes/confirm` answers `{ sending, already_sending }`. `POST /call-notes/{id}/resolve` takes `{ step, landed }`.
+  - `PrepFacts.my_last_note`: `{ id, summary, called_at, outcome }`, or none.
+- 2026-11-15: **For Track 1: the names Track 3 chose** (contract part 4): `PUT /people/{id}/hubspot-owner` takes `{ owner_id }` (null clears it). `GET /hubspot/owners` answers `{ owners: [{ id, name }] }`. A people row's `hubspot_owner` is `{ id, name, matched_by }`.
+- 2026-11-15: **Messages can't reach the other tracks.** Tracks 1 and 2 run in another Claude account, and `ListAgents` here shows no other session. So this Log is how Track 3 sends news. Track 3 reads the other tracks' Logs with `git show plan-v17-track1:plan/PLAN-V17.md`.
+- 2026-11-15: **For T1-6 and T3-4: the headers.** App Platform serves the website as a static site, so its content policy is the `<meta>` in `index.html`. A `<meta>` can't set `Permissions-Policy`, but a browser lets a page's own origin use the mic by default, so App Platform needs nothing for the mic. The Caddyfile (server mode) says `microphone=()` today, which T1-6 changes. Running WebAssembly needs `'wasm-unsafe-eval'` in `script-src`, in both places. More than one thread on the processor path would need two more headers on every page (cross-origin isolation). App Platform's static site can't send them, so that path runs on one thread there (**TBC**: how slow that is). The graphics card path doesn't need them.
+- 2026-11-15: **For T3-4: App Platform and large files.** DigitalOcean's limits page (read 15 Nov) gives no size limit for one file on a static site. Static sites go through its Spaces CDN, and a build has 24 GiB of disk and 1 hour. So 80 to 250 MB of model files isn't ruled out, but it isn't confirmed until a deploy tries it (**TBC**).
+- 2026-11-15: **T3-1 started, not done.** Worktree `../contour-v17-t3`, branch `plan-v17-track3` (from `437a2ee`), `npm ci` done. Lint and types pass. The tests, the build and the bundle report wait for memory: the laptop had 0.3 GB free of 15.6 GB, with Track 1's baseline running. Track 3 made S0 first (see S0), because no other V17 session was running then.
+
 ## Merge and deploy
 
 ### Stage A: call notes
