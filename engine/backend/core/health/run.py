@@ -21,7 +21,16 @@ TIMEOUT_SECONDS = 5.0
 
 State = Literal["ok", "problem", "off"]
 SystemId = Literal[
-    "database", "claude", "hubspot", "signalhire", "email", "runs", "schedules", "api"
+    "database",
+    "claude",
+    "hubspot",
+    "signalhire",
+    "email",
+    "runs",
+    "schedules",
+    "api",
+    "property_daily",  # PLAN-V16 T2-8
+    "arealytics",
 ]
 
 CHECK_FAILED = "The check itself failed."

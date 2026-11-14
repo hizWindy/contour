@@ -78,7 +78,19 @@ ENV PATH="/app/backend/.venv/bin:${PATH}" \
     EMBEDDING_CACHE_DIR=/opt/fastembed \
     ORT_DISABLE_TELEMETRY=1 \
     HF_HUB_DISABLE_TELEMETRY=1 \
-    HF_HUB_OFFLINE=${BAKE_MODEL}
+    HF_HUB_OFFLINE=${BAKE_MODEL} \
+    PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
+
+# The browser for Property Daily (PLAN-V16 T2-9): Playwright's own headless Chromium, at the version
+# that the playwright package in uv.lock names, with the system packages it needs, in a folder the
+# contour user can read. browser_channel "auto" picks it here. Its sandbox can't run as a normal
+# user in a container, so Playwright starts it without one: acceptable only because it loads
+# Property Daily's own hosts and nothing else (core/browser/worker.py).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libatomic1 \
+    && python -m playwright install --with-deps --only-shell chromium \
+    && chmod -R a+rX /opt/ms-playwright \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app/backend
 USER contour

@@ -78,6 +78,11 @@ def _configured_secrets() -> tuple[str, ...]:
         settings.anthropic_api_key,
         settings.signalhire_api_key,
         settings.hubspot_service_key,
+        # The tools' logins (PLAN-V16 T2-8)
+        settings.property_daily_username,
+        settings.property_daily_password,
+        settings.arealytics_username,
+        settings.arealytics_password,
         settings.first_admin_password,
     ):
         if key is not None:

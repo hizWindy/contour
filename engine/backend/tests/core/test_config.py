@@ -39,6 +39,7 @@ ENV_ONLY = [
     "cors_origins",
     "api_host",
     # Property Daily and Arealytics (PLAN-V16): the data approvals, the logins and the pace
+    "arealytics_enabled",  # no connector (dropped from PLAN-V16 on 15 Nov)
     "property_daily_to_claude_ok",
     "arealytics_to_claude_ok",
     "property_daily_username",
@@ -46,6 +47,7 @@ ENV_ONLY = [
     "arealytics_username",
     "arealytics_password",
     "source_page_wait_seconds",
+    "browser_channel",
 ]
 CHOICE_KEYS = {
     "claude_model",
@@ -57,7 +59,7 @@ CHOICE_KEYS = {
     "claude_effort",
 }
 # A switch has no min or max.
-BOOL_KEYS = {"prep_enabled", "why_now_enabled", "property_daily_enabled", "arealytics_enabled"}
+BOOL_KEYS = {"prep_enabled", "why_now_enabled", "property_daily_enabled"}
 NOT_NUMBERS = CHOICE_KEYS | BOOL_KEYS
 
 

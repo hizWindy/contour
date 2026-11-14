@@ -17,6 +17,7 @@ dependencies = [
     "langsmith>=0.14.12",
     "openpyxl",
     "pgvector",
+    "playwright>=1.65.2",
     "psycopg-pool>=3.3.3",
     "psycopg[binary]",
     "pydantic",
@@ -79,4 +80,5 @@ markers = [
     "integration: needs the database, and downloads the memory model once",
     "contract: the openapi.json file is the one the app writes (a gate, RUN_GATES=1)",
     "stubs: no route is left as a stub (a gate, RUN_GATES=1)",
+    "browser: drives a real browser (Chrome on this laptop); skips when none can start",
 ]

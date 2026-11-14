@@ -118,10 +118,14 @@ async def test_an_admin_gets_every_system(setup: Setup) -> None:
         "hubspot",
         "signalhire",
         "email",
+        "property_daily",  # PLAN-V16 T2-8
+        "arealytics",
         "runs",
         "schedules",
         "api",
     ]
+    assert found["property_daily"]["state"] == "off"  # switched off by default
+    assert found["arealytics"]["state"] == "off"  # not connected
     assert found["database"]["state"] == "ok"
     assert found["database"]["sentence"].startswith("It answers. pgvector ")
     assert found["claude"]["state"] == "ok"

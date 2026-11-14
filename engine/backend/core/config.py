@@ -85,9 +85,8 @@ EDITABLE_KEYS: Final[list[str]] = [
     "prep_reuse_days",
     "model_prep",
     "search_ahead_cap_usd",
-    # Property Daily and Arealytics (PLAN-V16)
+    # Property Daily (PLAN-V16)
     "property_daily_enabled",
-    "arealytics_enabled",
     "source_pages_per_day",
     "source_pages_per_run",
     "property_lookup_days",
@@ -440,6 +439,8 @@ class Settings(BaseSettings):
     # Our connectors read each tool in a browser of their own (core/browser, core/sources), at a
     # slow pace, and stop for 24 hours at the first sign of a block.
     property_daily_enabled: StrictBool = False
+    # Arealytics has no connector: its site refused automated access, and Al-khair dropped it from
+    # PLAN-V16 (15 Nov). So this is env-only and off, and nothing reads Arealytics while it is.
     arealytics_enabled: StrictBool = False
     # Each tool's login (env-only secrets: engine/.env and the App Platform dashboard). Never
     # logged, and no route sends them. Empty means not set. The tests blank them.
@@ -455,6 +456,9 @@ class Settings(BaseSettings):
     # between these two. Env-only, like the ceilings: a faster pace puts the account at risk.
     # In engine/.env: SOURCE_PAGE_WAIT_SECONDS=4,9
     source_page_wait_seconds: Annotated[tuple[float, float], NoDecode] = (4.0, 9.0)
+    # Which browser drives the tools (env-only). auto: Playwright's own Chromium, except on Windows,
+    # where Application Control blocks it (this laptop, 15 Nov), so the installed Chrome is used.
+    browser_channel: Literal["auto", "chromium", "chrome", "msedge"] = "auto"
     source_pages_per_day: int = Field(300, ge=1, le=1000)  # the most pages a day, for each tool
     source_pages_per_run: int = Field(60, ge=0, le=300)  # live lookup pages one run may use
     property_lookup_days: int = Field(30, ge=1, le=365)  # a company's lookup is reused this long

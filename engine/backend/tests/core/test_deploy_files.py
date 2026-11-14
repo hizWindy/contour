@@ -99,3 +99,38 @@ def test_every_part_keeps_its_logs_small() -> None:
     for name, service in compose()["services"].items():
         options = service["logging"]["options"]
         assert options["max-size"] and options["max-file"], name
+
+
+# --- The browser for Property Daily (PLAN-V16 T2-9) --------------------------------------------
+
+LOCK = ENGINE / "backend" / "uv.lock"
+
+
+def test_the_image_installs_the_chromium_of_the_locked_playwright() -> None:
+    """The venv's own playwright installs its browser, so the version is the one uv.lock names:
+    no second version is written anywhere."""
+    text = DOCKERFILE.read_text(encoding="utf-8")
+    assert "python -m playwright install --with-deps --only-shell chromium" in text
+    assert "PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright" in text
+    assert "chmod -R a+rX /opt/ms-playwright" in text  # the contour user can read it
+    assert not re.search(r"pip install[^\n]*playwright", text)
+    assert re.search(r'name = "playwright"\nversion = "\d+\.\d+\.\d+"', LOCK.read_text("utf-8"))
+    runtime = text.split("AS runtime", 1)[1]
+    assert runtime.index("playwright install") < runtime.index("USER contour")  # as root, once
+
+
+def test_no_tool_login_is_written_in_a_file_that_ships() -> None:
+    """The logins live in engine/.env and the App Platform dashboard only."""
+    names = ("PROPERTY_DAILY_USERNAME", "PROPERTY_DAILY_PASSWORD", "AREALYTICS_USERNAME")
+    shipped = [
+        DOCKERFILE,
+        ENGINE / "backend" / ".dockerignore",
+        ENGINE / ".." / ".do" / "app.yaml",
+        *(ENGINE / "backend" / "core").rglob("*.py"),
+        *(ENGINE / "backend" / "core").rglob("*.yaml"),
+    ]
+    for path in shipped:
+        text = path.read_text(encoding="utf-8")
+        for name in names:
+            assert not re.search(rf"{name}\s*[=:]\s*\S", text), f"{name} has a value in {path}"
+    assert ".env" in (ENGINE / "backend" / ".dockerignore").read_text(encoding="utf-8")

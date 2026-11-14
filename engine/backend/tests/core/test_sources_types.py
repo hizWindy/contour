@@ -11,7 +11,6 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from core.config import Settings
 from core.sources import reader
 from core.sources.types import (
     SOURCE_IDS,
@@ -75,23 +74,3 @@ def test_the_reader_names_are_the_ones_in_the_contract() -> None:
         "cities",
         "since",
     ]
-
-
-async def test_the_stub_lookup_says_off_or_not_checked_from_the_switches() -> None:
-    off = await reader.lookup_company(
-        None,  # type: ignore[arg-type]  # with settings given, the stub reads no database
-        "Sample Logistics Pty Ltd",
-        "Perth",
-        None,
-        settings=Settings(_env_file=None),
-    )
-    assert off.checked.model_dump() == {"property_daily": "off", "arealytics": "off"}
-    on = await reader.lookup_company(
-        None,  # type: ignore[arg-type]
-        "Sample Logistics Pty Ltd",
-        "Perth",
-        None,
-        settings=Settings(_env_file=None, property_daily_enabled=True),
-    )
-    assert on.checked.model_dump() == {"property_daily": "not_checked", "arealytics": "off"}
-    assert await reader.recent_items(None, ["Perth"], datetime.now(UTC)) == []  # type: ignore[arg-type]
