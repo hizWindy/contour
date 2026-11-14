@@ -9521,7 +9521,9 @@
               "Melbourne",
               "Adelaide",
               "Perth",
-              "Sydney"
+              "Sydney",
+              "Brisbane",
+              "Australia"
             ],
             "title": "City",
             "type": "string"
@@ -9664,17 +9666,19 @@
             "title": "Budget Usd"
           },
           "cities": {
-            "description": "The cities to search, in any order",
+            "description": "The places to search, in any order. `Australia` is the rest of Australia: one national search",
             "items": {
               "enum": [
                 "Melbourne",
                 "Adelaide",
                 "Perth",
-                "Sydney"
+                "Sydney",
+                "Brisbane",
+                "Australia"
               ],
               "type": "string"
             },
-            "maxItems": 4,
+            "maxItems": 6,
             "minItems": 1,
             "title": "Cities",
             "type": "array"
@@ -9745,7 +9749,9 @@
                 "Melbourne",
                 "Adelaide",
                 "Perth",
-                "Sydney"
+                "Sydney",
+                "Brisbane",
+                "Australia"
               ],
               "type": "string"
             },

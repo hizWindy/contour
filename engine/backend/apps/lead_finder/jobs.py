@@ -79,7 +79,19 @@ CITY_DAYS: tuple[tuple[str, int], ...] = (
     ("Adelaide", 1),
     ("Perth", 2),
     ("Sydney", 3),  # a secondary city: its leads can pass (PLAN-V16 T1-2)
+    # PLAN-V16 T1-11: Brisbane, and "Rest of Australia" (the national search: one search for each
+    # sign, `cities: ["Australia"]`). After Sydney, and off until picked, like the others.
+    ("Brisbane", 4),
+    ("Australia", 5),
 )
+# What a person reads for a schedule's place. The national search is "Rest of Australia".
+CITY_WORDS: dict[str, str] = {"Australia": "Rest of Australia"}
+
+
+def city_words(city: str) -> str:
+    return CITY_WORDS.get(city, city)
+
+
 SCHEDULED_CITIES = tuple(city for city, _ in CITY_DAYS)
 SCHEDULED_SIGNS = (
     "lease_ending",
@@ -339,7 +351,7 @@ JOBS = (
     *(
         _discovery_job(
             job_key(city),
-            f"Find new leads: {city}",
+            f"Find new leads: {city_words(city)}",
             DefaultSchedule(cadence=cadence_for(day), enabled=False, settings=settings_for(city)),
         )
         for city, day in CITY_DAYS

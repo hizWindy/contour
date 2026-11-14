@@ -90,12 +90,14 @@ async def test_picking_two_cities_turns_the_other_two_off(
         "Next round: Wed 18 Nov, 7:00 am. Perth Wed, Sydney Thu. Up to US$150."
     )
     by_city = {item["city"]: item for item in body["city_plan"]}
-    assert [item["city"] for item in body["city_plan"]] == list(CITIES)
+    assert [item["city"] for item in body["city_plan"]] == [*CITIES, "Brisbane", "Australia"]
     assert {city: item["enabled"] for city, item in by_city.items()} == {
         "Melbourne": False,
         "Adelaide": False,
         "Perth": True,
         "Sydney": True,
+        "Brisbane": False,  # PLAN-V16 T1-11: off until picked
+        "Australia": False,
     }
     assert (by_city["Perth"]["day"], by_city["Sydney"]["day"]) == ("Wednesday", "Thursday")
 

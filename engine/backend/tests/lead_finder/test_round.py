@@ -45,7 +45,10 @@ def melbourne(day: date, at: time = SEVEN) -> datetime:
     return datetime.combine(day, at, tzinfo=UTC) - timedelta(hours=11)
 
 
-def plan(cities: tuple[str, ...] = CITIES, **values: Any) -> Plan:
+FOUR = CITIES[:4]  # the cities picked until a person adds Brisbane or the rest of Australia
+
+
+def plan(cities: tuple[str, ...] = FOUR, **values: Any) -> Plan:
     chosen: dict[str, Any] = {
         "enabled": True,
         "every": 2,
@@ -92,7 +95,7 @@ def test_two_cities_in_weeks_are_one_day_apart_from_the_first_day() -> None:
 
 def test_the_days_wrap_past_sunday() -> None:
     times = round_times(plan(weekday=5), NOW)  # from Saturday
-    assert [times[city].weekday for city in CITIES] == [5, 6, 0, 1]
+    assert [times[city].weekday for city in FOUR] == [5, 6, 0, 1]
     assert times["Sydney"].first - times["Melbourne"].first == timedelta(days=3)
 
 
@@ -107,7 +110,7 @@ def test_cities_in_days_are_one_day_apart_and_stay_so() -> None:
     every_30 = plan(unit="days", every=30, weekday=5)
     times = round_times(every_30, NOW)
     assert all(item.weekday is None for item in times.values())  # a schedule in days has none
-    firsts = [times[city].first for city in CITIES]
+    firsts = [times[city].first for city in FOUR]
     assert firsts[0] == melbourne(date(2026, 11, 21))  # the next Saturday
     assert [later - earlier for earlier, later in pairwise(firsts)] == [timedelta(days=1)] * 3
     # What the scheduler does after each run keeps them one day apart, 30 days on.
@@ -132,7 +135,7 @@ def test_the_look_back_covers_the_time_between_rounds(step: int, days: int) -> N
 def body(**values: Any) -> RoundIn:
     chosen = {
         "enabled": True,
-        "cities": list(CITIES),
+        "cities": list(FOUR),
         "every": 2,
         "unit": "weeks",
         "weekday": 0,
@@ -161,7 +164,7 @@ def test_each_city_at_most_once_and_a_known_city() -> None:
     with pytest.raises(ValueError, match="Pick each city once"):
         body(cities=["Perth", "Perth"])
     with pytest.raises(ValueError):
-        body(cities=["Brisbane"])
+        body(cities=["Hobart"])
     with pytest.raises(ValueError):
         body(cities=[])
     with pytest.raises(ValueError, match="24-hour"):
@@ -179,6 +182,8 @@ def test_picking_two_cities_turns_the_other_two_off() -> None:
         "Adelaide": False,
         "Perth": True,
         "Sydney": True,
+        "Brisbane": False,
+        "Australia": False,
     }
     assert by_city["Melbourne"].next_run_at is None and by_city["Adelaide"].next_run_at is None
     assert (by_city["Perth"].weekday, by_city["Sydney"].weekday) == (2, 3)
@@ -209,7 +214,7 @@ def test_switching_off_leaves_every_city_off_and_the_record_brings_them_back() -
     assert not any(row.enabled or row.next_run_at for row in rows.values())
     read = plan_of(rows, {"cities": ["Perth", "Sydney"], "weekday": 2})
     assert (read.enabled, read.cities, read.weekday) == (False, ("Perth", "Sydney"), 2)
-    assert plan_of(default_rows(), {}).cities == CITIES  # nothing saved yet: all four
+    assert plan_of(default_rows(), {}).cities == FOUR  # nothing saved yet: the first four
 
 
 def test_the_plan_read_while_on_comes_from_the_schedules() -> None:
@@ -257,7 +262,7 @@ def claim(rows: dict[str, Schedule], city: str) -> None:
 
 
 def test_the_round_begins_at_the_first_picked_citys_time() -> None:
-    rows = planned_rows(CITIES)  # Melbourne Mon 23 Nov ... Sydney Thu 26 Nov
+    rows = planned_rows(FOUR)  # Melbourne Mon 23 Nov ... Sydney Thu 26 Nov
     monday = melbourne(date(2026, 11, 23))
     claim(rows, "Melbourne")
     claim(rows, "Adelaide")
@@ -268,7 +273,7 @@ def test_the_round_begins_at_the_first_picked_citys_time() -> None:
 
 
 def test_before_the_first_city_runs_it_is_still_the_round_before() -> None:
-    rows = planned_rows(CITIES)
+    rows = planned_rows(FOUR)
     window = round_window(list(rows.values()), NOW)  # Mon 16 Nov: the first round is on the 23rd
     assert window.start == melbourne(date(2026, 11, 9))
     assert window.next_start == melbourne(date(2026, 11, 23))
@@ -276,7 +281,7 @@ def test_before_the_first_city_runs_it_is_still_the_round_before() -> None:
 
 def test_a_weekly_round_never_counts_last_weeks_cities() -> None:
     """7 days back would count last week's Adelaide, Perth and Sydney: the round doesn't."""
-    rows = planned_rows(CITIES, every=1)
+    rows = planned_rows(FOUR, every=1)
     claim(rows, "Melbourne")
     for city in ("Adelaide", "Perth", "Sydney"):
         claim(rows, city)
@@ -340,3 +345,31 @@ def test_the_reasons_say_the_budget_and_the_next_round() -> None:
 def test_the_four_defaults_are_the_round_order() -> None:
     assert tuple(city for city, _ in CITY_DAYS) == CITIES
     assert {job.key for job in JOBS} >= {job_key(city) for city in CITIES}
+
+
+# --- Brisbane and the rest of Australia (PLAN-V16 T1-11) ------------------------------------------
+
+
+def test_brisbane_and_the_rest_of_australia_exist_and_are_off_until_picked() -> None:
+    assert CITIES == ("Melbourne", "Adelaide", "Perth", "Sydney", "Brisbane", "Australia")
+    rows = default_rows()
+    assert all(not rows[job_key(city)].enabled for city in CITIES)  # every schedule starts off
+    assert rows[job_key("Australia")].settings["cities"] == ["Australia"]  # the national search
+    assert plan_of(rows, {}).cities == FOUR  # and neither is picked until a person picks it
+
+
+def test_a_round_with_all_six_on_runs_one_day_apart() -> None:
+    rows = planned_rows(CITIES)  # from Monday 23 Nov
+    firsts = [at for city in CITIES if (at := rows[job_key(city)].next_run_at) is not None]
+    assert len(firsts) == 6 and firsts[0] == melbourne(date(2026, 11, 23))
+    assert [later - earlier for earlier, later in pairwise(firsts)] == [timedelta(days=1)] * 5
+    assert [rows[job_key(city)].weekday for city in CITIES] == [0, 1, 2, 3, 4, 5]
+    assert all(rows[job_key(city)].enabled for city in CITIES)
+    starts = {city: item.first for city, item in round_times(plan(CITIES), NOW).items()}
+    assert summary_words(plan(CITIES), starts, D("150")) == (
+        "Next round: Mon 23 Nov, 7:00 am. Melbourne Mon, Adelaide Tue, Perth Wed, Sydney Thu, "
+        "Brisbane Fri, Rest of Australia Sat. Up to US$150."
+    )
+    with pytest.raises(Problem):  # six places take six days
+        check_plan(body(cities=list(CITIES), every=5, unit="days"))
+    check_plan(body(cities=list(CITIES), every=6, unit="days"))

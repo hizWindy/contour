@@ -287,6 +287,14 @@ Each run returns a ranked table of leads, then a one-page profile for every Tier
 | Suggested opener | One line the BD team can adapt, tied to the sign |
 | What changed | New since the last run, upgraded, downgraded or unchanged |
 
+**How we apply this (PLAN-V16 T1-10 and T1-11, 15 Nov). Our reading, TBC.**
+- **The card** has every field above. The office's address comes from a property tool, because the web research keeps no address. Headcount and space are marked confirmed or estimated. A LinkedIn count is doubled, so it is an estimate.
+- **What changed** compares the lead with the last research of the same company: "Up from B to A: a new sign, lease ending in 1 to 3 years, or a relocation."
+- **A repeat never duplicates.** A company researched in the last 30 days is researched again only when a run finds a sign it doesn't have, dated after that research. The same news found twice never costs twice.
+- **The list** filters by tier, confidence, city group, "has a property record" and "excluded", and sorts by tier then score. The CSV has the new columns at its end.
+- **The one-page profile** is for Tier A leads.
+- **Automatic runs:** Brisbane and "Rest of Australia" (one national search for each sign) join Melbourne, Adelaide, Perth and Sydney, a day apart in that order. Both are off until picked.
+
 ## Waiting on Levi
 
 These are marked **TBC** above. Each is our proposal until he confirms it.

@@ -33,6 +33,7 @@ from apps.lead_finder.params import (
     default_cities,
     default_triggers,
     known_cities,
+    national_name,
 )
 from apps.lead_finder.rules import load_rules
 from apps.lead_finder.steps.plan import check_discovery_size, make_slices
@@ -74,12 +75,16 @@ def test_there_is_one_schedule_for_each_city_on_its_own_day_and_all_are_off() ->
         "lead_finder.discovery.adelaide",
         "lead_finder.discovery.perth",
         "lead_finder.discovery.sydney",
+        "lead_finder.discovery.brisbane",  # PLAN-V16 T1-11
+        "lead_finder.discovery.australia",
     ]
     assert [job.title for job in made] == [
         "Find new leads: Melbourne",
         "Find new leads: Adelaide",
         "Find new leads: Perth",
         "Find new leads: Sydney",
+        "Find new leads: Brisbane",
+        "Find new leads: Rest of Australia",
     ]
     for job, (city, weekday) in zip(made, CITY_DAYS, strict=True):
         assert job.project == "lead_finder"
@@ -90,7 +95,7 @@ def test_there_is_one_schedule_for_each_city_on_its_own_day_and_all_are_off() ->
         assert cadence.zone == "Australia/Melbourne"
         assert job.default.enabled is False  # each run costs money, so Al-khair switches it on
         assert job.default.settings == settings_for(city)
-    assert [weekday for _, weekday in CITY_DAYS] == [0, 1, 2, 3]
+    assert [weekday for _, weekday in CITY_DAYS] == [0, 1, 2, 3, 4, 5]
     assert DISCOVERY == "lead_finder.discovery.melbourne"
     assert made[0].default is not None and made[0].default.cadence == DEFAULT_CADENCE
 
@@ -114,13 +119,16 @@ def test_the_signs_are_the_main_signs_and_the_cities_every_city() -> None:
     # If the rules change the main signs, this fails: whether the schedules follow is a decision
     # (a new sign changes what a run costs).
     assert list(SCHEDULED_SIGNS) == default_triggers()
-    # The schedules cover the first places of the rules (Melbourne, Adelaide, Perth, Sydney). All of
-    # Australia has more places (PLAN-V16 T1-2); the schedules for them are T1-11.
-    assert list(SCHEDULED_CITIES) == known_cities()[: len(SCHEDULED_CITIES)]
+    # The schedules cover the five places Levi names (Melbourne, Adelaide, Perth, Sydney, Brisbane:
+    # the first places of the rules) and the national search for the rest (PLAN-V16 T1-11).
+    assert list(SCHEDULED_CITIES[:5]) == known_cities()[:5]
+    assert SCHEDULED_CITIES[5] == national_name()
     assert default_cities() == ["Melbourne"]  # the Start page also starts with one city
 
 
-@pytest.mark.parametrize("city", ["Melbourne", "Adelaide", "Perth", "Sydney"])
+@pytest.mark.parametrize(
+    "city", ["Melbourne", "Adelaide", "Perth", "Sydney", "Brisbane", "Australia"]
+)
 def test_each_citys_choices_make_a_valid_run_inside_the_default_limits(city: str) -> None:
     settings = Settings(_env_file=None)
     params = DiscoveryParams.model_validate(settings_for(city))
@@ -135,10 +143,9 @@ def test_each_citys_choices_make_a_valid_run_inside_the_default_limits(city: str
 def test_all_4_cities_in_one_run_are_too_large_for_the_default_limits() -> None:
     # Why there is one schedule for each city: 32 searches, and at most 13 fit.
     settings = Settings(_env_file=None)
-    params = DiscoveryParams(
-        cities=list(SCHEDULED_CITIES), triggers=list(SCHEDULED_SIGNS), since_days=14
-    )
-    assert len(SCHEDULED_CITIES) == 4
+    four = list(SCHEDULED_CITIES[:4])  # the national search is always a run of its own
+    params = DiscoveryParams(cities=four, triggers=list(SCHEDULED_SIGNS), since_days=14)
+    assert len(SCHEDULED_CITIES) == 6  # with Brisbane and the rest of Australia (PLAN-V16 T1-11)
     with pytest.raises(Problem) as refused:
         check_discovery_size(params, settings, make_caps(settings))
     assert refused.value.code == "discovery_too_large"
