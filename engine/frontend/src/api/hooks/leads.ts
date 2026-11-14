@@ -9,14 +9,15 @@ import {
 import { melbourneDate } from '@/lib/format'
 import { api, isMissing, unwrap, type ApiProblem } from '../client'
 import { CACHE_TIMES, queryKeys } from '../query'
-import type { LeadDetail, LeadPatch, QueryOf, Run } from '../types'
+import type { LeadDetail, LeadPage, LeadPatch, QueryOf, Run } from '../types'
 
 /** A page of leads for the results table. */
 export function leadsQueryOptions(query: QueryOf<'list_leads'> = {}) {
   return queryOptions({
     queryKey: queryKeys.leads.list(query),
     queryFn: async ({ signal }) =>
-      unwrap(await api.GET('/lead-finder/leads', { params: { query }, signal })),
+      // Until PLAN-V16 M1: the tier, confidence and exclusion of a row are in `v16.ts`.
+      unwrap(await api.GET('/lead-finder/leads', { params: { query }, signal })) as LeadPage,
   })
 }
 
@@ -167,11 +168,12 @@ export function useRecheckLead() {
   const queryClient = useQueryClient()
   return useMutation<Run, ApiProblem, string>({
     mutationFn: async (leadId) =>
+      // Until PLAN-V16 M1: the run's new fields are in `v16.ts`.
       unwrap(
         await api.POST('/lead-finder/leads/{lead_id}/recheck', {
           params: { path: { lead_id: leadId } },
         }),
-      ),
+      ) as Run,
     onSuccess: (run) => {
       queryClient.setQueryData(queryKeys.runs.detail(run.id), run)
       void queryClient.invalidateQueries({ queryKey: queryKeys.runs.lists() })

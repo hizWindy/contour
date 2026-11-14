@@ -49,6 +49,9 @@ function run(changes: Partial<Run> = {}): Run {
     created_at: '2026-10-26T04:00:00Z',
     started_at: '2026-10-26T04:00:01Z',
     finished_at: null,
+    goal_leads: null,
+    good_leads: 0,
+    leads_by_source: { web: 0, property_daily: 0, arealytics: 0 },
     ...changes,
   }
 }
@@ -255,6 +258,10 @@ describe('the run list', () => {
       score,
       city: 'Perth',
       cost_usd: cost,
+      tier: result === 'watch' ? 'C' : 'B',
+      confidence: 'medium',
+      excluded: null,
+      has_property: false,
     })
     mockApi(() => finished, [finished], {
       '/api/v1/lead-finder/leads': {
@@ -278,9 +285,11 @@ describe('the run list', () => {
     })
     const { user } = renderRun()
 
-    const companies = await screen.findByRole('table', { name: 'Companies this run researched' })
+    const companies = await screen.findByRole('table', { name: 'Ranked leads' })
     expect(await within(companies).findByText('KBR')).toBeInTheDocument()
-    expect(within(companies).getByText('UGL')).toBeInTheDocument()
+    expect(
+      within(screen.getByRole('table', { name: 'Watch' })).getByText('UGL'),
+    ).toBeInTheDocument()
 
     const money = await screen.findByLabelText('Where the money went')
     expect(within(money).getByText(/Finding companies \(1 request\)/)).toBeInTheDocument()
@@ -345,5 +354,172 @@ describe('the run list', () => {
     mockApi(() => run(), [])
     renderWithProviders(<RunsPage />)
     expect(await screen.findByRole('heading', { name: 'No runs yet.' })).toBeInTheDocument()
+  })
+})
+
+describe('the goal of good leads (PLAN-V16 T3-3)', () => {
+  const DONE = { mode: 'discovery', finished_at: '2026-10-26T04:13:29Z' } as const
+
+  it('running: shows how many good leads it has found of its goal, live', async () => {
+    mockApi(() => run({ mode: 'discovery', goal_leads: 20 }))
+    renderRun()
+    await waitFor(() => {
+      expect(FakeEventSource.instances.length).toBeGreaterThan(0)
+    })
+    act(() => {
+      const source = FakeEventSource.last()
+      source.emitOpen()
+      source.emitMessage(
+        event(1, 'progress', {
+          cost_usd: '4.100000',
+          web_searches: 40,
+          claude_requests: 30,
+          counts: {
+            ...COUNTS,
+            researched: 18,
+            by_result: { pass: 9, director_review: 3, watch: 6 },
+          },
+        }),
+      )
+    })
+
+    expect(await screen.findByText('12 of 20')).toBeInTheDocument()
+    expect(screen.getByText('good leads found')).toBeInTheDocument()
+    expect(screen.getByRole('progressbar', { name: 'Good leads found' })).toHaveAttribute(
+      'aria-valuetext',
+      '12 of 20 good leads found',
+    )
+    expect(screen.queryByText('It met its goal.')).not.toBeInTheDocument()
+  })
+
+  it('met its goal: says so, from the backend count', async () => {
+    mockApi(() => run({ ...DONE, status: 'done', goal_leads: 20, good_leads: 20 }))
+    renderRun()
+    expect(await screen.findByText('20 of 20')).toBeInTheDocument()
+    expect(screen.getByText('It met its goal.')).toBeInTheDocument()
+  })
+
+  it('ended short: says why once, without the stop reason again', async () => {
+    mockApi(() =>
+      run({
+        ...DONE,
+        status: 'done',
+        goal_leads: 20,
+        good_leads: 12,
+        stop_reason: 'Found 12 of 20 leads. It stopped at the run limit (US$20).',
+      }),
+    )
+    renderRun()
+    expect(await screen.findByText('12 of 20')).toBeInTheDocument()
+    expect(screen.getByText('It stopped at the run limit (US$20).')).toBeInTheDocument()
+    expect(screen.queryByText(/Stopped early/)).not.toBeInTheDocument()
+    expect(screen.queryByText('It met its goal.')).not.toBeInTheDocument()
+  })
+
+  it('ended short with no reason from the backend: says so in plain words', async () => {
+    mockApi(() => run({ ...DONE, status: 'cancelled', goal_leads: 20, good_leads: 3 }))
+    renderRun()
+    expect(await screen.findByText('3 of 20')).toBeInTheDocument()
+    expect(screen.getByText('It was stopped before it found them all.')).toBeInTheDocument()
+  })
+
+  it('no goal: no goal line, the stop reason as before', async () => {
+    mockApi(() =>
+      run({ ...DONE, status: 'done', goal_leads: null, stop_reason: 'The run reached its limit' }),
+    )
+    renderRun()
+    expect(await screen.findByText(/Stopped early: The run reached its limit/)).toBeInTheDocument()
+    expect(screen.queryByText('good leads found')).not.toBeInTheDocument()
+  })
+
+  it('says where the leads came from', async () => {
+    mockApi(() =>
+      run({
+        ...DONE,
+        status: 'done',
+        goal_leads: 20,
+        good_leads: 12,
+        leads_by_source: { web: 9, property_daily: 2, arealytics: 1 },
+      }),
+    )
+    renderRun()
+    const sources = await screen.findByRole('list', { name: 'Where the leads came from' })
+    expect(
+      within(sources)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent),
+    ).toEqual(['The web 9', 'Property Daily 2', 'Arealytics 1'])
+  })
+})
+
+describe('the run leads, as Levi lists them (PLAN-V16 T3-3)', () => {
+  const row = (id: string, company: string, tier: string, score: number, changes = {}) => ({
+    id,
+    company,
+    tier,
+    score,
+    result: tier === 'C' ? 'watch' : tier === 'discard' ? 'drop' : 'pass',
+    confidence: 'medium',
+    excluded: null,
+    has_property: false,
+    city: 'Perth',
+    cost_usd: '0.40',
+    ...changes,
+  })
+  const EXCLUDED = {
+    reason_id: 'law_firm',
+    label: 'A law firm',
+    evidence: 'Sample Legal is a law firm.',
+    url: null,
+    overridden_by: null,
+    overridden_at: null,
+  }
+
+  it('ranks Tier A and B, then lists the excluded with each reason and the watch list', async () => {
+    const finished = run({ mode: 'discovery', status: 'done', finished_at: '2026-10-26T04:13:29Z' })
+    mockApi(() => finished, [finished], {
+      '/api/v1/lead-finder/leads': {
+        total: 6,
+        items: [
+          row('11111111-2222-3333-4444-555555555555', 'Sample Energy', 'B', 61),
+          row('22222222-2222-3333-4444-555555555555', 'Sample Logistics', 'A', 82),
+          row('33333333-2222-3333-4444-555555555555', 'Sample Legal', 'discard', 0, {
+            result: 'drop',
+            excluded: EXCLUDED,
+          }),
+          row('44444444-2222-3333-4444-555555555555', 'Sample Insurance', 'C', 47),
+          row('55555555-2222-3333-4444-555555555555', 'Sample Retail', 'discard', 22),
+          row('66666666-2222-3333-4444-555555555555', 'Sample Defence', 'B', 70, {
+            excluded: {
+              ...EXCLUDED,
+              overridden_by: 'Al-khair',
+              overridden_at: '2026-11-15T01:00:00Z',
+            },
+          }),
+        ],
+      },
+    })
+    renderRun()
+
+    const ranked = await screen.findByRole('table', { name: 'Ranked leads' })
+    const names = within(ranked)
+      .getAllByRole('row')
+      .slice(1)
+      .map((tableRow) => within(tableRow).getAllByRole('cell')[0]?.textContent)
+    // Best first, and an overridden exclusion is judged like any lead.
+    expect(names).toEqual(['Sample Logistics', 'Sample Defence', 'Sample Energy'])
+
+    const excluded = screen.getByRole('table', { name: 'Excluded' })
+    expect(within(excluded).getByText('Sample Legal')).toBeInTheDocument()
+    expect(within(excluded).getByText('A law firm')).toBeInTheDocument()
+
+    const watch = screen.getByRole('table', { name: 'Watch' })
+    expect(within(watch).getByText('Sample Insurance')).toBeInTheDocument()
+
+    expect(screen.getByText(/1 company scored under 40 and is not listed/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'See it in Results' })).toHaveAttribute(
+      'href',
+      `/results?run_id=${RUN_ID}&tier=discard`,
+    )
   })
 })

@@ -43,6 +43,10 @@ function makeRow(changes: Partial<LeadRow> = {}): LeadRow {
     trigger_label: 'Lease ending in 1 to 3 years',
     useful: null,
     web_searches: 6,
+    tier: 'B',
+    confidence: 'medium',
+    excluded: null,
+    has_property: false,
     ...changes,
   }
 }

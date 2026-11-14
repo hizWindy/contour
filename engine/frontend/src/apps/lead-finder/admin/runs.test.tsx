@@ -62,6 +62,9 @@ function run(id: string, createdAt: string, cost: string, pass: number, cities: 
     created_at: createdAt,
     started_at: createdAt,
     finished_at: createdAt,
+    goal_leads: null,
+    good_leads: 0,
+    leads_by_source: { web: 0, property_daily: 0, arealytics: 0 },
   }
 }
 

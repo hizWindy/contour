@@ -110,6 +110,8 @@ export type Run = Schemas['RunOut'] & {
   leads_by_source: LeadsBySource
 }
 
+export type RunPage = Omit<Schemas['RunPage'], 'items'> & { items: Run[] }
+
 export type RunEstimate = Schemas['RunEstimate'] & {
   /** The companies the goal needs at the recent pass rate. Empty: no goal. */
   companies_needed: number | null

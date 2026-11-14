@@ -13,14 +13,14 @@ export type { components, operations, paths }
 export type Schemas = components['schemas']
 
 // Runs
-export type Run = Schemas['RunOut']
+export type Run = V16.Run // V16
 export type RunStatus = Run['status']
 export type RunCaps = Schemas['RunCaps']
 export type RunCounts = Schemas['RunCounts']
 export type RunCreate = Schemas['RunCreate']
 export type RunEstimate = V16.RunEstimate // V16
 export type RunSourceId = V16.RunSourceId // V16
-export type RunPage = Schemas['RunPage']
+export type RunPage = V16.RunPage // V16
 export type RunSummary = Schemas['RunSummary']
 export type EventLog = Schemas['EventLog']
 
@@ -34,9 +34,9 @@ export type ProblemDetails = Schemas['ProblemDetails']
 export type FieldError = Schemas['FieldError']
 
 // Leads
-export type LeadRow = Schemas['LeadRow']
+export type LeadRow = V16.LeadRow // V16
 export type LeadDetail = Schemas['LeadDetail']
-export type LeadPage = Schemas['LeadPage']
+export type LeadPage = V16.LeadPage // V16
 export type LeadFacets = Schemas['LeadFacets']
 export type LeadPatch = Schemas['LeadPatch']
 export type MapPoint = Schemas['MapPoint']
@@ -51,6 +51,9 @@ export type LeadOrigin = LeadRow['origin']
 export type RunOptions = V16.RunOptions // V16
 export type CityOption = V16.CityOption // V16
 export type CityGroup = V16.CityGroup // V16
+export type Tier = V16.Tier // V16
+export type Confidence = V16.Confidence // V16
+export type Exclusion = V16.Exclusion // V16
 
 // Settings, searches, memory, HubSpot, tests
 export type SettingsOut = Schemas['SettingsOut']

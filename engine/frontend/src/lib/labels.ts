@@ -5,14 +5,41 @@
  */
 import type {
   CityGroup,
+  Confidence,
   HubSpotStatus,
   LeadOrigin,
   LeadResult,
   LeadStatus,
   RunSourceId,
   RunStatus,
+  Tier,
 } from '@/api/types'
 import { humanise } from './format'
+
+/**
+ * A lead's tier (PLAN-V16 T1-6, Levi's section 6), best first. The tier is the headline; the four
+ * results stay (the plan's choice 1): A or B is a Pass or a Director review, C a Watch, Discard a
+ * Drop. A tier is shown in words, never in colour: colour stays with the results (DESIGN.md).
+ */
+export const TIER_ORDER: readonly Tier[] = ['A', 'B', 'C', 'discard']
+
+export const TIER_LABELS: Record<Tier, string> = { A: 'A', B: 'B', C: 'C', discard: 'Discard' }
+
+/** What each tier asks for, in Levi's words. */
+export const TIER_ACTIONS: Record<Tier, string> = {
+  A: 'Pursue now',
+  B: 'Nurture',
+  C: 'Watch',
+  discard: 'Do not list',
+}
+
+export const CONFIDENCE_ORDER: readonly Confidence[] = ['high', 'medium', 'low']
+
+export const CONFIDENCE_LABELS: Record<Confidence, string> = {
+  high: 'High',
+  medium: 'Medium',
+  low: 'Low',
+}
 
 /**
  * The four city groups (PLAN-V16 T1-2), in the order the Start page and the filters show them.

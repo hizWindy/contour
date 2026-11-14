@@ -43,6 +43,9 @@ function run(changes: Partial<Run> = {}): Run {
     created_at: '2026-10-27T03:40:00Z',
     started_at: '2026-10-27T03:40:10Z',
     finished_at: '2026-10-27T03:53:38Z',
+    goal_leads: null,
+    good_leads: 0,
+    leads_by_source: { web: 0, property_daily: 0, arealytics: 0 },
     ...changes,
   }
 }
@@ -174,5 +177,32 @@ describe('where the money went', () => {
   it('says when the log page holds fewer requests than the run made', () => {
     expect(logIsPartial([search('extract', '1')], 250)).toBe(true)
     expect(logIsPartial([search('extract', '1')], 1)).toBe(false)
+  })
+})
+
+describe('what a run across Australia was asked to do (PLAN-V16 T3-3)', () => {
+  it('says all of Australia, how many leads, and where it looked', () => {
+    const lines = setupLines(
+      run({
+        mode: 'discovery',
+        params: {
+          cities: ['Australia'],
+          triggers: ['lease_ending'],
+          goal_leads: 20,
+          sources: ['arealytics', 'web'],
+        },
+      }),
+      { triggers: TRIGGERS },
+    )
+    expect(value(lines, 'Where')).toBe('All of Australia')
+    expect(value(lines, 'Cities')).toBeUndefined()
+    expect(value(lines, 'How many leads')).toBe('20 good leads')
+    expect(value(lines, 'Where to look')).toBe('The web, Arealytics')
+  })
+
+  it('leaves out the goal and the sources when the run had none', () => {
+    const lines = setupLines(run({ params: { cities: ['Perth'] } }), { triggers: TRIGGERS })
+    expect(value(lines, 'How many leads')).toBeUndefined()
+    expect(value(lines, 'Where to look')).toBeUndefined()
   })
 })

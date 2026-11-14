@@ -32,7 +32,8 @@ export function useTestReport(runId: string | undefined) {
 export function useStartTestRun() {
   const queryClient = useQueryClient()
   return useMutation<Run, ApiProblem, void>({
-    mutationFn: async () => unwrap(await api.POST('/lead-finder/tests/run')),
+    // Until PLAN-V16 M1: the run's new fields are in `v16.ts`.
+    mutationFn: async () => unwrap(await api.POST('/lead-finder/tests/run')) as Run,
     onSuccess: (run) => {
       queryClient.setQueryData(queryKeys.runs.detail(run.id), run)
       void queryClient.invalidateQueries({ queryKey: queryKeys.runs.lists() })
