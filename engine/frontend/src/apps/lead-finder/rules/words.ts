@@ -42,6 +42,9 @@ export const CHANGED: Record<string, string> = {
 /** A rule key, in plain words, for the "Waiting on Levi" list. Unknown keys show as they are. */
 export const KEY_WORDS: Record<string, string> = {
   // PLAN-V16
+  'score.tiers': 'The tiers',
+  'score.dampeners': 'What a dampener takes off',
+  'industries.priority_sectors': 'The priority sectors',
   'cities.groups': 'The city groups',
   'cities.national': 'All of Australia, one search for each sign',
   exclusions: 'Who is left out',
@@ -164,14 +167,14 @@ export const NAME_CHECK_WORDS: Record<string, string> = {
   auto: 'strict while its Company API answers, the name as typed while it is off',
 }
 
-/** The score's parts, and the checks inside each (the keys of `score.check_labels`). */
+/**
+ * The score's parts, and the checks inside each (the keys of `score.check_labels`): Levi's Fit,
+ * Change and timing, and Access (PLAN-V16 T1-6).
+ */
 export const PART_CHECKS: Record<string, readonly string[]> = {
-  trigger: ['trigger_group', 'source'],
-  size: ['size'],
-  timing: ['recency', 'years_at_address', 'no_recent_move'],
-  access: ['contact_role', 'hubspot_contact', 'customer_link'],
-  fit: ['buys_strategy', 'industry_tier'],
-  competition: ['no_rival_in_place', 'no_contractor_relationship'],
+  fit: ['local_staff', 'priority_sector', 'city', 'office_relevance'],
+  change: ['strongest_sign', 'other_signs', 'office_constrained'],
+  access: ['no_lock_in', 'procurement', 'warm_path'],
 }
 
 export interface CheckRow {
@@ -193,24 +196,18 @@ export function partChecks(score: Criteria['score'], part: string): CheckRow[] {
       .map(([key, value]) => `${n(value)} ${words[key] ?? key.replace(/_/g, ' ')}`)
       .join(', ')
   const points: Record<string, string> = {
-    trigger_group: spell(score.trigger_group),
-    source: spell(score.source, RANK_WORDS),
-    size: spell(score.size, {
-      confirmed_in_range: 'confirmed in range',
-      estimated_in_range: 'estimated in range',
-      growing_into_range: 'growing into range',
-      director: 'a Director decides',
-    }),
-    recency: `${score.recency.map((r) => `${n(r.points)} within ${r.within_days} days`).join(', ')}, ${n(score.undated)} undated, ${n(score.lease_in_best_window)} for a lease end in the best window`,
-    years_at_address: n(score.years_at_address),
-    no_recent_move: n(score.no_recent_move),
-    contact_role: n(score.access.contact_role),
-    hubspot_contact: n(score.access.hubspot_contact),
-    customer_link: n(score.access.customer_link),
-    buys_strategy: n(score.fit.buys_strategy),
-    industry_tier: `${n(score.fit.tier_1)} tier 1, ${n(score.fit.tier_2)} tier 2`,
-    no_rival_in_place: n(score.competition.no_rival_in_place),
-    no_contractor_relationship: n(score.competition.no_contractor_relationship),
+    local_staff: score.local_staff
+      .map((step) => `${n(step.points)} for ${n(step.from_staff)}+ staff`)
+      .join(', '),
+    priority_sector: n(score.priority_sector),
+    city: spell(score.city),
+    office_relevance: n(score.office_relevance),
+    strongest_sign: spell(score.strongest_sign),
+    other_signs: `${n(score.other_signs.points_each)} each, at most ${n(score.other_signs.at_most)}, within ${n(score.other_signs.within_months)} months`,
+    office_constrained: n(score.office_constrained),
+    no_lock_in: n(score.no_lock_in),
+    procurement: n(score.procurement),
+    warm_path: n(score.warm_path),
   }
   return (PART_CHECKS[part] ?? []).map((id) => ({
     id,

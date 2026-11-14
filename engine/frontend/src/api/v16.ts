@@ -325,10 +325,46 @@ export interface DampenerRule {
   waived_by: string[]
 }
 
-export type Criteria = Omit<Schemas['Criteria'], 'cities' | 'triggers'> & {
+/** Levi's 100 points in three parts, the dampeners' points and the tiers (Track 1's T1-6). */
+export interface ScoreRule {
+  /** fit, change and access: the score bar draws whatever parts the rules give it. */
+  parts: Record<string, { label: string; points: number }>
+  check_labels: Record<string, string>
+  /** How signs and discovered companies rank against each other: not a lead's points. */
+  trigger_group: Record<'main' | 'other' | 'weak', number>
+  source: Record<string, number>
+  recency: { within_days: number; points: number }[]
+  undated: number
+  lease_in_best_window: number
+  local_staff: { from_staff: number; points: number }[]
+  priority_sector: number
+  city: { priority: number; secondary: number; other: number }
+  office_relevance: number
+  strongest_sign: Record<SignStrength, number>
+  other_signs: { points_each: number; at_most: number; within_months: number }
+  office_constrained: number
+  no_lock_in: number
+  procurement: number
+  warm_path: number
+  /** The checks the tool can't judge yet. */
+  unseen: string[]
+  dampeners: { strong: number; moderate: number }
+  /** A from `a`, B from `b`, C from `c`; under `c` is Discard. */
+  tiers: { a: number; b: number; c: number }
+}
+
+export type Criteria = Omit<
+  Schemas['Criteria'],
+  'cities' | 'triggers' | 'score' | 'industries' | 'rivals'
+> & {
   cities: CitiesRule
   exclusions: ExclusionRule[]
   dampeners: DampenerRule[]
+  score: ScoreRule
+  /** Levi's priority sectors replace version 2's tier 1 and tier 2 (T1-6). */
+  industries: Omit<Schemas['Industries'], 'tier_1' | 'tier_2'> & { priority_sectors: string[] }
+  /** The competitor sweep also runs after these signs (T1-4); it no longer has tiers. */
+  rivals: Omit<Schemas['Rivals'], 'tiers'> & { also_after: string[] }
   triggers: Omit<Schemas['Triggers'], 'main' | 'other' | 'weak'> & {
     main: SignRule[]
     other: SignRule[]

@@ -526,31 +526,29 @@ function RulesLoaded({ rules }: { rules: Rules }) {
             id="score"
             index={6}
             title="Score"
-            description="Six parts that add up to 100. Point at a part to see its checks."
+            description="Three parts that add up to 100, then the dampeners, then the tier. Point at a part to see its checks."
             tbc={tbc.get('score')}
           >
             <div className="py-2">
               <ScoreBar score={c.score} />
             </div>
-            <Row label="Research first" tbc={tbc}>
-              {c.score.bands.research_first} to 100
+            <Row label="Tier A: pursue now" rule="score.tiers" tbc={tbc}>
+              {c.score.tiers.a} to 100
             </Row>
-            <Row label="Investigate" tbc={tbc}>
-              {c.score.bands.investigate} to {c.score.bands.research_first - 1}
+            <Row label="Tier B: nurture" tbc={tbc}>
+              {c.score.tiers.b} to {c.score.tiers.a - 1}
             </Row>
-            <Row label="Nurture" tbc={tbc}>
-              under {c.score.bands.investigate}
+            <Row label="Tier C: watch" tbc={tbc}>
+              {c.score.tiers.c} to {c.score.tiers.b - 1}
             </Row>
-            <Row label="The bands use" rule="score.band_basis" tbc={tbc}>
-              {c.score.band_basis === 'scaled'
-                ? 'the points scaled to the points checked'
-                : 'the raw points'}
+            <Row label="Discard: not listed" tbc={tbc}>
+              under {c.score.tiers.c}
             </Row>
-            <Row label="Years at the same address" rule="score.years_at_address" tbc={tbc}>
-              {c.score.years_at_address} points
+            <Row label="A strong dampener takes off" rule="score.dampeners" tbc={tbc}>
+              {c.score.dampeners.strong} points
             </Row>
-            <Row label="No recent move or fitout" rule="score.no_recent_move" tbc={tbc}>
-              {c.score.no_recent_move} points
+            <Row label="A moderate dampener takes off" tbc={tbc}>
+              {c.score.dampeners.moderate} points
             </Row>
             {Object.entries(c.stages).map(([result, stage]) => (
               <Row key={result} label={`${resultLabel(result)} in HubSpot`} tbc={tbc}>
@@ -563,13 +561,10 @@ function RulesLoaded({ rules }: { rules: Rules }) {
             id="industries"
             index={7}
             title="Industries and fit"
-            description="Which industries score, which get a Director, and which get an office check."
+            description="Which sectors score, which get a Director, and which get an office check."
           >
-            <Row label="Tier 1" rule="industries.tier_1" tbc={tbc}>
-              <span className="text-caption">{list(c.industries.tier_1)}</span>
-            </Row>
-            <Row label="Tier 2" rule="industries.tier_2" tbc={tbc}>
-              <span className="text-caption">{list(c.industries.tier_2)}</span>
+            <Row label="Priority sectors" rule="industries.priority_sectors" tbc={tbc}>
+              <span className="text-caption">{list(c.industries.priority_sectors)}</span>
             </Row>
             <Row label="Director review" tbc={tbc}>
               <span className="text-caption">{list(c.industries.director_review)}</span>
@@ -593,7 +588,7 @@ function RulesLoaded({ rules }: { rules: Rules }) {
             </Row>
             <Row label="Rivals of a booming company" rule="rivals" tbc={tbc}>
               {c.rivals.enabled
-                ? `up to ${c.rivals.per_lead} a lead, ${c.rivals.per_run} a run, in ${list(c.rivals.tiers.map((t) => t.replace('_', ' ')))}`
+                ? `up to ${String(c.rivals.per_lead)} a lead, ${String(c.rivals.per_run)} a run, for a good lead in a priority sector${c.rivals.also_after.length > 0 ? ` or with ${list(c.rivals.also_after.map(signLabel))}` : ''}`
                 : 'Switched off'}
             </Row>
           </Section>
