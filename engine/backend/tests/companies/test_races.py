@@ -350,8 +350,9 @@ def test_0017_fails_stuck_preps_and_adds_the_index_and_the_tones(
                 "INSERT INTO companies.script_prefs (id, scope, tone) VALUES (%s, 'mine', 'loud')",
                 (uuid.uuid4(),),
             )
+    command.upgrade(config, "head")  # and the later ones (0018 on, PLAN-V16), so the models match
     command.check(config)  # the models declare the same index and table
-    command.downgrade(config, "-1")
+    command.downgrade(config, "0016_sync_cancel")
     with psycopg.connect(conninfo, autocommit=True) as connection:
         assert connection.execute("SELECT to_regclass('companies.script_prefs')").fetchone() == (
             None,
