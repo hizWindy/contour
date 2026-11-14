@@ -98,6 +98,11 @@ TEST_TABLES = (
     "core.run_events",
     "core.runs",
     "core.settings",
+    # Property Daily and Arealytics (PLAN-V16 T2-4)
+    "core.property_records",
+    "core.property_lookups",
+    "core.source_reads",
+    "core.source_state",
 )
 LANGGRAPH_SCHEMA = "langgraph"
 CHECKPOINT_SETUP_LOCK = 7_244_001  # a Postgres advisory lock key: one saver.setup() at a time

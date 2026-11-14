@@ -43,6 +43,7 @@ from core.prefs.models import Setting
 from core.runs.models import Run, RunEvent
 from core.schedules.models import Schedule
 from core.searches.models import SearchLog
+from core.sources.models import PropertyLookup, PropertyRecordRow, SourceRead, SourceState
 from tests.conftest import CHECKPOINT_SETUP_LOCK, LANGGRAPH_SCHEMA, TEST_TABLES
 
 if TYPE_CHECKING:
@@ -100,6 +101,27 @@ async def fill_every_table(factory: async_sessionmaker[AsyncSession]) -> None:
                     content="Acme is thinking about a move.",
                     embedding=[0.1] * EMBEDDING_DIM,
                 ),
+                PropertyRecordRow(
+                    source="property_daily",
+                    kind="lease",
+                    via="lookup",
+                    company="Acme",
+                    company_key="acme",
+                    summary="A lease of 1,200 m², ending in 2028.",
+                    url="https://example.com/report/1",
+                    record_key="0" * 64,
+                    read_at=datetime.now(UTC),
+                ),
+                PropertyLookup(
+                    source="property_daily",
+                    company_key="acme",
+                    company="Acme",
+                    status="found",
+                    records=1,
+                    looked_up_at=datetime.now(UTC),
+                ),
+                SourceRead(source="property_daily", kind="report", ok=True, outcome="ok", ms=900),
+                SourceState(source="property_daily"),
             ]
         )
         await db_session.flush()
