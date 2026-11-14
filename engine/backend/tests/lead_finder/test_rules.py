@@ -81,6 +81,58 @@ def test_every_place_has_a_group_and_a_search_area() -> None:
     assert cities.national not in cities.every
 
 
+def test_the_six_exclusions_are_levis_section_3() -> None:
+    criteria = load_rules().criteria
+    assert [(rule.id, rule.kind) for rule in criteria.exclusions] == [
+        ("government", "industry"),
+        ("not_for_profit", "industry"),
+        ("law_firm", "industry"),
+        ("big_bank", "industry"),
+        ("office_incidental", "office_incidental"),
+        ("tender_only", "tender_only"),
+    ]
+    assert criteria.exclusion_groups == [
+        "Government",
+        "Standard not-for-profits",
+        "Law firms",
+        "Premium banks and finance",
+    ]
+    # They left the Director review (PLAN-V16 T1-3). The rest of the list stays (TBC).
+    assert criteria.industries.director_review == [
+        "Education",
+        "Industry consultants",
+        "Real estate agencies",
+        "Hospitals and healthcare",
+    ]
+
+
+def test_an_exclusion_group_that_is_also_a_director_group_stops_start_up(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    edit(
+        rules_dir / "criteria.yaml", "industry_groups: [Law firms]", "industry_groups: [Education]"
+    )
+    with pytest.raises(ValidationError, match="also a Director review or a site-heavy group"):
+        read_rules(rules_dir)
+
+
+def test_two_exclusions_cannot_share_an_id(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    edit(rules_dir / "criteria.yaml", "id: law_firm", "id: government")
+    with pytest.raises(ValidationError, match="Exclusion ids appear twice: government"):
+        read_rules(rules_dir)
+
+
+def test_the_words_that_save_a_company_need_a_flag(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    edit(
+        rules_dir / "criteria.yaml",
+        "    flag: A government-owned or commercialised body. Flagged, not left out\n",
+        "",
+    )
+    with pytest.raises(ValidationError, match="`unless` and `flag` go together"):
+        read_rules(rules_dir)
+
+
 def test_a_place_in_two_groups_stops_start_up(tmp_path: Path) -> None:
     rules_dir = copy_rules(tmp_path)
     edit(

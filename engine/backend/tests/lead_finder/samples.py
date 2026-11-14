@@ -123,6 +123,7 @@ def make_facts(**changes: Any) -> CompanyFacts:
         tier_group=None,
         office_since=fact(None),
         last_fitout=fact(None),
+        tender_only=fact(None),
         fitout_contractors=[],
         talking_points=[],
         contact_role="Head of Property",

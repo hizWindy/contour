@@ -55,12 +55,26 @@ def extract_prompt(rules: LeadFinderRules) -> Prompt:
     triggers = "\n".join(f"- {t.id}: {t.label}" for t in criteria.claude_triggers)
     boosters = "\n".join(f"- {b.id}: {b.label}" for b in criteria.boosters)
     industries = criteria.industries
-    groups = [*industries.director_review, *industries.check_office_size]
+    # The groups that are left out say what they mean, so Claude files a company in the right one
+    # (PLAN-V16 T1-3: an industry super fund is no not-for-profit, a mid-tier bank is no big one)
+    meaning = {
+        group: rule.meaning
+        for rule in criteria.exclusions
+        if rule.meaning
+        for group in rule.industry_groups
+    }
+    groups = [
+        *industries.director_review,
+        *criteria.exclusion_groups,
+        *industries.check_office_size,
+    ]
     tiers = [*industries.tier_1, *industries.tier_2]
     text = Template(template).substitute(
         triggers=triggers,
         boosters=boosters,
-        industry_groups="\n".join(f"- {g}" for g in groups),
+        industry_groups="\n".join(
+            f"- {g}: {meaning[g]}" if g in meaning else f"- {g}" for g in groups
+        ),
         tier_groups="\n".join(f"- {g}" for g in tiers),
     )
     # The lists come from the rules, so their version is part of this prompt's version.

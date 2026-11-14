@@ -9,15 +9,16 @@ score is the points earned. "Checked" is the most the tool could judge, like "48
 """
 
 import re
-from dataclasses import dataclass
-from datetime import date, timedelta
+from collections.abc import Mapping
+from dataclasses import dataclass, replace
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Literal
 
 from pydantic import BaseModel, Field
 
 from apps.lead_finder.fields import CompanyFacts, TriggerFound
-from apps.lead_finder.rules import LeadFinderRules, Result
+from apps.lead_finder.rules import ExclusionRule, LeadFinderRules, Result
 from apps.lead_finder.sources import host_of, source_kind
 from core.hubspot.matching import CandidateReason, HubSpotMatch
 
@@ -73,6 +74,54 @@ class ScorePart(BaseModel):
     checks: list[ScoreCheck]
 
 
+FilterId = Literal["location", "office_size", "headcount", "office_relevance", "sector"]
+FilterState = Literal["pass", "fail", "estimated"]
+FILTER_LABELS: dict[FilterId, str] = {
+    "location": "Location",
+    "office_size": "Office size",
+    "headcount": "Headcount",
+    "office_relevance": "Office relevance",
+    "sector": "Sector",
+}
+
+
+class FilterResult(BaseModel):
+    """One of Levi's five filters (his section 2, PLAN-V16 T1-3). A fact nobody found is
+    "estimated" and labelled, never a fail (choice 3): a lead fails a filter only when a fact we
+    know says so."""
+
+    id: FilterId
+    label: str
+    state: FilterState = Field(
+        description="pass: the facts meet it. estimated: not known, or only estimated, so a "
+        "person may check. fail: a known fact says no."
+    )
+    basis: str = Field(
+        description="One plain sentence on what it rests on, like 'about 1,200 m², estimated "
+        "from staff'"
+    )
+
+
+class Override(BaseModel):
+    """A person's decision to judge a lead again without its exclusion."""
+
+    by: str = Field(description="Who did it: the name or email of the account")
+    at: datetime
+
+
+class Excluded(BaseModel):
+    """Why a lead is left out and not scored (Levi's section 3). An excluded lead is a Drop. A
+    person with the Lead Finder tick can override it: `overridden_by` and `overridden_at` then say
+    who did it, and the lead is judged without the exclusion."""
+
+    reason_id: str = Field(examples=["law_firm"])
+    label: str = Field(examples=["Law firm"])
+    evidence: str = Field(description="What says so, in one plain sentence")
+    url: str | None = Field(default=None, description="The page that says it, when there is one")
+    overridden_by: str | None = None
+    overridden_at: datetime | None = None
+
+
 class Verdict(BaseModel):
     result: Result
     stage: str  # the Profile's stage for the result: Active prospect, Target account...
@@ -85,6 +134,8 @@ class Verdict(BaseModel):
     parts: list[ScorePart] = Field(default_factory=list)  # empty for a Drop
     score_checked: int = 0
     band: Band | None = None
+    filters: list[FilterResult] = Field(default_factory=list)  # Levi's five (PLAN-V16 T1-3)
+    excluded: Excluded | None = None  # the exclusion that applies, or that a person overrode
 
 
 @dataclass(frozen=True)
@@ -95,6 +146,10 @@ class SizeJudgement:
     m2: int | None
     estimated: bool
     basis: SizeBasis
+    # The staff number the size rested on, after a LinkedIn count is doubled, and whether the size
+    # was worked out from it. The headcount filter reads them (PLAN-V16 T1-3).
+    staff: int | None = None
+    from_staff: bool = False
 
 
 def parse_date(text: str | None) -> date | None:
@@ -122,12 +177,25 @@ def month_year(text: str | None) -> str:
 
 
 def judge(
-    facts: CompanyFacts, hubspot: HubSpotMatch, rules: LeadFinderRules, today: date
+    facts: CompanyFacts,
+    hubspot: HubSpotMatch,
+    rules: LeadFinderRules,
+    today: date,
+    *,
+    overrides: Mapping[str, Override] | None = None,
 ) -> Verdict:
+    """The result, the score and the reasons for one company, from its facts.
+
+    `overrides` are the exclusions a person overrode, by exclusion id (PLAN-V16 T1-3): the lead is
+    judged as if they didn't apply, and the verdict's `excluded` says who overrode.
+    """
     criteria = rules.criteria
     checks: list[RuleCheck] = []
     checks += _never_suggest(facts, hubspot, rules, today)
-    checks.append(_city(facts, rules))
+    excluded, exclusion_checks = _exclusion(facts, rules, overrides or {})
+    checks += exclusion_checks
+    city_check = _city(facts, rules)
+    checks.append(city_check)
     sized = _size(facts, rules, today)
     checks.append(sized.check)
     checks.append(_office(facts, rules))
@@ -183,10 +251,71 @@ def judge(
         parts=parts,
         score_checked=checked,
         band=band,
+        filters=_filters(facts, rules, city_check, sized, excluded),
+        excluded=excluded,
     )
 
 
 # --- Each rule ---------------------------------------------------------------------------
+
+
+def _excluded_by(
+    rule: ExclusionRule, facts: CompanyFacts, rules: LeadFinderRules
+) -> tuple[str, str | None] | None:
+    """What says this company is one the rule leaves out: (the evidence, its link), or None."""
+    industry = facts.industry.value or facts.industry_group or "its industry"
+    if rule.kind == "industry":
+        if facts.industry_group not in rule.industry_groups:
+            return None
+        return f"Its industry is {industry} ({facts.industry_group}).", facts.industry.source_url
+    if rule.kind == "office_incidental":
+        site_heavy = facts.industry_group in rules.criteria.industries.check_office_size
+        if facts.office_matters.value is not False or not site_heavy:
+            return None
+        text = f"{industry}: the local staff are mostly not office staff."
+        return text, facts.office_matters.source_url
+    if facts.tender_only.value is not True:
+        return None
+    text = "A note says it buys its office fitouts only through formal public tender portals."
+    return text, facts.tender_only.source_url
+
+
+def _exclusion(
+    facts: CompanyFacts, rules: LeadFinderRules, overrides: Mapping[str, Override]
+) -> tuple[Excluded | None, list[RuleCheck]]:
+    """The first exclusion that applies (Levi's section 3, PLAN-V16 T1-3), and its rule check.
+
+    An active exclusion is a failed check, so the lead is a Drop. A person's override turns it
+    into a flag: the lead is judged as if it didn't apply, and the card says who overrode. A
+    company the rule's `unless` words describe (a government-owned corporation, an industry super
+    fund) is not left out: it gets the rule's flag.
+    """
+    text = f"{facts.industry.value or ''} {facts.owner.value or ''}".casefold()
+    for rule in rules.criteria.exclusions:
+        found = _excluded_by(rule, facts, rules)
+        if found is None:
+            continue
+        if rule.unless and any(word.casefold() in text for word in rule.unless):
+            return None, [
+                RuleCheck(rule="Excluded", outcome="flag", detail=rule.flag or rule.label)
+            ]
+        evidence, url = found
+        override = overrides.get(rule.id)
+        excluded = Excluded(
+            reason_id=rule.id,
+            label=rule.label,
+            evidence=evidence,
+            url=url,
+            overridden_by=override.by if override else None,
+            overridden_at=override.at if override else None,
+        )
+        if override is not None:
+            detail = f"{rule.label}. {override.by} overrode this exclusion"
+            return excluded, [RuleCheck(rule="Excluded", outcome="flag", detail=detail)]
+        return excluded, [
+            RuleCheck(rule="Excluded", outcome="fail", detail=f"{rule.label}. {evidence}")
+        ]
+    return None, []
 
 
 def _never_suggest(
@@ -288,7 +417,7 @@ def _size(facts: CompanyFacts, rules: LeadFinderRules, today: date) -> SizeJudge
     else:
         grown = _growing(facts, rules, today)
         if grown is not None:
-            return grown
+            return replace(grown, staff=staff)
         unknown = RuleCheck(
             rule="Size", outcome="unknown", detail="Office size and staff not known"
         )
@@ -297,17 +426,21 @@ def _size(facts: CompanyFacts, rules: LeadFinderRules, today: date) -> SizeJudge
     text = f"{m2:,} m²{basis}"
     low, _ = size.director_band_m2
     got: SizeBasis = "estimated" if estimated else "confirmed"
+
+    def judged(check: RuleCheck, size_basis: SizeBasis, is_estimated: bool) -> SizeJudgement:
+        return SizeJudgement(check, m2, is_estimated, size_basis, staff, from_staff)
+
     if m2 > size.office_m2_max or (staff is not None and staff > size.staff_max):
         check = RuleCheck(rule="Size", outcome="director", detail=f"{text}: over the top limit")
-        return SizeJudgement(check, m2, estimated, "director")  # no reason to look at growth
+        return judged(check, "director", estimated)  # no reason to look at growth
     if m2 >= size.office_m2_min:
-        return SizeJudgement(RuleCheck(rule="Size", outcome="ok", detail=text), m2, estimated, got)
+        return judged(RuleCheck(rule="Size", outcome="ok", detail=text), got, estimated)
     why: SizeBasis = "below"
     if from_staff and staff is not None:
         hint, floor = size.staff_hint_min, size.staff_floor
         if staff >= hint:
             detail = f"{text}: at the staff hint ({hint}+)"
-            return SizeJudgement(RuleCheck(rule="Size", outcome="ok", detail=detail), m2, True, got)
+            return judged(RuleCheck(rule="Size", outcome="ok", detail=detail), got, True)
         if staff >= floor:
             why = "small"
             detail = f"{text}: under {hint} staff, so a Watch. Check the office size"
@@ -321,7 +454,7 @@ def _size(facts: CompanyFacts, rules: LeadFinderRules, today: date) -> SizeJudge
     else:
         check = RuleCheck(rule="Size", outcome="fail", detail=f"{text}: too small")
     grown = _growing(facts, rules, today)
-    return grown if grown is not None else SizeJudgement(check, m2, estimated, why)
+    return replace(grown, staff=staff) if grown is not None else judged(check, why, estimated)
 
 
 def _growing(facts: CompanyFacts, rules: LeadFinderRules, today: date) -> SizeJudgement | None:
@@ -388,6 +521,118 @@ def _local_and_healthy(facts: CompanyFacts) -> list[RuleCheck]:
         else:
             checks.append(RuleCheck(rule=rule, outcome="fail", detail=fail_text))
     return checks
+
+
+GROUP_WORDS = {
+    "priority": "priority city",
+    "secondary": "secondary city",
+    "capital": "capital city",
+    "regional": "regional centre",
+}
+
+
+def _filters(
+    facts: CompanyFacts,
+    rules: LeadFinderRules,
+    city_check: RuleCheck,
+    sized: SizeJudgement,
+    excluded: Excluded | None,
+) -> list[FilterResult]:
+    """Levi's five filters, each pass, fail or estimated (his section 2, PLAN-V16 T1-3).
+
+    They say the same thing as the rule checks, in his words. A fact nobody found is "estimated"
+    and labelled (choice 3), never a fail. A filter fails only when a fact we know says no: a size
+    or a staff count under the floor, or an office that doesn't matter in a site-heavy industry.
+    """
+    criteria = rules.criteria
+    size = criteria.size
+    results: list[FilterResult] = []
+
+    def add(id: FilterId, state: FilterState, basis: str) -> None:
+        results.append(FilterResult(id=id, label=FILTER_LABELS[id], state=state, basis=basis))
+
+    # 1. Location: any place on our list passes, and so does a place that isn't (with its flag)
+    if city_check.outcome == "ok":
+        group = criteria.cities.group_of(city_check.detail)
+        words = f", a {GROUP_WORDS[group]}" if group else ""
+        add("location", "pass", f"{city_check.detail}{words}")
+    elif city_check.outcome == "flag":
+        add("location", "pass", city_check.detail)
+    else:
+        add("location", "estimated", city_check.detail)
+
+    # 2. Office size: 1,000 m² or more now, or within 24 months
+    outcome = sized.check.outcome
+    if outcome == "fail":
+        state: FilterState = "fail"
+    elif outcome == "ok":
+        state = "pass" if sized.basis == "confirmed" else "estimated"
+    elif outcome == "director":  # over the top limit still meets it; just under the minimum doesn't
+        over = (sized.m2 or 0) > size.office_m2_max or (sized.staff or 0) > size.staff_max
+        state = "pass" if over else "estimated"
+    else:  # flag or unknown
+        state = "estimated"
+    add("office_size", state, sized.check.detail)
+
+    # 3. Headcount: staff in that city, not the company's. 50+ qualifies (Levi, 9 Nov)
+    staff = sized.staff
+    if sized.from_staff and sized.check.outcome == "fail" and staff is not None:
+        add("headcount", "fail", f"{staff:,} staff in the city, under {size.staff_floor}")
+    elif staff is None:
+        grows = sized.basis == "growing"
+        add(
+            "headcount",
+            "estimated",
+            "No staff count, but it plans to grow into the office it will need"
+            if grows
+            else "Staff in the city not known",
+        )
+    elif staff >= size.staff_min:
+        confirmed = facts.staff_in_city.label == "confirmed" and not facts.staff_from_linkedin
+        counted = f"{staff:,} staff in the city"
+        add(
+            "headcount",
+            "pass" if confirmed else "estimated",
+            counted if confirmed else f"{counted}, estimated",
+        )
+    else:
+        under = f"{staff:,} staff in the city, under {size.staff_min}"
+        add("headcount", "estimated", f"{under}. Its office or its plan to grow carries it")
+
+    # 4. Office relevance: the office matters to how they work (an office-based business)
+    industry = facts.industry.value or "Industry not known"
+    incidental = (
+        excluded is not None
+        and excluded.overridden_by is None
+        and any(
+            rule.id == excluded.reason_id and rule.kind == "office_incidental"
+            for rule in criteria.exclusions
+        )
+    )
+    if incidental:
+        add("office_relevance", "fail", f"{industry}: most of the local staff are not office staff")
+    elif facts.office_matters.value is True:
+        add("office_relevance", "pass", f"{industry}: the office matters to how they work")
+    elif facts.office_matters.value is False:
+        text = f"{industry}: the office may not matter to how they work. Check the office size"
+        add("office_relevance", "estimated", text)
+    elif facts.industry_group in criteria.industries.check_office_size:
+        add("office_relevance", "estimated", f"{industry}: a site-heavy industry. Check the office")
+    elif facts.industry.value is not None:
+        add("office_relevance", "estimated", f"Not stated. Assumed from its industry ({industry})")
+    else:
+        add("office_relevance", "estimated", "Not known: no industry and no note about the office")
+
+    # 5. Sector: a priority sector earns the sector points. Any other sector passes too, so the
+    # score and the tier decide (Levi: other sectors "can qualify on strong signals")
+    priority = [*criteria.industries.tier_1, *criteria.industries.tier_2]
+    if facts.tier_group in priority:
+        add("sector", "pass", f"Priority sector: {facts.tier_group}")
+    elif facts.industry.value is not None:
+        add("sector", "pass", f"{facts.industry.value}: not a priority sector, so no sector points")
+    else:
+        add("sector", "estimated", "Industry not known")
+    return results
 
 
 @dataclass(frozen=True)

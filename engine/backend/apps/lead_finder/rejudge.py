@@ -13,7 +13,7 @@ from pydantic import TypeAdapter
 
 from apps.lead_finder.fields import CompanyFacts
 from apps.lead_finder.rules import LeadFinderRules
-from apps.lead_finder.scoring import Verdict, judge
+from apps.lead_finder.scoring import Override, Verdict, judge
 from core.hubspot.matching import HubSpotMatch
 
 RULE_RENAMES = {"Industry": "Office"}  # version 1 called the office check "Industry"
@@ -56,8 +56,21 @@ def rejudge(
     """The lead as the current rules judge it, and what changed from its saved rule checks."""
     facts = CompanyFacts.model_validate(card["facts"])
     hubspot = TypeAdapter(HubSpotMatch).validate_python(card["hubspot"])
-    now = judge(facts, hubspot, rules, today)
+    now = judge(facts, hubspot, rules, today, overrides=overrides_of(card))
     return Rejudged(company, was_result, was_score, now, _changes(card.get("checks", []), now))
+
+
+def overrides_of(card: dict[str, Any]) -> dict[str, Override]:
+    """The exclusion a person overrode on this card (PLAN-V16 T1-3), so judging it again keeps it
+    judged without the exclusion. Empty for a card with no override."""
+    excluded = card.get("excluded")
+    if not isinstance(excluded, dict) or not excluded.get("overridden_by"):
+        return {}
+    return {
+        str(excluded["reason_id"]): Override(
+            by=str(excluded["overridden_by"]), at=excluded["overridden_at"]
+        )
+    }
 
 
 def table(items: list[Rejudged]) -> str:

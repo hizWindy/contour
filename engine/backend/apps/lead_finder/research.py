@@ -83,9 +83,12 @@ from apps.lead_finder.sanitize import (
 from apps.lead_finder.scoring import (
     JUST_MOVED,
     Band,
+    Excluded,
+    FilterResult,
     RuleCheck,
     ScorePart,
     TriggerScore,
+    Verdict,
     city_of,
     judge,
     parse_date,
@@ -300,6 +303,18 @@ class LeadCard(BaseModel):
         description="Why there is no Why now: switched_off, drop, no_facts (the form failed), "
         "budget (the company's money ran out) or failed. Empty when there is one, or for a card "
         "made before it.",
+    )
+    filters: list[FilterResult] = Field(
+        default_factory=list,
+        description="Levi's five filters (location, office size, headcount, office relevance and "
+        "sector), each pass, fail or estimated, with what it rests on (PLAN-V16 T1-3). Empty for "
+        "a card made before it.",
+    )
+    excluded: Excluded | None = Field(
+        default=None,
+        description="Why the lead is left out and not scored (Levi's section 3): a Drop with its "
+        "reason, its evidence and its link. `overridden_by` is set when a person overrode it, and "
+        "the lead was then judged without the exclusion. Empty when no exclusion applies.",
     )
 
 
@@ -726,21 +741,10 @@ async def _judge_and_card(
     card = LeadCard(
         id=job.id,
         company=facts.name or job.company,
-        result=verdict.result,
-        stage=verdict.stage,
-        score=verdict.score,
-        score_parts=verdict.parts,
-        score_checked=verdict.score_checked or None,
-        band=verdict.band,
+        **verdict_fields(verdict),
         summary=facts.summary,
-        why_it_fits=_why(verdict.checks, verdict.result),
         contact_role=facts.contact_role,
         opening_line=facts.opening_line,
-        checks=verdict.checks,
-        triggers=verdict.triggers,
-        office_m2=verdict.office_m2,
-        office_m2_estimated=verdict.office_m2_estimated,
-        fitout_aud=verdict.fitout_aud,
         facts=facts,
         hubspot=HubSpotOut(**asdict(hubspot)),
         notes=[
@@ -1201,6 +1205,7 @@ def empty_facts(company: str, summary: str = "Nothing useful was found.") -> Com
         tier_group=None,
         office_since=unknown(),
         last_fitout=unknown(),
+        tender_only=unknown(),
         fitout_contractors=[],
         talking_points=[],
         contact_role=None,
@@ -1208,6 +1213,53 @@ def empty_facts(company: str, summary: str = "Nothing useful was found.") -> Com
         summary=summary,
         opening_line=None,
     )
+
+
+def verdict_fields(verdict: Verdict) -> dict[str, Any]:
+    """The card fields a verdict decides: the one place that lists them, so a lead judged again (an
+    override, a re-judge) and a lead just researched can't disagree about what a verdict sets."""
+    return {
+        "result": verdict.result,
+        "stage": verdict.stage,
+        "score": verdict.score,
+        "score_parts": verdict.parts,
+        "score_checked": verdict.score_checked or None,
+        "band": verdict.band,
+        "why_it_fits": _why(verdict.checks, verdict.result),
+        "checks": verdict.checks,
+        "triggers": verdict.triggers,
+        "office_m2": verdict.office_m2,
+        "office_m2_estimated": verdict.office_m2_estimated,
+        "fitout_aud": verdict.fitout_aud,
+        "filters": verdict.filters,
+        "excluded": verdict.excluded,
+    }
+
+
+def apply_verdict(card: LeadCard, verdict: Verdict) -> LeadCard:
+    """The card with a new verdict's fields. The Why now is cleared when the lead is no longer what
+    it was written for: it is written again by `why-now` or a re-check (PLAN-V12)."""
+    changes = verdict_fields(verdict)
+    if verdict.result != card.result:
+        changes |= {"why_now": None, "why_now_skipped": None}
+    return card.model_copy(update=changes)
+
+
+def verdict_columns(card: LeadCard) -> dict[str, Any]:
+    """The lead row's columns that copy what a verdict decides, and the card itself."""
+    trigger_ids = list(dict.fromkeys(score.trigger.id for score in card.triggers))
+    best = card.triggers[0].trigger if card.triggers else None
+    return {
+        "office_m2": card.office_m2,
+        "office_m2_estimated": card.office_m2_estimated,
+        "result": card.result,
+        "score": card.score,
+        "score_checked": card.score_checked,
+        "trigger_id": trigger_ids[0] if trigger_ids else None,
+        "trigger_ids": trigger_ids,
+        "trigger_date": parse_date(best.date) if best else None,
+        "card": card.model_dump(mode="json"),
+    }
 
 
 def _why(checks: list[RuleCheck], result: Result) -> str:
@@ -1284,8 +1336,6 @@ def _lead_values(
 ) -> dict[str, Any]:
     """The lead row: the card, and copies of what the website filters and sorts by."""
     facts = card.facts
-    trigger_ids = list(dict.fromkeys(score.trigger.id for score in card.triggers))
-    best = card.triggers[0].trigger if card.triggers else None
     industry = facts.industry.value if isinstance(facts.industry.value, str) else None
     staff = facts.staff_in_city.value
     website = facts.website.value if isinstance(facts.website.value, str) else None
@@ -1302,18 +1352,10 @@ def _lead_values(
         "industry": clip(industry, LIMITS["lead.industry"]),
         "industry_group": clip(facts.industry_group, LIMITS["lead.industry_group"]),
         "staff_in_city": staff if isinstance(staff, int) and not isinstance(staff, bool) else None,
-        "office_m2": card.office_m2,
-        "office_m2_estimated": card.office_m2_estimated,
-        "result": card.result,
-        "score": card.score,
-        "score_checked": card.score_checked,
-        "trigger_id": trigger_ids[0] if trigger_ids else None,
-        "trigger_ids": trigger_ids,
-        "trigger_date": parse_date(best.date) if best else None,
+        **verdict_columns(card),
         "contact_role": clip(card.contact_role, LIMITS["lead.contact_role"]),
         "hubspot_status": hubspot.status,
         "hubspot_id": hubspot.hubspot_id,
-        "card": card.model_dump(mode="json"),
         "cost_usd": card.research.cost_usd,
         "web_searches": card.research.web_searches,
         "rules_version": card.rules_version,

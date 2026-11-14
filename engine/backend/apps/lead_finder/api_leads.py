@@ -14,10 +14,10 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Response
 
-from apps.lead_finder import lead_store
+from apps.lead_finder import lead_store, override
 from apps.lead_finder.context import Origin
 from apps.lead_finder.lead_store import SORT_COLUMNS, lead_conditions, newest_only
-from apps.lead_finder.rules import Result
+from apps.lead_finder.rules import Result, load_rules
 from apps.lead_finder.schemas import (
     HubSpotStatus,
     LeadDetail,
@@ -32,6 +32,7 @@ from apps.lead_finder.schemas import (
     SortOrder,
 )
 from apps.lead_finder.similar import similar_for
+from core.api.access import SignedInDep
 from core.api.deps import EmbedderDep, SessionDep
 from core.api.errors import Problem
 from core.api.models import INT32_MAX, OFFSET_MAX, SafeText
@@ -261,3 +262,28 @@ async def patch_lead(
 )
 async def similar_leads(lead_id: uuid.UUID, session: SessionDep) -> SimilarOut:
     return await similar_for(session, lead_id)
+
+
+@router.post(
+    "/{lead_id}/override-exclusion",
+    response_model=LeadDetail,
+    summary="Judge an excluded lead again, without its exclusion",
+    description=(
+        "For a lead a rule left out (Levi's exclusions: a law firm, a government department, a "
+        "big bank...). Judges its saved facts again as if the rule didn't apply, and saves the "
+        "new result and score. The card keeps `excluded`, now with who did it and when. Free: "
+        "no search and no Claude. Answers 404 for an unknown lead, 409 `not_excluded` when no "
+        "rule left it out, and 409 `already_overridden` when it was done before."
+    ),
+)
+async def override_exclusion(
+    lead_id: uuid.UUID, session: SessionDep, auth: SignedInDep
+) -> LeadDetail:
+    by = (auth.user.name or auth.user.email) if auth is not None else "a person on this computer"
+    card = await override.override_exclusion(session, lead_id, by, load_rules())
+    if card is None:
+        raise Problem(404, *lead_store.NOT_FOUND)
+    detail = await lead_store.get_detail(session, lead_id)
+    if detail is None:  # the lead was deleted a moment ago
+        raise Problem(404, *lead_store.NOT_FOUND)
+    return detail

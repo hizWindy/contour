@@ -55,6 +55,7 @@ NEWER_FACTS = (
     "office_matters",
     "office_since",
     "last_fitout",
+    "tender_only",  # PLAN-V16 T1-3
 )
 NEWER_LISTS = ("fitout_contractors", "talking_points", "decision_makers")
 MAX_TALKING_POINTS = 3
@@ -183,6 +184,11 @@ class CompanyFacts(BaseModel):
     last_fitout: Fact[str] = Field(
         description="When that office last had a move, fitout or refit: YYYY-MM or YYYY. The "
         "move-in counts too. Null if no note says."
+    )
+    tender_only: Fact[bool] = Field(
+        description="true only if a note says the company buys its office fitouts solely through "
+        "formal public tender portals (AusTender, Tenders VIC, Tenders WA, SA Tenders). false if a "
+        "note says it buys some other way. Null if no note says."
     )
     fitout_contractors: list[str] = Field(
         description="Names of design or fitout firms that did this company's office, only if a "

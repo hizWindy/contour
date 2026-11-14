@@ -125,6 +125,7 @@ ROUTES = [
     ("POST", f"{LF}/leads/{{lead_id}}/hubspot/preview"),
     ("POST", f"{LF}/leads/{{lead_id}}/hubspot/send"),
     ("POST", f"{LF}/leads/{{lead_id}}/recheck"),
+    ("POST", f"{LF}/leads/{{lead_id}}/override-exclusion"),
     ("GET", f"{LF}/watchlist"),
     ("GET", f"{LF}/review/{{run_id}}"),
     ("POST", f"{LF}/review/status"),

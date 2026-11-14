@@ -91,16 +91,16 @@ fitout:
   rate_per_m2_aud: 1500 # the minimum rate in the deal criteria
 
 industries:
+  # PLAN-V16 T1-3: Government, Law firms, Premium banks and finance and Standard not-for-profits are
+  # left out now (`exclusions` below), not a Director's decision. Education, real estate agencies
+  # and hospitals aren't in Levi's list of exclusions, and neither are industry consultants, so
+  # they stay a Director review (TBC).
   director_review:
-    - Government
     - Education
     - Industry consultants
-    - Law firms
-    - Premium banks and finance
     - Real estate agencies
-    - Standard not-for-profits
     - Hospitals and healthcare
-  check_office_size: # site-heavy industries. Only a hint: a flag when it isn't clear that the office matters
+  check_office_size: # site-heavy industries. A flag when it isn't clear that the office matters, and an exclusion when it is clear it doesn't
     - Construction
     - Civil engineering
     - Mining and metals
@@ -123,6 +123,46 @@ industries:
     - Life sciences and medtech
     - Selected financial and corporate services
     - Other corporate professional services
+
+# Left out and not scored (Levi's section 3, PLAN-V16 T1-3, Criteria_v3.md). An excluded lead is a
+# Drop that shows its reason and its evidence. A person with the Lead Finder tick can override it,
+# and the lead is then judged again without the exclusion. They replace the Director review for these
+# industries. Every one is TBC with Levi. The code is scoring._exclusion.
+exclusions:
+  - id: government
+    label: Government department or agency
+    kind: industry
+    industry_groups: [Government]
+    meaning: a government department or agency. A government-owned corporation or a commercialised body is not in it, and its owner says so
+    unless: [government-owned, state-owned, commonwealth-owned, commercialised]
+    flag: A government-owned or commercialised body. Flagged, not left out
+  - id: not_for_profit
+    label: Not-for-profit or charity that relies on grants or donations
+    kind: industry
+    industry_groups: [Standard not-for-profits]
+    meaning: a charity or not-for-profit that relies on grants or donations. A large member-owned organisation, like an industry super fund or a member-owned insurer, is not in it
+    unless: [industry super fund, superannuation fund, member-owned, mutual insurer, mutual bank]
+    flag: A large member-owned organisation, not a not-for-profit. Flagged, not left out
+  - id: law_firm
+    label: Law firm
+    kind: industry
+    industry_groups: [Law firms]
+    meaning: a law firm of any size, tier one and national firms most of all
+  - id: big_bank
+    label: Big four bank or tier-one financial institution
+    kind: industry
+    industry_groups: [Premium banks and finance]
+    meaning: only the big four banks and other tier-one financial institutions that buy design apart from delivery. A mid-tier bank, an insurer or a fund manager is not in it
+    # Insurance and mid-tier financial services are priority sectors in Levi's notes (section 2). The
+    # old group held them too (Budget Direct, an insurer), so these words save a saved lead too.
+    unless: [insurance, insurer, fund manager, funds management, investment management, wealth management, customer-owned, mutual, credit union, building society]
+    flag: An insurer, a fund manager or a customer-owned bank, not a big bank. Flagged, not left out
+  - id: office_incidental
+    label: The office is incidental (most local staff are not office staff)
+    kind: office_incidental # office_matters is false, in a site-heavy industry (check_office_size)
+  - id: tender_only
+    label: Buys its fitouts only through formal public tender portals
+    kind: tender_only # the fact tender_only is true: AusTender, Tenders VIC, Tenders WA, SA Tenders
 
 fit:
   local_team_runs_project: true
@@ -317,7 +357,11 @@ tbc:
   - key: size.linkedin_staff_multiplier
     note: LinkedIn shows about half the real staff (median 0.51 across 19 HubSpot companies).
   - key: industries.check_office_size
-    note: Version 2 judges the office, not the industry (a miner's head office counts). A site-heavy industry gets a flag only when the AI can't tell whether the office matters. The AI's "the office doesn't matter" is flagged, not dropped, because it is a judgement.
+    note: Version 2 judges the office, not the industry (a miner's head office counts). A site-heavy industry gets a flag when the AI can't tell whether the office matters. Since PLAN-V16 T1-3, when the AI says the office doesn't matter in one of these industries, the company is left out (the exclusion office_incidental, Levi's section 3). In any other industry that answer is still only a flag.
+  - key: industries.director_review
+    note: Version 2's list without Government, Law firms, Premium banks and finance and Standard not-for-profits, which are exclusions now (PLAN-V16 T1-3). Education, real estate agencies, hospitals and industry consultants stay a Director review, because Levi's notes don't list them as exclusions. Industry consultants may not need one, since his notes make professional services (not legal) a priority sector. Levi to say.
+  - key: exclusions
+    note: Levi's section 3 (15 Nov, PLAN-V16 T1-3). Six kinds of company are left out and not scored, each with its reason and evidence, and a person can override one. Our readings, all TBC. All law firms are left out (his notes say "especially tier one and national"). Only the big four banks and other tier-one institutions are, not an insurer, a fund manager or a customer-owned bank, because insurance and mid-tier financial services are priority sectors. A government-owned corporation and an industry super fund are flagged, not left out. Tender portals count only when they are the company's only route.
   - key: industries.tier_1
     note: From the Target Customer Profile, which leadership hasn't approved. Question 1 for Levi.
   - key: industries.tier_2

@@ -64,7 +64,9 @@ def test_the_watchlist_rules_match_the_spec() -> None:
 
 def test_the_groups_exist_in_the_criteria() -> None:
     rules = load_rules()
-    director = set(rules.criteria.industries.director_review)
+    # The Director list holds the Director review groups and, since PLAN-V16 T1-3, the groups that
+    # are left out: a person decides whether such a company is researched at all
+    director = {*rules.criteria.industries.director_review, *rules.criteria.exclusion_groups}
     office = set(rules.criteria.industries.check_office_size)
     assert set(rules.watchlist.director_industries) <= director
     assert set(rules.watchlist.not_office_based) - {"none"} <= office

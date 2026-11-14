@@ -474,10 +474,24 @@ def office_check(result: Verdict) -> RuleCheck:
     return check
 
 
-def test_law_firms_and_other_director_sectors_go_to_a_director() -> None:
+def test_the_director_sectors_go_to_a_director() -> None:
+    for group in (
+        "Education",
+        "Industry consultants",
+        "Real estate agencies",
+        "Hospitals and healthcare",
+    ):
+        result = verdict(industry_group=group)
+        assert result.result == "director_review", group
+        assert office_check(result).outcome == "director"
+
+
+def test_law_firms_are_left_out_not_sent_to_a_director() -> None:
+    """PLAN-V16 T1-3 (Levi's section 3): a law firm is an exclusion, with a person's override."""
     result = verdict(industry_group="Law firms")
-    assert result.result == "director_review"
-    assert office_check(result).outcome == "director"
+    assert (result.result, result.stage) == ("drop", "Not a target")
+    assert result.excluded is not None and result.excluded.reason_id == "law_firm"
+    assert office_check(result).outcome == "ok"  # no Director check: the exclusion decides
 
 
 def test_a_miners_head_office_is_not_flagged_for_its_industry() -> None:

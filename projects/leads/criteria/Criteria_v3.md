@@ -70,8 +70,11 @@ Left out, not scored. Each goes on its own list with the reason and the evidence
 - An excluded lead is a **Drop**, with its reason and evidence. A person with the Lead Finder tick can override it, and the lead is then judged again without the exclusion. The tool records who did it.
 - This replaces version 2's Director review for government, law firms, premium banks and finance, and standard not-for-profits.
 - Education, real estate agencies and hospitals aren't in Levi's list. They stay a Director review.
-- "Industry consultants" was a Director review in version 2. Levi's notes list professional services (not legal) as a priority sector, so it is no longer special.
+- "Industry consultants" isn't in Levi's list either, so it stays a Director review too. His notes list professional services (not legal) as a priority sector, so it may not need one: a question for him.
 - Law firms: the notes say "especially tier one and national firms". We leave out all law firms.
+- **Which company is "one"?** The research files each company in an industry group, and the group decides. A company is not left out, and the card flags it, when its industry or its owner says it is: a government-owned or commercialised body (not a department), a member-owned organisation like an industry super fund (not a charity), or an insurer, a fund manager or a customer-owned bank (not a big bank). Insurance and mid-tier financial services are priority sectors in his notes.
+- **The office is incidental** only when the research says the office doesn't matter to how the company works, in a site-heavy industry (construction, mining and metals, machinery, manufacturing, food and beverages, retail, automotive, hospitality, transport and logistics, civil engineering). In any other industry that answer is a flag, not a reason to leave the lead out.
+- **Tender portals** only count when a note says the company buys fitouts solely through them. A company that uses a portal and other routes is a dampener (section 5).
 
 ## 4. Signs (Levi calls them trigger events)
 
@@ -233,7 +236,7 @@ These are marked **TBC** above. Each is our proposal until he confirms it.
 1. The city list and the points for each place (priority 5, secondary 2, any other place 1).
 2. 50 or 100 staff: does 50+ still qualify? We say yes, with 2 size points for 50 to 99.
 3. Sydney without a Director review.
-4. The exclusions against version 2's Director industries: law firms (all, or only tier one and national), "Industry consultants", and keeping Education, real estate agencies and hospitals as a Director review.
+4. The exclusions against version 2's Director industries: law firms (all, or only tier one and national), "Industry consultants" (still a Director review, or an ordinary lead), and keeping Education, real estate agencies and hospitals as a Director review. Also: how to tell a tier-one financial institution from a mid-tier one, and the tender-portal rule.
 5. Whether a good lead is Tier A or B, and how the tiers map to Pass, Director review, Watch and Drop.
 6. Financial stress as a strong dampener, where version 2 dropped the company.
 7. "Moderate to strong" for procurement red flags: which finding is which.

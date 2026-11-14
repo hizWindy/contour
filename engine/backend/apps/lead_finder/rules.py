@@ -175,6 +175,44 @@ class Industries(Strict):
         return self
 
 
+ExclusionKind = Literal["industry", "office_incidental", "tender_only"]
+
+
+class ExclusionRule(Strict):
+    """A kind of company that is left out and not scored (Levi's section 3, PLAN-V16 T1-3).
+
+    The code is `scoring._exclusion`. An excluded lead is a Drop that shows its reason and its
+    evidence, and a person with the Lead Finder tick can override it: the lead is then judged
+    again without the exclusion.
+
+    - `industry`: the company's `industry_group` (the answer form) is one of `industry_groups`.
+    - `office_incidental`: the office doesn't matter to how the company works, in an industry of
+      `industries.check_office_size` (logistics, manufacturing, retail, hospitality...).
+    - `tender_only`: a note says it buys its fitouts only through formal public tender portals.
+    """
+
+    id: str = Field(pattern=r"^[a-z][a-z_]*$")
+    label: str = Field(min_length=1)
+    kind: ExclusionKind
+    industry_groups: list[str] = Field(default_factory=list)
+    # What the extract prompt tells Claude a group means, so it files a company in the right group
+    meaning: str | None = None
+    # Words in the company's industry or owner that mean it is NOT one: a government-owned
+    # corporation, an industry super fund. It is not left out, and its card shows `flag` instead.
+    unless: list[str] = Field(default_factory=list)
+    flag: str | None = None
+
+    @model_validator(mode="after")
+    def check_rule(self) -> Self:
+        if self.kind == "industry" and not self.industry_groups:
+            raise ValueError(f"exclusion {self.id}: an industry exclusion needs industry_groups")
+        if self.kind != "industry" and (self.industry_groups or self.unless or self.flag):
+            raise ValueError(f"exclusion {self.id}: only an industry exclusion has groups or words")
+        if bool(self.unless) != bool(self.flag):
+            raise ValueError(f"exclusion {self.id}: `unless` and `flag` go together")
+        return self
+
+
 class OfficeAge(Strict):
     due_years: int = Field(gt=0)
     recent_move_years: int = Field(gt=0)
@@ -397,6 +435,7 @@ class Criteria(Strict):
     conflicts: Conflicts
     fitout: Fitout
     industries: Industries
+    exclusions: list[ExclusionRule] = Field(min_length=1)
     fit: Fit
     office_age: OfficeAge
     triggers: Triggers
@@ -409,6 +448,30 @@ class Criteria(Strict):
     results: list[Result]
     stages: dict[Result, str]
     tbc: list[TbcNote]
+
+    @property
+    def exclusion_groups(self) -> list[str]:
+        """The industry groups that mean an exclusion, in order: Claude may name them."""
+        return [group for rule in self.exclusions for group in rule.industry_groups]
+
+    @model_validator(mode="after")
+    def check_exclusions(self) -> Self:
+        ids = [rule.id for rule in self.exclusions]
+        repeated = sorted({i for i in ids if ids.count(i) > 1})
+        if repeated:
+            raise ValueError(f"Exclusion ids appear twice: {', '.join(repeated)}")
+        for kind in ("office_incidental", "tender_only"):
+            if sum(1 for rule in self.exclusions if rule.kind == kind) > 1:
+                raise ValueError(f"At most one exclusion has the kind {kind}")
+        groups = self.exclusion_groups
+        taken = {*self.industries.director_review, *self.industries.check_office_size}
+        clashing = sorted({g for g in groups if groups.count(g) > 1 or g in taken})
+        if clashing:
+            raise ValueError(
+                "An exclusion's industry group is also a Director review or a site-heavy group, "
+                f"or is in two exclusions: {', '.join(clashing)}"
+            )
+        return self
 
     @model_validator(mode="after")
     def check_sources(self) -> Self:
@@ -597,13 +660,14 @@ class LeadFinderRules(Strict):
                 f"watchlist.count_cities has cities that criteria.cities doesn't: "
                 f"{', '.join(outside)}"
             )
-        unknown = [
-            g for g in watchlist.director_industries if g not in criteria.industries.director_review
-        ]
+        # The Director list holds the Director review groups and, since PLAN-V16 T1-3, the groups
+        # that are left out: a person decides whether such a company is researched at all.
+        director_groups = {*criteria.industries.director_review, *criteria.exclusion_groups}
+        unknown = [g for g in watchlist.director_industries if g not in director_groups]
         if unknown:
             raise ValueError(
                 "watchlist.director_industries has groups that criteria.industries."
-                f"director_review doesn't: {', '.join(unknown)}"
+                f"director_review and criteria.exclusions don't: {', '.join(unknown)}"
             )
         unknown = [
             g

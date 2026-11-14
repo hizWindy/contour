@@ -32,6 +32,7 @@ FACT_FIELDS = (
     "office_matters",
     "office_since",
     "last_fitout",
+    "tender_only",
 )
 BLOCKED = "blocked"
 ID_MAX_CHARS = 40  # a trigger or booster id, when it is echoed in a message
