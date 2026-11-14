@@ -30,7 +30,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { formatDate, pluralise } from '@/lib/format'
-import { TIER_ACTIONS, TIER_LABELS } from '@/lib/labels'
+import { isTier, TIER_ACTIONS, TIER_LABELS } from '@/lib/labels'
 import { toastProblem } from '@/lib/problems'
 import { activeExclusion, CHANGE_MARKS, needsVerifying } from './v16-words'
 
@@ -90,7 +90,9 @@ export function ExclusionNotice({ lead }: { lead: LeadDetail }) {
                 override.mutate(lead.id, {
                   onSuccess: (judged) => {
                     toast(
-                      `${judged.company} judged again: Tier ${TIER_LABELS[judged.tier]}, score ${String(judged.score)}.`,
+                      isTier(judged.tier)
+                        ? `${judged.company} judged again: Tier ${TIER_LABELS[judged.tier]}, score ${String(judged.score)}.`
+                        : `${judged.company} judged again: score ${String(judged.score)}.`,
                     )
                   },
                   onError: toastProblem,
@@ -120,7 +122,9 @@ export function TierHeadline({ lead }: { lead: LeadDetail }) {
           confidence={lead.confidence}
           className="text-title"
         />
-        <span className="text-ui text-muted-foreground">{TIER_ACTIONS[lead.tier]}</span>
+        {isTier(lead.tier) ? (
+          <span className="text-ui text-muted-foreground">{TIER_ACTIONS[lead.tier]}</span>
+        ) : null}
       </div>
       {change && mark && ChangeIcon ? (
         <p className="flex items-start gap-2 text-ui">

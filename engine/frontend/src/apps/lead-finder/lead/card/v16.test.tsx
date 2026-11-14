@@ -62,6 +62,12 @@ describe('the tier headline (PLAN-V16 T3-4)', () => {
     expect(within(headline).getByText(action)).toBeInTheDocument()
   })
 
+  it('says "not ranked yet" for a lead saved before tiers, instead of breaking', () => {
+    const old = makeLead({ tier: undefined as unknown as Tier })
+    renderWithProviders(<TierHeadline lead={old} />)
+    expect(screen.getByText('Score 51, not ranked yet')).toBeInTheDocument()
+  })
+
   it('flags a Tier A lead with low confidence: verify before outreach', () => {
     renderWithProviders(<TierHeadline lead={makeLead({ tier: 'A', confidence: 'low' })} />)
     expect(screen.getByRole('status')).toHaveTextContent('Verify before outreach.')

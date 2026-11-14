@@ -7,10 +7,14 @@
  * own format (his section 9). A screen reader hears "Tier A, score 82, Medium confidence".
  */
 import type { Confidence, Tier } from '@/api/types'
-import { CONFIDENCE_LABELS, TIER_ACTIONS, TIER_LABELS } from '@/lib/labels'
+import { CONFIDENCE_LABELS, isTier, TIER_ACTIONS, TIER_LABELS } from '@/lib/labels'
 import { cn } from '@/lib/utils'
 
 export function TierMark({ tier, className }: { tier: Tier; className?: string }) {
+  // A lead saved before tiers, not yet judged again, has none: it says so instead of breaking.
+  if (!isTier(tier)) {
+    return <span className={cn('text-muted-foreground', className)}>Not ranked yet</span>
+  }
   return (
     <span className={cn('font-semibold tabular-nums', className)}>
       {TIER_LABELS[tier]}
@@ -38,6 +42,9 @@ export function TierLine({
   confidence: Confidence
   className?: string
 }) {
+  if (!isTier(tier)) {
+    return <span className={cn('tabular-nums', className)}>Score {score}, not ranked yet</span>
+  }
   return (
     <span className={cn('inline-flex flex-wrap items-baseline gap-x-1.5 tabular-nums', className)}>
       <span className="sr-only">Tier </span>

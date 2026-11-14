@@ -25,6 +25,11 @@ export const TIER_ORDER: readonly Tier[] = ['A', 'B', 'C', 'discard']
 
 export const TIER_LABELS: Record<Tier, string> = { A: 'A', B: 'B', C: 'C', discard: 'Discard' }
 
+/** False for a lead saved before tiers and not yet judged again: it has no tier to show. */
+export function isTier(value: unknown): value is Tier {
+  return typeof value === 'string' && Object.hasOwn(TIER_LABELS, value)
+}
+
 /** What each tier asks for, in Levi's words. */
 export const TIER_ACTIONS: Record<Tier, string> = {
   A: 'Pursue now',

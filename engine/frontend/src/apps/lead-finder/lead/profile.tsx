@@ -20,7 +20,7 @@ import { SourceLink } from '@/components/source-link'
 import { TierLine } from '@/components/tier-mark'
 import { Button } from '@/components/ui/button'
 import { formatDate, formatM2, formatStaff } from '@/lib/format'
-import { TIER_ACTIONS } from '@/lib/labels'
+import { isTier, TIER_ACTIONS } from '@/lib/labels'
 import { hasOffice, officeAddress, officeSource, STRENGTH_WORDS } from './card/v16-words'
 
 function Part({ title, children }: { title: string; children: ReactNode }) {
@@ -191,7 +191,9 @@ export function Profile({ lead }: { lead: LeadDetail }) {
             confidence={lead.confidence}
             className="text-section"
           />
-          <span className="text-ui text-muted-foreground">{TIER_ACTIONS[lead.tier]}</span>
+          {isTier(lead.tier) ? (
+            <span className="text-ui text-muted-foreground">{TIER_ACTIONS[lead.tier]}</span>
+          ) : null}
           {change ? <span className="text-ui">What changed: {change.text}</span> : null}
         </p>
       </header>
