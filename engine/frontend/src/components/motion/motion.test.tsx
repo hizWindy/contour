@@ -216,7 +216,10 @@ const CITIES = [
   { value: 'sydney', label: 'Sydney', disabled: true },
 ] as const
 
-function ChipHarness({ mode = 'many' as 'many' | 'one', start = ['melbourne'] as string[] }) {
+function ChipHarness({
+  mode = 'many' as 'many' | 'one' | 'one-or-none',
+  start = ['melbourne'] as string[],
+}) {
   const [value, setValue] = useState<string[]>(start)
   return (
     <>
@@ -275,6 +278,37 @@ describe('ChipGroup', () => {
   it('picks one, with nothing picked yet: the first chip holds the Tab stop', () => {
     wrap(<ChipHarness mode="one" start={[]} />)
     expect(screen.getAllByRole('radio').map((r) => r.tabIndex)).toEqual([0, -1, -1, -1])
+  })
+
+  it('picks one or none: pressed buttons, a pick lets go of the other, a second press of none', async () => {
+    const user = userEvent.setup()
+    wrap(<ChipHarness mode="one-or-none" start={[]} />)
+    const group = screen.getByRole('group', { name: 'Cities' })
+    // Not radio buttons, which can't be unpicked: every chip is a button in the Tab order.
+    expect(within(group).queryAllByRole('radio')).toHaveLength(0)
+    const chips = within(group).getAllByRole('button')
+    expect(chips.map((c) => c.getAttribute('aria-pressed'))).toEqual([
+      'false',
+      'false',
+      'false',
+      'false',
+    ])
+    // No roving Tab stop as in `one`: each chip is a stop of its own.
+    expect(chips.map((c) => c.tabIndex)).toEqual([0, 0, 0, 0])
+
+    await user.click(chips[1])
+    expect(screen.getByRole('status')).toHaveTextContent(/^adelaide$/)
+    await user.click(chips[2])
+    expect(screen.getByRole('status')).toHaveTextContent(/^perth$/)
+    expect(chips[1]).toHaveAttribute('aria-pressed', 'false')
+    expect(chips[2]).toHaveAttribute('aria-pressed', 'true')
+    expect(chips[2]).toHaveClass('bg-accent-soft')
+
+    // The keyboard does the same: Space on the picked chip lets go of it.
+    chips[2]?.focus()
+    await user.keyboard(' ')
+    expect(screen.getByRole('status')).toHaveTextContent(/^$/)
+    expect(chips[2]).toHaveAttribute('aria-pressed', 'false')
   })
 
   it('keeps the tick in the layout when a chip is not picked, so no chip changes width', () => {
