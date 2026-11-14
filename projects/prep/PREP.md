@@ -1,8 +1,8 @@
 # Call prep
 
-Last updated: 2026-11-12. **TBC** means to be confirmed.
+Last updated: 2026-11-15. **TBC** means to be confirmed.
 
-**Status (11 Nov):** PLAN-V10 built call prep, and [PLAN-V14](../../plan/PLAN-V14.md) refined it: "Research again", the three answers in the card's header, news with no age limit, the call technique in both scripts, and editable scripts with Your style and a team style. Both are merged into `master`, not deployed, and call prep is not switched on yet. The new prompt hasn't been tried on real companies (PLAN-V14 T1-5, paid, on Al-khair's word). What works now, from our HubSpot copy: the Companies page, the company panel, the prep box, "Sync with HubSpot", and the prep card with a sales script and guided questions (free, written from the copy). Call prep's web check (news, "still there?") stays off until Al-khair switches it on. People and call history wait for HubSpot access to contacts. The questions for Levi are in [EMAIL.md](EMAIL.md).
+**Status (11 Nov):** PLAN-V10 built call prep, and [PLAN-V14](../../plan/PLAN-V14.md) refined it: "Research again", the three answers in the card's header, news with no age limit, the call technique in both scripts, and editable scripts with Your style and a team style. Both are merged into `master`, not deployed, and call prep is not switched on yet. The new prompt hasn't been tried on real companies (PLAN-V14 T1-5, paid, on Al-khair's word). What works now, from our HubSpot copy: the Companies page, the company's record, the prep box, "Sync with HubSpot", and the prep card with a sales script and guided questions (free, written from the copy). Call prep's web check (news, "still there?") stays off until Al-khair switches it on. People and call history wait for HubSpot access to contacts. The questions for Levi are in [EMAIL.md](EMAIL.md).
 
 **12 Nov:** [PLAN-V15](../../plan/PLAN-V15.md) is merged into `master`, not deployed. The script now knows the relationship (open deal, customer, past customer, lost deal, contacted before, or cold): only a cold call introduces Contour. Each person picks a tone (Friendly by default, Direct, Consultative or Formal), and an Admin sets the team's default. Call prep's errors are in plain words, and two clicks can't start two paid preps. The opener wording for each stage and tone is **TBC** with Levi.
 
@@ -31,7 +31,7 @@ We add a short call script, written by Claude from the facts. This is our propos
 4. **If they say:** answers to likely pushback, like "We're not ready yet".
 5. **Goal of the call:** the next step to ask for, like a site visit.
 
-The company's full information is not in the script. It is on the company panel (see "How it looks").
+The company's full information is not in the script. It is in the company's record (see "How it looks").
 
 ## Decisions (8 Nov, Al-khair and Claude)
 
@@ -39,7 +39,8 @@ The company's full information is not in the script. It is on the company panel 
 - **Its own feature, not part of the Lead Finder.** The Lead Finder is for Levi, Marcus and one other person (5 Nov). Call prep is for the whole sales and BD team.
 - **It lives on a new Companies page** in the sidebar. The page lists every company: the HubSpot copy (13,913 companies) plus the researched leads.
 - **The prep box and the list search are separate.** The prep box answers "who am I calling?". The list search only filters the list.
-- **A company and a call prep are different things** (9 Nov, Al-khair). Clicking a company shows what we know about the client, in a side panel like a lead on the Results page. Prep is a call script for one person, in a modal over the page. A clickable prototype with made-up data: https://claude.ai/artifact/XLy7eG12m19r3Ne8uK5MTC (private).
+- **A company and a call prep are different things** (9 Nov, Al-khair). Clicking a company shows what we know about the client. Prep is a call script for one person. A clickable prototype of the 9 Nov layout, with made-up data: https://claude.ai/artifact/XLy7eG12m19r3Ne8uK5MTC (private).
+- **Where each one opens was swapped** (15 Nov, Al-khair). Call prep is the job done all day, so it gets the narrow side panel on the right and the list stays in view. The company's record, the long read, opens in a dialog in the middle. Levi wants the team to get a quick read and a script without navigating or searching.
 - **The name** is "Call prep" for now. Not "Company hub": that name is taken by announcements and onboarding. Confirm the names with Levi (**TBC**).
 
 ## How it looks
@@ -58,7 +59,7 @@ Company        City       Owner    Last talk
 Vitera         Adelaide   Marcus   12 Sep
 ```
 
-**Clicking a row** opens the company panel from the right, like a lead on the Results page. It answers "what do we know about this client?". (Example data below is made up.)
+**Clicking a row** opens the company's record in a dialog in the middle (768 px). It answers "what do we know about this client?". Its "Prep a call" closes it and opens the prep panel. (Example data below is made up.)
 
 ```
 ┌ Vitera Defence Systems ────────────────────────────── ✕ ┐
@@ -72,30 +73,37 @@ Vitera         Adelaide   Marcus   12 Sep
 └─────────────────────────────────────────────────────────┘
 ```
 
-**Prep** opens the prep card in a modal over the page: quick info, then a sales script with guided questions (9 Nov, Al-khair). Close it with ✕, Esc or a click outside.
+**Prep** is on every row and always in view, at the end of the company's name. It opens the prep card in a side panel from the right, 576 px wide, in one column in the order of the call (15 Nov, Al-khair). P does the same for the active row. The list stays usable beside the panel, so Prep on another row switches it. Close it with ✕ or Esc.
 
 ```
-┌ [JR] Jason Reeds ──────────────────────────────────── ✕ ┐
-│      Head of Property · Vitera (opens the company)      │
-│ [Still there?] [Last talk 12 Sep] [News · 5 months ago] │
-│ Sales script  Made 2 days ago  [Research again]         │
-│ Style: Team (2 notes) and yours │ Last time we talked   │
-│ Tone: warm, they know us        │                       │
-│ 1 Opener: "Hi Jason, it's Tom   │ the call note         │
-│   from Contour. We spoke on ... │ Quick facts           │
-│ 2 Why now: lease ends Mar 2028  │ [Company info]        │
-│ 3 Guided questions (1 of 4)     │                       │
-│   [x] Renew, or move?           │                       │
-│   [ ] Is Mar 2027 still the plan?                       │
-│       If they say "Delayed", ask: what changed?         │
-│ 4 If they say: "Not ready yet" -> the answer            │
-│ 5 Goal: book a site visit                               │
-│ +61 412 555 018 [Copy number]   [Copy script]           │
-└─────────────────────────────────────────────────────────┘
+┌ [JR] Jason Reeds ───────────────────────────── ✕ ┐
+│       Head of Property · Vitera (opens it)       │
+│ [Still there?] [Last talk 12 Sep] [News]         │
+├──────────────────────────────────────────────────┤
+│ Last time we talked · 12 Sep · by Tom            │
+│   "the call note"                                │
+│ Sales script  Made 2 days ago [Research again]   │
+│ Tone: warm, they know us                         │
+│ 1 Opener: "Hi Jason, it's Tom from Contour.      │
+│   We spoke on ..."                               │
+│ 2 Why now: lease ends Mar 2028                   │
+│ 3 Guided questions (1 of 4)                      │
+│   [x] Renew, or move?                            │
+│   [ ] Is Mar 2027 still the plan?                │
+│       If they say "Delayed", ask: what changed?  │
+│ 4 If they say (tap one to see the answer)        │
+│   ["Not ready yet" v]  ["Send an email" v]       │
+│ 5 Goal: book a site visit                        │
+│ Style: Team (2 notes) and yours                  │
+│ More about Vitera (folded)                 v     │
+├──────────────────────────────────────────────────┤
+│ +61 412 555 018 [Copy number]   [Copy script]    │
+└──────────────────────────────────────────────────┘
 ```
 
 Rules for the screen:
 
+- **Little scrolling, top to bottom** (15 Nov). One column in the order of the call. Quick facts fold under "More about". "If they say" shows only the pushbacks, and a tap opens one answer at a time. A question shows its source only while it is being asked. The Style row sits under the script, because it is a setting, not part of the call.
 - **The answers first, in the header.** Still there?, Last talk and News sit in one row under the name, and stay put while the script scrolls. These are Levi's questions; Connections waits for his customer list. On a rushed call, that is all they read.
 - **"Research again"** (it was Refresh) sits at the top of the script, with what it costs (up to the cap, US$0.25 **TBC**). It makes a new web check and a new script. While call prep is off it is greyed out and says why.
 - **News has no age limit.** The newest item shows with its date and age ("14 June 2026, 4 months ago"), so old news never looks fresh. With no web news, the newest saved note shows instead.
@@ -104,9 +112,9 @@ Rules for the screen:
 - **Fast, then complete.** The sales script and guided questions are written at once from our HubSpot copy (`playbook.ts`): free, and there even while call prep is off. With call prep on, its web check adds news and "still there?", and its own script fades in when ready (a few seconds; at once for a company searched ahead). The free script's wording is ours, from the prototype and Levi's questions (**TBC** with Levi).
 - **Guided questions.** Each says why it is asked, and what to ask next for each likely answer ("If they say 'Move', ask: who is helping you look?"). Tick one as you ask it, and the next one opens. The ticks aren't saved.
 - **Sync with HubSpot.** A button on the Companies page copies everything from HubSpot now (about 10 minutes, free), instead of waiting for the 6:00 sync. Its bar fills as it reads, and the list refreshes when it is done.
-- **Company only:** if they type just a company, the modal asks "Who are you calling?" and lists its people. "Prep a cold call" gives a script for the switchboard.
+- **Company only:** if they type just a company, or press Prep on a row, the panel asks "Who are you calling?" and lists its people. "Prep a cold call" gives a script for the switchboard.
 - **Recent chips** reopen today's preps without a new search.
-- **Phone:** the list is one card per company, and the filters sit behind one "Filters" button. The prep box sticks to the top. The panel and the prep card fill the screen, with the main action as a big button at the bottom: "Prep a call" on the panel, "Call" on the card.
+- **Phone:** the list is one card per company, and the filters sit behind one "Filters" button. The prep box sticks to the top. Each company card has its own Prep button. The company's record and the prep card fill the screen, with the main action as a big button at the bottom: "Prep a call" on the company, "Call" on the card.
 
 ## Proposed, not decided
 
