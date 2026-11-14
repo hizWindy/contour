@@ -345,6 +345,19 @@ Commands, from `backend/`: `uv run engine hubspot-check` (which scopes the key h
 
 psycopg's async mode can't use Windows' default event loop. `core/runtime.py` switches to the selector loop. Always start the backend with `uv run engine serve`, and keep the same fix at the top of `tests/conftest.py`. A script of your own needs it too: `asyncio.run(main(), loop_factory=loop_factory())`.
 
+## Claude Code agents
+
+Added 14 Nov 2026. Four agents in `.claude/agents/` split the work. Their skills are in `.claude/skills/`.
+
+| Agent | Owns | Its own skills |
+|---|---|---|
+| `frontend-agent` | `frontend/`, [DESIGN.md](DESIGN.md) and `design/principles/` | `ui-build`, `design-review`, `speed-check`, `design-extract` |
+| `backend-agent` | `backend/`, except the Lead Finder's rules, prompts and scoring | `api-change`, `db-migration` |
+| `rules-agent` | The Lead Finder's rules, prompts, scoring, sourcing, Why now and test set, and `projects/leads/criteria/` | `rule-change` |
+| `review-agent` | Nothing: it reads, runs the checks and reports, before a merge or a deploy | `merge-check`, `security-check`, `design-review` |
+
+All four use `plain` and `git-workflow`. Merging, pushing, deploying and anything that costs money stay with Al-khair.
+
 ## Writing
 
 Documents follow the plain-words rules in [../CLAUDE.md](../CLAUDE.md): answer first, short sentences, and **TBC** for anything not confirmed.
