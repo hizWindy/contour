@@ -94,9 +94,9 @@ export type Schedule = Schemas['ScheduleOut']
 export type ScheduleEstimate = Schemas['ScheduleEstimate']
 export type ScheduleEdit = Schemas['ScheduleEdit']
 export type RunNow = Schemas['RunNow']
-export type LeadFinderRound = Schemas['RoundOut']
-export type LeadFinderRoundIn = Schemas['RoundIn']
-export type RoundCity = Schemas['RoundCityOut']
+export type LeadFinderRound = V16.RoundOut // V16
+export type LeadFinderRoundIn = V16.RoundIn // V16
+export type RoundCity = V16.RoundCityPlan // V16
 
 // Health (PLAN-V13 T1-2)
 export type HealthDetails = Schemas['HealthDetails']

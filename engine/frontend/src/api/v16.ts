@@ -274,6 +274,20 @@ export interface SourceList {
   items: SourceOut[]
 }
 
+// The automatic round (T1-11): Brisbane and the rest of Australia join the four cities. The rest
+// of Australia is sent as `Australia`, like a run's national search (TBC with Track 1).
+
+export type RoundCityName = Schemas['RoundIn']['cities'][number] | 'Brisbane' | 'Australia'
+
+export type RoundIn = Omit<Schemas['RoundIn'], 'cities'> & { cities: RoundCityName[] }
+
+export type RoundCityPlan = Omit<Schemas['RoundCityOut'], 'city'> & { city: RoundCityName }
+
+export type RoundOut = Omit<Schemas['RoundOut'], 'cities' | 'city_plan'> & {
+  cities: RoundCityName[]
+  city_plan: RoundCityPlan[]
+}
+
 // The routes PLAN-V16 adds, in openapi-typescript's shape, for `apiV16` (v16-client.ts).
 
 interface Json<T> {

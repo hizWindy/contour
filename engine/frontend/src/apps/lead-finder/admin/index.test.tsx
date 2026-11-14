@@ -55,6 +55,7 @@ describe('the Admin tabs', () => {
       'Search log',
       'Memory',
       'HubSpot',
+      'Sources',
       'People',
       'Settings',
     ])

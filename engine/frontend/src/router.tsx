@@ -79,6 +79,7 @@ export const routes: RouteObject[] = [
           adminTab('searches', () => import('@/apps/lead-finder/admin/searches')),
           adminTab('memory', () => import('@/apps/lead-finder/admin/memory')),
           adminTab('hubspot', () => import('@/apps/lead-finder/admin/hubspot')),
+          adminTab('sources', () => import('@/apps/lead-finder/admin/sources')),
           adminTab('people', () => import('@/apps/lead-finder/admin/people')),
           adminTab('settings', () => import('@/apps/lead-finder/admin/settings')),
         ],

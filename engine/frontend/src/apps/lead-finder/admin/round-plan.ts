@@ -4,16 +4,33 @@
  * the same rules; these say them early, in the same words, so a save rarely meets a 422.
  *
  * Days are Melbourne days. Picked cities run one day apart in the fixed order Melbourne,
- * Adelaide, Perth, Sydney, from the first day, and the first round is the next first day still to
- * come (today counts while its time hasn't passed).
+ * Adelaide, Perth, Sydney, Brisbane and the rest of Australia (PLAN-V16 T1-11: the last two are off
+ * by default), from the first day, and the first round is the next first day still to come (today
+ * counts while its time hasn't passed).
  */
 import type { LeadFinderRound, LeadFinderRoundIn } from '@/api/types'
 
+/**
+ * A city of the round. Brisbane and `Australia` (the rest of Australia: one national search, like
+ * a run's "All of Australia") are PLAN-V16's, written by hand until M1 adds them to the contract.
+ */
 export type City = LeadFinderRound['cities'][number]
 export type Unit = LeadFinderRound['unit']
 export type Often = 'two-weeks' | 'thirty-days' | 'custom'
 
-export const CITIES: readonly City[] = ['Melbourne', 'Adelaide', 'Perth', 'Sydney']
+export const CITIES: readonly City[] = [
+  'Melbourne',
+  'Adelaide',
+  'Perth',
+  'Sydney',
+  'Brisbane',
+  'Australia',
+]
+
+/** The words for a round city: "Australia" is the rest of the country, after the cities. */
+export function cityWords(city: string): string {
+  return city === 'Australia' ? 'Rest of Australia' : city
+}
 export const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const
 export const WEEKDAY_NAMES = [
   'Monday',
@@ -214,7 +231,7 @@ export function previewWords(form: RoundForm, now: Date): string {
   const first = day(0)
   const name = (date: Date) => WEEKDAYS[(date.getUTCDay() + 6) % 7]
   const label = form.enabled ? 'Next round' : 'When it is on, the next round would be'
-  const days = cities.map((city, index) => `${city} ${name(day(index))}`).join(', ')
+  const days = cities.map((city, index) => `${cityWords(city)} ${name(day(index))}`).join(', ')
   const budget = Number(form.budget)
   const upTo = Number.isFinite(budget) && budget > 0 ? ` Up to ${usd(budget)}.` : ''
   return `${label}: ${name(first)} ${String(first.getUTCDate())} ${MONTHS[first.getUTCMonth()] ?? ''}, ${clockWords(form.at)}. ${days}.${upTo}`
