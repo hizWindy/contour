@@ -4,8 +4,10 @@ Two kinds of setting:
 - **Env-only:** the HubSpot approval switches, the hard ceilings, the daily cap, the database
   pool, the allowed web origins, the API address, the sign-in settings (on or off, the session
   times), the Signal Hire key and every HubSpot setting (the key, the version, the write switch,
-  the pace and the sync times). They change only in engine/.env, then a restart. The website
-  can't change them.
+  the pace and the sync times), and for call notes and the pre-meeting form (PLAN-V17) the
+  models, caps and limits, the switch that writes a pre-read on the meeting itself, and the
+  internal email domains. They change only in engine/.env, then a restart. The website can't
+  change them.
 - **Editable:** caps, concurrency, models and thresholds (the keys in EDITABLE_KEYS). The
   `core.prefs` package stores overrides in the database, checks each against its min and max
   here, and then clamps the result to the ceilings with `clamp_to_ceilings`.
@@ -38,6 +40,8 @@ FORGEABLE_ADDRESS_HEADERS = frozenset(
 )
 # Schemas that belong to something else. The run checkpoints may not live in any of them.
 RESERVED_SCHEMAS = frozenset({"public", "core", "lead_finder", "information_schema"})
+_DOMAIN_LABEL = r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?"
+PLAIN_DOMAIN = re.compile(rf"{_DOMAIN_LABEL}(?:\.{_DOMAIN_LABEL})+")  # like contourinteriors.com.au
 
 ClaudeModel = Literal["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"]
 ClaudeEffort = Literal["low", "medium", "high", "xhigh", "max"]
@@ -83,6 +87,10 @@ EDITABLE_KEYS: Final[list[str]] = [
     "prep_reuse_days",
     "model_prep",
     "search_ahead_cap_usd",
+    # Call notes and the pre-meeting form (PLAN-V17)
+    "call_notes_enabled",
+    "call_notes_ai_enabled",
+    "meeting_forms_enabled",
 ]
 
 # Which env-only ceiling caps each editable key.
@@ -425,6 +433,28 @@ class Settings(BaseSettings):
     model_prep: ClaudeModel | None = "claude-sonnet-5-5"  # None: claude_model
     search_ahead_cap_usd: Decimal = Field(Decimal("5"), ge=Decimal("1"), le=Decimal("100"))
 
+    # --- Call notes and the pre-meeting form (PLAN-V17). Off until Al-khair switches them on. ---
+    # call_notes_enabled shows Log call and Activity. call_notes_ai_enabled lets Claude sort a
+    # note: a rep's note names clients, so it waits for Levi's OK (choice 1, TBC). It is its own
+    # switch, not hubspot_names_to_claude_ok. With it off, the rep sorts a note by hand, free.
+    call_notes_enabled: StrictBool = False
+    call_notes_ai_enabled: StrictBool = False
+    model_notes: ClaudeModel = "claude-haiku-5-5"  # the sorter's model
+    notes_cap_usd: Decimal = Field(Decimal("0.01"), ge=Decimal("0.001"), le=Decimal("1"))
+    notes_max_chars: int = Field(6_000, ge=500, le=60_000)  # about 6 minutes of talk (TBC)
+    notes_soft_seconds: int = Field(180, ge=30, le=1_800)  # the timer turns Ochre (TBC, Levi)
+    transcript_max_chars: int = Field(60_000, ge=1_000, le=200_000)  # a meeting's (TBC)
+    meeting_forms_enabled: StrictBool = False  # shows Meetings and the pre-read
+    model_meeting_form: ClaudeModel = "claude-sonnet-5-5"
+    meeting_form_cap_usd: Decimal = Field(Decimal("0.10"), ge=Decimal("0.01"), le=Decimal("2"))
+    meeting_form_days_ahead: int = Field(2, ge=1, le=10)  # working days before (TBC)
+    # Also write the pre-read's copy on the meeting itself (choice 9). Off until a test on a
+    # made-up meeting shows the client gets nothing. Env-only.
+    meeting_note_on_meeting: StrictBool = False
+    # Who may get a pre-read: an exact domain match, never a sub-domain (TBC with Levi). A
+    # comma-separated list in engine/.env. Env-only.
+    internal_email_domains: Annotated[list[str], NoDecode] = ["contourinteriors.com.au"]
+
     # --- Validators --------------------------------------------------------------------
 
     @field_validator(
@@ -434,6 +464,10 @@ class Settings(BaseSettings):
         "auth_required",
         "session_cookie_secure",
         "server_mode",
+        "call_notes_enabled",
+        "call_notes_ai_enabled",
+        "meeting_forms_enabled",
+        "meeting_note_on_meeting",
         mode="before",
     )
     @classmethod
@@ -494,6 +528,30 @@ class Settings(BaseSettings):
         for address in cleaned:
             if not re.fullmatch(r"[^@\s,;<>]+@[^@\s,;<>]+\.[^@\s,;<>]+", address):
                 raise ValueError("lead_finder_notify_emails has something that isn't an address")
+        return cleaned
+
+    @field_validator("internal_email_domains", mode="before")
+    @classmethod
+    def _split_domains(cls, value: Any) -> Any:
+        """A comma-separated list (or a JSON list), like lead_finder_notify_emails."""
+        if isinstance(value, str):
+            text = value.strip()
+            if text.startswith("["):
+                try:
+                    return json.loads(text)
+                except json.JSONDecodeError as error:
+                    raise ValueError("internal_email_domains isn't a valid list") from error
+            return [part for part in re.split(r"[,;\s]+", text) if part]
+        return value
+
+    @field_validator("internal_email_domains")
+    @classmethod
+    def _domains(cls, value: list[str]) -> list[str]:
+        """Plain domains, like contourinteriors.com.au: lower case, no @, no dot at either end."""
+        cleaned = list(dict.fromkeys(item.strip().lower().removeprefix("@") for item in value))
+        for domain in cleaned:
+            if not PLAIN_DOMAIN.fullmatch(domain):
+                raise ValueError("internal_email_domains has something that isn't a plain domain")
         return cleaned
 
     @field_validator("email_from", "app_url")

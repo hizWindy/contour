@@ -205,6 +205,22 @@ TEXT: dict[str, tuple[str, str]] = {
         "The most the morning search ahead may spend in one day. It also counts in the cap "
         "for one day.",
     ),
+    "call_notes_enabled": (
+        "Call notes are on",
+        "Shows Log call in call prep and the Activity page, so a rep can log a call by talking "
+        "or typing. Nothing goes to HubSpot until a person confirms the batch.",
+    ),
+    "call_notes_ai_enabled": (
+        "Claude sorts call notes",
+        "Sends a rep's note to Claude, with emails and phone numbers taken out, to sort it into "
+        "the call, field changes and follow-up tasks. Well under US$0.001 a note (TBC). Off: the "
+        "rep picks the outcome and adds tasks by hand. Needs Levi's OK first (TBC).",
+    ),
+    "meeting_forms_enabled": (
+        "Pre-meeting forms are on",
+        "Shows Meetings and the pre-read: drafted from HubSpot before a client meeting, checked "
+        "by the rep, and emailed to the Contour team. About US$0.03 a draft (TBC).",
+    ),
     "memory_fresh_days": (
         "Days a note stays fresh",
         "Notes and leads younger than this are reused instead of searched again.",

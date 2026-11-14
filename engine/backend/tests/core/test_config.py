@@ -38,6 +38,17 @@ ENV_ONLY = [
     "db_pool_timeout",
     "cors_origins",
     "api_host",
+    # Call notes and the pre-meeting form (PLAN-V17)
+    "model_notes",
+    "notes_cap_usd",
+    "notes_max_chars",
+    "notes_soft_seconds",
+    "transcript_max_chars",
+    "model_meeting_form",
+    "meeting_form_cap_usd",
+    "meeting_form_days_ahead",
+    "meeting_note_on_meeting",
+    "internal_email_domains",
 ]
 CHOICE_KEYS = {
     "claude_model",
@@ -48,7 +59,13 @@ CHOICE_KEYS = {
     "model_why",
     "claude_effort",
 }
-BOOL_KEYS = {"prep_enabled", "why_now_enabled"}  # a switch has no min or max
+BOOL_KEYS = {  # a switch has no min or max
+    "prep_enabled",
+    "why_now_enabled",
+    "call_notes_enabled",
+    "call_notes_ai_enabled",
+    "meeting_forms_enabled",
+}
 NOT_NUMBERS = CHOICE_KEYS | BOOL_KEYS
 
 
@@ -92,6 +109,40 @@ def test_defaults_are_the_ones_in_the_design() -> None:
     assert s.hubspot_names_to_signalhire_ok is False
     assert s.cors_origins == ["http://localhost:5173", "http://127.0.0.1:5173"]
     assert s.api_host == "127.0.0.1"
+
+
+def test_call_notes_and_the_pre_meeting_form_start_off_with_the_plans_numbers() -> None:
+    """PLAN-V17, the contract, part 5. Every switch is off until Al-khair turns it on."""
+    s = make()
+    assert (s.call_notes_enabled, s.call_notes_ai_enabled, s.meeting_forms_enabled) == (
+        False,
+        False,
+        False,
+    )
+    assert s.meeting_note_on_meeting is False
+    assert (s.model_notes, s.notes_cap_usd) == ("claude-haiku-5-5", Decimal("0.01"))
+    assert (s.notes_max_chars, s.notes_soft_seconds, s.transcript_max_chars) == (6000, 180, 60000)
+    assert (s.model_meeting_form, s.meeting_form_cap_usd) == ("claude-sonnet-5-5", Decimal("0.10"))
+    assert s.meeting_form_days_ahead == 2
+    assert s.internal_email_domains == ["contourinteriors.com.au"]
+
+
+def test_the_internal_email_domains_come_from_a_list_in_the_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("INTERNAL_EMAIL_DOMAINS", " ContourInteriors.com.au, @contour.example ")
+    assert Settings(_env_file=None).internal_email_domains == [
+        "contourinteriors.com.au",
+        "contour.example",
+    ]
+
+
+@pytest.mark.parametrize(
+    "domain", ["jo@contourinteriors.com.au", "contourinteriors.com.au.", "-x.com.au", "localhost"]
+)
+def test_an_internal_email_domain_must_be_a_plain_domain(domain: str) -> None:
+    with pytest.raises(ValidationError):
+        make(internal_email_domains=[domain])
 
 
 def test_editable_keys_exist_and_env_only_keys_are_not_editable() -> None:
