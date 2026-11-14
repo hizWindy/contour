@@ -1003,7 +1003,7 @@ async def test_the_route_takes_a_city_and_industries(
     assert {item["city"] for item in perth["items"]} == {"Perth"}
     assert perth["counts"] == GOLDEN_COUNTS.model_dump()
     assert sum(f["count"] for f in perth["industries"]) <= perth["total"] + len(perth["director"])
-    for bad in ({"city": "Sydney"}, {"industry": ["  "]}):
+    for bad in ({"city": "Darwin"}, {"industry": ["  "]}):  # Darwin: no staff is counted there
         response = await db_client.get(WATCHLIST, params=bad)
         assert response.status_code == 422
         assert response.json()["code"] == "bad_choice"

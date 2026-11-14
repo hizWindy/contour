@@ -310,9 +310,10 @@ async def test_a_watchlist_run_waits_for_the_ok_to_send_hubspot_names(
     estimate = await manager.estimate(RunCreate(app=APP, mode="watchlist", params={}))
     assert estimate.valid
     assert estimate.blocked is not None and estimate.blocked.code == NOT_APPROVED_CODE
-    # 47 on the export's watch list at 100+ staff (EXPORT.md), 52 at 50+ (PLAN-V11 B2)
-    assert estimate.companies_expected == 52
-    assert "52 companies, but the run limit is 20." in " ".join(estimate.warnings)
+    # 47 on the export's watch list at 100+ staff (EXPORT.md), 52 at 50+ (PLAN-V11 B2), and 55 with
+    # Sydney and Brisbane counted too (PLAN-V16 T1-2)
+    assert estimate.companies_expected == 55
+    assert "55 companies, but the run limit is 20." in " ".join(estimate.warnings)
 
 
 @pytest.mark.skipif(not EXPORT.exists(), reason="the HubSpot export is not in the repo")
@@ -341,7 +342,7 @@ async def test_a_watchlist_run_skips_the_dissolved_deal_and_keeps_the_watch_orde
     dissolved = {e["name"] for e in skipped if (e.get("reason") or "").startswith("Deal dissolved")}
     assert dissolved == {"Patties Food Group", "Online Lead Management", "Baker Bleu"}
     over = next(e for e in skipped if e.get("count"))
-    assert over["count"] == 52 - 3 - 3
+    assert over["count"] == 55 - 3 - 3  # 52 in the document's three cities, 55 with five
     leads = await leads_of(session_factory, run_id)
     assert len(leads) == 3
     assert {lead.origin for lead in leads} == {"hubspot"}
