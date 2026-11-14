@@ -65,6 +65,12 @@ os.environ["HUBSPOT_WRITE_ENABLED"] = "false"  # and nothing can write to it
 os.environ["HUBSPOT_SYNC_MAX_AGE_HOURS"] = "0"  # a test backend never syncs when it starts
 os.environ["AUTH_REQUIRED"] = "false"  # nor does engine/.env turn the sign-in on under a test
 os.environ["SESSION_COOKIE_SECURE"] = "false"
+# No test signs in to Property Daily or Arealytics (PLAN-V16), whatever engine/.env holds.
+for _login in ("USERNAME", "PASSWORD"):
+    os.environ[f"PROPERTY_DAILY_{_login}"] = ""
+    os.environ[f"AREALYTICS_{_login}"] = ""
+os.environ["PROPERTY_DAILY_ENABLED"] = "false"
+os.environ["AREALYTICS_ENABLED"] = "false"
 get_settings.cache_clear()
 
 TEST_TABLES = (

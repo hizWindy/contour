@@ -38,6 +38,14 @@ ENV_ONLY = [
     "db_pool_timeout",
     "cors_origins",
     "api_host",
+    # Property Daily and Arealytics (PLAN-V16): the data approvals, the logins and the pace
+    "property_daily_to_claude_ok",
+    "arealytics_to_claude_ok",
+    "property_daily_username",
+    "property_daily_password",
+    "arealytics_username",
+    "arealytics_password",
+    "source_page_wait_seconds",
 ]
 CHOICE_KEYS = {
     "claude_model",
@@ -48,7 +56,8 @@ CHOICE_KEYS = {
     "model_why",
     "claude_effort",
 }
-BOOL_KEYS = {"prep_enabled", "why_now_enabled"}  # a switch has no min or max
+# A switch has no min or max.
+BOOL_KEYS = {"prep_enabled", "why_now_enabled", "property_daily_enabled", "arealytics_enabled"}
 NOT_NUMBERS = CHOICE_KEYS | BOOL_KEYS
 
 
@@ -685,3 +694,74 @@ def test_the_password_is_not_in_the_settings_text() -> None:
     text = f"{s!r} {s}"
     assert "hunter2-secret" not in text
     assert "sk-secret-key" not in text
+
+
+# --- Property Daily and Arealytics (PLAN-V16) -----------------------------------------------
+
+TOOL_SWITCHES = [
+    "property_daily_enabled",
+    "arealytics_enabled",
+    "property_daily_to_claude_ok",
+    "arealytics_to_claude_ok",
+]
+TOOL_LOGINS = [
+    "property_daily_username",
+    "property_daily_password",
+    "arealytics_username",
+    "arealytics_password",
+]
+
+
+def test_the_tools_start_off_and_only_property_daily_may_reach_claude() -> None:
+    s = make()
+    assert (s.property_daily_enabled, s.arealytics_enabled) == (False, False)
+    assert (s.property_daily_to_claude_ok, s.arealytics_to_claude_ok) == (True, False)
+    assert s.source_page_wait_seconds == (4.0, 9.0)
+    assert (s.source_pages_per_day, s.source_pages_per_run, s.property_lookup_days) == (300, 60, 30)
+    assert s.manual_run_goal_leads == 20
+    assert all(getattr(s, login) is None for login in TOOL_LOGINS)
+
+
+@pytest.mark.parametrize("switch", TOOL_SWITCHES)
+def test_a_tool_switch_takes_only_the_exact_text(
+    switch: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(switch.upper(), "true")
+    assert getattr(Settings(_env_file=None), switch) is True
+    monkeypatch.setenv(switch.upper(), "False")
+    assert getattr(Settings(_env_file=None), switch) is False
+    for stray in ("1", "yes", "on"):
+        monkeypatch.setenv(switch.upper(), stray)
+        with pytest.raises(ValidationError):
+            Settings(_env_file=None)
+
+
+@pytest.mark.parametrize("login", TOOL_LOGINS)
+def test_a_blank_login_is_not_set_and_a_login_never_shows(
+    login: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(login.upper(), "  ")
+    assert getattr(Settings(_env_file=None), login) is None
+    monkeypatch.setenv(login.upper(), "login-secret-7")
+    s = Settings(_env_file=None)
+    assert getattr(s, login).get_secret_value() == "login-secret-7"
+    assert "login-secret-7" not in f"{s!r} {s} {s.model_dump_json()}"
+
+
+@pytest.mark.parametrize(
+    ("text", "pair"), [("4,9", (4.0, 9.0)), ("[2, 3.5]", (2.0, 3.5)), ("6 6", (6.0, 6.0))]
+)
+def test_the_pause_between_pages_is_two_numbers_from_the_env(
+    text: str, pair: tuple[float, float], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("SOURCE_PAGE_WAIT_SECONDS", text)
+    assert Settings(_env_file=None).source_page_wait_seconds == pair
+
+
+@pytest.mark.parametrize("text", ["9,4", "0,3", "4", "4,9,12", "5,500", "fast"])
+def test_a_pause_that_is_backwards_too_fast_or_not_two_numbers_is_refused(
+    text: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("SOURCE_PAGE_WAIT_SECONDS", text)
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
