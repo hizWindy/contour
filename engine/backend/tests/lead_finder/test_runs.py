@@ -529,3 +529,86 @@ async def test_every_search_of_a_run_is_counted_once(
     assert orphans == 0  # every Claude request of the run carries the run id
     row = await assert_totals_match_log(session_factory, run_id)
     assert row.claude_requests == len(await searches_of(session_factory, run_id))
+
+
+# --- Discovery from Property Daily's feed (PLAN-V16 T1-8) ----------------------------------------
+
+
+async def test_a_run_without_the_web_finds_its_companies_in_property_dailys_feed(
+    make_lf_manager: MakeLeadFinderManager,
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from datetime import date
+
+    from apps.lead_finder import run_sources
+    from core.sources.types import FeedItem
+
+    link = "https://www.spatialgroup.com.au/cgi-bin/report.cgi?id=101"
+    item = FeedItem(
+        source="property_daily",
+        kind="lease",
+        company="Sample Logistics Pty Ltd",
+        city="Melbourne",
+        address="120 Collins Street, Melbourne VIC 3000",
+        lease_end=date(2028, 6, 30),
+        published_on=date(2026, 10, 20),
+        summary="Sample Logistics Pty Ltd's lease at 120 Collins Street ends in June 2028.",
+        url=link,
+        read_at=datetime(2026, 10, 20, tzinfo=UTC),
+        sign_id="lease_ending",
+    )
+    asked: list[list[str]] = []
+
+    async def recent(session: AsyncSession, cities: Any, since: datetime) -> list[FeedItem]:
+        asked.append(list(cities or []))
+        return [item]
+
+    monkeypatch.setattr(run_sources, "recent_items", recent)
+    ready = lf_settings(
+        property_daily_enabled=True,
+        property_daily_username="someone",
+        property_daily_password="something",
+    )
+    claude = FakeClaude()
+    manager = make_lf_manager(claude, settings=ready)
+    params = {
+        "cities": ["Melbourne"],
+        "triggers": ["lease_ending"],
+        "since_days": 30,
+        "sources": ["property_daily"],
+    }
+    estimate = await manager.estimate(RunCreate(app=APP, mode="discovery", params=params))
+    assert (estimate.valid, estimate.slices, estimate.companies_expected) == (True, 0, 1)
+    assert estimate.warnings[0] == (
+        "Discovery makes no web search. It reads 1 new item from Property Daily, and "
+        "researches up to 1 of them."
+    )
+    asked.clear()
+    run_id = await start(manager, "discovery", params)
+    row = await finished(manager, session_factory, run_id)
+
+    assert (row.status, row.error) == ("done", None)
+    assert "discover" not in claude.calls  # no web search for companies: free
+    assert asked == [["Melbourne"]]
+    events = await stored_json(session_factory, run_id)
+    assert of_type(events, "plan_ready") == [{"slices": 0, "companies": 1, "labels": []}]
+    assert of_type(events, "merged") == [{"candidates": 1, "unique": 1}]
+    (lead,) = await leads_of(session_factory, run_id)
+    assert lead.company_key == company_key("Sample Logistics Pty Ltd")
+    signs = [score["trigger"] for score in lead.card["triggers"]]
+    assert any(s["id"] == "lease_ending" and s["source_url"] == link for s in signs)
+    async with session_factory() as session:
+        noted = await session.scalar(
+            select(func.count()).select_from(MemoryItem).where(MemoryItem.url == link)
+        )
+    assert noted == 0  # a tool's item is never a note Claude reads
+
+
+async def test_a_run_that_names_a_tool_that_isnt_ready_is_refused(
+    make_lf_manager: MakeLeadFinderManager,
+) -> None:
+    manager = make_lf_manager(FakeClaude())
+    with pytest.raises(Problem) as refused:
+        await start(manager, "discovery", {**DISCOVERY, "sources": ["web", "property_daily"]})
+    assert (refused.value.status, refused.value.code) == (422, "source_not_ready")

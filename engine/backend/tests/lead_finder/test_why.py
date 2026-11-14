@@ -517,6 +517,54 @@ def test_no_hubspot_value_reaches_claude() -> None:
     assert hidden.triggers == []
 
 
+AREALYTICS_LINK = "https://app.arealytics.com.au/tenancy/77"
+PROPERTY_DAILY_LINK = "https://www.spatialgroup.com.au/cgi-bin/report.cgi?id=101"
+
+
+def test_no_arealytics_value_reaches_claude_while_its_switch_is_off() -> None:
+    """PLAN-V16 T1-8, choice 8: a tool whose `..._to_claude_ok` is off never reaches a prompt."""
+    facts = make_facts(
+        triggers=[lease("2028-09", url=AREALYTICS_LINK)],
+        office_m2=fact(3333, AREALYTICS_LINK),
+        office_since=fact("2014-05-01", AREALYTICS_LINK),
+        last_fitout=fact("2019-02-01", AREALYTICS_LINK),
+    )
+    sources = [
+        FactSource(fact="office_m2", used="arealytics", others=[], conflict=None),
+        FactSource(fact="office_since", used="arealytics", others=[], conflict=None),
+        FactSource(fact="last_fitout", used="arealytics", others=[], conflict=None),
+    ]
+    card = card_of(facts, fact_sources=sources)
+    sheet = facts_sheet(facts, card, RULES, TODAY)
+    assert "September 2028" in sheet.when.text  # the card's own lines still use them
+    hidden = frozenset({"hubspot", "arealytics"})
+    text = why_input(card, sheet, RULES, TODAY, hidden)
+    for value in ("arealytics", "3333", "3,333", "2014", "2019", "2028-09", "September 2028"):
+        assert value not in text, value
+    assert f"When: {HIDDEN}" in text and f"Size: {HIDDEN}" in text
+    view = claude_view(facts, sources, RULES, hidden)
+    assert (view.office_m2.value, view.office_since.value, view.last_fitout.value) == (
+        None,
+        None,
+        None,
+    )
+    assert view.triggers == []
+    # With its switch on, the same values may go
+    allowed = why_input(card, sheet, RULES, TODAY, frozenset({"hubspot"}))
+    assert "3333" in allowed and AREALYTICS_LINK in allowed
+
+
+def test_property_daily_values_reach_claude_while_its_switch_is_on() -> None:
+    facts = make_facts(triggers=[lease("2028-09", url=PROPERTY_DAILY_LINK)], office_m2=fact(1400))
+    sources = [FactSource(fact="office_m2", used="property_daily", others=[], conflict=None)]
+    card = card_of(facts, fact_sources=sources)
+    sheet = facts_sheet(facts, card, RULES, TODAY)
+    text = why_input(card, sheet, RULES, TODAY, frozenset({"hubspot", "arealytics"}))
+    assert PROPERTY_DAILY_LINK in text and '"value": 1400' in text
+    muted = why_input(card, sheet, RULES, TODAY, frozenset({"hubspot", "property_daily"}))
+    assert PROPERTY_DAILY_LINK not in muted and '"value": 1400' not in muted
+
+
 def test_a_line_without_hubspot_values_is_shown_to_claude() -> None:
     facts = make_facts(office_since=fact("2022"))  # all from the web research
     card = card_of(facts)

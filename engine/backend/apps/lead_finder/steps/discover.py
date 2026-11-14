@@ -45,7 +45,15 @@ from apps.lead_finder.sanitize import (
     one_line,
     safe_http_url,
 )
-from apps.lead_finder.sources import BLOCKED, host_of, on_site, source_kind, url_key
+from apps.lead_finder.sources import (
+    BLOCKED,
+    TOOL_KINDS,
+    host_of,
+    is_blocked,
+    on_site,
+    source_kind,
+    url_key,
+)
 from apps.lead_finder.steps.plan import Slice, area_text, focus_places
 from core.claude.budget import Budget, BudgetSpent
 from core.claude.client import Claude, ClaudeError, ClaudeUnavailable, Reply, WebTools
@@ -58,7 +66,7 @@ WHAT_HAPPENED_MAX = 240  # characters in the sentence of what happened
 DISCOVER_MAX_CONTINUES = 1  # a paused web turn is resumed at most once (research uses 3)
 NAME_DISPLAY_MAX = 60  # characters of a dropped name shown in the run feed
 # A website on one of these kinds of site is never a company's own website.
-NOT_A_COMPANY_SITE = frozenset({BLOCKED, "job_ads", "asx_or_official_news"})
+NOT_A_COMPANY_SITE = frozenset({BLOCKED, *TOOL_KINDS, "job_ads", "asx_or_official_news"})
 _DATE = re.compile(r"(\d{4})(?:-(\d{1,2})(?:-(\d{1,2}))?)?(?![\d-])")
 
 # The reasons a company is dropped. Short, plain, and the same every time.
@@ -247,7 +255,8 @@ def _site(value: str | None, seen_hosts: Iterable[str], criteria: Criteria) -> s
         return None
     if not any(on_site(host, [domain]) for host in seen_hosts):
         return None
-    if source_kind(f"https://{domain}", criteria) in NOT_A_COMPANY_SITE:
+    site = f"https://{domain}"
+    if is_blocked(site, criteria) or source_kind(site, criteria) in NOT_A_COMPANY_SITE:
         return None
     return domain
 
@@ -306,7 +315,7 @@ def check_candidates(
             reason = NOTHING_HAPPENED
         elif not safe_http_url(company.url):
             reason = LINK_NOT_PLAIN
-        elif source_kind(company.url, criteria) == BLOCKED:
+        elif is_blocked(company.url, criteria):
             reason = LINK_BLOCKED
         elif url_key(company.url) not in seen_keys:
             reason = LINK_NOT_READ

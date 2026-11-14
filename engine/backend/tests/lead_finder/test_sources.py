@@ -8,7 +8,14 @@ import pytest
 from apps.lead_finder.fields import BoosterFound, CompanyFacts, DecisionMaker, Fact, TriggerFound
 from apps.lead_finder.rules import load_rules
 from apps.lead_finder.sanitize import safe_http_url
-from apps.lead_finder.sources import check_sources, host_of, missing_facts, source_kind, url_key
+from apps.lead_finder.sources import (
+    check_sources,
+    host_of,
+    is_blocked,
+    missing_facts,
+    source_kind,
+    url_key,
+)
 from tests.lead_finder.samples import ASX, NEWS, SITE, fact, make_facts
 
 CRITERIA = load_rules().criteria
@@ -284,14 +291,20 @@ PROPERTY_DAILY = "https://www.propertydaily.com.au/news/acme-moves"
 
 
 def test_property_daily_is_a_blocked_site() -> None:
-    assert source_kind(PROPERTY_DAILY, CRITERIA) == "blocked"
-    assert source_kind("https://propertydaily.com.au/x", CRITERIA) == "blocked"
-    assert source_kind("https://news.propertydaily.com.au/x", CRITERIA) == "blocked"
+    """Claude's web tool never reads it, and a link of Claude's there is dropped (PLAN-V16 T1-7).
+    A link there that our connector made (a record, T1-8) is Property Daily's own kind."""
+    for link in (
+        PROPERTY_DAILY,
+        "https://propertydaily.com.au/x",
+        "https://news.propertydaily.com.au/x",
+        "https://www.spatialgroup.com.au/cgi-bin/report.cgi?id=1",  # its pages (T2-2)
+    ):
+        assert is_blocked(link, CRITERIA), link
+        assert source_kind(link, CRITERIA) == "property_daily", link
     assert source_kind("https://notpropertydaily.com.au/x", CRITERIA) == "other_news"
-    assert "propertydaily.com.au" in CRITERIA.source_domains.blocked
-    # The kind list names the tool's own site, for the facts our connector reads (T1-8). The
-    # blocked list still wins, so Claude's web tool never reads it (PLAN-V16 T1-7).
-    assert CRITERIA.source_domains.property_daily == ["propertydaily.com.au"]
+    assert not is_blocked("https://notpropertydaily.com.au/x", CRITERIA)
+    assert {"propertydaily.com.au", "spatialgroup.com.au"} <= set(CRITERIA.source_domains.blocked)
+    assert CRITERIA.source_domains.property_daily == ["propertydaily.com.au", "spatialgroup.com.au"]
 
 
 def test_arealytics_ranks_with_property_daily_above_news() -> None:
@@ -301,7 +314,8 @@ def test_arealytics_ranks_with_property_daily_above_news() -> None:
     assert CRITERIA.score.source["arealytics"] > CRITERIA.score.source["asx_or_official_news"]
     assert CRITERIA.source_domains.arealytics == ["arealytics.com.au"]
     assert "arealytics.com.au" in CRITERIA.source_domains.blocked
-    assert source_kind("https://www.arealytics.com.au/building/1", CRITERIA) == "blocked"
+    assert is_blocked("https://www.arealytics.com.au/building/1", CRITERIA)
+    assert source_kind("https://www.arealytics.com.au/building/1", CRITERIA) == "arealytics"
 
 
 def test_a_fact_that_cites_arealytics_is_dropped_even_if_it_was_read() -> None:
@@ -354,9 +368,11 @@ def test_host_of_has_no_closing_dot(url: str, host: str) -> None:
 
 
 def test_a_closing_dot_does_not_get_round_the_blocked_list() -> None:
-    assert source_kind("https://www.propertydaily.com.au./news/x", CRITERIA) == "blocked"
-    assert source_kind("https://news.propertydaily.com.au./x", CRITERIA) == "blocked"
-    assert source_kind("propertydaily.com.au./x", CRITERIA) == "blocked"
+    assert is_blocked("https://www.propertydaily.com.au./news/x", CRITERIA)
+    assert is_blocked("https://news.propertydaily.com.au./x", CRITERIA)
+    assert is_blocked("propertydaily.com.au./x", CRITERIA)
+    assert is_blocked("https://zoominfo.com./x", CRITERIA)
+    assert source_kind("https://zoominfo.com./x", CRITERIA) == "blocked"
     assert source_kind("https://afr.com./x", CRITERIA) == "other_news"
     assert source_kind("https://acme.com.au./about", CRITERIA, "acme.com.au") == (
         "asx_or_official_news"  # the company's own site, with or without the dot

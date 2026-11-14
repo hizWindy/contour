@@ -2,7 +2,9 @@
 
 The steps, in order:
 1. Memory first: reuse fresh notes about this company, so we don't pay to find them again. Then
-   Signal Hire's details for the company, when it is switched on: Claude gets them as hints.
+   Signal Hire's details for the company, when it is switched on: Claude gets them as hints. Then
+   what Property Daily and Arealytics know about its office (PLAN-V16 T1-8, `property.py`): free,
+   and Claude gets a tool's facts as hints only while that tool's `..._to_claude_ok` is on.
 2. Search: one Claude request per angle (property, people, money) that memory didn't cover. A
    lease and tenure run (`ResearchContext.focus`, PLAN-V11 C2) asks the tenure angle's office
    questions in place of property, and a missing move-in date is one of its gaps in step 4.
@@ -13,7 +15,9 @@ The steps, in order:
 4. Gap check: if the city, size or a trigger is missing, one more targeted search. Then stop.
 5. Match HubSpot. Signal Hire's checked name, website and industry are applied first. HubSpot,
    Signal Hire and the research each give a staff number, and the first source in
-   `size.staff_sources` wins (the others stay on the card). Apply the rules and the score.
+   `size.staff_sources` wins (the others stay on the card). The office's size, lease end and
+   move-in date come from the first source in `data_sources` (the property tools, HubSpot, then the
+   research), and the records add their own signs. Apply the rules and the score.
 6. Why now (PLAN-V12, while `why_now_enabled` is on): for a Pass, a Watch or a Director review,
    one short Claude request with no web search writes why to call now (apps/lead_finder/why.py).
    It comes after the judging, so it never changes the result or the score. Then save the card,
@@ -34,7 +38,8 @@ What a run relies on:
 - No database connection is held while Claude works: the memory read ends its transaction first.
   The same goes for Signal Hire: the transaction ends before it is asked.
 - A failure at Signal Hire is a line in the problems. It never stops a lead or a run
-  (apps/lead_finder/headcount.py, signalhire_company.py).
+  (apps/lead_finder/headcount.py, signalhire_company.py). The same goes for the property tools'
+  lookup, and no connection is held while it reads a site.
 """
 
 import asyncio
@@ -64,13 +69,21 @@ from apps.lead_finder.headcount import (
     wants_people,
     wants_signalhire,
 )
-from apps.lead_finder.office_numbers import fill_gaps, hubspot_staff, office_numbers
+from apps.lead_finder.office_numbers import hubspot_staff, office_numbers
 from apps.lead_finder.params import (
     NAME_MESSAGE,
     clean_typed_city,
     clean_typed_domain,
 )
 from apps.lead_finder.prompts import Prompt, extract_prompt, research_prompt, versions, why_prompt
+from apps.lead_finder.property import (
+    apply_office_sources,
+    for_card,
+    hidden_sources,
+    lookup_problems,
+    office_hint_lines,
+    record_signs,
+)
 from apps.lead_finder.rules import MAX_DAMPENER_SEARCHES, LeadFinderRules, Result
 from apps.lead_finder.sanitize import (
     clean_company_name,
@@ -105,7 +118,6 @@ from apps.lead_finder.sourcing import (
     apply_company_details,
     check_offices,
     choose_staff,
-    hubspot_filled,
     people_source,
 )
 from apps.lead_finder.tables import LIMITS, Lead, clip, company_key
@@ -128,6 +140,8 @@ from core.memory.service import recent, remember_many
 from core.searches.service import log_reply
 from core.signalhire.client import SignalHire, get_signalhire
 from core.signalhire.details import SignalHireCompany
+from core.sources.reader import lookup_company
+from core.sources.types import CompanyProperty
 
 APP = "lead_finder"
 SearchAngle = Literal["property", "people", "money", "tenure", "dampeners"]
@@ -358,6 +372,13 @@ class LeadCard(BaseModel):
         "with its strength, evidence, date, link and what could reverse it when found "
         "(PLAN-V16 T1-5). Empty for a card made before it.",
     )
+    property: CompanyProperty | None = Field(
+        default=None,
+        description="What Property Daily and Arealytics know about the company's office (PLAN-V16 "
+        "T1-8): their records, newest first (at most 30), and each tool's status (found, "
+        "not_found, off, error or not_checked). A tool that is off has no records here. Empty "
+        "for a card made before it, and for a company too small to research.",
+    )
 
 
 @dataclass
@@ -393,6 +414,8 @@ class Job:
     early_staff: StaffReading | None = None
     early_city: str | None = None
     too_small: str | None = None  # why the research stopped before Claude (PLAN-V9 B2)
+    # What the property tools know (PLAN-V16 T1-8), read before the search. None: not looked up
+    from_tools: CompanyProperty | None = None
 
     @property
     def company(self) -> str:
@@ -470,6 +493,10 @@ async def research_company(
         card = await _why_now(session, job, claude, card)  # a Drop: says why, asks nothing
         await _save(session, embedder, job, card, hubspot, key, place, metro, profile_text)
         return card
+
+    # 1d. What Property Daily and Arealytics know about its office (PLAN-V16 T1-8). Free, and only
+    # for a company that will be researched, so a too-small one uses no pages.
+    job.from_tools = await _property_lookup(session, job)
 
     # 2. Search the angles memory didn't cover. A lease and tenure run asks the office questions
     # first, in place of the property angle (PLAN-V11 C2).
@@ -563,6 +590,7 @@ async def refill_lead(
     if not job.notes:
         return None
     await _company_details(session, job, None, now, may_pay=False)  # a saved copy only: no credit
+    job.from_tools = old.property  # the records the research saved: no new lookup (PLAN-V16 T1-8)
     try:
         facts, dropped = await _fill_form(job, claude, extract_prompt(rules))
     finally:
@@ -669,6 +697,7 @@ async def why_now_for_lead(
         rules=rules,
         today=today or now.date(),
         now=now,
+        hidden=hidden_sources(settings),
     )
     for number, reply in enumerate(outcome.replies):
         log_reply(
@@ -761,11 +790,14 @@ async def _judge_and_card(
         fuzzy_min=settings.match_fuzzy_min,
         profile_min=settings.match_profile_min,
     )
-    # HubSpot's move-in year and lease end fill gaps the research left, and never overwrite.
+    # The office's size, lease end and move-in date: the first source in `data_sources` that has
+    # one (the property tools, HubSpot, then the research), and the signs the records show
+    # (PLAN-V16 T1-8). The others stay on the card.
     numbers = await office_numbers(session, hubspot.hubspot_id, metro)
-    before_hubspot = facts
-    facts, from_hubspot = fill_gaps(facts, numbers, rules, job.today)
-    sources.extend(hubspot_filled(before_hubspot, facts))
+    office = apply_office_sources(facts, job.from_tools, numbers, metro, rules, job.today)
+    facts, from_hubspot = office.facts, office.from_hubspot
+    sources.extend(office.entries)
+    facts = record_signs(facts, job.from_tools, context.signals, metro, rules, job.today)
     website = facts.website.value or request.website
     staff, from_signalhire, signalhire_people = await _signalhire_step(
         session, job, facts, metro, website, signalhire
@@ -812,6 +844,7 @@ async def _judge_and_card(
         dropped=dropped,
         problems=job.problems,
         form_failed=job.form_failed,
+        property=for_card(job.from_tools),
         research=ResearchCost(
             cost_usd=job.budget.spent_usd,
             cap_usd=job.budget.cap_usd,
@@ -847,6 +880,7 @@ async def _why_now(session: AsyncSession, job: Job, claude: Claude, card: LeadCa
         today=job.today,
         now=datetime.now(UTC),
         on_reply=job.context.on_reply,
+        hidden=hidden_sources(job.settings),
     )
     for number, reply in enumerate(outcome.replies):
         job.replies.append(("why" if number == 0 else "why:retry", reply))
@@ -969,6 +1003,33 @@ async def _company_details(
         if owned is not None:
             await owned.aclose()
     job.problems.extend(job.lookup.problems)
+
+
+async def _property_lookup(session: AsyncSession, job: Job) -> CompanyProperty | None:
+    """Step 1d: what Property Daily and Arealytics know about the company's office (PLAN-V16
+    T1-8), from our copy, or from a tool live when its copy is old and the tool is on. Free: no
+    Claude request. The lookup never raises (its contract), and a lead never stops for it: a tool
+    that failed is one line in the problems. The live pages count against the run's
+    `source_pages_per_run`. No connection of ours is held while it reads a site."""
+    await session.rollback()
+    try:
+        found = await lookup_company(
+            session,
+            job.company,
+            job.request.city,
+            job.request.website,
+            run_id=job.context.run_id,
+            settings=job.settings,
+        )
+    except Exception:  # its contract says it never raises; a lead never stops for it anyway
+        log.exception("property_lookup_failed", extra={"company": job.company})
+        job.problems.append(
+            "Property Daily and Arealytics: the lookup didn't work this time, so this lead was "
+            "judged without them."
+        )
+        return None
+    job.problems.extend(lookup_problems(found))
+    return found
 
 
 async def _signalhire_step(
@@ -1206,7 +1267,7 @@ def _angle_prompt(angle: SearchAngle, job: Job) -> str:
     ]
     examples = "\n".join(f"- {t.format(**values)}" for t in templates)
     return (
-        f"{_hints(job)}\n\n"
+        f"{_hints(job)}{_property_hints(job)}\n\n"
         f"Angle: {angle}. Find facts about {ANGLE_FOCUS[angle]}.\n"
         "Also note the company's website, industry and owner (for example ASX-listed, or "
         "owned overseas) if you see them.\n\n"
@@ -1214,9 +1275,19 @@ def _angle_prompt(angle: SearchAngle, job: Job) -> str:
     )
 
 
+def _property_hints(job: Job) -> str:
+    """The office now from each property tool Claude may read (PLAN-V16 T1-8), for the search
+    prompts only: the address, the floors, the m² and the lease dates, as data. Empty when there is
+    nothing, or no tool may go to Claude."""
+    city = job.request.city
+    metro = city_of(city, job.rules) if city else None
+    lines = office_hint_lines(job.from_tools, metro, job.rules, job.settings, job.today)
+    return "\n\n" + "\n".join(lines) if lines else ""
+
+
 def _gap_prompt(missing: list[str], job: Job) -> str:
     return (
-        f"{_hints(job)}\n\n"
+        f"{_hints(job)}{_property_hints(job)}\n\n"
         f"Earlier research didn't find these facts: {', '.join(missing)}.\n"
         "Search for these facts only. If you still can't find one, return no note for it."
     )

@@ -235,6 +235,16 @@ On every run, search each source group, and record which source supports each fa
 - **The two property tools rank first** among sources: Property Daily, then Arealytics (our order). The rank orders signs against each other. It is no longer points of the score.
 - **Claude's web tool never reads either tool's site.** Both are on the blocked list. Only our connector reads them (T1-8). **TBC with Al-khair and Levi:** whether Claude may read Arealytics's public pages.
 
+**The tools in the research (PLAN-V16 T1-8, 15 Nov). Our reading, TBC.**
+- **Arealytics is dropped from PLAN-V16.** Its site refused automated access (T2-2), so it is always "off" for now. The rules below name it so an API (W1) could take its place with no rule change.
+- **Before Claude searches,** the research asks our copy what the tools know about the company. It is free, and a failure is one line on the card.
+- **The office now:** a lease that still runs, or a move that has happened. With no lease end known, the only address a tool has in that city. With several such addresses we don't guess: a past office looks the same.
+- **Which source wins:** for the office's size, its lease end and when it moved in, Property Daily, then Arealytics, then HubSpot, then the web research. The others stay on the card. **A change:** HubSpot's lease end and move-in date now come before the web research's. Before, they only filled a gap. HubSpot's office size ("Office Space Size") is used for the first time.
+- **A flag** when two sizes are more than 1.25 times apart (example: 1,400 m² against 900 m²), or two dates more than 12 months apart (**TBC**).
+- **Signs from records** (code, never Claude): a lease ending in 12 to 36 months, or a move still to come, is "lease ending or a relocation". A search for space is "tenant advisor". A fitout, done or already given to a firm, is the last fitout, so it feeds the dampener. 8+ years at the address feeds long tenure.
+- **What Claude reads:** Property Daily's office facts as short hints in the searches, while `property_daily_to_claude_ok` is on. Arealytics's never (`arealytics_to_claude_ok` is off). The Why now and call prep follow the same switches.
+- **Discovery** can also look in the tools' new items (`sources` on a run): free, from our copy. A run without the web makes no web searches for companies. An item that is only a dampener (a fitout already given) never brings a company in.
+
 ## 8. Research method
 
 Run four passes. Say plainly what couldn't be checked. Accuracy matters more than volume: 10 well-evidenced leads beat 50 guesses.

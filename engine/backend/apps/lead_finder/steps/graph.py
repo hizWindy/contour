@@ -1,14 +1,16 @@
 """The Lead Finder run as a LangGraph graph, so a run saves its progress after every step and a
 resume continues where it stopped instead of paying twice.
 
-    plan -> (discover, one per slice | choose) -> merge -> choose -> (research, one per company
-    | finish) -> finish
+    plan -> (discover, one per slice | merge | choose) -> merge -> choose -> (research, one per
+    company | finish) -> finish
 
 - `plan`: an automatic run (one a schedule started) works out its goal in good leads first
   (`goal.py`). Discovery makes its slices (cities x triggers), and adds up to `rivals.per_run`
-  pending rivals of booming companies in its cities, with the weak sign `rival_growth`. The
-  other modes already know their companies (`State.known`): the watchlist, the typed list, the
-  test set.
+  pending rivals of booming companies in its cities, with the weak sign `rival_growth`, and the
+  new items of each property tool it picked, each with its sign (PLAN-V16 T1-8,
+  `run_sources.py`). A discovery run that leaves out the web has no slices, and goes straight to
+  `merge`. The other modes already know their companies (`State.known`): the watchlist, the
+  typed list, the test set.
 - `discover`: one Claude request per slice, side by side (the run's discover gate). It holds the
   slice reserve in the run budget. Only the search log is written; what it finds travels in the
   state.
@@ -53,6 +55,7 @@ from apps.lead_finder.rivals import (  # noqa: E402
     rival_found,
 )
 from apps.lead_finder.rules import LeadFinderRules, load_rules  # noqa: E402
+from apps.lead_finder.run_sources import feed_candidates, picked_tools  # noqa: E402
 from apps.lead_finder.steps.choose import (  # noqa: E402
     OVER_LIMIT_REASON,
     ExistingLead,
@@ -125,12 +128,19 @@ async def plan(state: State, runtime: Runtime[RunCtx]) -> dict[str, Any]:
                 session, run_cities(ctx.params, run.rules), setup.per_run
             )
         rivals = [rival_found(item, setup.sign) for item in pending]
+    # The new items of the property tools the run picked (PLAN-V16 T1-8): free, from our copy
+    tools = picked_tools(ctx.params, ctx.settings)
+    feed: list[Found] = []
+    if tools:
+        async with ctx.session() as session:
+            feed = await feed_candidates(session, ctx.params, run.rules, tools, datetime.now(UTC))
+    extra = [*rivals, *feed]
     await ctx.emit_event(
-        PlanReadyData(slices=len(slices), companies=len(rivals), labels=[s.label for s in slices])
+        PlanReadyData(slices=len(slices), companies=len(extra), labels=[s.label for s in slices])
     )
     found: dict[str, Any] = {"slices": [s.model_dump(mode="json") for s in slices]}
-    if rivals:
-        found["candidates"] = [rival.model_dump(mode="json") for rival in rivals]
+    if extra:
+        found["candidates"] = [company.model_dump(mode="json") for company in extra]
     if ctx.schedule_id is not None:  # an automatic run aims for its share of the round's goal
         async with ctx.session() as session:
             found["goal"] = await goal_for_run(
@@ -146,7 +156,11 @@ async def plan(state: State, runtime: Runtime[RunCtx]) -> dict[str, Any]:
 def after_plan(state: State) -> list[Send] | str:
     slices = state.get("slices") or []
     sends = [Send("discover", SliceTask(slice=slice_, today=state["today"])) for slice_ in slices]
-    return sends or "choose"
+    if sends:
+        return sends
+    # A discovery run with no slices (it left out the web, PLAN-V16 T1-8) still merges what the
+    # tools and the rivals found
+    return "merge" if state["mode"] == "discovery" else "choose"
 
 
 # --- discover --------------------------------------------------------------------------------
@@ -442,7 +456,7 @@ def build_graph() -> Any:
     builder.add_node("research", research, input_schema=CompanyTask)
     builder.add_node("finish", finish)
     builder.add_edge(START, "plan")
-    builder.add_conditional_edges("plan", after_plan, ["discover", "choose"])
+    builder.add_conditional_edges("plan", after_plan, ["discover", "merge", "choose"])
     builder.add_edge("discover", "merge")
     builder.add_edge("merge", "choose")
     builder.add_conditional_edges("choose", after_choose, ["research", "finish"])

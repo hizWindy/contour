@@ -1,6 +1,7 @@
 """Which source wins for each fact, and what the others said (PLAN-V4 C2 and C3). Pure code, so
 every case here is free and the same every time."""
 
+from datetime import date
 from typing import Any
 
 import pytest
@@ -10,13 +11,14 @@ from apps.lead_finder.office_numbers import OfficeNumbers, hubspot_staff
 from apps.lead_finder.rules import LeadFinderRules, load_rules
 from apps.lead_finder.sourcing import (
     FactSource,
+    OfficeValue,
     OtherValue,
     StaffCandidate,
     apply_company_details,
     check_offices,
+    choose_office_value,
     choose_staff,
     claude_staff,
-    hubspot_filled,
     people_source,
 )
 from core.signalhire.details import SignalHireOffice
@@ -329,16 +331,82 @@ def test_one_list_alone_needs_no_order_unless_it_is_signal_hires() -> None:
     assert alone is not None and alone.used == "signalhire" and alone.others == []
 
 
-# --- A move-in year that HubSpot filled in -------------------------------------------------------
+# --- The office's size, lease end and move-in date (PLAN-V16 T1-8) -----------------------------
+
+PD = "https://www.spatialgroup.com.au/cgi-bin/report.cgi?id=1"
+AL = "https://app.arealytics.com.au/tenant/1"
+WEB = "https://www.afr.com/property/acme"
 
 
-def test_a_move_in_year_filled_in_by_hubspot_is_labelled_as_hubspots() -> None:
-    before = make_facts(office_since=fact(None))
-    after = make_facts(office_since=fact("2016-03-01", LINK))
+def size(source: Any, area: int, url: str | None) -> OfficeValue:
+    return OfficeValue(source, area, f"{area:,} m²", url)
 
-    assert hubspot_filled(before, after) == [
-        FactSource(fact="office_since", used="hubspot", others=[], conflict=None)
+
+def test_the_first_source_in_the_order_wins_and_the_others_stay() -> None:
+    values = [
+        size("web_research", 2300, WEB),
+        size("hubspot", 2400, LINK),
+        size("arealytics", 2450, AL),
+        size("property_daily", 2500, PD),
     ]
-    assert hubspot_filled(after, after) == []  # HubSpot changed nothing
-    found = make_facts(office_since=fact("2019"))
-    assert hubspot_filled(found, found) == []  # the research's own year stays Claude's
+    choice = choose_office_value("office_m2", values, RULES)
+    assert choice.winner == values[3]  # Property Daily, then Arealytics, then HubSpot, then the web
+    assert choice.entry == FactSource(
+        fact="office_m2",
+        used="property_daily",
+        others=[
+            OtherValue(source="arealytics", value="2,450 m²", url=AL),
+            OtherValue(source="hubspot", value="2,400 m²", url=LINK),
+            OtherValue(source="claude", value="2,300 m²", url=WEB),
+        ],
+        conflict=None,  # all within 1.25 times of each other
+    )
+
+
+def test_each_source_wins_when_the_ones_before_it_have_nothing() -> None:
+    assert choose_office_value("office_m2", [size("hubspot", 900, LINK)], RULES).entry == (
+        FactSource(fact="office_m2", used="hubspot", others=[], conflict=None)
+    )
+    web_alone = choose_office_value("office_m2", [size("web_research", 900, WEB)], RULES)
+    assert web_alone.winner is not None and web_alone.entry is None  # as before: no entry
+    assert choose_office_value("office_m2", [], RULES).winner is None
+
+
+def test_sizes_far_apart_raise_a_flag() -> None:
+    """The plan's example: Arealytics says 1,400 m², the web says 900 m²."""
+    choice = choose_office_value(
+        "office_m2", [size("web_research", 900, WEB), size("arealytics", 1400, AL)], RULES
+    )
+    assert choice.entry is not None and choice.entry.used == "arealytics"
+    assert choice.entry.conflict == (
+        "The office sizes are more than 1.25 times apart: Arealytics 1,400 m², Claude 900 m². "
+        "Check which is right."
+    )
+
+
+def test_dates_more_than_12_months_apart_raise_a_flag() -> None:
+    def ends(source: Any, day: date) -> OfficeValue:
+        return OfficeValue(source, day, f"{day:%B %Y}", None)
+
+    near = [ends("property_daily", date(2028, 6, 30)), ends("web_research", date(2027, 7, 1))]
+    assert choose_office_value("lease_end", near, RULES).entry.conflict is None  # type: ignore[union-attr]
+    far = [ends("property_daily", date(2028, 6, 30)), ends("web_research", date(2027, 5, 1))]
+    entry = choose_office_value("lease_end", far, RULES).entry
+    assert entry is not None and entry.conflict == (
+        "The lease ends are more than 12 months apart: Property Daily June 2028, Claude May 2027. "
+        "Check which is right."
+    )
+    moved = [ends("hubspot", date(2015, 3, 1)), ends("web_research", date(2019, 7, 1))]
+    entry = choose_office_value("office_since", moved, RULES).entry
+    assert entry is not None and entry.conflict is not None
+    assert entry.conflict.startswith("The move-in dates are more than 12 months apart: HubSpot")
+
+
+def test_a_source_left_out_of_the_order_is_never_used() -> None:
+    sources = RULES.criteria.data_sources.model_copy(update={"office_m2": ["web_research"]})
+    rules = with_criteria(data_sources=sources)
+    choice = choose_office_value(
+        "office_m2", [size("property_daily", 2500, PD), size("web_research", 900, WEB)], rules
+    )
+    assert choice.winner is not None and choice.winner.source == "web_research"
+    assert choice.entry is None

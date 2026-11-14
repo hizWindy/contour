@@ -13,6 +13,7 @@ other modes hand the graph the companies they already know. Nothing here calls C
 anything outside the run context, so a run is testable with a fake Claude.
 """
 
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import select
@@ -29,6 +30,12 @@ from apps.lead_finder.params import (
 )
 from apps.lead_finder.rules import load_rules
 from apps.lead_finder.run_email import run_finished
+from apps.lead_finder.run_sources import (
+    SOURCE_WORDS,
+    check_sources,
+    feed_candidates,
+    picked_tools,
+)
 from apps.lead_finder.schemas import WatchItem
 from apps.lead_finder.steps.discover import MAX_CANDIDATES
 from apps.lead_finder.steps.plan import check_discovery_size, make_slices
@@ -82,6 +89,7 @@ def not_approved() -> Problem:
 
 
 def check_discovery(params: DiscoveryParams, settings: Settings, caps: RunCaps) -> None:
+    check_sources(params, settings)  # a tool it names must be ready (PLAN-V16 T1-8)
     check_discovery_size(params, settings, caps)
 
 
@@ -241,14 +249,36 @@ def _estimate(
 
 
 async def estimate_discovery(ctx: EstimateContext[DiscoveryParams]) -> RunEstimate:
-    slices = len(make_slices(ctx.params, load_rules()))
-    # A slice keeps at most 10 companies; how many it finds isn't known before the run.
-    companies = min(ctx.caps.max_companies, slices * MAX_CANDIDATES)
-    warnings = [
-        f"Discovery searches {slices} city and trigger pairs, then researches up to "
-        f"{companies} of the companies it finds. How many it finds isn't known in advance."
-    ]
-    return _estimate(ctx, companies, slices, warnings=warnings)
+    rules = load_rules()
+    slices = len(make_slices(ctx.params, rules))
+    # The property tools' new items are in our copy, so they are counted now, free (PLAN-V16
+    # T1-8). A slice keeps at most 10 companies; how many it finds isn't known before the run.
+    tools = picked_tools(ctx.params, ctx.settings)
+    feed = 0
+    if tools:
+        async with ctx.session() as session:
+            found = await feed_candidates(session, ctx.params, rules, tools, datetime.now(UTC))
+        feed = len(found)
+    companies = min(ctx.caps.max_companies, slices * MAX_CANDIDATES + feed)
+    names = " and ".join(SOURCE_WORDS[tool] for tool in tools)
+    items = f"{feed} new item" if feed == 1 else f"{feed} new items"
+    if not slices:
+        text = (
+            f"Discovery makes no web search. It reads {items} from {names}, and "
+            f"researches up to {companies} of them."
+        )
+    elif tools:
+        text = (
+            f"Discovery searches {slices} city and trigger pairs and reads {items} from "
+            f"{names}, then researches up to {companies} of the companies it finds. How many the "
+            "searches find isn't known in advance."
+        )
+    else:
+        text = (
+            f"Discovery searches {slices} city and trigger pairs, then researches up to "
+            f"{companies} of the companies it finds. How many it finds isn't known in advance."
+        )
+    return _estimate(ctx, companies, slices, warnings=[text])
 
 
 async def estimate_watchlist(ctx: EstimateContext[WatchlistParams]) -> RunEstimate:

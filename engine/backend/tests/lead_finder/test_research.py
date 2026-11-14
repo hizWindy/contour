@@ -8,6 +8,7 @@ import uuid
 from collections.abc import AsyncIterator
 from datetime import date
 from decimal import Decimal
+from typing import Any
 
 import httpx
 import pytest
@@ -981,3 +982,177 @@ async def test_no_known_number_means_no_stop(session: AsyncSession) -> None:
     card = await research(session, claude)  # no HubSpot office and no Signal Hire
     assert claude.calls
     assert not card.summary.startswith("Too small")
+
+
+# --- Property Daily and Arealytics (PLAN-V16 T1-8) --------------------------------------------
+
+PD_LINK = "https://www.spatialgroup.com.au/cgi-bin/report.cgi?id=101"
+AL_LINK = "https://app.arealytics.com.au/tenancy/77"
+PD_ADDRESS = "120 Collins Street, Melbourne VIC 3000"
+AL_TEXT = (
+    "Secret Lane",
+    "3333",
+    "3,333",
+    AL_LINK,
+    "arealytics.com.au",
+    "Only Arealytics says this",
+)
+
+
+def tool_record(source: Any, **values: Any) -> Any:
+    from datetime import UTC, datetime
+
+    from core.sources.types import PropertyRecord
+
+    base: dict[str, Any] = {
+        "source": source,
+        "kind": "lease",
+        "company": "Acme Software",
+        "city": "Melbourne",
+        "summary": "A lease.",
+        "url": PD_LINK if source == "property_daily" else AL_LINK,
+        "read_at": datetime(2026, 10, 20, tzinfo=UTC),
+    }
+    base.update(values)
+    return PropertyRecord(**base)
+
+
+def both_tools(property_daily: Any = "found", arealytics: Any = "found") -> Any:
+    from core.sources.types import CompanyProperty, SourceChecks
+
+    return CompanyProperty(
+        records=[
+            tool_record(
+                "property_daily",
+                address=PD_ADDRESS,
+                floor="Level 12",
+                area_m2=1400,
+                lease_end=date(2028, 6, 30),
+            ),
+            tool_record(
+                "arealytics",
+                address="9 Secret Lane, Melbourne VIC 3000",
+                area_m2=3333,
+                lease_end=date(2029, 9, 30),
+                summary="Only Arealytics says this.",
+            ),
+        ],
+        checked=SourceChecks(property_daily=property_daily, arealytics=arealytics),
+    )
+
+
+def fake_lookup(answer: Any, calls: list[tuple[Any, ...]]) -> Any:
+    async def lookup(
+        session: AsyncSession,
+        name: str,
+        city: str | None,
+        website: str | None,
+        *,
+        run_id: uuid.UUID | None = None,
+        settings: Settings | None = None,
+    ) -> Any:
+        calls.append((name, city, website, run_id))
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+
+    return lookup
+
+
+async def test_the_tools_records_reach_the_card_and_arealytics_never_reaches_claude(
+    session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[tuple[Any, ...]] = []
+    monkeypatch.setattr(research_module, "lookup_company", fake_lookup(both_tools(), calls))
+    claude = FakeClaude()
+
+    card = await research(session, claude, settings=lf_settings(why_now_enabled=True))
+
+    assert calls == [("Acme Software", "Melbourne", None, None)]  # once, before the search
+    assert card.property is not None and len(card.property.records) == 2
+    # Property Daily first: its floor area, and its lease end as the sign
+    assert (card.facts.office_m2.value, card.facts.office_m2.source_url) == (1400, PD_LINK)
+    leases = [s.trigger for s in card.triggers if s.trigger.id == "lease_ending"]
+    assert [(t.date, t.source_url) for t in leases] == [("2028-06-30", PD_LINK)]
+    size = next(entry for entry in card.fact_sources if entry.fact == "office_m2")
+    assert size.used == "property_daily"
+    assert [(o.source, o.value) for o in size.others] == [
+        ("arealytics", "3,333 m²"),
+        ("claude", "2,500 m²"),
+    ]
+    assert size.conflict is not None  # 3,333 against 1,400: a flag for a person
+    # What Claude read: Property Daily's hint in every search, and nothing from Arealytics anywhere
+    steps = {request.step for request in claude.requests}
+    assert {"extract", "why"} <= steps
+    for request in claude.requests:
+        for text in AL_TEXT:
+            assert text not in request.prompt and text not in request.system, (request.step, text)
+        hinted = PD_ADDRESS in request.prompt and '"area_m2": 1400' in request.prompt
+        assert hinted == request.step.startswith("search:"), request.step
+    saved = await session.scalar(select(Lead.card).where(Lead.id == card.id))
+    assert saved is not None and saved["property"]["records"][0]["area_m2"] == 1400
+
+
+async def test_a_lookup_that_fails_is_one_line_and_the_lead_is_still_saved(
+    session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from core.sources.types import CompanyProperty, SourceChecks
+
+    failed = CompanyProperty(checked=SourceChecks(property_daily="error", arealytics="off"))
+    monkeypatch.setattr(research_module, "lookup_company", fake_lookup(failed, []))
+    card = await research(session, FakeClaude())
+    assert card.result == "pass"
+    assert (
+        "Property Daily: the lookup didn't work this time, so this lead was judged without it."
+        in card.problems
+    )
+
+    monkeypatch.setattr(research_module, "lookup_company", fake_lookup(RuntimeError("x"), []))
+    other = await research(session, FakeClaude(), ResearchRequest(company="Beta", city="Melbourne"))
+    assert other.result == "pass" and other.property is None
+    assert any(line.startswith("Property Daily and Arealytics:") for line in other.problems)
+    assert await count(session, Lead) == 2
+
+
+async def test_with_both_tools_off_the_research_is_as_before(
+    session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The plan's "Done when": a run with both tools off works as today. Our copy may still hold
+    their records: a tool that is off is skipped."""
+    before = await research(session, FakeClaude(), ResearchRequest(company="Acme One"))
+    off = both_tools(property_daily="off", arealytics="off")
+    monkeypatch.setattr(research_module, "lookup_company", fake_lookup(off, []))
+    claude = FakeClaude()
+    after = await research(session, claude, ResearchRequest(company="Acme One"))
+
+    def same(card: LeadCard) -> tuple[Any, ...]:
+        return (
+            card.result,
+            card.score,
+            card.tier,
+            card.facts.model_dump(exclude={"name"}),
+            [s.trigger.id for s in card.triggers],
+            card.fact_sources,
+            card.problems,
+        )
+
+    assert same(after) == same(before)
+    assert after.property is not None and after.property.records == []
+    assert all(PD_ADDRESS not in request.prompt for request in claude.requests)
+
+
+async def test_a_company_too_small_to_research_uses_no_lookup(
+    session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[tuple[Any, ...]] = []
+    monkeypatch.setattr(research_module, "lookup_company", fake_lookup(both_tools(), calls))
+    session.add(HubSpotCompany(hubspot_id="102", name="Acme Software Pty Ltd", source="export"))
+    await session.flush()
+    session.add(HubSpotOffice(hubspot_company_id="102", label="Melbourne", linkedin_staff=6))
+    await session.commit()
+
+    card = await research(session, FakeClaude(facts=NO_STAFF))
+
+    assert card.summary.startswith("Too small")
+    assert calls == []  # no pages spent on it
+    assert card.property is None

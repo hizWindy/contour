@@ -77,15 +77,25 @@ size:
 # before have nothing. The other values stay on the lead card, and a big gap raises a flag for a
 # person to check. A source that isn't listed isn't asked, so taking headcount_tool out of one list
 # turns Signal Hire off for that data, with no code change. Staff numbers have their own list,
-# size.staff_sources. Everything else (triggers, owner, lease end, office size, healthy business,
-# office history) comes from the web research alone.
+# size.staff_sources. The office's size, its lease end and the date it has been at its address
+# have the three lists at the end (PLAN-V16 T1-8): the two property tools first, then HubSpot, then
+# the web research. Everything else (the other triggers, owner, healthy business) comes from the
+# web research alone.
 data_sources:
   company_details: [headcount_tool, web_research] # the checked name, website and industry. Reading them costs 1 Signal Hire company credit, once a month for each company
   office_cities: [headcount_tool, web_research] # the cities with an office, and the head office
   decision_makers: [headcount_tool, web_research] # the names and job titles of senior people
+  # PLAN-V16 T1-8. The first source with a value wins: its value is the one the rules use, and the
+  # others stay on the lead card. A tool that is switched off is skipped, and so is a lease end
+  # that has passed. A source left out of a list is never used for that fact.
+  office_m2: [property_daily, arealytics, hubspot, web_research] # the office's floor area
+  lease_end: [property_daily, arealytics, hubspot, web_research] # when the lease of the office ends
+  office_since: [property_daily, arealytics, hubspot, web_research] # when it moved in at its address
 
 conflicts:
   staff_gap_ratio: 2 # staff numbers from two sources more than this many times apart raise a flag
+  office_m2_gap_ratio: 1.25 # two office sizes more than this many times apart raise a flag (PLAN-V16 T1-8, TBC)
+  date_gap_months: 12 # two lease ends, or two move-in dates, more than this many months apart raise a flag (TBC)
 
 fitout:
   rate_per_m2_aud: 1500 # the minimum rate in the deal criteria
@@ -333,12 +343,15 @@ sources_rank: [property_daily, arealytics, asx_or_official_news, other_news, job
 source_domains:
   # The tools' own sites. They are on the blocked list too, so Claude's web tool never reads them
   # (PLAN-V16 choice 8): these two lists only name the kind of a fact our connector reads (T1-8).
-  property_daily: [propertydaily.com.au]
+  # A link Claude cites on one of them is still dropped, because the blocked list comes first for
+  # Claude's links. Property Daily's pages are on its publisher's site (PLAN-V16 T2-2).
+  property_daily: [propertydaily.com.au, spatialgroup.com.au]
   arealytics: [arealytics.com.au]
   asx_or_official_news: [asx.com.au, gov.au, wgea.gov.au, abr.business.gov.au, asic.gov.au]
   job_ads: [seek.com.au, indeed.com, jora.com, linkedin.com, glassdoor.com]
   blocked: # sites we never read: contact-data sellers (personal data), and Property Daily
     - propertydaily.com.au # only our connector reads it, never Claude's web tool (PLAN-V16 T1-7)
+    - spatialgroup.com.au # Property Daily's pages (PLAN-V16 T2-2): the same rule
     - arealytics.com.au # its data stays out of Claude until Arealytics approves (PLAN-V16 choice 8)
     - zoominfo.com
     - rocketreach.co
@@ -430,8 +443,12 @@ tbc:
     note: The order from the 27 Oct meeting. HubSpot first, then a headcount tool (Signal Hire), then LinkedIn doubled, then the AI's web research. The first source with a number wins, and the others stay on the lead card (PLAN-V4 C3); before that, HubSpot and Signal Hire only filled a gap. Signal Hire is on since 2 Nov, before its test (PLAN-V3 A4, B1) shows how far its counts can be trusted. Our export has a LinkedIn staff count for most offices, but no office size, no manual headcount, and almost no lease expiry or last-moved dates.
   - key: data_sources
     note: Our proposal (PLAN-V4). Signal Hire is main for the checked company name, website and industry, for the cities with an office, and for senior people's names. The web research is the backup. When two sources disagree, the main source wins and both values stay on the lead card. Levi confirms.
+  - key: data_sources.office_m2
+    note: Al-khair's order (PLAN-V16 T1-8), the same for the office's size, its lease end and when it moved in at its address. Property Daily, then Arealytics, then HubSpot, then the web research. Before T1-8, HubSpot's lease end and move-in date only filled a gap the web research left, so where both have a value HubSpot's now wins, and the web research's stays on the card. To go back, put web_research before hubspot. HubSpot's office size ("Office Space Size") is used for the first time. Arealytics is dropped from PLAN-V16 (its site refused automated access), so its place in the lists does nothing for now.
   - key: conflicts.staff_gap_ratio
     note: Our guess. Both doublings (LinkedIn x 2, Signal Hire x 2) are guesses, so two numbers 1.5 times apart are normal. Over 2 times apart raises a flag. The test of 5 companies (PLAN-V4 D2) shows what is normal.
+  - key: conflicts.office_m2_gap_ratio
+    note: Our guess (PLAN-V16 T1-8). The plan's example, Arealytics 1,400 m2 against the web's 900 m2, must raise a flag (1.56 times apart). The lease ends and move-in dates use date_gap_months, 12 months. M2's check of 10 cards against the sites shows what is normal.
   - key: size.headcount_tool_multiplier
     note: Signal Hire counts only the people it has on file, which is fewer than the real staff. 2 is our guess, like LinkedIn. The test of 5 companies (PLAN-V3 A4) gives the real ratio, and B1 sets the number. Levi confirms.
   - key: size.headcount_tool_name_check
@@ -493,7 +510,7 @@ tbc:
   - key: dampeners
     note: Levi's section 5 (PLAN-V16 T1-5). The five dampeners and which are strong or moderate are his, and so is "found or not found, never none". Our reading, for Levi to confirm. (1) His "moderate to strong" procurement flags are strong for a tender portal or offshore or central global buying, and moderate for lowest-price tenders or design and build bought apart. A flag with no kind is moderate. (2) A fitout or move with no date counts as moderate. (3) His "still list the lead if hiring would outgrow the space within 24 months" means the dampener takes nothing off, when the company plans to hire a lot and says it will need more space than it has now by a date inside 24 months. (4) His "unless it is part of a consolidation that creates a move" is a merger or takeover sign, or an office consolidation sign. (5) In version 2, a company in administration or cutting staff fast was a Drop. It is a strong dampener now (T1-6), no longer a Drop. The check adds up to 3 web searches a company on top of `company_max_searches`, so a researched company may use 3 more than that setting says. The money limits are the same.
   - key: source_domains
-    note: First draft. The test set will show which sites matter. Since PLAN-V16 T1-7 the two property tools have their own kind, and both sites are on the blocked list too, so Claude's web tool never reads them. Property Daily's terms need written approval before a program stores or reads it, and Arealytics's data stays out of Claude until Arealytics approves (choice 8). The kind is for facts our connector reads (T1-8). Whether Claude may read Arealytics's public pages is for Al-khair and Levi.
+    note: First draft. The test set will show which sites matter. Since PLAN-V16 T1-7 the two property tools have their own kind, and both sites are on the blocked list too, so Claude's web tool never reads them. Property Daily's terms need written approval before a program stores or reads it, and Arealytics's data stays out of Claude until Arealytics approves (choice 8). The kind is for facts our connector reads (T1-8). Whether Claude may read Arealytics's public pages is for Al-khair and Levi. Since T1-8, spatialgroup.com.au is on both lists too, because Property Daily's pages are on its publisher's site (T2-2). The whole site is blocked for Claude, its public news too (our choice).
   - key: sources_rank
     note: Levi, PLAN-V16 T1-7. Both property tools rank first, Property Daily then Arealytics (our order). They rank signs against each other. They are no longer points of a lead's score. Source quality is in the confidence.
   - key: score

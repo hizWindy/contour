@@ -12,7 +12,9 @@ The checks here need only the rules files, never the settings or the database:
   sanitiser (a bad name is a 422 that names the field, never a crash);
 - caps are above zero. They can only LOWER the settings. `runs.caps_override` hands them to
   `make_caps` (core/runs/types.py), which ignores a value above the settings' limit. The
-  estimate shows the cap that really applies.
+  estimate shows the cap that really applies;
+- `sources` names the web, Property Daily or Arealytics, each once. Whether a tool is ready needs
+  the settings, so `run_sources.check_sources` checks that when the run starts (PLAN-V16 T1-8).
 """
 
 import re
@@ -33,6 +35,9 @@ AreaId = Literal["cbd", "inner", "all"]  # the part of a city to look in; "all" 
 # How far back a discovery run looks. The Start page offers 7 and 30 (`options.py`). 14 is for a
 # schedule that runs every 2 weeks: its look-back matches the time between runs (PLAN-V6 D2).
 SinceDays = Literal[7, 14, 30]
+# Where discovery looks for companies (PLAN-V16 T1-8, the contract part 2)
+RunSource = Literal["web", "property_daily", "arealytics"]
+RUN_SOURCES: tuple[RunSource, ...] = ("web", "property_daily", "arealytics")
 COMPANIES_MIN = 1
 COMPANIES_MAX = 25
 # The most places one run may name. The rules list 20, so this only stops a long list of repeats;
@@ -310,6 +315,20 @@ class _Discovery(Strict):
             "The Start page offers 7 and 30; 14 is for a schedule that runs every 2 weeks."
         ),
     )
+    sources: list[RunSource] | None = Field(
+        None,
+        min_length=1,
+        max_length=len(RUN_SOURCES),
+        description=(
+            "Used by mode discovery only. Where discovery looks for companies: `web`, "
+            "`property_daily` and `arealytics`, each once. Left out, every source that is ready "
+            "(see `sources` in the run options). A tool that isn't ready is a 422 "
+            "`source_not_ready`. Without `web`, the run makes no web searches for companies: they "
+            "come from the tools' new items, free. The research of each company still uses every "
+            "tool that is switched on (PLAN-V16 T1-8)."
+        ),
+        examples=[["web", "property_daily"]],
+    )
 
     @field_validator("cities")
     @classmethod
@@ -337,6 +356,13 @@ class _Discovery(Strict):
                 {"national": national},
             )
         return cleaned
+
+    @field_validator("sources")
+    @classmethod
+    def _sources(cls, value: list[RunSource] | None) -> list[RunSource] | None:
+        if value is not None and len(set(value)) != len(value):
+            raise PydanticCustomError("source", "List each source once")
+        return value
 
     @field_validator("triggers")
     @classmethod
@@ -440,8 +466,8 @@ class LeadFinderRunParams(_Discovery, _Caps):
     """Every part with its default. The Start page shows these as the starting values.
 
     A real run uses the model of its mode (above), which refuses the parts it doesn't use. So
-    send only the parts of your mode: `cities`, `area`, `triggers` and `since_days` for
-    discovery, `watchlist` for watchlist, `companies` and `recheck` for company, and `caps` for
+    send only the parts of your mode: `cities`, `area`, `triggers`, `since_days` and `sources`
+    for discovery, `watchlist` for watchlist, `companies` and `recheck` for company, and `caps` for
     every mode (testset has nothing else).
     """
 

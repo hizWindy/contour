@@ -93,15 +93,41 @@ def on_site(host: str, domains: Iterable[str]) -> bool:
     return any(host == d or host.endswith("." + d) for d in domains)
 
 
+TOOL_KINDS = ("property_daily", "arealytics")
+
+
+def is_blocked(url: str, criteria: Criteria) -> bool:
+    """True for a link on a site Claude's web tool never reads (`source_domains.blocked`): the
+    contact-data sellers and the two property tools. Claude's own links there are dropped."""
+    return on_site(host_of(url), criteria.source_domains.blocked)
+
+
+def tool_of(url: str, criteria: Criteria) -> str | None:
+    """property_daily or arealytics for a link on that tool's own site, else None."""
+    host = host_of(url)
+    return next(
+        (kind for kind in TOOL_KINDS if on_site(host, getattr(criteria.source_domains, kind))),
+        None,
+    )
+
+
 def source_kind(url: str, criteria: Criteria, company_domain: str | None = None) -> str:
-    """property_daily, arealytics, asx_or_official_news, other_news, job_ads, or blocked."""
+    """property_daily, arealytics, asx_or_official_news, other_news, job_ads, or blocked.
+
+    A link on one of the two property tools' sites is that tool's kind, although both sites are on
+    the blocked list: only our connector makes such a link (a sign or a fact from a record,
+    PLAN-V16 T1-8), so it ranks first. Claude's links are checked with `is_blocked` first, so a
+    link of Claude's on those sites is still dropped."""
     host = host_of(url)
     domains = criteria.source_domains
+    tool = tool_of(url, criteria)
+    if tool is not None:
+        return tool
     if on_site(host, domains.blocked):
         return BLOCKED
     if company_domain and on_site(host, [company_domain]):
         return "asx_or_official_news"  # the company's own website or announcements
-    for kind in ("property_daily", "arealytics", "asx_or_official_news", "job_ads"):
+    for kind in ("asx_or_official_news", "job_ads"):
         if on_site(host, getattr(domains, kind)):
             return kind
     return "other_news"
@@ -142,14 +168,13 @@ def check_sources(
         elif domain != website_fact.value:
             website_fact = website_fact.model_copy(update={"value": domain})
         facts = facts.model_copy(update={"website": website_fact})
-    company_domain = website_fact.value
 
     def problem(url: str | None) -> str | None:
         if not url:
             return "no source link"
         if not safe_http_url(url):
             return "not a plain web link (http or https only)"
-        if source_kind(url, criteria, company_domain) == BLOCKED:
+        if is_blocked(url, criteria):
             return f"blocked site ({host_of(url)})"
         if url_key(url) not in seen:
             return f"link not among the pages read ({url})"

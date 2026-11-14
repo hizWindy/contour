@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic_core import PydanticCustomError
 
 from apps.lead_finder.context import Origin
-from apps.lead_finder.params import AreaId, LeadFinderRunParams
+from apps.lead_finder.params import AreaId, LeadFinderRunParams, RunSource
 from apps.lead_finder.research import LeadCard
 from apps.lead_finder.rules import Result
 from apps.lead_finder.scoring import Band
@@ -123,6 +123,22 @@ class OptionCaps(BaseModel):
     daily_left_usd: Decimal
 
 
+class SourceOption(BaseModel):
+    """Where a discovery run can look for companies (PLAN-V16 T1-8, the contract part 2)."""
+
+    id: RunSource
+    label: str = Field(examples=["Property Daily"])
+    on: bool = Field(description="The tool's switch. The web is always on.")
+    ready: bool = Field(
+        description="It can be used now: on, and with a login. A run may name only a ready one."
+    )
+    sentence: str | None = Field(
+        description="Why it isn't ready, in one plain sentence for the Start page. Empty when "
+        "it is ready.",
+        examples=["Property Daily is switched off. An Admin can switch it on."],
+    )
+
+
 class RunOptions(BaseModel):
     """Everything the Start page needs to draw itself."""
 
@@ -139,6 +155,13 @@ class RunOptions(BaseModel):
     )
     companies_limit: CompaniesLimit
     caps: OptionCaps
+    sources: list[SourceOption] = Field(
+        default_factory=list,
+        description=(
+            "Where discovery can look: the web, Property Daily and Arealytics, in that order "
+            "(PLAN-V16 T1-8). A run's `sources` left out uses every one that is ready."
+        ),
+    )
     defaults: LeadFinderRunParams = Field(
         description=(
             "The starting values for every part of a run's `params`. The Start page must send "

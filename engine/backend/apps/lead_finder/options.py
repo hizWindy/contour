@@ -6,6 +6,7 @@ from decimal import Decimal
 from apps.lead_finder.geo import CITY_CENTRES, NATIONAL_CENTRE
 from apps.lead_finder.params import COMPANIES_MAX, COMPANIES_MIN, LeadFinderRunParams
 from apps.lead_finder.rules import CITY_GROUPS, LeadFinderRules
+from apps.lead_finder.run_sources import source_options
 from apps.lead_finder.runs import MODES_NEEDING_APPROVAL, RUN_KINDS
 from apps.lead_finder.schemas import (
     AreaOption,
@@ -103,5 +104,6 @@ def build_run_options(
             company_cap_usd=caps.company_cap_usd,
             daily_left_usd=daily_left_usd,
         ),
+        sources=source_options(settings),
         defaults=defaults,
     )

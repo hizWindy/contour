@@ -62,11 +62,17 @@ def run_cities(params: DiscoveryParams | LeadFinderRunParams, rules: LeadFinderR
     return list(params.cities)
 
 
+def web_picked(params: DiscoveryParams | LeadFinderRunParams) -> bool:
+    """True when discovery searches the web (PLAN-V16 T1-8): `sources` is left out, or names it."""
+    return params.sources is None or "web" in params.sources
+
+
 def make_slices(
     params: DiscoveryParams | LeadFinderRunParams, rules: LeadFinderRules
 ) -> list[Slice]:
     """Cities x triggers, city by city. `params.area` narrows a city's focus (see
-    `focus_places`); a city it doesn't list is searched whole.
+    `focus_places`); a city it doesn't list is searched whole. A run whose `sources` leave out the
+    web has no slices: its companies come from the property tools' feed (`run_sources.py`).
 
     The national choice (`cities: ["Australia"]`, PLAN-V16 T1-2) is one slice for each sign, not
     one for each city: 20 places x 6 signs would be 120 searches. Its searches say "Australia" in
@@ -78,6 +84,8 @@ def make_slices(
     known_triggers = {item.id for item in rules.criteria.triggers.every}
     national = rules.criteria.cities.national
     slices: list[Slice] = []
+    if not web_picked(params):
+        return slices
     for city in params.cities:
         if city != national and city not in rules.queries.areas:
             raise ValueError(f"The rules have no areas for the city {city!r}")

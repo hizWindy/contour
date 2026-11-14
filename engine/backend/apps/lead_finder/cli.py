@@ -40,6 +40,7 @@ from sqlalchemy.exc import OperationalError
 
 from apps.lead_finder.fields import AngleNotes, Candidates, CompanyFacts
 from apps.lead_finder.headcount import HeadcountReading, describe_reading, read_headcount
+from apps.lead_finder.property import hidden_sources
 from apps.lead_finder.rejudge import Rejudged, rejudge, save_rejudged, table
 from apps.lead_finder.research import (
     LeadCard,
@@ -375,6 +376,7 @@ async def _why_now_leads(
 
     settings, rules = get_settings(), load_rules()
     model = settings.model_for("why")
+    hidden = hidden_sources(settings)  # what Claude never reads (PLAN-V16 T1-8)
     today = datetime.now(ZoneInfo("Australia/Melbourne")).date()
     query = select(Lead.id, Lead.company, Lead.origin, Lead.card).order_by(Lead.created_at)
     query = query.where(Lead.run_id == run_id if run_id is not None else Lead.id.in_(lead_ids))
@@ -395,7 +397,7 @@ async def _why_now_leads(
             items.append(WhyNowItem(lead_id, company, card.result, words, Decimal(0), cost))
             continue
         sheet = facts_sheet(card.facts, card, rules, today, people=len(card.signalhire_people))
-        estimate = estimate_usd(why_input(card, sheet, rules, today), model)
+        estimate = estimate_usd(why_input(card, sheet, rules, today, hidden), model)
         action = "write again" if card.why_now is not None else "write"
         items.append(WhyNowItem(lead_id, company, card.result, action, estimate, cost))
     found = {item.lead_id for item in items}

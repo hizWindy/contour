@@ -33,7 +33,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from apps.lead_finder.context import OnReply
 from apps.lead_finder.rules import LeadFinderRules
 from apps.lead_finder.sanitize import clean_company_name, clean_domain, json_text, one_line
-from apps.lead_finder.sources import BLOCKED, source_kind, url_key
+from apps.lead_finder.sources import is_blocked, url_key
 from apps.lead_finder.tables import LIMITS, Rival, clip, company_key
 from core.claude.budget import Budget, BudgetSpent
 from core.claude.client import Claude, ClaudeError, ClaudeUnavailable, Reply, WebTools
@@ -149,7 +149,7 @@ def check_rivals(
             continue
         if url_key(candidate.url) not in seen:
             continue
-        if source_kind(candidate.url, rules.criteria, None) == BLOCKED:
+        if is_blocked(candidate.url, rules.criteria):
             continue
         keys.add(key)
         kept.append(

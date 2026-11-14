@@ -1,0 +1,198 @@
+"""Where a discovery run looks for companies: the web, Property Daily and Arealytics (PLAN-V16 T1-8,
+the contract part 2).
+
+- **The choice** (`DiscoveryParams.sources`): which of the three to use. Left out, every source
+  that is ready. The web is always ready. A tool is ready when its switch is on and it has a login.
+  It only says where discovery looks: the research of each company still uses every tool that is
+  switched on.
+- **The run options** (`source_options`): each source, on or not, ready or not, and one plain
+  sentence when it isn't, for the Start page.
+- **The feed** (`feed_candidates`): the new items of each tool the run picked, from our copy (free
+  and fast), for the run's cities and signs and since `since_days`. Each item that has a sign is a
+  company found, like one a web slice found. An item that is only a dampener (a fitout already given
+  to a firm) is never a reason to look at a company. The merge then makes a company found by a tool
+  and by the web one candidate.
+
+**At M1:** `core.sources.reader.source_availability` (Track 2) knows more than the settings: a tool
+paused for 24 hours after a block. `source_options` and `tool_readiness` then read it in place of
+`_from_settings`. The sentences are Track 2's own words.
+"""
+
+from collections.abc import Sequence
+from dataclasses import dataclass
+from datetime import date, datetime, timedelta
+from typing import Final
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from apps.lead_finder.params import DiscoveryParams, LeadFinderRunParams, RunSource
+from apps.lead_finder.rules import LeadFinderRules
+from apps.lead_finder.sanitize import clean_company_name, one_line, safe_http_url
+from apps.lead_finder.schemas import SourceOption
+from apps.lead_finder.scoring import city_of
+from apps.lead_finder.steps.discover import WHAT_HAPPENED_MAX, Found
+from apps.lead_finder.steps.plan import is_national, run_cities
+from core.api.errors import Problem
+from core.config import Settings
+from core.sources.reader import recent_items
+from core.sources.types import SOURCE_IDS, FeedItem, SourceId
+
+FEED_SLICE: Final = "feed:{source}"  # the slice id of a company a tool's feed found
+SOURCE_WORDS: Final[dict[RunSource, str]] = {
+    "web": "The web",
+    "property_daily": "Property Daily",
+    "arealytics": "Arealytics",
+}
+# Track 2's words (core/sources/service.py), so the Start page and Admin say the same
+OFF_SENTENCE = "Property Daily is switched off. An Admin can switch it on."
+NO_LOGIN_SENTENCE = "Property Daily has no login yet. An Admin needs to add one."
+AREALYTICS_SENTENCE = "Arealytics isn't connected: it refused automated access."
+SOURCE_NOT_READY = "source_not_ready"
+
+
+@dataclass(frozen=True)
+class Readiness:
+    on: bool
+    ready: bool
+    sentence: str | None  # why it isn't ready, for a person. None when it is
+
+
+def _from_settings(settings: Settings, tool: SourceId) -> Readiness:
+    """A tool is ready when its switch is on and it has a login. Arealytics has no connector in
+    PLAN-V16 (its site refused automated access, T2-2), so it is never ready."""
+    if tool == "arealytics":
+        return Readiness(on=settings.arealytics_enabled, ready=False, sentence=AREALYTICS_SENTENCE)
+    if not settings.property_daily_enabled:
+        return Readiness(on=False, ready=False, sentence=OFF_SENTENCE)
+    if settings.property_daily_username is None or settings.property_daily_password is None:
+        return Readiness(on=True, ready=False, sentence=NO_LOGIN_SENTENCE)
+    return Readiness(on=True, ready=True, sentence=None)
+
+
+def tool_readiness(settings: Settings) -> dict[RunSource, Readiness]:
+    """Each source: the web is always ready, and each tool by its switch and its login."""
+    found: dict[RunSource, Readiness] = {"web": Readiness(on=True, ready=True, sentence=None)}
+    for tool in SOURCE_IDS:
+        found[tool] = _from_settings(settings, tool)
+    return found
+
+
+def source_options(settings: Settings) -> list[SourceOption]:
+    """The three sources for the Start page (`GET /lead-finder/run-options`)."""
+    return [
+        SourceOption(
+            id=source,
+            label=SOURCE_WORDS[source],
+            on=readiness.on,
+            ready=readiness.ready,
+            sentence=readiness.sentence,
+        )
+        for source, readiness in tool_readiness(settings).items()
+    ]
+
+
+def picked_tools(
+    params: DiscoveryParams | LeadFinderRunParams, settings: Settings
+) -> list[SourceId]:
+    """The tools whose feed the run reads: the ones it names, or every ready one when it names
+    none. A tool it names must be ready (`check_sources`)."""
+    ready = tool_readiness(settings)
+    if params.sources is None:
+        return [tool for tool in SOURCE_IDS if ready[tool].ready]
+    return [tool for tool in SOURCE_IDS if tool in params.sources]
+
+
+def check_sources(params: DiscoveryParams, settings: Settings) -> None:
+    """Raises a 422 `source_not_ready` when the run names a tool that isn't ready, with the tool's
+    own sentence. Pure: the run manager and the estimate both call it."""
+    if params.sources is None:
+        return
+    ready = tool_readiness(settings)
+    late = [source for source in params.sources if not ready[source].ready]
+    if not late:
+        return
+    sentences = " ".join(ready[source].sentence or "" for source in late).strip()
+    names = " and ".join(SOURCE_WORDS[source] for source in late)
+    raise Problem(
+        422,
+        "A source isn't ready",
+        f"{sentences} Untick {names}, or start the run when it is ready.",
+        code=SOURCE_NOT_READY,
+        errors=[{"field": "body.params.sources", "message": f"{names} isn't ready"}],
+    )
+
+
+# --- The feed -----------------------------------------------------------------------------------
+
+
+def _date_of(item: FeedItem) -> date | None:
+    """The sign's date: the lease end for a lease, else when it happened, else when the tool
+    published it."""
+    if item.sign_id == "lease_ending" and item.lease_end is not None:
+        return item.lease_end
+    return item.happened_on or item.published_on
+
+
+def feed_found(
+    items: Sequence[FeedItem],
+    params: DiscoveryParams | LeadFinderRunParams,
+    rules: LeadFinderRules,
+) -> list[Found]:
+    """The feed items as companies found, like a web slice's: a usable name, a sign the run looks
+    for, a plain link, and a city of the run (any of our places for all of Australia). Each tool's
+    items keep their order. Pure."""
+    known = {item.id for item in rules.criteria.triggers.every}
+    wanted = set(params.triggers) & known
+    national = is_national(params, rules)
+    cities = set(run_cities(params, rules))
+    found: list[Found] = []
+    for item in items:
+        name = clean_company_name(item.company)
+        sign = item.sign_id
+        if name is None or sign is None or sign not in wanted or not safe_http_url(item.url):
+            continue
+        place = next(
+            (
+                metro
+                for text in (item.city, item.address)
+                if text and (metro := city_of(text, rules))
+            ),
+            None,
+        )
+        if place is not None and place not in cities:
+            continue  # not one of the run's places
+        if place is None and not national:
+            continue  # a run of named places needs a place it can check
+        when = _date_of(item)
+        found.append(
+            Found(
+                name=name,
+                website=None,
+                city=place,
+                trigger_id=sign,
+                what_happened=one_line(item.summary, WHAT_HAPPENED_MAX),
+                date=when.isoformat() if when else None,
+                url=item.url,
+                published=item.published_on.isoformat() if item.published_on else None,
+                slice_id=FEED_SLICE.format(source=item.source),
+            )
+        )
+    return found
+
+
+async def feed_candidates(
+    session: AsyncSession,
+    params: DiscoveryParams | LeadFinderRunParams,
+    rules: LeadFinderRules,
+    tools: Sequence[SourceId],
+    now: datetime,
+) -> list[Found]:
+    """The companies the picked tools' feeds found for this run, from our copy only (free). An
+    empty list when it picks none."""
+    if not tools:
+        return []
+    since = now - timedelta(days=params.since_days)
+    national = is_national(params, rules)
+    places = [rules.criteria.cities.national] if national else run_cities(params, rules)
+    items = await recent_items(session, places, since)
+    return feed_found([item for item in items if item.source in tools], params, rules)

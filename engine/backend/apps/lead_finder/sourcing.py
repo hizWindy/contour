@@ -1,36 +1,56 @@
 """Which source wins for each fact, and what the others said (PLAN-V4 C2 and C3).
 
-Several sources can give the same fact: Claude's web research, HubSpot and Signal Hire. The rules
-say which is main: `size.staff_sources` for staff numbers and `data_sources` for the rest, both in
-criteria.yaml. The first source with a value is the one the rules use, and a later one fills in
-only when the ones before it have nothing. Every other value is kept on the lead card, and a big
-gap between them is a flag for a person to check.
+Several sources can give the same fact: Claude's web research, HubSpot, Signal Hire, and since
+PLAN-V16 T1-8 Property Daily and Arealytics. The rules say which is main: `size.staff_sources` for
+staff numbers and `data_sources` for the rest, both in criteria.yaml. The first source with a value
+is the one the rules use, and a later one fills in only when the ones before it have nothing. Every
+other value is kept on the lead card, and a big gap between them is a flag for a person to check.
 
 Pure code: nothing here asks a source for anything, so the same facts always give the same card.
 """
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from datetime import date
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
 from apps.lead_finder.fields import CompanyFacts, Fact
-from apps.lead_finder.rules import LeadFinderRules, StaffSource
+from apps.lead_finder.rules import LeadFinderRules, OfficeSource, StaffSource
 from apps.lead_finder.sanitize import clean_domain
 from apps.lead_finder.scoring import city_of
 from core.hubspot.matching import clean_name, names_are_close
 from core.signalhire.details import SignalHireCompany, SignalHireOffice
 
-Source = Literal["claude", "hubspot", "signalhire"]
+Source = Literal["claude", "hubspot", "signalhire", "property_daily", "arealytics"]
 FactKey = Literal[
-    "name", "website", "industry", "city", "staff_in_city", "office_since", "decision_makers"
+    "name",
+    "website",
+    "industry",
+    "city",
+    "staff_in_city",
+    "office_since",
+    "decision_makers",
+    "office_m2",  # PLAN-V16 T1-8: the office's floor area
+    "lease_end",  # PLAN-V16 T1-8: when the office's lease ends (its sign is `lease_ending`)
+    "last_fitout",  # PLAN-V16 T1-8: the last fitout, when a property tool knows a newer one
 ]
 SOURCE_NAMES: dict[Source, str] = {
     "claude": "Claude",
     "hubspot": "HubSpot",
     "signalhire": "Signal Hire",
+    "property_daily": "Property Daily",
+    "arealytics": "Arealytics",
 }
+# The name of each source of the office's facts on the card (`data_sources.office_m2` and the rest)
+OFFICE_SOURCE: dict[OfficeSource, Source] = {
+    "property_daily": "property_daily",
+    "arealytics": "arealytics",
+    "hubspot": "hubspot",
+    "web_research": "claude",
+}
+OfficeFact = Literal["office_m2", "lease_end", "office_since"]
 # The source of each kind of staff number in `size.staff_sources`. The two Claude kinds are what its
 # web research read: a LinkedIn count (doubled by the size rule), or a number from any other page.
 STAFF_SOURCE: dict[StaffSource, Source] = {
@@ -150,6 +170,81 @@ def _staff_gap(everyone: list[StaffCandidate], rules: LeadFinderRules) -> str | 
         f"{SOURCE_NAMES[STAFF_SOURCE[c.kind]]} about {c.staff:,}" for c in everyone if c.staff > 0
     )
     return f"The staff numbers are more than {ratio:g} times apart: {said}. Check which is right."
+
+
+# --- The office's size, lease end and move-in date (PLAN-V16 T1-8) ------------------------------
+
+
+@dataclass(frozen=True)
+class OfficeValue:
+    """One source's value for one of the office's facts, before the rules pick one."""
+
+    source: OfficeSource
+    value: int | date  # square metres, or a day
+    text: str  # for a person, like "1,400 m²" or "June 2028"
+    url: str | None  # the page or record it comes from, when it has one
+
+
+@dataclass(frozen=True)
+class OfficeChoice:
+    winner: OfficeValue | None  # None when no listed source has a value
+    entry: FactSource | None  # the card's entry, None when only the web research has a value
+
+
+def choose_office_value(
+    fact: OfficeFact, values: Sequence[OfficeValue], rules: LeadFinderRules
+) -> OfficeChoice:
+    """The value the rules use for the office's size, lease end or move-in date: the first source
+    in `data_sources.<fact>` that has one. A source the list leaves out isn't used. The other
+    values are kept in the entry, and two that are far apart raise a flag."""
+    order = list(getattr(rules.criteria.data_sources, fact))
+    ranked = sorted((v for v in values if v.source in order), key=lambda v: order.index(v.source))
+    if not ranked:
+        return OfficeChoice(None, None)
+    winner, others = ranked[0], ranked[1:]
+    used = OFFICE_SOURCE[winner.source]
+    if not others and used == "claude":
+        return OfficeChoice(winner, None)
+    entry = FactSource(
+        fact=fact,
+        used=used,
+        others=[
+            OtherValue(source=OFFICE_SOURCE[other.source], value=other.text, url=other.url)
+            for other in others
+        ],
+        conflict=_office_gap(fact, ranked, rules),
+    )
+    return OfficeChoice(winner, entry)
+
+
+def _months_apart(a: date, b: date) -> int:
+    first, last = sorted((a, b))
+    months = (last.year - first.year) * 12 + (last.month - first.month)
+    return months - 1 if last.day < first.day else months
+
+
+def _office_gap(
+    fact: OfficeFact, values: Sequence[OfficeValue], rules: LeadFinderRules
+) -> str | None:
+    """A plain sentence when two sources are far apart, like "Arealytics 1,400 m², Claude 900 m²".
+    Sizes: more than `conflicts.office_m2_gap_ratio` times apart. Dates: more than
+    `conflicts.date_gap_months` months apart."""
+    conflicts = rules.criteria.conflicts
+    said = ", ".join(f"{SOURCE_NAMES[OFFICE_SOURCE[v.source]]} {v.text}" for v in values)
+    if fact == "office_m2":
+        sizes = [v.value for v in values if isinstance(v.value, int) and v.value > 0]
+        ratio = conflicts.office_m2_gap_ratio
+        if len(sizes) < 2 or max(sizes) <= min(sizes) * ratio:
+            return None
+        return (
+            f"The office sizes are more than {ratio:g} times apart: {said}. Check which is right."
+        )
+    days = [v.value for v in values if isinstance(v.value, date)]
+    limit = conflicts.date_gap_months
+    if len(days) < 2 or _months_apart(min(days), max(days)) <= limit:
+        return None
+    what = "lease ends" if fact == "lease_end" else "move-in dates"
+    return f"The {what} are more than {limit} months apart: {said}. Check which is right."
 
 
 # --- The company's name, website and industry (PLAN-V4 C1 and C2) -----------------------------
@@ -290,14 +385,6 @@ def _compare(
 
 def _same_text(a: str, b: str) -> bool:
     return " ".join(a.split()).casefold() == " ".join(b.split()).casefold()
-
-
-def hubspot_filled(before: CompanyFacts, after: CompanyFacts) -> list[FactSource]:
-    """An entry for each fact HubSpot filled in where the research found none (`fill_gaps`), so
-    the card says the move-in year came from HubSpot and not from Claude."""
-    if before.office_since != after.office_since:
-        return [FactSource(fact="office_since", used="hubspot", others=[], conflict=None)]
-    return []
 
 
 # --- Offices and people (PLAN-V4 C2) -----------------------------------------------------------

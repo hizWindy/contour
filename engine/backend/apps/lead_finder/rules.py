@@ -135,16 +135,23 @@ class Size(Strict):
 
 
 DataSource = Literal["headcount_tool", "web_research"]
+# The sources of the office's size, its lease end and its move-in date (PLAN-V16 T1-8): the two
+# property tools, HubSpot and the web research.
+OfficeSource = Literal["property_daily", "arealytics", "hubspot", "web_research"]
 
 
 class DataSources(Strict):
     """Which source is main for which data (PLAN-V4 C2). In each list the first source with a value
     is the one the rules use, and the ones after it are the backup. Staff numbers have their own
-    list, `size.staff_sources`."""
+    list, `size.staff_sources`. The office's size, lease end and move-in date have theirs since
+    PLAN-V16 T1-8."""
 
     company_details: list[DataSource] = Field(min_length=1)
     office_cities: list[DataSource] = Field(min_length=1)
     decision_makers: list[DataSource] = Field(min_length=1)
+    office_m2: list[OfficeSource] = Field(min_length=1)
+    lease_end: list[OfficeSource] = Field(min_length=1)
+    office_since: list[OfficeSource] = Field(min_length=1)
 
     @model_validator(mode="after")
     def check_lists(self) -> Self:
@@ -158,6 +165,10 @@ class Conflicts(Strict):
     # Staff numbers from two sources more than this many times apart raise a flag. The lower bound
     # keeps a typo (0.5, or 1) from flagging every lead.
     staff_gap_ratio: float = Field(gt=1, le=20)
+    # PLAN-V16 T1-8: two office sizes more than this many times apart, or two lease ends or move-in
+    # dates more than this many months apart, raise a flag
+    office_m2_gap_ratio: float = Field(gt=1, le=20)
+    date_gap_months: int = Field(ge=1, le=120)
 
 
 class Fitout(Strict):
