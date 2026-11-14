@@ -552,7 +552,7 @@ Newest first.
 
 ## Track 2: Companies backend (session 2)
 
-**Progress:** Stage A 3 of 9. Stage B 0 of 7. Every step is `backend-agent` work.
+**Progress:** Stage A 4 of 9. Stage B 0 of 7. Every step is `backend-agent` work.
 
 ### Stage A: call notes
 
@@ -569,7 +569,7 @@ Newest first.
   - Checked at start-up: every field on the list must be in the field map.
   - **Done when:** a test proves a field off the list is refused, and that Perth maps to HubSpot's "other office 1" group.
 
-- [ ] **T2-4. The sorter** (`apps/companies/notes.py`).
+- [x] **T2-4. The sorter** (`apps/companies/notes.py`). Done 2026-11-15, `b2498a4`: `notes.py`, `note_dates.py`, 101 tests with a fake Claude.
   - **With the AI off:** the note is the call's text. The outcome, the changes and the tasks are what the rep adds by hand. Status goes straight to `to_confirm`. Free.
   - **With the AI on:** one Claude request in a fixed form, no web tools, the model `model_notes`, at most `notes_cap_usd`. It follows `prep.py`: a background runner that stops on shutdown, the cost in the search log, and the daily limit.
   - **What Claude gets:** the note with emails and phone numbers removed (`scrub`), today's date in Melbourne, the company's offices, the allow-list and the outcome names. The person is already known from the panel. Without one, code matches a name in the note to the company's people.
@@ -658,6 +658,14 @@ Newest first.
 
 Newest first.
 
+- 2026-11-15, T2-4 done (`b2498a4`). Choices made while building (each can be changed):
+  - The date rules are in their own module, `note_dates.py`. "Next Tuesday" is the Tuesday of next week (weeks start Monday); the card shows the rep's words beside every date. Weekends move to Monday for a task; public holidays don't (not confirmed yet).
+  - A last move with no year means the most recent one ("moved in March" is 1 Mar 2026). A month with no day is the 1st (**TBC** with Levi).
+  - A task whose date code can't read is kept, due the next working day, with a sentence on the card. Dropping it would lose the follow-up.
+  - What is dropped also shows as one sentence in `unsure`, since `CallNoteOut` has no field for it. It goes into the call's text when sent.
+  - The sort pins Claude's effort at `medium`, so raising `claude_effort` for research never raises a sort's cost.
+  - The rep's outcome wins over the sorter's; `sorted` keeps the sorter's for T2-8.
+  - **Found:** `scrub` (in `facts.py`) takes a date written with dashes or dots (31-03-2028, 2028-03-31) for a phone number. Since a note is scrubbed when saved (T2-5), a typed lease date would be lost. T2-5 makes `scrub` keep date-shaped numbers. Call prep uses the same `scrub`, and a date is not a contact detail.
 - 2026-11-15, T2-2 and T2-3 done (`fde75c2`, `8fed44f`). Notes:
   - **For Track 1 (T1-4, T1-8):** `scripts/schema_map.py` run with the main folder's venv reads the main folder's `.env` and writes into the main folder. Run it with `PYTHONPATH=<your worktree>/engine/backend`.
   - The schema map lists changes from `SCHEMA-0013.md`: no maps were saved for 0014 to 0017. After 0020 slots in at M1, make `SCHEMA-0021.md` again.
