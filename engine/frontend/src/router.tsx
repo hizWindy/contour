@@ -7,7 +7,7 @@
  * so this table doesn't change when a project is added. A project still to be developed gets one
  * page that says so.
  */
-import { createBrowserRouter, Navigate, type RouteObject } from 'react-router'
+import { createBrowserRouter, Navigate, Outlet, type RouteObject } from 'react-router'
 import { runSummaryQueryOptions } from '@/api/hooks'
 import { MODULES, PLANNED } from '@/modules'
 import { AppFrame } from '@/shell/app-frame'
@@ -15,6 +15,7 @@ import type { RouteHandle } from '@/shell/crumbs'
 import { costSince } from '@/shell/home-words'
 import { adminTabLabel } from '@/shell/nav'
 import { page, type PageModule } from '@/shell/page-route'
+import { RequireSignIn } from '@/shell/require-sign-in'
 import { NotFound, RouteError } from '@/shell/route-error'
 import { ShellSkeleton } from '@/shell/shell-skeleton'
 
@@ -38,6 +39,24 @@ export const routes: RouteObject[] = [
     path: '/login',
     handle: { crumb: 'Sign in' } satisfies RouteHandle,
     ...page(() => import('@/auth/login-page')),
+  },
+  // A lead's one-page profile (PLAN-V16 T3-7) prints on one A4 page, so it sits outside the app
+  // frame too. It still needs a person who may see leads.
+  {
+    path: '/leads/:leadId/profile',
+    element: (
+      <RequireSignIn>
+        <Outlet />
+      </RequireSignIn>
+    ),
+    errorElement: <RouteError />,
+    children: [
+      {
+        index: true,
+        handle: { crumb: 'Profile' } satisfies RouteHandle,
+        ...page(() => import('@/apps/lead-finder/lead/profile')),
+      },
+    ],
   },
   {
     path: '/',
