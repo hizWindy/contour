@@ -17,6 +17,7 @@ dependencies = [
     "langsmith>=0.14.12",
     "openpyxl",
     "pgvector",
+    "playwright>=1.65.2",
     "psycopg-pool>=3.3.3",
     "psycopg[binary]",
     "pydantic",
