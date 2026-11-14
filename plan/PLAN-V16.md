@@ -508,7 +508,7 @@ Newest first.
 
 ## Track 3: the website (session 3)
 
-**Progress:** 3 of 8.
+**Progress:** 4 of 8 (T3-4 built, waiting for Al-khair's look).
 
 Every step follows `engine/DESIGN.md`, uses the `ui-build` skill, and builds against the contract with `mockApi`.
 
@@ -540,11 +540,13 @@ Every step follows `engine/DESIGN.md`, uses the `ui-build` skill, and builds aga
   - **Contour angle,** the likely roles to contact, and the suggested opener.
   - **An excluded lead** shows its reason first, with an "Override" button that asks once before it judges again.
   - **Done when:** the card has tests for a full record, an empty one, an excluded lead and each tier, and Al-khair has seen it.
+  - Built 2026-11-15 (c278332), with its tests. **Waiting for Al-khair's look** before the tick.
 
-- [ ] **T3-5. Results.**
+- [x] **T3-5. Results.**
   - A Tier column, and filters for tier, confidence, city group, "Has a property record" and "Excluded". The default view is tiers A and B.
   - The map fits all of Australia when leads are spread, and one city when they aren't.
   - **Done when:** the filters and the default view have tests.
+  - Done 2026-11-15 (fad9835, fabbc0d). Built, waiting for a look.
 
 - [ ] **T3-6. Rules and Admin.**
   - **Rules page:** the city groups, the five filters, the exclusions, the signs by strength, the dampeners, the score table and the tiers, with the TBC list.
@@ -562,6 +564,10 @@ Every step follows `engine/DESIGN.md`, uses the `ui-build` skill, and builds aga
 ### Track 3 Log
 
 Newest first.
+
+- 2026-11-15: **T3-5 done** (fad9835, fabbc0d), built and waiting for a look. Results opens on Tier A and B: an address with no `tier` shows them, a line under the bar says "Showing Tier A and B, the good leads." with "Show every tier" (`tier=all`), and the API always gets the tiers spelled out (`tier=A&tier=B`, or all four), so the list never depends on the server's default. Tier is in the bar; Confidence and City group in the panel's new "Confidence and place" group; "Only leads with a property record" and "Only excluded leads" in Other (the second shows every tier with it, since an excluded lead is in none). Each is a chip; the default view isn't. A Tier column in the table and in the list beside the map. The map fits all of Australia when the leads are in more than one city, else the one city. 53 Results tests. **Browser check** on the mock: the default view, every tier, the map spread (whole country) and one city (Adelaide), the panel at 1280 dark, and the phone: no sideways scroll, no page errors. **For Track 1 / M1:** the four leads routes (list, facets, map, export) get the same new filters; `excluded=true` means "only excluded"; the website doesn't need tier counts in the facets.
+- 2026-11-15: **T3-4 built** (c278332), with its tests; **waiting for Al-khair's look** before the tick. The headline "A · 82 · Medium" (a screen reader hears "Tier A, score 82, Medium confidence") with what the tier asks for, what changed since the last research, why the confidence, what the dampeners took off, and "Verify before outreach" for a Tier A lead with low confidence; it replaced the score bar and its band. An excluded lead shows its reason first (with the evidence and its page) and an Override that asks once, then judges it again and says the new tier in a toast; an overridden exclusion stays as one quiet line. The Overview gains Property record (above the Summary), Size and Dampeners, the Contour angle and "Suggested opener" in the Summary, and the likely roles. Score and rules gains the five filters and what the dampeners took off. The Results side panel shows the row's tier line while the card loads. The new routes go through `apiV16` (`src/api/v16-client.ts`), the same client as `api`, typed by hand until M1. 61 card tests. **Browser check** on the mock at 1440 light (full record, verify flag, excluded, the Override end to end, empty record), 1280 dark and 390 light and dark: no sideways scroll, no page errors.
+- 2026-11-15: **Arealytics dropped** (Track 2's message and its 55e96f4, fe28990: Al-khair dropped it after its sign-in page said "Automated access detected"). For Track 3: `SourceOut` gains `connected`; a source that isn't connected gets no switch, no Check now and no Resume (T3-6); `arealytics_enabled` isn't on the Settings page; the card says "Arealytics: switched off"; the Start page greys it out with its sentence ("Arealytics isn't connected: it refused automated access."), as for any source that isn't ready. Replied to Track 2 with what Track 3 does.
 
 - 2026-11-15: **T3-3 done** (cf1a7cd, ae18d56), built and waiting for a look. The run page's Progress card opens with the goal: "12 of 20 good leads found" as its biggest number, with a bar and a line under it. Running counts the Pass and Director review results so far (Tier A or B, choice 1); once the run ends, the backend's `good_leads`. "It met its goal." or, ended short, why: the backend's `stop_reason` without a leading "Found 12 of 20 leads." (the number is already above), or plain words by status when it gives none. Then "Where the leads came from" (`leads_by_source`). "Leads from this run" replaces "Companies researched": Ranked leads (A and B, by tier then score, with the result), Excluded (each reason), Watch (C), and a count of discarded ones with a link to them in Results (`tier=discard`, read by T3-5). What it looked for says "All of Australia", how many leads and where it looked. 36 run tests. **Browser check** on the mock (below): the four states at 1440 light, the short run at 1440 dark and at 390 light and dark, running at 1280: no sideways scroll, no page errors. Fixed from it: the goal's bar read as one with the companies bar (a line now parts them), and a long exclusion reason now wraps on a phone.
 - 2026-11-15: **T3-2 done** (a92261a, 74196ff), built and waiting for a look. Where: "All of Australia" first (it clears the cities and is sent alone, as `["Australia"]`), then the four groups as chips; the map is a shorter preview of what is picked, and a national pick zooms it out to the whole country. Leads to find: "How many leads", 1 to 100, starts at the default; "20 leads" reads as 20; one it can't read says "Type a whole number from 1 to 100." and keeps Start off; under it "About 50 companies, about US$19." or, in Ochre, the backend's sentence for the limit that binds. Where to look: the web, Property Daily, Arealytics; one that isn't ready is greyed out with its sentence. The ready ones are the server's default, so `sources` is sent only when a person changes them. The sign groups also read the strengths T1-4 may send (very high to low), and any group the page doesn't know comes last. **Browser check** at 1440, 1280 and 390, light and dark: no sideways scroll, no page errors.
