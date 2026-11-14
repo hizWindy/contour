@@ -95,6 +95,169 @@ const SCORE_PARTS: LeadDetail['score_parts'] = [
   },
 ]
 
+/** The five filters (PLAN-V16 T1-3): one estimated, never a fail for an unknown fact. */
+export const FILTERS: LeadDetail['filters'] = [
+  { id: 'location', label: 'Location', state: 'pass', basis: 'Melbourne, a priority city.' },
+  {
+    id: 'office_size',
+    label: 'Office size',
+    state: 'estimated',
+    basis: 'About 2,500 m², estimated from 250 staff.',
+  },
+  { id: 'headcount', label: 'Headcount', state: 'pass', basis: '250 staff in Melbourne.' },
+  {
+    id: 'office_relevance',
+    label: 'Office relevance',
+    state: 'pass',
+    basis: 'Most staff work in the office.',
+  },
+  { id: 'sector', label: 'Sector', state: 'pass', basis: 'Technology, a priority sector.' },
+]
+
+/** Every dampener check, as the backend sends them: one found, the others not found or not checked. */
+export const DAMPENERS: LeadDetail['dampeners'] = [
+  {
+    id: 'recent_fitout',
+    label: 'A fitout or move in the last 3 years',
+    state: 'not_found',
+    strength: 'strong',
+    evidence: null,
+    date: null,
+    url: null,
+    can_reverse: null,
+  },
+  {
+    id: 'older_fitout',
+    label: 'A fitout or move 3 to 5 years ago',
+    state: 'found',
+    strength: 'moderate',
+    evidence: 'Sample Interiors finished a fitout of level 12 in March 2022.',
+    date: '2022-03-01',
+    url: 'https://www.example.com/projects/acme-level-12',
+    can_reverse: 'Hiring would outgrow the space by 2027.',
+  },
+  {
+    id: 'outsourcing',
+    label: 'A real estate outsourcing deal',
+    state: 'not_found',
+    strength: 'strong',
+    evidence: null,
+    date: null,
+    url: null,
+    can_reverse: null,
+  },
+  {
+    id: 'competitor_tie',
+    label: 'A tie to a competitor',
+    state: 'not_found',
+    strength: 'moderate',
+    evidence: null,
+    date: null,
+    url: null,
+    can_reverse: null,
+  },
+  {
+    id: 'procurement',
+    label: 'Procurement red flags',
+    state: 'not_checked',
+    strength: 'moderate',
+    evidence: null,
+    date: null,
+    url: null,
+    can_reverse: null,
+  },
+]
+
+/** What the tools and the research know about the office: the card's "full record" (T3-4). */
+export const FULL_RECORD: Partial<LeadDetail> = {
+  tier: 'A',
+  score: 82,
+  score_before_dampeners: 92,
+  confidence: 'medium',
+  confidence_why: 'The headcount is from LinkedIn; the lease end is from Property Daily.',
+  dampeners: DAMPENERS,
+  property: {
+    records: [
+      {
+        source: 'property_daily',
+        kind: 'fitout',
+        company: 'Acme Software',
+        city: 'Melbourne',
+        address: '120 Collins Street',
+        building: 'Acme Tower',
+        floor: 'Level 12',
+        area_m2: 1400,
+        lease_start: null,
+        lease_end: null,
+        happened_on: '2022-03-01',
+        published_on: '2022-03-10',
+        summary: 'Sample Interiors finished a fitout of level 12 at 120 Collins Street.',
+        url: 'javascript:alert(1)',
+        read_at: '2026-11-14T22:00:00Z',
+      },
+      {
+        source: 'property_daily',
+        kind: 'lease',
+        company: 'Acme Software',
+        city: 'Melbourne',
+        address: '120 Collins Street',
+        building: 'Acme Tower',
+        floor: 'Level 12',
+        area_m2: 1400,
+        lease_start: '2018-07-01',
+        lease_end: '2028-06-30',
+        happened_on: '2018-07-01',
+        published_on: '2018-06-20',
+        summary: 'Leased 1,400 m² on level 12 of 120 Collins Street, ending in June 2028.',
+        url: 'https://www.propertydaily.com.au/news/acme-lease',
+        read_at: '2026-11-14T22:00:00Z',
+      },
+    ],
+    checked: { property_daily: 'found', arealytics: 'off' },
+    looked_up_at: '2026-11-14T22:00:00Z',
+  },
+  office: {
+    address: '120 Collins Street, Melbourne',
+    building: 'Acme Tower',
+    floor: 'Level 12',
+    area_m2: 1400,
+    area_basis: 'confirmed',
+    since: '2017',
+    since_words: 'At this address since at least 2017.',
+    lease_end: '2028-06-30',
+    lease_end_basis: 'confirmed',
+    fitout_by: 'Sample Interiors',
+    source: 'property_daily',
+  },
+  headcount: {
+    now: 120,
+    projected: 180,
+    now_basis: 'confirmed',
+    projected_basis: 'estimated',
+    source_url: 'https://www.wgea.gov.au/data/acme',
+  },
+  space: { now_m2: 1200, projected_m2: 1800 },
+  contour_angle: 'Growth planning: a bigger team needs more room by 2028.',
+  contact_roles: ['CEO', 'COO', 'Head of People'],
+  what_changed: { kind: 'upgraded', text: 'Up from B to A: a lease end in 2028 was found.' },
+}
+
+/** An excluded lead (Levi's section 3): a Drop, left out with its reason. */
+export const EXCLUDED: Partial<LeadDetail> = {
+  result: 'drop',
+  tier: 'discard',
+  score: 0,
+  score_before_dampeners: 0,
+  excluded: {
+    reason_id: 'law_firm',
+    label: 'A law firm',
+    evidence: 'Acme Software is a law firm, despite its name.',
+    url: 'https://www.example.com/acme-legal',
+    overridden_by: null,
+    overridden_at: null,
+  },
+}
+
 export function makeLead(changes: Partial<LeadDetail> = {}): LeadDetail {
   return {
     id: LEAD_ID,
@@ -220,6 +383,21 @@ export function makeLead(changes: Partial<LeadDetail> = {}): LeadDetail {
     updated_at: '2026-10-26T04:00:00Z',
     previous: [],
     rivals: [],
+    // PLAN-V16: an empty record. Tier B, no dampener checked, nothing from the tools yet.
+    tier: 'B',
+    score_before_dampeners: 51,
+    confidence: 'medium',
+    confidence_why: 'The staff number is from the research; the lease end is from a news page.',
+    filters: FILTERS,
+    excluded: null,
+    dampeners: [],
+    property: null,
+    office: null,
+    headcount: null,
+    space: null,
+    contour_angle: null,
+    contact_roles: [],
+    what_changed: null,
     ...changes,
   }
 }

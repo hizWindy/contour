@@ -1,9 +1,11 @@
 /**
  * The top of the lead card (PLAN-V6, F1): what a person needs to decide, without scrolling on a
- * laptop. The result with its stage and where the company came from; the score as a bar with its
- * band; one line on why to call now (the Why now's reason, PLAN-V12 D1), or else why it fits; the
- * best sign with its date and page; staff and office size, each with its source; the HubSpot
- * label with the owner; the first person to talk to; and the actions.
+ * laptop. An excluded lead's reason first, with its Override (PLAN-V16 T3-4); the result with its
+ * stage and where the company came from; the headline "A · 82 · Medium" with what changed (it
+ * replaced the score bar and its band); one line on why to call now (the Why now's reason,
+ * PLAN-V12 D1), or else why it fits; the best sign with its date and page; staff and office size,
+ * each with its source; the HubSpot label with the owner; the first person to talk to; and the
+ * actions.
  *
  * The name is the page's title (or the side panel's), so it is not repeated here. The details are
  * in the tabs below.
@@ -17,51 +19,13 @@ import { SourceLink } from '@/components/source-link'
 import { SourceMark } from '@/components/source-mark'
 import { StatusBadge } from '@/components/status-badge'
 import { Badge } from '@/components/ui/badge'
-import { formatM2, formatScore, formatStaff } from '@/lib/format'
+import { formatM2, formatStaff } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { Actions } from './actions'
-import { BAND_WORDS, bestTrigger, firstPerson, sourceWord } from './words'
+import { ExclusionNotice, TierHeadline } from './headline'
+import { activeExclusion, officeSource } from './v16-words'
+import { bestTrigger, firstPerson, sourceWord } from './words'
 import { rejectReasonLabel } from '../../reject-reasons-data'
-
-/** The points earned out of the points the tool could check, as words and as a bar. */
-function ScoreBar({ lead }: { lead: LeadDetail }) {
-  const checked = lead.score_checked
-  const words = `Score ${formatScore(lead.score, checked)}${checked ? ' checked' : ''}`
-  const band = lead.band ? (
-    <Badge variant="outline">{BAND_WORDS[lead.band] ?? lead.band}</Badge>
-  ) : null
-  if (!checked) {
-    return (
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-ui font-semibold tabular-nums">{words}</span>
-        {band}
-      </div>
-    )
-  }
-  const share = Math.max(0, Math.min(100, Math.round((lead.score / checked) * 100)))
-  return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-ui font-semibold tabular-nums">{words}</span>
-        {band}
-      </div>
-      <div
-        role="meter"
-        aria-label="Score"
-        aria-valuemin={0}
-        aria-valuemax={checked}
-        aria-valuenow={lead.score}
-        aria-valuetext={`${String(lead.score)} of ${String(checked)} points checked`}
-        className="h-2 w-full max-w-sm overflow-hidden rounded-sm bg-muted"
-      >
-        <div
-          className="h-full rounded-sm bg-muted-foreground"
-          style={{ width: `${String(share)}%` }}
-        />
-      </div>
-    </div>
-  )
-}
 
 function Item({
   label,
@@ -94,20 +58,32 @@ export function QuickView({ lead }: { lead: LeadDetail }) {
   const sent = useLeadHubSpot(lead.id).data
   const facts = lead.facts
   const staff = typeof facts.staff_in_city.value === 'number' ? facts.staff_in_city.value : null
-  // The size the rules used: the research's own number, or an estimate from the staff.
+  // The size: the current office's own area when a source gave one (PLAN-V16 T1-8's order:
+  // Property Daily, Arealytics, HubSpot, the research), else the size the rules used, the
+  // research's own number or an estimate from the staff.
+  const office = lead.office
+  const officeArea = office?.area_m2 ?? null
   const m2 =
-    lead.office_m2 ?? (typeof facts.office_m2.value === 'number' ? facts.office_m2.value : null)
+    officeArea ??
+    lead.office_m2 ??
+    (typeof facts.office_m2.value === 'number' ? facts.office_m2.value : null)
+  const m2Estimated =
+    officeArea !== null ? office?.area_basis === 'estimated' : lead.office_m2_estimated
   const m2Source =
-    lead.office_m2_estimated && facts.office_m2.value === null
-      ? 'the staff number'
-      : facts.office_m2.source_url
-        ? 'Claude'
-        : null
+    officeArea !== null && office
+      ? officeSource(office)
+      : lead.office_m2_estimated && facts.office_m2.value === null
+        ? 'the staff number'
+        : facts.office_m2.source_url
+          ? 'Claude'
+          : null
+  const excluded = activeExclusion(lead) !== null
   const best = bestTrigger(lead)
   const person = firstPerson(lead)
   const reason = lead.why_now?.reason ? lead.why_now.reason : null // PLAN-V12 D1
   return (
     <section aria-label="Quick view" className="flex flex-col gap-4">
+      <ExclusionNotice lead={lead} />
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <ResultBadge result={lead.result} />
         {lead.stage ? <span className="text-ui text-muted-foreground">{lead.stage}</span> : null}
@@ -116,7 +92,8 @@ export function QuickView({ lead }: { lead: LeadDetail }) {
         {lead.is_test ? <Badge variant="outline">Test set</Badge> : null}
       </div>
 
-      <ScoreBar lead={lead} />
+      {/* An excluded lead is not scored, so its reason above stands in for the headline. */}
+      {excluded ? null : <TierHeadline lead={lead} />}
 
       {lead.form_failed ? (
         <p role="status" className="max-w-prose rounded-md border border-destructive px-3 py-2">
@@ -167,7 +144,7 @@ export function QuickView({ lead }: { lead: LeadDetail }) {
             <span className="text-muted-foreground">Not known</span>
           ) : (
             <WithSource
-              value={formatM2(m2, lead.office_m2_estimated)}
+              value={formatM2(m2, m2Estimated)}
               // Office size has no entry of its own in the sources: it comes from the research,
               // or the rules estimate it from the staff.
               source={m2Source}

@@ -35,7 +35,7 @@ export type FieldError = Schemas['FieldError']
 
 // Leads
 export type LeadRow = V16.LeadRow // V16
-export type LeadDetail = Schemas['LeadDetail']
+export type LeadDetail = V16.LeadDetail // V16
 export type LeadPage = V16.LeadPage // V16
 export type LeadFacets = Schemas['LeadFacets']
 export type LeadPatch = Schemas['LeadPatch']
@@ -54,6 +54,18 @@ export type CityGroup = V16.CityGroup // V16
 export type Tier = V16.Tier // V16
 export type Confidence = V16.Confidence // V16
 export type Exclusion = V16.Exclusion // V16
+// The lead card's new parts (PLAN-V16 contract parts 1 and 3)
+export type PropertySource = V16.PropertySource // V16
+export type SourceStatus = V16.SourceStatus // V16
+export type PropertyRecord = V16.PropertyRecord // V16
+export type RecordKind = V16.RecordKind // V16
+export type Office = V16.Office // V16
+export type ChangeKind = V16.ChangeKind // V16
+export type FilterState = V16.FilterState // V16
+export type DampenerStrength = V16.DampenerStrength // V16
+// Sources for Admin (PLAN-V16 contract part 4)
+export type SourceOut = V16.SourceOut // V16
+export type SourceList = V16.SourceList // V16
 
 // Settings, searches, memory, HubSpot, tests
 export type SettingsOut = Schemas['SettingsOut']

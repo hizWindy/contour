@@ -4,8 +4,8 @@
  * linked at the top.
  *
  * It never opens empty (PLAN-V7 C4): the row the person opened is already in the list, so the name,
- * the place, the result and the score show at once, and the rest of the card fills in when it
- * arrives.
+ * the place, the result and the tier line ("B · 51 · Medium", PLAN-V16) show at once, and the
+ * rest of the card fills in when it arrives.
  */
 import { ExternalLink } from 'lucide-react'
 import { useState } from 'react'
@@ -15,6 +15,7 @@ import type { LeadRow } from '@/api/types'
 import { PendingDetail } from '@/components/skeletons'
 import { ErrorState } from '@/components/error-state'
 import { ResultBadge } from '@/components/result-badge'
+import { TierLine } from '@/components/tier-mark'
 import {
   Sheet,
   SheetContent,
@@ -22,7 +23,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
-import { formatScore } from '@/lib/format'
 import { LeadCardView } from '../lead/lead-card-view'
 
 /** What the list row already says, shown while the card loads. */
@@ -30,9 +30,7 @@ function RowSummary({ row }: { row: LeadRow }) {
   return (
     <p className="mb-6 flex flex-wrap items-center gap-x-3 gap-y-2 text-ui">
       <ResultBadge result={row.result} />
-      <span className="tabular-nums">
-        {`Score ${formatScore(row.score, row.score_checked)}${row.score_checked ? ' checked' : ''}`}
-      </span>
+      <TierLine tier={row.tier} score={row.score} confidence={row.confidence} />
     </p>
   )
 }

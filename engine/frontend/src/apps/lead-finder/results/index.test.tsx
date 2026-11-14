@@ -397,7 +397,7 @@ describe('the results page', () => {
     await user.click(await screen.findByRole('button', { name: 'Acme Software' }))
     const panel = await screen.findByRole('dialog', { name: 'Acme Software' })
     expect(await within(panel).findByRole('tablist', { name: 'Lead details' })).toBeInTheDocument()
-    expect(within(panel).getByText('Score 51 of 77 checked')).toBeInTheDocument()
+    expect(panel.querySelector('[data-slot="tier-headline"]')).toHaveTextContent(/Tier B.*score 51/)
     expect(within(panel).getByRole('link', { name: 'Open the full page' })).toHaveAttribute(
       'href',
       `/leads/${LEAD_ID}`,
@@ -429,7 +429,8 @@ describe('the results page', () => {
 
     const panel = await screen.findByRole('dialog', { name: 'Acme Software' })
     expect(within(panel).getByText('Software, Melbourne')).toBeInTheDocument()
-    expect(within(panel).getByText('Score 51 of 77 checked')).toBeInTheDocument()
+    // The row's own tier line shows while the card loads (PLAN-V16).
+    expect(panel).toHaveTextContent(/Tier B.*score 51.*Medium confidence/)
     expect(within(panel).getByText('Loading the lead.')).toBeInTheDocument()
     expect(within(panel).queryByRole('tablist')).toBeNull()
   })

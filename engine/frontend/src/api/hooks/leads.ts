@@ -8,6 +8,7 @@ import {
 } from '@tanstack/react-query'
 import { melbourneDate } from '@/lib/format'
 import { api, isMissing, unwrap, type ApiProblem } from '../client'
+import { apiV16 } from '../v16-client'
 import { CACHE_TIMES, queryKeys } from '../query'
 import type { LeadDetail, LeadPage, LeadPatch, QueryOf, Run } from '../types'
 
@@ -96,12 +97,13 @@ export function leadQueryOptions(leadId: string) {
   return queryOptions({
     queryKey: queryKeys.leads.detail(leadId),
     queryFn: async ({ signal }) =>
+      // Until PLAN-V16 M1: the card's new fields are in `v16.ts`.
       unwrap(
         await api.GET('/lead-finder/leads/{lead_id}', {
           params: { path: { lead_id: leadId } },
           signal,
         }),
-      ),
+      ) as LeadDetail,
   })
 }
 
@@ -150,10 +152,31 @@ export function usePatchLead() {
   const queryClient = useQueryClient()
   return useMutation<LeadDetail, ApiProblem, PatchLeadVariables>({
     mutationFn: async ({ leadId, patch }) =>
+      // Until PLAN-V16 M1, like `leadQueryOptions`.
       unwrap(
         await api.PATCH('/lead-finder/leads/{lead_id}', {
           params: { path: { lead_id: leadId } },
           body: patch,
+        }),
+      ) as LeadDetail,
+    onSuccess: (lead) => {
+      queryClient.setQueryData(queryKeys.leads.detail(lead.id), lead)
+      refreshLeads(queryClient)
+    },
+  })
+}
+
+/**
+ * Judges an excluded lead again without its exclusion (PLAN-V16 T3-4). It is free (no Claude) and
+ * the backend records who did it. It returns the lead judged again and puts it in the cache.
+ */
+export function useOverrideExclusion() {
+  const queryClient = useQueryClient()
+  return useMutation<LeadDetail, ApiProblem, string>({
+    mutationFn: async (leadId) =>
+      unwrap(
+        await apiV16.POST('/lead-finder/leads/{lead_id}/override-exclusion', {
+          params: { path: { lead_id: leadId } },
         }),
       ),
     onSuccess: (lead) => {

@@ -253,6 +253,11 @@ export type LeadsQuery = NonNullable<operations['list_leads']['parameters']['que
 export interface SourceOut {
   id: PropertySource
   name: string
+  /**
+   * False for a tool we have no connector for: Arealytics, dropped from V16 on 15 Nov (it refused
+   * automated access). It has no switch, no check and no resume (they answer 409).
+   */
+  connected: boolean
   on: boolean
   /** Empty: not checked since the backend started (it signs in again after a restart). */
   signed_in: boolean | null
@@ -267,4 +272,58 @@ export interface SourceOut {
 
 export interface SourceList {
   items: SourceOut[]
+}
+
+// The routes PLAN-V16 adds, in openapi-typescript's shape, for `apiV16` (v16-client.ts).
+
+interface Json<T> {
+  headers: Record<string, unknown>
+  content: { 'application/json': T }
+}
+
+type Problem = Json<Schemas['ProblemDetails']>
+
+interface NoParameters {
+  query?: never
+  header?: never
+  path?: never
+  cookie?: never
+}
+
+interface Operation<Path, Out> {
+  parameters: { query?: never; header?: never; path: Path; cookie?: never }
+  requestBody?: never
+  responses: {
+    200: Json<Out>
+    403: Problem
+    404: Problem
+    409: Problem
+    422: Problem
+  }
+}
+
+interface ListOperation<Out> {
+  parameters: NoParameters
+  requestBody?: never
+  responses: { 200: Json<Out>; 403: Problem }
+}
+
+export interface V16Paths {
+  /** Judges the lead again without its exclusion, free, and records who did it (contract part 3). */
+  '/lead-finder/leads/{lead_id}/override-exclusion': {
+    parameters: NoParameters
+    post: Operation<{ lead_id: string }, LeadDetail>
+  }
+  /** Each tool's state, for Admin (contract part 4). */
+  '/sources': { parameters: NoParameters; get: ListOperation<SourceList> }
+  /** A free sign-in check: it reads one page. */
+  '/sources/{source_id}/check': {
+    parameters: NoParameters
+    post: Operation<{ source_id: PropertySource }, SourceOut>
+  }
+  /** Lifts a 24-hour pause. */
+  '/sources/{source_id}/resume': {
+    parameters: NoParameters
+    post: Operation<{ source_id: PropertySource }, SourceOut>
+  }
 }

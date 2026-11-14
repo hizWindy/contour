@@ -1,13 +1,15 @@
 /**
- * The Score and rules tab: why this result, rule by rule, and the score in its six parts, each
- * opening to the checks behind it.
+ * The Score and rules tab: why this result, rule by rule; the five filters checked before the
+ * score, each met, not met or estimated with its basis (PLAN-V16 T3-4); and the score in its
+ * parts, each opening to the checks behind it, with what the dampeners took off.
  */
 import { ChevronDown } from 'lucide-react'
 import type { LeadDetail, Schemas } from '@/api/types'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { formatNumber } from '@/lib/format'
+import { formatNumber, pluralise } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { Section } from './parts'
+import { FILTER_STATES } from './v16-words'
 import { OUTCOME } from './words'
 
 type ScorePartOut = Schemas['ScorePart']
@@ -46,6 +48,49 @@ function Rules({ lead }: { lead: LeadDetail }) {
   )
 }
 
+/** The five filters (Levi's section 2). An unknown fact is estimated, never a fail. */
+function Filters({ lead }: { lead: LeadDetail }) {
+  if (lead.filters.length === 0) {
+    return null
+  }
+  return (
+    <Section title="The five filters">
+      <ul className="flex flex-col gap-2" aria-label="Each filter">
+        {lead.filters.map((filter) => {
+          const meta = FILTER_STATES[filter.state]
+          const Icon = meta.icon
+          return (
+            <li key={filter.id} className="flex items-start gap-2">
+              <Icon aria-hidden="true" className={cn('mt-0.5 size-4 shrink-0', meta.tone)} />
+              <span className="flex min-w-0 flex-col">
+                <span>
+                  <span className="font-semibold">{filter.label}</span>{' '}
+                  <span className="text-muted-foreground">{meta.word}</span>
+                </span>
+                <span className="text-muted-foreground">{filter.basis}</span>
+              </span>
+            </li>
+          )
+        })}
+      </ul>
+    </Section>
+  )
+}
+
+/** "92 before the dampeners; they took off 10 points." Nothing when none was found. */
+function Dampened({ lead }: { lead: LeadDetail }) {
+  const deducted = lead.score_before_dampeners - lead.score
+  if (deducted <= 0) {
+    return null
+  }
+  return (
+    <p>
+      {formatNumber(lead.score_before_dampeners)} before the dampeners; they took off{' '}
+      {pluralise(deducted, 'point')}, so the score is {formatNumber(lead.score)}.
+    </p>
+  )
+}
+
 function ScoreParts({ lead }: { lead: LeadDetail }) {
   if (lead.score_parts.length === 0) {
     return (
@@ -64,6 +109,7 @@ function ScoreParts({ lead }: { lead: LeadDetail }) {
         The tool could check {formatNumber(lead.score_checked ?? 0)} of the 100 points. Sales fills
         in the rest after the first call.
       </p>
+      <Dampened lead={lead} />
       <ul className="flex flex-col gap-1" aria-label="Each part of the score">
         {lead.score_parts.map((part: ScorePartOut) => (
           <li key={part.id}>
@@ -105,6 +151,7 @@ export function ScoreTab({ lead }: { lead: LeadDetail }) {
   return (
     <>
       <Rules lead={lead} />
+      <Filters lead={lead} />
       <ScoreParts lead={lead} />
     </>
   )
