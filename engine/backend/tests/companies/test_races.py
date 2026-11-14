@@ -28,11 +28,10 @@ from apps.companies.prep import STUCK_ERROR, PrepRunner
 from apps.companies.tables import Prep, ScriptEdit, ScriptStyle
 from core.api.deps import settings_dependency
 from core.claude.client import Reply, WebTools
-from core.config import get_settings
 from tests.companies.helpers import API, signed_in_as
 from tests.companies.test_prep import FakeClaude, people_and_calls, prep_settings
 from tests.companies.test_script_notes import as_admin
-from tests.conftest import alembic_config, server_conninfo
+from tests.conftest import alembic_config
 from tests.core.auth_world import World
 from tests.lead_finder.factories import FakeEmbedder
 
@@ -283,23 +282,6 @@ async def test_two_admins_at_once_never_pass_8_team_notes(world: World) -> None:
 # --- Migration 0017 -----------------------------------------------------------------------------
 
 
-@pytest.fixture
-def scratch_url(database_url: str) -> Iterator[tuple[str, str]]:
-    """A throwaway database to migrate up and down: (Alembic's url, psycopg's conninfo)."""
-    settings = get_settings()
-    name = f"{settings.postgres_db}_mig17"
-    server = server_conninfo(settings)
-    drop = sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(name))
-    with psycopg.connect(server, autocommit=True) as connection:
-        connection.execute(drop)
-        connection.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)))
-    try:
-        yield settings.database_url(name), server_conninfo(settings, name)
-    finally:
-        with psycopg.connect(server, autocommit=True) as connection:
-            connection.execute(drop)
-
-
 def test_0017_fails_stuck_preps_and_adds_the_index_and_the_tones(
     scratch_url: tuple[str, str],
 ) -> None:
@@ -350,8 +332,9 @@ def test_0017_fails_stuck_preps_and_adds_the_index_and_the_tones(
                 "INSERT INTO companies.script_prefs (id, scope, tone) VALUES (%s, 'mine', 'loud')",
                 (uuid.uuid4(),),
             )
+    command.upgrade(config, "head")  # and the later ones (0018 on, PLAN-V16), so the models match
     command.check(config)  # the models declare the same index and table
-    command.downgrade(config, "-1")
+    command.downgrade(config, "0016_sync_cancel")
     with psycopg.connect(conninfo, autocommit=True) as connection:
         assert connection.execute("SELECT to_regclass('companies.script_prefs')").fetchone() == (
             None,
