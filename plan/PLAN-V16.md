@@ -423,7 +423,7 @@ Newest first.
 
 ## Track 2: the tools (session 2)
 
-**Progress:** 2 of 9 (T2-6 dropped on 15 Nov).
+**Progress:** 5 of 9 (T2-6 dropped on 15 Nov). T2-5's code is done; its real read waits for Al-khair's word.
 
 - [x] **T2-1. Own copy and a baseline.** Done 2026-11-15, 6200a65. `playwright` 1.65.2; its Chromium is build 1255 (Chrome for Testing 159.0.8154.6). Windows Application Control blocks that Chromium on this laptop, so the laptop drives the installed Chrome (157) with `channel="chrome"`; the script printed "Example Domain". The container uses build 1255 (T2-9).
   - Make the worktree and the database. Run the backend tests once and note the counts.
@@ -443,7 +443,7 @@ Newest first.
   - Saved pages go in the scratchpad, never in the repo.
   - **Done when:** `tools/propertydaily.md` and `tools/arealytics.md` each have a "Pages" section with the patterns and fields, and a list of what each tool can't give us.
 
-- [ ] **T2-3. The browser** (`core/browser/`).
+- [x] **T2-3. The browser** (`core/browser/`). Done 2026-11-15, 6de569a: 19 tests against a local test site (pace, the day and run limits, the host and image block, never-open pages, each stop rule, sign-in once and twice, a hung page, a crashed driver, idle close). On this laptop it drives the installed Chrome (`browser_channel` "auto").
   - One headless Chromium, started when a job needs it and closed after 5 minutes idle. One page at a time for each site.
   - **Its own thread.** The backend on Windows uses the selector event loop (for psycopg), and that loop can't start a browser process. So the browser runs in one worker thread with its own loop, and the backend talks to it through a queue. The same code runs on the server.
   - **Signed-in state** is kept in memory and in a temp file (`context.storage_state(path=...)`), reused by `browser.new_context(storage_state=...)`. It is never in git and never logged. After a restart the connector signs in again.
@@ -453,14 +453,14 @@ Newest first.
   - Every action has a timeout (30 s). A hung page is closed, and the lookup returns `error`.
   - **Done when:** tests against a small local test site prove the pace, the daily limit, the host block, each stop rule, and that a crash of the browser never crashes the backend.
 
-- [ ] **T2-4. The tables.** Migration `0018_property_sources`, in the `core` schema, so call prep can read them later.
+- [x] **T2-4. The tables.** Migration `0018_property_sources`, in the `core` schema, so call prep can read them later. Done 2026-11-15, 9bf070f: up, down and up on `leadfinder_v16b`; `SCHEMA-0018.md`. A fourth table, `core.source_state`, keeps the 24-hour pause and the last problem (the pause must survive a restart). The two `TRUNCATE` lines don't need the tables: they have no link to the sign-in tables.
   - `core.property_records`: the `PropertyRecord` fields, a cleaned company key (the same cleaning as HubSpot matching), and a unique key so the same record is saved once.
   - `core.property_lookups`: the company key, the tool, when, the status and the count. This is the 30-day memory.
   - `core.source_reads`: the log from T2-3.
   - Run `scripts/schema_map.py`, and add the tables to the four table lists.
   - **Done when:** the migration runs up and down, and the schema map is committed.
 
-- [ ] **T2-5. The Property Daily connector** (`core/sources/property_daily/`).
+- [ ] **T2-5. The Property Daily connector** (`core/sources/property_daily/`). Code done 2026-11-15, c0258c0: `pages.yaml` and `pages.py`, `parse.py`, and `read.py` (sign-in, feed, lookup and lease endings in one file), 28 tests on made-up pages. Waiting: one real feed read and one real lookup, on Al-khair's word.
   - `signin.py`: signs in with the username and password from the settings.
   - `parse.py`: pure code that turns a page (or its data reply) into `PropertyRecord`s. It drops emails, phone numbers and people's names.
   - `pages.yaml`: the address patterns and selectors from T2-2. A layout change is a fix to this file, checked at start-up.
@@ -476,7 +476,7 @@ Newest first.
   - It never uses the site's export or bulk download.
   - **Done when:** the same as T2-5, for Arealytics.
 
-- [ ] **T2-7. The jobs and the reader.**
+- [x] **T2-7. The jobs and the reader.** Done 2026-11-15, c57b5c2: 24 tests (30-day reuse, a run over its page limit is `not_checked`, a pause or a failed page is `error` and not remembered, never raises, both jobs skip and start). `source_availability` in `reader.py` gives the run options' `sources` (for Track 1).
   - `reader.py` gets its real code: `lookup_company` and `recent_items` (the contract, part 1). Company names are matched like HubSpot's (`core/hubspot/matching.py`), in a thread.
   - Two schedule jobs (`JobSpec`), both **off** until a person switches them on:
     - `sources.property_daily.feed`: every working day at 6:15 am Melbourne time;
@@ -507,6 +507,7 @@ Newest first.
 
 Newest first.
 
+- 2026-11-15: **T2-3, T2-4 and T2-7 done; T2-5's code done.** For Track 1 at M1: `core.sources.reader.source_availability(session, settings)` gives each tool's `on`, `ready` and sentence for the run options (Arealytics: "Arealytics isn't connected: it refused automated access."). `core.sources.meaning` maps a record to a sign: a lease ending in 12 to 36 months or a move is `lease_ending`, a need for space is `tenant_advisor`, an awarded fitout is the dampener `recent_fitout` (**TBC**: Track 1 names the dampener in T1-5; align at M1). `lookup_company` takes `run_id` and `settings` as keywords; pass the run's settings so the switch and the limits are the run's.
 - 2026-11-15: **T2-2 done** (b44c2a6), with Claude in Chrome. Al-khair signed in to Property Daily himself (Claude doesn't type passwords into a site). About 15 pages read, nothing changed on the site. Findings:
   - **Property Daily** is plain server pages on `www.spatialgroup.com.au`, with no JSON data address. The daily email page holds a day's items in 1 page; a company's report holds its history back to 2005 (about 20 years, as Levi said); the lease database has "leases ending soon" views for all of Australia on 1 page each. Details in `tools/propertydaily.md`.
   - **The login in `engine/.env` is Levi's own** (the site greeted him), not Al-khair's as the plan assumed. Two sessions at once lock both out. Al-khair kept his Chrome tab signed in; he signs out before the first real check.
