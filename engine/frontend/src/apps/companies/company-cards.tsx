@@ -4,15 +4,17 @@
  * and the deal, where it is, the next lease end and the last talk (in Ochre when they need
  * attention), and the owner.
  *
- * - **A tap** opens the company panel. The touch that starts the tap already starts loading the
- *   company, so the panel opens filled.
+ * - **A tap** opens the company. The touch that starts the tap already starts loading the
+ *   company, so it opens filled.
+ * - **Prep** sits at the card's bottom right, where a thumb reaches it, and opens call prep
+ *   straight away, without opening the company first.
  * - **The card it came from** is marked with a Navy edge, so you keep your place.
  * - **Pages:** Previous and Next under the list, which scrolls back to its first card.
  * - **Motion:** a pressed card tints at once; the list dims while the next page loads (150 ms).
  * - **Source:** with the Lead Finder tick, each card says where the company came from
  *   (HubSpot, Lead Finder or Both), as the table's Source column does (PLAN-V13 T2-8).
  */
-import { ChevronLeft, ChevronRight, CircleDashed } from 'lucide-react'
+import { ChevronLeft, ChevronRight, CircleDashed, PhoneCall } from 'lucide-react'
 import { useId, type ReactNode } from 'react'
 import type { CompanyRow } from '@/api/types'
 import { ResultBadge } from '@/components/result-badge'
@@ -21,6 +23,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { PREP_BUTTON } from './focus'
 import { DealMark, LastTalk, LeaseEnd } from './marks'
 import { CompanySource } from './source'
 import { companyPlace } from './words'
@@ -32,6 +35,7 @@ function Card({
   today,
   onOpen,
   onIntent,
+  onPrep,
 }: {
   row: CompanyRow
   active: boolean
@@ -39,11 +43,12 @@ function Card({
   today: string
   onOpen: (key: string) => void
   onIntent: (key: string) => void
+  onPrep?: (row: CompanyRow) => void
 }) {
   const id = useId()
   const place = companyPlace(row)
   return (
-    <li>
+    <li className="relative">
       <button
         type="button"
         data-row-id={row.key}
@@ -95,13 +100,39 @@ function Card({
               <LastTalk date={row.last_talk} today={today} />
             </span>
           </span>
-          <span className="flex flex-wrap items-center justify-between gap-2 text-caption text-muted-foreground">
+          <span
+            className={cn(
+              'flex flex-wrap items-center justify-between gap-2 text-caption text-muted-foreground',
+              // Room for Prep, which sits over the card's bottom right.
+              onPrep && 'min-h-8 pr-24',
+            )}
+          >
             {row.owner ? `Owner: ${row.owner}` : 'No owner'}
             {/* Where it came from (PLAN-V13 T2-8), for the Lead Finder tick. */}
             {leadsShown ? <CompanySource row={row} /> : null}
           </span>
         </span>
       </button>
+      {onPrep ? (
+        // Beside the card's button, not inside it: a button can't hold another one.
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="absolute right-3.5 bottom-3.5"
+          aria-label={`Prep a call to ${row.name}`}
+          {...{ [PREP_BUTTON]: row.key }}
+          onPointerDown={() => {
+            onIntent(row.key)
+          }}
+          onClick={() => {
+            onPrep(row)
+          }}
+        >
+          <PhoneCall aria-hidden="true" />
+          Prep
+        </Button>
+      ) : null}
     </li>
   )
 }
@@ -141,6 +172,8 @@ export interface CompanyCardsProps {
   today: string
   onOpen: (key: string) => void
   onIntent: (key: string) => void
+  /** "Prep" on a card: opens call prep. Without it, no button. */
+  onPrep?: (row: CompanyRow) => void
   onPageChange: (index: number) => void
   empty: ReactNode
 }
@@ -157,6 +190,7 @@ export function CompanyCards({
   today,
   onOpen,
   onIntent,
+  onPrep,
   onPageChange,
   empty,
 }: CompanyCardsProps) {
@@ -181,6 +215,7 @@ export function CompanyCards({
             today={today}
             onOpen={onOpen}
             onIntent={onIntent}
+            onPrep={onPrep}
           />
         ))}
       </ul>

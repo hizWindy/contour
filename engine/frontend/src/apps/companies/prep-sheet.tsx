@@ -1,19 +1,26 @@
 /**
- * The prep card (PLAN-V10 D4 and F1): what to know and say on one call, in a modal over the page.
- * The company panel is everything we know about a client; this card is quick info and a script.
+ * The prep card (PLAN-V10 D4 and F1): what to know and say on one call, in a side panel from the
+ * right. The company's full record opens in the middle instead (`company-dialog.tsx`): call prep is
+ * the thing done all day, so it gets the narrow, quick panel and the list stays in view beside it.
  *
+ * - **One column, top to bottom, in the order of the call:** who you are calling, Still there?,
+ *   Last talk and News (`before-you-dial.tsx`, in the header, which doesn't scroll), then the last
+ *   call's note, then the script (opener, why now, questions, if they say, goal). Quick facts sit
+ *   folded under "More about" at the end. The number and Copy script stay at the bottom.
  * - **At once:** the sales script and the guided questions are written here from what we already
  *   know (`playbook.ts`). Free, and ready as the card opens.
- * - **In the header,** under the person's name: Still there?, Last talk and News (PLAN-V14 T2-3,
- *   `before-you-dial.tsx`). The header doesn't scroll, so they stay in view.
  * - **Then complete:** with call prep switched on, Claude checks the web for news and "still
- *   there?" and writes its own script. It cross-fades in when it is ready. Its lines show their
- *   sources (F for a fact we had, W for a web page found).
+ *   there?" and writes its own script. It cross-fades in where the free one was, so nothing jumps.
+ *   Its lines show their sources (F for a fact we had, W for a web page found).
+ * - **The list stays usable** on a laptop: the panel doesn't block the page, so "Prep" on another
+ *   row, or P on the active row, switches the panel to that company. Esc or Close shuts it, and
+ *   focus goes back to the row's Prep button.
  * - **A company with no person** asks "Who are you calling?", with "Prep a cold call" for the
- *   switchboard. The modal then grows into the card (250 ms) instead of jumping.
- * - **Motion:** it fades in and rises 8 px (250 ms), and leaves in 150 ms. Another person in the
- *   same modal cross-fades in 150 ms, and the modal keeps its size.
- * - **Phone:** it fills the screen, and the number with a Call button stays at the bottom.
+ *   switchboard.
+ * - **Motion:** the panel slides in over 250 ms and out in 150 ms. Another person in the same
+ *   panel cross-fades in 150 ms.
+ * - **Phone:** it fills the screen and blocks the page, and the number with a Call button stays at
+ *   the bottom.
  */
 import {
   Building2,
@@ -35,19 +42,20 @@ import { ErrorState } from '@/components/error-state'
 import { Pending } from '@/components/skeletons'
 import { Button } from '@/components/ui/button'
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
 import { melbourneDate } from '@/lib/format'
 import { PHONE, useMediaQuery } from '@/lib/use-media-query'
 import { cn } from '@/lib/utils'
 import { BeforeYouDial } from './before-you-dial'
+import { focusMovedOn, PREP_BUTTON } from './focus'
 import { SourcesContext } from './guide-sources'
-import { CallSide } from './prep-card'
+import { LastTalk, MoreAbout } from './prep-card'
 import type { PrepTarget } from './prep-box'
 import { guideText } from './playbook'
 import { SalesScript, SalesScriptPending } from './sales-script'
@@ -229,17 +237,17 @@ function WhoPicker({
   )
 }
 
-export interface PrepModalProps {
+export interface PrepSheetProps {
   target: PrepTarget | null
   onClose: () => void
-  /** Another person (or a cold call) in the same modal. */
+  /** Another person (or a cold call) in the same panel. */
   onChangeTarget: (target: PrepTarget) => void
-  /** "Company info": close the card and open the company's panel. */
+  /** "Company info": close the card and open the company's record. */
   onOpenCompany?: (companyKey: string) => void
 }
 
-export function PrepModal({ target, onClose, onChangeTarget, onOpenCompany }: PrepModalProps) {
-  // While the modal fades out, it keeps showing what it had.
+export function PrepSheet({ target, onClose, onChangeTarget, onOpenCompany }: PrepSheetProps) {
+  // While the panel slides shut, it keeps showing what it had.
   const [shown, setShown] = useState(target)
   if (target !== null && target !== shown) {
     setShown(target)
@@ -352,20 +360,44 @@ export function PrepModal({ target, onClose, onChangeTarget, onOpenCompany }: Pr
   const enabled = off ? false : (facts.data?.prep_enabled ?? null)
 
   return (
-    <Dialog
+    <Sheet
       open={target !== null}
+      // On a laptop the list stays usable beside the panel; on a phone the panel is the screen.
+      modal={onPhone}
       onOpenChange={(open) => {
         if (!open) onClose()
       }}
     >
-      <DialogContent
-        className={cn(
-          'flex max-h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden p-0 data-open:slide-in-from-bottom-2 sm:transition-[max-width] sm:duration-250',
-          picking ? 'sm:max-w-lg' : 'sm:max-w-5xl',
-          'max-sm:top-0 max-sm:left-0 max-sm:h-dvh max-sm:max-h-none max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none max-sm:border-0',
-        )}
+      <SheetContent
+        side="right"
+        // 576 px: one column, and lines of reading length (DESIGN.md "Line length").
+        className="w-full gap-0 p-0 outline-none data-[side=right]:w-full data-[side=right]:sm:max-w-xl"
+        // A click on the list (another row's Prep, J, K) must not close the panel.
+        onInteractOutside={(event) => {
+          event.preventDefault()
+        }}
+        // Focus goes to the panel itself, not its first button (the company link), so a stray
+        // Enter does nothing and a screen reader starts at the person's name.
+        onOpenAutoFocus={(event) => {
+          event.preventDefault()
+          if (event.currentTarget instanceof HTMLElement) event.currentTarget.focus()
+        }}
+        onCloseAutoFocus={(event) => {
+          // "Company info" opened the company's dialog: focus stays there.
+          if (focusMovedOn()) {
+            event.preventDefault()
+            return
+          }
+          // Back to the Prep button of the row it came from, so J, K and P carry on from there.
+          const id = shown?.companyKey ? CSS.escape(shown.companyKey) : null
+          const button = id ? document.querySelector<HTMLElement>(`[${PREP_BUTTON}="${id}"]`) : null
+          if (button) {
+            event.preventDefault()
+            button.focus()
+          }
+        }}
       >
-        <DialogHeader className="gap-3 border-b p-5 pr-14 text-left max-sm:p-4 max-sm:pr-14">
+        <SheetHeader className="gap-3 border-b p-5 pr-14 text-left max-sm:p-4 max-sm:pt-[max(1rem,env(safe-area-inset-top))] max-sm:pr-14">
           <div className="flex min-w-0 items-start gap-3">
             {picking ? (
               <Avatar icon={Building2} />
@@ -375,8 +407,8 @@ export function PrepModal({ target, onClose, onChangeTarget, onOpenCompany }: Pr
               <Avatar icon={PhoneOutgoing} />
             )}
             <div className="flex min-w-0 flex-col gap-0.5">
-              <DialogTitle className="text-section">{title}</DialogTitle>
-              <DialogDescription asChild>
+              <SheetTitle className="text-section">{title}</SheetTitle>
+              <SheetDescription asChild>
                 <p className="text-ui text-foreground">
                   {picking ? null : person ? (
                     <span>{personTitle ?? 'No title on record'} · </span>
@@ -395,13 +427,13 @@ export function PrepModal({ target, onClose, onChangeTarget, onOpenCompany }: Pr
                     companyName
                   )}
                 </p>
-              </DialogDescription>
+              </SheetDescription>
             </div>
           </div>
           {picking ? null : (
             // Under the person's name, and out of the scroll, so it stays in view.
             <SourcesContext.Provider value={sources}>
-              <div className="-mr-9 max-sm:-mr-10 sm:pl-13">
+              <div className="-mr-9 max-sm:-mr-10">
                 <BeforeYouDial
                   company={company.data}
                   facts={facts.data}
@@ -413,7 +445,7 @@ export function PrepModal({ target, onClose, onChangeTarget, onOpenCompany }: Pr
               </div>
             </SourcesContext.Provider>
           )}
-        </DialogHeader>
+        </SheetHeader>
         <SourcesContext.Provider value={sources}>
           <div
             key={key}
@@ -481,45 +513,44 @@ export function PrepModal({ target, onClose, onChangeTarget, onOpenCompany }: Pr
                     </Button>
                   </div>
                 ) : null}
-                <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_19rem]">
-                  {guide ? (
-                    <section
-                      key={guide.madeFrom}
-                      aria-labelledby={SCRIPT_TITLE_ID}
-                      className="flex min-w-0 animate-in flex-col gap-4 duration-150 fade-in-0"
-                    >
-                      <ScriptHeader
-                        madeFrom={guide.madeFrom}
-                        prep={prep.data}
-                        enabled={enabled}
-                        namesOk={facts.data?.names_ok !== false}
-                        capUsd={facts.data?.prep_cap_usd ?? null}
-                        running={checking || start.isPending}
-                        stage={prep.data?.stage ?? 0}
-                        failed={Boolean(problem) || prep.data?.status === 'failed'}
-                        toneNow={toneNow}
-                        copyAt={facts.data?.copy_at ?? null}
-                        onResearch={() => {
-                          ask(true)
-                        }}
-                      />
-                      <SalesScript guide={guide} />
-                    </section>
-                  ) : company.error ? (
-                    <ErrorState
-                      error={company.error}
-                      context="The company couldn't be loaded, so there is no script."
+                <LastTalk company={company.data} facts={facts.data} />
+                {guide ? (
+                  <section
+                    key={guide.madeFrom}
+                    aria-labelledby={SCRIPT_TITLE_ID}
+                    className="flex min-w-0 animate-in flex-col gap-4 duration-150 fade-in-0"
+                  >
+                    <ScriptHeader
+                      madeFrom={guide.madeFrom}
+                      prep={prep.data}
+                      enabled={enabled}
+                      namesOk={facts.data?.names_ok !== false}
+                      capUsd={facts.data?.prep_cap_usd ?? null}
+                      running={checking || start.isPending}
+                      stage={prep.data?.stage ?? 0}
+                      failed={Boolean(problem) || prep.data?.status === 'failed'}
+                      toneNow={toneNow}
+                      copyAt={facts.data?.copy_at ?? null}
+                      onResearch={() => {
+                        ask(true)
+                      }}
                     />
-                  ) : (
-                    <SalesScriptPending />
-                  )}
-                  <CallSide
-                    company={company.data}
-                    facts={facts.data}
-                    today={today}
-                    onOpenCompany={openCompany}
+                    <SalesScript guide={guide} />
+                  </section>
+                ) : company.error ? (
+                  <ErrorState
+                    error={company.error}
+                    context="The company couldn't be loaded, so there is no script."
                   />
-                </div>
+                ) : (
+                  <SalesScriptPending />
+                )}
+                <MoreAbout
+                  company={company.data}
+                  companyName={companyName}
+                  today={today}
+                  onOpenCompany={openCompany}
+                />
               </div>
             )}
           </div>
@@ -547,7 +578,7 @@ export function PrepModal({ target, onClose, onChangeTarget, onOpenCompany }: Pr
             </div>
           </div>
         ) : !picking ? (
-          <div className="flex flex-wrap items-center gap-2 border-t bg-popover p-4">
+          <div className="flex flex-wrap items-center gap-2 border-t bg-popover px-5 py-3">
             {phone && tel ? (
               <>
                 <span className="text-body font-semibold tabular-nums select-all">{phone}</span>
@@ -565,7 +596,7 @@ export function PrepModal({ target, onClose, onChangeTarget, onOpenCompany }: Pr
             </div>
           </div>
         ) : null}
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   )
 }

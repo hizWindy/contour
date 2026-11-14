@@ -1,12 +1,15 @@
 /**
- * The company panel (PLAN-V10 B5): a Sheet from the right, so the list stays in view behind it.
- * It answers "what do we know about this client?". A call script is something else: "Prep a call"
- * opens it in a modal over the page.
+ * The company's record (PLAN-V10 B5): a dialog in the middle of the page. It answers "what do we
+ * know about this client?", the long read before or after a call, so it gets the width. A call
+ * script is something else: "Prep a call" closes this and opens the narrow prep panel on the right
+ * (`prep-sheet.tsx`), which is the thing done all day.
  *
  * It never opens empty: the row the person opened is already in the list, so the name, the place
  * and the four boxes show at once, and the rest fades in when it arrives (a hover or focus on the
- * row has usually loaded it already). Esc or the close button closes it, and focus goes back to
- * the row.
+ * row has usually loaded it already). Its header stays put while the sections scroll. Esc or the
+ * close button closes it, and focus goes back to the row.
+ *
+ * Motion: it fades in and rises 8 px (250 ms), and leaves in 150 ms.
  *
  * On a phone (PLAN-V10 G1) it fills the screen. Its header stays at the top with the close button
  * while the sections scroll, and "Prep a call" is a full-width button at the bottom, where a thumb
@@ -20,18 +23,19 @@ import type { CompanyDetail, CompanyPerson, CompanyRow } from '@/api/types'
 import { ErrorState } from '@/components/error-state'
 import { Button } from '@/components/ui/button'
 import {
-  Sheet,
-  SheetClose,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet'
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { safeHref } from '@/lib/safe-href'
 import { melbourneDate } from '@/lib/format'
 import { PHONE, useMediaQuery } from '@/lib/use-media-query'
 import { cn } from '@/lib/utils'
 import { CompanyView, CompanyViewPending, QuickBoxes } from './company-view'
+import { focusMovedOn } from './focus'
 import { NotInHubSpot } from './marks'
 import { companyPlace } from './words'
 
@@ -117,8 +121,8 @@ export function CompanyActions({ company, onPrep, fullPage }: CompanyActionsProp
   )
 }
 
-export interface CompanyPanelProps {
-  /** The company to show, or nothing to close the panel. */
+export interface CompanyDialogProps {
+  /** The company to show, or nothing to close the dialog. */
   companyKey: string | null
   onClose: () => void
   onOpenFullPage?: (key: string) => void
@@ -128,14 +132,14 @@ export interface CompanyPanelProps {
   rows?: readonly CompanyRow[]
 }
 
-export function CompanyPanel({
+export function CompanyDialog({
   companyKey,
   onClose,
   onOpenFullPage,
   onPrep,
   rows,
-}: CompanyPanelProps) {
-  // While the panel slides shut, it keeps showing the company it had.
+}: CompanyDialogProps) {
+  // While the dialog fades out, it keeps showing the company it had.
   const [shown, setShown] = useState(companyKey)
   if (companyKey !== null && companyKey !== shown) {
     setShown(companyKey)
@@ -152,18 +156,21 @@ export function CompanyPanel({
         }
       : undefined
   return (
-    <Sheet
+    <Dialog
       open={companyKey !== null}
       onOpenChange={(open) => {
         if (!open) onClose()
       }}
     >
-      <SheetContent
-        side="right"
+      <DialogContent
         showCloseButton={!phone}
-        // Full screen on a phone; wider on a laptop, where the sections need the room.
-        className="w-full gap-0 overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-2xl"
+        // Full screen on a phone; 768 px in the middle on a laptop, where the sections need room.
+        className="flex max-h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden p-0 data-open:slide-in-from-bottom-2 sm:max-w-3xl max-sm:top-0 max-sm:left-0 max-sm:h-dvh max-sm:max-h-none max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none max-sm:border-0"
         onCloseAutoFocus={(event) => {
+          if (focusMovedOn()) {
+            event.preventDefault()
+            return
+          }
           // Back to the row it came from, so J and K carry on from there. On a phone the row is a
           // card, which is the button itself.
           const id = shown ? CSS.escape(shown) : null
@@ -178,16 +185,15 @@ export function CompanyPanel({
           }
         }}
       >
-        <SheetHeader
+        <DialogHeader
           className={cn(
-            'gap-3 pr-12',
-            // On a phone the header stays put while the sections scroll under it.
-            phone &&
-              'sticky top-0 z-10 border-b bg-popover pt-[max(1rem,env(safe-area-inset-top))]',
+            // The header stays put while the sections scroll under it.
+            'gap-3 border-b p-5 pr-14 text-left max-sm:p-4 max-sm:pr-12',
+            phone && 'pt-[max(1rem,env(safe-area-inset-top))]',
           )}
         >
           {phone ? (
-            <SheetClose asChild>
+            <DialogClose asChild>
               <Button
                 type="button"
                 variant="ghost"
@@ -197,13 +203,13 @@ export function CompanyPanel({
                 <XIcon aria-hidden="true" />
                 <span className="sr-only">Close</span>
               </Button>
-            </SheetClose>
+            </DialogClose>
           ) : null}
           <div className="flex flex-col gap-1">
-            <SheetTitle>{known?.name ?? 'Company'}</SheetTitle>
-            <SheetDescription>
+            <DialogTitle className="text-section">{known?.name ?? 'Company'}</DialogTitle>
+            <DialogDescription>
               {known ? companyPlace(known) || 'What we know about this company.' : 'Loading.'}
-            </SheetDescription>
+            </DialogDescription>
           </div>
           {known ? (
             <CompanyActions
@@ -213,8 +219,8 @@ export function CompanyPanel({
               fullPage={{ onOpen: onOpenFullPage }}
             />
           ) : null}
-        </SheetHeader>
-        <div className="flex flex-col gap-5 px-4 pb-8">
+        </DialogHeader>
+        <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto overscroll-contain p-5 pb-8 max-sm:p-4">
           {known?.source === 'lead' ? <NotInHubSpot /> : null}
           {known ? <QuickBoxes company={known} today={today} /> : null}
           {company.error ? (
@@ -244,7 +250,7 @@ export function CompanyPanel({
           )}
         </div>
         {phone && onPrep ? (
-          <div className="sticky bottom-0 z-10 mt-auto border-t bg-popover p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <div className="border-t bg-popover p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             <Button
               type="button"
               size="lg"
@@ -257,7 +263,7 @@ export function CompanyPanel({
             </Button>
           </div>
         ) : null}
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   )
 }

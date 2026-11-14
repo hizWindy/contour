@@ -1,7 +1,8 @@
 /**
  * One company on its own page (PLAN-V10 B5), at /companies/:key, so it can be shared. The same view
- * as the panel, with room to read, and the same "Prep a call". On a phone (PLAN-V10 G1) "Prep a
- * call" is a full-width button that stays at the bottom of the screen.
+ * as the dialog on the Companies page, with room to read, and the same "Prep a call", which opens
+ * the prep panel on the right. On a phone (PLAN-V10 G1) "Prep a call" is a full-width button that
+ * stays at the bottom of the screen.
  */
 import { Building2, PhoneCall } from 'lucide-react'
 import { useState } from 'react'
@@ -13,11 +14,11 @@ import { ErrorState } from '@/components/error-state'
 import { PageHeader } from '@/components/page-header'
 import { Button } from '@/components/ui/button'
 import { PHONE, useMediaQuery } from '@/lib/use-media-query'
-import { CompanyActions } from './company-panel'
+import { CompanyActions } from './company-dialog'
 import { CompanyView, CompanyViewPending } from './company-view'
 import { companyPlace } from './words'
 import type { PrepTarget } from './prep-box'
-import { PrepModal } from './prep-modal'
+import { PrepSheet } from './prep-sheet'
 
 export default function CompanyPage() {
   const { key = '' } = useParams()
@@ -95,7 +96,7 @@ export default function CompanyPage() {
           <CompanyViewPending />
         )}
       </div>
-      <PrepModal
+      <PrepSheet
         target={prep}
         onClose={() => {
           setPrep(null)

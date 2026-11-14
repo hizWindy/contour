@@ -9,7 +9,7 @@
  *   (`aria-sort`).
  * - One row can be active (the Navy selection). Clicking a row makes it active and opens it. With
  *   `onActiveRowChange`, J and K move the active row, Enter opens it and Esc calls `onEscape`
- *   (`useListKeyboard`).
+ *   (`useListKeyboard`). `rowLetters` adds a page's own keys for the active row, like P.
  * - The table scrolls inside its own box, up and down and sideways, so the page doesn't have to:
  *   the box fills the screen from where it starts down to the page buttons (`fill`). The header
  *   row stays at the top of the box, and a column with `meta: { sticky: true }` stays at the left
@@ -119,6 +119,8 @@ export interface DataTableProps<TData> {
   /** Called with a row's id once the pointer has rested on it for a moment (about to open it). */
   onRowIntent?: (id: string) => void
   onEscape?: () => void
+  /** More keys for the active row, by lower-case letter, like `{ p: prep }` (`useListKeyboard`). */
+  rowLetters?: Readonly<Record<string, (id: string) => void>>
   /** True while a new page or sort loads. The rows already shown stay, dimmed. */
   loading?: boolean
   /** Shown when there are no rows. Default: a plain sentence. */
@@ -242,6 +244,7 @@ export function DataTable<TData>({
   onOpenRow,
   onRowIntent,
   onEscape,
+  rowLetters,
   loading = false,
   empty,
   toolbar,
@@ -277,6 +280,7 @@ export function DataTable<TData>({
     onActiveChange: (id) => onActiveRowChange?.(id),
     onOpen: onOpenRow,
     onEscape,
+    letters: rowLetters,
     containerRef: bodyRef,
   })
 

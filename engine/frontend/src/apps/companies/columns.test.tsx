@@ -131,7 +131,7 @@ describe('the Companies columns (PLAN-V13 T2-8)', () => {
     expect(within(table).getByText('Not in HubSpot yet')).toBeInTheDocument()
   })
 
-  it('offer Prep a call and Open in HubSpot at the end of a row, without opening the row', async () => {
+  it('put Prep on every name and Open in HubSpot at the end of a row, without opening the row', async () => {
     const handlers = { onPrep: vi.fn(), onOpen: vi.fn() }
     const onOpenRow = vi.fn()
     const queryClient = createTestQueryClient()
@@ -154,7 +154,11 @@ describe('the Companies columns (PLAN-V13 T2-8)', () => {
     )
     const table = screen.getByRole('table', { name: 'Companies' })
     const abc = within(table).getByRole('row', { name: /ABC Logistics/ })
-    await user.click(within(abc).getByRole('button', { name: 'Prep a call' }))
+    // Prep is always in view, not only on hover, and says which company it preps.
+    const prep = within(abc).getByRole('button', { name: 'Prep a call to ABC Logistics' })
+    expect(prep).toHaveTextContent('Prep')
+    expect(prep.closest('[data-slot=row-actions]')).toBeNull()
+    await user.click(prep)
     expect(handlers.onPrep).toHaveBeenCalledWith(expect.objectContaining({ key: '101' }))
     expect(onOpenRow).not.toHaveBeenCalled()
     expect(within(abc).getByRole('link', { name: 'Open in HubSpot' })).toHaveAttribute(
@@ -165,11 +169,14 @@ describe('the Companies columns (PLAN-V13 T2-8)', () => {
     await user.click(within(meridian).getByRole('button', { name: 'Open in HubSpot' }))
     expect(handlers.onOpen).toHaveBeenCalledWith('102')
     expect(onOpenRow).not.toHaveBeenCalled()
-    // A lead is not in HubSpot, so it has no HubSpot action
+    // A lead is not in HubSpot, so it has no HubSpot action, but it can still be prepped
     const delta = within(table).getByRole('row', { name: /Delta Freight/ })
     expect(within(delta).queryByText('Open in HubSpot')).toBeNull()
-    expect(within(delta).getByRole('button', { name: 'Prep a call' })).toBeInTheDocument()
-    // The actions show on hover or focus, and stay out of the way otherwise
+    expect(delta.querySelector('[data-slot=row-actions]')).toBeNull()
+    expect(
+      within(delta).getByRole('button', { name: 'Prep a call to Delta Freight' }),
+    ).toBeInTheDocument()
+    // Open in HubSpot shows on hover or focus, and stays out of the way otherwise
     expect(abc.querySelector('[data-slot=row-actions]')).toHaveClass('opacity-0')
   })
 

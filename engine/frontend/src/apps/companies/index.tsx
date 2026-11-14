@@ -5,9 +5,13 @@
  * - The prep box at the top preps a call. The filter bar under it only filters the list.
  * - The filters, sort, page and the open company live in the address (`params.ts`), so a link or
  *   Back shows the same list.
- * - A click on a row opens the company panel. J and K move through the rows, Enter opens the
- *   active one and Esc closes the panel. A pointer resting on a row, or focus moving to it, loads
- *   the company first, so the panel opens filled.
+ * - "Prep" on every row (or P on the active row) opens call prep in a narrow panel on the right.
+ *   The list stays usable beside it, so the next row's Prep switches the panel to that company.
+ * - A click on a row opens the company's record in a dialog in the middle. J and K move through
+ *   the rows, Enter opens the active one and Esc closes what is open. A pointer resting on a row,
+ *   or focus moving to it, loads the company first, so both open filled.
+ * - One at a time: opening the company closes call prep, and "Prep a call" in the company's
+ *   dialog closes the dialog first.
  * - On a phone (PLAN-V10 G1) the list is cards (`company-cards.tsx`), the filters sit behind one
  *   Filters button, and the prep box stays pinned to the top while the list scrolls.
  */
@@ -28,7 +32,7 @@ import { PHONE, REDUCED_MOTION, useMediaQuery } from '@/lib/use-media-query'
 import { sparing } from '@/shell/preload'
 import { companyColumns } from './columns'
 import { CompanyCards } from './company-cards'
-import { CompanyPanel } from './company-panel'
+import { CompanyDialog } from './company-dialog'
 import { FilterBar } from './filter-bar'
 import { HubSpotSync } from './hubspot-sync'
 import {
@@ -44,7 +48,7 @@ import {
   type CompanyFilters,
 } from './params'
 import { PrepBox, type PrepTarget } from './prep-box'
-import { PrepModal } from './prep-modal'
+import { PrepSheet } from './prep-sheet'
 
 const COMPACT_KEY = 'companies.compact'
 
@@ -107,7 +111,7 @@ export default function CompaniesPage() {
   const clearFilters = (): void => {
     go({ ...state, filters: NO_FILTERS, page: 0 })
   }
-  // A pointer resting on a row, or focus moving to it: the panel it opens starts loading.
+  // A pointer resting on a row, or focus moving to it: what Prep and the dialog show starts loading.
   const startCompany = (key: string): void => {
     if (!sparing()) {
       void queryClient.prefetchQuery(companyQueryOptions(key))
@@ -116,6 +120,7 @@ export default function CompaniesPage() {
   const openCompany = useCallback(
     (key: string): void => {
       setActive(key)
+      setPrep(null)
       go({ ...state, company: key })
     },
     // `go` only wraps setParams, which never changes.
@@ -127,7 +132,7 @@ export default function CompaniesPage() {
       go({ ...state, company: null })
     }
   }
-  // The full page opens after the list has dropped the panel from its address, so Back returns to
+  // The full page opens after the list has dropped the dialog from its address, so Back returns to
   // the list as it was.
   const openFullPage = (key: string): void => {
     void (async () => {
@@ -138,11 +143,14 @@ export default function CompaniesPage() {
       await navigate(`/companies/${encodeURIComponent(key)}`)
     })()
   }
-  // "Prep a call" from a row: the company, nobody picked yet.
+  // "Prep" on a row, or P: the company, nobody picked yet. The row becomes the active one.
   const prepRow = useCallback((row: CompanyRow): void => {
+    setActive(row.key)
     setPrep({ companyKey: row.key, companyName: row.name, person: null })
   }, [])
+  // "Prep a call" in the company's dialog: the dialog closes first.
   const prepCall = (company: CompanyDetail, person: CompanyPerson | null): void => {
+    closeCompany()
     setPrep({
       companyKey: company.key,
       companyName: company.name,
@@ -154,10 +162,21 @@ export default function CompaniesPage() {
   const facets = useCompanyFacets()
   const page = companies.data
   const leadsShown = page?.leads_shown ?? facets.data?.leads_shown ?? false
-  // The row actions (PLAN-V13 T2-8): "Prep a call" and "Open in HubSpot" at the end of a row.
+  // "Prep" at the end of each name, and "Open in HubSpot" at the end of a row (PLAN-V13 T2-8).
   const columns = useMemo(
     () => companyColumns({ leadsShown, handlers: { onPrep: prepRow, onOpen: openCompany } }),
     [leadsShown, prepRow, openCompany],
+  )
+  const rows = page?.items
+  // P on the active row: the same as its Prep button.
+  const rowLetters = useMemo(
+    () => ({
+      p: (key: string) => {
+        const row = rows?.find((item) => item.key === key)
+        if (row) prepRow(row)
+      },
+    }),
+    [rows, prepRow],
   )
   const filtered = activeFilterCount(state.filters) > 0
   const activeRow = state.company ?? active
@@ -221,6 +240,7 @@ export default function CompaniesPage() {
             today={today}
             onOpen={openCompany}
             onIntent={startCompany}
+            onPrep={prepRow}
             onPageChange={(pageIndex) => {
               go({ ...state, page: pageIndex })
               listTop.current?.scrollIntoView({
@@ -258,19 +278,20 @@ export default function CompaniesPage() {
             onOpenRow={openCompany}
             onRowIntent={startCompany}
             onEscape={closeCompany}
+            rowLetters={rowLetters}
             loading={companies.isFetching}
             empty={<Empty filtered={filtered} onClear={clearFilters} />}
           />
         </div>
       )}
-      <CompanyPanel
+      <CompanyDialog
         companyKey={state.company}
         onClose={closeCompany}
         onOpenFullPage={openFullPage}
         onPrep={prepCall}
         rows={page?.items}
       />
-      <PrepModal
+      <PrepSheet
         target={prep}
         onClose={() => {
           setPrep(null)

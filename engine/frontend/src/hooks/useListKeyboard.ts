@@ -9,6 +9,8 @@
  *    nothing else has focus (not a button or a link, which keep their own Enter).
  *  - `scope: 'container'` listens only for keys pressed inside the element, and adds ArrowUp and
  *    ArrowDown. In `document` scope the arrow keys also work while focus is inside the element.
+ *  - `letters` adds a page's own keys for the active row, like P for "Prep a call" on Companies.
+ *    They follow the same rules as J and K.
  */
 import { useEffect, useEffectEvent, type RefObject } from 'react'
 
@@ -25,6 +27,8 @@ export interface ListKeyboardOptions {
   onOpen?: (id: string) => void
   /** Escape calls this. */
   onEscape?: () => void
+  /** More keys for the active row, by lower-case letter: `{ p: (id) => ... }`. */
+  letters?: Readonly<Record<string, (id: string) => void>>
   scope?: 'document' | 'container'
   /** The element that holds the rows. Needed for `scope: 'container'`, and for arrows. */
   containerRef?: RefObject<HTMLElement | null>
@@ -71,7 +75,7 @@ export function useListKeyboard(options: ListKeyboardOptions): void {
       return
     }
     const insideContainer = container !== null && target !== null && container.contains(target)
-    const { ids, activeId, onActiveChange, onOpen, onEscape } = options
+    const { ids, activeId, onActiveChange, onOpen, onEscape, letters } = options
     const index = activeId ? ids.indexOf(activeId) : -1
 
     const move = (to: number): void => {
@@ -126,6 +130,13 @@ export function useListKeyboard(options: ListKeyboardOptions): void {
           onEscape()
         }
         break
+      default: {
+        const run = event.key.length === 1 ? letters?.[event.key.toLowerCase()] : undefined
+        if (run && activeId && !event.shiftKey) {
+          event.preventDefault()
+          run(activeId)
+        }
+      }
     }
   })
 

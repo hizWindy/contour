@@ -7,6 +7,7 @@
  * - **Motion:** the follow-ups open and fold in 250 ms on the one curve, and fade in 150 ms. A
  *   ticked question dims in 150 ms. Nothing moves with reduced motion.
  * - **Nothing is saved.** The ticks are for this call only, and start again with the next card.
+ * - **Short:** only the open question shows why it is asked and its source, so the list fits.
  */
 import { ChevronDown, CornerDownRight } from 'lucide-react'
 import { useId, useState } from 'react'
@@ -121,7 +122,8 @@ function QuestionRow({
             ) : null}
           </button>
         </EditableLine>
-        <GuideWhy line={question} />
+        {/* Only the question being asked shows where it comes from, so the list stays short. */}
+        {open ? <GuideWhy line={question} /> : null}
         {hasFollowUps ? <FollowUps id={`${id}-next`} question={question} open={open} /> : null}
       </div>
     </li>

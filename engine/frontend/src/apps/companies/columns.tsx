@@ -5,10 +5,11 @@
  * The order follows HubSpot's own company list, so the team finds things where they expect:
  * Company name, Owner, Last activity, City, Industry, Staff, Next lease end, Deal. People with
  * the Lead Finder tick also see Source (HubSpot, Lead Finder or Both) and the newest result.
- * The name stays put when the table scrolls sideways. Pointing at a row shows "Prep a call" and
- * "Open in HubSpot" at its end. Everything else is one click away, in the panel.
+ * The name stays put when the table scrolls sideways, and so does "Prep" at the end of its cell,
+ * on every row. Pointing at a row shows "Open in HubSpot" at its end. Everything else is one click
+ * away, in the company's dialog.
  *
- * The name is a button: a click or Enter opens the panel, through the row's own click.
+ * The name is a button: a click or Enter opens the company, through the row's own click.
  */
 import { createColumnHelper } from '@tanstack/react-table'
 import type { CompanyRow } from '@/api/types'
@@ -39,7 +40,7 @@ export function companyColumns({
       header: 'Company name',
       // The name stays in view while the other columns scroll sideways.
       meta: { sticky: true, className: 'max-w-72 sm:min-w-56' },
-      cell: (info) => <CompanyCell row={info.row.original} />,
+      cell: (info) => <CompanyCell row={info.row.original} onPrep={handlers?.onPrep} />,
     }),
     help.accessor('owner', {
       header: 'Owner',
@@ -126,7 +127,7 @@ export function companyColumns({
     help.display({
       id: 'actions',
       header: () => <span className="sr-only">Actions</span>,
-      // Zero width, stuck to the right edge: the actions float over the row's end when it is
+      // Zero width, stuck to the right edge: the action floats over the row's end when it is
       // pointed at, like HubSpot's preview button, and never push the other columns.
       meta: { hideBelow: 'md', className: 'sticky right-0 w-0 p-0' },
       cell: (info) => <RowActions row={info.row.original} handlers={handlers} />,

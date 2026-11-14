@@ -4,15 +4,18 @@
  * T2-2, with no change. Its title and "Written from ..." line are in `script-header.tsx`.
  *
  * PLAN-V14 T3-4: the tone line sits above the steps, and lines are keyed by their slot, because a
- * person's edit may repeat another line's words. T3-5: the "Style" row at the top opens the style
- * sheet; after a style change it says "Not used yet" until a new script is made. T3-6: each
+ * person's edit may repeat another line's words. T3-5: the "Style" row opens the style sheet; after
+ * a style change it says "Not used yet" until a new script is made. It sits after the steps, so the
+ * opener is the first thing under the script's title. T3-6: each
  * editable line has a pencil (`line-editor.tsx`), and the first save offers "Make it my style".
+ * In the side panel, "If they say" shows the pushbacks only; a press opens one answer at a time.
  */
-import { CornerDownRight, Flag, Info, MessageCircle } from 'lucide-react'
-import { useMemo, useState, type ReactNode } from 'react'
+import { ChevronDown, CornerDownRight, Flag, Info, MessageCircle } from 'lucide-react'
+import { useId, useMemo, useState, type ReactNode } from 'react'
 import { Pending, SkeletonLines } from '@/components/skeletons'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatNumber } from '@/lib/format'
+import { cn } from '@/lib/utils'
 import { GuideIconMark, GuideText, GuideWhy } from './guide-parts'
 import { GuidedQuestions } from './guided-questions'
 import type { CallGuide } from './playbook'
@@ -55,9 +58,78 @@ function Step({
   )
 }
 
-/** A quiet line for "nothing here". The card's side uses it too. */
+/** A quiet line for "nothing here". The card's other parts use it too. */
 export function Quiet({ children }: { children: ReactNode }) {
   return <p className="text-ui text-muted-foreground">{children}</p>
+}
+
+/**
+ * "If they say": each pushback is a button, and a press shows its answer under it. One answer at a
+ * time, so the step stays a few short lines until the call needs it.
+ */
+function IfTheySay({ items }: { items: CallGuide['ifTheySay'] }) {
+  const [open, setOpen] = useState<number | null>(null)
+  const base = useId()
+  return (
+    <ul className="flex flex-col gap-2">
+      {items.map((item, index) => {
+        const slot = lineSlot('if_they_say', index, item.answer)
+        const shown = open === index
+        const id = `${base}-${String(index)}`
+        return (
+          <li key={slot} className="flex flex-col gap-2">
+            <button
+              type="button"
+              aria-expanded={shown}
+              aria-controls={shown ? id : undefined}
+              onClick={() => {
+                setOpen(shown ? null : index)
+              }}
+              className={cn(
+                'flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left text-body font-semibold transition-colors duration-150',
+                shown ? 'border-primary bg-card' : 'bg-background hover:bg-muted',
+              )}
+            >
+              {/* Past the draft's end, a person's answer has no pushback left to answer. */}
+              <span className="min-w-0">
+                {item.theySay ? `"${item.theySay}"` : 'Your own answer'}
+              </span>
+              <ChevronDown
+                aria-hidden="true"
+                className={cn(
+                  'size-4 shrink-0 text-muted-foreground transition-transform duration-150',
+                  shown && 'rotate-180',
+                )}
+              />
+            </button>
+            {shown ? (
+              <div
+                id={id}
+                className="flex animate-in items-start gap-2 pl-3 text-body duration-150 fade-in-0"
+              >
+                <CornerDownRight
+                  aria-hidden="true"
+                  className="mt-1 size-4 shrink-0 text-muted-foreground"
+                />
+                <EditableLine
+                  line={item.answer}
+                  slot={slot}
+                  label={
+                    item.theySay
+                      ? `Answer to "${item.theySay}"`
+                      : `Your own answer ${String(index + 1)}`
+                  }
+                  className="flex-1"
+                >
+                  <GuideText line={item.answer} />
+                </EditableLine>
+              </div>
+            ) : null}
+          </li>
+        )
+      })}
+    </ul>
+  )
 }
 
 /** The script: opener, why now, guided questions, if they say and the goal. */
@@ -96,22 +168,6 @@ export function SalesScript({ guide }: { guide: CallGuide }) {
   return (
     <LineEditContext.Provider value={edit}>
       <div className="flex flex-col gap-4">
-        <StyleRow
-          madeFrom={guide.madeFrom}
-          changedSince={changedOn === draft}
-          onOpen={() => {
-            setPrefill(null)
-            setStyleOpen(true)
-          }}
-        />
-        <StyleSheet
-          open={styleOpen}
-          onOpenChange={setStyleOpen}
-          prefill={prefill}
-          onChanged={() => {
-            setChangedOn(draft)
-          }}
-        />
         {guide.notices?.map((notice) => (
           <p key={notice} role="status" className="flex items-start gap-2 text-ui text-foreground">
             <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
@@ -191,41 +247,19 @@ export function SalesScript({ guide }: { guide: CallGuide }) {
           <Step n={3} title="Guided questions">
             <GuidedQuestions questions={guide.questions} />
           </Step>
-          <Step n={4} title="If they say">
+          <Step
+            n={4}
+            title="If they say"
+            aside={
+              guide.ifTheySay.length > 0 ? (
+                <span className="text-caption text-muted-foreground">Tap what you hear.</span>
+              ) : null
+            }
+          >
             {guide.ifTheySay.length === 0 ? (
               <Quiet>No likely pushback with a source.</Quiet>
             ) : (
-              <dl className="flex flex-col gap-3">
-                {guide.ifTheySay.map((item, index) => (
-                  <div
-                    key={lineSlot('if_they_say', index, item.answer)}
-                    className="flex flex-col gap-1"
-                  >
-                    {/* Past the draft's end, a person's answer has no pushback left to answer. */}
-                    <dt className="text-body font-semibold">
-                      {item.theySay ? `"${item.theySay}"` : 'Your own answer'}
-                    </dt>
-                    <dd className="flex items-start gap-2 text-body">
-                      <CornerDownRight
-                        aria-hidden="true"
-                        className="mt-1 size-4 shrink-0 text-muted-foreground"
-                      />
-                      <EditableLine
-                        line={item.answer}
-                        slot={lineSlot('if_they_say', index, item.answer)}
-                        label={
-                          item.theySay
-                            ? `Answer to "${item.theySay}"`
-                            : `Your own answer ${String(index + 1)}`
-                        }
-                        className="flex-1"
-                      >
-                        <GuideText line={item.answer} />
-                      </EditableLine>
-                    </dd>
-                  </div>
-                ))}
-              </dl>
+              <IfTheySay items={guide.ifTheySay} />
             )}
           </Step>
           <Step n={5} title="Goal of the call">
@@ -258,6 +292,23 @@ export function SalesScript({ guide }: { guide: CallGuide }) {
               : `${formatNumber(guide.dropped)} lines were left out because they had no source.`}
           </p>
         ) : null}
+        {/* The style is a setting, not part of the call, so it comes after the script. */}
+        <StyleRow
+          madeFrom={guide.madeFrom}
+          changedSince={changedOn === draft}
+          onOpen={() => {
+            setPrefill(null)
+            setStyleOpen(true)
+          }}
+        />
+        <StyleSheet
+          open={styleOpen}
+          onOpenChange={setStyleOpen}
+          prefill={prefill}
+          onChanged={() => {
+            setChangedOn(draft)
+          }}
+        />
       </div>
     </LineEditContext.Provider>
   )
