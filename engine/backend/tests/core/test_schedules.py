@@ -39,6 +39,7 @@ pytestmark = pytest.mark.integration
 
 Factory = async_sessionmaker[AsyncSession]
 MEL = ZoneInfo("Australia/Melbourne")
+SOURCE_KEYS = ("sources.property_daily.feed", "sources.property_daily.lease_endings")
 NOW = datetime(2026, 11, 4, 9, 0, tzinfo=UTC)  # Wednesday 4 Nov, 8:00 pm in Melbourne
 FORTNIGHTLY = Cadence(every=2, unit="weeks", weekday=0, at=time(7, 0))  # every 2 weeks, Monday 7:00
 DAILY = Cadence(every=1, unit="days", at=time(6, 0))
@@ -202,7 +203,12 @@ def defaults() -> list[JobSpec]:
 async def test_the_two_defaults_are_made_once(session_factory: Factory) -> None:
     async with session_factory() as db:
         made = await service.ensure_defaults(db, defaults(), NOW)
-    assert sorted(made) == ["core.hubspot_sync", "lead_finder.discovery"]  # x.none has no default
+    assert sorted(made) == [  # x.none has no default
+        "core.hubspot_sync",
+        "lead_finder.discovery",
+        "sources.property_daily.feed",
+        "sources.property_daily.lease_endings",
+    ]
 
     sync = (await _by_job(session_factory))[HUBSPOT_SYNC]
     assert (sync.enabled, sync.every, sync.unit, sync.weekday) == (True, 1, "days", None)
@@ -452,7 +458,7 @@ async def test_the_loop_makes_the_default_schedules_when_it_starts(
     )
     await loop.start()
     await loop.stop()
-    assert set(await _by_job(session_factory)) == {HUBSPOT_SYNC}
+    assert set(await _by_job(session_factory)) == {HUBSPOT_SYNC, *SOURCE_KEYS}
 
 
 # --- Daylight saving, through the loop --------------------------------------------------------
@@ -545,8 +551,11 @@ async def test_the_hubspot_job_is_running_while_a_sync_is() -> None:
 
 
 def test_the_core_offers_the_hubspot_sync_on_by_default_every_day_at_6am() -> None:
-    (job,) = CORE_JOBS
+    job, *source_jobs = CORE_JOBS
     assert (job.key, job.project) == (HUBSPOT_SYNC, "core")
+    # Property Daily's two jobs (PLAN-V16 T2-7) are there too, and off.
+    assert [source.key for source in source_jobs] == list(SOURCE_KEYS)
+    assert all(source.default and not source.default.enabled for source in source_jobs)
     assert job.default is not None
     assert job.default.enabled is True
     assert job.default.cadence == Cadence(every=1, unit="days", at=time(6, 0))
@@ -576,4 +585,5 @@ async def test_a_project_adds_its_jobs_through_its_app_spec() -> None:
     app = FastAPI()
     fake = Fake(key="lead_finder.discovery")
     app.state.apps = [SimpleNamespace(jobs=(fake.spec(),)), SimpleNamespace(jobs=())]
-    assert [job.key for job in schedules_runtime.all_jobs(app)] == [HUBSPOT_SYNC, fake.key]
+    keys = [job.key for job in schedules_runtime.all_jobs(app)]
+    assert keys == [HUBSPOT_SYNC, *SOURCE_KEYS, fake.key]
