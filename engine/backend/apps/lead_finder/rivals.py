@@ -107,19 +107,16 @@ def wants_rivals(
     city: str | None,
     signs: Sequence[str] = (),
 ) -> bool:
-    """True for a good lead in a known city that is in a tier the rules name (`rivals.tiers`), or
-    that has a sign they name (`rivals.also_after`): Levi's competitor sweep runs after a sector
-    tailwind sign too (PLAN-V16 T1-4), whatever the lead's sector."""
+    """True for a good lead in a known city that is in a priority sector, or that has a sign the
+    rules name (`rivals.also_after`): Levi's competitor sweep runs after a sector tailwind sign
+    too (PLAN-V16 T1-4), whatever the lead's sector. `tier_group` is the sector group Claude
+    filed the company in (its old name; PLAN-V16 T1-6 made the tiers priority sectors)."""
     setup = rules.criteria.rivals
     if not setup.enabled or result not in GOOD_RESULTS or not city:
         return False
     if any(sign in setup.also_after for sign in signs):
         return True
-    if not tier_group:
-        return False
-    industries = rules.criteria.industries
-    tiers = {"tier_1": industries.tier_1, "tier_2": industries.tier_2}
-    return any(tier_group in tiers[tier] for tier in setup.tiers)
+    return bool(tier_group) and tier_group in rules.criteria.industries.priority_sectors
 
 
 def rivals_request(company: str, industry: str | None, city: str, limit: int) -> str:

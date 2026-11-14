@@ -68,7 +68,7 @@ def extract_prompt(rules: LeadFinderRules) -> Prompt:
         *criteria.exclusion_groups,
         *industries.check_office_size,
     ]
-    tiers = [*industries.tier_1, *industries.tier_2]
+    sectors = industries.priority_sectors
     # The four dampener checks Claude answers (Levi's section 5, PLAN-V16 T1-5), in plain words
     dampeners = "\n".join(
         f"- {rule.id}: {rule.meaning}"
@@ -82,7 +82,7 @@ def extract_prompt(rules: LeadFinderRules) -> Prompt:
         industry_groups="\n".join(
             f"- {g}: {meaning[g]}" if g in meaning else f"- {g}" for g in groups
         ),
-        tier_groups="\n".join(f"- {g}" for g in tiers),
+        priority_sectors="\n".join(f"- {g}" for g in sectors),
     )
     # The lists come from the rules, so their version is part of this prompt's version.
     return Prompt("extract", text, f"{version}+{rules.version[:6]}")

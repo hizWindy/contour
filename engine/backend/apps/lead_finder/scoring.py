@@ -3,9 +3,11 @@
 The same facts always get the same result, so every rule is easy to test. The rules come
 from Criteria_v2.md (a draft until Levi confirms it), through rules/criteria.yaml.
 
-The score is the Target Customer Profile's 100 points in six parts. Each part is a few checks.
-A check earns points, or it is "not known yet" when the tool can't judge it for this lead. The
-score is the points earned. "Checked" is the most the tool could judge, like "48 of 60 checked".
+The score is Levi's 100 points in three parts (PLAN-V16 T1-6): Fit 30, Change and timing 50 and
+Access 20. Each part is a few checks. A check earns points, or it is "not known yet" when the tool
+can't judge it for this lead. The dampeners then take points off, and the score sets the tier
+(A, B, C or Discard). The tier sets the result, and a confidence rating says how well the facts are
+sourced.
 """
 
 import re
@@ -13,12 +15,13 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
 from decimal import Decimal
-from typing import Literal, NamedTuple
+from typing import Any, Literal, NamedTuple
 
 from pydantic import BaseModel, Field
 
-from apps.lead_finder.fields import CompanyFacts, DampenerFinding, TriggerFound
+from apps.lead_finder.fields import CompanyFacts, DampenerFinding, Fact, TriggerFound
 from apps.lead_finder.rules import (
+    SEARCHED_DAMPENER_IDS,
     DampenerId,
     DampenerRule,
     DampenerStrength,
@@ -32,7 +35,11 @@ from core.hubspot.matching import CandidateReason, HubSpotMatch
 
 Outcome = Literal["ok", "fail", "director", "unknown", "flag"]
 Group = Literal["main", "other", "weak"]
+# The score's bands before PLAN-V16 (75 and 50, scaled to the points checked). A card made then
+# still shows its band. A lead judged now has none: it has a tier.
 Band = Literal["research_first", "investigate", "nurture"]
+Tier = Literal["A", "B", "C", "discard"]
+Confidence = Literal["high", "medium", "low"]
 # "small": worked out from staff between staff_floor and staff_hint_min. The lead is a Watch at
 # best, with a "check office size" flag (PLAN-V9 B1). Since 9 Nov both are 50, so no lead is
 # "small" until the rules open that band again (PLAN-V11 B2).
@@ -41,6 +48,11 @@ DAYS_PER_YEAR = 365.25
 DAYS_PER_MONTH = 30.44
 # The rule check of a company that moved or fitted out lately: it makes the lead a Watch (B3)
 JUST_MOVED = "Just moved"
+# The rule check of the tier, when it holds a lead at Watch or drops it
+TIER_CHECK = "Tier"
+# The flag on a Tier A lead whose facts are mostly estimated (Levi's section 6)
+VERIFY_CHECK = "Verify before outreach"
+STRENGTH_RANK: dict[str, int] = {"very_high": 4, "high": 3, "medium": 2, "low": 1}
 REASON_WORDS: dict[CandidateReason, str] = {
     "close_name": "close name",
     "name_in_deal": "name in a deal",
@@ -167,15 +179,17 @@ class Dampener(BaseModel):
 class Verdict(BaseModel):
     result: Result
     stage: str  # the Profile's stage for the result: Active prospect, Target account...
-    score: int
+    score: int  # after the dampeners
+    score_before_dampeners: int
+    tier: Tier
+    confidence: Confidence
+    confidence_why: str
     checks: list[RuleCheck]
     office_m2: int | None
     office_m2_estimated: bool
     fitout_aud: Decimal | None
     triggers: list[TriggerScore]  # the triggers that count, best first
     parts: list[ScorePart] = Field(default_factory=list)  # empty for a Drop
-    score_checked: int = 0
-    band: Band | None = None
     filters: list[FilterResult] = Field(default_factory=list)  # Levi's five (PLAN-V16 T1-3)
     excluded: Excluded | None = None  # the exclusion that applies, or that a person overrode
     dampeners: list[Dampener] = Field(default_factory=list)  # every one, as the rules list them
@@ -274,29 +288,42 @@ def judge(
         result = "pass"
 
     fitout = sized.m2 * criteria.fitout.rate_per_m2_aud if sized.m2 is not None else None
+    dampeners = _dampeners(facts, rules, today, sized, triggers)
     parts: list[ScorePart] = []
-    score = checked = 0
-    band: Band | None = None
+    before = score = 0
+    tier: Tier = "discard"
     if result != "drop":  # a Drop scores 0: the score never overrides a Drop
-        parts = _score_parts(triggers, facts, sized, history, rules)
-        score = max(0, min(100, sum(part.earned for part in parts)))
-        checked = sum(part.checked for part in parts)
-        band = band_of(score, checked, rules)
+        parts = _score_parts(triggers, facts, sized, history, dampeners, rules, today)
+        before = max(0, min(100, sum(part.earned for part in parts)))
+        score = max(0, before - _deduction(dampeners, rules))
+        tier = tier_of(score, rules)
+        unchecked = any(
+            item.state == "not_checked" for item in dampeners if item.id in SEARCHED_DAMPENER_IDS
+        )
+        result, tier_check = _by_tier(result, tier, score, unknown_core, unchecked, rules)
+        if tier_check is not None:
+            checks.append(tier_check)
+    confidence, confidence_why = _confidence(facts, sized, triggers, dampeners)
+    if tier == "A" and confidence == "low":
+        detail = f"A high score on facts that are mostly estimated. {confidence_why}"
+        checks.append(RuleCheck(rule=VERIFY_CHECK, outcome="flag", detail=detail))
     return Verdict(
         result=result,
         stage=criteria.stages[result],
         score=score,
+        score_before_dampeners=before,
+        tier=tier,
+        confidence=confidence,
+        confidence_why=confidence_why,
         checks=checks,
         office_m2=sized.m2,
         office_m2_estimated=sized.estimated,
         fitout_aud=fitout,
         triggers=triggers,
         parts=parts,
-        score_checked=checked,
-        band=band,
         filters=_filters(facts, rules, city_check, sized, excluded),
         excluded=excluded,
-        dampeners=_dampeners(facts, rules, today, sized, triggers),
+        dampeners=dampeners,
     )
 
 
@@ -553,17 +580,30 @@ def _office(facts: CompanyFacts, rules: LeadFinderRules) -> RuleCheck:
 
 
 def _local_and_healthy(facts: CompanyFacts) -> list[RuleCheck]:
+    """Can the local team run the project, and is the company healthy. A team that can't is a
+    fail. A company in administration or cutting staff fast was a fail too, until Levi's notes made
+    financial stress a dampener (PLAN-V16 T1-6): it is a flag now, and takes points off."""
     checks = []
-    for rule, fact, fail_text in (
-        ("Local team", facts.local_team_runs_project, "The local team can't run the project"),
-        ("Healthy", facts.healthy, "In administration or cutting staff fast"),
+    for rule, fact, fail_text, outcome in (
+        (
+            "Local team",
+            facts.local_team_runs_project,
+            "The local team can't run the project",
+            "fail",
+        ),
+        (
+            "Healthy",
+            facts.healthy,
+            "In administration or cutting staff fast: a strong dampener",
+            "flag",
+        ),
     ):
         if fact.value is None:
             checks.append(RuleCheck(rule=rule, outcome="unknown", detail="Not checked"))
         elif fact.value:
             checks.append(RuleCheck(rule=rule, outcome="ok", detail="Yes"))
         else:
-            checks.append(RuleCheck(rule=rule, outcome="fail", detail=fail_text))
+            checks.append(RuleCheck(rule=rule, outcome=outcome, detail=fail_text))
     return checks
 
 
@@ -669,7 +709,7 @@ def _filters(
 
     # 5. Sector: a priority sector earns the sector points. Any other sector passes too, so the
     # score and the tier decide (Levi: other sectors "can qualify on strong signals")
-    priority = [*criteria.industries.tier_1, *criteria.industries.tier_2]
+    priority = criteria.industries.priority_sectors
     if facts.tier_group in priority:
         add("sector", "pass", f"Priority sector: {facts.tier_group}")
     elif facts.industry.value is not None:
@@ -1086,10 +1126,130 @@ def _triggers(facts: CompanyFacts, rules: LeadFinderRules, today: date) -> list[
                 timing_points=timing,
             )
         )
-    return sorted(counted, key=lambda t: t.points, reverse=True)
+    # The strongest sign first (Levi's section 4), then the one that ranks best by group, source
+    # and timing
+    return sorted(
+        counted, key=lambda t: (STRENGTH_RANK.get(t.strength or "", 0), t.points), reverse=True
+    )
 
 
 # --- The score ---------------------------------------------------------------------------
+
+
+def _deduction(dampeners: list[Dampener], rules: LeadFinderRules) -> int:
+    """The points the found dampeners take off (Levi's section 6): 20 for each strong one and 10
+    for each moderate one. A dampener that takes nothing off (`waived`) doesn't count."""
+    points = rules.criteria.score.dampeners
+    return sum(
+        points.strong if item.strength == "strong" else points.moderate
+        for item in dampeners
+        if item.state == "found" and item.waived is None and item.strength is not None
+    )
+
+
+def tier_of(score: int, rules: LeadFinderRules) -> Tier:
+    """A at 75 or more, B at 55 to 74, C at 40 to 54, Discard under 40 (Levi's section 6)."""
+    tiers = rules.criteria.score.tiers
+    if score >= tiers.a:
+        return "A"
+    if score >= tiers.b:
+        return "B"
+    if score >= tiers.c:
+        return "C"
+    return "discard"
+
+
+def _by_tier(
+    result: Result,
+    tier: Tier,
+    score: int,
+    unknown_core: bool,
+    unchecked: bool,
+    rules: LeadFinderRules,
+) -> tuple[Result, RuleCheck | None]:
+    """The tier sets the result (PLAN-V16 choice 1). A and B keep a Pass or a Director review. C is
+    a Watch. Discard is a Drop. A rule that already holds a lead at Watch (it just moved, or its
+    size isn't clear) wins over A and B. An unknown fact never fails a lead (choice 3), so a
+    Discard stays a Watch for a person to check while the city or the size isn't known
+    (`unknown_core`), or the dampener checks haven't run (`unchecked`): the score is missing
+    points that a research would find."""
+    tiers = rules.criteria.score.tiers
+    if tier in ("A", "B"):
+        return result, None
+    if tier == "C":
+        detail = (
+            f"Tier C, a score of {score} (from {tiers.c} to {tiers.b - 1}): watch for a new sign"
+        )
+        held: Result = "watch" if result in ("pass", "director_review") else result
+        return held, RuleCheck(rule=TIER_CHECK, outcome="flag", detail=detail)
+    if unknown_core or unchecked:
+        missing = (
+            "the city or the size isn't known"
+            if unknown_core
+            else "the dampener checks haven't run"
+        )
+        detail = (
+            f"A score of {score} is under {tiers.c} (Discard), but {missing}, so a person checks it"
+        )
+        held = "watch" if result in ("pass", "director_review") else result
+        return held, RuleCheck(rule=TIER_CHECK, outcome="flag", detail=detail)
+    detail = f"A score of {score} is under {tiers.c}: Discard"
+    return "drop", RuleCheck(rule=TIER_CHECK, outcome="fail", detail=detail)
+
+
+def _staff_for_score(sized: SizeJudgement, rules: LeadFinderRules) -> tuple[int | None, str]:
+    """The staff the Fit part scores: the larger of the staff now and the staff the office size
+    points to (its floor area, or the office a growth plan says it will need, at about 10 m² a
+    person). Levi: "local office headcount and projected size"."""
+    per_person = rules.criteria.size.m2_per_staff
+    from_size = round(sized.m2 / per_person) if sized.m2 is not None else None
+    staff = max((n for n in (sized.staff, from_size) if n is not None), default=None)
+    if staff is None:
+        return None, "Staff and office size not known"
+    if staff == sized.staff:
+        return staff, f"{staff:,} staff in the city"
+    return staff, f"About {staff:,} staff: a {sized.m2:,} m² office at {per_person:g} m² a person"
+
+
+def _words(parts: list[str]) -> str:
+    """'a', 'a and b' or 'a, b and c'."""
+    return parts[0] if len(parts) == 1 else f"{', '.join(parts[:-1])} and {parts[-1]}"
+
+
+def _confidence(
+    facts: CompanyFacts,
+    sized: SizeJudgement,
+    triggers: list[TriggerScore],
+    dampeners: list[Dampener],
+) -> tuple[Confidence, str]:
+    """How well the facts are sourced (Levi's section 6). High: the headcount and the signs are
+    confirmed on a named source, and every dampener check ran. Low: two or more of those fail,
+    like estimated facts. Medium: one fails. A fact a property tool confirms counts as confirmed
+    (its label is "confirmed", PLAN-V16 T1-8). Not found has no source to name, so a dampener check
+    counts when it ran."""
+
+    def confirmed(fact: Fact[Any]) -> bool:
+        return fact.value is not None and fact.label == "confirmed" and bool(fact.source_url)
+
+    problems: list[str] = []
+    sure = (confirmed(facts.staff_in_city) and not facts.staff_from_linkedin) or confirmed(
+        facts.office_m2
+    )
+    if not sure:
+        known = sized.staff is not None or sized.m2 is not None
+        problems.append("the headcount is estimated" if known else "the headcount isn't known")
+    if not triggers:
+        problems.append("no sign was found")
+    elif any(item.trigger.label != "confirmed" for item in triggers):
+        problems.append("a sign is only estimated")
+    searched = [item for item in dampeners if item.id in SEARCHED_DAMPENER_IDS]
+    if any(item.state == "not_checked" for item in searched):
+        problems.append("the dampener checks haven't all run")
+    if not problems:
+        why = "High: the headcount and the signs are confirmed, and every dampener check ran."
+        return "high", why
+    level: Confidence = "medium" if len(problems) == 1 else "low"
+    return level, f"{level.capitalize()}: {_words(problems)}."
 
 
 def _score_parts(
@@ -1097,14 +1257,18 @@ def _score_parts(
     facts: CompanyFacts,
     sized: SizeJudgement,
     history: History,
+    dampeners: list[Dampener],
     rules: LeadFinderRules,
+    today: date,
 ) -> list[ScorePart]:
-    """The six parts of the score, each with its checks. A check is "not known yet" when the tool
-    can't judge it for this lead, and then it adds nothing to `checked`."""
+    """The three parts of the score, each with its checks (Levi's section 6). A check is "not known
+    yet" when the tool can't judge it for this lead, and then it earns nothing. This is the score
+    before the dampeners."""
     criteria = rules.criteria
     score = criteria.score
-    best = triggers[0] if triggers else None
     evidence = {booster.id: booster.evidence for booster in facts.boosters}
+    states = {item.id: item for item in dampeners}
+    labels = {sign.id: sign.label for sign in criteria.triggers.every}
 
     def check(
         id: str, earned: int, most: int, *, known: bool = True, detail: str = ""
@@ -1119,109 +1283,135 @@ def _score_parts(
             detail=detail if known else "",
         )
 
-    size_points = {
-        "confirmed": score.size.confirmed_in_range,
-        "estimated": score.size.estimated_in_range,
-        "growing": score.size.growing_into_range,
-        "director": score.size.director,
-        "small": 0,
-        "below": 0,
-        "none": 0,
-    }
-    tier = facts.tier_group
-    tier_points = (
-        score.fit.tier_1
-        if tier in criteria.industries.tier_1
-        else score.fit.tier_2
-        if tier in criteria.industries.tier_2
-        else 0
+    # --- Fit (30)
+    staff, staff_detail = _staff_for_score(sized, rules)
+    place = facts.city.value
+    metro = city_of(place, rules) if place else None
+    group = criteria.cities.group_of(metro) if metro else None
+    city_points = {"priority": score.city.priority, "secondary": score.city.secondary}.get(
+        group or "", score.city.other
     )
-    years = f"{history.years_at:.1f} years at this address" if history.years_at is not None else ""
-    last = max((d for d in (history.since, history.fitout) if d is not None), default=None)
+    city_detail = (
+        f"{metro}: {GROUP_WORDS[group]}"
+        if metro and group
+        else f"{place}: not one of the places we list"
+    )
+    sector = facts.tier_group
+    in_sector = sector in criteria.industries.priority_sectors
+    matters = facts.office_matters.value
+
+    # --- Change and timing (50)
+    best = triggers[0] if triggers else None
+    strongest = score.strongest_sign[best.strength] if best and best.strength else 0
+    window = timedelta(days=round(score.other_signs.within_months * DAYS_PER_MONTH))
+    others: list[TriggerScore] = []
+    for item in triggers[1:]:
+        if best is not None and item.trigger.id == best.trigger.id:
+            continue  # the same sign twice is not an independent one
+        if any(kept.trigger.id == item.trigger.id for kept in others):
+            continue
+        when = parse_date(item.trigger.date)
+        # A sign with no date counts: it passed the 18-month rule by having none, and an unknown
+        # date doesn't fail a lead
+        if when is None or when > today or today - when <= window:
+            others.append(item)
+    others = others[: score.other_signs.at_most]
+    years = history.years_at
+    lease = any(item.trigger.id == "lease_ending" for item in triggers)
+    old_office = years is not None and years >= criteria.office_age.tenure_years
+    if lease:
+        constrained_detail = "Lease timing: the lease ends within 3 years"
+    else:
+        constrained_detail = f"{years:.1f} years at this address" if years is not None else ""
+
+    # --- Access (20)
+    outsourcing, tie = states["outsourcing"], states["competitor_tie"]
+    lock_in = next((item for item in (outsourcing, tie) if item.state == "found"), None)
+    procurement = states["procurement"]
+    if lock_in is not None:
+        lock_in_points, lock_in_known = 0, True
+        lock_in_detail = lock_in.evidence or lock_in.label
+    elif outsourcing.state == "not_found" and tie.state == "not_found":
+        lock_in_points, lock_in_known = score.no_lock_in, True
+        lock_in_detail = "No outsourcing deal or tie to a competitor found"
+    else:
+        lock_in_points, lock_in_known, lock_in_detail = 0, False, ""
+    if procurement.state == "found":
+        buys_points, buys_known = 0, True
+        buys_detail = f"A red flag: {procurement.evidence or procurement.label}"
+    elif "buys_strategy" in evidence:
+        buys_points, buys_known, buys_detail = score.procurement, True, evidence["buys_strategy"]
+    else:
+        buys_points, buys_known = 0, procurement.state == "not_found"
+        buys_detail = "No sign found of how it buys"
+
     by_part: dict[str, list[ScoreCheck]] = {
-        "trigger": [
+        "fit": [
             check(
-                "trigger_group",
-                best.group_points if best else 0,
-                max(score.trigger_group.values()),
+                "local_staff",
+                score.staff_points(staff) if staff is not None else 0,
+                max(step.points for step in score.local_staff),
+                known=staff is not None,
+                detail=staff_detail,
+            ),
+            check(
+                "priority_sector",
+                score.priority_sector if in_sector else 0,
+                score.priority_sector,
+                known=facts.industry.value is not None,
+                detail=sector if in_sector and sector else "Not a priority sector",
+            ),
+            check(
+                "city",
+                city_points,
+                max(score.city.priority, score.city.secondary, score.city.other),
+                known=place is not None,
+                detail=city_detail,
+            ),
+            check(
+                "office_relevance",
+                score.office_relevance if matters else 0,
+                score.office_relevance,
+                known=matters is not None,
+                detail=(
+                    "The office matters to how it works" if matters else "The office may not matter"
+                ),
+            ),
+        ],
+        "change": [
+            check(
+                "strongest_sign",
+                strongest,
+                max(score.strongest_sign.values()),
                 detail=best.trigger.what_happened if best else "No sign of an office change yet",
             ),
             check(
-                "source",
-                best.source_points if best else 0,
-                max(score.source.values()),
-                detail=best.source_kind.replace("_", " ") if best else "",
-            ),
-        ],
-        "size": [
-            check(
-                "size",
-                size_points[sized.basis],
-                criteria.score.parts["size"].points,
-                known=sized.basis != "none",
-                detail=sized.check.detail,
-            )
-        ],
-        "timing": [
-            check(
-                "recency",
-                best.timing_points if best else 0,
-                score.recency_max,
-                detail=f"Dated {best.trigger.date}" if best and best.trigger.date else "",
+                "other_signs",
+                score.other_signs.points_each * len(others),
+                score.other_signs.points_each * score.other_signs.at_most,
+                detail="; ".join(labels.get(item.trigger.id, item.trigger.id) for item in others)
+                or "No other sign",
             ),
             check(
-                "years_at_address",
-                score.years_at_address if history.due else 0,
-                score.years_at_address,
-                known=history.years_at is not None,
-                detail=years,
-            ),
-            check(
-                "no_recent_move",
-                score.no_recent_move if history.recent is False else 0,
-                score.no_recent_move,
-                known=history.recent is not None,
-                detail=f"Last move or fitout {last.year}" if last else "",
+                "office_constrained",
+                score.office_constrained if lease or old_office else 0,
+                score.office_constrained,
+                known=lease or years is not None,
+                detail=constrained_detail,
             ),
         ],
         "access": [
             check(
-                "contact_role",
-                score.access.contact_role if facts.contact_role else 0,
-                score.access.contact_role,
-                detail=facts.contact_role or "No contact role found",
-            ),
-            check("hubspot_contact", 0, score.access.hubspot_contact, known=False),
-            check("customer_link", 0, score.access.customer_link, known=False),
-        ],
-        "fit": [
-            check(
-                "buys_strategy",
-                score.fit.buys_strategy if "buys_strategy" in evidence else 0,
-                score.fit.buys_strategy,
-                detail=evidence.get("buys_strategy", "No sign found"),
+                "no_lock_in",
+                lock_in_points,
+                score.no_lock_in,
+                known=lock_in_known,
+                detail=lock_in_detail,
             ),
             check(
-                "industry_tier",
-                tier_points,
-                max(score.fit.tier_1, score.fit.tier_2),
-                known=facts.industry.value is not None,
-                detail=tier or "Not in a tier",
+                "procurement", buys_points, score.procurement, known=buys_known, detail=buys_detail
             ),
-        ],
-        "competition": [
-            check(
-                "no_rival_in_place",
-                score.competition.no_rival_in_place if "no_rival_in_place" in evidence else 0,
-                score.competition.no_rival_in_place,
-                detail=evidence.get("no_rival_in_place", "No sign found"),
-            ),
-            check(
-                "no_contractor_relationship",
-                0,
-                score.competition.no_contractor_relationship,
-                known=False,
-            ),
+            check("warm_path", 0, score.warm_path, known=False),
         ],
     }
     return [
@@ -1235,18 +1425,3 @@ def _score_parts(
         )
         for part_id, rule in score.parts.items()
     ]
-
-
-def band_of(score: int, checked: int, rules: LeadFinderRules) -> Band:
-    """The Profile's bands: 75 to 100 research first, 50 to 74 investigate, under 50 nurture. With
-    `band_basis: scaled` the points earned are scaled to the points checked first, so
-    48 of 60 counts as 80."""
-    rule = rules.criteria.score
-    value = score
-    if rule.band_basis == "scaled":
-        value = round(score * 100 / checked) if checked else 0
-    if value >= rule.bands.research_first:
-        return "research_first"
-    if value >= rule.bands.investigate:
-        return "investigate"
-    return "nurture"

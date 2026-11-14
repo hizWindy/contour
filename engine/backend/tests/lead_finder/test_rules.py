@@ -581,35 +581,40 @@ def test_signal_hire_can_be_turned_off_by_taking_it_out_of_the_list(tmp_path: Pa
     assert "headcount_tool" not in read_rules(rules_dir).criteria.size.staff_sources
 
 
-def test_the_industry_tiers_come_from_the_profile() -> None:
+def test_the_priority_sectors_replace_the_two_tiers() -> None:
+    """Levi's section 2 (PLAN-V16 T1-6). Life sciences and medtech was a tier 2 industry, and his
+    list doesn't name it."""
     industries = load_rules().criteria.industries
-    assert "Technology and telecommunications" in industries.tier_1
-    assert "Defence and advanced manufacturing" in industries.tier_2
+    assert "Technology and telecommunications" in industries.priority_sectors
+    assert "Defence and advanced manufacturing" in industries.priority_sectors
+    assert "Life sciences and medtech" not in industries.priority_sectors
+    assert not hasattr(industries, "tier_1")
 
 
-def test_a_tier_group_in_both_tiers_stops_start_up(tmp_path: Path) -> None:
+def test_a_priority_sector_listed_twice_stops_start_up(tmp_path: Path) -> None:
     rules_dir = copy_rules(tmp_path)
     edit(
         rules_dir / "criteria.yaml",
-        "    - Defence and advanced manufacturing",
-        "    - Energy and infrastructure",
+        "    - Defence and advanced manufacturing # defence",
+        "    - Energy and infrastructure # defence",
     )
-    with pytest.raises(ValidationError, match="A tier group is listed twice: Energy and infra"):
+    with pytest.raises(
+        ValidationError, match="A priority sector is listed twice: Energy and infra"
+    ):
         read_rules(rules_dir)
 
 
-def test_the_extract_prompt_lists_every_industry_and_tier_group() -> None:
+def test_the_extract_prompt_lists_every_industry_and_priority_sector() -> None:
     rules = load_rules()
     text = extract_prompt(rules).text
     industries = rules.criteria.industries
     for group in (
         *industries.director_review,
         *industries.check_office_size,
-        *industries.tier_1,
-        *industries.tier_2,
+        *industries.priority_sectors,
     ):
         assert f"- {group}" in text
-    assert "$tier_groups" not in text
+    assert "$priority_sectors" not in text
     assert "$industry_groups" not in text
 
 
@@ -647,25 +652,25 @@ def test_trigger_without_templates_stops_start_up(tmp_path: Path) -> None:
 
 def test_parts_that_do_not_add_up_to_100_stop_start_up(tmp_path: Path) -> None:
     rules_dir = copy_rules(tmp_path)
-    edit(rules_dir / "criteria.yaml", "points: 25 }", "points: 30 }")
-    with pytest.raises(ValidationError, match="The six parts add up to 105"):
+    edit(
+        rules_dir / "criteria.yaml",
+        "access: { label: Access, points: 20 }",
+        "access: { label: Access, points: 25 }",
+    )
+    with pytest.raises(ValidationError, match="The three parts add up to 105"):
         read_rules(rules_dir)
 
 
 def test_checks_that_do_not_add_up_to_their_part_stop_start_up(tmp_path: Path) -> None:
     rules_dir = copy_rules(tmp_path)
-    edit(
-        rules_dir / "criteria.yaml",
-        "{ main: 15, other: 10, weak: 4 }",
-        "{ main: 20, other: 10, weak: 4 }",
-    )
-    with pytest.raises(ValidationError, match="part trigger add up to 30, but the part is 25"):
+    edit(rules_dir / "criteria.yaml", "  priority_sector: 8\n", "  priority_sector: 10\n")
+    with pytest.raises(ValidationError, match="part fit add up to 32, but the part is 30"):
         read_rules(rules_dir)
 
 
 def test_a_check_that_does_not_exist_cannot_be_unseen(tmp_path: Path) -> None:
     rules_dir = copy_rules(tmp_path)
-    edit(rules_dir / "criteria.yaml", "unseen: [hubspot_contact,", "unseen: [nope,")
+    edit(rules_dir / "criteria.yaml", "unseen: [warm_path]", "unseen: [nope]")
     with pytest.raises(ValidationError, match="checks that don't exist: nope"):
         read_rules(rules_dir)
 
@@ -677,10 +682,54 @@ def test_each_result_needs_a_stage(tmp_path: Path) -> None:
         read_rules(rules_dir)
 
 
-def test_bands_must_go_from_low_to_high(tmp_path: Path) -> None:
+def test_the_tiers_must_go_down_from_a_to_c(tmp_path: Path) -> None:
     rules_dir = copy_rules(tmp_path)
-    edit(rules_dir / "criteria.yaml", "investigate: 50", "investigate: 80")
-    with pytest.raises(ValidationError, match=r"investigate must be below bands\.research_first"):
+    edit(
+        rules_dir / "criteria.yaml",
+        "tiers: { a: 75, b: 55, c: 40 }",
+        "tiers: { a: 75, b: 80, c: 40 }",
+    )
+    with pytest.raises(ValidationError, match=r"score\.tiers must go down from a to b to c"):
+        read_rules(rules_dir)
+
+
+def test_the_score_is_levis_three_parts_and_cuts() -> None:
+    score = load_rules().criteria.score
+    assert {part_id: part.points for part_id, part in score.parts.items()} == {
+        "fit": 30,
+        "change": 50,
+        "access": 20,
+    }
+    assert (score.tiers.a, score.tiers.b, score.tiers.c) == (75, 55, 40)
+    assert (score.dampeners.strong, score.dampeners.moderate) == (20, 10)
+    assert score.strongest_sign == {"very_high": 25, "high": 18, "medium": 10, "low": 4}
+    assert [(step.from_staff, step.points) for step in score.local_staff] == [
+        (250, 12),
+        (150, 10),
+        (100, 5),
+        (50, 2),
+    ]
+    assert (score.city.priority, score.city.secondary, score.city.other) == (5, 2, 1)
+    assert (score.other_signs.points_each, score.other_signs.at_most) == (8, 2)
+    assert score.warm_path == 4 and score.unseen == ["warm_path"]
+    assert [score.staff_points(staff) for staff in (49, 50, 99, 100, 150, 250)] == [
+        0,
+        2,
+        2,
+        5,
+        10,
+        12,
+    ]
+
+
+def test_a_weaker_sign_cannot_earn_more_than_a_stronger_one(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    edit(
+        rules_dir / "criteria.yaml",
+        "strongest_sign: { very_high: 25, high: 18, medium: 10, low: 4 }",
+        "strongest_sign: { very_high: 25, high: 18, medium: 19, low: 4 }",
+    )
+    with pytest.raises(ValidationError, match="must not give a weaker sign more points"):
         read_rules(rules_dir)
 
 

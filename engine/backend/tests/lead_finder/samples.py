@@ -41,6 +41,7 @@ from pydantic import BaseModel
 
 from apps.lead_finder.fields import (
     AngleNotes,
+    BoosterFound,
     Candidate,
     Candidates,
     CompanyFacts,
@@ -175,12 +176,18 @@ def make_facts(**changes: Any) -> CompanyFacts:
                 label="confirmed",
             )
         ],
-        boosters=[],
+        boosters=[
+            BoosterFound(
+                id="buys_strategy",
+                evidence="Acme talks about culture and hybrid work, and hires firms directly.",
+                source_url=NEWS,
+            )
+        ],
         expected_move=fact("2027", NEWS, "estimated"),
         growth_plan=fact(None),
         size_needed_m2=fact(None),
         growth_by=fact(None),
-        office_matters=fact(None),
+        office_matters=fact(True),
         tier_group=None,
         office_since=fact(None),
         last_fitout=fact(None),

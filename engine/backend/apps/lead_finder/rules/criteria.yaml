@@ -111,18 +111,19 @@ industries:
     - Automotive
     - Hospitality
     - Transport and logistics
-  # Industry tiers from the Target Customer Profile. A tier adds points to the score. It never
-  # decides whether a company fits.
-  tier_1:
-    - Energy and infrastructure
-    - Mining and resources
-    - Technology and telecommunications
-    - Engineering and technical services
-  tier_2:
-    - Defence and advanced manufacturing
-    - Life sciences and medtech
-    - Selected financial and corporate services
-    - Other corporate professional services
+  # Levi's priority sectors (his section 2, PLAN-V16 T1-6): energy, renewables and critical
+  # infrastructure, defence, engineering, insurance and mid-tier financial services, technology,
+  # professional services (not legal) and resources head offices. They replace version 2's tier 1
+  # and tier 2. A priority sector adds points to the score. It never decides whether a company
+  # fits. Each is the name of an industry group Claude files a company in (the fact `tier_group`).
+  priority_sectors:
+    - Energy and infrastructure # energy, renewables, critical infrastructure
+    - Defence and advanced manufacturing # defence
+    - Engineering and technical services # engineering
+    - Selected financial and corporate services # insurance, mid-tier financial services
+    - Technology and telecommunications # technology
+    - Other corporate professional services # professional services, not legal
+    - Mining and resources # resources head offices
 
 # Left out and not scored (Levi's section 3, PLAN-V16 T1-3, Criteria_v3.md). An excluded lead is a
 # Drop that shows its reason and its evidence. A person with the Lead Finder tick can override it,
@@ -293,15 +294,14 @@ triggers:
       label: On a growth list, like the AFR Fast 100 or the Deloitte Technology Fast 50
       strength: low # low on its own: it supports other signs
 
-# Rivals of a booming company (PLAN-V9 B5, Levi 2 Nov). When a lead in one of these tiers is a Pass or
-# a Director review, one Claude web search names up to per_lead Australian rivals with an office in
-# the same city. The next discovery run for that city adds up to per_run of them to its list, with
-# the weak sign below, so real news still ranks first. Set enabled to false to stop it.
+# Rivals of a booming company (PLAN-V9 B5, Levi 2 Nov). When a lead in a priority sector is a Pass
+# or a Director review, one Claude web search names up to per_lead Australian rivals with an office
+# in the same city. The next discovery run for that city adds up to per_run of them to its list,
+# with the weak sign below, so real news still ranks first. Set enabled to false to stop it.
 # Levi's competitor sweep (section 4): it also runs for a good lead with a sector tailwind sign,
 # whatever its sector (`also_after`, PLAN-V16 T1-4).
 rivals:
   enabled: true
-  tiers: [tier_1, tier_2]
   also_after: [hot_industry_growth]
   per_lead: 5
   per_run: 5
@@ -341,50 +341,61 @@ source_domains:
     - lusha.com
     - apollo.io
 
-# The score, 0 to 100: the Target Customer Profile's six parts (Criteria_v2.md section 6). The parts
-# add up to 100, and the checks inside each part add up to the part (the backend checks this).
-# The checks and their points are our proposal, TBC until Levi fills in the Importance column.
-# A check is "not known yet" when the tool can't judge it for a lead, and then it adds nothing to
-# "checked". The tool shows points earned out of points checked, like "48 of 60 checked".
+# The score, 0 to 100 (Levi's section 6, PLAN-V16 T1-6, Criteria_v3.md): Fit 30, Change and timing 50
+# and Access 20. The checks inside each part add up to the part (the backend checks this). Then the
+# dampeners take points off, and the score sets the tier. Every number is Levi's except where a
+# note under "tbc" says it is our reading. A check is "not known yet" when the tool can't judge it
+# for a lead: it earns nothing, and the lead's confidence says so.
 score:
   parts:
-    trigger: { label: Business or property trigger, points: 25 }
-    size: { label: Project size, points: 20 }
-    timing: { label: Timing, points: 15 }
-    access: { label: Decision-maker access, points: 15 }
-    fit: { label: Integrated strategic fit, points: 15 }
-    competition: { label: Competitive opportunity, points: 10 }
+    fit: { label: Fit, points: 30 }
+    change: { label: Change and timing, points: 50 }
+    access: { label: Access, points: 20 }
   check_labels:
-    trigger_group: The best trigger
-    source: How strong its source is
-    size: Office size
-    recency: How recent the trigger is, or how near the lease end
-    years_at_address: Years at the same address
-    no_recent_move: No recent move or fitout
-    contact_role: A contact role found
-    hubspot_contact: A contact already in HubSpot
-    customer_link: A link to a current customer
-    buys_strategy: Talks about culture, hybrid work or green ratings
-    industry_tier: Industry tier
-    no_rival_in_place: Not in a competitor's case studies
-    no_contractor_relationship: No known fitout contractor relationship
-  trigger_group: { main: 15, other: 10, weak: 4 } # the best trigger counts
+    local_staff: Local staff, now or projected
+    priority_sector: A priority sector
+    city: City
+    office_relevance: The office matters to how it works
+    strongest_sign: The strongest sign
+    other_signs: Other independent signs within 12 months
+    office_constrained: The office is constrained or ending
+    no_lock_in: No outsourcing deal or competitor lock-in found
+    procurement: Favourable procurement
+    warm_path: A warm path in
+  # How signs, and companies found by discovery, are ranked against each other. These are not
+  # points of a lead's score: the strength of its strongest sign is (strongest_sign below).
+  trigger_group: { main: 15, other: 10, weak: 4 }
   source: { property_daily: 10, asx_or_official_news: 8, other_news: 5, job_ads: 2 }
-  size: { confirmed_in_range: 20, estimated_in_range: 16, growing_into_range: 14, director: 10 }
-  recency: # timing: how long ago the best trigger happened
+  recency: # how long ago a sign happened
     - { within_days: 30, points: 6 }
     - { within_days: 90, points: 4 }
     - { within_days: 365, points: 2 }
   undated: 1
   lease_in_best_window: 6 # a lease ending 1 to 3 years out
-  years_at_address: 7 # more than office_age.due_years at the same address. Was 5 (Levi, 9 Nov: check how long it has been at its office, PLAN-V11 B5)
-  no_recent_move: 2 # no move or fitout in the last office_age.recent_move_years. Was 4: B3 now makes a very recent move a Watch
-  access: { contact_role: 5, hubspot_contact: 5, customer_link: 5 }
-  fit: { buys_strategy: 8, tier_1: 7, tier_2: 4 }
-  competition: { no_rival_in_place: 6, no_contractor_relationship: 4 }
-  unseen: [hubspot_contact, customer_link, no_contractor_relationship] # the tool can't judge these yet
-  bands: { research_first: 75, investigate: 50 } # under investigate is "nurture" (the Profile)
-  band_basis: scaled # scaled: points earned out of points checked, then x100. raw: points earned
+  # Fit (30). Staff of at least from_staff earn the points of the highest step reached. Levi:
+  # 100 staff = 5, 150+ = 10, 250+ = 12. 50 to 99 staff = 2 is ours (Levi, 9 Nov: 50+ still fits)
+  local_staff:
+    - { from_staff: 250, points: 12 }
+    - { from_staff: 150, points: 10 }
+    - { from_staff: 100, points: 5 }
+    - { from_staff: 50, points: 2 }
+  priority_sector: 8
+  city: { priority: 5, secondary: 2, other: 1 } # other: a capital, a regional centre, or a place that isn't listed (TBC)
+  office_relevance: 5 # the office matters to how it works (office_matters is true)
+  # Change and timing (50)
+  strongest_sign: { very_high: 25, high: 18, medium: 10, low: 4 }
+  other_signs: # 8 each, at most 2. A sign with no date counts too
+    points_each: 8
+    at_most: 2
+    within_months: 12
+  office_constrained: 9 # 8+ years at the address, or a lease ending in 3 years
+  # Access (20)
+  no_lock_in: 10 # no outsourcing deal and no tie to a competitor found
+  procurement: 6 # direct engagement and a values strategy, and no red flag
+  warm_path: 4
+  unseen: [warm_path] # the tool can't judge these yet: it needs HubSpot contacts and board lists
+  dampeners: { strong: 20, moderate: 10 } # taken off the score for each found dampener
+  tiers: { a: 75, b: 55, c: 40 } # A 75+, B 55 to 74, C 40 to 54, Discard under 40
 
 results: [pass, director_review, watch, drop]
 
@@ -431,10 +442,8 @@ tbc:
     note: Version 2's list without Government, Law firms, Premium banks and finance and Standard not-for-profits, which are exclusions now (PLAN-V16 T1-3). Education, real estate agencies, hospitals and industry consultants stay a Director review, because Levi's notes don't list them as exclusions. Industry consultants may not need one, since his notes make professional services (not legal) a priority sector. Levi to say.
   - key: exclusions
     note: Levi's section 3 (15 Nov, PLAN-V16 T1-3). Six kinds of company are left out and not scored, each with its reason and evidence, and a person can override one. Our readings, all TBC. All law firms are left out (his notes say "especially tier one and national"). Only the big four banks and other tier-one institutions are, not an insurer, a fund manager or a customer-owned bank, because insurance and mid-tier financial services are priority sectors. A government-owned corporation and an industry super fund are flagged, not left out. Tender portals count only when they are the company's only route.
-  - key: industries.tier_1
-    note: From the Target Customer Profile, which leadership hasn't approved. Question 1 for Levi.
-  - key: industries.tier_2
-    note: Defence is Tier 2 today, but 5 of the 23 Gold customers are defence or secure sites. Question 1 for Levi.
+  - key: industries.priority_sectors
+    note: Levi's list (section 2, PLAN-V16 T1-6) is energy, renewables, critical infrastructure, defence, engineering, insurance, mid-tier financial services, technology, professional services (not legal) and resources head offices. They replace version 2's tier 1 and tier 2, and each is one of the industry groups Claude files a company in. Our reading, for Levi to confirm. Life sciences and medtech was a tier 2 industry, and his list doesn't name it, so it earns no sector points now. Mining and resources is a priority sector for its head offices.
   - key: fit.local_team_runs_project
     note: Was "decides locally". Some of Contour's clients are owned overseas.
   - key: fit.healthy
@@ -476,10 +485,12 @@ tbc:
   - key: office_age.tenure_fitout_years
     note: Levi's section 4 (PLAN-V16 T1-4), long tenure. 8 or more years at the address, a company that is stable or growing, and no known fitout there in the last 5 years. A year is enough for the move-in ("at this address since at least 2017"). Ten or more years is the strongest, so T1-6 gives it more points in the score.
   - key: dampeners
-    note: Levi's section 5 (PLAN-V16 T1-5). The five dampeners and which are strong or moderate are his, and so is "found or not found, never none". Our reading, for Levi to confirm. (1) His "moderate to strong" procurement flags are strong for a tender portal or offshore or central global buying, and moderate for lowest-price tenders or design and build bought apart. A flag with no kind is moderate. (2) A fitout or move with no date counts as moderate. (3) His "still list the lead if hiring would outgrow the space within 24 months" means the dampener takes nothing off, when the company plans to hire a lot and says it will need more space than it has now by a date inside 24 months. (4) His "unless it is part of a consolidation that creates a move" is a merger or takeover sign, or an office consolidation sign. (5) In version 2, a company in administration or cutting staff fast was a Drop. It is a strong dampener now, and the old Drop stays until the new score (T1-6). The check adds up to 3 web searches a company on top of `company_max_searches`, so a researched company may use 3 more than that setting says. The money limits are the same.
+    note: Levi's section 5 (PLAN-V16 T1-5). The five dampeners and which are strong or moderate are his, and so is "found or not found, never none". Our reading, for Levi to confirm. (1) His "moderate to strong" procurement flags are strong for a tender portal or offshore or central global buying, and moderate for lowest-price tenders or design and build bought apart. A flag with no kind is moderate. (2) A fitout or move with no date counts as moderate. (3) His "still list the lead if hiring would outgrow the space within 24 months" means the dampener takes nothing off, when the company plans to hire a lot and says it will need more space than it has now by a date inside 24 months. (4) His "unless it is part of a consolidation that creates a move" is a merger or takeover sign, or an office consolidation sign. (5) In version 2, a company in administration or cutting staff fast was a Drop. It is a strong dampener now (T1-6), no longer a Drop. The check adds up to 3 web searches a company on top of `company_max_searches`, so a researched company may use 3 more than that setting says. The money limits are the same.
   - key: source_domains
     note: First draft. The test set will show which sites matter.
   - key: score
-    note: The six parts are the Profile's, which leadership hasn't approved. The checks inside them and all their points are our proposal, until Levi fills in the Importance column. Three checks can't be judged yet (a contact in HubSpot, a link to a current customer, no known contractor relationship). On 9 Nov Levi asked to weigh the years at the address more, so Timing is now 6 for the trigger's timing, 7 for the years at the address (was 5) and 2 for no recent move (was 4). Those numbers are TBC (PLAN-V11 B5).
-  - key: score.band_basis
-    note: Our proposal. With scaled, 48 of 60 checked counts as 80 for the band. Raw would use 48.
+    note: Levi's three parts and every check's points are his (section 6, PLAN-V16 T1-6), and so are the tiers (A 75+, B 55 to 74, C 40 to 54, Discard under 40) and the deductions (strong 20, moderate 10). The points are the score before the dampeners. They replace the Profile's six parts. Our readings, TBC. (1) 50 to 99 local staff earns 2 (Levi, 9 Nov, 50+ still fits), and 100 to 149 earns 5. Local staff means the larger of the staff now and the staff the office size or a growth plan points to (10 m2 a person). (2) A place other than the five he names earns 1 for the city (our choice 5). (3) The office matters to how it works is the fact office_matters. (4) Favourable procurement is the booster buys_strategy (direct engagement and a values strategy), and a red flag found by the procurement check cancels it. (5) The office is constrained or ending is 8 or more years at the address, or a lease that ends in 3 years. Overflow space and split sites can't be judged yet. (6) A warm path in can't be judged yet. It needs HubSpot contacts and board lists, so nobody earns its 4 points and the best score is 96. (7) For other independent signs, any sign that counts, other than the strongest and the same sign twice, with a date in the last 12 months or still to come, or with no date (an unknown date doesn't fail a lead). (8) No outsourcing deal or lock-in earns its 10 only when both checks ran and found nothing. A card made before the dampener check has not been checked, so it earns 0 there until it is researched again. (9) Version 2's source points (Property Daily 10, official 8, news 5, job ads 2) no longer count in the score. Source quality is in the confidence now. They still rank signs against each other.
+  - key: score.tiers
+    note: Levi's cuts (section 6). The tier sets the result (our choice 1, PLAN-V16). A and B are a Pass, or a Director review when a Director rule applies. C is a Watch. Discard is a Drop, and so is an exclusion. A rule that holds a lead at Watch (it just moved, or its size isn't clear) still wins over the tier. An unknown fact never fails a lead, so a Discard stays a Watch while the city or the size isn't known, or while the dampener checks haven't run (a lead researched before PLAN-V16 T1-5). Its score is missing points that a research would find.
+  - key: score.dampeners
+    note: Levi's deductions (section 6) are 20 for each strong dampener and 10 for each moderate one. A dampener that takes nothing off (waived) doesn't count. Several can add up, and the score doesn't go below 0.

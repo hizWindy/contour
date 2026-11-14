@@ -82,12 +82,15 @@ from apps.lead_finder.sanitize import (
 )
 from apps.lead_finder.scoring import (
     JUST_MOVED,
+    TIER_CHECK,
     Band,
+    Confidence,
     Dampener,
     Excluded,
     FilterResult,
     RuleCheck,
     ScorePart,
+    Tier,
     TriggerScore,
     Verdict,
     city_of,
@@ -236,20 +239,42 @@ class LeadCard(BaseModel):
         default=None,
         description="The Profile's stage for the result. Empty for a card made under version 1.",
     )
-    score: int = Field(description="0 to 100: the points earned in the Profile's six parts.")
+    score: int = Field(
+        description="0 to 100, after the dampeners (Levi's section 6, PLAN-V16 T1-6). A card made "
+        "before it has the Profile's six-part score."
+    )
+    score_before_dampeners: int | None = Field(
+        default=None,
+        description="The score before the dampeners took points off. Empty for a card made "
+        "before PLAN-V16 T1-6.",
+    )
+    tier: Tier | None = Field(
+        default=None,
+        description="A (75 and over), B (55 to 74), C (40 to 54) or discard (under 40). Empty for "
+        "a card made before PLAN-V16 T1-6.",
+    )
+    confidence: Confidence | None = Field(
+        default=None,
+        description="high, medium or low: how well the headcount, the signs and the dampener "
+        "checks are sourced. Empty for a card made before PLAN-V16 T1-6.",
+    )
+    confidence_why: str | None = Field(
+        default=None, description="One sentence that says why the confidence is what it is"
+    )
     score_parts: list[ScorePart] = Field(
         default_factory=list,
-        description="The six parts and their checks. Empty for a Drop, and for a card made "
-        "under version 1.",
+        description="The three parts (Fit, Change and timing, Access) and their checks, before "
+        "the dampeners. Empty for a Drop. A card made before PLAN-V16 T1-6 has the six parts.",
     )
     score_checked: int | None = Field(
         default=None,
-        description="The most points the tool could judge, like 48 of 60. Empty for a Drop, "
-        "and for a card made under version 1.",
+        description="Before PLAN-V16 T1-6: the most points the tool could judge, like 48 of 60. "
+        "Empty for a card made after it.",
     )
     band: Band | None = Field(
         default=None,
-        description="research_first (75 to 100), investigate (50 to 74) or nurture (under 50)",
+        description="Before PLAN-V16 T1-6: research_first, investigate or nurture. Empty for a "
+        "card made after it: it has a tier.",
     )
     summary: str
     why_it_fits: str
@@ -1254,9 +1279,13 @@ def verdict_fields(verdict: Verdict) -> dict[str, Any]:
         "result": verdict.result,
         "stage": verdict.stage,
         "score": verdict.score,
+        "score_before_dampeners": verdict.score_before_dampeners,
+        "tier": verdict.tier,
+        "confidence": verdict.confidence,
+        "confidence_why": verdict.confidence_why,
         "score_parts": verdict.parts,
-        "score_checked": verdict.score_checked or None,
-        "band": verdict.band,
+        "score_checked": None,  # the points the tool could judge: before PLAN-V16 T1-6
+        "band": None,
         "why_it_fits": _why(verdict.checks, verdict.result),
         "checks": verdict.checks,
         "triggers": verdict.triggers,
@@ -1288,6 +1317,8 @@ def verdict_columns(card: LeadCard) -> dict[str, Any]:
         "result": card.result,
         "score": card.score,
         "score_checked": card.score_checked,
+        "tier": card.tier,
+        "confidence": card.confidence,
         "trigger_id": trigger_ids[0] if trigger_ids else None,
         "trigger_ids": trigger_ids,
         "trigger_date": parse_date(best.date) if best else None,
@@ -1299,7 +1330,10 @@ def _why(checks: list[RuleCheck], result: Result) -> str:
     parts = [f"{c.rule}: {c.detail}" for c in checks if c.rule in ("City", "Size", "Office")]
     # A company that just moved is a Watch whatever else it shows, so that reason comes first (B3)
     moved = [c.detail for c in checks if c.rule == JUST_MOVED and result == "watch"]
-    reasons = [*moved, *(c.detail for c in checks if c.outcome in ("fail", "director"))]
+    # The tier says why a good lead is only a Watch, or a Drop (PLAN-V16 T1-6)
+    tier = [c.detail for c in checks if c.rule == TIER_CHECK]
+    reasons = [*moved, *(c.detail for c in checks if c.outcome in ("fail", "director")), *tier]
+    reasons = list(dict.fromkeys(reasons))
     label = result.replace("_", " ").capitalize()
     because = f" Because: {'; '.join(reasons)}." if reasons and result != "pass" else ""
     return f"{'. '.join(parts)}. Result: {label}.{because}"

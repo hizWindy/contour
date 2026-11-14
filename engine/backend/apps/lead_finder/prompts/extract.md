@@ -42,8 +42,8 @@ For each entry:
 Industry groups. If the company's industry belongs to one, put that group's name in industry_group, exactly as written (the words after a colon say what the group means: they are not part of the name). Otherwise empty text.
 $industry_groups
 
-Tier groups. If the company's industry belongs to one of these, put that group's name in tier_group, exactly as written. Otherwise empty text.
-$tier_groups
+Priority sectors. If the company's industry belongs to one of these, put that group's name in tier_group, exactly as written. Otherwise empty text.
+$priority_sectors
 
 Then write:
 - fitout_contractors: the names of design or fitout firms that did this company's office, only if a note names them. Firm names only. An empty list if none.

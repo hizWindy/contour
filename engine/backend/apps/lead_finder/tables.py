@@ -66,6 +66,8 @@ LIMITS: Final[dict[str, int]] = {
     "lead.industry": 120,
     "lead.industry_group": 120,
     "lead.result": 32,
+    "lead.tier": 8,
+    "lead.confidence": 8,
     "lead.trigger_id": 64,
     "lead.contact_role": 200,
     "lead.status": 16,
@@ -200,6 +202,11 @@ class Lead(Base):
     office_m2_estimated: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     result: Mapped[str] = mapped_column(_string("lead.result"), index=True)  # pass, watch, ...
     score: Mapped[int] = mapped_column(Integer)
+    # Levi's tier (A, B, C or discard) and the confidence in the facts (high, medium or low), from
+    # PLAN-V16 T1-6. Empty for a lead judged before it, until `lead-finder rejudge --save` fills
+    # them in.
+    tier: Mapped[str | None] = mapped_column(_string("lead.tier"), index=True)
+    confidence: Mapped[str | None] = mapped_column(_string("lead.confidence"), index=True)
     # The most points the tool could judge for this lead ("48 of 60 checked"). Empty for a lead
     # scored under version 1, and for a Drop.
     score_checked: Mapped[int | None] = mapped_column(Integer)

@@ -18,6 +18,7 @@ from apps.lead_finder import research as research_module
 from apps.lead_finder.api import claude_dependency
 from apps.lead_finder.context import CreditMeter, ResearchContext
 from apps.lead_finder.fields import DecisionMaker
+from apps.lead_finder.rejudge import save_rejudged
 from apps.lead_finder.research import LeadCard, ResearchRequest, refill_lead, research_company
 from apps.lead_finder.rules import MAX_DAMPENER_SEARCHES, LeadFinderRules, load_rules
 from apps.lead_finder.tables import Lead
@@ -104,8 +105,11 @@ async def test_research_searches_four_angles_and_saves_everything(session: Async
         "search:property",
     ]
     assert card.result == "pass"
-    assert card.score == 51  # see test_scoring: a good lead with nothing found for fit or rivals
-    assert (card.score_checked, card.band) == (77, "investigate")
+    assert card.score == 72  # see test_scoring: a good lead with nothing found for sector or rivals
+    assert (card.score_before_dampeners, card.tier, card.confidence) == (72, "B", "high")
+    assert card.confidence_why.startswith("High:")  # type: ignore[union-attr]
+    assert (card.score_checked, card.band) == (None, None)  # the six-part score's fields
+    assert [part.id for part in card.score_parts] == ["fit", "change", "access"]
     # 4 searches x $0.12 + $0.04. The dampener check adds one search request, $0.12 here (it was
     # $0.40 with three angles): the extra cost PLAN-V16 T1-5 asked to be measured on the fake
     assert card.research.cost_usd == Decimal("0.520000")
@@ -114,8 +118,48 @@ async def test_research_searches_four_angles_and_saves_everything(session: Async
     assert card.dropped == []
     assert await count(session, SearchLog, job_id=card.id) == 5
     assert await count(session, Lead) == 1
+    lead = await session.scalar(select(Lead))
+    assert lead is not None and (lead.tier, lead.confidence) == ("B", "high")  # the columns
     assert await count(session, MemoryItem, kind="source_note") == 5
     assert await count(session, MemoryItem, kind="company_profile") == 1
+
+
+async def test_saving_a_rejudge_fills_in_the_tier_and_the_confidence_of_a_saved_lead(
+    session: AsyncSession,
+) -> None:
+    """`lead-finder rejudge --save` (PLAN-V16 T1-6): a lead made before the tiers is judged again
+    from its card, and its row and its card get the new verdict."""
+    card = await research(session, FakeClaude())
+    lead = await session.get(Lead, card.id)
+    assert lead is not None
+    lead.tier, lead.confidence, lead.score, lead.rules_version = None, None, 51, "old"
+    lead.card = {**lead.card, "tier": None, "confidence": None, "score": 51, "band": "investigate"}
+    note, status = "Call on Monday", "watching"
+    lead.note, lead.status = note, status  # a person's work stays
+    await session.commit()
+
+    done = await save_rejudged(session, load_rules(), TODAY)
+
+    assert [(item.company, item.now.tier) for item in done] == [("Acme Software", "B")]
+    session.expire_all()
+    saved = await session.get(Lead, card.id)
+    assert saved is not None
+    assert (saved.tier, saved.confidence, saved.score, saved.result) == ("B", "high", 72, "pass")
+    assert saved.rules_version == load_rules().version
+    assert (saved.note, saved.status) == (note, status)
+    assert saved.card["tier"] == "B" and saved.card["score_before_dampeners"] == 72
+    assert saved.card["band"] is None and saved.card["rules_version"] == load_rules().version
+
+
+async def test_a_test_set_lead_is_left_alone_by_a_saved_rejudge(session: AsyncSession) -> None:
+    card = await research(session, FakeClaude())
+    lead = await session.get(Lead, card.id)
+    assert lead is not None
+    lead.is_test, lead.tier = True, None
+    await session.commit()
+    assert await save_rejudged(session, load_rules(), TODAY) == []
+    session.expire_all()
+    assert (await session.get(Lead, card.id)).tier is None  # type: ignore[union-attr]
 
 
 async def test_the_dampener_check_has_its_own_three_searches_and_its_own_prompt(

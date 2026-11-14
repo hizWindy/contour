@@ -1,9 +1,9 @@
-"""Levi's dampeners (his section 5, PLAN-V16 T1-5): facts that lower a lead's score and never
-remove it.
+"""Levi's dampeners (his section 5, PLAN-V16 T1-5): facts that lower a lead's score. No rule
+check fails because of one, and none excludes a lead.
 
 Every lead lists the five. Each is found, not found (checked, nothing shown: never written as
-"none") or not checked (nobody could check). This step judges and describes them. The points they
-take off come with the new score (T1-6).
+"none") or not checked (nobody could check). The points they take off (strong 20, moderate 10) are
+the score's (T1-6, and `test_scoring.py`).
 """
 
 from datetime import UTC, date, datetime
@@ -90,8 +90,9 @@ def test_a_check_the_answer_missed_is_not_checked() -> None:
     assert states["competitor_tie"] == "not_found"
 
 
-def test_a_dampener_never_removes_the_lead() -> None:
-    """A strong one of each, and the lead is still a Pass: points come off in the score (T1-6)."""
+def test_a_dampener_adds_no_rule_of_its_own() -> None:
+    """All four found: no rule check fails and nothing is excluded. They only cost points, so the
+    score falls (the tier, and so the result, follow it)."""
     answers = with_dampeners(
         found_dampener("recent_fitout", date="2026-01"),
         found_dampener("outsourcing"),
@@ -100,7 +101,11 @@ def test_a_dampener_never_removes_the_lead() -> None:
     )
     result = verdict(dampeners=answers)
     assert [item.state for item in result.dampeners[:4]] == ["found"] * 4
-    assert result.result == "pass"
+    assert result.excluded is None
+    assert not [
+        check for check in result.checks if check.outcome == "fail" and check.rule != "Tier"
+    ]
+    assert result.score < verdict().score
 
 
 # --- A fitout or move in that city ----------------------------------------------------------
@@ -332,7 +337,8 @@ def test_a_person_who_overrides_the_tender_exclusion_still_sees_the_flag() -> No
         TODAY,
         overrides={"tender_only": Override(by="A Director", at=now)},
     )
-    assert result.result == "pass"
+    assert result.excluded is not None and result.excluded.overridden_by == "A Director"
+    assert result.result == "watch"  # 72 - 6 - 20 = 46: Tier C
     assert (result.dampeners[3].state, result.dampeners[3].strength) == ("found", "strong")
 
 

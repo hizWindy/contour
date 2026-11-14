@@ -4,12 +4,15 @@ Run it from engine/backend:
     uv run lead-finder research "Culture Amp" --city Melbourne
     uv run lead-finder testset --yes
     uv run lead-finder rejudge
+    uv run lead-finder rejudge --save --yes
     uv run lead-finder headcount "Culture Amp" --city Melbourne --yes
     uv run lead-finder forms
     uv run lead-finder refill --yes
     uv run lead-finder why-now --lead <id> --lead <id> --yes
 The first two spend money on Claude. Every request is in the search log. `rejudge` is free: it
 judges the saved leads again with the current rules, from their cards, and saves nothing.
+`rejudge --save --yes` also saves the new result, score, tier and confidence on each lead
+(PLAN-V16 T1-6). It changes saved leads, so it needs `--yes`.
 `why-now` writes the lead card's Why now for saved leads, from their cards and notes: no web
 search, one short Claude request a lead (PLAN-V12 C3). Without `--yes` it lists the leads and the
 estimated cost, and spends nothing.
@@ -37,7 +40,7 @@ from sqlalchemy.exc import OperationalError
 
 from apps.lead_finder.fields import AngleNotes, Candidates, CompanyFacts
 from apps.lead_finder.headcount import HeadcountReading, describe_reading, read_headcount
-from apps.lead_finder.rejudge import Rejudged, rejudge, table
+from apps.lead_finder.rejudge import Rejudged, rejudge, save_rejudged, table
 from apps.lead_finder.research import (
     LeadCard,
     ResearchRequest,
@@ -171,6 +174,19 @@ async def _rejudge() -> list[Rejudged]:
                 .order_by(Lead.created_at)
             )
             return [rejudge(c, r, s, card, rules, today) for c, r, s, card in rows.all()]
+    finally:
+        await get_engine().dispose()
+
+
+async def _rejudge_and_save() -> list[Rejudged]:
+    """The saved leads, judged again and saved with their new verdict (PLAN-V16 T1-6)."""
+    from apps.lead_finder.rules import load_rules as rules_now
+    from core.db.engine import get_engine, get_sessionmaker
+
+    rules, today = rules_now(), datetime.now(ZoneInfo("Australia/Melbourne")).date()
+    try:
+        async with get_sessionmaker()() as session:
+            return await save_rejudged(session, rules, today)
     finally:
         await get_engine().dispose()
 
@@ -468,11 +484,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     tests = commands.add_parser("testset", help="Research the 10 test companies (costs money).")
     tests.add_argument("--twice", action="store_true", help="Run again to show memory savings.")
     tests.add_argument("--yes", action="store_true", help="Confirm the spend.")
-    commands.add_parser(
+    again = commands.add_parser(
         "rejudge",
         help="Judge the saved leads again with the current rules, from their cards. "
-        "No searches, no cost, and nothing is saved.",
+        "No searches, no cost, and nothing is saved unless you add --save --yes.",
     )
+    again.add_argument(
+        "--save",
+        action="store_true",
+        help="Save the new result, score, tier and confidence on each lead. It changes saved "
+        "leads, so it needs --yes.",
+    )
+    again.add_argument("--yes", action="store_true", help="Confirm that --save changes leads.")
     head = commands.add_parser(
         "headcount",
         help="Read Signal Hire's headcount for one company (1 company credit, and 2 searches "
@@ -519,8 +542,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        if args.command == "rejudge":  # read only, so it never migrates the database
+        if args.command == "rejudge" and not args.save:  # read only: it never migrates
             print(table(asyncio.run(_rejudge(), loop_factory=loop_factory())))
+            return 0
+        if args.command == "rejudge":
+            if not args.yes:
+                print("This changes the saved leads: their result, score, tier and confidence.")
+                print("Look at the table first (without --save), then add --yes.")
+                return 1
+            migrate()
+            print(table(asyncio.run(_rejudge_and_save(), loop_factory=loop_factory())))
             return 0
         if args.command == "headcount":  # no database either
             return _headcount(args)

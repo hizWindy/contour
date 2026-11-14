@@ -66,7 +66,6 @@ from apps.lead_finder.schemas import (
     SortOrder,
     TriggerFacet,
 )
-from apps.lead_finder.scoring import band_of
 from apps.lead_finder.tables import REJECT_REASONS, Lead, Rival
 from core.api.errors import Problem
 from core.memory.embedder import Embedder
@@ -351,8 +350,8 @@ def _row(data: Mapping[Any, Any], labels: Mapping[str, str]) -> LeadRow:
     values["hubspot_owner"] = data["hubspot_owner"]
     rules = load_rules()
     values["stage"] = rules.criteria.stages[data["result"]]
-    checked = data["score_checked"]
-    values["band"] = band_of(data["score"], checked, rules) if checked else None
+    # The score's bands ended with PLAN-V16 T1-6: a lead has a tier now (a later step lists it)
+    values["band"] = None
     return LeadRow.model_validate(values)
 
 

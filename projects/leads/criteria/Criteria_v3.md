@@ -130,7 +130,7 @@ A dampener lowers a lead's score. It never removes the lead. Search for each one
 - When one is found, record the evidence and the date, and say whether anything could reverse it. Examples: an agreement's renewal date, or a new CEO who may change suppliers.
 - **"Not found" is not "none".** The first four rows are checked on every lead that passes the filters. Having no evidence is written as "not found".
 - **TBC, our reading of "moderate to strong".** A tender portal, or offshore or central global buying, is strong. A lowest-price history, or design and build bought apart, is moderate.
-- **TBC, financial stress.** In version 2, a company in administration or cutting staff fast was a Drop. Levi's notes make it a dampener, so it is now a strong one. The old Drop stays until the new score is built.
+- **TBC, financial stress.** In version 2, a company in administration or cutting staff fast was a Drop. Levi's notes make it a dampener, so it is now a strong one. It is no longer a Drop (PLAN-V16 T1-6).
 
 **How we apply this (TBC):**
 - **Five dampeners, six rows.** The two fitout rows are one dampener with two strengths: strong up to 3 years ago, moderate from 3 to 5 years. A fitout longer ago than 5 years doesn't count.
@@ -140,7 +140,7 @@ A dampener lowers a lead's score. It never removes the lead. Search for each one
 - **A fitout with no date** counts as moderate, and says "date not known".
 - **Outgrow rule.** A found dampener takes nothing off when the company plans to hire a lot, says it will need more space than it has now, and needs it within 24 months. The card still shows it as found, with the reason. This is our reading of "still list the lead".
 - **Consolidation.** Financial stress takes nothing off when the company has a merger or takeover sign, or an office consolidation sign.
-- **Not built yet.** The points (20 off for strong, 10 for moderate) come with the new score (T1-6). Until then a dampener is shown and doesn't change the result.
+- **The points.** A found dampener takes 20 off (strong) or 10 off (moderate) in the score (section 6), unless it is waived.
 
 ## 6. Scoring
 
@@ -185,6 +185,24 @@ Each lead that passes the filters is scored out of 100. A separate confidence ra
 The Director rules that stay: an office over 6,000 m² or over 600 staff (a possible Whale Pipeline project), and the Director industries left after section 3. A good lead is Tier A or B (**TBC**). The goal of 100 good leads every 2 weeks counts those.
 
 **Priority sectors** replace version 2's tier 1 and tier 2 industries. They are the list in section 2.
+
+**How we apply this (TBC).** Every number in the tables is Levi's, except the ones marked TBC. The rest is our reading:
+- **Local staff** is the larger of the staff now and the staff the office size or a growth plan points to (10 m² a person). 100 to 149 staff earn 5.
+- **Priority sectors** are 7 of Claude's industry groups: energy and infrastructure, defence, engineering, insurance and mid-tier finance, technology, other professional services, and mining and resources. Life sciences and medtech was a tier 2 industry. His list doesn't name it, so it earns no sector points now.
+- **Office relevance** is the research's answer to "does the office matter to how it works" (true earns 5).
+- **Favourable procurement** is the evidence that it buys directly and talks about culture, hybrid work or green ratings. A red flag from the dampener check cancels it.
+- **Constrained or ending** is 8+ years at the address, or a lease that ends within 3 years. Overflow space and split sites can't be judged yet.
+- **A warm path in** can't be judged yet (it needs HubSpot contacts and board lists), so its 4 points are never earned. The best score is 96.
+- **Other independent signs** are signs other than the strongest, each of a different kind, dated in the last 12 months or still to come, or with no date. Two count at most.
+- **No outsourcing deal or lock-in** earns its 10 only when both checks ran and found nothing. A lead researched before the dampener check hasn't been checked, so it earns 0 there until it is researched again.
+- **Source points are gone.** Version 2 gave a sign points for its source (Property Daily 10, official news 8, other news 5, job ads 2). They no longer count in the score. Source quality is in the confidence now.
+- **Dampeners.** Each found dampener takes its points off (20 or 10), unless it is waived. The score doesn't go below 0.
+- **Confidence.** *High:* the headcount and the signs are confirmed on a named source, and the four dampener checks all ran. *Medium:* one of those three isn't true. *Low:* two or more aren't. A LinkedIn count (doubled) is an estimate. A fact a property tool confirms counts as confirmed. A Tier A lead with low confidence gets the flag "Verify before outreach".
+- **A rule that holds a lead at Watch** (it just moved in the last 12 months, or its size isn't clear) wins over Tier A or B.
+- **An unknown fact never fails a lead.** A Discard stays a **Watch** while the city or the size isn't known, or while the dampener checks haven't run. The card says why.
+- **No sign yet.** A company with no sign is a Watch whatever its tier, because the rules need a sign for a Pass. Its score can't pass 55 (fit 30, a tight office 9, access 16), and most are under 40. Those are a Discard: a Drop, hidden by default. If it gets a sign later, a new run finds it again.
+- **Financial stress** was a Drop in version 2. It is a strong dampener now.
+- **Saved leads.** `uv run lead-finder rejudge` shows what the new rules say about the saved leads, and saves nothing. `rejudge --save --yes` saves it: the result, score, tier and confidence of each lead. Do it after the merge, once Levi has seen the table.
 
 ## 7. Sources to search
 

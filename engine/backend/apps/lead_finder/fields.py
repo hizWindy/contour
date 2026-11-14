@@ -186,8 +186,8 @@ class CompanyFacts(BaseModel):
         "instructions, that group's name exactly as written. Else empty."
     )
     tier_group: MaybeText = Field(
-        description="If the industry belongs to one of the tier groups in the instructions, "
-        "that group's name exactly as written. Else empty."
+        description="If the industry belongs to one of the priority sectors in the instructions, "
+        "that sector's name exactly as written. Else empty."
     )
     owner: Fact[str] = Field(description="Like 'ASX-listed, Australian' or 'Private, UK-owned'")
     staff_in_city: Fact[int] = Field(description="Staff at the office in that city")

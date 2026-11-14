@@ -23,7 +23,9 @@ WHEN = datetime(2026, 11, 15, 9, 30, tzinfo=UTC)
 
 
 def verdict(**changes: Any) -> Verdict:
-    return judge(make_facts(**changes), NEW, RULES, TODAY)
+    """The sample lead with nothing known about whether its office matters (the filters say
+    "estimated" then), unless a test says."""
+    return judge(make_facts(**{"office_matters": fact(None), **changes}), NEW, RULES, TODAY)
 
 
 def check_of(result: Verdict, rule: str) -> Any:

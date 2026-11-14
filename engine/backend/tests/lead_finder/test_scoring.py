@@ -5,21 +5,31 @@ from typing import Any
 
 import pytest
 
-from apps.lead_finder.fields import BoosterFound, TriggerFound
+from apps.lead_finder.fields import BoosterFound, DampenerCheck, TriggerFound
 from apps.lead_finder.rules import LeadFinderRules, load_rules
 from apps.lead_finder.scoring import (
     JUST_MOVED,
+    TIER_CHECK,
+    VERIFY_CHECK,
     RuleCheck,
     ScoreCheck,
     ScorePart,
     TriggerScore,
     Verdict,
-    band_of,
     judge,
     parse_date,
+    tier_of,
 )
 from core.hubspot.matching import CandidateReason, HubSpotMatch, MatchCandidate
-from tests.lead_finder.samples import ASX, NEWS, fact, make_facts
+from tests.lead_finder.samples import (
+    ASX,
+    NEWS,
+    fact,
+    found_dampener,
+    make_facts,
+    no_dampeners,
+    with_dampeners,
+)
 
 TODAY = date(2026, 10, 26)
 NEW = HubSpotMatch(status="new")
@@ -55,9 +65,11 @@ HINT_75 = with_size(staff_hint_min=75, staff_min=100)
 def test_a_good_lead_passes_with_its_score() -> None:
     result = verdict()
     assert result.result == "pass"
-    # trigger part: main trigger 15 + other news 5. Size: 2,500 m² confirmed 20. Timing: a lease
-    # 1 to 3 years out 6. Access: a contact role 5. Nothing found for fit or competition.
-    assert result.score == 15 + 5 + 20 + 6 + 5
+    # Fit: 250 staff 12, no priority sector 0, Melbourne 5, the office matters 5. Change: a lease
+    # end (a very high sign) 25, no other sign, a lease within 3 years 9. Access: no outsourcing
+    # deal or tie to a competitor 10, favourable procurement 6, a warm path can't be judged yet.
+    assert result.score == result.score_before_dampeners == 22 + 34 + 16 == 72
+    assert result.tier == "B"
     assert result.fitout_aud == 2500 * 1500
 
 
@@ -69,97 +81,446 @@ def score_check(result: Verdict, id: str) -> ScoreCheck:
     return next(check for part in result.parts for check in part.checks if check.id == id)
 
 
-def test_the_score_has_the_profiles_six_parts() -> None:
+def test_the_score_has_levis_three_parts_and_ten_checks() -> None:
     result = verdict()
-    assert [(p.id, p.max) for p in result.parts] == [
-        ("trigger", 25),
-        ("size", 20),
-        ("timing", 15),
-        ("access", 15),
-        ("fit", 15),
-        ("competition", 10),
+    assert [(p.id, p.max) for p in result.parts] == [("fit", 30), ("change", 50), ("access", 20)]
+    assert [p.earned for p in result.parts] == [22, 34, 16]
+    assert [c.id for p in result.parts for c in p.checks] == [
+        "local_staff",
+        "priority_sector",
+        "city",
+        "office_relevance",
+        "strongest_sign",
+        "other_signs",
+        "office_constrained",
+        "no_lock_in",
+        "procurement",
+        "warm_path",
     ]
-    assert [p.earned for p in result.parts] == [20, 20, 6, 5, 0, 0]
-    assert sum(p.earned for p in result.parts) == result.score == 51
-    # Checked: trigger 15 + 10, size 20, recency 6, contact role 5, strategy 8, tier 7, rival 6.
-    assert result.score_checked == 77
-    assert result.band == "investigate"  # 51 of 77 checked counts as 66
-    assert result.score <= result.score_checked <= 100
+    assert sum(p.max for p in result.parts) == 100
+    assert sum(p.earned for p in result.parts) == result.score == 72
 
 
 def test_the_trigger_points_are_the_sum_of_their_three_parts() -> None:
+    """The group, the source and the timing still rank signs against each other (they are no
+    longer points of the lead's score)."""
     (best,) = verdict().triggers
     assert (best.group_points, best.source_points, best.timing_points) == (15, 5, 6)
     assert best.points == 15 + 5 + 6
 
 
-def test_checks_the_tool_cannot_judge_are_not_known_yet() -> None:
-    result = verdict()
-    for id in ("hubspot_contact", "customer_link", "no_contractor_relationship"):
-        check = score_check(result, id)
-        assert (check.known, check.earned) == (False, 0)
-    # Nothing is said about the years at the address or a recent move, so they are not known either.
-    assert not score_check(result, "years_at_address").known
-    assert not score_check(result, "no_recent_move").known
+def test_a_warm_path_in_cannot_be_judged_yet() -> None:
+    check = score_check(verdict(), "warm_path")
+    assert (check.known, check.earned, check.max) == (False, 0, 4)
 
 
-def test_the_years_at_the_address_and_a_quiet_office_earn_timing_points() -> None:
-    base = verdict()
-    due = verdict(office_since=fact("2015"))
-    # Years at the address 7 (was 5), no recent move 2 (was 4): Levi, 9 Nov (PLAN-V11 B5)
-    assert score_check(due, "years_at_address").earned == 7
-    assert score_check(due, "no_recent_move").earned == 2
-    assert part_of(due, "timing").earned == 6 + 7 + 2 == 15
-    assert due.score_checked == base.score_checked + 7 + 2  # both checks are now known
-    # Moved in last year: known, but it earns nothing for years or a quiet office.
-    moved = verdict(office_since=fact("2026-02"))
-    assert (
-        score_check(moved, "years_at_address").known,
-        score_check(moved, "years_at_address").earned,
-    ) == (True, 0)
-    assert score_check(moved, "no_recent_move").earned == 0
+# --- Fit (30) ----------------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
-    ("group", "points"),
-    [
-        ("Technology and telecommunications", 7),
-        ("Defence and advanced manufacturing", 4),
-        (None, 0),
-    ],
+    ("staff", "points"),
+    [(50, 2), (99, 2), (100, 5), (149, 5), (150, 10), (249, 10), (250, 12), (600, 12)],
 )
-def test_the_industry_tier_adds_points_to_strategic_fit(group: str | None, points: int) -> None:
-    assert score_check(verdict(tier_group=group), "industry_tier").earned == points
-
-
-def test_the_industry_tier_is_not_known_when_the_industry_is_not() -> None:
-    assert not score_check(verdict(industry=fact(None)), "industry_tier").known
-
-
-@pytest.mark.parametrize(
-    ("changes", "points"),
-    [
-        ({}, 20),  # 2,500 m², confirmed
-        ({"office_m2": fact(2500, label="estimated")}, 16),
-        ({"office_m2": fact(None), "staff_in_city": fact(100)}, 16),  # worked out from staff
-        ({"office_m2": fact(900)}, 10),  # just under the minimum: a Director decides
-        ({"office_m2": fact(None), "staff_in_city": fact(60)}, 16),  # 50+ fits since 9 Nov
-    ],
-)
-def test_the_size_check_follows_what_the_size_rests_on(
-    changes: dict[str, Any], points: int
+def test_local_staff_earns_the_points_of_the_highest_step_it_reaches(
+    staff: int, points: int
 ) -> None:
-    check = score_check(verdict(**changes), "size")
-    assert (check.earned, check.known, check.max) == (points, True, 20)
+    check = score_check(verdict(office_m2=fact(None), staff_in_city=fact(staff)), "local_staff")
+    assert (check.earned, check.known, check.max) == (points, True, 12)
+    assert check.detail == f"{staff:,} staff in the city"
 
 
-def test_a_growing_company_earns_the_growing_points() -> None:
-    assert score_check(growing(), "size").earned == 14
+def test_the_larger_of_the_staff_and_the_projected_size_counts() -> None:
+    """Levi: "local office headcount and projected size"."""
+    big_office = score_check(verdict(office_m2=fact(3000), staff_in_city=fact(120)), "local_staff")
+    assert big_office.earned == 12
+    assert big_office.detail == "About 300 staff: a 3,000 m² office at 10 m² a person"
+    # Southern Launch: 35 staff today and the funding for an office of 1,500 m², about 150 staff
+    assert score_check(growing(), "local_staff").earned == 10
 
 
-def test_an_unknown_size_is_not_known_yet() -> None:
-    check = score_check(verdict(office_m2=fact(None), staff_in_city=fact(None)), "size")
+def test_local_staff_is_not_known_when_neither_staff_nor_size_is() -> None:
+    check = score_check(verdict(office_m2=fact(None), staff_in_city=fact(None)), "local_staff")
     assert (check.known, check.earned) == (False, 0)
+
+
+@pytest.mark.parametrize("group", load_rules().criteria.industries.priority_sectors)
+def test_a_priority_sector_earns_8(group: str) -> None:
+    check = score_check(verdict(tier_group=group), "priority_sector")
+    assert (check.earned, check.known, check.detail) == (8, True, group)
+
+
+@pytest.mark.parametrize("group", [None, "Life sciences and medtech", "Retail"])
+def test_any_other_sector_earns_nothing(group: str | None) -> None:
+    check = score_check(verdict(tier_group=group), "priority_sector")
+    assert (check.earned, check.known) == (0, True)
+
+
+def test_the_priority_sectors_are_levis_list_in_our_seven_groups() -> None:
+    assert load_rules().criteria.industries.priority_sectors == [
+        "Energy and infrastructure",
+        "Defence and advanced manufacturing",
+        "Engineering and technical services",
+        "Selected financial and corporate services",
+        "Technology and telecommunications",
+        "Other corporate professional services",
+        "Mining and resources",
+    ]
+
+
+def test_the_sector_is_not_known_when_the_industry_is_not() -> None:
+    assert not score_check(verdict(industry=fact(None)), "priority_sector").known
+
+
+@pytest.mark.parametrize(
+    ("place", "points"),
+    [
+        ("Melbourne", 5),
+        ("Adelaide", 5),
+        ("Perth", 5),
+        ("Sydney", 2),
+        ("Brisbane", 2),
+        ("Hobart", 1),  # a capital
+        ("Geelong", 1),  # a regional centre
+        ("Albury", 1),  # not on the list: it passes with a flag, and earns 1
+    ],
+)
+def test_the_city_earns_by_its_group(place: str, points: int) -> None:
+    check = score_check(verdict(city=fact(place)), "city")
+    assert (check.earned, check.known, check.max) == (points, True, 5)
+
+
+def test_an_unknown_city_is_not_known_yet() -> None:
+    assert not score_check(verdict(city=fact(None)), "city").known
+
+
+@pytest.mark.parametrize(
+    ("matters", "points", "known"), [(True, 5, True), (False, 0, True), (None, 0, False)]
+)
+def test_the_office_relevance_follows_what_the_research_says(
+    matters: bool | None, points: int, known: bool
+) -> None:
+    check = score_check(verdict(office_matters=fact(matters)), "office_relevance")
+    assert (check.earned, check.known) == (points, known)
+
+
+# --- Change and timing (50) --------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("sign", "when", "points"),
+    [
+        ("lease_ending", "2028-03", 25),  # very high
+        ("merger_or_takeover", "2026-09-01", 18),  # high
+        ("restructure", "2026-09-01", 10),  # medium
+        ("culture_change", "2026-09-01", 4),  # low
+    ],
+)
+def test_the_strongest_sign_earns_by_its_strength(sign: str, when: str, points: int) -> None:
+    check = score_check(verdict(triggers=[trigger(sign, when)]), "strongest_sign")
+    assert (check.earned, check.max) == (points, 25)
+
+
+def test_the_strongest_sign_decides_whatever_the_order_or_the_date() -> None:
+    result = verdict(
+        triggers=[
+            trigger("culture_change", "2026-10-20"),
+            trigger("merger_or_takeover", "2026-04-01"),
+        ]
+    )
+    assert [item.trigger.id for item in result.triggers] == ["merger_or_takeover", "culture_change"]
+    assert score_check(result, "strongest_sign").earned == 18
+
+
+def test_no_sign_earns_nothing_for_the_strongest_sign() -> None:
+    check = score_check(verdict(triggers=[]), "strongest_sign")
+    assert (check.earned, check.known) == (0, True)
+    assert check.detail == "No sign of an office change yet"
+
+
+SIGNS_OVER_TIME = [
+    trigger("merger_or_takeover", "2026-09-01"),  # the strongest: high
+    trigger("restructure", "2026-08-01"),
+    trigger("return_to_office", "2026-07-01"),
+    trigger("new_ceo", "2026-06-01"),
+]
+
+
+@pytest.mark.parametrize(("signs", "points"), [(1, 0), (2, 8), (3, 16), (4, 16)])
+def test_other_independent_signs_earn_8_each_and_at_most_2(signs: int, points: int) -> None:
+    result = verdict(triggers=SIGNS_OVER_TIME[:signs])
+    assert score_check(result, "other_signs").earned == points
+    assert score_check(result, "other_signs").max == 16
+
+
+def test_a_sign_older_than_12_months_is_a_sign_but_not_another_one() -> None:
+    old = trigger("restructure", "2025-06-01")  # 16 months: inside the 18, outside the 12
+    result = verdict(triggers=[trigger("merger_or_takeover", "2026-09-01"), old])
+    assert len(result.triggers) == 2
+    assert score_check(result, "other_signs").earned == 0
+
+
+def test_a_sign_with_no_date_or_still_to_come_counts_as_another() -> None:
+    undated = verdict(
+        triggers=[trigger("merger_or_takeover", "2026-09-01"), trigger("restructure", None)]
+    )
+    assert score_check(undated, "other_signs").earned == 8
+    lease = verdict(
+        triggers=[trigger("merger_or_takeover", "2026-09-01"), trigger("lease_ending", "2028-03")]
+    )
+    assert lease.triggers[0].trigger.id == "lease_ending"  # very high is the strongest
+    assert score_check(lease, "other_signs").earned == 8  # the merger is the other sign
+
+
+def test_the_same_sign_twice_is_not_an_independent_one() -> None:
+    twice = verdict(
+        triggers=[
+            trigger("merger_or_takeover", "2026-09-01"),
+            trigger("merger_or_takeover", "2026-08-01"),
+            trigger("restructure", "2026-08-01"),
+            trigger("restructure", "2026-07-01"),
+        ]
+    )
+    assert score_check(twice, "other_signs").earned == 8  # only the restructure
+
+
+def test_a_lease_within_3_years_or_8_years_at_the_address_is_a_constrained_office() -> None:
+    assert score_check(verdict(), "office_constrained").earned == 9  # a lease end in March 2028
+    quiet = [trigger("restructure", "2026-09-01")]
+    unknown = score_check(verdict(triggers=quiet), "office_constrained")
+    assert (unknown.known, unknown.earned) == (False, 0)
+    old = score_check(verdict(triggers=quiet, office_since=fact("2015")), "office_constrained")
+    assert (old.known, old.earned) == (True, 9)
+    assert old.detail == "11.3 years at this address"
+    young = score_check(verdict(triggers=quiet, office_since=fact("2019-06")), "office_constrained")
+    assert (young.known, young.earned) == (True, 0)  # 7.4 years: not 8
+
+
+# --- Access (20) -------------------------------------------------------------------------------
+
+
+def test_no_lock_in_earns_10_only_when_both_checks_ran_and_found_nothing() -> None:
+    assert score_check(verdict(), "no_lock_in").earned == 10
+    checks: tuple[DampenerCheck, ...] = ("outsourcing", "competitor_tie")
+    for check in checks:
+        found = score_check(
+            verdict(dampeners=with_dampeners(found_dampener(check, "A deal."))), "no_lock_in"
+        )
+        assert (found.earned, found.known, found.detail) == (0, True, "A deal.")
+        missing = score_check(verdict(dampeners=no_dampeners(except_for=[check])), "no_lock_in")
+        assert (missing.earned, missing.known) == (0, False)
+    assert not score_check(verdict(dampeners=[]), "no_lock_in").known
+
+
+def test_favourable_procurement_needs_the_evidence_and_no_red_flag() -> None:
+    assert score_check(verdict(), "procurement").earned == 6
+    flag = found_dampener("procurement", "It buys by tender.", kind="lowest_price")
+    flagged = score_check(verdict(dampeners=with_dampeners(flag)), "procurement")
+    assert (flagged.earned, flagged.known) == (0, True)
+    assert flagged.detail == "A red flag: It buys by tender."
+    plain = score_check(verdict(boosters=[]), "procurement")
+    assert (plain.earned, plain.known) == (0, True)  # checked, and nothing says how it buys
+    assert not score_check(verdict(boosters=[], dampeners=[]), "procurement").known
+
+
+# --- The dampeners take points off, and the score sets the tier -----------------------------------
+
+
+def test_a_strong_dampener_takes_20_off_and_a_moderate_one_10() -> None:
+    fitout: dict[str, Any] = {"last_fitout": fact("2025-06")}  # 16 months ago: strong
+    older: dict[str, Any] = {"last_fitout": fact("2023-03")}  # 3.6 years ago: moderate
+    assert verdict(**fitout).score_before_dampeners == 72
+    assert verdict(**fitout).score == 72 - 20
+    assert verdict(**older).score == 72 - 10
+
+
+def test_a_found_outsourcing_deal_costs_its_check_and_its_dampener() -> None:
+    result = verdict(dampeners=with_dampeners(found_dampener("outsourcing")))
+    assert result.score_before_dampeners == 72 - 10  # the no lock-in check earns nothing
+    assert result.score == 72 - 10 - 20  # and the strong dampener
+
+
+def test_dampeners_add_up_and_the_score_stops_at_zero() -> None:
+    answers = with_dampeners(
+        found_dampener("outsourcing"),
+        found_dampener("competitor_tie"),
+        found_dampener("procurement", kind="lowest_price"),
+    )
+    several = verdict(dampeners=answers)
+    # lock-in 10 and procurement 6 are gone, and 20 + 10 + 10 come off
+    assert (several.score_before_dampeners, several.score) == (72 - 16, 72 - 16 - 40)
+    assert verdict(dampeners=answers, healthy=fact(False, ASX)).score == 0  # 16 - 20, not below 0
+
+
+def test_a_waived_dampener_takes_nothing_off() -> None:
+    growing_fast: dict[str, Any] = {
+        "last_fitout": fact("2025-06"),
+        "growth_plan": fact(True),
+        "size_needed_m2": fact(4000),
+        "growth_by": fact("2027-06"),
+    }
+    result = verdict(**growing_fast)
+    assert result.dampeners[0].waived is not None
+    assert result.score == result.score_before_dampeners == 72
+
+
+@pytest.mark.parametrize(
+    ("score", "tier"),
+    [
+        (0, "discard"),
+        (39, "discard"),
+        (40, "C"),
+        (54, "C"),
+        (55, "B"),
+        (74, "B"),
+        (75, "A"),
+        (100, "A"),
+    ],
+)
+def test_the_tier_edges_are_levis(score: int, tier: str) -> None:
+    assert tier_of(score, load_rules()) == tier
+
+
+STRONG_LEAD: dict[str, Any] = {
+    "tier_group": "Technology and telecommunications",
+    "triggers": [trigger("lease_ending", "2028-03"), trigger("merger_or_takeover", "2026-09-01")],
+}
+WEAK_LEAD: dict[str, Any] = {
+    "office_m2": fact(None),
+    "staff_in_city": fact(50),
+    "office_matters": fact(False),
+    "boosters": [],
+    "triggers": [trigger("culture_change", "2026-09-01")],
+}
+
+
+def test_tiers_a_and_b_are_a_pass() -> None:
+    a = verdict(**STRONG_LEAD)
+    # Fit 30, change 25 + 8 + 9, access 16
+    assert (a.score, a.tier, a.result) == (88, "A", "pass")
+    b = verdict()
+    assert (b.tier, b.result) == ("B", "pass")
+
+
+def test_tier_c_is_a_watch_that_says_why() -> None:
+    result = verdict(triggers=[trigger("restructure", "2026-09-01")])
+    assert (result.score, result.tier, result.result) == (22 + 10 + 16, "C", "watch")
+    (check,) = [c for c in result.checks if c.rule == TIER_CHECK]
+    assert check.outcome == "flag"
+    assert check.detail == "Tier C, a score of 48 (from 40 to 54): watch for a new sign"
+
+
+def test_discard_is_a_drop_that_says_why() -> None:
+    result = verdict(**WEAK_LEAD)
+    assert result.score == 7 + 4 + 10  # fit 2 + 5, change 4, access 10
+    assert (result.tier, result.result, result.stage) == ("discard", "drop", "Not a target")
+    (check,) = [c for c in result.checks if c.rule == TIER_CHECK]
+    assert (check.outcome, check.detail) == ("fail", "A score of 21 is under 40: Discard")
+
+
+def test_an_unknown_fact_never_drops_a_lead_it_stays_a_watch() -> None:
+    """A Discard with the city unknown, or with the dampener checks not run, is a Watch."""
+    unknown_city = verdict(**WEAK_LEAD, city=fact(None))
+    assert (unknown_city.tier, unknown_city.result) == ("discard", "watch")
+    unchecked = verdict(**WEAK_LEAD, dampeners=[])
+    assert (unchecked.tier, unchecked.result) == ("discard", "watch")
+    (check,) = [c for c in unchecked.checks if c.rule == TIER_CHECK]
+    assert check.outcome == "flag"
+    assert "the dampener checks haven't run, so a person checks it" in check.detail
+
+
+def test_a_rule_that_holds_a_lead_at_watch_wins_over_tier_b() -> None:
+    """It moved in 4 months ago, so it is a Watch whatever the tier (PLAN-V11 B3)."""
+    result = verdict(**STRONG_LEAD, office_since=fact("2026-06"))
+    assert (result.score, result.tier, result.result) == (88 - 20, "B", "watch")
+
+
+# --- Confidence --------------------------------------------------------------------------------
+
+
+def test_confidence_is_high_when_the_headcount_the_signs_and_the_checks_are_sourced() -> None:
+    result = verdict()
+    assert result.confidence == "high"
+    assert result.confidence_why == (
+        "High: the headcount and the signs are confirmed, and every dampener check ran."
+    )
+
+
+@pytest.mark.parametrize(
+    ("changes", "level", "why"),
+    [
+        (
+            {"staff_in_city": fact(250, label="estimated"), "office_m2": fact(None)},
+            "medium",
+            "Medium: the headcount is estimated.",
+        ),
+        (
+            {"staff_in_city": fact(250), "staff_from_linkedin": True, "office_m2": fact(None)},
+            "medium",  # a LinkedIn count, doubled, is an estimate
+            "Medium: the headcount is estimated.",
+        ),
+        ({"dampeners": []}, "medium", "Medium: the dampener checks haven't all run."),
+        (
+            {
+                "triggers": [
+                    TriggerFound(
+                        id="lease_ending",
+                        what_happened="x",
+                        date="2028-03",
+                        source_url=NEWS,
+                        label="estimated",
+                    )
+                ]
+            },
+            "medium",
+            "Medium: a sign is only estimated.",
+        ),
+        (
+            {
+                "staff_in_city": fact(250, label="estimated"),
+                "office_m2": fact(None),
+                "dampeners": [],
+            },
+            "low",
+            "Low: the headcount is estimated and the dampener checks haven't all run.",
+        ),
+        (
+            {"staff_in_city": fact(None), "office_m2": fact(None), "triggers": []},
+            "low",
+            "Low: the headcount isn't known and no sign was found.",
+        ),
+    ],
+)
+def test_confidence_falls_with_each_estimated_fact_or_check_that_didnt_run(
+    changes: dict[str, Any], level: str, why: str
+) -> None:
+    result = verdict(**changes)
+    assert (result.confidence, result.confidence_why) == (level, why)
+
+
+def test_a_confirmed_office_size_is_enough_for_the_headcount() -> None:
+    result = verdict(staff_in_city=fact(None))  # the office is 2,500 m², confirmed
+    assert result.confidence == "high"
+
+
+def test_tier_a_on_estimated_facts_says_to_verify_before_outreach() -> None:
+    estimated = {
+        **STRONG_LEAD,
+        "staff_in_city": fact(250, label="estimated"),
+        "office_m2": fact(None),
+        "dampeners": [],  # the checks didn't run: no lock-in and procurement earn nothing
+        "triggers": [
+            trigger("lease_ending", "2028-03"),
+            trigger("merger_or_takeover", "2026-09-01"),
+            trigger("restructure", "2026-08-01"),
+            trigger("return_to_office", "2026-07-01"),
+        ],
+    }
+    result = verdict(**estimated)
+    assert (result.tier, result.confidence) == ("A", "low")
+    (flag,) = [c for c in result.checks if c.rule == VERIFY_CHECK]
+    assert flag.outcome == "flag"
+    assert flag.detail.startswith("A high score on facts that are mostly estimated. Low:")
+    assert not [c for c in verdict(**STRONG_LEAD).checks if c.rule == VERIFY_CHECK]
 
 
 @pytest.mark.parametrize(
@@ -167,8 +528,13 @@ def test_an_unknown_size_is_not_known_yet() -> None:
     [
         ({}, "pass", "Active prospect"),
         ({"office_m2": fact(7000)}, "director_review", "Active prospect"),  # over the top limit
-        ({"triggers": []}, "watch", "Target account"),
-        ({"healthy": fact(False)}, "drop", "Not a target"),
+        # no sign yet, and a strong fit: Tier C, so watch for one
+        (
+            {"triggers": [], "tier_group": "Technology and telecommunications"},
+            "watch",
+            "Target account",
+        ),
+        ({"office_m2": fact(500), "staff_in_city": fact(None)}, "drop", "Not a target"),
     ],
 )
 def test_every_result_has_the_profiles_stage(
@@ -179,29 +545,25 @@ def test_every_result_has_the_profiles_stage(
 
 
 def test_a_drop_scores_zero_and_has_no_parts() -> None:
-    result = verdict(healthy=fact(False))
-    assert (result.result, result.score, result.score_checked) == ("drop", 0, 0)
-    assert (result.parts, result.band) == ([], None)
+    result = verdict(office_m2=fact(500), staff_in_city=fact(None))  # too small
+    assert (result.result, result.score, result.score_before_dampeners) == ("drop", 0, 0)
+    assert (result.tier, result.parts) == ("discard", [])
 
 
-@pytest.mark.parametrize(
-    ("basis", "score", "checked", "band"),
-    [
-        ("scaled", 60, 60, "research_first"),  # 60 of 60 counts as 100
-        ("scaled", 48, 60, "research_first"),  # 80
-        ("scaled", 36, 60, "investigate"),  # 60
-        ("scaled", 20, 60, "nurture"),  # 33
-        ("scaled", 0, 0, "nurture"),
-        ("raw", 48, 60, "nurture"),  # the points earned, as they are: under 50
-        ("raw", 60, 60, "investigate"),
-        ("raw", 75, 80, "research_first"),
-    ],
-)
-def test_the_band_follows_the_profile(basis: str, score: int, checked: int, band: str) -> None:
-    rules = load_rules()
-    changed = rules.criteria.score.model_copy(update={"band_basis": basis})
-    criteria = rules.criteria.model_copy(update={"score": changed})
-    assert band_of(score, checked, rules.model_copy(update={"criteria": criteria})) == band
+def test_a_lead_with_no_sign_and_a_middling_fit_is_a_discard() -> None:
+    """No sign yet and 38 points: under Levi's 40, so it isn't listed."""
+    result = verdict(triggers=[])
+    assert (result.score, result.tier, result.result) == (38, "discard", "drop")
+
+
+def test_an_unhealthy_company_is_a_strong_dampener_not_a_drop() -> None:
+    """Version 2 dropped a company in administration or cutting staff fast. Levi's notes make it a
+    dampener (PLAN-V16 T1-6): 20 points off, and a flag on the card."""
+    result = verdict(healthy=fact(False, ASX))
+    assert result.result == "watch"  # 72 - 20 = 52: Tier C
+    assert (result.score_before_dampeners, result.score, result.tier) == (72, 52, "C")
+    (check,) = [c for c in result.checks if c.rule == "Healthy"]
+    assert check.outcome == "flag"
 
 
 def size_check(result: Verdict) -> RuleCheck:
@@ -393,15 +755,16 @@ def test_a_place_that_is_not_listed_passes_with_a_check_the_city_flag() -> None:
     assert "Albury NSW" in check.detail
 
 
-def test_no_trigger_means_watch() -> None:
-    result = verdict(triggers=[])
-    assert result.result == "watch"
+def test_no_sign_means_watch_when_the_fit_is_strong() -> None:
+    result = verdict(triggers=[], tier_group="Technology and telecommunications")
+    assert result.result == "watch"  # Tier C: 46 points of fit and access
     assert result.triggers == []
 
 
 def test_a_weak_trigger_still_counts_but_scores_lower() -> None:
     weak = verdict(triggers=[trigger("hiring_push", "2026-10-10")])
-    assert weak.result == "pass"
+    assert [item.trigger.id for item in weak.triggers] == ["hiring_push"]
+    assert weak.score == 22 + 4 + 16  # a low sign is worth 4, and nothing says the office is tight
     assert weak.score < verdict().score
 
 
@@ -418,14 +781,13 @@ def test_a_weak_trigger_still_counts_but_scores_lower() -> None:
 )
 def test_the_version_2_triggers_have_their_group(trigger_id: str, group: str) -> None:
     result = verdict(triggers=[trigger(trigger_id, "2026-10-10")])
-    assert result.result == "pass"
     assert result.triggers[0].group == group
 
 
 def test_old_or_finished_triggers_dont_count() -> None:
-    assert verdict(triggers=[trigger("merger_or_takeover", "2024-05")]).result == "watch"
-    assert verdict(triggers=[trigger("lease_ending", "2026-01")]).result == "watch"
-    assert verdict(triggers=[trigger("lease_ending", "2031-01")]).result == "watch"
+    assert verdict(triggers=[trigger("merger_or_takeover", "2024-05")]).triggers == []
+    assert verdict(triggers=[trigger("lease_ending", "2026-01")]).triggers == []
+    assert verdict(triggers=[trigger("lease_ending", "2031-01")]).triggers == []
 
 
 @pytest.mark.parametrize(
@@ -483,7 +845,9 @@ def test_the_new_signs_are_signs_like_the_others() -> None:
 def test_an_official_source_scores_higher_than_news() -> None:
     news = verdict(triggers=[trigger("big_new_contract", "2026-10-01", NEWS)])
     asx = verdict(triggers=[trigger("big_new_contract", "2026-10-01", ASX)])
-    assert asx.score > news.score
+    # The source ranks signs against each other. It is no longer points of the score: it is part
+    # of the confidence now
+    assert asx.triggers[0].points > news.triggers[0].points
     assert asx.triggers[0].source_kind == "asx_or_official_news"
 
 
@@ -493,12 +857,12 @@ def test_evidence_earns_points_in_the_check_it_belongs_to() -> None:
         for b in ("buys_strategy", "can_pay", "no_rival_in_place")
     ]
     result = verdict(boosters=boosters)
-    assert score_check(result, "buys_strategy").earned == 8
-    assert score_check(result, "buys_strategy").detail == "buys_strategy found"
-    assert score_check(result, "no_rival_in_place").earned == 6
-    assert (
-        result.score == verdict().score + 8 + 6
-    )  # can_pay earns nothing: the Profile has no place for it
+    assert score_check(result, "procurement").earned == 6
+    assert score_check(result, "procurement").detail == "buys_strategy found"
+    # can_pay earns nothing (the Profile has no place for it), and neither does no_rival_in_place
+    # (the competitor check covers it)
+    assert result.score == verdict().score
+    assert verdict(boosters=boosters[1:]).score == verdict().score - 6  # without buys_strategy
 
 
 def test_an_open_deal_is_never_suggested() -> None:
@@ -516,9 +880,10 @@ def test_a_recent_dissolved_deal_waits_unless_a_new_trigger_appears() -> None:
     assert verdict(old).result == "pass"
 
 
-def test_unhealthy_is_dropped_but_unknown_local_team_is_not() -> None:
-    assert verdict(healthy=fact(False)).result == "drop"
+def test_unhealthy_is_a_dampener_not_a_drop_and_a_local_team_that_cant_is() -> None:
+    assert verdict(healthy=fact(False)).result == "watch"  # 72 - 20: Tier C (it was a Drop)
     assert verdict(local_team_runs_project=fact(None)).result == "pass"
+    assert verdict(local_team_runs_project=fact(False)).result == "drop"
 
 
 def office_check(result: Verdict) -> RuleCheck:
@@ -564,10 +929,11 @@ def test_a_company_that_works_from_sites_is_flagged_to_check_the_office() -> Non
 
 
 def test_when_it_is_unclear_only_a_site_heavy_industry_is_flagged() -> None:
-    mining = verdict(industry=fact("Mining"), industry_group="Mining and metals")
+    unclear: dict[str, Any] = {"office_matters": fact(None)}
+    mining = verdict(industry=fact("Mining"), industry_group="Mining and metals", **unclear)
     assert office_check(mining).outcome == "flag"
-    assert office_check(verdict()).outcome == "ok"  # software, nothing known about the office
-    assert office_check(verdict(industry=fact(None))).outcome == "unknown"
+    assert office_check(verdict(**unclear)).outcome == "ok"  # software, nothing known about it
+    assert office_check(verdict(industry=fact(None), **unclear)).outcome == "unknown"
 
 
 def history_check(result: Verdict) -> RuleCheck | None:
@@ -612,8 +978,13 @@ def test_office_history_notes_how_long_and_whether_it_moved_lately(
 
 
 def test_a_move_more_than_12_months_ago_never_changes_the_result() -> None:
+    """It is no rule: it costs points as a strong dampener, and never makes the lead a Watch by
+    itself."""
     recent = verdict(office_since=fact("2025-03"))
-    assert (recent.result, recent.score) == (verdict().result, verdict().score)
+    assert just_moved(recent) is None
+    assert recent.dampeners[0].strength == "strong"
+    assert recent.score_before_dampeners == verdict().score
+    assert recent.score == verdict().score - 20
 
 
 # --- A company that just moved (Levi, 9 Nov, PLAN-V11 B3) -------------------------------------
@@ -628,7 +999,9 @@ def test_a_sign_and_a_move_4_months_ago_is_a_watch() -> None:
     assert verdict().result == "pass"  # the sample passes, with a lease sign
     growing = [trigger("fast_growth", "2026-10")]  # a growth sign, like Budget Direct's
     assert verdict(triggers=growing).result == "pass"
-    assert verdict(triggers=growing, office_since=fact("2026-06")).result == "watch"
+    # The rule holds even a strong lead (Tier B after the strong dampener's 20 points: 88 - 20)
+    held = verdict(**STRONG_LEAD, office_since=fact("2026-06"))
+    assert (held.tier, held.result) == ("B", "watch")
     result = verdict(office_since=fact("2026-06"))
     assert result.result == "watch"
     check = just_moved(result)
@@ -638,21 +1011,21 @@ def test_a_sign_and_a_move_4_months_ago_is_a_watch() -> None:
         "Moved in June 2026, so probably not in the market yet",
     )
     assert history_check(result) is None  # one check says it all
-    assert result.parts and result.band is not None  # a Watch keeps its score
+    assert result.parts and result.tier == "C"  # a Watch keeps its score and its tier (72 - 20)
 
 
 def test_a_move_14_months_ago_is_not_just_moved() -> None:
-    growing = [trigger("fast_growth", "2026-10")]
-    assert verdict(triggers=growing, office_since=fact("2025-08")).result == "pass"
     result = verdict(office_since=fact("2025-08"))
-    assert (result.result, just_moved(result)) == ("pass", None)
+    assert just_moved(result) is None  # the 12-month rule doesn't apply
     check = history_check(result)
-    assert check is not None and check.outcome == "flag"  # still in the last 3 years: ranked lower
+    assert check is not None and check.outcome == "flag"  # still in the last 3 years
+    assert result.dampeners[0].strength == "strong"  # so a strong dampener: 72 - 20 = 52
+    assert (result.tier, result.result) == ("C", "watch")
 
 
 def test_a_drop_stays_a_drop_when_it_just_moved() -> None:
-    result = verdict(office_since=fact("2026-06"), healthy=fact(False))
-    assert result.result == "drop"
+    result = verdict(office_since=fact("2026-06"), office_m2=fact(500), staff_in_city=fact(None))
+    assert result.result == "drop"  # too small
 
 
 def test_a_fitout_4_months_ago_counts_too_and_says_so() -> None:
@@ -686,7 +1059,7 @@ def test_just_moved_follows_the_rules_months() -> None:
         update={"criteria": rules.criteria.model_copy(update={"office_age": age})}
     )
     assert rules.criteria.office_age.just_moved_months == 12
-    assert verdict_under(shorter, office_since=fact("2026-06")).result == "pass"  # 4 months > 3
+    assert just_moved(verdict_under(shorter, office_since=fact("2026-06"))) is None  # 4 > 3
 
 
 # --- An old office: 8+ years at the same address (Levi, 9 Nov, PLAN-V11 C1) ----------------------
@@ -709,13 +1082,14 @@ def test_9_years_with_no_fitout_gets_the_old_office_sign() -> None:
     assert (sign.trigger.date, sign.trigger.source_url) == (None, NEWS)  # the move-in's source
     assert sign.timing_points == 1  # undated: the years at the address earn their own points
     assert result.result == "pass"  # a main sign, alone enough (TBC with Levi: or a Director)
-    assert score_check(result, "years_at_address").earned == 7
+    assert score_check(result, "strongest_sign").earned == 25  # very high
+    assert score_check(result, "office_constrained").earned == 9  # 8+ years at the address
 
 
 def test_9_years_with_a_fitout_in_2022_has_no_old_office_sign() -> None:
     result = verdict(triggers=[], office_since=fact("2017-06"), last_fitout=fact("2022"))
     assert old_office(result) is None
-    assert result.result == "watch"  # no sign of an office change at all
+    assert result.triggers == []  # no sign of an office change at all
 
 
 def test_6_years_has_no_old_office_sign() -> None:
@@ -752,7 +1126,7 @@ def test_a_company_that_is_not_stable_has_no_tenure_sign() -> None:
     stable = verdict(triggers=[], office_since=fact("2012"), healthy=fact(True))
     assert old_office(stable) is not None
     unhealthy = verdict(triggers=[], office_since=fact("2012"), healthy=fact(False))
-    assert old_office(unhealthy) is None  # and it is a Drop for being unhealthy anyway
+    assert old_office(unhealthy) is None  # it is a strong dampener, too
     assert (
         old_office(verdict(triggers=[], office_since=fact("2012"), healthy=fact(None))) is not None
     )
@@ -898,11 +1272,13 @@ def test_an_overseas_company_new_to_adelaide_passes_as_growing() -> None:
     assert check.outcome == "ok"
     assert check.detail == "Growing into the range: will need about 1,200 m² by 2027"
     assert result.triggers[0].group == "main"
-    assert score_check(result, "industry_tier").earned == 7  # energy is tier 1
+    assert score_check(result, "priority_sector").earned == 8  # energy is a priority sector
 
 
 def test_new_to_australia_with_no_city_goes_to_a_director() -> None:
-    result = new_to_australia(city=fact(None))
+    # A second sign lifts it to Tier B: a Director decides only for A and B (choice 1)
+    signs = [trigger("new_to_australia", "2026-10"), trigger("capital_raise", "2026-09-01")]
+    result = new_to_australia(city=fact(None), triggers=signs)
     assert result.result == "director_review"
     (city,) = [check for check in result.checks if check.rule == "City"]
     assert city.outcome == "director"
@@ -925,6 +1301,6 @@ def test_a_booming_industry_sign_counts_as_a_main_sign() -> None:
             )
         ]
     )
-    assert result.result == "pass"
     assert result.triggers[0].trigger.id == "hot_industry_growth"
     assert result.triggers[0].group == "main"
+    assert result.triggers[0].strength == "medium"  # a sector tailwind
