@@ -473,13 +473,13 @@ The first two and `meeting_forms_enabled` are on the Settings page. `internal_em
 
 ## Track 1: HubSpot (session 1)
 
-**Progress:** Stage A 0 of 7. Stage B 0 of 4. Every step is `backend-agent` work.
+**Progress:** Stage A 1 of 7 (T1-2). Stage B 0 of 4. Every step is `backend-agent` work.
 
 ### Stage A: call notes
 
 - [ ] **T1-1. Own copy and a baseline.** Make the worktree and the database. Run the backend tests once and note the counts.
 
-- [ ] **T1-2. Ask HubSpot what the key may do.** Free, and it changes nothing. It loads the real key into the process only.
+- [x] **T1-2. Ask HubSpot what the key may do.** Done 2026-11-15 (no code; the answers are in the Log). Free, and it changes nothing. It loads the real key into the process only.
   - For calls, notes, tasks and meetings: read one record, and try to change record 0, which can't exist. "Missing scopes" names the scope. "Not found" means the key has it.
   - Read the field definitions for `hs_task_status`, `hs_call_disposition` and every meeting field (to find the outcome values and the Contour attendees).
   - Write the results in the Log: for each thing we need, the scope HubSpot named.
@@ -549,6 +549,17 @@ The first two and `meeting_forms_enabled` are on the Settings page. `internal_em
 ### Track 1 Log
 
 Newest first.
+
+- 2026-11-15: **T1-2 done.** Free, and nothing in HubSpot changed. The real key was loaded into the probe's own process only, and never printed. For calls, notes, tasks and meetings, the probe read one record (one field, nothing printed), ran a search that matches nothing, read the links to companies and contacts, and tried to change record 0 (which can't exist): first with an empty body, then with one real field.
+  - **Reads:** calls, notes, tasks and meetings: yes, all four. Calls read **without** `crm.objects.contacts.read`. HubSpot names a scope only when one is missing, so the name that grants each is **TBC** (its docs list `crm.objects.calls.read` and the like).
+  - **Writes:** calls, notes, tasks and meetings: yes, all four. One real field on record 0 answers 404, past the permission check. The scope's name is **TBC**: likely `crm.objects.contacts.write`, which the key also has.
+  - **Also seen:** `crm.objects.companies.write`: yes, so field changes can be written (and the Lead Finder's "Send to HubSpot"). `crm.objects.contacts.read`: still missing. HubSpot asks for one of `crm.objects.contacts.read`, `crm.schemas.contacts.read`, `crm.objects.contacts.sensitive.read.v2` or `crm.objects.contacts.highly_sensitive.read.v2`. Deals write: missing (`crm.objects.deals.write` and 3 more), and not needed. `crm.lists.write`: the check can't tell.
+  - **So W1 is one permission:** `crm.objects.contacts.read`, for picking the person and linking the call to them. Sending waits only for `HUBSPOT_WRITE_ENABLED` and the M2 test.
+  - **The probe itself:** an empty body on record 0 answers 400 for every kind but deals, which answers 403. So HubSpot checks the permission first, and `check.py`'s reading of 400 as "yes" holds.
+  - **Fields:** `hs_task_status` COMPLETED, DEFERRED, IN_PROGRESS, NOT_STARTED, WAITING (we send NOT_STARTED). `hs_task_type` CALL, EMAIL, TODO and two LinkedIn types. `hs_task_priority` NONE, LOW, MEDIUM, HIGH. `hs_call_disposition` lists no choices, so the six ids in `people.py` stay. `hs_call_direction` INBOUND, OUTBOUND. `hs_call_status` COMPLETED and 11 more.
+  - **Meetings** (137 fields): the outcome is `hs_meeting_outcome` (SCHEDULED, COMPLETED, RESCHEDULED, NO_SHOW, CANCELED). The Contour attendees are `hs_attendee_owner_ids` (owner ids). `hs_meeting_location_type` (VCE, ADDRESS, PHONE, CUSTOM) and `hs_meeting_external_url` help with `where`. `hs_internal_meeting_notes` is there. `hs_all_attendee_emails` holds addresses: we never read it. Contour's own `hs_activity_type` has 13 types, like "New Qualified Project Meeting".
+  - **Message to Track 2:** not sent. No other session is reachable from this one (`ListAgents` shows none), so the list is here, for W1.
+- 2026-11-15: **T1-1 started, not done.** The session in `../contour-v17-t3` (Track 3) made S0 (0df133e, then 437a2ee), a few seconds before I would have. I did no S0 work. Own copy: worktree `../contour-v17-t1` on `plan-v17-track1` (from 437a2ee), database `leadfinder_v17a` (a copy of the dev database at `0017_call_prep`), test suffix `_v17a`, its own `.venv`, `COMPANIES.xlsx` copied. **The baseline test run hasn't run:** it waited behind another session's full run, then Claude Code stopped it at 06:00 because the laptop ran out of memory (0.4 GB free of 15.6 GB).
 
 ## Track 2: Companies backend (session 2)
 
