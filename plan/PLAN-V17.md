@@ -681,7 +681,7 @@ Newest first.
   - `TickIn`: a tick that draws once.
   - Each follows reduced motion (`useStill`), uses the kit's springs, and has a test in `motion.test.tsx`.
   - **Done when:** the tests pass, the design-lint test passes (nothing loops), and the late motion file's size is in the Log.
-  - Done 2026-11-15 (`73a72d0`). Lint, types, and the motion and design-lint tests pass (2 files, 120 tests). Motion's late file is unchanged: 14 kB gzip of its own, adding 32 kB, as in T3-1. It was measured on this branch just before the new files went in. `features.ts` didn't change and no page uses the parts yet. T3-4's bundle check measures it again. Four design questions wait for Al-khair (Log).
+  - Done 2026-11-15 (`73a72d0`). Lint, types, and the motion and design-lint tests pass (2 files, 120 tests). Motion's late file is unchanged: 14 kB gzip of its own, adding 32 kB, as in T3-1. It was measured on this branch just before the new files went in. `features.ts` didn't change and no page uses the parts yet. T3-4's bundle check measures it again. Five design questions wait for Al-khair (Log).
 
 - [ ] **T3-4. The mic** (only if T3-2 said yes; else the typing-only version).
   - A Web Worker (`stt.worker.ts`) holds the model and the library. Nothing of it is in the first visit.
