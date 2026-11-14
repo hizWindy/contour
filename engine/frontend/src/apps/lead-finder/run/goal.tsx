@@ -13,7 +13,8 @@ export function GoalBlock({ progress }: { progress: GoalProgress }) {
   const { state, goal, found, share, why } = progress
   const words = `${formatNumber(found)} of ${formatNumber(goal)}`
   return (
-    <div data-slot="run-goal" className="flex flex-col gap-2">
+    // A line under it keeps its bar apart from the companies bar that follows.
+    <div data-slot="run-goal" className="flex flex-col gap-2 border-b pb-4">
       <p className="flex flex-wrap items-baseline gap-x-2">
         <span className="text-title font-semibold tabular-nums">{words}</span>
         <span className="text-ui text-muted-foreground">good leads found</span>

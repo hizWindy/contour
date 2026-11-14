@@ -162,6 +162,8 @@ const EXCLUDED = [
     id: 'reason',
     header: 'Why it was left out',
     enableSorting: false,
+    // A reason can be long: it wraps instead of widening the table on a phone.
+    meta: { className: 'min-w-40 whitespace-normal' },
   }),
   cityColumn(),
 ]
