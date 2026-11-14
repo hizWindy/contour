@@ -410,7 +410,7 @@ describe('Rules', () => {
   })
 
   it('words: partChecks and list', () => {
-    const checks = partChecks(RULES.criteria.score as never, 'change')
+    const checks = partChecks(RULES.criteria.score, 'change')
     expect(checks.map((c) => c.id)).toEqual(['strongest_sign', 'other_signs', 'office_constrained'])
     expect(checks[1]?.points).toBe('8 each, at most 2, within 12 months')
     expect(list(['a'])).toBe('a')
