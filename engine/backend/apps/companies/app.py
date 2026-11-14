@@ -5,6 +5,7 @@ from fastapi import FastAPI
 
 from apps.companies.api import router
 from apps.companies.jobs import JOBS
+from apps.companies.note_fields import check_note_fields
 from apps.companies.prep import PrepRunner
 from core.apps import AppSpec
 from core.hubspot.needs import HubSpotNeeds
@@ -34,7 +35,10 @@ async def stop_preps(app: FastAPI) -> None:
 
 
 def check_rules() -> None:
-    """The Companies page has no rules file. The prep settings are checked with the others."""
+    """The Companies page's one rules file is what a call may change (PLAN-V17 T2-3): the backend
+    won't start if it names a field the HubSpot field map doesn't have. The prep settings are
+    checked with the others."""
+    check_note_fields()
 
 
 APP = AppSpec(

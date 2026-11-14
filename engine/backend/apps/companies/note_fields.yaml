@@ -1,0 +1,29 @@
+# What a call may change in HubSpot (PLAN-V17 T2-3, choice 3). TBC with Levi: which fields.
+#
+# Each office's lease end, last move and staff count. Anything else the rep says stays in the
+# call's text. The rep sees the old and the new value, and confirms, before anything is sent.
+#
+# - id: the name the sorter, the card and the website use.
+# - label: the words on screen.
+# - kind: a date or a number. Code reads and checks the value, never the AI alone.
+# - office_field: our office column in core/hubspot/fields.yaml (offices). HubSpot's field for
+#   each office group comes from there, so no HubSpot field name is typed twice. Perth is
+#   HubSpot's "other office 1" group.
+#
+# The backend checks this list when it starts, and won't start if a field isn't in that map.
+
+fields:
+  - id: lease_end
+    label: Lease end
+    kind: date
+    office_field: lease_expiry
+  - id: last_move
+    label: Last move
+    kind: date
+    office_field: last_moved
+  # "Number of Staff" is free text in our copy. TBC: whether HubSpot keeps it as text or a pick
+  # list, which decides how a number is written there.
+  - id: staff
+    label: Staff
+    kind: number
+    office_field: staff_count_text
