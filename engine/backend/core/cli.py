@@ -266,6 +266,36 @@ async def _sources_lookup(name: str, city: str | None) -> tuple[str, bool]:
     return "\n".join(lines), True
 
 
+async def _sources_read(what: str) -> tuple[str, bool]:
+    """Runs one of Property Daily's two jobs now: the daily emails ("feed") or the leases that
+    end soon ("leases"). Saves what is new (PLAN-V16 T2-8)."""
+    from core.api.sources import PROBLEM_WORDS
+    from core.browser.reader import PageProblem, SourcePaused, SourceStopped
+    from core.db.engine import get_sessionmaker
+    from core.prefs.service import effective_settings
+    from core.sources.service import availability, close_sources, get_sources
+
+    async with get_sessionmaker()() as session:
+        settings = await effective_settings(session)
+        ready = (await availability(session, settings))["property_daily"]
+    if not ready.ready:
+        return f"Not read. {ready.sentence}", False
+    try:
+        if what == "feed":
+            done = await get_sources().feed(settings)
+            last = done.last_day.isoformat() if done.last_day else "no new day"
+            return f"Daily emails read up to {last}: {done.new_records} new facts.", True
+        new = await get_sources().lease_endings(settings)
+        return f"Leases that end in 12 to 36 months read: {new} new facts.", True
+    except (SourcePaused, PageProblem) as stop:
+        reason = stop.reason if isinstance(stop, SourcePaused) else stop.outcome
+        return f"Not read: {PROBLEM_WORDS.get(reason, 'the read failed.')}", False
+    except SourceStopped:
+        return "Not read: no login is set.", False
+    finally:
+        await close_sources()
+
+
 async def _hubspot_check() -> tuple[str, bool]:
     """Which permissions the HubSpot key has, and what each project can do. Free, read only."""
     from core.apps import load_apps
@@ -665,6 +695,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     lookup_cmd.add_argument("company", help='The company name, like "Sample Logistics"')
     lookup_cmd.add_argument("--city", default=None, help="Its city, like Perth")
+    commands.add_parser(
+        "sources-feed", help="Read Property Daily's daily emails since the last one read, now."
+    )
+    commands.add_parser(
+        "sources-leases",
+        help="Read Property Daily's leases that end in 12 to 36 months, now.",
+    )
     email_cmd = commands.add_parser(
         "email-test", help="Send one test email (the log provider only writes it to the log)."
     )
@@ -728,6 +765,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             text, ok = asyncio.run(
                 _sources_lookup(args.company, args.city), loop_factory=loop_factory()
             )
+            print(text, file=sys.stdout if ok else sys.stderr)
+            return 0 if ok else 1
+        elif args.command in ("sources-feed", "sources-leases"):
+            what = "feed" if args.command == "sources-feed" else "leases"
+            text, ok = asyncio.run(_sources_read(what), loop_factory=loop_factory())
             print(text, file=sys.stdout if ok else sys.stderr)
             return 0 if ok else 1
         elif args.command == "sign-out-everyone":

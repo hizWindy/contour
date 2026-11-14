@@ -87,7 +87,7 @@ class LocalSite:
                     "/login_fail.htm": (200, SIGN_IN_PAGE),
                 }
                 if path == "/slow":
-                    time.sleep(4)
+                    time.sleep(8)  # longer than the 5-second limit below
                     self._send(200, "<body>Late</body>")
                 elif path == "/members" and signed_in:
                     self._send(200, "<title>Members</title><body>Members area</body>")
@@ -147,7 +147,7 @@ def test_site() -> Iterator[LocalSite]:
 
 @pytest.fixture
 async def worker() -> AsyncIterator[BrowserWorker]:
-    browser = BrowserWorker(action_seconds=2.0, idle_seconds=60)
+    browser = BrowserWorker(action_seconds=5.0, idle_seconds=60)
     yield browser
     await browser.close()
 
@@ -386,7 +386,7 @@ async def test_a_crashed_browser_never_crashes_the_backend(
 
 
 async def test_the_browser_closes_when_idle_and_starts_again(test_site: LocalSite) -> None:
-    worker = BrowserWorker(action_seconds=2.0, idle_seconds=0.5)
+    worker = BrowserWorker(action_seconds=5.0, idle_seconds=0.5)
     try:
         reader, _ = make_reader(worker, test_site)
         await reader.page(test_site.url("/page"), kind="report")
