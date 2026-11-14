@@ -552,19 +552,19 @@ Newest first.
 
 ## Track 2: Companies backend (session 2)
 
-**Progress:** Stage A 1 of 9. Stage B 0 of 7. Every step is `backend-agent` work.
+**Progress:** Stage A 3 of 9. Stage B 0 of 7. Every step is `backend-agent` work.
 
 ### Stage A: call notes
 
 - [x] **T2-1. Own copy and a baseline.** Make the worktree and the database. Run the backend tests once and note the counts. Done 2026-11-15: worktree `../contour-v17-t2` (branch `plan-v17-track2`, from `437a2ee`), database `leadfinder_v17b` (a copy of the dev database at `0017_call_prep`). Baseline (see the Log).
 
-- [ ] **T2-2. The table.** Migration `0021_call_notes`, in the `companies` schema.
+- [x] **T2-2. The table.** Migration `0021_call_notes`, in the `companies` schema. Done 2026-11-15, `fde75c2`: up and down tested (`test_call_notes_table.py`), `engine/schema/SCHEMA-0021.md` committed.
   - `companies.call_notes`: who made it, the company, the person, the prep it came from (or none), the text, the source, when the call was, the status, what the sorter made, the rep's edits, what it cost, the write it became (`core.hubspot_writes`), and the times.
   - A unique index on the user and the idempotency key, so a double press is one note.
   - Run `scripts/schema_map.py`, and add the table to the four table lists.
   - **Done when:** the migration runs up and down, and the schema map is committed.
 
-- [ ] **T2-3. What a call may change.**
+- [x] **T2-3. What a call may change.** Done 2026-11-15, `8fed44f`: `note_fields.yaml` and `note_fields.py`, checked by `check_rules()` at start-up.
   - `apps/companies/note_fields.yaml`: the allow-list (choice 3). For each: its id, its label, its kind (a date, a number), and the HubSpot field for each office group, read from `core/hubspot/fields.yaml`. No field name is typed twice.
   - Checked at start-up: every field on the list must be in the field map.
   - **Done when:** a test proves a field off the list is refused, and that Perth maps to HubSpot's "other office 1" group.
@@ -658,6 +658,13 @@ Newest first.
 
 Newest first.
 
+- 2026-11-15, T2-2 and T2-3 done (`fde75c2`, `8fed44f`). Notes:
+  - **For Track 1 (T1-4, T1-8):** `scripts/schema_map.py` run with the main folder's venv reads the main folder's `.env` and writes into the main folder. Run it with `PYTHONPATH=<your worktree>/engine/backend`.
+  - The schema map lists changes from `SCHEMA-0013.md`: no maps were saved for 0014 to 0017. After 0020 slots in at M1, make `SCHEMA-0021.md` again.
+  - `test_races.py`: 0017's test now goes to the newest migration before it checks the models, with the same lines as PLAN-V16's fix (`4397820`), so the two plans join cleanly there.
+  - **TBC:** whether HubSpot keeps "Number of Staff" (`staff_count_text`) as text or a pick list. It decides how a staff number is written.
+  - **A rule to keep (AGENTS.md Safety: no contact email or phone is stored):** a note's text goes through `scrub` when it is saved, so a number or an address the rep says is left out, and the card says so. Built in T2-5. Al-khair can reverse it.
+  - A rare limit: deleting an account fails if one of its notes has the same `Idempotency-Key` as a note made with sign-in off. Each press gets a random key, and accounts are not deleted from the website.
 - 2026-11-15, T2-1: baseline on `437a2ee` (S0 and its tick), in a clean copy with its own test database (`RUN_GATES=1`): 3,643 passed, 25 skipped, 1 failed. The failure is `test_companies_speed` (a Companies page against its time limit), the same one S0 saw on `master`: this laptop's load, not the code. 8 min 51 s.
 - 2026-11-15, start: V17 Track 2 started on Al-khair's `implement v17 track2`. S0 was made by Track 3 (`0df133e`). Messages: the only session `ListAgents` showed (`contour-dc`) is V16 Track 1, not V17. It says V16 joins `master` first, so at M1 V17's `0020` re-points its `down_revision` to V16's newest (`0019`). Track 1 and Track 3 don't show in `ListAgents`, so this Log is how Track 2 tells them things.
 - 2026-11-15, for Track 1 (T1-5): `StepResult.step` in `core/hubspot/writer.py` accepts only `company`, `note` and `list`. The activity steps (`call`, `fields`, `task:1`, `note`) need it widened. Until then Track 2's tests build fake write results with `model_construct`. Track 2 reads a held field (changed in HubSpot since the rep looked) from `plan.fields`: `write` false, HubSpot's new value in `current`.
