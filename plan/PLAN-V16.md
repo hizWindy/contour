@@ -275,9 +275,9 @@ No record ever holds an email address or a phone number. Names of people in a re
 
 ## Track 1: the rules and the research (session 1)
 
-**Progress:** 0 of 12.
+**Progress:** 1 of 12.
 
-- [ ] **T1-1. Own copy and a baseline.**
+- [x] **T1-1. Own copy and a baseline.** Done 2026-11-15 (counts in the Log).
   - Make the worktree and the database. Run the backend tests once and note the counts.
   - Save the re-judge output: the count of each result.
   - Copy Levi's notes into `projects/leads/criteria/Criteria_v3.md`, in plain words, with his section numbers. `Criteria_v2.md` stays as the old version.
@@ -420,6 +420,8 @@ No record ever holds an email address or a phone number. Names of people in a re
 ### Track 1 Log
 
 Newest first.
+
+- 2026-11-15: **T1-1 done.** The Track 2 session made S0 (`plan-v16`: a727967 and 5095b47, in `../contour-v16-t2`), a few seconds before I would have. I did no S0 work. **Own copy:** worktree `../contour-v16-t1` on `plan-v16-track1` (from `plan-v16` at 5095b47), database `leadfinder_v16a` (a copy of the dev database at `0017_call_prep`, 52 leads), test suffix `_v16a`, its own `.venv`, `COMPANIES.xlsx` copied. No `npm ci`: this track has no website work. **Backend tests on 5095b47** (a full run with `heavy.sh`, on a clean copy of that commit): **3,660 passed, 28 skipped, 1 failed**, 8 min 4 s. The one failure is a timing test, `tests/companies/test_companies_speed.py::test_a_page_and_the_prep_box_are_fast_on_a_full_copy` (533 ms against its 300 ms limit, while two other sessions were running tests). It passes alone in 3 s. **Re-judge baseline** (`lead-finder rejudge`, today's rules, the 52 saved leads): the saved results are Pass 2, Director review 7, Watch 41, Drop 2. Judged again now: **Pass 1, Director review 3, Watch 26, Drop 22** (bands: 13 investigate, 17 nurture, 22 none). 24 of the 52 differ from the saved result, because the HubSpot labels were refreshed after those leads were made (PLAN-V5 D2). **Forms check** (`lead-finder forms`): company facts use 3 of 16 null-or-value fields and 0 of 24 optional ones, so there is room for the new facts. `projects/leads/criteria/Criteria_v3.md` is written from Levi's notes (his section numbers, plain words, our TBC choices marked, the questions for him at the end). S0's own box in "Before the tracks start" is still unticked: the Track 2 session ticks it.
 
 ## Track 2: the tools (session 2)
 
