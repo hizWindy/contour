@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { unwrap, type ApiProblem } from '../client'
 import { queryKeys } from '../query'
-import type { PropertySource, SourceList, SourceOut } from '../types'
+import type { PropertySource, ToolList, ToolOut } from '../types'
 import { apiV16 } from '../v16-client'
 
 /**
@@ -17,8 +17,8 @@ export function useSources() {
 }
 
 /** One tool's new state goes into the list, and the Start page's sources read again. */
-function putSource(queryClient: QueryClient, source: SourceOut): void {
-  queryClient.setQueryData<SourceList>(queryKeys.sources.all, (list) =>
+function putSource(queryClient: QueryClient, source: ToolOut): void {
+  queryClient.setQueryData<ToolList>(queryKeys.sources.all, (list) =>
     list ? { items: list.items.map((item) => (item.id === source.id ? source : item)) } : list,
   )
   void queryClient.invalidateQueries({ queryKey: queryKeys.runOptions.all })
@@ -28,7 +28,7 @@ function putSource(queryClient: QueryClient, source: SourceOut): void {
 /** "Check now": a free sign-in check that reads one page. A failed check fills `last_problem`. */
 export function useCheckSource() {
   const queryClient = useQueryClient()
-  return useMutation<SourceOut, ApiProblem, PropertySource>({
+  return useMutation<ToolOut, ApiProblem, PropertySource>({
     mutationFn: async (sourceId) =>
       unwrap(
         await apiV16.POST('/sources/{source_id}/check', {
@@ -44,7 +44,7 @@ export function useCheckSource() {
 /** "Resume": lifts a 24-hour pause. */
 export function useResumeSource() {
   const queryClient = useQueryClient()
-  return useMutation<SourceOut, ApiProblem, PropertySource>({
+  return useMutation<ToolOut, ApiProblem, PropertySource>({
     mutationFn: async (sourceId) =>
       unwrap(
         await apiV16.POST('/sources/{source_id}/resume', {

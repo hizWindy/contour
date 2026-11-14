@@ -248,9 +248,12 @@ export interface LeadsQueryV16 {
 export type LeadsQuery = NonNullable<operations['list_leads']['parameters']['query']> &
   LeadsQueryV16
 
-// Part 4: sources for Admin (Track 2 builds, Track 3 reads). Track 2 confirmed this shape (15 Nov).
+// Part 4: sources for Admin (Track 2 builds, Track 3 reads). Track 2 confirmed this shape (15 Nov)
+// and named the models ToolOut and ToolList, because the contract's SourceOut is the search log's.
+// Check and resume answer 409 `not_connected` (Arealytics) or `source_not_ready` (off, no login or
+// paused), with the sentence as the detail.
 
-export interface SourceOut {
+export interface ToolOut {
   id: PropertySource
   name: string
   /**
@@ -270,8 +273,8 @@ export interface SourceOut {
   last_problem: string | null
 }
 
-export interface SourceList {
-  items: SourceOut[]
+export interface ToolList {
+  items: ToolOut[]
 }
 
 // The automatic round (T1-11): Brisbane and the rest of Australia join the four cities. The rest
@@ -329,15 +332,15 @@ export interface V16Paths {
     post: Operation<{ lead_id: string }, LeadDetail>
   }
   /** Each tool's state, for Admin (contract part 4). */
-  '/sources': { parameters: NoParameters; get: ListOperation<SourceList> }
+  '/sources': { parameters: NoParameters; get: ListOperation<ToolList> }
   /** A free sign-in check: it reads one page. */
   '/sources/{source_id}/check': {
     parameters: NoParameters
-    post: Operation<{ source_id: PropertySource }, SourceOut>
+    post: Operation<{ source_id: PropertySource }, ToolOut>
   }
   /** Lifts a 24-hour pause. */
   '/sources/{source_id}/resume': {
     parameters: NoParameters
-    post: Operation<{ source_id: PropertySource }, SourceOut>
+    post: Operation<{ source_id: PropertySource }, ToolOut>
   }
 }

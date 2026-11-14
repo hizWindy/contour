@@ -13,7 +13,7 @@ import { CircleCheck, CircleMinus, Pause, RefreshCw, TriangleAlert } from 'lucid
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { useCheckSource, useResumeSource, useSources, useUpdateSettings } from '@/api/hooks'
-import type { SourceOut } from '@/api/types'
+import type { ToolOut } from '@/api/types'
 import { ErrorState } from '@/components/error-state'
 import { EmptyState } from '@/components/empty-state'
 import { PendingCards } from '@/components/skeletons'
@@ -41,7 +41,7 @@ function Line({ label, children }: { label: string; children: React.ReactNode })
   )
 }
 
-function SourceSwitch({ source }: { source: SourceOut }) {
+function SourceSwitch({ source }: { source: ToolOut }) {
   const update = useUpdateSettings()
   // The switch moves at once; the list catches up when the save is back.
   const [pending, setPending] = useState<boolean | null>(null)
@@ -89,7 +89,7 @@ function SourceSwitch({ source }: { source: SourceOut }) {
   )
 }
 
-function SourceCard({ source }: { source: SourceOut }) {
+function SourceCard({ source }: { source: ToolOut }) {
   const check = useCheckSource()
   const resume = useResumeSource()
   const paused = source.paused_until !== null
@@ -179,7 +179,8 @@ function SourceCard({ source }: { source: SourceOut }) {
               type="button"
               variant="outline"
               size="sm"
-              disabled={check.isPending}
+              // The backend checks only a tool that is on and not paused (409 otherwise).
+              disabled={check.isPending || !source.on || paused}
               onClick={() => {
                 check.mutate(source.id, {
                   onSuccess: (checked) => {
@@ -197,7 +198,11 @@ function SourceCard({ source }: { source: SourceOut }) {
               {check.isPending ? 'Checking.' : 'Check now'}
             </Button>
             <span className="text-caption text-muted-foreground">
-              A free sign-in check: it reads one page.
+              {!source.on
+                ? 'Switch it on to check its sign-in.'
+                : paused
+                  ? 'Resume it to check its sign-in.'
+                  : 'A free sign-in check: it reads one page.'}
             </span>
           </div>
         ) : null}

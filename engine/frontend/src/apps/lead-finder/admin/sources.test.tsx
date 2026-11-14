@@ -1,11 +1,11 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import type { SourceOut } from '@/api/types'
+import type { ToolOut } from '@/api/types'
 import { mockApi, type Call } from '@/test/mock-api'
 import { renderWithProviders } from '@/test/render'
 import AdminSourcesTab from './sources'
 
-const DAILY: SourceOut = {
+const DAILY: ToolOut = {
   id: 'property_daily',
   name: 'Property Daily',
   connected: true,
@@ -19,7 +19,7 @@ const DAILY: SourceOut = {
   last_problem: null,
 }
 
-const AREALYTICS: SourceOut = {
+const AREALYTICS: ToolOut = {
   id: 'arealytics',
   name: 'Arealytics',
   connected: false,
@@ -35,7 +35,7 @@ const AREALYTICS: SourceOut = {
 
 const SETTINGS = { daily_left_usd: '50.00', fields: [] }
 
-function answers(daily: SourceOut = DAILY, after: Partial<SourceOut> = {}): Call[] {
+function answers(daily: ToolOut = DAILY, after: Partial<ToolOut> = {}): Call[] {
   return mockApi({
     '/api/v1/sources': { items: [daily, AREALYTICS] },
     '/api/v1/sources/property_daily/check': { ...daily, ...after },
@@ -133,5 +133,23 @@ describe('Admin, Sources (PLAN-V16 T3-6)', () => {
     })
     renderWithProviders(<AdminSourcesTab />)
     expect(await screen.findByText("The sources couldn't be loaded.")).toBeInTheDocument()
+  })
+})
+
+describe('Check now waits for a tool that is on and not paused', () => {
+  it('is off while the tool is switched off, and says why', async () => {
+    answers({ ...DAILY, on: false })
+    renderWithProviders(<AdminSourcesTab />)
+    await screen.findByText('Property Daily', { selector: '[data-slot="card-title"]' })
+    expect(screen.getByRole('button', { name: 'Check now' })).toBeDisabled()
+    expect(screen.getByText('Switch it on to check its sign-in.')).toBeInTheDocument()
+  })
+
+  it('is off while the tool is paused', async () => {
+    answers({ ...DAILY, paused_until: '2026-11-15T19:15:00Z' })
+    renderWithProviders(<AdminSourcesTab />)
+    await screen.findByText(/^Paused until/)
+    expect(screen.getByRole('button', { name: 'Check now' })).toBeDisabled()
+    expect(screen.getByText('Resume it to check its sign-in.')).toBeInTheDocument()
   })
 })

@@ -64,8 +64,8 @@ export type ChangeKind = V16.ChangeKind // V16
 export type FilterState = V16.FilterState // V16
 export type DampenerStrength = V16.DampenerStrength // V16
 // Sources for Admin (PLAN-V16 contract part 4)
-export type SourceOut = V16.SourceOut // V16
-export type SourceList = V16.SourceList // V16
+export type ToolOut = V16.ToolOut // V16
+export type ToolList = V16.ToolList // V16
 
 // Settings, searches, memory, HubSpot, tests
 export type SettingsOut = Schemas['SettingsOut']
