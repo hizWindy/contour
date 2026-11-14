@@ -508,7 +508,7 @@ Newest first.
 
 ## Track 3: the website (session 3)
 
-**Progress:** 5 of 8 (T3-4 built and waiting for Al-khair's look; T3-6 built but for the Rules score and tiers, which wait for Track 1's T1-6).
+**Progress:** 6 of 8. T3-4 and T3-6 are built and tested, and wait only for Al-khair's look.
 
 Every step follows `engine/DESIGN.md`, uses the `ui-build` skill, and builds against the contract with `mockApi`.
 
@@ -554,18 +554,21 @@ Every step follows `engine/DESIGN.md`, uses the `ui-build` skill, and builds aga
   - **The round card** offers Brisbane and "Rest of Australia".
   - **Settings:** the new settings, in a "Sources" group.
   - **Done when:** each has tests, and Al-khair has seen them.
-  - Built 2026-11-15 (50189ff, fde046e, 76f047a), with tests: the Sources tab, the Settings group, the round card, and the Rules page's city groups, filters and exclusions, signs by strength and dampeners. **Still to do:** the Rules page's score table and tiers, on Track 1's T1-6 (not committed yet). Then it waits for Al-khair's look.
+  - Built 2026-11-15 (50189ff, fde046e, 76f047a, d3a7b8f, 2046979), with tests: the Sources tab, the Settings group, the round card, and the Rules page (city groups, filters and exclusions, signs by strength, dampeners, and Levi's score with the tiers, on Track 1's T1-6). **Waiting for Al-khair's look** before the tick.
 
 - [x] **T3-7. The one-page profile.** A print view for a Tier A lead: everything in his section 9 on one page. "Print" on the card opens it.
   - **Done when:** it fits one A4 page for a full lead, in a test at print size.
   - Done 2026-11-15 (85da4dd, cef5809). Built, waiting for a look.
 
-- [ ] **T3-8. Track 3 check.** Lint, types, the tests, the build, the design check and `node scripts/bundle-report.js`. Each screen at 1440px, 1280px and 390px, light and dark.
+- [x] **T3-8. Track 3 check.** Lint, types, the tests, the build, the design check and `node scripts/bundle-report.js`. Each screen at 1440px, 1280px and 390px, light and dark.
   - **Done when:** all checks pass and the Log says "Track 3 ready to merge".
+  - Done 2026-11-15 (the Log, newest line). Track 3 is ready to merge; T3-4 and T3-6 still wait for Al-khair's look.
 
 ### Track 3 Log
 
 Newest first.
+
+- 2026-11-15: **T3-8 done. Track 3 ready to merge** (branch `plan-v16-track3` at the commit of this line; T3-4 and T3-6 wait only for Al-khair's look). With `heavy.sh`: lint clean (0 warnings), types clean, Prettier clean, build clean; tests **95 files, 1,327 passed** (a first run lost 33 test files to Windows failing to start their workers, 0xC0000142, while other tracks were busy, and a timing test failed under that load; the clean run passed everything). Bundle: the first visit is 231 kB of JavaScript gzipped in 31 files and 23 kB of CSS; the main file 65.3 kB gzipped (64.6 kB at the baseline); 95 files, 656 kB gzipped in all; every new page loads on its own. **Design check** against DESIGN.md's "Check before showing any screen": tokens only; one Navy button a screen (Start run, the profile's Print); every status an icon and a word, and the tier in words, never colour; no new motion beyond the kit's chips; no em dash (the words test); skeletons keep the size while loading; the design-lint, contrast and words tests pass. **Screens** (the mock, made-up "Sample" companies): Start, the run page, the lead card (full, empty, excluded with Override, verify), Results (default, every tier, the map spread and in one city, the panel), the profile (on screen and in A4 PDF: 1 page), Admin Sources, Settings, the round, Health and Rules, at 1440, 1280 and 390, light and dark between them; no sideways scroll and no page error anywhere. **For M1:** run `npm run types`, point each `// V16` line in `src/api/types.ts` back at `Schemas[...]` (the Sources ones at `ToolOut` and `ToolList`), delete `src/api/v16.ts` and `src/api/v16-client.ts` (the hooks call `api` again), drop the casts marked "until PLAN-V16 M1", and fix what no longer matches; the round's "Rest of Australia" is sent as `Australia` until Track 1 says otherwise. **For Al-khair:** a look at T3-4 (the lead card) and T3-6 (Sources, Settings, the round, Rules), and the five design rules proposed below, before any goes into DESIGN.md.
 
 - 2026-11-15: **A first full check, and design rules to propose.** With `heavy.sh`: lint and types clean, build clean; tests **1,322 of 1,325** at first: the review page's sample row had no tier, and the new Tier column threw. Fixed (5a79cda): a lead with no tier yet (saved before tiers, not judged again) now says "not ranked yet" in the tier mark, the card, the override toast and the profile (`isTier`). Bundle: 95 JavaScript files, 656 kB gzipped in all; the main file 65.3 kB gzipped (64.6 kB at the baseline); the new pages load on their own (the Sources tab 5.8 kB, the profile 7.2 kB). **Browser check** of the Admin parts on the mock: the Sources tab (a paused Property Daily with Resume, Check now off with its reason, Arealytics not connected), the Settings' Sources group, the round with Brisbane and "Rest of Australia", Health with the two tool rows, and the Rules page (1440 light, 1280 dark, 390 light): no sideways scroll, no page errors. **Design rules to propose** (for `engine/DESIGN.md`, added only after Al-khair agrees, as the `ui-build` skill says): (1) a lead's tier shows in words, never in colour: "A · 82 · Medium" is the card's headline, and colour stays with the results; (2) Start's "Where" is chips by city group, with "All of Australia" first, and the map only previews what is picked; (3) Results opens on Tier A and B, says so under the bar, and offers "Show every tier"; (4) a page made to print (the profile) sits outside the frame, on A4, on plain paper; (5) Admin gains the Sources tab.
 
