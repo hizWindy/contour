@@ -6,7 +6,7 @@ This plan makes the Lead Finder search all of Australia, read Property Daily and
 
 - **Built by:** Al-khair Pama. **Signed off by:** Al-khair for the code and every screen. Levi gave the green light to use Playwright, Property Daily and Arealytics (15 Nov, as Al-khair reports). He confirms the rules marked **TBC**.
 - **Last updated:** 2026-11-15 (written; nothing built yet).
-- **Progress:** each track keeps its own count, at the top of its part. S0: 0 of 1. M1 to M5: 0 of 5.
+- **Progress:** each track keeps its own count, at the top of its part. S0: 1 of 1. M1 to M5: 0 of 5.
 - **Sources:**
   - Al-khair's asks (15 Nov chat);
   - Levi's refinement notes (`documents/lead-finder-docs/LEVI_LEAD_FINDER_REFINEMENT.MD`, kept off GitHub);
@@ -186,7 +186,7 @@ These are recommendations. They stand unless Al-khair changes them before the st
 
 ## Before the tracks start
 
-- [ ] **S0. The base branch and the stubs.**
+- [x] **S0. The base branch and the stubs.** Done 2026-11-15 by Track 2, on Al-khair's go signal: `plan-v16` from `master` (dab1fdf), made in the Track 2 worktree, so the main folder stayed on `master`. Commits a727967 (the plan, the go signals, the stubs and the settings; `.do/app.yaml` names the four logins, as a test asks) and 5095b47 (the `tools/` notes). Backend tests on it (`RUN_GATES=1`): 3,624 passed, 65 skipped. The first run's 10 failures came from a missing `COMPANIES.xlsx` in the new worktree, and pass with it.
   - Make `plan-v16` from `master`. Use a temporary worktree. Don't switch the main folder's branch.
   - Its first commit holds this plan, the `CLAUDE.md` go signals, and:
     - `engine/backend/core/sources/types.py`: the models in the contract, part 1;
@@ -423,14 +423,14 @@ Newest first.
 
 ## Track 2: the tools (session 2)
 
-**Progress:** 0 of 10.
+**Progress:** 2 of 9 (T2-6 dropped on 15 Nov).
 
-- [ ] **T2-1. Own copy and a baseline.**
+- [x] **T2-1. Own copy and a baseline.** Done 2026-11-15, 6200a65. `playwright` 1.65.2; its Chromium is build 1255 (Chrome for Testing 159.0.8154.6). Windows Application Control blocks that Chromium on this laptop, so the laptop drives the installed Chrome (157) with `channel="chrome"`; the script printed "Example Domain". The container uses build 1255 (T2-9).
   - Make the worktree and the database. Run the backend tests once and note the counts.
   - Add the package `playwright` (`uv add playwright`), then `uv run playwright install chromium` on the laptop. Note the installed version: the container must use the same one.
   - **Done when:** a 5-line script opens `https://example.com` in headless Chromium and prints its title.
 
-- [ ] **T2-2. Map the two sites.** Needs Al-khair at the keyboard.
+- [x] **T2-2. Map the two sites.** Done 2026-11-15, b44c2a6, with Claude in Chrome after Al-khair signed in. Property Daily's pages are in `tools/propertydaily.md`. Arealytics refused automated access at its sign-in page, so it was dropped (see T2-6).
   - Al-khair signs in to each site in a browser the session can see (a headed Playwright window, or Claude in Chrome). The session reads, and clicks only to move between pages. It changes nothing on the sites: no shortlist, no note, no reminder, no export.
   - For each site, write down in [tools/](../tools/):
     - how sign-in works. Property Daily's FAQ says a username and password. Arealytics: **TBC** (a code by email would need a saved session);
@@ -466,9 +466,10 @@ Newest first.
   - `pages.yaml`: the address patterns and selectors from T2-2. A layout change is a fix to this file, checked at start-up.
   - `feed.py`: reads the items since the last read, every category (leasing, requirements, relocations, fitout projects, design appointments), every city. Each item gets a sign or a dampener: a lease expiry or a requirement is a sign, a fitout project already awarded is a dampener.
   - `lookup.py`: searches the database for one company, and reads its history: past leases, moves and office sizes.
+  - `lease_endings.py` (moved here from T2-6 on 15 Nov): Property Daily's own "leases ending soon" views (12 to 24 months, and over 24 months cut at 36), 500 m² and up. Each becomes a `FeedItem` with the sign `lease_ending`. All of Australia in 2 pages.
   - **Done when:** `parse.py` passes tests on made-up pages shaped like the real ones. On Al-khair's word, one real feed read and one real lookup work on the laptop, and their counts are in the Log.
 
-- [ ] **T2-6. The Arealytics connector** (`core/sources/arealytics/`).
+- [ ] **T2-6. The Arealytics connector** (`core/sources/arealytics/`). **Dropped on 2026-11-15** by Al-khair: at T2-2 its sign-in page said "Automated access detected" for an AI browser agent, and its terms ban scripts (4.3). It waits on W1 (an API or written approval). Its switch is no longer on the Settings page, and every lookup says "Arealytics: switched off". Its lease endings come from Property Daily instead (T2-5).
   - The same five parts as T2-5.
   - `lookup.py`: finds the tenant by name, then reads its leases (address, floor, area m², start, end) and the building.
   - `lease_endings.py`: for one city, the office leases that end in 12 to 36 months, 500 m² and up (looser than the 1,000 m² rule, so a growing company isn't missed). Each becomes a `FeedItem` with the sign `lease_ending`. Cities: Melbourne, Perth and Sydney first (Levi), then Brisbane and Adelaide if our licence has them (**TBC**).
@@ -479,7 +480,7 @@ Newest first.
   - `reader.py` gets its real code: `lookup_company` and `recent_items` (the contract, part 1). Company names are matched like HubSpot's (`core/hubspot/matching.py`), in a thread.
   - Two schedule jobs (`JobSpec`), both **off** until a person switches them on:
     - `sources.property_daily.feed`: every working day at 6:15 am Melbourne time;
-    - `sources.arealytics.lease_endings`: every Monday at 6:45 am, one city a week in turn.
+    - `sources.property_daily.lease_endings`: every Monday at 6:45 am, all of Australia (it replaced the Arealytics job on 15 Nov).
   - A job skips itself while its tool is off or paused, and says why.
   - **Done when:** tests with fake connectors prove the 30-day reuse, the per-run page limit, the "never raises" rule, and both jobs.
 
@@ -505,6 +506,14 @@ Newest first.
 ### Track 2 Log
 
 Newest first.
+
+- 2026-11-15: **T2-2 done** (b44c2a6), with Claude in Chrome. Al-khair signed in to Property Daily himself (Claude doesn't type passwords into a site). About 15 pages read, nothing changed on the site. Findings:
+  - **Property Daily** is plain server pages on `www.spatialgroup.com.au`, with no JSON data address. The daily email page holds a day's items in 1 page; a company's report holds its history back to 2005 (about 20 years, as Levi said); the lease database has "leases ending soon" views for all of Australia on 1 page each. Details in `tools/propertydaily.md`.
+  - **The login in `engine/.env` is Levi's own** (the site greeted him), not Al-khair's as the plan assumed. Two sessions at once lock both out. Al-khair kept his Chrome tab signed in; he signs out before the first real check.
+  - **Arealytics** showed "Automated access detected" at its sign-in page, before any sign-in. We stopped and asked. **Al-khair dropped it from V16.** So: T2-6 is dropped; the Arealytics job is replaced by a Property Daily lease-endings job (T2-5, T2-7); `arealytics_enabled` leaves the Settings page (env-only, off); lookups say "Arealytics: switched off".
+  - Sent to Track 3: Arealytics is dropped, and what that changes in `GET /sources` and the Settings page. Track 1 isn't reachable by message from this session, so this Log is its note: the contract's shapes don't change, and Arealytics' status is always `off`.
+- 2026-11-15: **T2-1 done** (6200a65). Worktree `../contour-v16-t2`, `COMPANIES.xlsx` copied in. Database `leadfinder_v16b`: a `pg_dump` copy of `leadfinder` at 0017 (13,917 companies). Tests on `leadfinder_test_v16b`. Baseline on `plan-v16` with `heavy.sh` and `RUN_GATES=1`: **3,624 passed, 65 skipped** (see S0). `playwright` 1.65.2; Windows blocks its own Chromium here ("spawn UNKNOWN"), the installed Chrome 157 and Edge work headless.
+- 2026-11-15: **S0 done** (a727967, 5095b47), in this worktree, after Track 3 agreed by message that Track 2 makes it. Sent to Track 3: S0 is ready; the `GET /sources` shape (Track 3's, with `signed_in` as true, false or null); which new settings are editable and which are env-only.
 
 ## Track 3: the website (session 3)
 
