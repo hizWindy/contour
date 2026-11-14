@@ -508,24 +508,26 @@ Newest first.
 
 ## Track 3: the website (session 3)
 
-**Progress:** 0 of 8.
+**Progress:** 3 of 8.
 
 Every step follows `engine/DESIGN.md`, uses the `ui-build` skill, and builds against the contract with `mockApi`.
 
-- [ ] **T3-1. Own copy and a baseline.** Make the worktree. Run lint, types, the tests and the build once, and note the counts.
+- [x] **T3-1. Own copy and a baseline.** Make the worktree. Run lint, types, the tests and the build once, and note the counts. Done 2026-11-15 (the counts are in the Log).
 
-- [ ] **T3-2. Start a run.**
+- [x] **T3-2. Start a run.**
   - **Where:** the cities in four groups (Priority, Secondary, Capitals, Regional), and "All of Australia" as the first choice. Picking it clears the cities.
   - **How many leads:** a number field, 1 to 100, filled with the default (20). Under it, the estimate's sentence, like "About 50 companies, about US$19", or the limit that binds.
   - **Where to look:** three ticks: the web, Property Daily, Arealytics. A tool that isn't ready is greyed out with its one sentence, like "Property Daily is switched off. An Admin can switch it on."
   - **Done when:** it works in the browser with `mockApi`, with tests for the national choice, the default and a greyed-out tool.
+  - Done 2026-11-15 (a92261a, 74196ff). Built, waiting for a look.
 
-- [ ] **T3-3. The run page.**
+- [x] **T3-3. The run page.**
   - Progress to the goal: "12 of 20 leads found".
   - Where the leads came from: the web, Property Daily, Arealytics.
   - When it ends: the ranked leads, then "Excluded" (with each reason) and "Watch".
   - A run that ended short shows its sentence.
   - **Done when:** the four states (running, met its goal, ended short, no goal) have tests.
+  - Done 2026-11-15 (cf1a7cd, ae18d56). Built, waiting for a look.
 
 - [ ] **T3-4. The lead card.**
   - **The header:** "A · 82 · Medium" (tier, score, confidence), then what changed, like "New" or "Up from B".
@@ -560,6 +562,12 @@ Every step follows `engine/DESIGN.md`, uses the `ui-build` skill, and builds aga
 ### Track 3 Log
 
 Newest first.
+
+- 2026-11-15: **T3-3 done** (cf1a7cd, ae18d56), built and waiting for a look. The run page's Progress card opens with the goal: "12 of 20 good leads found" as its biggest number, with a bar and a line under it. Running counts the Pass and Director review results so far (Tier A or B, choice 1); once the run ends, the backend's `good_leads`. "It met its goal." or, ended short, why: the backend's `stop_reason` without a leading "Found 12 of 20 leads." (the number is already above), or plain words by status when it gives none. Then "Where the leads came from" (`leads_by_source`). "Leads from this run" replaces "Companies researched": Ranked leads (A and B, by tier then score, with the result), Excluded (each reason), Watch (C), and a count of discarded ones with a link to them in Results (`tier=discard`, read by T3-5). What it looked for says "All of Australia", how many leads and where it looked. 36 run tests. **Browser check** on the mock (below): the four states at 1440 light, the short run at 1440 dark and at 390 light and dark, running at 1280: no sideways scroll, no page errors. Fixed from it: the goal's bar read as one with the companies bar (a line now parts them), and a long exclusion reason now wraps on a phone.
+- 2026-11-15: **T3-2 done** (a92261a, 74196ff), built and waiting for a look. Where: "All of Australia" first (it clears the cities and is sent alone, as `["Australia"]`), then the four groups as chips; the map is a shorter preview of what is picked, and a national pick zooms it out to the whole country. Leads to find: "How many leads", 1 to 100, starts at the default; "20 leads" reads as 20; one it can't read says "Type a whole number from 1 to 100." and keeps Start off; under it "About 50 companies, about US$19." or, in Ochre, the backend's sentence for the limit that binds. Where to look: the web, Property Daily, Arealytics; one that isn't ready is greyed out with its sentence. The ready ones are the server's default, so `sources` is sent only when a person changes them. The sign groups also read the strengths T1-4 may send (very high to low), and any group the page doesn't know comes last. **Browser check** at 1440, 1280 and 390, light and dark: no sideways scroll, no page errors.
+- 2026-11-15: **How Track 3 builds against the contract.** The new fields are written by hand in `engine/frontend/src/api/v16.ts`; `types.ts` points the changed types at it (each marked `// V16`), and the hooks cast to them, each marked "until PLAN-V16 M1". **At M1:** run `npm run types`, point each `// V16` line back at `Schemas[...]`, delete `v16.ts` and the casts (ESLint's `no-unnecessary-type-assertion` finds any left), then fix what no longer matches. **Names chosen where the contract left one open** (for Track 1; Track 1 wasn't reachable by message): run options `sources.<id>.message` (the sentence when not ready); estimate `goal_note` (the binding-limit sentence); `stop_reason` holds the "why" of a run that ended short (the page drops a leading "Found 12 of 20 leads." if it is there); `what_changed: { kind, text } | null`; `dampeners[].strength`: `strong` or `moderate`, and `can_reverse` a sentence; `office`, `headcount` and `space` may be null; the bases are `confirmed` or `estimated`; `LeadRow` gains `tier`, `confidence`, `excluded` (the same object as the card's) and `has_property`. Part 4 matches Track 2's shape, confirmed by message (`signed_in` may be empty). Track 1's T1-2 `CityOption.group` already matches.
+- 2026-11-15: **The mock for browser checks.** A small Node server in this session's scratchpad (never in git) answers the website's routes with made-up "Sample ..." data in the contract's shapes, on 8043; the website runs on 5213 against it (`API_PROXY_TARGET`), and headless Chrome takes the screenshots (`plan/shots/v16-t3/`, git-ignored). No backend, no database and no key were used.
+- 2026-11-15: **T3-1 done.** Worktree `../contour-v16-t3`, branch `plan-v16-track3`, made from `plan-v16` and fast-forwarded to S0 (a727967, 5095b47) before the first commit. Baseline with `heavy.sh`: lint clean (0 warnings), types clean, **90 test files, 1,246 tests passed**, build clean (the main file 64.6 kB gzipped).
 
 ## Merge and deploy
 
