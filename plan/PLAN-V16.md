@@ -423,7 +423,7 @@ Newest first.
 
 ## Track 2: the tools (session 2)
 
-**Progress:** 5 of 9 (T2-6 dropped on 15 Nov). T2-5's code is done; its real read waits for Al-khair's word.
+**Progress:** 7 of 9 (T2-6 dropped on 15 Nov). T2-5's code is done; its real read waits for Al-khair's word.
 
 - [x] **T2-1. Own copy and a baseline.** Done 2026-11-15, 6200a65. `playwright` 1.65.2; its Chromium is build 1255 (Chrome for Testing 159.0.8154.6). Windows Application Control blocks that Chromium on this laptop, so the laptop drives the installed Chrome (157) with `channel="chrome"`; the script printed "Example Domain". The container uses build 1255 (T2-9).
   - Make the worktree and the database. Run the backend tests once and note the counts.
@@ -484,13 +484,13 @@ Newest first.
   - A job skips itself while its tool is off or paused, and says why.
   - **Done when:** tests with fake connectors prove the 30-day reuse, the per-run page limit, the "never raises" rule, and both jobs.
 
-- [ ] **T2-8. Admin and commands.**
+- [x] **T2-8. Admin and commands.** Done 2026-11-15, 7dab969. The answer models are `ToolOut` and `ToolList` (`SourceOut` was taken by the searches); `ToolOut` adds `connected` (false for Arealytics). A check or resume of Arealytics answers 409 `not_connected`; a check while off, without a login or paused answers 409 `source_not_ready`. 13 tests, and the logins never appear in an answer or a log line.
   - The routes in the contract, part 4, and the two Health rows.
   - Commands: `uv run engine sources-check` (signs in to each tool that is on, free) and `uv run engine sources-lookup "Company" --city Perth` (one live lookup, printed).
   - The secrets are `SecretStr`. `core/logs.py` redacts them, and no route ever returns them.
   - **Done when:** tests cover the routes and prove no secret is in a response or a log line.
 
-- [ ] **T2-9. The container.**
+- [x] **T2-9. The container.** Done 2026-11-15 (the commit after 7dab969): the image builds with Playwright's headless Chromium (it also needed `libatomic1` for Playwright's driver). Image 1.98 GB (848 MB before). Measured in the image with `--memory=2g`: 225 MB with the memory model, **643 MB at the peak** of 20 lookups (60 pages), 246 MB once the browser closed: the browser adds about 420 MB while it reads, and closes after 5 minutes idle. Not measured: a full run with a fake Claude in the container (the image has no tests). With the backend's own 150 MB idle and a run and a HubSpot copy on top (AGENTS.md), the peak stays near 1.0 to 1.3 GB, so over 500 MB stays free. **Choice 7 stands: the browser stays in the backend container.** M4 watches the live memory for an hour. Chromium runs without its sandbox in the container (Playwright's default there), loading Property Daily's hosts only.
   - `backend/Dockerfile`: install Chromium and its system packages (`playwright install --with-deps chromium`), at the same version as `uv.lock`, in a path the `contour` user can read.
   - **Measure** on the laptop: run the image with `--memory=2g` (the server's size), start a run with a fake Claude, and do 20 lookups against the local test site. Note the peak memory.
   - **Decide (choice 7):** if the peak leaves under 500 MB free, move the browser to a worker of its own in `.do/app.yaml` (a second component with the same image, a queue in the database, and its own size; its price is **TBC**). Tell Al-khair before building it.
@@ -507,6 +507,8 @@ Newest first.
 
 Newest first.
 
+- 2026-11-15: **T2-9 done.** The measure and the choice are in T2-9. `engine/frontend/openapi.json` was written again (`uv run engine openapi`) with the three `/sources` routes; `schema.d.ts` is left for M1 (`npm run types`).
+- 2026-11-15: **T2-8 done** (7dab969). Sent to Track 3: the model names `ToolOut` and `ToolList`, the 409 codes, and the two Health ids (after "email"). Track 3 answered that its Sources tab hides the switch, Check now and Resume when `connected` is false.
 - 2026-11-15: **T2-3, T2-4 and T2-7 done; T2-5's code done.** For Track 1 at M1: `core.sources.reader.source_availability(session, settings)` gives each tool's `on`, `ready` and sentence for the run options (Arealytics: "Arealytics isn't connected: it refused automated access."). `core.sources.meaning` maps a record to a sign: a lease ending in 12 to 36 months or a move is `lease_ending`, a need for space is `tenant_advisor`, an awarded fitout is the dampener `recent_fitout` (**TBC**: Track 1 names the dampener in T1-5; align at M1). `lookup_company` takes `run_id` and `settings` as keywords; pass the run's settings so the switch and the limits are the run's.
 - 2026-11-15: **T2-2 done** (b44c2a6), with Claude in Chrome. Al-khair signed in to Property Daily himself (Claude doesn't type passwords into a site). About 15 pages read, nothing changed on the site. Findings:
   - **Property Daily** is plain server pages on `www.spatialgroup.com.au`, with no JSON data address. The daily email page holds a day's items in 1 page; a company's report holds its history back to 2005 (about 20 years, as Levi said); the lease database has "leases ending soon" views for all of Australia on 1 page each. Details in `tools/propertydaily.md`.

@@ -64,6 +64,15 @@ Mapped on 2026-11-15 (PLAN-V16 T2-2), signed in, by reading only. The site is pl
 - An API or a data feed (**TBC**: W1 in PLAN-V16).
 - A lease view for one city: `market=` didn't narrow the "leases ending soon" view (**TBC**).
 
+## How the Lead Finder reads it (PLAN-V16, built 15 Nov)
+
+- **What it keeps:** facts only, in `core.property_records`: a company's need for space, its current, future and past offices (floor, building, address, m², lease end), a fitout already given to a firm, and the link. Each summary is written by our code. No person's name, email or phone.
+- **The daily feed:** a job reads each working day's email at 6:15 am Melbourne time (1 page a day). Off until a person switches it on.
+- **Leases ending soon:** a job reads the two "ending soon" views every Monday at 6:45 am (2 pages), and keeps leases of 500 m² and up that end in 12 to 36 months. Off until switched on.
+- **A lookup:** when a company is researched, about 3 pages (the search, the lease search, its newest report in its city). It is reused for 30 days.
+- **Checks:** `engine sources-check` signs in and opens the home page. `engine sources-lookup "Company" --city Perth` looks one company up. Admin's Sources tab has "Check now".
+- The browser, the pace and the stop rules are in [playwright.md](playwright.md).
+
 ## Status and next step
 
 - Levi gave the green light to read it with a program on 2026-11-15 (as Al-khair reports). The Spatial Group hasn't been asked.

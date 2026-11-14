@@ -15,12 +15,16 @@ Last updated: 2026-11-15. **TBC** means to be confirmed.
 - [Property Daily](propertydaily.md) has no public API. Playwright is the way to read it from the Lead Finder.
 - Example: each working day at 7 am, it opens new Property Daily leads. It saves the company, address, m², lease end and link, and they show as leads.
 
-## How it would work
+## How it works (PLAN-V16, built 15 Nov)
 
-1. **Sign in with the username and password** from `engine/.env` (Property Daily's form takes them). Keep the session in memory and in a temp file (`storageState`), and sign in again when it ends.
-2. **Use its own login,** not Levi's or Al-khair's. Property Daily locks out a login used by two people at once.
-3. **Run slowly, once a day,** reading only new leads.
-4. **Keep it behind a switch** ("Property Daily is on" in Settings, off by default) until Al-khair turns it on.
+The code is in `engine/backend/core/browser/` (the browser) and `core/sources/` (Property Daily).
+
+1. **Its own thread.** One headless browser runs in a thread with its own event loop, because the backend's loop on Windows can't start a program. It starts when a page is needed and closes after 5 minutes idle. A crash starts a new one; it never stops the backend.
+2. **Only Property Daily loads.** Every other host is blocked inside the browser, and so are images, fonts and video. Some pages are never opened: Logout, the shortlist, reminders, notes, payments, account details and "Request Update" (the list is in `core/sources/property_daily/pages.yaml`).
+3. **A slow pace.** One page at a time, 4 to 9 seconds apart (at random), at most 300 pages a day and 60 live lookup pages a run (Settings). Every page is one row in `core.source_reads`: the kind of page, how it went and how long it took. Never the page itself.
+4. **Sign-in.** When the sign-in page shows, it signs in once with the username and password from `engine/.env` (or the App Platform dashboard), then tries the page again. The session is kept in memory and a temp folder made for this process, never in git and never in a log.
+5. **It stops at the first block.** A person-check, a lockout, a 403 or 429, a sign-in that fails, or the sign-in page again right after signing in pauses Property Daily for 24 hours. Health and Admin's Sources tab show it, and an Admin can resume it. Nothing hides that it is a program.
+6. **Behind a switch.** "Property Daily is on" in Settings, off by default.
 
 ## Limits
 
