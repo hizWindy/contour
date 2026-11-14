@@ -6,7 +6,7 @@ This plan lets a rep log a call by talking, and replaces the Word pre-read with 
 
 - **Built by:** Al-khair Pama. **Signed off by:** Al-khair for the code and every screen. Levi confirms the rules marked **TBC**.
 - **Last updated:** 2026-11-15 (written; nothing built yet).
-- **Progress:** each track keeps its own count, at the top of its part. S0: 0 of 1. Merge and deploy: 0 of 9.
+- **Progress:** each track keeps its own count, at the top of its part. S0: 1 of 1. Merge and deploy: 0 of 9.
 - **Sources:**
   - Levi's 9 Nov and 12 Nov calls (`minutes of meeting/`), and the 15 Nov design session (AI Brain: "Call notes and meeting form (15 Nov)", and the six 15 Nov decisions);
   - the code as it is on `master` (`dab1fdf`);
@@ -365,7 +365,7 @@ Each step names its agent. The track's session leads: it hands the step to that 
 
 ## Before the tracks start
 
-- [ ] **S0. The base branch and the stubs.**
+- [x] **S0. The base branch and the stubs.** Done 2026-11-15 by Track 3, on Al-khair's go signal, as no other V17 session was running: `plan-v17` from `master` (`dab1fdf`), made in the Track 3 worktree (`../contour-v17-t3`), so the main folder stayed on `master`. Commit `0df133e`. Backend tests on it (`RUN_GATES=1`): 3,626 passed, 25 skipped. One fails the same way on `master`: `test_companies_speed` (a Companies list took about 560ms against its 300ms limit, from this laptop's load). 17 errors came from a run flag that turned off pytest's log capture: their 10 files pass in full (196 tests).
   - Make `plan-v17` from `master`. Use a temporary worktree. Don't switch the main folder's branch.
   - Its first commit holds this plan, the `CLAUDE.md` go signals, and:
     - `engine/backend/core/hubspot/activities.py`: the models in the contract, part 1, and the three functions, which answer "Waiting for write access" for now;
