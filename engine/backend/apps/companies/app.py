@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from apps.companies.api import router
 from apps.companies.jobs import JOBS
 from apps.companies.note_fields import check_note_fields
+from apps.companies.notes import NoteSorter
 from apps.companies.prep import PrepRunner
 from core.apps import AppSpec
 from core.hubspot.needs import HubSpotNeeds
@@ -34,6 +35,23 @@ async def stop_preps(app: FastAPI) -> None:
         await runner.stop()
 
 
+async def stop_note_sorts(app: FastAPI) -> None:
+    """Stops the call notes this backend is sorting (PLAN-V17 T2-4). Each goes to the rep's batch
+    to be sorted by hand, never lost, and its spend is logged."""
+    sorter: NoteSorter | None = getattr(app.state, "note_sorter", None)
+    if sorter is not None:
+        await sorter.stop()
+
+
+async def stop_background(app: FastAPI) -> None:
+    """What runs in the background stops when the backend does: the preps, then the sorts. One
+    that fails never keeps the other running."""
+    try:
+        await stop_preps(app)
+    finally:
+        await stop_note_sorts(app)
+
+
 def check_rules() -> None:
     """The Companies page's one rules file is what a call may change (PLAN-V17 T2-3): the backend
     won't start if it names a field the HubSpot field map doesn't have. The prep settings are
@@ -51,5 +69,5 @@ APP = AppSpec(
     tables_module="apps.companies.tables",
     hubspot_needs=HUBSPOT_NEEDS,
     jobs=JOBS,  # the morning search ahead (PLAN-V10 D5)
-    on_shutdown=stop_preps,  # running preps stop and log their spend (PLAN-V15)
+    on_shutdown=stop_background,  # running preps and sorts stop and log their spend
 )
