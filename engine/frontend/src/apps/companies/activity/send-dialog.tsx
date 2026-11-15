@@ -4,9 +4,12 @@
  * and one main button. The preview reads HubSpot again as the dialog opens, so a change whose
  * value moved since is counted as held. Nothing is written until the rep sends.
  *
- * A call the server won't send (`skipped`, T3-11), like one whose change isn't on the list a call
- * may change, is named here with why, in the server's words, before anything goes. The totals are
- * the server's, without it. With none left to send, Send is greyed, with why.
+ * - **The title counts only what will go,** each kind by its name: "Send 2 calls and 1 meeting
+ *   note to HubSpot?" (a logged meeting goes as a note, not a call). Until the preview answers it
+ *   counts the cards being sent; then the server's totals, which leave out what it won't send.
+ * - A call the server won't send (`skipped`, T3-11), like one whose change isn't on the list a call
+ *   may change, is named here with why, in the server's words, before anything goes. The totals
+ *   are the server's, without it. With none left to send, Send is greyed, with why.
  *
  * It rises 8px as it fades in, and fades out in 150ms, as the company's dialog does.
  */
@@ -14,6 +17,7 @@ import { Send, TriangleAlert } from 'lucide-react'
 import { useId } from 'react'
 import type { ApiProblem } from '@/api/client'
 import type { CallNotePreview } from '@/api/v17'
+import { sendCounts, type SendCounts } from './notes'
 import { ErrorState } from '@/components/error-state'
 import {
   AlertDialog,
@@ -44,14 +48,16 @@ export interface SkippedCall {
   id: string
   /** The company the call was with, from the cards on screen, or null if it isn't there. */
   name: string | null
+  /** A logged meeting's notes, not a call (from the card on screen). */
+  meeting: boolean
   why: string
 }
 
 export interface SendDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  /** How many calls the rep is sending. */
-  count: number
+  /** The calls and meeting notes among the cards the rep is sending, until the preview answers. */
+  cards: Pick<SendCounts, 'calls' | 'meetingNotes'>
   preview: CallNotePreview | undefined
   /** The calls the preview says won't be sent, with why. */
   skipped: readonly SkippedCall[]
@@ -64,7 +70,7 @@ export interface SendDialogProps {
 export function SendDialog({
   open,
   onOpenChange,
-  count,
+  cards,
   preview,
   skipped,
   loading,
@@ -80,25 +86,32 @@ export function SendDialog({
   // Every call left out: there is nothing to send.
   const nothing = preview !== undefined && preview.items.length === 0 && skipped.length > 0
   const ready = preview?.sending_ready === true && !loading && !nothing
+  // What will go: the server's count once the preview is here, the cards' until then.
+  const counts = preview && !loading ? sendCounts(preview) : null
+  const going = counts ?? cards
+  const skippedMeetings = skipped.filter((call) => call.meeting).length
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent className="data-open:slide-in-from-bottom-2">
         <AlertDialogHeader>
-          <AlertDialogTitle>{sendTitle(count)}</AlertDialogTitle>
+          <AlertDialogTitle>{sendTitle(going.calls, going.meetingNotes)}</AlertDialogTitle>
           <AlertDialogDescription>{SEND_DESCRIPTION}</AlertDialogDescription>
         </AlertDialogHeader>
         {error ? (
           <ErrorState error={error} context={PREVIEW_FAILED} onRetry={onRetry} />
-        ) : loading || !preview ? (
+        ) : !counts || !preview ? (
           // As tall as the totals that take its place, so the dialog doesn't jump.
           <p role="status" className="text-body text-muted-foreground">
             {READING_HUBSPOT}
           </p>
         ) : (
           <div className="flex flex-col gap-3">
-            <p data-slot="send-totals" className="text-body font-semibold text-foreground">
-              {totalsWords(preview.totals)}
-            </p>
+            {/* Nothing will go: no totals of nothing, the line under the list says why. */}
+            {nothing ? null : (
+              <p data-slot="send-totals" className="text-body font-semibold text-foreground">
+                {totalsWords(counts)}
+              </p>
+            )}
             {held > 0 ? (
               <p className="flex items-start gap-2 text-ui text-review-ink">
                 <TriangleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
@@ -109,7 +122,7 @@ export function SendDialog({
               <div data-slot="send-skipped" className="flex flex-col gap-1.5 text-ui">
                 <p className="flex items-start gap-2 text-review-ink">
                   <TriangleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-                  {notSentHead(skipped.length)}
+                  {notSentHead(skipped.length - skippedMeetings, skippedMeetings)}
                 </p>
                 <ul className="flex flex-col gap-1 pl-6 text-foreground">
                   {skipped.map((call) => (

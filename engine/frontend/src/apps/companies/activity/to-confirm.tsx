@@ -46,7 +46,7 @@ import { useBarRoom } from '@/lib/use-bar-room'
 import { changeDetail } from '@/lib/problems'
 import { cn } from '@/lib/utils'
 import { NoteCard, type EditNote } from './note-card'
-import { applyPreview, isCallNotesOff, sortForConfirm } from './notes'
+import { applyPreview, cardCounts, isCallNotesOff, sortForConfirm } from './notes'
 import { activityQuery } from './params'
 import { removeCallNote, useRemoving } from './remove'
 import { SendDialog, type SkippedCall } from './send-dialog'
@@ -58,6 +58,7 @@ import {
   ALREADY_SENDING,
   batchSentence,
   firstOfWords,
+  isMeetingNotes,
   LOAD_FAILED,
   NONE_READY,
   NOT_SENT,
@@ -273,11 +274,19 @@ export const ToConfirm = memo(function ToConfirm({
     setDialogOpen(true)
   }
   // The calls the preview says won't be sent, by their company, for the dialog.
-  const skippedNow: SkippedCall[] = (sendPreview.data?.skipped ?? []).map((call) => ({
-    id: call.id,
-    name: byId.get(call.id)?.company_name ?? null,
-    why: call.why,
-  }))
+  const skippedNow: SkippedCall[] = (sendPreview.data?.skipped ?? []).map((call) => {
+    const card = byId.get(call.id)
+    return {
+      id: call.id,
+      name: card?.company_name ?? null,
+      meeting: card ? isMeetingNotes(card) : false,
+      why: call.why,
+    }
+  })
+  // What the dialog's title counts until the preview answers: the cards being sent, by kind.
+  const sendingCards = cardCounts(
+    sendIds.map((id) => byId.get(id)).filter((note): note is CallNoteOut => note !== undefined),
+  )
   const send = (): void => {
     setDialogOpen(false)
     confirm.mutate(sendIds)
@@ -455,7 +464,7 @@ export const ToConfirm = memo(function ToConfirm({
       <SendDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
-        count={sendIds.length}
+        cards={sendingCards}
         preview={sendPreview.data}
         skipped={skippedNow}
         loading={sendPreview.isPending}

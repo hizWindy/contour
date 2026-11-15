@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { CallNoteOut } from '@/api/v17'
+import type { CallNoteOut, CallNotePreview } from '@/api/v17'
 import { formatDate } from '@/lib/format'
-import { sortForConfirm } from './notes'
+import { cardCounts, sendCounts, sortForConfirm } from './notes'
 import { activityQuery, readTab, writeTab } from './params'
 import { readCalendarDate, readFieldValue } from './values'
 import {
@@ -9,10 +9,17 @@ import {
   callWhen,
   fieldValue,
   loggedWhen,
+  notSentHead,
+  sendTitle,
   stepName,
   totalsWords,
   waitingLine,
 } from './words'
+
+/** Just enough of a note for the counts: a typed call, in the batch. */
+function note(id: string, changes: Partial<CallNoteOut> = {}): CallNoteOut {
+  return { id, source: 'typed', left_out: false, ...changes } as CallNoteOut
+}
 
 describe('a change value forgives (DESIGN.md "Fields forgive")', () => {
   it.each([
@@ -105,10 +112,18 @@ describe('the tab in the address', () => {
 
 describe('the words', () => {
   it('says the totals, a step and the end of a batch in plain words', () => {
-    expect(totalsWords({ calls: 7, tasks: 3, changes: 2 })).toBe(
+    expect(totalsWords({ calls: 7, meetingNotes: 0, tasks: 3, changes: 2 })).toBe(
       '7 calls, 3 tasks, 2 field changes',
     )
-    expect(totalsWords({ calls: 1, tasks: 1, changes: 1 })).toBe('1 call, 1 task, 1 field change')
+    expect(totalsWords({ calls: 1, meetingNotes: 0, tasks: 1, changes: 1 })).toBe(
+      '1 call, 1 task, 1 field change',
+    )
+    expect(totalsWords({ calls: 2, meetingNotes: 1, tasks: 3, changes: 0 })).toBe(
+      '2 calls, 1 meeting note, 3 tasks, 0 field changes',
+    )
+    expect(totalsWords({ calls: 0, meetingNotes: 2, tasks: 0, changes: 0 })).toBe(
+      '2 meeting notes, 0 tasks, 0 field changes',
+    )
     expect(stepName('task:2')).toBe('Follow-up 2')
     expect(stepName('fields')).toBe('The field changes')
     expect(batchDoneWords(6, 1, 0)).toBe('6 logged in HubSpot. 1 needs a look.')
@@ -116,6 +131,43 @@ describe('the words', () => {
     expect(waitingLine('Waiting for HubSpot write access')).toBe(
       'Waiting for HubSpot write access. You can still check and change your calls.',
     )
+  })
+
+  it('names what a send holds by kind: calls, and meeting notes apart', () => {
+    expect(sendTitle(3)).toBe('Send 3 calls to HubSpot?')
+    expect(sendTitle(2, 1)).toBe('Send 2 calls and 1 meeting note to HubSpot?')
+    expect(sendTitle(0, 2)).toBe('Send 2 meeting notes to HubSpot?')
+    expect(sendTitle(1, 0)).toBe('Send 1 call to HubSpot?')
+    expect(sendTitle(0, 0)).toBe('Send to HubSpot?')
+    expect(notSentHead(1)).toBe("1 call won't be sent:")
+    expect(notSentHead(1, 1)).toBe("1 call and 1 meeting note won't be sent:")
+    expect(notSentHead(0, 1)).toBe("1 meeting note won't be sent:")
+  })
+
+  it("counts what will go from the server's totals, and a meeting's notes apart on an older one", () => {
+    const meeting = note('m1', { source: 'transcript' })
+    const preview = (totals: CallNotePreview['totals']): CallNotePreview => ({
+      items: [note('a'), note('b'), meeting],
+      sending_ready: true,
+      waiting_for: null,
+      totals,
+    })
+    // Track 2's totals: calls only, and the meeting notes on their own.
+    expect(sendCounts(preview({ calls: 2, meeting_notes: 1, tasks: 3, changes: 1 }))).toEqual({
+      calls: 2,
+      meetingNotes: 1,
+      tasks: 3,
+      changes: 1,
+    })
+    // An older server counted the meeting's notes as a call: they come out of the calls.
+    expect(sendCounts(preview({ calls: 3, tasks: 3, changes: 1 }))).toEqual({
+      calls: 2,
+      meetingNotes: 1,
+      tasks: 3,
+      changes: 1,
+    })
+    // The cards being sent, before the preview answers.
+    expect(cardCounts([note('a'), meeting])).toEqual({ calls: 1, meetingNotes: 1 })
   })
 
   it('writes the day of a logged call as the call line beside it does', () => {

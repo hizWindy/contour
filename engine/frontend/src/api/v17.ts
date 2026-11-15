@@ -194,8 +194,12 @@ export interface CallNotePreview {
   items: CallNoteOut[]
   sending_ready: boolean
   waiting_for: string | null
-  /** A logged meeting's notes count as one call. */
-  totals: { calls: number; tasks: number; changes: number }
+  /**
+   * What sending adds, without the notes it won't send (`skipped`) or those left out. `calls` is
+   * calls only, and `meeting_notes` a logged meeting's notes (Track 2, `37ba1e5`). It is optional in
+   * the contract and always sent; before it, a meeting's notes counted as a call.
+   */
+  totals: { calls: number; tasks: number; changes: number; meeting_notes?: number }
   /** The notes it won't send, with why. Optional in the contract. */
   skipped?: CallNoteSkipped[]
 }

@@ -3,6 +3,7 @@ import type { QueryClient } from '@tanstack/react-query'
 import { isApiProblem } from '@/api/client'
 import { updateNoteInLists } from '@/api/hooks/call-notes'
 import type { CallNoteOut, CallNotePreview } from '@/api/v17'
+import { isMeetingNotes } from './words'
 
 /** A note the sorter was unsure of first, then the calls in the order they were made. */
 export function sortForConfirm(notes: readonly CallNoteOut[]): CallNoteOut[] {
@@ -38,4 +39,38 @@ export function applyPreview(client: QueryClient, preview: CallNotePreview): voi
   for (const item of preview.items) {
     updateNoteInLists(client, item.id, (note) => withHubSpotNow(note, item))
   }
+}
+
+/** What a send holds, by kind. */
+export interface SendCounts {
+  calls: number
+  /** Logged meetings' notes: they go to HubSpot as notes, not calls. */
+  meetingNotes: number
+  tasks: number
+  changes: number
+}
+
+/**
+ * What will go, as the preview says: the server's totals, which leave out the notes it won't send
+ * (`skipped`) and those left out. A server without `meeting_notes` counted a logged meeting's
+ * notes as calls, so they are counted apart, from its items (`source` transcript).
+ */
+export function sendCounts(preview: CallNotePreview): SendCounts {
+  const { calls, tasks, changes, meeting_notes: meetingNotes } = preview.totals
+  if (meetingNotes !== undefined) return { calls, meetingNotes, tasks, changes }
+  const meetings = preview.items.filter((note) => !note.left_out && isMeetingNotes(note))
+  return {
+    calls: Math.max(0, calls - meetings.length),
+    meetingNotes: meetings.length,
+    tasks,
+    changes,
+  }
+}
+
+/** The calls and the meeting notes among the cards being sent, before the preview answers. */
+export function cardCounts(
+  notes: readonly Pick<CallNoteOut, 'source'>[],
+): Pick<SendCounts, 'calls' | 'meetingNotes'> {
+  const meetingNotes = notes.filter(isMeetingNotes).length
+  return { calls: notes.length - meetingNotes, meetingNotes }
 }

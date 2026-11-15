@@ -175,6 +175,8 @@ interface Server {
   skip: Record<string, string>
   /** Try again answers 422 `change_off_the_list` (T3-11). */
   retryRefused: boolean
+  /** The preview's totals as before Track 2's `37ba1e5`: no `meeting_notes`, each counted a call. */
+  oldTotals: boolean
   sent: Sent[]
 }
 
@@ -241,6 +243,7 @@ function mockServer(changes: Partial<Omit<Server, 'sent' | 'release'>> = {}): Se
     listsOff: false,
     skip: {},
     retryRefused: false,
+    oldTotals: false,
     sent: [],
     ...changes,
   }
@@ -297,12 +300,16 @@ function mockServer(changes: Partial<Omit<Server, 'sent' | 'release'>> = {}): Se
             ...(server.hubspotNow[change.id] ?? {}),
           })),
         }))
+      // As Track 2 counts: the calls, and a logged meeting's notes on their own. Without the
+      // skipped notes, which aren't among the items.
+      const meetings = items.filter((item) => item.source === 'transcript').length
       return json({
         items,
         sending_ready: server.options?.sending_ready ?? false,
         waiting_for: server.options?.waiting_for ?? null,
         totals: {
-          calls: items.length,
+          calls: server.oldTotals ? items.length : items.length - meetings,
+          ...(server.oldTotals ? {} : { meeting_notes: meetings }),
           tasks: items.reduce((sum, item) => sum + item.tasks.length, 0),
           changes: items.reduce((sum, item) => sum + item.changes.length, 0),
         },
@@ -1321,6 +1328,31 @@ describe("a logged meeting's notes (T3-11)", () => {
       ),
     ).toBeInTheDocument()
   })
+
+  it.each([
+    ['totals with meeting notes apart', false],
+    ['an older server, whose totals count them as calls', true],
+  ])(
+    'the send names the meeting notes apart, and counts only what will go (%s)',
+    async (_name, oldTotals) => {
+      mockServer({
+        notes: [...threeNotes(), meetingNotes('m1', { called_at: '2026-11-10T04:00:00Z' })],
+        skip: { n2: OFF_THE_LIST },
+        oldTotals,
+      })
+      const { user } = renderActivity()
+      await toConfirmList()
+      await user.click(screen.getByRole('button', { name: 'Send 4 to HubSpot' }))
+      // The cards say 3 calls and 1 meeting note; the server leaves one call out.
+      const dialog = await screen.findByRole('alertdialog', {
+        name: 'Send 2 calls and 1 meeting note to HubSpot?',
+      })
+      expect(
+        await within(dialog).findByText('2 calls, 1 meeting note, 1 task, 1 field change'),
+      ).toBeInTheDocument()
+      expect(within(dialog).getByText("1 call won't be sent:")).toBeInTheDocument()
+    },
+  )
 })
 
 describe('a call the server leaves out of a send (T3-11)', () => {
@@ -1329,8 +1361,8 @@ describe('a call the server leaves out of a send (T3-11)', () => {
     const { user } = renderActivity()
     const list = await toConfirmList()
     await user.click(screen.getByRole('button', { name: 'Send 3 to HubSpot' }))
-    const dialog = await screen.findByRole('alertdialog', { name: 'Send 3 calls to HubSpot?' })
-    // The totals are the server's, without it.
+    // The title counts only what will go, and the totals are the server's, without it.
+    const dialog = await screen.findByRole('alertdialog', { name: 'Send 2 calls to HubSpot?' })
     expect(await within(dialog).findByText('2 calls, 1 task, 1 field change')).toBeInTheDocument()
     const skipped = within(dialog)
       .getByText("1 call won't be sent:")
@@ -1371,8 +1403,11 @@ describe('a call the server leaves out of a send (T3-11)', () => {
     const { user } = renderActivity()
     await toConfirmList()
     await user.click(screen.getByRole('button', { name: 'Send 1 to HubSpot' }))
-    const dialog = await screen.findByRole('alertdialog', { name: 'Send 1 call to HubSpot?' })
+    const dialog = await screen.findByRole('alertdialog')
     expect(await within(dialog).findByText("1 call won't be sent:")).toBeInTheDocument()
+    // Nothing will go: the title counts nothing, and there are no totals of nothing.
+    expect(dialog).toHaveAccessibleName('Send to HubSpot?')
+    expect(dialog.querySelector('[data-slot=send-totals]')).toBeNull()
     const send = within(dialog).getByRole('button', { name: 'Send to HubSpot' })
     expect(send).toBeDisabled()
     expect(send).toHaveAccessibleDescription('None of these can be sent now.')
