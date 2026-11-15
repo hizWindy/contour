@@ -21,6 +21,10 @@ What it does for every caller, so no project needs its own copy:
 - **Writes are off** unless the client was made with `writes_allowed=True`, which
   `get_hubspot` does only when `HUBSPOT_WRITE_ENABLED=true` (rule 1 of PLAN-V5). The scope
   probes (`probe_write_scope`) write nothing, so they work while writes are off.
+- **Links** (PLAN-V17 T1-3): a new call, task, note or meeting is linked to its company, person
+  and deal in the same request that makes it, with HubSpot's own number for each pair
+  (`LINK_TYPES`). A pair that isn't in the table is refused before anything is sent. `linked`
+  reads the links of many records at once, 100 at a time.
 
 API versions have dates, like 2026-09 (`HUBSPOT_API_VERSION`). "v3" uses HubSpot's older paths,
 which still work until a date HubSpot hasn't published.
@@ -33,6 +37,7 @@ import time
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
+from types import MappingProxyType
 from typing import Any, Literal, Protocol, Self
 
 import httpx2
@@ -55,8 +60,13 @@ NOT_SENT = (httpx2.ConnectError, httpx2.ConnectTimeout, httpx2.PoolTimeout)
 MAX_DETAIL_CHARS = 300
 
 # contacts and calls: read for the Companies page (PLAN-V10 C1), once the key has the scope.
-ObjectType = Literal["companies", "deals", "notes", "contacts", "calls"]
-WriteScopeProbe = Literal["companies", "lists"]
+# calls, tasks, notes and meetings: written and read for call notes and the pre-meeting form
+# (PLAN-V17).
+ObjectType = Literal["companies", "deals", "notes", "contacts", "calls", "tasks", "meetings"]
+# What `probe_write_scope` can try: a record kind (a change to record 0), or a list.
+WriteScopeProbe = Literal["companies", "lists", "calls", "notes", "tasks", "meetings"]
+# The kinds of record a new record can be linked to when it is made.
+LinkKind = Literal["companies", "contacts", "deals"]
 # Searches that are reads: HubSpot uses POST for them, so the method alone can't say.
 READ_POSTS = ("/search", "/batch/read")
 
@@ -72,8 +82,26 @@ LEGACY_PREFIX = {
     "account-info": "/account-info/v3",
 }
 
-# HubSpot's own association type ids (HUBSPOT_DEFINED).
-NOTE_TO_COMPANY = 190
+# HubSpot's own association type ids (HUBSPOT_DEFINED) for a link made with a new record, by
+# (the new record's kind, the other record's kind). From HubSpot's API reference, version
+# 2026-09, read 15 Nov 2026 (PLAN-V17, "HubSpot's API, checked"). The only copy of these numbers:
+# the fake HubSpot reads this table too. A pair that isn't here is refused before sending.
+LINK_TYPES: Mapping[tuple[ObjectType, LinkKind], int] = MappingProxyType(
+    {
+        ("calls", "contacts"): 194,
+        ("calls", "companies"): 182,
+        ("calls", "deals"): 206,
+        ("tasks", "contacts"): 204,
+        ("tasks", "companies"): 192,
+        ("tasks", "deals"): 216,
+        ("notes", "contacts"): 202,
+        ("notes", "companies"): 190,
+        ("notes", "deals"): 214,
+        ("meetings", "contacts"): 200,
+        ("meetings", "companies"): 188,
+        ("meetings", "deals"): 212,
+    }
+)
 PRIMARY_COMPANY_LABEL = "Primary"
 
 
@@ -136,6 +164,15 @@ class HubSpotWritesOff(HubSpotError):
 class Association:
     id: str  # the other record's id
     primary: bool  # HubSpot's "Primary" label (a deal's main company)
+
+
+@dataclass(frozen=True)
+class Link:
+    """A link to make with a new record: the other record's kind and its HubSpot id (digits,
+    checked when the request is built)."""
+
+    kind: LinkKind
+    id: str
 
 
 @dataclass(frozen=True)
@@ -262,6 +299,13 @@ class HubSpot(Protocol):
         """The record, or None when HubSpot has no record with this id."""
         ...
 
+    async def linked(
+        self, from_kind: ObjectType, to_kind: ObjectType, ids: Sequence[str]
+    ) -> dict[str, tuple[Association, ...]]:
+        """record id -> the `to_kind` records it is linked to, each once. A record with no such
+        links is left out. A link is primary when HubSpot labels it "Primary"."""
+        ...
+
     async def primary_companies(self, deal_ids: Sequence[str]) -> dict[str, str]:
         """deal id -> its primary company's id, for deals that have one."""
         ...
@@ -285,8 +329,11 @@ class HubSpot(Protocol):
         object_type: ObjectType,
         properties: Mapping[str, str],
         *,
-        associate_with_company: str | None = None,
-    ) -> HubSpotObject: ...
+        links: Sequence[Link] = (),
+    ) -> HubSpotObject:
+        """Makes a record, linked to each of `links` in the same request. Raises `ValueError`
+        for a link `LINK_TYPES` has no number for, before anything is sent."""
+        ...
 
     async def update_object(
         self, object_type: ObjectType, object_id: str, properties: Mapping[str, str]
@@ -296,7 +343,7 @@ class HubSpot(Protocol):
 
     async def probe_write_scope(self, what: WriteScopeProbe) -> bool | None:
         """Whether the key may write `what`: True, False, or None when HubSpot's answer says
-        neither. It changes nothing: it aims at record 0, which can't exist."""
+        neither. It changes nothing: it aims at record 0 (or list 0), which can't exist."""
         ...
 
     async def aclose(self) -> None: ...
@@ -703,17 +750,28 @@ class HttpHubSpot:
             return None
         return _parse(_Object, data).as_object()
 
-    async def primary_companies(self, deal_ids: Sequence[str]) -> dict[str, str]:
-        found: dict[str, str] = {}
-        ids = list(dict.fromkeys(deal_ids))
-        for start in range(0, len(ids), BATCH_SIZE):
-            chunk = ids[start : start + BATCH_SIZE]
-            path = self._path("crm/associations", "/deals/companies/batch/read")
+    async def linked(
+        self, from_kind: ObjectType, to_kind: ObjectType, ids: Sequence[str]
+    ) -> dict[str, tuple[Association, ...]]:
+        """HubSpot's batch read of links, `BATCH_SIZE` ids a request. HubSpot pages one record's
+        links only when it has very many (the page size is TBC); only the first page is read,
+        which is far more than a deal's companies or a meeting's people."""
+        wanted = list(dict.fromkeys(_id(item) for item in ids))
+        path = self._path("crm/associations", f"/{from_kind}/{to_kind}/batch/read")
+        targets: dict[str, list[_AssocTarget]] = {}
+        for start in range(0, len(wanted), BATCH_SIZE):
+            chunk = wanted[start : start + BATCH_SIZE]
             data = await self._call("POST", path, body={"inputs": [{"id": i} for i in chunk]})
             for result in _parse(_AssocBatch, data).results:
-                company = _primary_target(result.to)
-                if company is not None:
-                    found[result.from_.id] = company
+                targets.setdefault(result.from_.id, []).extend(result.to)
+        return {record: _targets(found) for record, found in targets.items() if found}
+
+    async def primary_companies(self, deal_ids: Sequence[str]) -> dict[str, str]:
+        found: dict[str, str] = {}
+        for deal_id, links in (await self.linked("deals", "companies", deal_ids)).items():
+            company = primary_company({"companies": links})
+            if company is not None:
+                found[deal_id] = company
         return found
 
     async def owners(self, *, archived: bool = False) -> list[Owner]:
@@ -780,24 +838,14 @@ class HttpHubSpot:
         object_type: ObjectType,
         properties: Mapping[str, str],
         *,
-        associate_with_company: str | None = None,
+        links: Sequence[Link] = (),
     ) -> HubSpotObject:
-        self._check_writes()
+        # The body is checked first, so a link with no number is refused whether writing is on
+        # or off, and nothing is sent either way.
         body: dict[str, Any] = {"properties": dict(properties)}
-        if associate_with_company is not None:
-            if object_type != "notes":
-                raise ValueError("only a note is linked to a company when it is made")
-            body["associations"] = [
-                {
-                    "to": {"id": _id(associate_with_company)},
-                    "types": [
-                        {
-                            "associationCategory": "HUBSPOT_DEFINED",
-                            "associationTypeId": NOTE_TO_COMPANY,
-                        }
-                    ],
-                }
-            ]
+        if links:
+            body["associations"] = _associations(object_type, links)
+        self._check_writes()
         data = await self._call("POST", self._path("crm/objects", f"/{object_type}"), body=body)
         return _parse(_Object, data).as_object()
 
@@ -816,14 +864,16 @@ class HttpHubSpot:
 
     async def probe_write_scope(self, what: WriteScopeProbe) -> bool | None:
         body: Any
-        if what == "companies":
+        if what == "lists":
+            method, path, body = "PUT", self._path("crm/lists", "/0/memberships/add"), []
+        else:
+            # A change to record 0 with nothing in it. HubSpot checks the permission before the
+            # body (PLAN-V17 T1-2, 15 Nov 2026: 403 without it, 400 or 404 with it).
             method, path, body = (
                 "PATCH",
-                self._path("crm/objects", "/companies/0"),
+                self._path("crm/objects", f"/{what}/0"),
                 {"properties": {}},
             )
-        else:
-            method, path, body = "PUT", self._path("crm/lists", "/0/memberships/add"), []
         try:
             await self._call(method, path, body=body, probe=True)
         except HubSpotMissingScope:
@@ -984,17 +1034,39 @@ def _id(value: str) -> str:
     return text
 
 
-def _primary_target(targets: Sequence[_AssocTarget]) -> str | None:
-    """The company labelled Primary, else the only one. Several and none primary: no answer."""
-    for target in targets:
-        if any(t.label == PRIMARY_COMPANY_LABEL for t in target.association_types):
-            return target.to_object_id
-    unique = {target.to_object_id for target in targets}
-    return unique.pop() if len(unique) == 1 else None
+def _associations(object_type: ObjectType, links: Iterable[Link]) -> list[dict[str, Any]]:
+    """A new record's `associations`: one entry per linked record, in the order given, with
+    HubSpot's number for the pair. Raises `ValueError` for a pair with no number or an id that
+    isn't digits."""
+    found: dict[tuple[str, int], dict[str, Any]] = {}
+    for link in links:
+        type_id = LINK_TYPES.get((object_type, link.kind))
+        if type_id is None:
+            raise ValueError(f"no HubSpot link number from {object_type!r} to {link.kind!r}")
+        record = _id(link.id)
+        found.setdefault(
+            (record, type_id),
+            {
+                "to": {"id": record},
+                "types": [{"associationCategory": "HUBSPOT_DEFINED", "associationTypeId": type_id}],
+            },
+        )
+    return list(found.values())
+
+
+def _targets(found: Iterable[_AssocTarget]) -> tuple[Association, ...]:
+    """One entry per linked record, in HubSpot's order: a record listed twice is kept once. It
+    is primary when any of its types is labelled Primary."""
+    primary: dict[str, bool] = {}
+    for target in found:
+        labelled = any(t.label == PRIMARY_COMPANY_LABEL for t in target.association_types)
+        primary[target.to_object_id] = primary.get(target.to_object_id, False) or labelled
+    return tuple(Association(id=key, primary=value) for key, value in primary.items())
 
 
 def primary_company(associations: Mapping[str, Sequence[Association]]) -> str | None:
-    """A deal's main company from a list answer: the primary link, else the only one."""
+    """A deal's main company from its links (a list answer, or `linked`): the primary link,
+    else the only one. Several and none primary: no answer."""
     links = associations.get("companies", ())
     for link in links:
         if link.primary:

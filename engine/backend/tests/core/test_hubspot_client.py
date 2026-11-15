@@ -1,6 +1,9 @@
 """The HubSpot client (PLAN-V5 B1): what it sends, how it pages, waits, retries and fails, that a
-write is never sent twice, and that the key never reaches a log line. No real request is made."""
+write is never sent twice, and that the key never reaches a log line. PLAN-V17 T1-3: the links a
+new call, task, note or meeting is made with, the batch read of links, and the write probes for
+each kind. No real request is made."""
 
+import json
 import logging
 from collections.abc import Callable
 from typing import Any
@@ -10,14 +13,19 @@ import pytest
 
 from core.config import Settings
 from core.hubspot.client import (
+    BATCH_SIZE,
     MAX_TRIES,
+    Association,
     HttpHubSpot,
     HubSpotMissingScope,
     HubSpotRejected,
     HubSpotUnavailable,
     HubSpotWritesOff,
     HubSpotWriteUncertain,
+    Link,
+    ObjectType,
     Pacer,
+    WriteScopeProbe,
     get_hubspot,
     missing_scopes,
     primary_company,
@@ -179,6 +187,12 @@ async def test_writes_are_refused_while_writing_is_off() -> None:
         await client.update_object("companies", "1", {"city": "Perth"})
     with pytest.raises(HubSpotWritesOff):
         await client.add_to_list("9", ["1"])
+    with pytest.raises(HubSpotWritesOff):  # PLAN-V17: a call with its links, too
+        await client.create_object(
+            "calls",
+            {"hs_timestamp": "1763251200000"},
+            links=[Link("companies", "101"), Link("contacts", "201"), Link("deals", "501")],
+        )
     assert calls == []  # nothing left this computer
 
 
@@ -215,21 +229,97 @@ async def test_a_busy_write_is_sent_again_because_hubspot_refused_it_first() -> 
     assert made.id == "55"
 
 
-async def test_a_note_is_linked_to_its_company_when_it_is_made() -> None:
-    bodies: list[Any] = []
-
+def recorder(seen: list[httpx2.Request], status: int = 201) -> Handler:
     def handler(request: httpx2.Request) -> httpx2.Response:
-        import json
+        seen.append(request)
+        return answer(status, {"id": "77", "properties": {}})
 
-        bodies.append(json.loads(request.content))
-        return answer(201, {"id": "77", "properties": {}})
+    return handler
 
-    await make(handler, writes=True).create_object(
-        "notes", {"hs_note_body": "hello"}, associate_with_company="123"
+
+def links_in(request: httpx2.Request) -> list[tuple[str, str, int]]:
+    """(the other record's id, the category, the link number) for each link in a create."""
+    body = json.loads(request.content)
+    return [
+        (item["to"]["id"], kind["associationCategory"], kind["associationTypeId"])
+        for item in body["associations"]
+        for kind in item["types"]
+    ]
+
+
+async def test_a_note_is_linked_to_its_company_when_it_is_made() -> None:
+    """The Lead Finder's note on a company (writer.py) keeps HubSpot's number 190."""
+    seen: list[httpx2.Request] = []
+    await make(recorder(seen), writes=True).create_object(
+        "notes", {"hs_note_body": "hello"}, links=[Link("companies", "123")]
     )
-    (body,) = bodies
-    assert body["associations"][0]["to"] == {"id": "123"}
-    assert body["associations"][0]["types"][0]["associationTypeId"] == 190
+    (request,) = seen
+    assert request.url.path == "/crm/objects/2026-09/notes"
+    assert json.loads(request.content)["properties"] == {"hs_note_body": "hello"}
+    assert links_in(request) == [("123", "HUBSPOT_DEFINED", 190)]
+
+
+# PLAN-V17, "HubSpot's API, checked": the numbers for a company, a person and a deal. Written out
+# here, not read from the client's table, so a wrong number in the table fails this test.
+@pytest.mark.parametrize(
+    ("kind", "numbers"),
+    [
+        ("calls", (182, 194, 206)),
+        ("tasks", (192, 204, 216)),
+        ("notes", (190, 202, 214)),
+        ("meetings", (188, 200, 212)),
+    ],
+)
+async def test_a_new_activity_is_linked_to_its_company_person_and_deal(
+    kind: ObjectType, numbers: tuple[int, int, int]
+) -> None:
+    seen: list[httpx2.Request] = []
+    made = await make(recorder(seen), writes=True).create_object(
+        kind,
+        {"hs_timestamp": "1763251200000"},
+        links=[Link("companies", "101"), Link("contacts", "201"), Link("deals", " 501 ")],
+    )
+    (request,) = seen
+    assert made.id == "77"
+    assert (request.method, request.url.path) == ("POST", f"/crm/objects/2026-09/{kind}")
+    company, person, deal = numbers
+    assert links_in(request) == [
+        ("101", "HUBSPOT_DEFINED", company),
+        ("201", "HUBSPOT_DEFINED", person),
+        ("501", "HUBSPOT_DEFINED", deal),  # the id is trimmed, and only digits pass
+    ]
+
+
+async def test_a_link_twice_is_sent_once_and_no_links_send_no_associations() -> None:
+    seen: list[httpx2.Request] = []
+    client = make(recorder(seen), writes=True)
+    await client.create_object(
+        "tasks",
+        {"hs_task_subject": "Send the plan"},
+        links=[Link("companies", "101"), Link("companies", " 101 ")],
+    )
+    await client.create_object("companies", {"name": "Sample Logistics Pty Ltd"})
+    assert links_in(seen[0]) == [("101", "HUBSPOT_DEFINED", 192)]
+    assert "associations" not in json.loads(seen[1].content)
+
+
+@pytest.mark.parametrize("writes", [True, False])
+async def test_a_link_hubspot_has_no_number_for_is_refused_before_anything_is_sent(
+    writes: bool,
+) -> None:
+    seen: list[httpx2.Request] = []
+    client = make(recorder(seen), writes=writes)
+    with pytest.raises(ValueError, match="no HubSpot link number"):
+        await client.create_object(
+            "calls",
+            {"hs_timestamp": "1763251200000"},
+            links=[Link("companies", "101"), Link("calls", "301")],  # type: ignore[arg-type]
+        )
+    with pytest.raises(ValueError, match="no HubSpot link number"):
+        await client.create_object("companies", {"name": "Acme"}, links=[Link("contacts", "201")])
+    with pytest.raises(ValueError, match="record id"):
+        await client.create_object("calls", {}, links=[Link("companies", "101/../owners")])
+    assert seen == []
 
 
 async def test_a_value_hubspot_refuses_is_rejected_not_uncertain() -> None:
@@ -238,12 +328,19 @@ async def test_a_value_hubspot_refuses_is_rejected_not_uncertain() -> None:
         await client.update_object("companies", "1", {"industry": "NOT_A_CODE"})
 
 
+@pytest.mark.parametrize("what", ["companies", "calls", "notes", "tasks", "meetings"])
 @pytest.mark.parametrize(
     ("status", "body", "expected"),
-    [(403, MISSING, False), (404, {"category": "OBJECT_NOT_FOUND"}, True), (500, {}, None)],
+    [
+        (403, MISSING, False),
+        (404, {"category": "OBJECT_NOT_FOUND"}, True),
+        # An empty change: HubSpot checks the permission first (PLAN-V17 T1-2), so 400 is yes.
+        (400, {"category": "VALIDATION_ERROR"}, True),
+        (500, {}, None),
+    ],
 )
 async def test_the_write_scope_probe_reads_the_answer_and_works_with_writes_off(
-    status: int, body: dict[str, Any], expected: bool | None
+    what: WriteScopeProbe, status: int, body: dict[str, Any], expected: bool | None
 ) -> None:
     seen: list[httpx2.Request] = []
 
@@ -251,8 +348,22 @@ async def test_the_write_scope_probe_reads_the_answer_and_works_with_writes_off(
         seen.append(request)
         return answer(status, body)
 
-    assert await make(handler, writes=False).probe_write_scope("companies") is expected
-    assert seen[0].url.path == "/crm/objects/2026-09/companies/0"  # record 0 can't exist
+    assert await make(handler, writes=False).probe_write_scope(what) is expected
+    request = seen[0]
+    assert (request.method, request.url.path) == ("PATCH", f"/crm/objects/2026-09/{what}/0")
+    assert json.loads(request.content) == {"properties": {}}  # record 0 can't exist anyway
+
+
+async def test_the_list_write_probe_adds_nothing_to_list_0() -> None:
+    seen: list[httpx2.Request] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        seen.append(request)
+        return answer(404, {"category": "OBJECT_NOT_FOUND"})
+
+    assert await make(handler).probe_write_scope("lists") is True
+    assert (seen[0].method, seen[0].url.path) == ("PUT", "/crm/lists/2026-09/0/memberships/add")
+    assert json.loads(seen[0].content) == []
 
 
 async def test_ids_and_field_names_are_checked_before_they_go_into_a_path() -> None:
@@ -288,25 +399,70 @@ async def test_owners_keep_the_name_and_never_the_email() -> None:
     assert "email" not in repr(owners)
 
 
+def target(record: int, *labels: str | None) -> dict[str, Any]:
+    """One linked record in a batch read answer, with one type for each label."""
+    types = [{"category": "HUBSPOT_DEFINED", "typeId": 341, "label": label} for label in labels]
+    return {"toObjectId": record, "associationTypes": types or [{"typeId": 341}]}
+
+
 async def test_a_deals_primary_company_comes_from_its_label() -> None:
+    seen: list[httpx2.Request] = []
+
     def handler(request: httpx2.Request) -> httpx2.Response:
+        seen.append(request)
         return answer(
             207,
             {
                 "results": [
-                    {
-                        "from": {"id": "5"},
-                        "to": [
-                            {"toObjectId": 8, "associationTypes": [{"typeId": 341}]},
-                            {"toObjectId": 9, "associationTypes": [{"label": "Primary"}]},
-                        ],
-                    },
+                    {"from": {"id": "5"}, "to": [target(8), target(9, None, "Primary")]},
                     {"from": {"id": "6"}, "to": []},
-                ]
+                    {"from": {"id": "7"}, "to": [target(10)]},  # the only one
+                    {"from": {"id": "8"}, "to": [target(11), target(12)]},  # several, none primary
+                    {"from": {"id": "9"}, "to": [target(13), target(13)]},  # one, listed twice
+                ],
+                "errors": [{"category": "OBJECT_NOT_FOUND", "message": "No links for 6"}],
             },
         )
 
-    assert await make(handler).primary_companies(["5", "6"]) == {"5": "9"}
+    found = await make(handler).primary_companies(["5", "6", "7", "8", "9"])
+    assert found == {"5": "9", "7": "10", "9": "13"}
+    (request,) = seen
+    assert request.url.path == "/crm/associations/2026-09/deals/companies/batch/read"
+
+
+async def test_linked_reads_100_ids_a_request_and_leaves_out_records_without_links() -> None:
+    seen: list[list[str]] = []
+    paths: set[str] = set()
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        paths.add(request.url.path)
+        ids = [item["id"] for item in json.loads(request.content)["inputs"]]
+        seen.append(ids)
+        results = [
+            {"from": {"id": int(i)}, "to": [target(9000 + int(i)), target(1, "Primary")]}
+            for i in ids
+            if int(i) % 2 == 0  # odd ids have no links: HubSpot leaves them out
+        ]
+        return answer(207, {"status": "COMPLETE", "results": results})
+
+    ids = [str(n) for n in range(1, 251)]
+    found = await make(handler).linked("meetings", "contacts", [*ids, "2", " 4 "])
+
+    assert [len(batch) for batch in seen] == [BATCH_SIZE, BATCH_SIZE, 50]  # each id once
+    assert paths == {"/crm/associations/2026-09/meetings/contacts/batch/read"}
+    assert len(found) == 125 and "1" not in found
+    assert found["2"] == (Association("9002", primary=False), Association("1", primary=True))
+
+
+async def test_linked_with_no_ids_asks_nothing() -> None:
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        raise AssertionError("nothing should be sent")
+
+    client = make(handler)
+    assert await client.linked("calls", "companies", []) == {}
+    assert await client.primary_companies([]) == {}
+    with pytest.raises(ValueError, match="record id"):  # an id goes to HubSpot as digits only
+        await client.linked("calls", "companies", ["12 OR 1=1"])
 
 
 def test_a_list_answer_names_the_primary_company() -> None:

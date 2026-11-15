@@ -289,7 +289,7 @@ def test_hubspot_problems() -> None:
     )
     missing = hubspot_finding(connection(crm_objects_deals_read="no"), good, good, 5, NOW, DAY2)
     assert missing.state == "problem"
-    assert missing.sentence == "5 of 6 read permissions. Missing: Read deals and their stages."
+    assert missing.sentence == "9 of 10 read permissions. Missing: Read deals and their stages."
     assert (missing.next_step or "").startswith("Add it to the key in HubSpot")
     failed = hubspot_finding(connection(), sync("failed", None), good, 5, NOW, DAY2)
     assert failed.state == "problem" and failed.sentence.startswith("The last sync failed")

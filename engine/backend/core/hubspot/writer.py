@@ -42,6 +42,7 @@ from core.hubspot.client import (
     HubSpotObject,
     HubSpotWritesOff,
     HubSpotWriteUncertain,
+    Link,
     PropertyInfo,
 )
 from core.hubspot.importer import normalize_domain
@@ -497,7 +498,7 @@ async def _note_step(hubspot: HubSpot, plan: WritePlan, company_id: str) -> Step
         made = await hubspot.create_object(
             "notes",
             {"hs_note_body": body, "hs_timestamp": timestamp},
-            associate_with_company=company_id,
+            links=[Link("companies", company_id)],
         )
     except HubSpotWriteUncertain as error:
         result = _failed("note", error)
