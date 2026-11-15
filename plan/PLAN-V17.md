@@ -660,7 +660,7 @@ Newest first.
 
 ## Track 3: the website (session 3)
 
-**Progress:** Stage A 4 of 8. Stage B 2 of 4. Every step is `frontend-agent` work, follows `engine/DESIGN.md` and "The screens, and how they move", uses the `ui-build` skill, and builds against the contract with `mockApi`.
+**Progress:** Stage A 4 of 8. Stage B 3 of 4. Built: all 12 steps. Waiting for Al-khair: T3-2 (the mic test, which decides T3-4), and his look at T3-5, T3-6 and T3-11. Every step is `frontend-agent` work, follows `engine/DESIGN.md` and "The screens, and how they move", uses the `ui-build` skill, and builds against the contract with `mockApi`.
 
 ### Stage A: call notes
 
@@ -760,12 +760,53 @@ Newest first.
     - The tests cover all of it: 109 files and 1,538 passed. Lint, types and the build pass.
     - The first visit is 34 files, 719 kB raw (+767 bytes) and 236,463 bytes gzip (+319 bytes; the report still says 231 kB). The extra is Vite's list of each late page's files, and Home's late card (**TBC**: accept).
 
-- [ ] **T3-12. Track 3 check.** The same checks as T3-8, on the Stage B screens.
+- [x] **T3-12. Track 3 check.** The same checks as T3-8, on the Stage B screens.
   - **Done when:** all checks pass and the Log says "Track 3 ready to merge".
+  - Done 2026-11-16 (fixes `f8bc44c` to `199446f`).
+    - Lint and types pass. Tests: 111 files and 1,559 passed. The build passes.
+    - The first visit is 34 files, 236,463 bytes gzip (the report says 231 kB) and 736,196 bytes raw. Stage B adds 0.5 kB gzip over Stage A, for the new pages' route entries (**TBC**: accept).
+    - 96 Stage B screenshots, keyboard only, reduced motion, and 4x CPU on Meetings' switch: all pass.
+    - A fresh review-agent's design review (`design-review`): its Must fix and every Should fix are fixed. The fixed screens were seen again at 1280 and 390px.
 
 ### Track 3 Log
 
 Newest first.
+
+- 2026-11-16: **Track 3 ready to merge.** Branch `plan-v17-track3`; the Stage A tag is `v17-notes-t3` (`868d1f4`).
+  - **Checks:** lint and types pass; tests 111 files and 1,559 passed; the build passes. The first visit is 34 files, 236,463 bytes gzip.
+  - **Stage B's independent review** (a fresh review-agent): one Must fix and seven Should fixes, all fixed (`f8bc44c` to `199446f`):
+    - on a phone, focus can't hide behind a fixed bottom bar;
+    - the send dialog keeps its buttons in view;
+    - Cancel can't stop a send that is going;
+    - a pasted Outlook list loses no address;
+    - When and Where show once, in the facts;
+    - a status change moves nothing;
+    - an open summary box keeps the page to one Navy button;
+    - Activity's send title counts only what will go, with meeting notes named.
+  - **Also fixed:**
+    - Log meeting reads `transcript_max_chars`;
+    - a changed sent pre-read shows its copy line as the last send's;
+    - "Try the HubSpot copy again" shows only for a failed copy;
+    - a typed past meeting opens its pre-read;
+    - a save that fails after leaving the page says so;
+    - long meeting notes fold on Activity's cards;
+    - rows say Zoom or Google Meet when HubSpot's place names it, as Track 2's facts do.
+  - **Waiting for Al-khair:**
+    - **T3-2:** the mic test, which decides T3-4's free in-browser mic. Until then the mic is typing-only.
+    - **His look** at T3-5, T3-6 and T3-11.
+    - **These TBCs:**
+      - the 4x frame exception in T3-8;
+      - the first visit's growth (Stage A 230 kB, now 231 kB gzip);
+      - DESIGN.md lines for Home's late Upcoming meetings card and the tick on a sent pre-read;
+      - the cost shown before "Draft it";
+      - the transcript kept in memory only;
+      - "Copy" when email isn't set up;
+      - Meetings having no Navy button;
+      - `scroll-padding-top` for the sticky top bars;
+      - and the earlier TBCs below.
+  - **For M5, with Track 2:** with the AI off, a logged meeting's transcript is its card's text, and Edit puts it in the 2,000-character summary box. Track 2 and Al-khair should settle what that card shows.
+  - **Clean up after M5:** the throwaway worktree `../contour-v17-t3-preview` and its database `leadfinder_v17c_preview`.
+- 2026-11-16: **Track 2's latest** (`f94de4a`): the facts and the email say "Teams" (or Zoom or Google Meet), and the preview's totals count `meeting_notes` apart from calls. Both are used.
 
 - 2026-11-16: **T3-12, the browser pass on Stage B** (the preview, with Track 2's real meetings routes, the built site, and made-up meetings and pre-reads for what a preview without HubSpot meetings or a Claude key can't show):
   - **96 screenshots, with no failures and no console errors:** 16 screens at 1440, 1280 and 390px, light and dark.
