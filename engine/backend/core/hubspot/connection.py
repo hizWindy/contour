@@ -1,5 +1,9 @@
-"""How the backend gets a HubSpot client and the sync runner, in one place, so tests and the fake
-backend can swap them (`app.state.hubspot_provider`, `app.state.hubspot_syncs`).
+"""How the backend gets a HubSpot client, the sync runner and the meetings refresher, in one
+place, so tests and the fake backend can swap them (`app.state.hubspot_provider`,
+`app.state.hubspot_syncs`, `app.state.meetings_refresher`).
+
+`refresh_meetings_soon` is how a page asks for fresh meetings (PLAN-V17 T1-8): Track 2's
+Meetings and Home routes call it, and it answers at once.
 
 The status the Admin page shows (`connection_status`) joins the key, the connection check (kept
 for `CHECK_FRESH_SECONDS`, so opening the page doesn't call HubSpot every time), each project's
@@ -19,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.config import Settings, get_settings
 from core.hubspot.check import ConnectionCheck, check_connection
 from core.hubspot.client import HubSpot, get_hubspot
+from core.hubspot.meetings import MeetingsRefresher
 from core.hubspot.needs import ProjectReadiness, readiness
 from core.hubspot.service import HubSpotSummary, summary
 from core.hubspot.sync import SyncOut, SyncRunner, last_good, recent_syncs, running_sync
@@ -75,10 +80,44 @@ def hubspot_set_up(app: FastAPI) -> bool:
 
 
 async def shut_down(app: FastAPI) -> None:
-    """At backend stop: a running sync is stopped and marked interrupted."""
+    """At backend stop: a running sync is stopped and marked interrupted, and a meetings refresh
+    is stopped (its save, if it had started, is rolled back)."""
     runner: SyncRunner | None = getattr(app.state, "hubspot_syncs", None)
     if runner is not None:
         await runner.stop()
+    refresher: MeetingsRefresher | None = getattr(app.state, "meetings_refresher", None)
+    if refresher is not None:
+        await refresher.stop()
+
+
+def meetings_refresher(app: FastAPI) -> MeetingsRefresher:
+    """The app's one meetings refresher, made on first use. Tests may put their own in
+    `app.state.meetings_refresher`."""
+    refresher: MeetingsRefresher | None = getattr(app.state, "meetings_refresher", None)
+    if refresher is None:
+        from core.db.engine import get_sessionmaker
+
+        refresher = MeetingsRefresher(
+            sessions=get_sessionmaker(), hubspot=lambda: hubspot_provider(app)()
+        )
+        app.state.meetings_refresher = refresher
+    return refresher
+
+
+def refresh_meetings_soon(app: FastAPI) -> bool:
+    """Starts a read of the meetings changed in HubSpot, in the background, when someone opens
+    Meetings or Home (PLAN-V17 T1-8). It answers at once and never raises.
+
+    With no HubSpot key it does nothing. True when it started a check: not while one runs, nor
+    within a minute of the last one. The check itself asks HubSpot only when 15 minutes have
+    passed since the last read (`meetings.refresh`)."""
+    if not hubspot_set_up(app):
+        return False
+    try:
+        return meetings_refresher(app).soon()
+    except Exception as error:
+        log.warning("hubspot_meetings_refresh_not_started", extra={"error": type(error).__name__})
+        return False
 
 
 @asynccontextmanager

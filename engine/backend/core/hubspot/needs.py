@@ -93,5 +93,5 @@ def _sending_words(state: WriteState, missing: Sequence[str]) -> str:
     if state == "waiting":
         return f"sending waits for {', '.join(missing)}"
     if state == "off":
-        return "sending is switched off (HUBSPOT_WRITE_ENABLED)"
+        return "sending is switched off on the server"
     return "sending not known yet"

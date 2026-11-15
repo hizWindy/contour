@@ -9,6 +9,9 @@ Contacts are never stored here, and neither is an owner's email.
 - `hubspot_owners`: who owns records, so a company shows a name instead of an owner id.
 - `hubspot_syncs`: one row per sync, with its counts and any error (PLAN-V5 B4).
 - `hubspot_writes`: one row per write a person asked for, from preview to result (B5).
+- `hubspot_meetings`: our copy of HubSpot's meetings, people as ids only (PLAN-V17 T1-8), and
+  `hubspot_meeting_reads`: one row per read of them, so the 15-minute rule and the status
+  (`meetings.status`) work from the database.
 """
 
 import uuid
@@ -31,7 +34,7 @@ from sqlalchemy import (
     Uuid,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from core.db.base import CORE_SCHEMA, Base
@@ -49,6 +52,14 @@ SYNC_PHASES = ("reading", "saving", "people", "profiles")
 # landed. partial: some steps landed and some failed. failed: nothing landed. uncertain: a step
 # may or may not have landed (HubSpot didn't answer), so nothing more is sent until it is checked.
 WRITE_STATUSES = ("previewed", "writing", "done", "partial", "failed", "uncertain")
+# A meeting's place (PLAN-V17 T1-8): a video call, an address, or neither (a phone call too).
+MEETING_WHERE = ("online", "in_person", "unknown")
+# full: every meeting in the window, and our copy replaced (the daily sync). changes: the meetings
+# changed since the last good read (`meetings.refresh`).
+MEETING_READ_KINDS = ("full", "changes")
+# done: read and saved. waiting: HubSpot said the key lacks a permission. failed: another problem,
+# and our copy stayed as it was.
+MEETING_READ_STATES = ("done", "waiting", "failed")
 
 
 def _in_list(column: str, values: tuple[str, ...]) -> str:
@@ -332,3 +343,65 @@ class HubSpotCall(Base):
     imported_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("now()")
     )
+
+
+def _ids_column() -> Any:
+    return mapped_column(ARRAY(String(32)), default=list, server_default=text("'{}'::varchar[]"))
+
+
+class HubSpotMeeting(Base):
+    """A meeting, copied from HubSpot (PLAN-V17 T1-8): the ones from 90 days back to 60 days ahead
+    (TBC). The people on it are ids only (HubSpot's contacts and owners), never an address, and
+    any email or phone number in its text is blanked before it is saved. `hubspot_company_id` may
+    name a company our copy doesn't have, so it is not a foreign key."""
+
+    __tablename__ = "hubspot_meetings"
+    __table_args__ = (
+        # "where" is a word SQL keeps for itself, so the check quotes it.
+        CheckConstraint(_in_list('"where"', MEETING_WHERE), name="where"),
+        Index("ix_hubspot_meetings_starts_at", "starts_at"),
+        Index("ix_hubspot_meetings_company_starts_at", "hubspot_company_id", "starts_at"),
+        {"schema": CORE_SCHEMA},
+    )
+
+    hubspot_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    hubspot_company_id: Mapped[str | None] = mapped_column(String(32))  # the first one linked
+    more_companies: Mapped[bool] = mapped_column(  # linked to more than one company
+        Boolean, default=False, server_default=text("false")
+    )
+    contact_ids: Mapped[list[str]] = _ids_column()  # HubSpot's contacts on it
+    owner_id: Mapped[str | None] = mapped_column(String(32))
+    attendee_owner_ids: Mapped[list[str]] = _ids_column()  # Contour's other people on it
+    title: Mapped[str] = mapped_column(String(300))
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    where: Mapped[str] = mapped_column(String(16), server_default="unknown")  # MEETING_WHERE
+    location: Mapped[str | None] = mapped_column(Text)
+    outcome: Mapped[str | None] = mapped_column(String(32))  # HubSpot's, like "CANCELED"
+    notes: Mapped[str | None] = mapped_column(Text)  # HubSpot's internal notes, as plain text
+    hubspot_url: Mapped[str | None] = mapped_column(Text)
+    hubspot_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    imported_at: Mapped[datetime] = mapped_column(  # when our copy of it last changed
+        DateTime(timezone=True), server_default=text("now()")
+    )
+
+
+class HubSpotMeetingRead(Base):
+    """One read of HubSpot's meetings (PLAN-V17 T1-8): what kind, how it ended, and how many
+    meetings changed in our copy. The 15-minute rule and the meetings' status read these."""
+
+    __tablename__ = "hubspot_meeting_reads"
+    __table_args__ = (
+        CheckConstraint(_in_list("kind", MEETING_READ_KINDS), name="kind"),
+        CheckConstraint(_in_list("state", MEETING_READ_STATES), name="state"),
+        Index("ix_hubspot_meeting_reads_started_at", text("started_at DESC")),
+        {"schema": CORE_SCHEMA},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, Identity(always=False), primary_key=True)
+    kind: Mapped[str] = mapped_column(String(16))  # MEETING_READ_KINDS
+    state: Mapped[str] = mapped_column(String(16))  # MEETING_READ_STATES
+    sentence: Mapped[str | None] = mapped_column(Text)  # plain words when not done
+    changed: Mapped[int] = _zero()  # meetings added, changed or removed in our copy
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

@@ -19,7 +19,11 @@ How one sync goes:
 4. **Save** (`save_snapshot`) everything in ONE transaction: owners, companies (an export row
    with the same id is replaced), their offices, and the deals whose company is in our copy. A
    full sync then removes the companies and deals HubSpot no longer has. If anything fails,
-   nothing is saved.
+   nothing is saved. Then, in the "people" phase, contacts and calls are copied (`people.py`),
+   each account is matched to its HubSpot owner by email, in memory (`owners.py`, PLAN-V17
+   T1-4), and the meetings from 90 days back to 60 days ahead replace our copy of them
+   (`meetings.py`, T1-8), even while people wait for the contacts scope. A problem in any of
+   them is a warning: the companies stay saved.
 5. **Profiles.** The memory profiles of the companies that changed are built again (all of them
    after a full sync, or when an earlier sync skipped them). A failure here is a warning, not a
    failed sync: the data is saved.
@@ -73,7 +77,9 @@ from core.hubspot.mapping import (
     labelled_fields,
     load_field_map,
 )
+from core.hubspot.meetings import copy_meetings
 from core.hubspot.models import HubSpotCompany, HubSpotDeal, HubSpotSync
+from core.hubspot.owners import match_accounts
 from core.hubspot.people import WAITING as PEOPLE_WAITING
 from core.hubspot.people import read_people, save_people
 from core.hubspot.profiles import rebuild_profiles
@@ -664,6 +670,10 @@ async def run(
         await _note(sessions, plan.id, phase="people")
         people_warnings, people_saved = await sync_people(sessions, hubspot, snapshot.owners)
         warnings += people_warnings
+        # Who each account is in HubSpot (PLAN-V17 T1-4): the owners' emails stay in memory.
+        warnings += await match_accounts(sessions, hubspot)
+        # Our copy of meetings (PLAN-V17 T1-8), whether or not people could be read.
+        warnings += await copy_meetings(sessions, hubspot)
         await _note(sessions, plan.id, phase="profiles", people_saved=people_saved)
         owed = await _profiles_owed(sessions, plan.id)
         rebuilt, skipped = 0, False

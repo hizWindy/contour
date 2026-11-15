@@ -6,9 +6,9 @@ import uuid
 import pytest
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from core.hubspot.client import HubSpotWritesOff, HubSpotWriteUncertain, PropertyInfo
+from core.hubspot.client import HubSpotList, HubSpotWritesOff, HubSpotWriteUncertain, PropertyInfo
 from core.hubspot.models import HubSpotCompany, HubSpotWrite
 from core.hubspot.writer import (
     CompanyTarget,
@@ -209,6 +209,32 @@ async def test_two_clicks_at_once_write_once(session: AsyncSession, session_fact
     await asyncio.gather(click(), click())
     assert sorted(map(str, results)) in (["done", "in progress"], ["done", "done"])
     assert len(fake.companies) == 1
+
+
+async def test_two_previews_at_once_make_one_write(
+    session_factory: async_sessionmaker[AsyncSession], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two rows for one lead could both be sent, so the second preview waits for the first's row
+    and plans that one again."""
+    fake = fake_with_fields()
+    both = asyncio.Barrier(2)
+    find = fake.find_lists
+
+    async def together(name: str) -> list[HubSpotList]:
+        await both.wait()  # each preview has looked for the lead's write, and found none
+        return await find(name)
+
+    monkeypatch.setattr(fake, "find_lists", together)
+
+    async def preview() -> WriteOut:
+        async with session_factory() as own:
+            return await preview_write(own, fake, request())
+
+    first, second = await asyncio.wait_for(asyncio.gather(preview(), preview()), timeout=30)
+
+    assert first.id == second.id
+    async with session_factory() as check:
+        assert await check.scalar(select(func.count()).select_from(HubSpotWrite)) == 1
 
 
 async def test_the_database_lets_one_write_run_per_subject(session: AsyncSession) -> None:

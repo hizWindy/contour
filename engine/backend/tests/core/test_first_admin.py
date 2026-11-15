@@ -34,7 +34,7 @@ def conninfo(database_url: str) -> Iterator[str]:
     with psycopg.connect(info, autocommit=True) as connection:
         connection.execute(
             "TRUNCATE companies.script_edits, companies.script_styles, companies.script_prefs, "
-            "companies.preps, "
+            "companies.preps, core.hubspot_meetings, core.hubspot_meeting_reads, "
             "core.audit_log, core.sessions, core.users"
         )
     yield info

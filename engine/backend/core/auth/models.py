@@ -11,6 +11,9 @@ of every sign-in (core.audit_log). PLAN-V6 B1.
 - **The log.** Every sign-in, failure, lock, sign-out and password change, with the time and the IP
   address. Never a password, a token or a login name that was typed (`details` is for facts like
   how many sessions ended). It keeps its rows when a user is deleted (the user becomes empty).
+- **Who a user is in HubSpot** (PLAN-V17 T1-4): a HubSpot owner's id, so the calls a rep logs land
+  under their name, and how it was matched (`email` by the sync, or `person`: set by an Admin).
+  Never the owner's email. `core.hubspot.owners` keeps it.
 """
 
 import uuid
@@ -38,6 +41,8 @@ from core.db.base import CORE_SCHEMA, Base
 
 # admin is the only one used today. staff and viewer are allowed so the table needs no change later.
 ROLES = ("admin", "staff", "viewer")
+# How a user's HubSpot owner was found: the sync matched the email, or an Admin chose it by hand.
+OWNER_MATCHES = ("email", "person")
 
 # The kinds of entry in the log. A fixed list, so the Account tab can switch on each one.
 AUDIT_EVENTS = (
@@ -71,6 +76,16 @@ class User(Base):
         CheckConstraint("email = lower(btrim(email)) AND position('@' IN email) > 1", name="email"),
         CheckConstraint(f"username IS NULL OR username ~ '{USERNAME_PATTERN}'", name="username"),
         CheckConstraint("failed_attempts >= 0", name="failed_attempts"),
+        CheckConstraint(
+            "hubspot_owner_matched_by IS NULL OR "
+            + _in_list("hubspot_owner_matched_by", OWNER_MATCHES),
+            name="hubspot_owner_matched_by",
+        ),
+        # A link is an owner id and how it was matched, or neither.
+        CheckConstraint(
+            "(hubspot_owner_id IS NULL) = (hubspot_owner_matched_by IS NULL)",
+            name="hubspot_owner_link",
+        ),
         {"schema": CORE_SCHEMA},
     )
 
@@ -95,6 +110,9 @@ class User(Base):
     apps: Mapped[list[str]] = mapped_column(
         ARRAY(String(64)), default=list, server_default=text("'{}'::varchar[]")
     )
+    # Who this person is in HubSpot (PLAN-V17 T1-4): an owner's id, or none. Never the email.
+    hubspot_owner_id: Mapped[str | None] = mapped_column(String(32))
+    hubspot_owner_matched_by: Mapped[str | None] = mapped_column(String(16))  # OWNER_MATCHES
 
 
 class UserSession(Base):

@@ -116,6 +116,29 @@ async def test_the_count_of_failed_tries_cannot_be_negative(session_factory: Fac
         await save(session_factory, make_user(failed_attempts=-1))
 
 
+async def test_a_hubspot_owner_link_is_an_id_and_how_it_was_matched_or_nothing(
+    session_factory: Factory,
+) -> None:
+    """PLAN-V17 T1-4. The owner's id only: no column holds an owner's email."""
+
+    def linked(email: str, owner_id: str | None, matched_by: str | None) -> User:
+        return make_user(
+            email=email, hubspot_owner_id=owner_id, hubspot_owner_matched_by=matched_by
+        )
+
+    await save(session_factory, make_user(email="a@example.test"))  # no link
+    await save(session_factory, linked("b@example.test", "301", "email"))
+    await save(session_factory, linked("c@example.test", "302", "person"))
+    for number, (owner_id, matched_by) in enumerate([("301", None), (None, "person")]):
+        with pytest.raises(IntegrityError, match="ck_users_hubspot_owner_link"):
+            await save(session_factory, linked(f"d{number}@example.test", owner_id, matched_by))
+    with pytest.raises(IntegrityError, match="ck_users_hubspot_owner_matched_by"):
+        await save(session_factory, linked("e@example.test", "301", "robot"))
+    with pytest.raises(DataError):  # longer than any HubSpot id
+        await save(session_factory, linked("f@example.test", "1" * 33, "person"))
+    assert [column.name for column in User.__table__.columns if "email" in column.name] == ["email"]
+
+
 # --- Sessions ---------------------------------------------------------------------------------
 
 

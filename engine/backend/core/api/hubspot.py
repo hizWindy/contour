@@ -1,5 +1,8 @@
-"""HubSpot endpoints: the connection (status, syncs), the export upload (the backup), and
-what's loaded."""
+"""HubSpot endpoints: the connection (status, syncs), the export upload (the backup), what's
+loaded, the owners an Admin can pick for a person (PLAN-V17 T1-4), and the Admin's write log.
+
+The write log and its apply are for Admins only (PLAN-V17 T1-7): the log names companies, calls,
+tasks and field values, and a project sends its own writes through its own routes."""
 
 import asyncio
 import logging
@@ -11,6 +14,8 @@ from pydantic import BaseModel, Field
 
 from core.api.deps import EmbedderDep, SessionDep
 from core.api.errors import Problem
+from core.api.signin import AdminDep
+from core.hubspot.activities import apply_activity
 from core.hubspot.client import HubSpotError, HubSpotWritesOff
 from core.hubspot.connection import (
     HubSpotStatus,
@@ -20,6 +25,7 @@ from core.hubspot.connection import (
     written_hook,
 )
 from core.hubspot.importer import ExportError, read_export
+from core.hubspot.owners import OWNERS_CAP, HubSpotOwnerList, active_owners
 from core.hubspot.profiles import RebuildRunning
 from core.hubspot.profiles import rebuild_profiles as build_profiles
 from core.hubspot.service import HubSpotSummary, ImportResult, save_export, summary
@@ -36,6 +42,7 @@ from core.hubspot.writer import (
     WriteOut,
     apply_write,
     get_write,
+    is_activity,
     recent_writes,
 )
 
@@ -161,10 +168,13 @@ async def cancel_hubspot_sync(request: Request, sync_id: int) -> SyncOut:
     "/writes",
     response_model=list[WriteOut],
     summary="The log of writes to HubSpot, newest first",
-    description="Every write a person confirmed, with what it changed. Previews are left out.",
+    description=(
+        "Every write a person confirmed, with what it changed. Previews are left out. Admins "
+        "only: it names companies, calls, tasks and field values."
+    ),
 )
 async def list_hubspot_writes(
-    session: SessionDep, limit: Annotated[int, Query(ge=1, le=200)] = 50
+    session: SessionDep, admin: AdminDep, limit: Annotated[int, Query(ge=1, le=200)] = 50
 ) -> list[WriteOut]:
     return await recent_writes(session, limit=limit)
 
@@ -174,21 +184,26 @@ async def list_hubspot_writes(
     response_model=WriteOut,
     summary="Write a previewed change to HubSpot",
     description=(
-        "Writes once only: applying a finished write returns its result. Needs the write "
-        "scopes and HUBSPOT_WRITE_ENABLED=true; until then it answers 409 hubspot_write_off."
+        "Writes once only: applying a finished write returns its result. A Lead Finder send "
+        "and a call note's activity (a call, field changes, tasks, a note) each go through "
+        "their own writer. Admins only: each project sends its own writes through its own "
+        "routes. Needs the write scopes and HUBSPOT_WRITE_ENABLED=true; until then it answers "
+        "409 hubspot_write_off."
     ),
 )
 async def apply_hubspot_write(
-    request: Request, session: SessionDep, write_id: uuid.UUID
+    request: Request, session: SessionDep, admin: AdminDep, write_id: uuid.UUID
 ) -> WriteOut:
     try:
         row = await get_write(session, write_id)
+        hook = written_hook(request.app, row.app)
+        activity = is_activity(row)
         async with open_hubspot(request.app) as client:
             if client is None:
                 raise KEY_MISSING
-            return await apply_write(
-                session, client, write_id, on_written=written_hook(request.app, row.app)
-            )
+            if activity:
+                return await apply_activity(session, client, write_id, on_written=hook)
+            return await apply_write(session, client, write_id, on_written=hook)
     except (WriteNotFound, WriteInProgress, HubSpotError) as error:
         raise write_problem(error) from error
 
@@ -239,6 +254,26 @@ async def import_export(
 @router.get("/summary", response_model=HubSpotSummary, summary="How much HubSpot data is loaded")
 async def get_summary(session: SessionDep) -> HubSpotSummary:
     return await summary(session)
+
+
+@router.get(
+    "/owners",
+    response_model=HubSpotOwnerList,
+    summary="The active HubSpot owners, to pick who a person is in HubSpot",
+    description=(
+        "Each active owner's id and name from our copy of HubSpot, which the sync keeps, sorted "
+        "by name. An owner with no name in HubSpot shows as 'HubSpot owner 301'. Never an "
+        "email. At most 500: Contour has a few dozen. Admins only."
+    ),
+)
+async def list_hubspot_owners(
+    session: SessionDep,
+    admin: AdminDep,
+    limit: Annotated[
+        int, Query(ge=1, le=OWNERS_CAP, description="The most owners to send")
+    ] = OWNERS_CAP,
+) -> HubSpotOwnerList:
+    return HubSpotOwnerList(owners=await active_owners(session, limit=limit))
 
 
 @router.post(

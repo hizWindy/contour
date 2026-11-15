@@ -96,12 +96,23 @@ FORBIDDEN = re.compile(
     r"engine/\.env|\.env\b|uv run|docker|localhost|127\.0\.0\.1"
     r"|\b(?:ANTHROPIC|HUBSPOT|SIGNALHIRE|EMAIL|DAILY|DB|POSTGRES)_[A-Z_]+\b"
 )
+# A setting's own name as the code spells it ("meeting_note_on_meeting") is a setting name too
+# (PLAN-V17 Track 1, the Stage B security check). Only names with an underscore: one word could
+# be a plain word.
+SETTING_NAMES = re.compile(
+    r"\b(?:"
+    + "|".join(
+        sorted((re.escape(name) for name in Settings.model_fields if "_" in name), key=len)[::-1]
+    )
+    + r")\b"
+)
 # What raises or builds an error a person can see.
 ERROR_MAKERS = {
     "Problem",
     "problem",
     "ClaudeError",
     "ClaudeUnavailable",
+    "ConnectionCheck",  # its problem shows on the HubSpot page (PLAN-V17, asked by Track 3)
     "EmailNotSetUp",
     "HubSpotError",
     "HubSpotUnavailable",
@@ -114,7 +125,20 @@ NOT_SHOWN = {"core/cli.py", "core/config.py", "apps/lead_finder/cli.py"}
 LEFT = {
     ("core/api/security.py", "The engine only answers to localhost or 127.0.0.1."),
 }
-NAMED_TEXTS = ("TITLE", "DETAIL", "DOWN", "FAILED", "ERROR", "MISSING", "INTERRUPTED")
+NAMED_TEXTS = (
+    "TITLE",
+    "DETAIL",
+    "DOWN",
+    "FAILED",
+    "ERROR",
+    "MISSING",
+    "INTERRUPTED",
+    # The sentences a status shows, like meetings' WAITING and NOT_READ_YET (PLAN-V17 Track 1).
+    "WAITING",
+    "YET",
+    "NO_HUBSPOT",
+    "LINKS",
+)
 
 
 def _texts(node: ast.AST) -> list[str]:
@@ -134,16 +158,25 @@ def _caller(call: ast.Call) -> str:
     return ""
 
 
+def _shown_in(call: ast.Call) -> list[str]:
+    """The texts of an error a person may see: all of the call's but its `code=`, which is a
+    name for code (the website reads it, a person never does), like "auth_required"."""
+    parts = [*call.args, *(item.value for item in call.keywords if item.arg != "code")]
+    return [value for part in parts for value in _texts(part)]
+
+
 def shown_texts() -> list[tuple[str, str]]:
     found: list[tuple[str, str]] = []
-    for path in [*BACKEND.glob("core/**/*.py"), *BACKEND.glob("apps/lead_finder/**/*.py")]:
+    # Every project, not only the Lead Finder: the Companies page's errors are shown too
+    # (PLAN-V17, asked by Track 2), and a project added later is covered with no change here.
+    for path in [*BACKEND.glob("core/**/*.py"), *BACKEND.glob("apps/**/*.py")]:
         name = path.relative_to(BACKEND).as_posix()
         if name in NOT_SHOWN:
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, ast.Call) and _caller(node) in ERROR_MAKERS:
-                found += [(name, value) for value in _texts(node)]
+                found += [(name, value) for value in _shown_in(node)]
             elif isinstance(node, ast.Assign):
                 targets = [t.id for t in node.targets if isinstance(t, ast.Name)]
                 if any(t.isupper() and t.endswith(NAMED_TEXTS) for t in targets):
@@ -154,8 +187,22 @@ def shown_texts() -> list[tuple[str, str]]:
 def test_no_error_a_person_sees_names_a_command_a_file_or_a_setting() -> None:
     texts = shown_texts()
     assert len(texts) > 100  # the scan really reads the errors
-    bad = [(name, value) for name, value in texts if FORBIDDEN.search(value)]
+    bad = [
+        (name, value)
+        for name, value in texts
+        if FORBIDDEN.search(value) or SETTING_NAMES.search(value)
+    ]
     assert set(bad) <= LEFT
+
+
+def test_the_guard_knows_a_setting_by_its_own_name_and_reads_status_sentences() -> None:
+    """The guard itself: a setting's name in lower case is caught, a plain sentence isn't, and
+    the meetings status sentences are among the texts it reads."""
+    assert SETTING_NAMES.search("Switch on meeting_note_on_meeting first.")
+    assert SETTING_NAMES.search("Set call_notes_enabled.")
+    assert not SETTING_NAMES.search("Call notes are switched off on the server.")
+    read = {value for name, value in shown_texts() if name == "core/hubspot/meetings.py"}
+    assert "Meetings from HubSpot aren't read yet." in read
 
 
 # --- The one-backend lock ----------------------------------------------------------------------

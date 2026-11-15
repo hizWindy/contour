@@ -81,6 +81,15 @@ PURPOSE = {
         "Every write to HubSpot a person asked for: the plan they saw, each step's result. The "
         "id is the write's key, so it is written once only."
     ),
+    "core.hubspot_meetings": (
+        "Our copy of HubSpot's meetings from 90 days back to 60 days ahead (TBC): the company, "
+        "the people as ids only, when, where, the outcome and the internal notes, with emails "
+        "and phone numbers left out (PLAN-V17)."
+    ),
+    "core.hubspot_meeting_reads": (
+        "One row for each read of HubSpot's meetings (the daily one, or a refresh): how it "
+        "ended and how many changed. The 15-minute rule and the meetings' status read it."
+    ),
     "lead_finder.leads": (
         "One row per researched company. `card` holds the whole lead card. The other columns "
         "are copies, for filtering and sorting."
@@ -120,6 +129,8 @@ COLUMN_NOTES = {
     "core.hubspot_deals.stage": "The stage's label from its pipeline, never guessed from the id.",
     "core.hubspot_writes.subject": 'What the write is about, like "lead:<id>".',
     "core.hubspot_companies.state_raw": "The state as typed in HubSpot.",
+    "core.hubspot_meetings.hubspot_company_id": "The first company linked. See more_companies.",
+    "core.hubspot_meetings.attendee_owner_ids": "Contour's other people on it, as owner ids.",
 }
 
 # Columns that hold another table's key but have no foreign key, so nothing in the database
@@ -137,6 +148,11 @@ SOFT_LINKS = (
         "HubSpot's owner list may lack an id, and one bad row must not stop a sync",
     ),
     ("core.hubspot_deals.owner_id", "core.hubspot_owners.owner_id", "the same reason"),
+    (
+        "core.hubspot_meetings.hubspot_company_id",
+        "core.hubspot_companies.hubspot_id",
+        "a meeting's company may not be in our copy, and one must not stop a read",
+    ),
 )
 
 INTERNAL = "('pg_catalog', 'information_schema', 'pg_toast', 'public')"

@@ -72,6 +72,8 @@ TEST_TABLES = (
     "companies.script_styles",
     "companies.script_prefs",
     "companies.preps",
+    "core.hubspot_meeting_reads",
+    "core.hubspot_meetings",
     "core.hubspot_calls",
     "core.hubspot_contacts",
     "core.schedules",

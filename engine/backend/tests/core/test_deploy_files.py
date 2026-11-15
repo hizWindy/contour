@@ -99,3 +99,47 @@ def test_every_part_keeps_its_logs_small() -> None:
     for name, service in compose()["services"].items():
         options = service["logging"]["options"]
         assert options["max-size"] and options["max-file"], name
+
+
+def caddy_header(name: str) -> str:
+    """One header's value, from the site's `header` block."""
+    text = CADDYFILE.read_text("utf-8")
+    found = re.search(rf'^\t\t{re.escape(name)} "([^"]*)"$', text, re.MULTILINE)
+    assert found, f"the Caddyfile has no {name} header"
+    return found.group(1)
+
+
+def content_policy() -> dict[str, list[str]]:
+    return {
+        parts[0]: parts[1:]
+        for parts in (item.split() for item in caddy_header("Content-Security-Policy").split(";"))
+        if parts
+    }
+
+
+def test_the_mic_works_on_our_own_pages_and_the_rest_stays_off() -> None:
+    """Call notes (PLAN-V17 T1-6): a rep talks to the app after a call, so the mic is allowed
+    for our own pages, and for no other site's. The camera, the location, payments and USB stay
+    off."""
+    features = dict(
+        item.strip().split("=", 1) for item in caddy_header("Permissions-Policy").split(",")
+    )
+    assert features["microphone"] == "(self)"
+    for name in ("camera", "geolocation", "payment", "usb"):
+        assert features[name] == "()", name
+
+
+def test_our_own_worker_may_run_webassembly_and_nothing_else_opens() -> None:
+    """The speech model runs in a Web Worker from our own site, as WebAssembly (PLAN-V17 T1-6).
+    So scripts may compile WebAssembly, a worker may come from our own origin only, and no
+    script may be inline or built from text. The only places outside our own site are the
+    ones that were there before: the map tiles and inline images."""
+    policy = content_policy()
+    assert policy["script-src"] == ["'self'", "'wasm-unsafe-eval'"]
+    assert policy["worker-src"] == ["'self'"]
+    assert policy["default-src"] == policy["connect-src"] == ["'self'"]
+    keywords = {"'self'", "'none'", "'unsafe-inline'", "'wasm-unsafe-eval'"}
+    elsewhere = {value for values in policy.values() for value in values if value not in keywords}
+    assert elsewhere == {"data:", "https://tile.openstreetmap.org"}
+    assert "'unsafe-inline'" not in policy["script-src"]
+    assert "'unsafe-inline'" in policy["style-src"]  # only for styles, as before

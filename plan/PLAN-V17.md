@@ -473,20 +473,20 @@ The first two and `meeting_forms_enabled` are on the Settings page. `internal_em
 
 ## Track 1: HubSpot (session 1)
 
-**Progress:** Stage A 0 of 7. Stage B 0 of 4. Every step is `backend-agent` work.
+**Progress:** Stage A 7 of 7 (tag `v17-notes-t1`). Stage B 4 of 4: Track 1 ready to merge. Every step is `backend-agent` work.
 
 ### Stage A: call notes
 
-- [ ] **T1-1. Own copy and a baseline.** Make the worktree and the database. Run the backend tests once and note the counts.
+- [x] **T1-1. Own copy and a baseline.** Done 2026-11-15, without the baseline run, on Al-khair's word: the laptop was out of memory (see the Log). Make the worktree and the database. Run the backend tests once and note the counts.
 
-- [ ] **T1-2. Ask HubSpot what the key may do.** Free, and it changes nothing. It loads the real key into the process only.
+- [x] **T1-2. Ask HubSpot what the key may do.** Done 2026-11-15 (no code; the answers are in the Log). Free, and it changes nothing. It loads the real key into the process only.
   - For calls, notes, tasks and meetings: read one record, and try to change record 0, which can't exist. "Missing scopes" names the scope. "Not found" means the key has it.
   - Read the field definitions for `hs_task_status`, `hs_call_disposition` and every meeting field (to find the outcome values and the Contour attendees).
   - Write the results in the Log: for each thing we need, the scope HubSpot named.
   - Send Track 2 a message with the list, for the email to Levi (W1).
   - **Done when:** the Log has the scope for each of the eight (four reads, four writes), or "HubSpot's answer didn't say" with what was tried.
 
-- [ ] **T1-3. The client learns tasks, meetings and links.**
+- [x] **T1-3. The client learns tasks, meetings and links.** Done 2026-11-15 (5509d4f).
   - `ObjectType` gains `tasks` and `meetings`.
   - `create_object` takes a list of links (the other record's kind and id). The link numbers are a table in `client.py`, from "HubSpot's API, checked". The Lead Finder's note to a company keeps working.
   - `linked(from_kind, to_kind, ids)`: the batch read, 100 ids at a time. `primary_companies` uses it.
@@ -494,7 +494,7 @@ The first two and `meeting_forms_enabled` are on the Settings page. `internal_em
   - `FakeHubSpot` (`tests/core/hubspot_fake.py`) follows, and refuses a link number that isn't in the table.
   - **Done when:** tests prove the request body for a call with a company, a person and a deal (182, 194, 206), a task (192, 204, 216), and that a write is still refused while writing is off.
 
-- [ ] **T1-4. Who the rep is in HubSpot.**
+- [x] **T1-4. Who the rep is in HubSpot.** Done 2026-11-15 (2f9eccf; names as Track 3 reads them in feee0f5).
   - Migration `0020_hubspot_owner_link`: `core.users.hubspot_owner_id`, and how it was matched.
   - The sync matches each account to an owner by email, in memory. The owner's email is never saved or logged: only the id is.
   - An Admin can set or clear it (the contract, part 4). A hand-set link is never changed by the sync.
@@ -502,7 +502,7 @@ The first two and `meeting_forms_enabled` are on the Settings page. `internal_em
   - Run `scripts/schema_map.py`.
   - **Done when:** tests prove a match by email, no match, a hand-set link that survives a sync, and that no owner email is in the database or a log line.
 
-- [ ] **T1-5. The activity writer** (`activities.py`, the contract, part 1).
+- [x] **T1-5. The activity writer** (`activities.py`, the contract, part 1). Done 2026-11-15 (b699b0f). Companies' write scopes are in Track 2's file, so they are asked for in the Log.
   - It reuses `writer.py`'s parts: the claim (so two clicks can't both write), the step log, `note_html`, and the `core.hubspot_writes` table. Move what both need into shared functions. Don't copy them.
   - **The call first,** then the fields, then the tasks, then the note. A failed step stops the ones after it that depend on it, and the rest carry on.
   - **A field change:** the company is read again right before writing. If HubSpot's value is no longer what the rep saw (`seen`), that field is not written and comes back as "changed in HubSpot since". Pick-list values go as HubSpot's code (`_choice_code`).
@@ -511,13 +511,13 @@ The first two and `meeting_forms_enabled` are on the Settings page. `internal_em
   - `HubSpotNeeds` for Companies gains its `write` scopes, from T1-2.
   - **Done when:** tests with `FakeHubSpot` prove each step, the order, a field that changed since, a timeout that is found, a timeout that isn't, two clicks at once, and that an old Lead Finder write still reads.
 
-- [ ] **T1-6. The mic's headers.**
+- [x] **T1-6. The mic's headers.** Done 2026-11-15 (26cc66d).
   - `engine/deploy/Caddyfile`: `Permissions-Policy` allows the mic for our own pages (`microphone=(self)`). The content policy allows a worker from our own origin and WebAssembly. Nothing else opens.
   - `test_deploy_files.py` gains a check for both.
   - Tell Track 3 the exact policy line, so `index.html` matches.
   - **Done when:** the guard test passes, and no other origin is in the policy.
 
-- [ ] **T1-7. Stage A check.**
+- [x] **T1-7. Stage A check.** Done 2026-11-15 (the review's fixes a2ce1a1; tag `v17-notes-t1` on this tick).
   - All backend tests, Ruff and mypy. `uv run engine openapi`.
   - The `review-agent` runs `security-check` on the diff: the key, the owner emails, the write-once rule.
   - Tag `v17-notes-t1`. Send the others a message.
@@ -525,7 +525,7 @@ The first two and `meeting_forms_enabled` are on the Settings page. `internal_em
 
 ### Stage B: the pre-meeting form
 
-- [ ] **T1-8. Our copy of meetings.**
+- [x] **T1-8. Our copy of meetings.** Done 2026-11-16 (355bf2b).
   - Migration `0022_hubspot_meetings`: `core.hubspot_meetings` (the `Meeting` fields). People are kept as contact ids, never as addresses.
   - The daily sync reads meetings in its "people" phase: from 90 days back to 60 days ahead (**TBC**), found with a search on `hs_meeting_start_time`, then their companies and people with `linked`.
   - `refresh`: the meetings changed since the last read (`hs_lastmodifieddate`), at most once every 15 minutes, started when someone opens Meetings or Home. A search never shows a deleted meeting, so the daily read is what removes one.
@@ -534,21 +534,137 @@ The first two and `meeting_forms_enabled` are on the Settings page. `internal_em
   - Add the table to the four table lists.
   - **Done when:** tests prove the read, a meeting with two companies (the first wins, with a flag), a cancelled one, the 15-minute rule, and the waiting state.
 
-- [ ] **T1-9. The pre-read's copy in HubSpot.**
+- [x] **T1-9. The pre-read's copy in HubSpot.** Done 2026-11-16 (ff2dbf3).
   - `NoteIn` in the activity writer: a note on the company, and on the deal if there is one (190, 214).
   - With `meeting_note_on_meeting` on: the same text is added to the end of the meeting's `hs_internal_meeting_notes`. It never replaces what is there, and never touches `hs_meeting_body` or the location.
   - **Done when:** tests prove the note's links, that the meeting is untouched while the switch is off, and that existing internal notes are kept.
 
-- [ ] **T1-10. Only Contour addresses.**
+- [x] **T1-10. Only Contour addresses.** Done 2026-11-15 (1a7a6c4).
   - `core/email/internal.py`: `only_internal(addresses, domains)` returns the ones allowed and the ones refused. Exact domain match, no sub-domain tricks ("contourinteriors.com.au.evil.com" is refused).
   - **Done when:** tests cover a good address, a look-alike domain, upper case and an empty list.
 
-- [ ] **T1-11. Track 1 check.** All backend tests, Ruff and mypy, `uv run engine openapi`, and the `review-agent`'s `security-check`.
+- [x] **T1-11. Track 1 check.** Done 2026-11-16 (checks on 2f54cff). All backend tests, Ruff and mypy, `uv run engine openapi`, and the `review-agent`'s `security-check`.
   - **Done when:** all checks pass and the Log says "Track 1 ready to merge".
 
 ### Track 1 Log
 
 Newest first.
+
+- 2026-11-16: **T1-11 done. Track 1 ready to merge.** Stage A is tag `v17-notes-t1` (20345a5). Stage B is the branch tip.
+  - **Full run on 2f54cff** (with the review's fixes): 3,840 passed, 25 skipped (the usual 25 in the routes list), none failed. Core 2,099, Companies 108, Lead Finder 1,622, gates and e2e 11, from 01:01 to 01:09. It ran in the foreground in six parts under the heavy lock, with the database up and no extra skips. The run before the fixes, on b0302ff, also passed: 3,831.
+  - Ruff, mypy and the fast tests pass (the hook on 2f54cff). The contract gate passes, so `openapi.json` matches the code.
+  - **Security check** (a new `review-agent`, on `v17-notes-t1..b0302ff`): Ready with notes, no blocker for Track 1.
+  - **Fixed in 2f54cff:**
+    1. Our copy of meetings kept some phone numbers. A number in twos ("04 12 34 56 78", "+33 6 12 34 56 78") was kept, and so was any digit in a link ("https://wa.me/61400000000"). Now only a date or a time keeps its digits, and only a Teams, Google Meet or Zoom link (by its own host) keeps its meeting number.
+    2. The screen-words guard now reads the status sentences (like meetings' "not read yet"). It catches a setting by its own lower-case name ("meeting_note_on_meeting"), and skips an error's `code=`.
+  - **For Track 2 at M5** (told by message):
+    - The "your pre-read is ready" email (`meeting_job.tell_rep`) went to the rep's account address with no `only_internal` check. An account can have any address, so it could leave Contour (choice 10). **Fixed by Track 2** (3d91e43, with a test): an outside address gets no email.
+    - With `meeting_id` passed and the switch on, Send also changes the meeting's internal notes, but no person sees that step (preview and apply run back to back). **On Track 2's M5 list:** `FormEmailPreview` says so once the switch is in the joined branch, and Track 3's "Check and send" shows it as one plain line.
+  - **For M2 (a made-up meeting):** the meeting step reads the notes, then writes them. A line someone types into the meeting's internal notes in between is lost, and HubSpot has no "only if unchanged". The gap is short.
+- 2026-11-16: **T1-9 done** (ff2dbf3), built by the `backend-agent`.
+  - **The note:** it goes on the company (190) and the deal (214), as before, and now carries the rep's owner id. A note that timed out is looked for by that owner too.
+  - **`ActivityRequest.meeting_id`** (new, optional, digits only). A request with a meeting but no note is refused: dropping it quietly would hide that nothing reached the meeting.
+  - **A new step, `meeting`,** after `note`. It is planned only when the request has a note and a meeting, and `meeting_note_on_meeting` is on at the preview. At send, the switch is read again: off since the preview, it sends nothing and says so.
+    - It reads the meeting's `hs_internal_meeting_notes`, then adds the note at the end after an empty line, keeping what is there byte for byte. Nothing else on the meeting is read or sent: not `hs_meeting_body`, not the location.
+    - Notes that already hold the note's text are left as they are, so applying again, or a takeover, never adds it twice. A change that timed out is read back: there is done, not there is failed (sending again is safe because it reads first).
+    - `WritePlan` gains `meeting_id` and `meeting` (what the step will do, in plain words).
+  - **Tests:** `test_hubspot_meeting_note.py` 15: the note's links and owner, the switch off leaves the meeting untouched, existing notes kept, never twice (again, after a takeover, after a cut-off change), a timeout found and not found, the switch turned off after the preview, a meeting not in HubSpot, only the internal notes sent, no note text in a log line. Also the activity writer 34, the writer and fake 15, the Lead Finder's send 7, the guard and stubs 6, the contract gate 2. Each of five rules was broken on purpose, and a test failed each time.
+  - **TBC (M2, on a made-up meeting):** how HubSpot shows the break, whether changing a meeting emails the client, and HubSpot's length limit for internal notes. Our copy of the meeting catches up at the next refresh.
+  - **For Track 2 at M5:**
+    1. `meeting_send.copy_in_hubspot` passes `meeting_id=form.meeting_id` (None for a typed meeting).
+    2. Read "saved" from the `note` step, not the whole write. With the switch on, a failed `meeting` step makes the write `partial` while the note on the company is saved.
+    3. The call-note batch (transcripts included) passes no `meeting_id`. With the switch on it would add a whole transcript (up to 60,000 characters) to the meeting's notes. That is Al-khair's call, not in this plan.
+- 2026-11-16: **T1-8 done** (355bf2b), built by the `backend-agent`.
+  - **What it adds:**
+    - Migration `0022_hubspot_meetings` (after `0020_hubspot_owner_link`): `core.hubspot_meetings` (the `Meeting` fields, people as contact ids) and `core.hubspot_meeting_reads` (each read: full or changes, done, waiting or failed, a sentence, how many). Both tables are in the four table lists. `SCHEMA-0022.md`.
+    - The sync's people phase runs `copy_meetings` after the owner match, even while people wait for the contacts scope. It reads 90 days back to 60 days ahead (**TBC**) on `hs_meeting_start_time`, then each meeting's companies and contacts with `linked`, and replaces our copy, so a meeting deleted in HubSpot goes. A problem is a warning, and the copy from before stays.
+    - `refresh`: the meetings changed since the last good read, less 10 minutes because search lags (**TBC**). It asks HubSpot at most once every 15 minutes (the rule is kept in the database), and two refreshes at once read once.
+    - `refresh_meetings_soon(app)` (in `core/hubspot/connection.py`) is how a page asks for a refresh. It answers at once, does nothing with no key, and stops at shutdown.
+  - **The reads,** all from our copy:
+    - `upcoming` and `past` keep to their windows. With an owner they give the meetings that owner owns or attends. They take an optional `now=`.
+    - `for_company` gives the meetings where that company is the first linked, newest first, at most 200.
+    - `get` gives one meeting.
+    - `status` is ready once a read worked, waiting (naming the missing scope, or "not read yet"), or off with no key.
+  - **Choices made while building:**
+    - `outcome` is HubSpot's own value (`CANCELED`). A cancelled meeting is kept.
+    - `where` is `online` for a video call (`hs_meeting_location_type` VCE, or Teams, Google Meet or Zoom named in the location or the link). It is `in_person` for an address, and `unknown` otherwise, including a phone call.
+    - Emails and phone numbers are blanked in the title, the location and the notes. `hs_all_attendee_emails` and `hs_meeting_body` are never read.
+    - `notes` is the plain text of `hs_internal_meeting_notes`, cut at 4,000 characters.
+    - `Meeting` gains `attendee_owner_ids` (the Contour people, from `hs_attendee_owner_ids`, without the owner) and `more_companies` (linked to more than one company: the first wins).
+    - If HubSpot refuses the contacts links, meetings are kept without their people, with a warning.
+    - Read rows are kept 30 days (the newest good one stays). More than 10,000 meetings in the window are read in turns.
+  - **Tests:** `test_hubspot_meetings.py` has 50 tests: the read, two companies (the first wins, with the flag), a cancelled one, the 15-minute rule and two at once, the waiting state, people waiting don't stop meetings, a deleted meeting, the windows and the owner filter, and no email or phone saved or logged. The touched suites passed with the database up and nothing skipped: client, fake, guard and stubs 77; migrations 56; the table lists 50; sync 30; owners and people 22.
+  - **TBC:** the window (90 and 60 days), the 15 minutes, the 10-minute overlap, HubSpot's order for a meeting's companies, and whether the real key reads meeting-to-contact links (T1-2 suggests yes).
+  - **For Track 2 at M5:**
+    - Call `refresh_meetings_soon(request.app)` from Meetings and Home.
+    - `contour_people` can use `attendee_owner_ids`.
+    - 0023's `down_revision` becomes `0022_hubspot_meetings`.
+  - Track 1's own database `leadfinder_v17a` is now at 0022 (for the schema map).
+- 2026-11-15: **T1-10 done** (1a7a6c4), and **`rep_of_owner`** for Track 2 (e4b5823).
+  - `core/email/internal.py`: `only_internal(addresses, domains)` gives the addresses whose domain is exactly one of `domains`, in lower case and each once, and the rest as typed. A look-alike, a sub-domain, a letter from another alphabet, two @, a display name or a broken address is refused. A blank is skipped. With no domains, nobody is allowed. It has the signature and the answer of Track 2's stand-in (`apps/companies/internal.py`), and Track 2's own ten cases pass against it, so M5 is one import line in `meeting_send.py`. 22 tests of its own.
+  - `owners.rep_of_owner(session, owner_id)`: the account linked to an owner, as (its name, its own address), or None. It is for Track 2's `RepOf` seam (`no_rep` until M5): who gets "your pre-read is ready", and who is ticked when a pre-read is sent. Only an account that can sign in and may open Companies (an Admin, or its tick). Two accounts on one owner: a link set by hand wins, then the oldest. Not in the contract: added because Track 2's seam needs it.
+- 2026-11-15: **T1-7 done. Track 1 Stage A ready.** Tag `v17-notes-t1` on this tick's commit.
+  - **Full run on a2ce1a1** (with the review's fixes): 3,742 passed, 25 skipped (the usual 25 in the routes list), none failed. Core 2,001, Companies 108, Lead Finder 1,622, gates and e2e 11, from 23:28 to 23:42, with `RUN_GATES=1` on the test database `_v17a`.
+  - How it ran: in the foreground, in six parts under the heavy lock, on Al-khair's word. Claude Code had stopped two background runs for low memory (0.2 to 0.4 GB free).
+  - The database was up the whole time (no extra skips). Docker Desktop had stopped under memory pressure after 22:05 and was back at 22:41 (Track 3's message). T1-10's test, not committed yet, was left out.
+  - Ruff, mypy and the fast tests pass (the hook on a2ce1a1). The contract gate passes, so `openapi.json` matches the code.
+  - **The other tracks:**
+    - Track 3 shows the 403 on the write log as one plain line, "Only an Admin can see the writes to HubSpot." (its 0842897). It uses the `{user_id}` path (9646b1b).
+    - Track 2 checks the field list when sorting, on the edit and at send.
+    - Track 2 sends a logged meeting's transcript as a `note` on the company and its one open deal. It will fill `ActivityRequest.meeting_id` once T1-9 adds it.
+- 2026-11-15: **T1-7 under way, not done.**
+  - **First full run** on 86cf3f0 (`RUN_GATES=1`, one folder at a time to save memory, test database `_v17a`): 3,752 passed, 25 skipped, none failed (core 2,011, companies 108, Lead Finder 1,622, gates 3, e2e 8), in about 16 minutes. Ruff and mypy pass (the hook). The contract gate passes, so `openapi.json` is up to date.
+  - **Security check** (a new `review-agent`, on 437a2ee..86cf3f0): Ready with notes, no blocker. Fixed in a2ce1a1 by the `backend-agent` (each new test failed with its fix taken out):
+    1. A takeover knows which create was on its way (`sending` in the plan). Before, it lived only in memory, so a retried step cut off mid-send could be sent twice.
+    2. `GET /hubspot/writes` and `POST /hubspot/writes/{write_id}/apply` are for Admins only (sign-in off: open). The log names companies, calls, tasks and field values. Track 3 was told: a Staff person on Admin, HubSpot gets 403 `admin_only` on the write log.
+    3. Looking for a create that timed out keeps only records linked to the write's company. Every task due on one day has the same time, so another company's "Follow up" could be taken for ours.
+    4. Two previews of one subject take turns (`lock_subject`, an advisory lock in `save_preview`), so they make one row.
+    5. A yes to a create or a change that we can't read is uncertain (it may have landed), not failed.
+  - **Left for M1's merge-check:** the activity writer takes any company field, so choice 3's list is Track 2's to enforce. Track 2 says it checks the list when sorting, on the edit and again at send, with a test (its Log).
+  - **The second full run** (on a2ce1a1) was stopped by Claude Code at 20:3x because the laptop was critically low on memory (0.2 GB free). It reached part of `tests/core` only. It starts again only on Al-khair's word. The fix agent's own runs on a2ce1a1 passed: the activity writer 34, the client 58, the Lead Finder writer 11, the screen-words guard 9, the routes list 105 (25 skipped), the contract gate 2, the Lead Finder's send 7, and the hook's fast tests.
+  - The fix agent made a second test database, `leadfinder_test_v17a_t1fix`, while another process was using `_v17a`. It can be dropped.
+  - **For M9 (docs):** AGENTS.md should say the write log and its apply are for Admins only.
+
+- 2026-11-15: **Fixes asked by the other tracks** (feee0f5, 94fdce2, and f7499d3 from the first session).
+  - **For Track 3:** `GET /hubspot/owners` answers `{owners: [{id, name}]}`. Every owner has a name: theirs, or "HubSpot owner 301" when HubSpot has none or our copy doesn't hold them yet (`shown_name` in `owners.py`, also used in a task's words). Never an email. The path stays `PUT /people/{user_id}/hubspot-owner`, like `PATCH /people/{user_id}` (the M1 rename Track 3 planned).
+  - **For Track 3:** with no key, the connection check says "The HubSpot key isn't set on the server.", and a project's sending-off line says "sending is switched off on the server". The screen-words guard reads `ConnectionCheck` too, and a test checks every readiness line.
+  - **For Track 2** (its T2-9 Log): the screen-words guard reads `apps/**` (f7499d3).
+  - **0017's test** in `tests/companies/test_races.py` (Track 2's file) failed here once 0020 existed. Track 2's own two lines (fde75c2) are applied byte for byte (94fdce2), so the join is clean. A trial join (`git merge-tree`) of this branch with Track 2's and Track 3's tips has no conflict today.
+- 2026-11-15: **T1-5 done** (b699b0f).
+  - `activities.py`: `preview_activity` reads the company now and says what each field would do (choice 4: a confirmed change may replace a value). `apply_activity` writes `call`, `fields` (one change), `task:1` and on, then `note`, each saved as it lands. A failed step never stops the others. `resolve_step` lets a person settle an uncertain step. `owner_of` uses T1-4's link.
+  - **Never twice:** a create that timed out is looked for 3 times over about 30 seconds (the exact `hs_timestamp`, the owner, and the title or subject), and never sent again blind. One found: done. None, or more than one: uncertain until a person says. Two clicks write once. A write left "writing" for 5 minutes (**TBC**) is taken over, and its step in flight is uncertain. A field changed in HubSpot since the preview, or since the rep saw it, is held: not written, and `plan.fields` shows HubSpot's value now.
+  - `writer.py`: the claim, the step log and the copy refresh are shared, not copied. `StepResult.step` is text (`call`, `fields`, `task:n`, `note`), as Track 2 asked. Old Lead Finder rows still read, and each writer refuses the other's rows.
+  - Our copy gets the new call at once, and the company is read again after a field change.
+  - Tests: `test_hubspot_activities.py` (each step and the order, a field changed since, a timeout found and one not found, two clicks at once, an old Lead Finder write) and the stub tests.
+  - **Track 2's asks are met:** one write row per subject, used by preview and apply; a subject already done, writing or part-written gets its write back; `apply_activity` refuses while writing is off (`HubSpotWritesOff`) before it claims anything; a write cut off part way is settled by the writer itself.
+  - **Asked of Track 2** (its file, `apps/companies/app.py`): `HUBSPOT_NEEDS` gains `write=("crm.objects.companies.write", ACTIVITY_WRITE_SCOPE)`, with `ACTIVITY_WRITE_SCOPE` imported from `core.hubspot.check` (`crm.objects.contacts.write`, name **TBC**). Then the HubSpot page shows Companies as "sending ready" or waiting for a named scope (the contract, part 4). Its comment that calls need the contacts scope is out of date: T1-2 found the key reads calls without it.
+- 2026-11-15: **T1-4 done** (2f9eccf).
+  - Migration `0020_hubspot_owner_link`: `core.users` gains `hubspot_owner_id` and `hubspot_owner_matched_by` (`email` or `person`), set or empty together. `SCHEMA-0020.md`.
+  - The sync's people phase links each account to the active owner with the same email (case and spaces ignored; two owners with one email: the lowest id wins). The owners' emails stay in memory: nothing saves, logs or returns one. A link an Admin set by hand is never changed. An old email link is cleared when the owner goes. A failed match never fails the sync.
+  - `owner_of`: the account's owner id, or None (no link, or sign-in off: HubSpot shows the call as unassigned).
+  - Admin routes: `GET /people` rows gain `hubspot_owner` (`id`, `name`, `matched_by`). `PUT /people/{user_id}/hubspot-owner` takes `{owner_id}` (null clears it). `GET /hubspot/owners` is the pick list.
+  - Tests: `test_hubspot_owners.py` (a match by email, no match, a hand-set link that survives a sync, no owner email in the database or a log line, an archived owner) and `test_migrations.py` (0020 up and down).
+- 2026-11-15: **A new Track 1 session** (`contour-7e`, from about 19:20) carries on. The first one stopped after f7499d3 (18:58), before ticking T1-4 and T1-5. `ListAgents` here shows `contour-bd` (Track 2) and `contour-a8`, so messages can reach them now.
+- 2026-11-15: **T1-6 done** (26cc66d). `Permissions-Policy` has `microphone=(self)`; the camera, location, payments and USB stay off. The content policy adds `'wasm-unsafe-eval'` to `script-src`, and `worker-src 'self'`. No other origin. Two guard tests in `test_deploy_files.py`.
+  - **For Track 3 (T3-4), the line for `index.html`'s meta tag** (Caddy's line without `frame-ancestors` and `form-action`): `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; connect-src 'self'; worker-src 'self'; base-uri 'none'; object-src 'none'`. Not sent as a message: no other session is reachable from this one.
+  - On App Platform the website gets no Caddy headers (AGENTS.md, **TBC**), so there the meta tag is the policy. With no `Permissions-Policy` header, a browser allows the mic on our own pages only, which is what we want.
+- 2026-11-15: **T1-3 done** (5509d4f), built by the `backend-agent`.
+  - `client.py`: `tasks` and `meetings`, `Link`, and one read-only table `LINK_TYPES` with the 12 numbers. `create_object(..., links=)` replaces `associate_with_company`; the Lead Finder's note still sends 190. A pair with no number, or an id that isn't digits, is refused before anything is sent, with writing on or off. `linked()` reads 100 ids a request, and `primary_companies` is built on it. Only the first page of one record's links is read (how HubSpot pages very many is **TBC**). `probe_write_scope` knows calls, notes, tasks and meetings.
+  - `check.py`: four new read probes (`crm.objects.calls.read`, `.notes.read`, `.tasks.read`, `.meetings.read`), and the contacts probe reads people only. One write probe, named `crm.objects.contacts.write` (name **TBC**), "Log calls, tasks and notes": yes only when all three may be written. A "no" on a read now names what HubSpot asked for; a write probe can't yet (it answers only yes or no). The check is 17 requests, about 2 to 3 seconds (an estimate, not measured live).
+  - `FakeHubSpot`: tasks, meetings, links kept and read back both ways, and an unknown pair refused. A call, task or meeting needs the activity write scope; a note keeps the companies write scope.
+  - Checks: 192 tests in the files it touched passed, then the commit hook passed (ruff, mypy on 323 files, the fast tests).
+  - Left for later: `people.py` still says calls are read with the contacts scope (out of date after T1-2). The Companies needs (Track 2's file) don't list the new scopes yet: the request comes with T1-5.
+- 2026-11-15: **T1-1 done, without the baseline run.** Claude Code stopped the baseline run three times, from 06:00, because the laptop had 0.2 to 0.5 GB of memory free of 15.6 GB, with 18 to 19 Claude processes open. On Al-khair's word (about 16:55), the track goes on without it: each step runs the test files it touches, the commit hook runs the fast tests, and T1-7 runs the full suite. So there is no "before" count to compare with.
+- 2026-11-15: **T1-2 done.** Free, and nothing in HubSpot changed. The real key was loaded into the probe's own process only, and never printed. For calls, notes, tasks and meetings, the probe read one record (one field, nothing printed), ran a search that matches nothing, read the links to companies and contacts, and tried to change record 0 (which can't exist): first with an empty body, then with one real field.
+  - **Reads:** calls, notes, tasks and meetings: yes, all four. Calls read **without** `crm.objects.contacts.read`. HubSpot names a scope only when one is missing, so the name that grants each is **TBC** (its docs list `crm.objects.calls.read` and the like).
+  - **Writes:** calls, notes, tasks and meetings: yes, all four. One real field on record 0 answers 404, past the permission check. The scope's name is **TBC**: likely `crm.objects.contacts.write`, which the key also has.
+  - **Also seen:** `crm.objects.companies.write`: yes, so field changes can be written (and the Lead Finder's "Send to HubSpot"). `crm.objects.contacts.read`: still missing. HubSpot asks for one of `crm.objects.contacts.read`, `crm.schemas.contacts.read`, `crm.objects.contacts.sensitive.read.v2` or `crm.objects.contacts.highly_sensitive.read.v2`. Deals write: missing (`crm.objects.deals.write` and 3 more), and not needed. `crm.lists.write`: the check can't tell.
+  - **So W1 is one permission:** `crm.objects.contacts.read`, for picking the person and linking the call to them. Sending waits only for `HUBSPOT_WRITE_ENABLED` and the M2 test.
+  - **The probe itself:** an empty body on record 0 answers 400 for every kind but deals, which answers 403. So HubSpot checks the permission first, and `check.py`'s reading of 400 as "yes" holds.
+  - **Fields:** `hs_task_status` COMPLETED, DEFERRED, IN_PROGRESS, NOT_STARTED, WAITING (we send NOT_STARTED). `hs_task_type` CALL, EMAIL, TODO and two LinkedIn types. `hs_task_priority` NONE, LOW, MEDIUM, HIGH. `hs_call_disposition` lists no choices, so the six ids in `people.py` stay. `hs_call_direction` INBOUND, OUTBOUND. `hs_call_status` COMPLETED and 11 more.
+  - **Meetings** (137 fields): the outcome is `hs_meeting_outcome` (SCHEDULED, COMPLETED, RESCHEDULED, NO_SHOW, CANCELED). The Contour attendees are `hs_attendee_owner_ids` (owner ids). `hs_meeting_location_type` (VCE, ADDRESS, PHONE, CUSTOM) and `hs_meeting_external_url` help with `where`. `hs_internal_meeting_notes` is there. `hs_all_attendee_emails` holds addresses: we never read it. Contour's own `hs_activity_type` has 13 types, like "New Qualified Project Meeting".
+  - **Message to Track 2:** not sent. No other session is reachable from this one (`ListAgents` shows none), so the list is here, for W1.
+- 2026-11-15: **T1-1 started, not done.** The session in `../contour-v17-t3` (Track 3) made S0 (0df133e, then 437a2ee), a few seconds before I would have. I did no S0 work. Own copy: worktree `../contour-v17-t1` on `plan-v17-track1` (from 437a2ee), database `leadfinder_v17a` (a copy of the dev database at `0017_call_prep`), test suffix `_v17a`, its own `.venv`, `COMPANIES.xlsx` copied. **The baseline test run hasn't run:** it waited behind another session's full run, then Claude Code stopped it at 06:00 because the laptop ran out of memory (0.4 GB free of 15.6 GB).
 
 ## Track 2: Companies backend (session 2)
 

@@ -6,6 +6,8 @@ a person. Admins only.
   and a starting password under today's rules. The password is never shown again or logged.
 - `PATCH /people/{user_id}`: change the projects, the role or whether it can sign in. An Admin
   can't take their own Admin role away or switch themselves off, so there is always one Admin.
+- `PUT /people/{user_id}/hubspot-owner`: who the person is in HubSpot, set or cleared by hand
+  (PLAN-V17 T1-4). Each row of the list shows it as `hubspot_owner`. Never an owner's email.
 
 Changing your own password is PLAN-V6 C4, still open. A password a person forgot is reset with
 `engine reset-password`.
@@ -18,6 +20,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Path, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.api.deps import SessionDep
 from core.api.errors import Problem
@@ -28,6 +31,8 @@ from core.auth.admin import BY_COMMAND, create_person
 from core.auth.models import User
 from core.auth.passwords import PasswordRefused
 from core.auth.users import LoginTaken
+from core.hubspot import owners
+from core.hubspot.owners import HubSpotOwnerLink
 
 router = APIRouter(prefix="/people", tags=["people"])
 
@@ -45,6 +50,12 @@ class PersonOut(OutModel):
     active: bool = Field(description="false: this account can't sign in")
     created_at: datetime
     last_signed_in_at: datetime | None
+    hubspot_owner: HubSpotOwnerLink | None = Field(
+        description=(
+            "Who this person is in HubSpot: the calls they log land under this owner. null: no "
+            "link, so HubSpot shows their calls as unassigned"
+        )
+    )
 
 
 def _apps(value: list[str], request: Request | None = None) -> list[str]:
@@ -80,7 +91,25 @@ class PersonPatch(BaseModel):
     _apps = field_validator("apps")(lambda value: None if value is None else _apps(value))
 
 
-def _out(user: User) -> PersonOut:
+class HubSpotOwnerIn(BaseModel):
+    """Who a person is in HubSpot, chosen by hand. null clears it."""
+
+    # No example with null: the OpenAPI file drops every null, so it would show as {}.
+    model_config = ConfigDict(extra="forbid")
+
+    owner_id: SafeText | None = Field(
+        max_length=32,
+        description="An active owner's id from GET /hubspot/owners, or null to clear the link",
+        examples=["301"],
+    )
+
+    @field_validator("owner_id")
+    @classmethod
+    def _trimmed(cls, value: str | None) -> str | None:
+        return None if value is None else value.strip()
+
+
+def _out(user: User, hubspot_owner: HubSpotOwnerLink | None = None) -> PersonOut:
     return PersonOut.model_validate(
         {
             "id": user.id,
@@ -92,8 +121,14 @@ def _out(user: User) -> PersonOut:
             "active": user.active,
             "created_at": user.created_at,
             "last_signed_in_at": user.last_signed_in_at,
+            "hubspot_owner": hubspot_owner,
         }
     )
+
+
+async def _out_with_owner(session: AsyncSession, user: User) -> PersonOut:
+    links = await owners.links_of(session, [user])
+    return _out(user, links.get(user.id))
 
 
 def _known_apps(request: Request, apps: list[str]) -> None:
@@ -119,8 +154,9 @@ def _invalid(field: str, message: str) -> Problem:
 
 @router.get("", response_model=list[PersonOut], summary="Everyone with an account")
 async def list_people(session: SessionDep, admin: AdminDep) -> list[PersonOut]:
-    rows = await session.scalars(select(User).order_by(func.lower(User.name), User.email))
-    return [_out(user) for user in rows]
+    users = list(await session.scalars(select(User).order_by(func.lower(User.name), User.email)))
+    links = await owners.links_of(session, users)
+    return [_out(user, links.get(user.id)) for user in users]
 
 
 @router.post(
@@ -202,4 +238,43 @@ async def change_person(
     )
     await session.commit()
     await session.refresh(user)
-    return _out(user)
+    return await _out_with_owner(session, user)
+
+
+@router.put(
+    "/{user_id}/hubspot-owner",
+    response_model=PersonOut,
+    summary="Set or clear who a person is in HubSpot",
+    description=(
+        "Links the account to a HubSpot owner by hand, so the calls, tasks and notes this person "
+        "logs land under that owner in HubSpot. `owner_id` is an active owner from GET "
+        "/hubspot/owners. The HubSpot sync never changes a link set by hand. "
+        '`{"owner_id": null}` clears the link, and the next sync may then match the person by '
+        "email again. Admins only."
+    ),
+)
+async def set_hubspot_owner(
+    user_id: Annotated[uuid.UUID, Path()],
+    body: HubSpotOwnerIn,
+    session: SessionDep,
+    admin: AdminDep,
+    now: NowDep,
+) -> PersonOut:
+    try:
+        user = await owners.set_by_hand(session, user_id, body.owner_id)
+    except owners.OwnerNotActive:
+        raise _invalid(
+            "owner_id", "This isn't an active HubSpot owner. Pick one from the list."
+        ) from None
+    if user is None:
+        raise Problem(404, "No such person", "The account may have been removed.")
+    audit.add_entry(
+        session,
+        "account_changed",
+        user_id=user.id,
+        details={"fields": ["hubspot_owner"], "hubspot_owner_id": user.hubspot_owner_id},
+        at=now,
+    )
+    await session.commit()
+    await session.refresh(user)
+    return await _out_with_owner(session, user)

@@ -24,13 +24,16 @@
 	# What the site tells the browser to refuse. The content policy is the one in index.html, plus
 	# the two directives a <meta> tag can't carry: frame-ancestors (no embedding in other sites) and
 	# form-action. A test in the website (src/test/csp.test.ts) keeps index.html in step.
+	# Call notes (PLAN-V17 T1-6): the speech model runs in a Web Worker from our own site, as
+	# WebAssembly, so scripts may compile WebAssembly ('wasm-unsafe-eval', never 'unsafe-eval') and
+	# a worker may come from our own origin only. The mic is allowed for our own pages only.
 	header {
 		Strict-Transport-Security "{$HSTS:max-age=31536000}"
-		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; connect-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'"
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; connect-src 'self'; worker-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'"
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
 		Referrer-Policy "strict-origin-when-cross-origin"
-		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+		Permissions-Policy "camera=(), microphone=(self), geolocation=(), payment=(), usb=()"
 		Cross-Origin-Opener-Policy "same-origin"
 		-Server
 	}
