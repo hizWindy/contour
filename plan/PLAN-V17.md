@@ -552,7 +552,7 @@ Newest first.
 
 ## Track 2: Companies backend (session 2)
 
-**Progress:** Stage A 4 of 9. Stage B 0 of 7. Every step is `backend-agent` work.
+**Progress:** Stage A 5 of 9. Stage B 0 of 7. Every step is `backend-agent` work.
 
 ### Stage A: call notes
 
@@ -580,7 +580,7 @@ Newest first.
   - Run the forms check: the form must stay under Anthropic's limits for strict forms.
   - **Done when:** tests with a fake Claude prove each date case, a dropped field, the unsure flag, the cap, that no email or phone number reaches Claude, and that the AI-off path makes no request.
 
-- [ ] **T2-5. The routes** (the contract, part 2).
+- [x] **T2-5. The routes** (the contract, part 2). Done 2026-11-15, `99fe715`: `api_notes.py`, `note_store.py`, 25 route tests, 14 `scrub` tests.
   - Follow the `api-change` skill: the route, the service, the models, the errors in plain words, who may call it, the tests, and `test_contract_routes.py`.
   - A rep reads and changes their own notes. An Admin reads all (**TBC**: a team view).
   - Every list is paged. Call notes off answers 409 `call_notes_off` with one plain sentence.
@@ -658,6 +658,13 @@ Newest first.
 
 Newest first.
 
+- 2026-11-15, T2-5 done (`99fe715`).
+  - **Stored text has no contact details:** a note, a summary and a follow-up are saved through `scrub`. `scrub` now keeps a date written with dashes or dots (31-03-2028, 2028-03-31); every phone shape is still blanked.
+  - **Who sees what:** a rep reads and changes their own notes. An Admin may read anyone's (`mine=false`) but changing someone else's answers 403 `not_your_note`. Anyone else gets 404. With sign-in off every note is open.
+  - **For Track 3, answers to its five questions:** (1) yes: T2-6 lets a note be saved with no words when an outcome is picked. (2) yes: the same `Idempotency-Key` gives back the first note, whatever the body. (3) yes: `to_confirm` in the summary counts notes still `sorting`. (4) a `lead:` company's note is saved; sending it is refused with a sentence ("This company isn't in HubSpot yet..."). (5) the same: "next tue" is the Tuesday of next week, and the card shows the rep's words.
+  - **For Track 3, names:** T2-6 changes Track 2's names to Track 3's (`src/api/v17.ts`): options `ai_enabled`, `sending_ready`, `waiting_for`; preview `{items, sending_ready, waiting_for, totals}`; confirm `{sending, already_sending}`; a task edit may send `due_words`. Kept from Track 2 as extras: preview and confirm also list `skipped` (each id with why). A step's `status` may also be `held` (a field changed in HubSpot since the rep looked). `office` is never null (every change is for an office).
+  - **Error codes:** 409 `call_notes_off`, `note_sorting`, `note_sent`, `hubspot_writes_off`, `nothing_to_retry`, `note_uncertain`, `nothing_to_resolve`. 422 `note_too_long`, `note_empty`, `person_not_at_company`, `prep_not_found`, `called_later`, `change_not_possible`, `change_twice`, `task_in_past`, `task_empty`, `owner_not_found`. 403 `not_your_note`. 404 `note_not_found`, `company_not_found`.
+- 2026-11-15, read Track 1's Log (T1-2): W1 is one permission, `crm.objects.contacts.read`. The key already writes calls, notes, tasks and company fields. Track 2 uses it in T2-9's `projects/prep/EMAIL.md`.
 - 2026-11-15, T2-4 done (`b2498a4`). Choices made while building (each can be changed):
   - The date rules are in their own module, `note_dates.py`. "Next Tuesday" is the Tuesday of next week (weeks start Monday); the card shows the rep's words beside every date. Weekends move to Monday for a task; public holidays don't (not confirmed yet).
   - A last move with no year means the most recent one ("moved in March" is 1 Mar 2026). A month with no day is the 1st (**TBC** with Levi).
