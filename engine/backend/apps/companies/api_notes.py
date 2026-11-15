@@ -381,6 +381,7 @@ async def retry_call_note(
     ),
 )
 async def resolve_call_note(
+    request: Request,
     note_id: NoteId,
     body: CallNoteResolve,
     session: SessionDep,
@@ -390,7 +391,15 @@ async def resolve_call_note(
 ) -> CallNoteOut:
     note = await note_store.read_note(session, note_id, auth, change=True)
     try:
-        await note_store.resolve(session, note, body.step, body.landed, sender=sender)
+        await note_store.resolve(
+            session,
+            note,
+            body.step,
+            body.landed,
+            app=request.app,
+            settings=settings,
+            sender=sender,
+        )
     except HubSpotWritesOff as error:
         raise note_store.writes_off(error.detail) from None
     return await note_store.one_out(session, note)

@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from apps.companies.app import HUBSPOT_NEEDS
-from core.hubspot.check import check_connection
+from core.hubspot.check import ACTIVITY_WRITE_SCOPE, check_connection
 from core.hubspot.client import Owner
 from core.hubspot.models import HubSpotCall, HubSpotContact
 from core.hubspot.needs import readiness
@@ -73,8 +73,12 @@ async def test_without_the_scope_the_sync_goes_on_and_says_it_waits(
     ready = readiness("companies", "Companies", HUBSPOT_NEEDS, check, write_enabled=False)
     assert ready.reading == "waiting"
     # Reading waits for the contacts scope; sending call notes (PLAN-V17) waits for this fake
-    # key's missing write scope too.
-    assert ready.waiting_for == ["crm.objects.contacts.read", "crm.objects.companies.write"]
+    # key's missing write scopes too: the companies scope and core's activity scope.
+    assert ready.waiting_for == [
+        "crm.objects.contacts.read",
+        "crm.objects.companies.write",
+        ACTIVITY_WRITE_SCOPE,
+    ]
 
 
 async def test_with_the_scope_people_and_two_years_of_calls_are_copied(

@@ -679,3 +679,27 @@ async def test_confirm_retry_and_resolve_wait_for_write_access(
     assert started.status_code == 202, started.text
     assert (started.json()["sending"], started.json()["already_sending"]) == (1, False)
     assert (after["status"], after["steps"]) == ("to_confirm", [])  # nothing was sent
+
+
+async def test_resolve_says_in_words_when_core_cant_settle_the_step(
+    world: World, settings: dict[str, Any]
+) -> None:
+    """PLAN-V17 merge: with writing on, core's writer settles the step itself. A write it can't
+    settle (here a bare row that isn't a call note's) answers in plain words, never a 500."""
+    await a_company(world)
+    await add(world, HubSpotWrite(app="companies", subject="call_note:x", plan={}))
+    async with world.factory() as db:
+        write_id = await db.scalar(select(HubSpotWrite.id))
+    unsure_call = {
+        "call": {"summary": "", "outcome": "Connected", "state": "uncertain", "step": "call"},
+        "writes": [{"id": str(write_id), "subject": "call_note:x", "call": True}],
+    }
+    world.app.state.hubspot_provider = lambda: None
+    settings.update(hubspot_write_enabled=True)
+    async with signed_in_as(world, "mia", ["companies"]) as client:
+        note = await log_call(client)
+        await set_note(world, note["id"], status="uncertain", write_id=write_id, card=unsure_call)
+        answer = await client.post(
+            f"{NOTES}/{note['id']}/resolve", json={"step": "call", "landed": True}
+        )
+    assert (answer.status_code, answer.json()["code"]) == (409, "nothing_to_resolve")

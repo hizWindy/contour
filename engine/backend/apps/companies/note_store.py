@@ -92,9 +92,10 @@ from core.auth.models import User
 from core.auth.sessions import AuthContext
 from core.company_leads import CompanyLeads
 from core.config import Settings
-from core.hubspot.activities import OUTCOME_NAMES
+from core.hubspot.activities import OUTCOME_NAMES, StepNotUncertain
 from core.hubspot.connection import hubspot_set_up, project_readiness
 from core.hubspot.models import HubSpotCompany, HubSpotContact, HubSpotOffice, HubSpotOwner
+from core.hubspot.writer import WriteInProgress, WriteNotFound
 
 APP = "companies"
 MELBOURNE = ZoneInfo("Australia/Melbourne")
@@ -1147,23 +1148,50 @@ def nothing_to_retry() -> Problem:
     )
 
 
+def nothing_to_resolve() -> Problem:
+    return Problem(
+        409,
+        "Nothing to check",
+        "Only a note that HubSpot may or may not have saved needs this.",
+        code="nothing_to_resolve",
+    )
+
+
+def step_not_unsure() -> Problem:
+    return Problem(
+        409,
+        "Nothing to check there",
+        "HubSpot gave a clear answer for that step. Pick a step marked unsure.",
+        code="step_not_unsure",
+    )
+
+
 async def resolve(
-    session: AsyncSession, note: CallNote, step: str, landed: bool, *, sender: NoteSender
+    session: AsyncSession,
+    note: CallNote,
+    step: str,
+    landed: bool,
+    *,
+    app: FastAPI,
+    settings: Settings,
+    sender: NoteSender,
 ) -> None:
     """A person says whether a step HubSpot may or may not have saved is there. The writer
-    settles the step, and the note's status follows: not there, and a retry sends it again."""
+    settles the step, and the note's status follows: not there, and a retry sends it again.
+    While HubSpot can't be written it waits, as Try again does (core's writer never calls
+    HubSpot to settle a step, so this route checks it here)."""
     if note.status != "uncertain" or note.write_id is None:
-        raise Problem(
-            409,
-            "Nothing to check",
-            "Only a note that HubSpot may or may not have saved needs this.",
-            code="nothing_to_resolve",
-        )
+        raise nothing_to_resolve()
     if step not in unsure_steps(NoteCard.model_validate(note.card or {})):
-        raise Problem(
-            409,
-            "Nothing to check there",
-            "HubSpot gave a clear answer for that step. Pick a step marked unsure.",
-            code="step_not_unsure",
-        )
-    await sender.resolve(session, note.id, note.write_id, step, landed)
+        raise step_not_unsure()
+    sending = sending_state(app, settings)
+    if not sending.ready:
+        raise writes_off(sending.waiting_for or WAITING_FOR_WRITES)
+    try:
+        await sender.resolve(session, note.id, note.write_id, step, landed)
+    except StepNotUncertain:
+        raise step_not_unsure() from None
+    except WriteInProgress:
+        raise already_sending() from None
+    except WriteNotFound:
+        raise nothing_to_resolve() from None
