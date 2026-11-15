@@ -641,8 +641,11 @@ describe('To confirm', () => {
     await user.keyboard('j')
     expect(first).toHaveAttribute('aria-current', 'true')
     expect(first).toHaveFocus()
+    // The active card has the Navy edge and the tint of a selected row.
+    expect(first).toHaveClass('bg-selected', 'shadow-[inset_3px_0_0_var(--primary)]')
     await user.keyboard('j')
     expect(second).toHaveAttribute('aria-current', 'true')
+    expect(first).not.toHaveClass('bg-selected')
     await user.keyboard('k')
     expect(first).toHaveAttribute('aria-current', 'true')
 
@@ -652,15 +655,20 @@ describe('To confirm', () => {
       name: 'Summary: Sample Logistics Pty Ltd',
     })
     expect(summary).toHaveFocus()
+    // Its fields sit on the card colour, not the tint (a field's border is under 3:1 there). The
+    // Navy edge still marks it.
+    expect(first).not.toHaveClass('bg-selected')
+    expect(first).toHaveClass('bg-card', 'shadow-[inset_3px_0_0_var(--primary)]')
     await user.keyboard('jx')
     expect(summary).toHaveValue('Jo says the Perth lease now ends in June 2028.jx')
     expect(first).toHaveAttribute('aria-current', 'true')
     expect(sent(server, 'PATCH', `${NOTES}/n1`)).toHaveLength(0)
 
-    // Esc puts the field back and ends the editing; the card keeps the focus.
+    // Esc puts the field back and ends the editing; the card keeps the focus, and the tint.
     await user.keyboard('{Escape}')
     expect(within(first).queryByRole('textbox')).toBeNull()
     expect(first).toHaveFocus()
+    expect(first).toHaveClass('bg-selected')
     expect(sent(server, 'PATCH', `${NOTES}/n1`)).toHaveLength(0)
 
     // X leaves it out.

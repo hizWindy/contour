@@ -17,7 +17,9 @@
  *   (`Reveal`, 40ms apart).
  * - **While it is sent:** "Sending to HubSpot.", then the tick beside "Logged" (`TickIn`), or
  *   "Needs a look" with what happened. Nothing can be changed meanwhile.
- * - **The active card** (J and K move it) has the Navy edge of a selected row.
+ * - **The active card** (J and K move it) has the Navy edge and the tint of a selected row. While
+ *   it is edited it keeps the edge but not the tint: its fields sit on the card colour, where
+ *   their borders reach 3:1.
  */
 import {
   CircleAlert,
@@ -423,7 +425,10 @@ export function NoteCard({
       onPointerDown={onActivate}
       className={cn(
         'flex flex-col overflow-hidden rounded-lg border bg-card text-ui',
-        active && 'bg-selected shadow-[inset_3px_0_0_var(--primary)]',
+        active && 'shadow-[inset_3px_0_0_var(--primary)]',
+        // A field's border is under 3:1 on the selected tint (contrast.test.ts), so the card being
+        // edited, always the active one, keeps the Navy edge only.
+        active && !editing && 'bg-selected',
       )}
     >
       {note.unsure ? (
