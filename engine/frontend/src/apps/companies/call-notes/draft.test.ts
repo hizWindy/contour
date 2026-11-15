@@ -47,6 +47,11 @@ function blockStorage(): void {
   })
 }
 
+/** What one localStorage entry holds, read back. */
+function stored(entry: string): Record<string, unknown> {
+  return JSON.parse(window.localStorage.getItem(entry) ?? '{}') as Record<string, unknown>
+}
+
 /** Signs `user` out of this browser, the way "Sign out" in the account menu does. */
 async function signOut(user: SignedInUser): Promise<void> {
   stubAuthBackend({ me: signedOut() })
@@ -172,9 +177,7 @@ describe('whose drafts they are (privacy on a shared browser)', () => {
     // Sign-in off: one entry, the same as before people had their own.
     const shared = draft({ text: 'Shared' })
     keepDraft(shared)
-    expect(Object.keys(JSON.parse(window.localStorage.getItem(STORAGE) ?? '{}'))).toEqual([
-      '101|201',
-    ])
+    expect(Object.keys(stored(STORAGE))).toEqual(['101|201'])
     expect(readDraft(null, '101', '201')).toEqual(shared)
     expect(readDraft(MIA.id, '101', '201')).toEqual(mias)
     // A drop for one person never touches another's.
@@ -219,7 +222,7 @@ describe('whose drafts they are (privacy on a shared browser)', () => {
     // Once storage takes a write again, the note goes into Mia's entry, whole.
     vi.restoreAllMocks()
     keepDraft({ ...mias, text: 'Only in this page, and more' })
-    expect(JSON.parse(window.localStorage.getItem(`${STORAGE}.${MIA.id}`) ?? '{}')).toMatchObject({
+    expect(stored(`${STORAGE}.${MIA.id}`)).toMatchObject({
       '101|201': { text: 'Only in this page, and more' },
     })
   })
