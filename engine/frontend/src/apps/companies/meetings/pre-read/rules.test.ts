@@ -1,7 +1,7 @@
 /**
  * The pre-read's rules and words without a screen (PLAN-V17 T3-10, T3-11): when "Check and send"
- * may be pressed, a rep's edit to a summary, what a redraft says it costs, who got it, when the
- * meeting is, and who the send goes to. Made-up names only.
+ * may be pressed, a rep's edit to a summary, what a redraft says it costs, who got it, and who the
+ * send goes to. Made-up names only.
  */
 import { describe, expect, it } from 'vitest'
 import { FORM_POLL_MS, formPollMs, isFormMissing } from '@/api/hooks/meetings'
@@ -21,7 +21,6 @@ import {
   costSoFar,
   DRAFT_ESTIMATE,
   hubspotCopyWords,
-  meetingWhen,
   notSavedWords,
   recipientsWords,
   redraftHint,
@@ -207,18 +206,6 @@ describe('the words', () => {
     )
     expect(notSavedWords(new ApiProblem({ title: 'Something went wrong.', status: 500 }))).toBe(
       'Something went wrong. Not saved yet. Try again.',
-    )
-  })
-
-  it('writes when the meeting is, in Melbourne time, with the year only for another year', () => {
-    expect(meetingWhen('2026-11-26T23:00:00Z', '2026-11-27T00:00:00Z', '2026-11-18')).toBe(
-      'Fri 27 Nov, 10:00 am to 11:00 am',
-    )
-    expect(meetingWhen('2026-11-26T23:00:00Z', null, '2026-11-18')).toBe('Fri 27 Nov, 10:00 am')
-    expect(meetingWhen('2027-01-05T22:00:00Z', null, '2026-11-18')).toBe('Wed 6 Jan 2027, 9:00 am')
-    // A meeting that runs past midnight writes its last day too.
-    expect(meetingWhen('2026-11-27T12:00:00Z', '2026-11-27T14:00:00Z', '2026-11-18')).toBe(
-      'Fri 27 Nov, 11:00 pm to Sat 28 Nov, 1:00 am',
     )
   })
 })

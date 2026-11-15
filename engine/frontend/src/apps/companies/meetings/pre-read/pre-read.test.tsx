@@ -304,7 +304,7 @@ function summaryOf(title: string) {
   return within(block)
 }
 
-/** The page's header: the meeting, its company, when and where, and the status. */
+/** The page's header: the meeting, its company, and the status. */
 function pageHeader(): HTMLElement {
   const header = document.querySelector('[data-slot=page-header]')
   if (!(header instanceof HTMLElement)) throw new Error('No page header')
@@ -341,15 +341,19 @@ describe('a draft', () => {
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Office walk-through' }),
     ).toBeInTheDocument()
-    // The header: the company (a link to its record), the day and time, Teams, the status.
+    // The header: the company (a link to its record), and the status on a line of its own, so a
+    // new word moves nothing. When and where are the facts' to say, once.
     const header = within(pageHeader())
     expect(header.getByRole('link', { name: 'Sample Logistics Pty Ltd' })).toHaveAttribute(
       'href',
       '/companies/101',
     )
-    expect(header.getByText(WHEN)).toBeInTheDocument()
-    expect(header.getByText('Teams')).toBeInTheDocument()
-    expect(header.getByText('Draft ready')).toBeInTheDocument()
+    expect(header.queryByText(WHEN)).toBeNull()
+    expect(header.queryByText('Teams')).toBeNull()
+    expect(pageHeader()).toHaveClass('flex-col')
+    const statusLine = pageHeader().querySelector('[data-slot=pre-read-status-line]')
+    expect(statusLine).toHaveTextContent('Draft ready')
+    expect(statusLine).not.toContainElement(header.getByRole('heading', { level: 1 }))
     // HubSpot's link comes from the meeting itself, and opens in a new tab.
     const hubspot = await screen.findByRole('link', { name: /^Open in HubSpot/ })
     expect(hubspot).toHaveAttribute('href', HUBSPOT_URL)
@@ -361,6 +365,7 @@ describe('a draft', () => {
     expect(facts.getAllByRole('term').map((term) => term.textContent)).toEqual(
       FACTS.map((fact) => fact.label),
     )
+    expect(facts.getByText('Fri 27 Nov 2026, 10:00 am to 11:00 am')).toBeInTheDocument()
     expect(facts.getByText('Sam Sample (Office Manager)')).toBeInTheDocument()
     expect(facts.getByText('About 300')).toBeInTheDocument()
     expect(facts.getByText('HubSpot company')).toHaveClass('text-muted-foreground')
@@ -423,7 +428,6 @@ describe('a draft', () => {
       'href',
       '/companies/lead%3A7',
     )
-    expect(within(pageHeader()).getByText('In person')).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /Open in HubSpot/ })).toBeNull()
     expect(server.calls.map((call) => call.path)).toEqual([FORM])
   })

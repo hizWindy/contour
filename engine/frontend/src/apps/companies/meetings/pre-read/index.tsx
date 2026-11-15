@@ -37,12 +37,11 @@ import { PageHeader } from '@/components/page-header'
 import { Pending } from '@/components/skeletons'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { melbourneDate } from '@/lib/format'
 import { PHONE, useMediaQuery } from '@/lib/use-media-query'
 import { cn } from '@/lib/utils'
 import { MEETINGS_PATH } from '../params'
 import { MeetingFormsOff } from '../states'
-import { FactsSection } from './facts'
+import { FactsRowsPending, FactsSection } from './facts'
 import { PreReadHeader } from './header'
 import { SendDialog } from './send-dialog'
 import { SentNote } from './sent'
@@ -63,27 +62,31 @@ function Back() {
   return <BackButton fallbackTo={MEETINGS_PATH} fallbackLabel={MEETINGS} />
 }
 
-/** The still shape of the page while it loads: the header, the facts, the summaries, the blanks. */
+/**
+ * The still shape of the page while it loads: the header with its status line, the facts (their
+ * own still rows), the summaries.
+ */
 function PreReadPending() {
   return (
     <>
       <Back />
       <Pending label={LOADING}>
         <div className="flex max-w-3xl flex-col gap-8">
-          <div className="flex items-start gap-3">
-            <Skeleton className="size-10 shrink-0 rounded-lg" />
-            <div className="flex min-w-0 flex-1 flex-col gap-2">
-              <Skeleton className="h-8 w-2/3" />
-              <Skeleton className="h-5 w-1/2" />
+          <div className="flex flex-col gap-3">
+            <div className="flex items-start gap-3">
+              <Skeleton className="size-10 shrink-0 rounded-lg" />
+              <div className="flex min-w-0 flex-1 flex-col gap-1">
+                <Skeleton className="h-8 w-2/3" />
+                <Skeleton className="h-5 w-1/2" />
+              </div>
+            </div>
+            <div className="pl-13">
+              <Skeleton className="h-8 w-56 touch:h-11" />
             </div>
           </div>
           <div className="flex flex-col gap-3">
             <Skeleton className="h-6 w-32" />
-            <div className="flex flex-col gap-3 rounded-lg border bg-card p-4">
-              {Array.from({ length: 6 }, (_, index) => (
-                <Skeleton key={index} className="h-5 w-3/4" />
-              ))}
-            </div>
+            <FactsRowsPending />
           </div>
           <div className="flex flex-col gap-3">
             <Skeleton className="h-6 w-32" />
@@ -137,7 +140,6 @@ function PreReadMissing() {
 function PreReadView({ form }: { form: MeetingFormOut }) {
   const client = useQueryClient()
   const onPhone = useMediaQuery(PHONE)
-  const today = melbourneDate()
   const [sending, setSending] = useState(false)
   // Sent from this page just now: "Sent" draws its tick once.
   const [justSent, setJustSent] = useState(false)
@@ -150,7 +152,7 @@ function PreReadView({ form }: { form: MeetingFormOut }) {
     <>
       <Back />
       {/*
-        One column, the header in it, so the status sits at the edge of what it describes. On a
+        One column, the header in it, with the status on its own line under the title. On a
         phone the page ends above "Check and send", which stays at the bottom while it is offered.
       */}
       <div
@@ -159,7 +161,7 @@ function PreReadView({ form }: { form: MeetingFormOut }) {
           onPhone && status !== 'sent' && 'pb-28',
         )}
       >
-        <PreReadHeader form={form} today={today} justSent={justSent} />
+        <PreReadHeader form={form} justSent={justSent} />
         <SentNote form={form} />
         <FactsSection form={form} />
         <SummariesSection form={form} />

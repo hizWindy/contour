@@ -5,10 +5,9 @@
  */
 import { toApiProblem } from '@/api/client'
 import type { FormRecipient, HubSpotCopy, MeetingFormOut } from '@/api/v17'
-import { formatDate, formatNumber, formatTime, melbourneDate, pluralise } from '@/lib/format'
+import { formatDate, formatNumber, formatTime, pluralise } from '@/lib/format'
 import { formatMoney, parseMoney } from '@/lib/money'
 import { changeDetail } from '@/lib/problems'
-import { dayText } from '../words'
 import { MOST_PEOPLE, type SendBlock } from './rules'
 
 export const PRE_READ = 'Pre-read'
@@ -238,20 +237,4 @@ export function hubspotCopyWords(copy: HubSpotCopy): string {
 export function copyNotTriedWords(error: unknown): string {
   const { title, detail } = sendProblemWords(error)
   return [`The copy wasn't tried again. ${title}`, detail].filter(Boolean).join(' ')
-}
-
-// --- When the meeting is -------------------------------------------------------------------------
-
-/**
- * "Thu 26 Nov, 10:00 am to 11:00 am", in Melbourne time, with the year only for another year. A
- * meeting that ends on another day writes that day too.
- */
-export function meetingWhen(startsAt: string, endsAt: string | null, today: string): string {
-  const day = melbourneDate(startsAt)
-  const start = `${dayText(day, today)}, ${formatTime(startsAt)}`
-  if (!endsAt) return start
-  const endDay = melbourneDate(endsAt)
-  const end =
-    endDay === day ? formatTime(endsAt) : `${dayText(endDay, today)}, ${formatTime(endsAt)}`
-  return `${start} to ${end}`
 }
