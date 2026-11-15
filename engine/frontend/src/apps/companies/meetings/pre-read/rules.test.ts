@@ -1,22 +1,35 @@
 /**
- * The pre-read's rules and words without a screen (PLAN-V17 T3-10): when "Check and send" may be
- * pressed, a rep's edit to a summary, what a redraft says it costs, who got it, and when the
- * meeting is. Made-up names only.
+ * The pre-read's rules and words without a screen (PLAN-V17 T3-10, T3-11): when "Check and send"
+ * may be pressed, a rep's edit to a summary, what a redraft says it costs, who got it, when the
+ * meeting is, and who the send goes to. Made-up names only.
  */
 import { describe, expect, it } from 'vitest'
 import { FORM_POLL_MS, formPollMs, isFormMissing } from '@/api/hooks/meetings'
 import { ApiProblem } from '@/api/client'
-import type { FormSummary, MeetingFormOut } from '@/api/v17'
-import { hasSummaries, sendBlock, withSummary } from './rules'
+import type { FormPerson, FormSummary, MeetingFormOut } from '@/api/v17'
 import {
+  addressKey,
+  hasSummaries,
+  isTicked,
+  readAddresses,
+  sendBlock,
+  sendTo,
+  withSummary,
+} from './rules'
+import {
+  copyNotTriedWords,
+  costSoFar,
+  DRAFT_ESTIMATE,
   hubspotCopyWords,
   meetingWhen,
   notSavedWords,
   recipientsWords,
-  redraftCost,
   redraftHint,
+  sendProblemWords,
+  sendToWords,
   sentWords,
-  withCost,
+  whyLine,
+  withEstimate,
 } from './words'
 
 const SOURCE = {
@@ -72,7 +85,7 @@ describe('Check and send', () => {
 
   it('may be pressed once both blanks are filled and the summaries are written', () => {
     expect(sendBlock(ready)).toBeNull()
-    // A sent pre-read too: T3-11 decides what a second press does.
+    // A sent pre-read too, though the page offers no Check and send until it changes (T3-11).
     expect(sendBlock({ ...ready, status: 'sent' })).toBeNull()
   })
 
@@ -116,21 +129,25 @@ describe('a summary the rep edits', () => {
 })
 
 describe('what a redraft costs', () => {
-  it('says about what the pre-read cost, rounded to the cent', () => {
-    expect(redraftCost('0.0312')).toBe('about US$0.03')
-    expect(withCost('Redraft', '0.0312')).toBe('Redraft (about US$0.03)')
-    expect(withCost('Try again', '0.0312')).toBe('Try again (about US$0.03)')
-    expect(redraftHint('0.0312')).toBe('It writes the three summaries again. Your edits are kept.')
+  it("says one draft's cost by the plan's estimate, whatever the drafts so far cost", () => {
+    expect(DRAFT_ESTIMATE).toBe('about US$0.03')
+    expect(withEstimate('Redraft')).toBe('Redraft (about US$0.03)')
+    expect(withEstimate('Try again')).toBe('Try again (about US$0.03)')
   })
 
-  it('says under a cent, and with nothing to go by, that it costs money', () => {
-    expect(redraftCost('0.004')).toBe('under US$0.01')
+  it('says what the drafts have cost so far, from the server, rounded to the cent', () => {
+    // The server adds every draft together: two drafts are about US$0.06.
+    expect(costSoFar('0.0624')).toBe('US$0.06 so far.')
+    expect(redraftHint('0.0624')).toBe(
+      'It writes the three summaries again. Your edits are kept. US$0.06 so far.',
+    )
+    expect(costSoFar('0.004')).toBe('Under US$0.01 so far.')
+  })
+
+  it('says nothing about a cost so far while nothing is spent', () => {
     for (const nothing of ['0', '0.000000', 'not money']) {
-      expect(redraftCost(nothing)).toBeNull()
-      expect(withCost('Redraft', nothing)).toBe('Redraft')
-      expect(redraftHint(nothing)).toBe(
-        'It writes the three summaries again, and costs money. Your edits are kept.',
-      )
+      expect(costSoFar(nothing)).toBeNull()
+      expect(redraftHint(nothing)).toBe('It writes the three summaries again. Your edits are kept.')
     }
   })
 })
@@ -173,8 +190,14 @@ describe('the words', () => {
     expect(hubspotCopyWords({ state: 'saved', sentence: null })).toBe(
       'A copy is saved in HubSpot, as a note on the company.',
     )
+    expect(hubspotCopyWords({ state: 'waiting', sentence: null })).toBe(
+      'The copy waits for HubSpot write access. The email still went.',
+    )
     expect(hubspotCopyWords({ state: 'off', sentence: ' ' })).toBe(
-      "No copy in HubSpot: the company isn't in HubSpot.",
+      "No copy in HubSpot: the company isn't in HubSpot yet.",
+    )
+    expect(hubspotCopyWords({ state: 'failed', sentence: null })).toBe(
+      "The copy in HubSpot didn't save. The email still went.",
     )
   })
 
@@ -196,6 +219,85 @@ describe('the words', () => {
     // A meeting that runs past midnight writes its last day too.
     expect(meetingWhen('2026-11-27T12:00:00Z', '2026-11-27T14:00:00Z', '2026-11-18')).toBe(
       'Fri 27 Nov, 11:00 pm to Sat 28 Nov, 1:00 am',
+    )
+  })
+})
+
+describe('who the send goes to (T3-11)', () => {
+  function person(email: string, changes: Partial<FormPerson> = {}): FormPerson {
+    return { email, name: null, why: 'added by you', ticked: true, allowed: true, ...changes }
+  }
+
+  it('reads one address, a pasted list, or Outlook names, in lower case, once each', () => {
+    expect(readAddresses(' Jo.Sample@Example.com ')).toEqual({
+      found: ['jo.sample@example.com'],
+      unreadable: [],
+    })
+    expect(readAddresses('jo@example.com, mia@example.com;al@example.com jo@example.com')).toEqual({
+      found: ['jo@example.com', 'mia@example.com', 'al@example.com'],
+      unreadable: [],
+    })
+    expect(readAddresses('Jo Sample <jo@example.com>; "Mia" <MIA@example.com>')).toEqual({
+      found: ['jo@example.com', 'mia@example.com'],
+      unreadable: [],
+    })
+    expect(readAddresses('mailto:jo@example.com.')).toEqual({
+      found: ['jo@example.com'],
+      unreadable: [],
+    })
+  })
+
+  it('says what is not an address, and takes nothing longer than 254 characters', () => {
+    expect(readAddresses('jo at example dot com').unreadable).toEqual([
+      'jo',
+      'at',
+      'example',
+      'dot',
+      'com',
+    ])
+    expect(readAddresses('jo@example').unreadable).toEqual(['jo@example'])
+    expect(readAddresses('').found).toEqual([])
+    const long = `${'a'.repeat(250)}@x.com`
+    expect(readAddresses(long)).toEqual({ found: [], unreadable: [long] })
+  })
+
+  it("ticks the server's ticks, the rep's changes, and never an address that isn't Contour's", () => {
+    const jo = person('Jo@example.com', { name: 'Jo Sample', why: 'on the meeting' })
+    const outside = person('mia@elsewhere.com', { allowed: false })
+    const al = person('al@example.com', { ticked: false })
+    expect(addressKey(jo.email)).toBe('jo@example.com')
+    expect(isTicked(jo, {})).toBe(true)
+    expect(isTicked(jo, { 'jo@example.com': false })).toBe(false)
+    // The server ticks an address it refuses too: it still can't be ticked.
+    expect(isTicked(outside, {})).toBe(false)
+    expect(isTicked(outside, { 'mia@elsewhere.com': true })).toBe(false)
+    expect(sendTo([jo, outside, al], { 'al@example.com': true })).toEqual([
+      'Jo@example.com',
+      'al@example.com',
+    ])
+  })
+
+  it('says the count on the button, the why as a line, and a refusal in its own words', () => {
+    expect(sendToWords(1)).toBe('Send to 1 person')
+    expect(sendToWords(4)).toBe('Send to 4 people')
+    expect(whyLine('on the meeting')).toBe('On the meeting')
+    expect(
+      sendProblemWords(
+        new ApiProblem({
+          title: 'Only Contour addresses',
+          detail:
+            'A pre-read goes to Contour addresses only, so nothing was sent. Take out: mia@elsewhere.com.',
+          status: 422,
+          code: 'outside_address',
+        }),
+      ),
+    ).toEqual({
+      title: 'Only Contour addresses.',
+      detail:
+        'A pre-read goes to Contour addresses only, so nothing was sent. Take out: mia@elsewhere.com.',
+    })
+    expect(copyNotTriedWords(new ApiProblem({ title: 'Email failed', status: 502 }))).toBe(
+      "The copy wasn't tried again. Email failed.",
     )
   })
 })

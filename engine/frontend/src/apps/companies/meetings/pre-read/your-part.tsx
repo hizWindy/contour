@@ -10,8 +10,9 @@
  * - **"Check and send"** is the page's one Navy button. It stays greyed until both blanks are
  *   filled, with the reason beside it in plain words (`sendBlock`), and while the summaries are
  *   written or after a draft failed, since the server sends only a written pre-read. On a phone
- *   it sits at the bottom of the screen, where a thumb reaches it. T3-11 builds what it opens: the
- *   Alert Dialog with the email and the people.
+ *   it sits at the bottom of the screen, where a thumb reaches it. It opens the send dialog
+ *   (`send-dialog.tsx`, T3-11). While the pre-read is sent and unchanged it isn't offered: the
+ *   page says who got it. An edit makes it a draft again, and the button comes back.
  *
  * The blanks are the rep's own while the page is open: a new answer from the server (the page
  * asks every 2 seconds while the summaries are written) doesn't touch them.
@@ -196,7 +197,7 @@ export function YourPart({
   onCheckAndSend,
 }: {
   form: MeetingFormOut
-  /** What "Check and send" opens (T3-11). */
+  /** Opens the send dialog (T3-11). */
   onCheckAndSend: () => void
 }) {
   const headingId = useId()
@@ -224,31 +225,34 @@ export function YourPart({
         <BlankField label={NEXT_STEP} placeholder={NEXT_STEP_PLACEHOLDER} blank={nextStep} />
         <BlankField label={GOING} placeholder={GOING_PLACEHOLDER} blank={going} />
       </div>
-      <div
-        data-slot="send-bar"
-        className={cn(
-          'flex flex-wrap items-center justify-end gap-x-4 gap-y-2',
-          onPhone &&
-            'fixed inset-x-0 bottom-0 z-20 flex-col items-stretch border-t bg-popover p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]',
-        )}
-      >
-        {reason ? (
-          <p id={reasonId} className="min-w-0 flex-1 text-ui text-pretty text-muted-foreground">
-            {reason}
-          </p>
-        ) : null}
-        <Button
-          type="button"
-          size={onPhone ? 'lg' : 'default'}
-          className={onPhone ? 'w-full' : undefined}
-          disabled={block !== null}
-          aria-describedby={reason ? reasonId : undefined}
-          onClick={onCheckAndSend}
+      {/* Sent and unchanged: nothing to send. An edit makes it a draft, and this comes back. */}
+      {form.status === 'sent' ? null : (
+        <div
+          data-slot="send-bar"
+          className={cn(
+            'flex flex-wrap items-center justify-end gap-x-4 gap-y-2',
+            onPhone &&
+              'fixed inset-x-0 bottom-0 z-20 flex-col items-stretch border-t bg-popover p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]',
+          )}
         >
-          <Send aria-hidden="true" />
-          {CHECK_AND_SEND}
-        </Button>
-      </div>
+          {reason ? (
+            <p id={reasonId} className="min-w-0 flex-1 text-ui text-pretty text-muted-foreground">
+              {reason}
+            </p>
+          ) : null}
+          <Button
+            type="button"
+            size={onPhone ? 'lg' : 'default'}
+            className={onPhone ? 'w-full' : undefined}
+            disabled={block !== null}
+            aria-describedby={reason ? reasonId : undefined}
+            onClick={onCheckAndSend}
+          >
+            <Send aria-hidden="true" />
+            {CHECK_AND_SEND}
+          </Button>
+        </div>
+      )}
     </section>
   )
 }

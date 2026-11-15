@@ -5,7 +5,8 @@
  *
  * Top to bottom: the meeting (`header.tsx`), who got it if it was sent (`sent.tsx`), the facts
  * with no AI (`facts.tsx`), the three summaries with the pencil and Redraft (`summaries.tsx`),
- * then the rep's two blanks and "Check and send", the one Navy button (`your-part.tsx`).
+ * then the rep's two blanks and "Check and send", the one Navy button (`your-part.tsx`), which
+ * opens the send dialog with the email and the people (`send-dialog.tsx`, T3-11).
  *
  * - **While it drafts** (a new pre-read, or a redraft), the page asks again every 2 seconds and
  *   stops once it is ready or failed (`useMeetingForm`). What changes doesn't move: the status
@@ -20,7 +21,7 @@
  */
 import { useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, FileText, SearchX } from 'lucide-react'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import {
   isFormMissing,
@@ -43,6 +44,7 @@ import { MEETINGS_PATH } from '../params'
 import { MeetingFormsOff } from '../states'
 import { FactsSection } from './facts'
 import { PreReadHeader } from './header'
+import { SendDialog } from './send-dialog'
 import { SentNote } from './sent'
 import { SummariesSection } from './summaries'
 import {
@@ -136,6 +138,9 @@ function PreReadView({ form }: { form: MeetingFormOut }) {
   const client = useQueryClient()
   const onPhone = useMediaQuery(PHONE)
   const today = melbourneDate()
+  const [sending, setSending] = useState(false)
+  // Sent from this page just now: "Sent" draws its tick once.
+  const [justSent, setJustSent] = useState(false)
   const { id, status } = form
   const meetingId = form.meeting.meeting_id
   useEffect(() => {
@@ -146,19 +151,33 @@ function PreReadView({ form }: { form: MeetingFormOut }) {
       <Back />
       {/*
         One column, the header in it, so the status sits at the edge of what it describes. On a
-        phone the page ends above "Check and send", which stays at the bottom.
+        phone the page ends above "Check and send", which stays at the bottom while it is offered.
       */}
-      <div className={cn('flex w-full max-w-3xl flex-col gap-8', onPhone && 'pb-28')}>
-        <PreReadHeader form={form} today={today} />
+      <div
+        className={cn(
+          'flex w-full max-w-3xl flex-col gap-8',
+          onPhone && status !== 'sent' && 'pb-28',
+        )}
+      >
+        <PreReadHeader form={form} today={today} justSent={justSent} />
         <SentNote form={form} />
         <FactsSection form={form} />
         <SummariesSection form={form} />
         <YourPart
           form={form}
-          // T3-11 opens the Alert Dialog with the email and the people here.
-          onCheckAndSend={() => undefined}
+          onCheckAndSend={() => {
+            setSending(true)
+          }}
         />
       </div>
+      <SendDialog
+        form={form}
+        open={sending}
+        onOpenChange={setSending}
+        onSent={() => {
+          setJustSent(true)
+        }}
+      />
     </>
   )
 }

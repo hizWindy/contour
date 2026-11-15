@@ -6,7 +6,8 @@
  *
  * - The status is an icon and a word, as on Meetings. When it changes (Drafting to Draft ready,
  *   Draft ready to Sent), the old one fades out and the new one in (`FadeSwap`), and a screen
- *   reader hears the new word.
+ *   reader hears the new word. When the rep's own send lands (T3-11), "Sent" draws its tick once
+ *   (`TickIn`); a pre-read that was sent before the page opened shows the still icon.
  * - The form's copy of the meeting has no HubSpot link, so the page reads the meeting itself for
  *   it (`useMeeting`). While it loads, the button's place is kept, unseen, so the header doesn't
  *   move when it comes. A meeting typed in has no link, and one that can't be read shows none.
@@ -15,6 +16,7 @@ import { CalendarClock, ExternalLink, FileText, MapPin, Video } from 'lucide-rea
 import { Link } from 'react-router'
 import { useMeeting } from '@/api/hooks/meetings'
 import type { MeetingFormOut } from '@/api/v17'
+import { TickIn } from '@/components/motion'
 import { PageHeader } from '@/components/page-header'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -29,14 +31,17 @@ function companyHref(key: string): string {
   return `/companies/${encodeURIComponent(key)}`
 }
 
-/** The pre-read's status, as on Meetings' rows. A screen reader hears it when it changes. */
-function StatusMark({ status }: { status: MeetingFormOut['status'] }) {
+/**
+ * The pre-read's status, as on Meetings' rows. A screen reader hears it when it changes. Sent by
+ * the rep here and now (`justSent`), its tick draws once as the new badge comes in.
+ */
+function StatusMark({ status, justSent }: { status: MeetingFormOut['status']; justSent: boolean }) {
   const { icon: Icon, ink } = STATUS_LOOK[status]
   return (
     <span role="status" data-slot="pre-read-status" className="inline-flex">
       <FadeSwap swapKey={status} className="inline-flex">
         <Badge variant="outline" className={ink}>
-          <Icon aria-hidden="true" />
+          {status === 'sent' && justSent ? <TickIn /> : <Icon aria-hidden="true" />}
           {STATUS_WORDS[status]}
         </Badge>
       </FadeSwap>
@@ -75,7 +80,16 @@ function OpenInHubSpot({ meetingId }: { meetingId: string | null }) {
   )
 }
 
-export function PreReadHeader({ form, today }: { form: MeetingFormOut; today: string }) {
+export function PreReadHeader({
+  form,
+  today,
+  justSent,
+}: {
+  form: MeetingFormOut
+  today: string
+  /** The rep sent it from this page just now: "Sent" draws its tick once. */
+  justSent: boolean
+}) {
   const { meeting } = form
   const where = meeting.where === 'unknown' ? null : meeting.where
   const WhereIcon = where === 'online' ? Video : MapPin
@@ -106,7 +120,7 @@ export function PreReadHeader({ form, today }: { form: MeetingFormOut; today: st
       }
       actions={
         <>
-          <StatusMark status={form.status} />
+          <StatusMark status={form.status} justSent={justSent} />
           <OpenInHubSpot meetingId={meeting.meeting_id} />
         </>
       }

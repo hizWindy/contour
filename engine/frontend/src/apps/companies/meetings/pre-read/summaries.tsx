@@ -10,9 +10,11 @@
  *   summary's text). If the server says no, the summary goes back, and the box opens again with
  *   the rep's words and why. A summary the rep changed stays as it is through a redraft: the
  *   server keeps it.
- * - **Redraft** writes the three again, which costs money, so the button says what the last
- *   draft cost. While it drafts, each AI summary is a still grey block at its real size (the rep's
- *   own stay as they are), and the page asks again every 2 seconds (`useMeetingForm`).
+ * - **Redraft** writes the three again, which costs money, so the button says what one draft
+ *   costs by the plan's estimate, and the line beside it what the drafts have cost so far (the
+ *   server adds them together, and keeps no cost for each one). While it drafts, each AI summary
+ *   is a still grey block at its real size (the rep's own stay as they are), and the page asks
+ *   again every 2 seconds (`useMeetingForm`).
  * - **A failed draft** says what went wrong in the server's plain words, with Try again (the
  *   redraft). Summaries an earlier draft wrote stay under it.
  */
@@ -46,7 +48,7 @@ import {
   SUMMARY_HINT,
   SUMMARY_TITLES,
   TRY_AGAIN,
-  withCost,
+  withEstimate,
   WRITING,
   WRITTEN_BY_AI,
 } from './words'
@@ -230,7 +232,7 @@ function FailedNotice({
             onClick={onTryAgain}
           >
             <RefreshCw aria-hidden="true" />
-            {withCost(TRY_AGAIN, form.cost_usd)}
+            {withEstimate(TRY_AGAIN)}
           </Button>
           <p id={hintId} className="text-caption">
             {redraftHint(form.cost_usd)}
@@ -264,7 +266,7 @@ function RedraftRow({
         onClick={onRedraft}
       >
         <RefreshCw aria-hidden="true" />
-        {withCost(REDRAFT, form.cost_usd)}
+        {withEstimate(REDRAFT)}
       </Button>
       <p id={hintId} className="text-caption text-muted-foreground">
         {redraftHint(form.cost_usd)}

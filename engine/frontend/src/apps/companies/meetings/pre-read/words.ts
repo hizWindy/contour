@@ -5,10 +5,11 @@
  */
 import { toApiProblem } from '@/api/client'
 import type { FormRecipient, HubSpotCopy, MeetingFormOut } from '@/api/v17'
-import { formatDate, formatNumber, formatTime, melbourneDate } from '@/lib/format'
+import { formatDate, formatNumber, formatTime, melbourneDate, pluralise } from '@/lib/format'
 import { formatMoney, parseMoney } from '@/lib/money'
+import { changeDetail } from '@/lib/problems'
 import { dayText } from '../words'
-import type { SendBlock } from './rules'
+import { MOST_PEOPLE, type SendBlock } from './rules'
 
 export const PRE_READ = 'Pre-read'
 export const MEETINGS = 'Meetings'
@@ -62,29 +63,34 @@ export const REDRAFT = 'Redraft'
 export const EDITS_KEPT = 'Your edits are kept.'
 
 /**
- * What a redraft costs, for its button: "about US$0.03", "under US$0.01", or null with nothing to
- * go by (no draft has cost anything yet). `cost_usd` is what the pre-read has cost so far: Track 2
- * adds each draft's cost to it, so after a redraft it is the drafts' total (TBC: the last draft's
- * own cost, a question for Track 2).
+ * What one draft costs, for Redraft's button: the plan's estimate (PLAN-V17 "What it costs": about
+ * US$0.03 with Sonnet 5.5, measured by T2-16), not the server's. The server's `cost_usd` adds every
+ * draft of the pre-read together, and Track 2 keeps no cost for each one, so it can't say what the
+ * next draft costs: the page shows it as what was spent so far (`costSoFar`).
  */
-export function redraftCost(costUsd: string): string | null {
+export const DRAFT_ESTIMATE = 'about US$0.03'
+
+/** "Redraft (about US$0.03)": the button says what one more draft costs, by the plan's estimate. */
+export function withEstimate(label: string): string {
+  return `${label} (${DRAFT_ESTIMATE})`
+}
+
+/**
+ * What the pre-read's drafts have cost so far, from the server (`cost_usd`, every draft added
+ * together): "US$0.06 so far.", "Under US$0.01 so far.", or null while nothing is spent.
+ */
+export function costSoFar(costUsd: string): string | null {
   const micros = parseMoney(costUsd)
   if (micros === null || micros <= 0n) return null
-  if (micros < 10_000n) return 'under US$0.01'
-  return `about ${formatMoney(costUsd)}`
+  if (micros < 10_000n) return 'Under US$0.01 so far.'
+  return `${formatMoney(costUsd)} so far.`
 }
 
-/** "Redraft (about US$0.03)", or the label alone with nothing to go by. */
-export function withCost(label: string, costUsd: string): string {
-  const cost = redraftCost(costUsd)
-  return cost ? `${label} (${cost})` : label
-}
-
-/** The line beside Redraft: what it does, that it costs money, and that the rep's edits stay. */
+/** The line beside Redraft: what it does, that the rep's edits stay, and what was spent so far. */
 export function redraftHint(costUsd: string): string {
-  return redraftCost(costUsd)
-    ? `It writes the three summaries again. ${EDITS_KEPT}`
-    : `It writes the three summaries again, and costs money. ${EDITS_KEPT}`
+  return [`It writes the three summaries again. ${EDITS_KEPT}`, costSoFar(costUsd)]
+    .filter(Boolean)
+    .join(' ')
 }
 
 // --- The two blanks -----------------------------------------------------------------------------
@@ -124,11 +130,70 @@ export const SEND_REASONS: Readonly<Record<SendBlock, string>> = {
   failed: "The summaries weren't written. Try again first.",
 }
 
+// --- The send dialog (T3-11) ------------------------------------------------------------------
+
+export const SEND_TITLE = 'Send the pre-read?'
+export const SEND_DESCRIPTION =
+  'Check the email and who gets it. Nothing is sent until you press Send.'
+export const GETTING_READY = 'Getting the email ready.'
+export const SAVING_FIRST = 'Saving your part first.'
+export const PREVIEW_FAILED = "The email couldn't be made ready, so nothing was sent."
+export const THE_EMAIL = 'The email'
+export const EMAIL_BOX = 'The email as it will arrive'
+export const SUBJECT = 'Subject:'
+export const WHO_GETS_IT = 'Who gets it'
+export const ONLY_CONTOUR = 'Only Contour addresses can get it.'
+export const NOBODY_LISTED = 'Nobody yet. Add a Contour address below.'
+export const NOT_CONTOUR = "Not a Contour address, so it can't get the pre-read."
+export const CHECKING = 'Checking it is a Contour address.'
+export const ADD_SOMEONE = 'Add someone'
+export const ADDRESS_PLACEHOLDER = 'Their email address'
+export const ADD = 'Add'
+export const ADDRESS_UNREADABLE = "That doesn't look like an email address."
+export const ALREADY_LISTED = 'Already on the list.'
+export const TOO_MANY = `Up to ${String(MOST_PEOPLE)} people can get it.`
+export const NOBODY_TICKED = 'Tick someone to send it to, or add a Contour address.'
+export const OVER_THE_MOST = `Send it to ${String(MOST_PEOPLE)} people or fewer.`
+export const SEND = 'Send'
+export const SENDING = 'Sending.'
+export const CANCEL = 'Cancel'
+/** With no sender set up (409 `email_not_set_up`): nothing is lost. */
+export const STAYS_HERE = 'The pre-read stays here, so you can send it once email is set up.'
+
+/** "Remove mia@example.com" */
+export function removeWords(address: string): string {
+  return `Remove ${address}`
+}
+
+/** "Send to 4 people", "Send to 1 person". */
+export function sendToWords(count: number): string {
+  return `Send to ${pluralise(count, 'person', 'people')}`
+}
+
+/** The server's `why`, as the start of a line: "On the meeting". */
+export function whyLine(why: string): string {
+  const text = why.trim()
+  return text === '' ? text : `${text.charAt(0).toUpperCase()}${text.slice(1)}`
+}
+
+/**
+ * What a refused send says, in the server's own words: its title, then what to do. An address
+ * that isn't Contour's is named there ("Take out: mia@example.com."). A lost connection says
+ * whether it may have gone, as every change does.
+ */
+export function sendProblemWords(error: unknown): { title: string; detail: string | null } {
+  const problem = toApiProblem(error)
+  return { title: sentence(problem.title), detail: changeDetail(problem) }
+}
+
 // --- Sent ------------------------------------------------------------------------------------------
 
 export const CHANGED_AFTER_SENT = 'A change makes it a draft again, so you can send the new words.'
 export const CHANGED_SINCE_SENT =
   "It changed after it was sent, so it's a draft again. Send it again to share the new words."
+export const TRY_COPY_AGAIN = 'Try the HubSpot copy again'
+export const NOBODY_EMAILED_AGAIN = 'Nobody is emailed again.'
+export const TRYING_COPY = 'Trying the copy again. Nobody is emailed again.'
 
 /** "Jo Sample", or "Jo Sample, Mia Sample and Al Sample": each by name, else by address. */
 export function recipientsWords(people: readonly FormRecipient[]): string {
@@ -152,16 +217,26 @@ export function sentWords(
   return `${to ? `${sent} to ${to}` : sent}${when}${by}.`
 }
 
-/** Where the copy in HubSpot stands, in words: the server's sentence, else these. */
+/**
+ * Where the copy in HubSpot stands, in words, for each state: the server's sentence when it sends
+ * one (it says why: "Waiting for HubSpot write access.", "This company isn't in HubSpot yet, so no
+ * copy was saved there."), else these. Saved has no sentence.
+ */
 const COPY_WORDS: Readonly<Record<HubSpotCopy['state'], string>> = {
   saved: 'A copy is saved in HubSpot, as a note on the company.',
-  waiting: "The copy waits for HubSpot: writing to it isn't on yet. The email still went.",
-  off: "No copy in HubSpot: the company isn't in HubSpot.",
-  failed: "The copy in HubSpot didn't save. Sending again tries it again.",
+  waiting: 'The copy waits for HubSpot write access. The email still went.',
+  off: "No copy in HubSpot: the company isn't in HubSpot yet.",
+  failed: "The copy in HubSpot didn't save. The email still went.",
 }
 
 export function hubspotCopyWords(copy: HubSpotCopy): string {
   return copy.sentence?.trim() ? sentence(copy.sentence) : COPY_WORDS[copy.state]
+}
+
+/** "The copy wasn't tried again. You're offline. ..." */
+export function copyNotTriedWords(error: unknown): string {
+  const { title, detail } = sendProblemWords(error)
+  return [`The copy wasn't tried again. ${title}`, detail].filter(Boolean).join(' ')
 }
 
 // --- When the meeting is -------------------------------------------------------------------------

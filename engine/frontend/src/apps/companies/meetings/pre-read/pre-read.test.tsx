@@ -390,11 +390,12 @@ describe('a draft', () => {
     }
     expect(screen.getByText('Source: Call with Sam Sample, 20 Oct 2026')).toBeInTheDocument()
 
-    // Redraft says it costs money, with the last cost, and that edits stay.
+    // Redraft says what one draft costs by the plan's estimate, that edits stay, and what the
+    // drafts have cost so far (the server's total).
     const redraft = screen.getByRole('button', { name: 'Redraft (about US$0.03)' })
     expect(redraft).toBeEnabled()
     expect(redraft).toHaveAccessibleDescription(
-      'It writes the three summaries again. Your edits are kept.',
+      'It writes the three summaries again. Your edits are kept. US$0.03 so far.',
     )
 
     // The two blanks, empty, with clear labels; Check and send waits for them.
@@ -513,6 +514,12 @@ describe('the pencil', () => {
     ).toBeInTheDocument()
     expect(stillBlocks()).toBe(0)
     expect(await screen.findByText('Draft ready')).toBeInTheDocument()
+    // Two drafts so far: the button still says one draft's cost, the line what both cost.
+    expect(
+      screen.getByRole('button', { name: 'Redraft (about US$0.03)' }),
+    ).toHaveAccessibleDescription(
+      'It writes the three summaries again. Your edits are kept. US$0.06 so far.',
+    )
   }, 15_000)
 
   it('a refused save puts the summary back, and opens the box again with the words and why', async () => {
@@ -700,7 +707,7 @@ describe('a failed draft', () => {
 
     const tryAgain = within(notice).getByRole('button', { name: 'Try again (about US$0.03)' })
     expect(tryAgain).toHaveAccessibleDescription(
-      'It writes the three summaries again. Your edits are kept.',
+      'It writes the three summaries again. Your edits are kept. US$0.03 so far.',
     )
     await user.click(tryAgain)
     expect(await screen.findByText('Writing the summaries.')).toBeInTheDocument()
@@ -742,11 +749,14 @@ describe('sent', () => {
     expect(
       screen.getByText('A change makes it a draft again, so you can send the new words.'),
     ).toBeInTheDocument()
+    // Sent and unchanged: nothing to send (T3-11).
+    expect(screen.queryByRole('button', { name: 'Check and send' })).toBeNull()
 
     // A change: the server makes it a draft again, and the page says when it was last sent.
     await user.type(screen.getByRole('textbox', { name: 'Ideal next step' }), ' Bring the plans.')
     await user.tab()
     expect(await screen.findByText('Draft ready')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Check and send' })).toBeEnabled()
     expect(
       screen.getByText(/^Last sent to Jo Sample and mia\.sample@example\.com/),
     ).toBeInTheDocument()
