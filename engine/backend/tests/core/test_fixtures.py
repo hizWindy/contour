@@ -33,6 +33,8 @@ from core.hubspot.models import (
     HubSpotCompany,
     HubSpotContact,
     HubSpotDeal,
+    HubSpotMeeting,
+    HubSpotMeetingRead,
     HubSpotOffice,
     HubSpotOwner,
     HubSpotSync,
@@ -87,6 +89,13 @@ async def fill_every_table(factory: async_sessionmaker[AsyncSession]) -> None:
                 HubSpotOwner(owner_id="11", name="Pat Lee"),
                 HubSpotSync(mode="full", trigger="command", status="running"),
                 HubSpotWrite(app="lead_finder", subject="lead:1", plan={}),
+                HubSpotMeeting(hubspot_id="401", title="Fitout chat", starts_at=datetime.now(UTC)),
+                HubSpotMeetingRead(
+                    kind="full",
+                    state="done",
+                    started_at=datetime.now(UTC),
+                    finished_at=datetime.now(UTC),
+                ),
                 SearchLog(
                     app="lead_finder",
                     step="extract",

@@ -53,6 +53,7 @@ log = logging.getLogger(__name__)
 
 BASE_URL = "https://api.hubapi.com"
 PAGE_SIZE = 100  # the most HubSpot gives in one list page
+SEARCH_PAGE_SIZE = 200  # the most HubSpot gives in one search page (a caller asks for it)
 SEARCH_RESULTS_CAP = 10_000  # HubSpot's search never pages past this many results
 BATCH_SIZE = 100  # the most ids in one batch request
 MAX_TRIES = 3  # a busy answer, a server error or a slow read: tried at most 3 times in all
@@ -790,7 +791,7 @@ class HttpHubSpot:
         limit: int = PAGE_SIZE,
     ) -> Page:
         body: dict[str, Any] = {
-            "limit": max(1, min(limit, PAGE_SIZE)),
+            "limit": max(1, min(limit, SEARCH_PAGE_SIZE)),
             "properties": list(dict.fromkeys(properties)),
         }
         if filters:

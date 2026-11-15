@@ -16,6 +16,7 @@ from core.hubspot.client import (
     BATCH_SIZE,
     MAX_TRIES,
     Association,
+    Filter,
     HttpHubSpot,
     HubSpotError,
     HubSpotMissingScope,
@@ -101,6 +102,44 @@ async def test_a_list_sends_the_key_in_a_header_and_reads_every_page() -> None:
     assert request.url.params["archived"] == "false"
     assert request.headers["authorization"] == f"Bearer {KEY}"
     assert KEY not in str(request.url)
+
+
+async def test_a_search_sends_its_filters_and_sort_and_pages_up_to_200() -> None:
+    """PLAN-V17 T1-8: a meetings search pages 200 at a time, HubSpot's most. A list stays at 100."""
+    bodies: list[dict[str, Any]] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        bodies.append(json.loads(request.content))
+        return answer(200, {"total": 0, "results": []})
+
+    client = make(handler)
+    when = Filter("hs_meeting_start_time", "GTE", "1763000000000")
+    await client.search_objects(
+        "meetings",
+        filters=[when],
+        properties=["hs_meeting_title"],
+        sort_by="hs_meeting_start_time",
+        limit=200,
+    )
+    await client.search_objects("meetings", filters=[when], properties=[], limit=500)
+    await client.search_objects("meetings", filters=[when], properties=[])
+    assert bodies[0] == {
+        "limit": 200,
+        "properties": ["hs_meeting_title"],
+        "filterGroups": [
+            {
+                "filters": [
+                    {
+                        "propertyName": "hs_meeting_start_time",
+                        "operator": "GTE",
+                        "value": "1763000000000",
+                    }
+                ]
+            }
+        ],
+        "sorts": [{"propertyName": "hs_meeting_start_time", "direction": "ASCENDING"}],
+    }
+    assert [body["limit"] for body in bodies] == [200, 200, 100]  # the default stays 100
 
 
 async def test_the_older_v3_paths_are_used_when_asked() -> None:

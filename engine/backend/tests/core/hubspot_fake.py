@@ -16,6 +16,11 @@ touches no real data. It follows the `HubSpot` protocol (core/hubspot/client.py)
   `HubSpotRejected`, the way HubSpot refuses a bad request.
 - An owner may have an email (`owner_email`, or `add_owner(..., email=...)`). Only
   `owner_emails` returns it, for the active owners, as the client does (PLAN-V17 T1-4).
+- Meetings (PLAN-V17 T1-8): `add_meeting` makes one with its companies and people. A search
+  takes GT, GTE, LT and LTE on any date field (milliseconds or ISO text, like HubSpot), and
+  sorts by `sort_by` when it names a field other than `hs_lastmodifieddate` (records without
+  it last). Without the meetings scope (`scopes.discard(SCOPE_FOR["meetings"])`) a meetings
+  search refuses, like HubSpot's 403.
 """
 
 from collections.abc import Mapping, Sequence
@@ -231,6 +236,26 @@ class FakeHubSpot:
         self.call_log[call_id] = record
         return record
 
+    def add_meeting(
+        self,
+        meeting_id: str,
+        *,
+        companies: Sequence[str] = (),
+        contacts: Sequence[str] = (),
+        updated_at: datetime | None = None,
+        **properties: str | None,
+    ) -> FakeRecord:
+        """A meeting linked to `companies` (in that order) and `contacts`."""
+        record = FakeRecord(
+            meeting_id,
+            dict(properties),
+            updated_at=updated_at or datetime.now(UTC),
+            companies=tuple(companies),
+            contacts=tuple(contacts),
+        )
+        self.meetings[meeting_id] = record
+        return record
+
     def add_owner(
         self, owner_id: str, name: str | None, *, email: str | None = None, archived: bool = False
     ) -> Owner:
@@ -334,6 +359,8 @@ class FakeHubSpot:
         for item in filters:
             records = [r for r in records if _passes(r, item)]
         records.sort(key=lambda r: (r.updated_at, int(r.id)))
+        if sort_by and sort_by != "hs_lastmodifieddate":
+            records.sort(key=lambda r: _sort_key(r.properties.get(sort_by)))
         return self._page(records, properties, after, links=False)
 
     async def get_object(
@@ -476,14 +503,48 @@ class FakeHubSpot:
         self.closed = True
 
 
+RANGES = frozenset({"GT", "GTE", "LT", "LTE"})
+
+
+def _ms(value: str | None) -> int | None:
+    """A date field's value as milliseconds: HubSpot takes and gives milliseconds or ISO text."""
+    text = (value or "").strip()
+    if not text:
+        return None
+    if text.isdigit():
+        return int(text)
+    try:
+        moment = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return int((moment if moment.tzinfo else moment.replace(tzinfo=UTC)).timestamp() * 1000)
+
+
+def _in_range(moment: int | None, item: Filter) -> bool:
+    target = _ms(item.value)
+    if moment is None or target is None:
+        return False  # HubSpot leaves out a record without the field
+    return {
+        "GTE": moment >= target,
+        "GT": moment > target,
+        "LT": moment < target,
+        "LTE": moment <= target,
+    }[item.operator]
+
+
+def _sort_key(value: str | None) -> tuple[bool, int]:
+    moment = _ms(value)
+    return (moment is None, moment or 0)
+
+
 def _passes(record: FakeRecord, item: Filter) -> bool:
     if item.property == "hs_lastmodifieddate":
-        moment = int(record.updated_at.timestamp() * 1000)
-        target = int(item.value or 0)
-        return {"GTE": moment >= target, "GT": moment > target, "LT": moment < target}.get(
-            item.operator, True
-        )
+        if item.operator not in RANGES:
+            return True
+        return _in_range(int(record.updated_at.timestamp() * 1000), item)
     value = record.properties.get(item.property)
+    if item.operator in RANGES:
+        return _in_range(_ms(value), item)
     if item.operator == "EQ":
         return (value or "").casefold() == (item.value or "").casefold()
     if item.operator == "IN":
