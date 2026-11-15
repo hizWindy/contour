@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import type { HubSpotSync } from '@/api/types'
 import { mockApi, type Call } from '@/test/mock-api'
@@ -259,5 +259,70 @@ describe('Admin, HubSpot: stopping a sync, and a full copy (PLAN-V15 T2-6)', () 
     expect(list).toHaveTextContent(
       'Stopped after saving companies. People and profiles update with the next sync.',
     )
+  })
+})
+
+describe('Admin, HubSpot: the Companies line (PLAN-V17 T3-7)', () => {
+  const companies = (changes: Record<string, unknown>) => ({
+    app: 'companies',
+    title: 'Companies',
+    uses: 'Reads companies, deals and owners, and sends the calls a rep confirms.',
+    reading: 'ready',
+    sending: 'ready',
+    waiting_for: [],
+    summary: 'Companies: reading ready. Sending ready.',
+    ...changes,
+  })
+
+  async function projectLines(project: Record<string, unknown>) {
+    mockApi({
+      '/api/v1/hubspot/status': {
+        ...HUBSPOT_STATUS,
+        projects: [...HUBSPOT_STATUS.projects, project],
+      },
+      '/api/v1/hubspot/writes': [],
+    })
+    const view = renderWithProviders(<AdminHubSpotTab />)
+    await view.user.click(await screen.findByRole('button', { name: /of \d+ permissions/ }))
+    const list = await screen.findByRole('list', { name: 'Projects' })
+    return { view, lines: within(list).getAllByRole('listitem') }
+  }
+
+  it('says which scope sending waits for, in the backend own words, with the waiting icon', async () => {
+    const { lines } = await projectLines(
+      companies({
+        sending: 'waiting',
+        waiting_for: ['crm.objects.calls.write', 'crm.objects.tasks.write'],
+        summary:
+          'Companies: reading ready. Sending waits for crm.objects.calls.write, crm.objects.tasks.write.',
+      }),
+    )
+    const line = lines[1]
+    expect(line).toHaveTextContent(
+      'Companies: reading ready. Sending waits for crm.objects.calls.write, crm.objects.tasks.write.',
+    )
+    expect(line.querySelector('svg')).toHaveClass('lucide-hourglass')
+    // The Lead Finder waits too.
+    expect(lines[0].querySelector('svg')).toHaveClass('lucide-hourglass')
+  })
+
+  it('says sending is ready once it is, with the tick', async () => {
+    const { lines } = await projectLines(companies({}))
+    const line = lines[1]
+    expect(line).toHaveTextContent('Companies: reading ready. Sending ready.')
+    expect(line).toHaveTextContent(
+      'Reads companies, deals and owners, and sends the calls a rep confirms.',
+    )
+    expect(line.querySelector('svg')).toHaveClass('lucide-circle-check')
+  })
+
+  it.each([
+    ['unknown', 'lucide-circle-question-mark'],
+    ['off', 'lucide-circle-pause'],
+  ])('marks sending %s with its own icon', async (sending, icon) => {
+    const { lines } = await projectLines(
+      companies({ sending, summary: 'Companies: reading ready. Sending not known yet.' }),
+    )
+    expect(lines[1].querySelector('svg')).toHaveClass(icon)
   })
 })

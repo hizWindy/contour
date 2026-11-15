@@ -3,14 +3,20 @@
  * each permission, what each project can do, the syncs with "Sync now" (what changed, and
  * everything once a week), "Full copy" and, while one runs, its phase and Stop (PLAN-V15 T2-6),
  * whether writing is on, and the last 50 writes with links to HubSpot.
+ *
+ * Each project's line is the backend's own sentence, like "Companies: reading ready. Sending waits
+ * for crm.objects.calls.write." (PLAN-V17 T3-7: Companies sends call notes). An icon beside it says
+ * where it stands at a glance, as the permissions above have: ready, waiting, not known or off.
  */
 import { createColumnHelper } from '@tanstack/react-table'
 import {
   ChevronDown,
   CircleCheck,
+  CirclePause,
   CircleQuestionMark,
   CircleX,
   Copy,
+  Hourglass,
   RefreshCw,
   ShieldCheck,
   Square,
@@ -25,7 +31,7 @@ import {
   useRecheckHubSpot,
   useStartHubSpotSync,
 } from '@/api/hooks'
-import type { HubSpotScope, HubSpotSync, HubSpotWrite } from '@/api/types'
+import type { HubSpotProject, HubSpotScope, HubSpotSync, HubSpotWrite } from '@/api/types'
 import { DataTable } from '@/components/data-table'
 import { isStopping, stoppedWords, syncProgress } from '@/components/hubspot/sync-progress'
 import { ErrorState } from '@/components/error-state'
@@ -68,6 +74,17 @@ const WRITE_STATUS: Record<HubSpotWrite['status'], string> = {
   partial: 'Part sent',
   failed: 'Failed',
   uncertain: 'Not sure it landed',
+}
+
+/**
+ * The icon for a project's line: waiting for a permission, not known yet, sending switched off, or
+ * ready (reading and, if it sends, sending). The words are the backend's own `summary`.
+ */
+function projectIcon(project: HubSpotProject): LucideIcon {
+  if (project.reading === 'waiting' || project.sending === 'waiting') return Hourglass
+  if (project.reading === 'unknown' || project.sending === 'unknown') return CircleQuestionMark
+  if (project.sending === 'off') return CirclePause
+  return CircleCheck
 }
 
 function syncCounts(sync: HubSpotSync): string {
@@ -194,12 +211,18 @@ export function ConnectionCard() {
                   })}
                 </ul>
                 <ul className="flex flex-col gap-2" aria-label="Projects">
-                  {data.projects.map((project) => (
-                    <li key={project.app}>
-                      <p className="font-semibold">{project.summary}</p>
-                      <p className="text-muted-foreground">{project.uses}</p>
-                    </li>
-                  ))}
+                  {data.projects.map((project) => {
+                    const Icon = projectIcon(project)
+                    return (
+                      <li key={project.app} className="flex items-start gap-2">
+                        <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+                        <span className="flex min-w-0 flex-col">
+                          <span className="font-semibold">{project.summary}</span>
+                          <span className="text-muted-foreground">{project.uses}</span>
+                        </span>
+                      </li>
+                    )
+                  })}
                 </ul>
               </CollapsibleContent>
             </Collapsible>
