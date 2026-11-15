@@ -550,6 +550,19 @@ The first two and `meeting_forms_enabled` are on the Settings page. `internal_em
 
 Newest first.
 
+- 2026-11-15: **T1-7 under way, not done.**
+  - **First full run** on 86cf3f0 (`RUN_GATES=1`, one folder at a time to save memory, test database `_v17a`): 3,752 passed, 25 skipped, none failed (core 2,011, companies 108, Lead Finder 1,622, gates 3, e2e 8), in about 16 minutes. Ruff and mypy pass (the hook). The contract gate passes, so `openapi.json` is up to date.
+  - **Security check** (a new `review-agent`, on 437a2ee..86cf3f0): Ready with notes, no blocker. Fixed in a2ce1a1 by the `backend-agent` (each new test failed with its fix taken out):
+    1. A takeover knows which create was on its way (`sending` in the plan). Before, it lived only in memory, so a retried step cut off mid-send could be sent twice.
+    2. `GET /hubspot/writes` and `POST /hubspot/writes/{write_id}/apply` are for Admins only (sign-in off: open). The log names companies, calls, tasks and field values. Track 3 was told: a Staff person on Admin, HubSpot gets 403 `admin_only` on the write log.
+    3. Looking for a create that timed out keeps only records linked to the write's company. Every task due on one day has the same time, so another company's "Follow up" could be taken for ours.
+    4. Two previews of one subject take turns (`lock_subject`, an advisory lock in `save_preview`), so they make one row.
+    5. A yes to a create or a change that we can't read is uncertain (it may have landed), not failed.
+  - **Left for M1's merge-check:** the activity writer takes any company field, so choice 3's list is Track 2's to enforce. Track 2 says it checks the list when sorting, on the edit and again at send, with a test (its Log).
+  - **The second full run** (on a2ce1a1) was stopped by Claude Code at 20:3x because the laptop was critically low on memory (0.2 GB free). It reached part of `tests/core` only. It starts again only on Al-khair's word. The fix agent's own runs on a2ce1a1 passed: the activity writer 34, the client 58, the Lead Finder writer 11, the screen-words guard 9, the routes list 105 (25 skipped), the contract gate 2, the Lead Finder's send 7, and the hook's fast tests.
+  - The fix agent made a second test database, `leadfinder_test_v17a_t1fix`, while another process was using `_v17a`. It can be dropped.
+  - **For M9 (docs):** AGENTS.md should say the write log and its apply are for Admins only.
+
 - 2026-11-15: **Fixes asked by the other tracks** (feee0f5, 94fdce2, and f7499d3 from the first session).
   - **For Track 3:** `GET /hubspot/owners` answers `{owners: [{id, name}]}`. Every owner has a name: theirs, or "HubSpot owner 301" when HubSpot has none or our copy doesn't hold them yet (`shown_name` in `owners.py`, also used in a task's words). Never an email. The path stays `PUT /people/{user_id}/hubspot-owner`, like `PATCH /people/{user_id}` (the M1 rename Track 3 planned).
   - **For Track 3:** with no key, the connection check says "The HubSpot key isn't set on the server.", and a project's sending-off line says "sending is switched off on the server". The screen-words guard reads `ConnectionCheck` too, and a test checks every readiness line.
