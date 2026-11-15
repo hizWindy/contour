@@ -674,7 +674,7 @@ Newest first.
   - The 10 notes' text goes to Track 2 for T2-8. No recording is kept.
   - **Done when:** the Log has the numbers and the decision.
 
-- [ ] **T3-3. Four motion parts** (in the motion kit).
+- [x] **T3-3. Four motion parts** (in the motion kit).
   - `PushView`: one view replaces another inside a box that keeps its size (the Log call view in the panel).
   - `ListExit`: a row leaves and the rows under it glide up, with Motion's `layout` (already loaded: `domMax`).
   - `LevelMeter`: five bars that follow a level from 0 to 1, as `scaleY`.
@@ -719,6 +719,7 @@ Newest first.
   - "Last talk" in the panel shows the rep's own note that isn't in HubSpot yet, marked "Your note, not in HubSpot yet".
   - Admin: the three switches on Settings, the Companies line on the HubSpot page, and the owner on the People tab.
   - **Done when:** each has tests, and a person without the Companies tick sees none of it.
+  - 2026-11-15: **built** (`049e973` to `0a9b240`), checks in the Log. Not seen in a browser yet: T3-8 does that.
 
 - [ ] **T3-8. Stage A check.**
   - Lint, types, the tests, the build and `node scripts/bundle-report.js`.
@@ -747,6 +748,39 @@ Newest first.
 ### Track 3 Log
 
 Newest first.
+
+- 2026-11-15: **Al-khair's answers** (in chat, 15 Nov):
+  1. Activity (and Meetings in Stage B) stays in the menu for anyone who sees Companies, while its switch is off. The page says it is off.
+  2. DESIGN.md gains all six proposed rules: the level meter, the in-panel push, a note kept in the browser until the server has it, a card list that keeps each card in place, a card that edits in place, and the batch send. T3-8 writes them.
+  3. X keeps the card in To confirm, dimmed, with "Put back".
+  4. The tick draws its line (`TickIn`, `pathLength`).
+  - The other choices waiting for a look (T3-3's 4 and 5, T3-5's 1 to 4, T3-6's 1, 3 and 4, T3-7's) stand as built unless he changes them.
+- 2026-11-15: **T3-7 built** (`049e973` to `0a9b240`).
+  - What it adds: Activity's count in the menu, Home's "7 calls to confirm" and "2 need a look", and Ctrl+K's "Log a call" and "Calls to confirm". Also Last talk with "Your note, not in HubSpot yet", Settings' Call notes group, an icon on each project's HubSpot line, and each person's HubSpot owner on People.
+  - The parts around the app load late (`call-note-parts.ts`), so the first visit stays at 230 kB gzip (715 kB raw).
+  - The agent's checks: lint, types, and the full suite (99 files, 1,380 passed, up from 1,352). The build passes.
+  - The planned "Call notes" project is gone: Activity replaces it.
+  - Track 3's own choices (**TBC**, his look): Companies' group comes after the Lead Finder's, in the same order as Home and Ctrl+K. The count sits inside Activity's link, so a screen reader hears "Activity, 7 calls to confirm". The owner column shows from 1024px wide. The owner pick list has "None" first.
+- 2026-11-15: **For M1** (read from Track 2's branch, `49ad168`, and from building T3-7):
+  - **Track 2's code answers T3-6's four questions, all yes.**
+    - The lists group the statuses as Track 3 assumed.
+    - Confirm marks each note `sending` before it answers.
+    - "Keep mine" clears `current_changed`.
+    - A change or follow-up sent back with `id: null` is taken as new. A second change to the same field and office answers 422 `change_twice`.
+  - **What M1's type check will find:**
+    - The call note routes' key is `{note_id}`, not `{id}`. The addresses are the same.
+    - Save answers 201 (200 for a repeated `Idempotency-Key`). Confirm and Try again answer 202.
+    - The call, each change and each task carry `in_hubspot`. Track 3 doesn't use it yet: Needs a look offers Try again and resolve, not edits.
+    - Extras Track 3 doesn't read: `skipped`, `batch_id` and `notes` on preview and confirm, and `status` on `my_last_note`.
+  - **For Track 1:**
+    - `core/hubspot/needs.py` words a switched-off write as "sending is switched off (HUBSPOT_WRITE_ENABLED)". The HubSpot page shows that line as it comes, so a setting's name would show on screen. Suggested: "sending is switched off on the server".
+    - An owner with no name in HubSpot needs a stand-in name, never an email.
+    - If T1-4's route uses `{user_id}`, M1 renames it in `hubspot-owners.ts`.
+  - **For Track 2:** Activity's prefetch asks for the counts beside the switches. So with call notes off, its 409 `call_notes_off` is expected, and nothing shows. The menu and Home ask only once the switches say on.
+- 2026-11-15: **Ready for T3-8 and T3-2:**
+  - Track 3's database `leadfinder_v17c` is made, a copy of the dev database at `0017_call_prep`.
+  - For the screen checks: a throwaway worktree `../contour-v17-t3-preview` (detached, never a branch). It joins `plan-v17-track2` into `plan-v17-track3` on its own database, `leadfinder_v17c_preview`, with no keys. Removed after T3-8.
+  - T3-2's test page (Transformers.js 4.3.2, Whisper base and small, English) is in the session's scratchpad, never in git. It waits for Al-khair at the keyboard.
 
 - 2026-11-15: **T3-6 built, waiting for a look.**
   - Activity reads only the rep's own notes (`mine=true`). A team view for Admins is **TBC** and not built.
