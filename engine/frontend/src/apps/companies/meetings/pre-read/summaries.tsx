@@ -8,8 +8,8 @@
  * - **The pencil** (the line editor's, `line-box.tsx`) turns a summary into a text box. Save
  *   shows the new words and "Edited by you" at once, then tells the server (a PATCH with that
  *   summary's text). If the server says no, the summary goes back, and the box opens again with
- *   the rep's words and why. A summary the rep changed stays as it is through a redraft: the
- *   server keeps it.
+ *   the rep's words and why; if the rep has left the page by then, a toast says so. A summary the
+ *   rep changed stays as it is through a redraft: the server keeps it.
  * - **Redraft** writes the three again, which costs money, so the button says what one draft
  *   costs by the plan's estimate, and the line beside it what the drafts have cost so far (the
  *   server adds them together, and keeps no cost for each one). While it drafts, each AI summary
@@ -19,7 +19,8 @@
  *   redraft). Summaries an earlier draft wrote stay under it.
  */
 import { Cpu, Hourglass, PenLine, RefreshCw, TriangleAlert } from 'lucide-react'
-import { useId, useRef, useState, type RefObject } from 'react'
+import { useEffect, useId, useRef, useState, type RefObject } from 'react'
+import { toast } from 'sonner'
 import { isStillDrafting, useEditMeetingForm, useRedraftMeetingForm } from '@/api/hooks/meetings'
 import type { FormSummariesPatch, MeetingFormOut, SummaryBy } from '@/api/v17'
 import { Button } from '@/components/ui/button'
@@ -40,6 +41,7 @@ import {
   FAILED_FALLBACK,
   FAILED_TITLE,
   LEFT_EMPTY,
+  leftNotSavedWords,
   NOTHING_FROM_AI,
   notSavedWords,
   REDRAFT,
@@ -98,6 +100,16 @@ function SummaryBlock({ form, name }: SummaryBlockProps) {
   const [editing, setEditing] = useState(false)
   // A save the server refused: the rep's words, to open the box with again, and why.
   const [kept, setKept] = useState<{ text: string; problem: string } | null>(null)
+  // Only the newest save's answer counts, as one left on its way may answer after it.
+  const newest = useRef(0)
+  // Still on screen: a save that fails after the rep left the page says so in a toast instead.
+  const shownNow = useRef(true)
+  useEffect(() => {
+    shownNow.current = true
+    return () => {
+      shownNow.current = false
+    }
+  }, [])
   const writing = form.status === 'drafting' && summary.by === 'ai'
   const text = summary.text.trim()
 
@@ -117,15 +129,24 @@ function SummaryBlock({ form, name }: SummaryBlockProps) {
     close()
     const patch: FormSummariesPatch = {}
     patch[name] = next
-    edit.mutate(
-      { patch: { summaries: patch }, apply: (current) => withSummary(current, name, next) },
-      {
-        onError: (error) => {
-          setKept({ text: next, problem: notSavedWords(error) })
-          setEditing(true)
-        },
-      },
-    )
+    newest.current += 1
+    const mine = newest.current
+    // Its promise answers even once the page is gone, which a callback given to `mutate` doesn't.
+    void edit
+      .mutateAsync({
+        patch: { summaries: patch },
+        apply: (current) => withSummary(current, name, next),
+      })
+      .catch((error: unknown) => {
+        if (mine !== newest.current) return
+        if (!shownNow.current) {
+          const words = leftNotSavedWords(title, form.meeting.company_name, error)
+          toast.error(words.title, { description: words.description })
+          return
+        }
+        setKept({ text: next, problem: notSavedWords(error) })
+        setEditing(true)
+      })
   }
 
   let body

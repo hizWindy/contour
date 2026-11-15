@@ -115,6 +115,29 @@ export function notSavedWords(error: unknown): string {
   return title.trim() ? `${sentence(title)} ${NOT_SAVED}` : NOT_SAVED
 }
 
+/**
+ * A blank or a summary whose save failed after the rep left the page, for a toast, since the page
+ * that would say so is gone: what wasn't saved, why, and on which pre-read. `"Ideal next step"
+ * wasn't saved`, then "You're offline. Open the pre-read for Sample Logistics Pty Ltd and write it
+ * again."
+ */
+export function leftNotSavedWords(
+  what: string,
+  companyName: string,
+  error: unknown,
+): { title: string; description: string } {
+  const why = toApiProblem(error).title.trim()
+  return {
+    title: `"${what}" wasn't saved`,
+    description: [
+      why ? sentence(why) : null,
+      `Open the pre-read for ${companyName} and write it again.`,
+    ]
+      .filter(Boolean)
+      .join(' '),
+  }
+}
+
 // --- Check and send -----------------------------------------------------------------------------
 
 export const CHECK_AND_SEND = 'Check and send'

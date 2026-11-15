@@ -134,8 +134,8 @@ interface Server {
   next: MeetingFormOut[]
   /** How GET answers: the form, 404 `form_not_found`, 422 for an id that can't be one, off, or a fault. */
   get: 'ok' | 'missing' | 'bad-id' | 'off' | 'broken'
-  /** How PATCH answers: at once, after `release()`, or a fault the first time. */
-  patch: 'ok' | 'wait' | 'fail-once'
+  /** How PATCH answers: at once, after `release()`, a fault the first time, or one after `release()`. */
+  patch: 'ok' | 'wait' | 'fail-once' | 'wait-then-fail'
   release: () => void
   calls: Call[]
 }
@@ -225,11 +225,12 @@ function mockServer(changes: Partial<Omit<Server, 'calls' | 'release'>> = {}): S
       return json(server.form)
     }
     if (url.pathname === FORM && method === 'PATCH') {
-      if (server.patch === 'wait') {
+      if (server.patch === 'wait' || server.patch === 'wait-then-fail') {
         await new Promise<void>((resolve) => {
           server.release = resolve
         })
       }
+      if (server.patch === 'wait-then-fail') return FAULT()
       if (server.patch === 'fail-once' && !failed) {
         failed = true
         return FAULT()
@@ -644,6 +645,52 @@ describe('the two blanks', () => {
     ])
     expect(next).not.toHaveAttribute('aria-invalid')
     expect(screen.getByRole('button', { name: 'Check and send' })).toBeEnabled()
+  })
+})
+
+describe('a save that fails after the rep has left the page', () => {
+  const LEFT_WHY =
+    'Something went wrong on our side. Open the pre-read for Sample Logistics Pty Ltd and write it again.'
+
+  it('a blank says so in a toast, naming it and the pre-read', async () => {
+    const server = mockServer({ patch: 'wait-then-fail' })
+    const { user, router } = renderPreRead()
+    await screen.findByRole('heading', { level: 1, name: 'Office walk-through' })
+    await user.type(screen.getByRole('textbox', { name: 'Ideal next step' }), 'Book a visit.')
+    await user.tab()
+    await waitFor(() => {
+      expect(patches(server)).toHaveLength(1)
+    })
+    // Back to Meetings while it saves: the page that would say so is gone.
+    await act(async () => {
+      await router.navigate('/companies/meetings')
+    })
+    await screen.findByRole('heading', { level: 1, name: 'Client meetings' })
+    server.release()
+    expect(await screen.findByText(`"Ideal next step" wasn't saved`)).toBeInTheDocument()
+    expect(screen.getByText(LEFT_WHY)).toBeInTheDocument()
+  })
+
+  it('a summary says so in a toast too', async () => {
+    const server = mockServer({ patch: 'wait-then-fail' })
+    const { user, router } = renderPreRead()
+    await screen.findByRole('heading', { level: 1, name: 'Office walk-through' })
+    await user.click(summaryOf('What they do').getByRole('button', { name: 'Edit what they do' }))
+    await user.type(
+      summaryOf('What they do').getByRole('textbox', { name: 'What they do, your wording' }),
+      ' Mostly freight.',
+    )
+    await user.click(summaryOf('What they do').getByRole('button', { name: 'Save' }))
+    await waitFor(() => {
+      expect(patches(server)).toHaveLength(1)
+    })
+    await act(async () => {
+      await router.navigate('/companies/meetings')
+    })
+    await screen.findByRole('heading', { level: 1, name: 'Client meetings' })
+    server.release()
+    expect(await screen.findByText(`"What they do" wasn't saved`)).toBeInTheDocument()
+    expect(screen.getByText(LEFT_WHY)).toBeInTheDocument()
   })
 })
 
