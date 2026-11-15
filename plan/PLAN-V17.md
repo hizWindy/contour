@@ -749,6 +749,35 @@ Newest first.
 
 Newest first.
 
+- 2026-11-15: **T3-8 in progress: the browser check so far.**
+  - **The setup:** a throwaway preview, the worktree `../contour-v17-t3-preview`. It joins `plan-v17-track2` (Track 2's real call notes routes) into this branch.
+    - It runs on its own database (`leadfinder_v17c_preview`, now at `0021_call_notes`), with no keys: backend 8053, website 5223.
+    - Call notes are on and the AI is off. Three made-up notes were saved through the real routes.
+    - Headless Chrome answers the states the preview can't reach with made-up data: sending ready, a batch, Needs a look, Logged, call notes off, and HubSpot owners.
+    - Screenshots are in `plan/shots/v17-t3/` (git-ignored).
+  - **Works on the real routes before M1:**
+    - Saving a note, and a change and a follow-up added to it.
+    - The counts in the menu, on Home and on the tabs, which agree.
+    - Last talk showing "Your note, not in HubSpot yet" from Track 2's `my_last_note`.
+    - The waiting line ("Waiting for HubSpot to be connected.").
+    - No console errors.
+  - **Passes:**
+    - Reduced motion: Log call is in place at once.
+    - Keyboard only: every stop in Log call (18) and on Activity (26) shows a focus ring. J, X and Put back work.
+    - Home's layout shift (CLS) is 0.027, under 0.1.
+    - Activity's tab switches drop no frames at 4x CPU slowdown.
+  - **Found, being fixed** (one frontend-agent run):
+    1. **A bug:** L takes the script view down, so Back builds it again with the guided questions' "Asked" ticks cleared and the scroll at the top. Back also costs one long frame: about 85ms at full speed, 830 to 1,180ms at 4x. The fix keeps the script built under the note view.
+    2. A rolling number beside words sits about 0.2em too high ("Send ³ to HubSpot"). The cause is the digit columns' `overflow: hidden`.
+    3. A left-out card dimmed with `opacity-60` falls under 4.5:1. It will dim with the quieter text colour: Al-khair's "dim it, with Put back" stays.
+    4. The send bar said the count twice ("7 calls to send." beside "Send 7 to HubSpot").
+    5. A batch landing had 13 frames over 33ms at 4x, the longest 229ms. Being looked at.
+  - **Measured, not a Stage A change:** at 4x CPU, opening call prep takes one 660ms frame and building the script 1,600ms. Log call's first L takes about 670ms (97ms at full speed). Each time the slide itself runs smoothly once the view is built.
+  - **The design review** (`design-review`, by the frontend-agent): 2 Must fix and 1 Should fix, all fixed (`eb005cf`, `47f91db`, `3584fe3`). Two ideas wait for Al-khair (**TBC**):
+    - the `sm` button is 40px on touch everywhere, so make it 44px in one line;
+    - Edit mode's follow-ups are boxes inside a card.
+  - **DESIGN.md** gains his six rules, the drawn tick and the dimmed card (`f84a8bb`, `9677630`).
+  - **For Track 1:** with no key, the HubSpot page's "Connected" row shows "HUBSPOT_SERVICE_KEY is not set in engine/.env". That puts a setting's name and a file's name on screen. It comes from `core/hubspot/` (the connection check), not from Stage A. Suggested: "The HubSpot key isn't set on the server."
 - 2026-11-15: **Al-khair's answers** (in chat, 15 Nov):
   1. Activity (and Meetings in Stage B) stays in the menu for anyone who sees Companies, while its switch is off. The page says it is off.
   2. DESIGN.md gains all six proposed rules: the level meter, the in-panel push, a note kept in the browser until the server has it, a card list that keeps each card in place, a card that edits in place, and the batch send. T3-8 writes them.
