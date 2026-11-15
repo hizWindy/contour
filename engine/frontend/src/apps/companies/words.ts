@@ -7,6 +7,8 @@ export const WAITING_FOR_PEOPLE = 'Waiting for HubSpot access to contacts and ca
 
 export const LOG_A_CALL = 'Log a call'
 export const CALLS_TO_CONFIRM = 'Calls to confirm'
+/** Ctrl+K's entry for the pre-meeting form (PLAN-V17 T3-11): it opens Meetings, upcoming. */
+export const PRE_READ_FOR_A_MEETING = 'Pre-read for a meeting'
 
 /** "7 calls to confirm", "1 call to confirm". */
 export function toConfirmWords(count: number): string {

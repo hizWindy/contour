@@ -13,13 +13,15 @@
  * sits under Meetings (`/companies/meetings/{form_id}`, T3-10), so the menu marks Meetings there.
  * Activity's row shows how many calls wait to be confirmed, and Ctrl+K gains "Log a call" and
  * "Calls to confirm" (`call-note-links.tsx`, which loads late through `call-note-parts.ts`, so the
- * first visit doesn't grow).
+ * first visit doesn't grow). With pre-meeting forms on (T3-11), Home gains "Upcoming meetings", a
+ * card that comes late and goes after the others, and Ctrl+K "Pre-read for a meeting", loaded the
+ * same way.
  */
 import { Building2, CalendarCheck, ClipboardCheck } from 'lucide-react'
 import type { PrefetchArgs, RouteHandle } from '@/shell/crumbs'
 import type { AppModule } from '@/shell/nav'
 import { page } from '@/shell/page-route'
-import { CallNoteCommands, ToConfirmCount } from './call-note-parts'
+import { CompaniesCommands, ToConfirmCount, UpcomingMeetings } from './call-note-parts'
 import { CompaniesHomeCard } from './home-card'
 import { prefetchCompanies, prefetchCompaniesHome, prefetchCompany } from './prefetch'
 
@@ -53,7 +55,10 @@ export const COMPANIES: AppModule = {
   name: 'Companies',
   icon: Building2,
   tone: 'companies',
-  homeCards: [{ id: 'companies', component: CompaniesHomeCard }],
+  homeCards: [
+    { id: 'companies', component: CompaniesHomeCard },
+    { id: 'meetings', component: UpcomingMeetings, late: true },
+  ],
   prefetchSummary: prefetchCompaniesHome,
   description:
     'Every client and prospect in HubSpot, with what we know about each, and a call script before you ring.',
@@ -82,7 +87,7 @@ export const COMPANIES: AppModule = {
       count: ToConfirmCount,
     },
   ],
-  commands: CallNoteCommands,
+  commands: CompaniesCommands,
   routes: [
     {
       path: 'companies',

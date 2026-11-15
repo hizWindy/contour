@@ -109,6 +109,13 @@ export interface HomeCard {
   component: ComponentType
   /** The project's main card: two columns wide on a laptop, beside the narrow cards. */
   wide?: boolean
+  /**
+   * A card that may draw nothing, or come after Home has drawn, because it waits for a switch
+   * (Companies' "Upcoming meetings", PLAN-V17 T3-11). It goes after every other card, Runs and
+   * cost too, so its coming moves none of them; it takes no place while it draws nothing; and it
+   * brings its own fade (`Reveal`) for when it comes.
+   */
+  late?: boolean
 }
 
 /**
