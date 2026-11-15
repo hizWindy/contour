@@ -10,7 +10,7 @@ routes are in api_meetings.py.
 - **Mine** is the rep's own, by their HubSpot owner (`owner_of`). With sign-in off nobody is
   signed in, so it is everyone's. The team's list puts the rep's own first.
 - **The search** is plain code: each word must start a word of the company's name, the title, or
-  the date in words (Melbourne time). So "vitera 26 nov", "thu" and "26/11" all work.
+  the date in words (Melbourne time). So "sample 26 nov", "thu" and "26/11" all work.
 """
 
 import re
@@ -261,10 +261,11 @@ class Row:
     meeting: Meeting
     company_name: str
     group: MeetingGroup | None
+    typed: MeetingFormState | None = None  # a typed meeting's own pre-read
 
 
 async def items_of(session: AsyncSession, rows: Sequence[Row]) -> list[MeetingItem]:
-    ids = [row.meeting.id for row in rows]
+    ids = [row.meeting.id for row in rows if row.typed is None]
     forms = await forms_of(session, ids)
     noted = await with_notes(session, ids)
     return [
@@ -272,10 +273,59 @@ async def items_of(session: AsyncSession, rows: Sequence[Row]) -> list[MeetingIt
             meeting=row.meeting,
             company_name=row.company_name,
             group=row.group,
-            form=forms.get(row.meeting.id),
-            notes_logged=row.meeting.id in noted,
+            form=row.typed or forms.get(row.meeting.id),
+            notes_logged=row.typed is None and row.meeting.id in noted,
+            typed=row.typed is not None,
         )
         for row in rows
+    ]
+
+
+@dataclass(frozen=True)
+class Entry:
+    """One meeting a list may show: from HubSpot, or typed in for "New pre-read"."""
+
+    meeting: Meeting
+    company_name: str
+    typed: MeetingFormState | None = None
+
+
+async def typed_meetings(
+    session: AsyncSession, auth: AuthContext | None, *, upcoming: bool, now: datetime
+) -> list[Entry]:
+    """My own pre-reads for meetings typed in ("New pre-read"), in the same window as the list:
+    the next 7 days, or the last 30, by when the meeting starts. With sign-in off: the ones
+    nobody signed in made. Each is shown as a meeting with no HubSpot id."""
+    window = (
+        (now, now + timedelta(days=UPCOMING_DAYS))
+        if upcoming
+        else (now - timedelta(days=PAST_DAYS), now)
+    )
+    maker = (
+        MeetingForm.made_by == auth.user.id if auth is not None else MeetingForm.made_by.is_(None)
+    )
+    forms = await session.scalars(
+        select(MeetingForm).where(
+            MeetingForm.meeting_id.is_(None),
+            maker,
+            MeetingForm.starts_at >= window[0],
+            MeetingForm.starts_at < window[1],
+        )
+    )
+    return [
+        Entry(
+            meeting=Meeting(
+                id="",
+                company_id=form.company_key,
+                title=form.title,
+                starts_at=form.starts_at,
+                ends_at=form.ends_at,
+                where=form.where,  # the table's check keeps it to the list
+            ),
+            company_name=form.company_name,
+            typed=MeetingFormState(id=form.id, status=form.status),
+        )
+        for form in forms
     ]
 
 
@@ -292,63 +342,75 @@ async def list_meetings(
     now: datetime,
 ) -> MeetingPage:
     """A page of client meetings: upcoming (the next 7 days, soonest first, grouped by day) or
-    past (newest first). Mine, or the team's with mine first."""
+    past (newest first). Mine, or the team's with mine first. My own typed pre-reads join them,
+    even while HubSpot's meetings aren't read."""
     status = await source.status(session)
+    upcoming = when == "upcoming"
+    owner = await my_owner(session, auth, source) if status.state == "ready" else None
+    sentence: str | None = None
+    entries: list[Entry] = []
     if status.state != "ready":
         sentence = status.sentence or NOT_READY
-        return MeetingPage(items=[], total=0, meetings_state=status.state, sentence=sentence)
-    owner = await my_owner(session, auth, source)
-    if mine and auth is not None and owner is None:
-        return MeetingPage(items=[], total=0, meetings_state="ready", sentence=NOT_LINKED)
-    upcoming = when == "upcoming"
-    read = source.upcoming if upcoming else source.past
-    found = await read(
-        session, owner_id=owner if mine else None, days=UPCOMING_DAYS if upcoming else PAST_DAYS
-    )
+    elif mine and auth is not None and owner is None:
+        sentence = NOT_LINKED
+    else:
+        read = source.upcoming if upcoming else source.past
+        found = await read(
+            session,
+            owner_id=owner if mine else None,
+            days=UPCOMING_DAYS if upcoming else PAST_DAYS,
+        )
+        entries += [Entry(meeting, name) for meeting, name in await client_meetings(session, found)]
+    entries += await typed_meetings(session, auth, upcoming=upcoming, now=now)
     words = search_words(q)
-    pairs = [
-        (meeting, name)
-        for meeting, name in await client_meetings(session, found)
-        if matches(meeting, name, words)
-    ]
+    entries = [entry for entry in entries if matches(entry.meeting, entry.company_name, words)]
 
-    def order(pair: tuple[Meeting, str]) -> tuple[bool, float]:
-        meeting = pair[0]
-        theirs = not mine and owner is not None and meeting.owner_id != owner  # mine first
-        moment = meeting.starts_at.timestamp()
+    def order(entry: Entry) -> tuple[bool, float]:
+        theirs = (  # mine first: a typed one is always mine
+            not mine
+            and owner is not None
+            and entry.typed is None
+            and entry.meeting.owner_id != owner
+        )
+        moment = entry.meeting.starts_at.timestamp()
         return theirs, (moment if upcoming else -moment)
 
-    pairs.sort(key=order)
-    page = pairs[offset : offset + limit]
+    entries.sort(key=order)
     rows = [
-        Row(meeting, name, group_of(meeting.starts_at, now) if upcoming else None)
-        for meeting, name in page
+        Row(
+            entry.meeting,
+            entry.company_name,
+            group_of(entry.meeting.starts_at, now) if upcoming else None,
+            entry.typed,
+        )
+        for entry in entries[offset : offset + limit]
     ]
     return MeetingPage(
         items=await items_of(session, rows),
-        total=len(pairs),
-        meetings_state="ready",
-        sentence=None,
+        total=len(entries),
+        meetings_state=status.state,
+        sentence=sentence,
     )
 
 
 async def summary(
-    session: AsyncSession, auth: AuthContext | None, *, source: MeetingSource
+    session: AsyncSession, auth: AuthContext | None, *, source: MeetingSource, now: datetime
 ) -> MeetingSummary:
     """For Home: my upcoming meetings (the next 7 days) that need a pre-read (none, or one that
-    failed), and those whose draft waits for me. A cancelled meeting needs none."""
-    nothing = MeetingSummary(need_pre_read=0, draft_ready=0)
-    if (await source.status(session)).state != "ready":
-        return nothing
-    owner = await my_owner(session, auth, source)
-    if auth is not None and owner is None:
-        return nothing
-    found = await client_meetings(
-        session, await source.upcoming(session, owner_id=owner, days=UPCOMING_DAYS)
-    )
-    meetings = [meeting for meeting, _ in found if not cancelled(meeting)]
-    forms = await forms_of(session, [meeting.id for meeting in meetings])
-    states = [forms[meeting.id].status if meeting.id in forms else None for meeting in meetings]
+    failed), and those whose draft waits for me, my typed ones too. A cancelled meeting needs
+    none."""
+    states: list[str | None] = []
+    if (await source.status(session)).state == "ready":
+        owner = await my_owner(session, auth, source)
+        if auth is None or owner is not None:
+            found = await client_meetings(
+                session, await source.upcoming(session, owner_id=owner, days=UPCOMING_DAYS)
+            )
+            meetings = [meeting for meeting, _ in found if not cancelled(meeting)]
+            forms = await forms_of(session, [meeting.id for meeting in meetings])
+            states += [forms[m.id].status if m.id in forms else None for m in meetings]
+    typed = await typed_meetings(session, auth, upcoming=True, now=now)
+    states += [entry.typed.status for entry in typed if entry.typed is not None]
     return MeetingSummary(
         need_pre_read=sum(state in (None, "failed") for state in states),
         draft_ready=sum(state == "draft" for state in states),

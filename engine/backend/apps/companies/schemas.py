@@ -4,9 +4,9 @@ import uuid
 from collections.abc import Callable
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 from pydantic.config import JsonDict
 
 from apps.companies.deals import DealState, StageKind
@@ -826,6 +826,11 @@ class MeetingItem(Out):
     )
     form: MeetingFormState | None = Field(description="Its pre-read, or none yet")
     notes_logged: bool = Field(description="A call note is linked to it (Log meeting)")
+    typed: bool = Field(
+        False,
+        description="True for a meeting typed in for New pre-read: it isn't in HubSpot, its "
+        "`meeting.id` is empty, and `form` is its pre-read",
+    )
 
 
 class MeetingPage(Out):
@@ -911,6 +916,56 @@ class MeetingFormOut(Out):
     hubspot_copy: HubSpotCopy | None = Field(description="None until it is sent")
     cost_usd: Decimal
     error: str | None = Field(description="Why the draft failed, in plain words")
+
+
+FORM_SUMMARY_MAX_CHARS = 2_000
+FORM_BLANK_MAX_CHARS = 1_000
+
+
+class MeetingFormStart(BaseModel):
+    """Starts a pre-read: for a HubSpot meeting (`meeting_id`), or for one typed in
+    (`company_key`, `title`, `starts_at`, and `ends_at` and `where` when known)."""
+
+    meeting_id: str | None = Field(
+        None, max_length=32, pattern=r"^[0-9]+$", description="HubSpot's meeting"
+    )
+    company_key: SafeText | None = Field(
+        None, max_length=64, description="A typed meeting's company: a HubSpot id, or lead:<id>"
+    )
+    title: SafeText | None = Field(None, max_length=300)
+    starts_at: AwareDatetime | None = Field(None, description="With its time zone")
+    ends_at: AwareDatetime | None = None
+    where: MeetingWhere = "unknown"
+
+    @model_validator(mode="after")
+    def _one_kind(self) -> Self:
+        typed = (self.company_key, self.title, self.starts_at, self.ends_at)
+        if self.meeting_id is not None and any(part is not None for part in typed):
+            raise ValueError("send a meeting_id, or a typed meeting, not both")
+        if self.meeting_id is None and not (
+            (self.company_key or "").strip() and (self.title or "").strip() and self.starts_at
+        ):
+            raise ValueError("a typed meeting needs a company_key, a title and starts_at")
+        if self.starts_at and self.ends_at and self.ends_at < self.starts_at:
+            raise ValueError("ends_at is before starts_at")
+        return self
+
+
+class FormSummariesPatch(BaseModel):
+    """The new text of each summary the rep changed. Null or empty clears it."""
+
+    what_they_do: SafeText | None = Field(None, max_length=FORM_SUMMARY_MAX_CHARS)
+    what_we_know: SafeText | None = Field(None, max_length=FORM_SUMMARY_MAX_CHARS)
+    talks_so_far: SafeText | None = Field(None, max_length=FORM_SUMMARY_MAX_CHARS)
+
+
+class MeetingFormPatch(BaseModel):
+    """The rep's edits. Only the parts sent change. A summary sent here is the rep's own from
+    then on (`by: person`): a redraft leaves it alone, and it keeps its sources."""
+
+    summaries: FormSummariesPatch | None = None
+    next_step: SafeText | None = Field(None, max_length=FORM_BLANK_MAX_CHARS)
+    going: SafeText | None = Field(None, max_length=FORM_BLANK_MAX_CHARS)
 
 
 class MeetingDetail(Out):

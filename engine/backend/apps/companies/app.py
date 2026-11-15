@@ -5,6 +5,7 @@ from fastapi import FastAPI
 
 from apps.companies.api import router
 from apps.companies.jobs import JOBS
+from apps.companies.meeting_form import MeetingFormRunner
 from apps.companies.note_batch import NoteSender
 from apps.companies.note_fields import check_note_fields
 from apps.companies.notes import NoteSorter
@@ -53,16 +54,27 @@ async def stop_note_sending(app: FastAPI) -> None:
         await sender.stop()
 
 
+async def stop_meeting_forms(app: FastAPI) -> None:
+    """Stops the pre-reads this backend is drafting (PLAN-V17 T2-12). Each fails in plain words,
+    keeps its facts and the rep's edits, and what it had spent is logged."""
+    runner: MeetingFormRunner | None = getattr(app.state, "meeting_form_runner", None)
+    if runner is not None:
+        await runner.stop()
+
+
 async def stop_background(app: FastAPI) -> None:
-    """What runs in the background stops when the backend does: the preps, the sorts, then the
-    sending. One that fails never keeps the others running."""
+    """What runs in the background stops when the backend does: the preps, the sorts, the
+    sending, then the pre-reads. One that fails never keeps the others running."""
     try:
         await stop_preps(app)
     finally:
         try:
             await stop_note_sorts(app)
         finally:
-            await stop_note_sending(app)
+            try:
+                await stop_note_sending(app)
+            finally:
+                await stop_meeting_forms(app)
 
 
 def check_rules() -> None:

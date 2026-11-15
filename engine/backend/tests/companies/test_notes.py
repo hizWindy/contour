@@ -558,7 +558,7 @@ class FakeClaude:
     cost), or an error to raise. It records every request. With a gate, it waits until the test
     opens it."""
 
-    def __init__(self, *replies: tuple[NoteAnswer | None, str] | BaseException) -> None:
+    def __init__(self, *replies: tuple[BaseModel | None, str] | BaseException) -> None:
         self.replies = list(replies)
         self.asked: list[dict[str, Any]] = []
         self.gate: asyncio.Event | None = None
