@@ -24,7 +24,7 @@ import {
   OPEN_MEETINGS,
   OPEN_PRE_READ,
   PAST,
-  WHERE_WORDS,
+  whereWords,
 } from './words'
 
 function MeetingLine({
@@ -42,8 +42,9 @@ function MeetingLine({
   const status = rowStatus(item, past)
   const when = meetingDay(meeting.starts_at, today)
   const title = meeting.title.trim()
-  const where = meeting.where === 'unknown' ? null : WHERE_WORDS[meeting.where]
-  const facts = [when, where, item.owner_name?.trim() || null].filter(Boolean).join(' · ')
+  const facts = [when, whereWords(meeting), item.owner_name?.trim() || null]
+    .filter(Boolean)
+    .join(' · ')
   const href = item.form
     ? preReadHref(item.form.id)
     : meetingsHref({
@@ -51,7 +52,12 @@ function MeetingLine({
         team: true,
         q: companyMeetingsQuery(companyName),
       })
-  const label = item.form ? (status === 'draft' ? CHECK_AND_SEND : OPEN_PRE_READ) : OPEN_MEETINGS
+  // A past meeting's draft opens as any pre-read does: Check and send is for one still to come.
+  const label = item.form
+    ? status === 'draft' && !past
+      ? CHECK_AND_SEND
+      : OPEN_PRE_READ
+    : OPEN_MEETINGS
   return (
     <li
       data-slot="company-meeting"

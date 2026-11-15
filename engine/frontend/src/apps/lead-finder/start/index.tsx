@@ -35,6 +35,7 @@ import { PageHeader } from '@/components/page-header'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatMoney } from '@/lib/money'
+import { useBarRoom } from '@/lib/use-bar-room'
 import { useMediaQuery } from '@/lib/use-media-query'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
@@ -163,6 +164,8 @@ function StartFormView({ options }: { options: RunOptions }) {
   // Under 1024px the cost card is far below the form (three screens on a phone), so the money and
   // the Start button follow you in a bar at the bottom of the screen instead.
   const barAtBottom = useMediaQuery(UNDER_LAPTOP)
+  // A field the keyboard lands on scrolls above that bar, never under it.
+  const barRoom = useBarRoom()
 
   const askThenStart = (): void => {
     if (form.mode === 'tenure') {
@@ -537,6 +540,7 @@ function StartFormView({ options }: { options: RunOptions }) {
 
       {barAtBottom ? (
         <div
+          ref={barRoom}
           data-slot="start-bar"
           className="sticky bottom-0 z-30 -mx-4 flex items-center gap-3 border-t bg-background px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:-mx-6 sm:px-6 [@media(max-height:480px)]:static"
         >

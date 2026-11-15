@@ -134,8 +134,8 @@ interface Server {
   next: MeetingFormOut[]
   /** How GET answers: the form, 404 `form_not_found`, 422 for an id that can't be one, off, or a fault. */
   get: 'ok' | 'missing' | 'bad-id' | 'off' | 'broken'
-  /** How PATCH answers: at once, after `release()`, or a fault the first time. */
-  patch: 'ok' | 'wait' | 'fail-once'
+  /** How PATCH answers: at once, after `release()`, a fault the first time, or one after `release()`. */
+  patch: 'ok' | 'wait' | 'fail-once' | 'wait-then-fail'
   release: () => void
   calls: Call[]
 }
@@ -225,11 +225,12 @@ function mockServer(changes: Partial<Omit<Server, 'calls' | 'release'>> = {}): S
       return json(server.form)
     }
     if (url.pathname === FORM && method === 'PATCH') {
-      if (server.patch === 'wait') {
+      if (server.patch === 'wait' || server.patch === 'wait-then-fail') {
         await new Promise<void>((resolve) => {
           server.release = resolve
         })
       }
+      if (server.patch === 'wait-then-fail') return FAULT()
       if (server.patch === 'fail-once' && !failed) {
         failed = true
         return FAULT()
@@ -304,7 +305,7 @@ function summaryOf(title: string) {
   return within(block)
 }
 
-/** The page's header: the meeting, its company, when and where, and the status. */
+/** The page's header: the meeting, its company, and the status. */
 function pageHeader(): HTMLElement {
   const header = document.querySelector('[data-slot=page-header]')
   if (!(header instanceof HTMLElement)) throw new Error('No page header')
@@ -341,15 +342,19 @@ describe('a draft', () => {
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Office walk-through' }),
     ).toBeInTheDocument()
-    // The header: the company (a link to its record), the day and time, Teams, the status.
+    // The header: the company (a link to its record), and the status on a line of its own, so a
+    // new word moves nothing. When and where are the facts' to say, once.
     const header = within(pageHeader())
     expect(header.getByRole('link', { name: 'Sample Logistics Pty Ltd' })).toHaveAttribute(
       'href',
       '/companies/101',
     )
-    expect(header.getByText(WHEN)).toBeInTheDocument()
-    expect(header.getByText('Teams')).toBeInTheDocument()
-    expect(header.getByText('Draft ready')).toBeInTheDocument()
+    expect(header.queryByText(WHEN)).toBeNull()
+    expect(header.queryByText('Teams')).toBeNull()
+    expect(pageHeader()).toHaveClass('flex-col')
+    const statusLine = pageHeader().querySelector('[data-slot=pre-read-status-line]')
+    expect(statusLine).toHaveTextContent('Draft ready')
+    expect(statusLine).not.toContainElement(header.getByRole('heading', { level: 1 }))
     // HubSpot's link comes from the meeting itself, and opens in a new tab.
     const hubspot = await screen.findByRole('link', { name: /^Open in HubSpot/ })
     expect(hubspot).toHaveAttribute('href', HUBSPOT_URL)
@@ -361,6 +366,7 @@ describe('a draft', () => {
     expect(facts.getAllByRole('term').map((term) => term.textContent)).toEqual(
       FACTS.map((fact) => fact.label),
     )
+    expect(facts.getByText('Fri 27 Nov 2026, 10:00 am to 11:00 am')).toBeInTheDocument()
     expect(facts.getByText('Sam Sample (Office Manager)')).toBeInTheDocument()
     expect(facts.getByText('About 300')).toBeInTheDocument()
     expect(facts.getByText('HubSpot company')).toHaveClass('text-muted-foreground')
@@ -423,7 +429,6 @@ describe('a draft', () => {
       'href',
       '/companies/lead%3A7',
     )
-    expect(within(pageHeader()).getByText('In person')).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /Open in HubSpot/ })).toBeNull()
     expect(server.calls.map((call) => call.path)).toEqual([FORM])
   })
@@ -459,11 +464,23 @@ describe('the pencil', () => {
     })
     expect(box).toHaveFocus()
     expect(box).toHaveValue('Their Perth lease ends in June 2028.')
+    // The open box's Save is quiet: the page keeps one Navy button, "Check and send". Save and
+    // Cancel are 44px tall on a touch screen.
+    const save = summaryOf('What we know about the project').getByRole('button', { name: 'Save' })
+    const cancel = summaryOf('What we know about the project').getByRole('button', {
+      name: 'Cancel',
+    })
+    expect(save).toHaveAttribute('data-variant', 'outline')
+    expect(save).toHaveClass('touch:h-11')
+    expect(cancel).toHaveClass('touch:h-11')
+    expect(
+      [...document.querySelectorAll('[data-slot=button][data-variant=default]')].map(
+        (button) => button.textContent,
+      ),
+    ).toEqual(['Check and send'])
     await user.clear(box)
     await user.type(box, words)
-    await user.click(
-      summaryOf('What we know about the project').getByRole('button', { name: 'Save' }),
-    )
+    await user.click(save)
 
     // At once, before the server answers: the new words, and the mark turns.
     expect(summaryOf('What we know about the project').getByText(words)).toBeInTheDocument()
@@ -628,6 +645,52 @@ describe('the two blanks', () => {
     ])
     expect(next).not.toHaveAttribute('aria-invalid')
     expect(screen.getByRole('button', { name: 'Check and send' })).toBeEnabled()
+  })
+})
+
+describe('a save that fails after the rep has left the page', () => {
+  const LEFT_WHY =
+    'Something went wrong on our side. Open the pre-read for Sample Logistics Pty Ltd and write it again.'
+
+  it('a blank says so in a toast, naming it and the pre-read', async () => {
+    const server = mockServer({ patch: 'wait-then-fail' })
+    const { user, router } = renderPreRead()
+    await screen.findByRole('heading', { level: 1, name: 'Office walk-through' })
+    await user.type(screen.getByRole('textbox', { name: 'Ideal next step' }), 'Book a visit.')
+    await user.tab()
+    await waitFor(() => {
+      expect(patches(server)).toHaveLength(1)
+    })
+    // Back to Meetings while it saves: the page that would say so is gone.
+    await act(async () => {
+      await router.navigate('/companies/meetings')
+    })
+    await screen.findByRole('heading', { level: 1, name: 'Client meetings' })
+    server.release()
+    expect(await screen.findByText(`"Ideal next step" wasn't saved`)).toBeInTheDocument()
+    expect(screen.getByText(LEFT_WHY)).toBeInTheDocument()
+  })
+
+  it('a summary says so in a toast too', async () => {
+    const server = mockServer({ patch: 'wait-then-fail' })
+    const { user, router } = renderPreRead()
+    await screen.findByRole('heading', { level: 1, name: 'Office walk-through' })
+    await user.click(summaryOf('What they do').getByRole('button', { name: 'Edit what they do' }))
+    await user.type(
+      summaryOf('What they do').getByRole('textbox', { name: 'What they do, your wording' }),
+      ' Mostly freight.',
+    )
+    await user.click(summaryOf('What they do').getByRole('button', { name: 'Save' }))
+    await waitFor(() => {
+      expect(patches(server)).toHaveLength(1)
+    })
+    await act(async () => {
+      await router.navigate('/companies/meetings')
+    })
+    await screen.findByRole('heading', { level: 1, name: 'Client meetings' })
+    server.release()
+    expect(await screen.findByText(`"What they do" wasn't saved`)).toBeInTheDocument()
+    expect(screen.getByText(LEFT_WHY)).toBeInTheDocument()
   })
 })
 

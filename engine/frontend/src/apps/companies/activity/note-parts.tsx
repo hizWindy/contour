@@ -15,6 +15,7 @@
  */
 import {
   ArrowRight,
+  ChevronDown,
   ListTodo,
   Mail,
   PhoneCall,
@@ -23,7 +24,7 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react'
-import { useId, useRef, useState, type KeyboardEvent } from 'react'
+import { useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
 import type { CallNoteChange, CallNoteTask, NoteField, TaskKind } from '@/api/v17'
 import { Segmented } from '@/components/motion'
 import { Button } from '@/components/ui/button'
@@ -55,6 +56,8 @@ import {
   KEEP_MINE,
   KIND,
   KIND_LABELS,
+  SHOW_ALL,
+  SHOW_LESS,
   VALUE,
   VALUE_UNREADABLE,
   WHAT_TO_DO,
@@ -66,6 +69,84 @@ import {
  * Undo) that the server hasn't given an id yet. It goes to the server with no id.
  */
 export const NEW_PART = 'new-'
+
+/**
+ * How much of a long text a folded card holds: more than its two lines ever show, so the fold is
+ * the lines', and the page (and a screen reader) never holds a whole transcript until it is open.
+ */
+const FOLDED_CHARS = 400
+
+/**
+ * A card's text, folded to two lines (DESIGN.md's "two-line summary"), with "Show all" when there
+ * is more: a long summary on a narrow screen, or a meeting's transcript, which is the card's text
+ * while the AI is off (up to 60,000 characters). "Show less" folds it again and keeps the button
+ * in view. Only the card changes: the note is as it was. `className` sets the text's size; its
+ * colour comes from the card, so a card left out dims it.
+ */
+export function CardText({ text, className }: { text: string; className?: string }) {
+  const [open, setOpen] = useState(false)
+  // The folded lines hide some of it (measured; a test with no layout measures nothing).
+  const [hidden, setHidden] = useState(false)
+  const box = useRef<HTMLParagraphElement>(null)
+  const toggle = useRef<HTMLButtonElement>(null)
+  const textId = useId()
+  const long = text.length > FOLDED_CHARS
+  useLayoutEffect(() => {
+    const shown = box.current
+    if (open || !shown) return undefined
+    // It answers once as it starts watching, then each time the card's width changes.
+    const observer = new ResizeObserver(() => {
+      setHidden(shown.scrollHeight > shown.clientHeight + 1)
+    })
+    observer.observe(shown)
+    return () => {
+      observer.disconnect()
+    }
+  }, [open, text])
+  const folded = long ? `${text.slice(0, FOLDED_CHARS).trimEnd()}…` : text
+  return (
+    <div className="flex flex-col items-start gap-1">
+      <p
+        ref={box}
+        id={textId}
+        className={cn(
+          'max-w-prose text-pretty break-words',
+          open ? 'whitespace-pre-line' : 'line-clamp-2',
+          className,
+        )}
+      >
+        {open ? text : folded}
+      </p>
+      {open || long || hidden ? (
+        <Button
+          ref={toggle}
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="touch:h-11"
+          aria-expanded={open}
+          aria-controls={textId}
+          onClick={() => {
+            const closing = open
+            setOpen(!open)
+            // A long text folds away above the button: keep the button where the eye is.
+            if (closing) {
+              requestAnimationFrame(() => {
+                toggle.current?.scrollIntoView({ block: 'nearest' })
+              })
+            }
+          }}
+        >
+          <ChevronDown
+            aria-hidden="true"
+            className={cn('transition-transform duration-150 ease-standard', open && 'rotate-180')}
+          />
+          {open ? SHOW_LESS : SHOW_ALL}
+        </Button>
+      ) : null}
+    </div>
+  )
+}
 
 const KIND_ICONS: Readonly<Record<TaskKind, LucideIcon>> = {
   call: PhoneCall,

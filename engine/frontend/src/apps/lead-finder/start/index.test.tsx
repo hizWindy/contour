@@ -149,6 +149,8 @@ describe('the Start page', () => {
     expect(screen.getAllByRole('button', { name: 'Start run' })).toHaveLength(1)
     const barBox = bar.closest('[data-slot=start-bar]') as HTMLElement
     expect(barBox).toHaveClass('sticky', 'bottom-0')
+    // A field the keyboard lands on scrolls above the bar (WCAG 2.4.11).
+    expect(document.documentElement.style.scrollPaddingBottom).toBe('7rem')
     expect(await within(barBox).findByText('about US$4.40')).toBeInTheDocument()
     expect(
       within(barBox).getByText(/Run limit US\$20\.00\. Left today US\$50\.00\./),
@@ -160,6 +162,8 @@ describe('the Start page', () => {
     await user.click(bar)
     expect(await screen.findByText('The run page')).toBeInTheDocument()
     expect(seen.starts).toHaveLength(1)
+    // The bar went with the page, and so did its room.
+    expect(document.documentElement.style.scrollPaddingBottom).toBe('')
   })
 
   it('has no bar on a laptop: the Start button is in the cost card', async () => {
@@ -168,6 +172,7 @@ describe('the Start page', () => {
     const cost = await screen.findByRole('complementary', { name: 'Cost' })
     expect(within(cost).getByRole('button', { name: 'Start run' })).toBeInTheDocument()
     expect(document.querySelector('[data-slot=start-bar]')).toBeNull()
+    expect(document.documentElement.style.scrollPaddingBottom).toBe('')
   })
 
   it('starts the run with an Idempotency-Key and opens its page', async () => {

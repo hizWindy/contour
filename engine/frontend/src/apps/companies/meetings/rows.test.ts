@@ -7,7 +7,7 @@ import { DRAFTING_POLL_MS, meetingsPollMs } from '@/api/hooks/meetings'
 import type { Meeting, MeetingItem } from '@/api/v17'
 import { meetingsHref, meetingsQuery, preReadHref, readMeetings, writeMeetings } from './params'
 import { groupUpcoming, isCancelled, rowKey, rowStatus } from './rows'
-import { dayText, pastWhen, upcomingWhen, waitingLine } from './words'
+import { dayText, pastWhen, upcomingWhen, waitingLine, whereWords } from './words'
 
 // Weeks run Monday to Sunday.
 const WEDNESDAY = '2026-11-18'
@@ -85,6 +85,29 @@ describe('one status a row', () => {
     expect(isCancelled(item({ meeting: { outcome: 'Cancelled' } }))).toBe(true)
     expect(isCancelled(item({ meeting: { outcome: 'RESCHEDULED' } }))).toBe(false)
     expect(isCancelled(item({ meeting: { outcome: null } }))).toBe(false)
+  })
+
+  it('says where the pre-read of a past meeting typed in stands: it has no notes to log', () => {
+    const typed = (status: 'draft' | 'sent') =>
+      item({ typed: true, meeting: { id: '' }, form: { id: 'f9', status } })
+    expect(rowStatus(typed('sent'), true)).toBe('sent')
+    expect(rowStatus(typed('draft'), true)).toBe('draft')
+    expect(rowStatus(typed('sent'), false)).toBe('sent')
+  })
+
+  it("names a video call's service as Track 2's facts do: Teams, unless the location says Zoom or Google Meet", () => {
+    expect(whereWords({ where: 'online', location: null })).toBe('Teams')
+    expect(whereWords({ where: 'online', location: 'Microsoft Teams Meeting' })).toBe('Teams')
+    expect(whereWords({ where: 'online', location: 'https://us02web.zoom.us/j/81234567890' })).toBe(
+      'Zoom',
+    )
+    expect(whereWords({ where: 'online', location: 'Zoom call' })).toBe('Zoom')
+    expect(
+      whereWords({ where: 'online', location: 'Google Meet: meet.google.com/abc-defg-hij' }),
+    ).toBe('Google Meet')
+    expect(whereWords({ where: 'in_person', location: 'Level 3, 1 Sample St' })).toBe('In person')
+    // Not known, a phone call included: nothing.
+    expect(whereWords({ where: 'unknown', location: 'https://zoom.us/j/1' })).toBeNull()
   })
 
   it('keys a meeting typed in (its HubSpot id is empty) by its form', () => {

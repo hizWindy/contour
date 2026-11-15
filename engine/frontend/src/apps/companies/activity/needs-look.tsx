@@ -44,6 +44,7 @@ import { ListExit, ListExitItem, TickIn } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { changeDetail } from '@/lib/problems'
 import { cn } from '@/lib/utils'
+import { CardText } from './note-parts'
 import { isCallNotesOff } from './notes'
 import { OpenInHubSpot } from './open-in-hubspot'
 import { activityQuery } from './params'
@@ -271,9 +272,7 @@ function LookCard({
             {STATUS_WORDS[status]}
           </p>
         ) : null}
-        <p className="line-clamp-2 max-w-prose text-pretty break-words text-foreground">
-          {summary}
-        </p>
+        <CardText text={summary} className="text-foreground" />
         <Steps steps={note.steps} meeting={meeting} />
       </div>
       <div className="flex flex-wrap items-center gap-2 border-t px-4 py-2.5 sm:px-5">

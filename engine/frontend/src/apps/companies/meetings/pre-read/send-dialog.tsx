@@ -13,10 +13,16 @@
  *   says why beside it, before anything is sent. An address the rep added can be taken out again.
  * - **The meeting's notes:** one line, in the server's words, when Send also adds the pre-read to
  *   the meeting's notes in HubSpot.
- * - **A refused send** keeps the dialog open and says why in the server's words, under the people:
- *   an address that isn't Contour's is named there, nothing is sent, and the preview is asked
- *   again, so its row says so too. With no email set up, it says the pre-read stays here.
+ * - **A refused send** keeps the dialog open and says why in the server's words, under the people
+ *   (scrolled into view): an address that isn't Contour's is named there, nothing is sent, and the
+ *   preview is asked again, so its row says so too. With no email set up, it says the pre-read
+ *   stays here.
+ * - **While it sends** nothing can stop it or change who gets it: Cancel, Esc, the ticks, Add and
+ *   the X buttons wait until the server answers.
  * - **Sent:** the dialog closes, the page shows who got it and when, and the focus goes there.
+ * - **The title and the buttons stay put;** only the middle (the email and the people) scrolls, so
+ *   Send is always in view, on a laptop and on a phone, where the dialog keeps clear of the safe
+ *   area at the bottom. The email box scrolls on its own, and hands the wheel on at its end.
  *
  * It waits for a blank the rep has just left to be saved before it asks for the preview, so the
  * email it shows holds it. The people the rep added, and their ticks, stay while the page is open.
@@ -129,7 +135,7 @@ function EmailBox({ preview }: { preview: FormEmailPreview }) {
         // It scrolls, so the keyboard can reach it (WCAG 2.1.1).
         tabIndex={0}
         data-slot="email-box"
-        className="max-h-48 overflow-y-auto overscroll-contain rounded-md border bg-background p-3 text-ui text-foreground"
+        className="max-h-48 overflow-y-auto rounded-md border bg-background p-3 text-ui text-foreground"
       >
         <p className="break-words">
           <span className="text-muted-foreground">{SUBJECT} </span>
@@ -146,12 +152,15 @@ function PersonRow({
   person,
   ticked,
   removable,
+  locked,
   onTick,
   onRemove,
 }: {
   person: FormPerson
   ticked: boolean
   removable: boolean
+  /** The send is on its way: who gets it can't change now. */
+  locked: boolean
   onTick: (ticked: boolean) => void
   onRemove: () => void
 }) {
@@ -164,7 +173,7 @@ function PersonRow({
       <Checkbox
         id={boxId}
         checked={ticked}
-        disabled={!person.allowed}
+        disabled={!person.allowed || locked}
         aria-describedby={person.allowed ? whyId : `${whyId} ${refusedId}`}
         className="mt-0.5"
         onCheckedChange={(value) => {
@@ -197,6 +206,7 @@ function PersonRow({
           variant="ghost"
           size="icon"
           className="-my-1.5"
+          disabled={locked}
           aria-label={removeWords(person.email)}
           onClick={onRemove}
         >
@@ -209,15 +219,18 @@ function PersonRow({
 
 /**
  * An address the rep has added that the server hasn't answered for: being checked, or not checked
- * because the check failed (Try again is under the list). It can be taken out either way.
+ * because the check failed (Try again is under the list). It can be taken out either way, but not
+ * while the send is on its way.
  */
 function CheckingRow({
   address,
   checking,
+  locked,
   onRemove,
 }: {
   address: string
   checking: boolean
+  locked: boolean
   onRemove: () => void
 }) {
   return (
@@ -232,6 +245,7 @@ function CheckingRow({
         variant="ghost"
         size="icon"
         className="-my-1.5"
+        disabled={locked}
         aria-label={removeWords(address)}
         onClick={onRemove}
       >
@@ -270,6 +284,7 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
   const [checkProblem, setCheckProblem] = useState<ApiProblem | null>(null)
   const asked = useRef(false)
   const sent = useRef(false)
+  const problemRef = useRef<HTMLDivElement>(null)
   const inputId = useId()
   const addNoteId = useId()
   const blockId = useId()
@@ -301,6 +316,11 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
     askNow()
   }, [open, saving])
 
+  // A refused send says why under the people, which may be scrolled away from Send: bring it up.
+  useEffect(() => {
+    if (sendProblem) problemRef.current?.scrollIntoView({ block: 'nearest' })
+  }, [sendProblem])
+
   const close = (): void => {
     setShown(null)
     setTyped('')
@@ -317,11 +337,14 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
   const unlisted = added.filter((address) => !listed.has(address))
   const to = sendTo(people, picks)
   const block = to.length === 0 ? NOBODY_TICKED : to.length > MOST_PEOPLE ? OVER_THE_MOST : null
-  const busy = preview.isPending || send.isPending || saving
+  // On its way: nothing may stop it or change who gets it until the server answers.
+  const locked = send.isPending
+  const busy = preview.isPending || locked || saving
   const canSend = shown !== null && !busy && block === null
 
   const add = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault()
+    if (locked) return
     const { found, unreadable } = readAddresses(typed)
     if (found.length === 0 || unreadable.length > 0) {
       setAddProblem(ADDRESS_UNREADABLE)
@@ -344,6 +367,7 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
   }
 
   const remove = (address: string): void => {
+    if (locked) return
     const key = addressKey(address)
     const next = added.filter((one) => one !== key)
     setAdded(next)
@@ -415,6 +439,7 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
                     person={person}
                     ticked={isTicked(person, picks)}
                     removable={added.includes(key)}
+                    locked={locked}
                     onTick={(ticked) => {
                       setPicks((now) => ({ ...now, [key]: ticked }))
                     }}
@@ -429,6 +454,7 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
                   key={address}
                   address={address}
                   checking={preview.isPending}
+                  locked={locked}
                   onRemove={() => {
                     remove(address)
                   }}
@@ -437,10 +463,12 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
             </ul>
           )}
           {sendProblem !== null ? (
-            <Problem
-              error={sendProblem}
-              extra={sendProblem.code === 'email_not_set_up' ? STAYS_HERE : undefined}
-            />
+            <div ref={problemRef}>
+              <Problem
+                error={sendProblem}
+                extra={sendProblem.code === 'email_not_set_up' ? STAYS_HERE : undefined}
+              />
+            </div>
           ) : null}
           {checkProblem !== null ? (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -450,6 +478,7 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
                 variant="outline"
                 size="sm"
                 className="touch:h-11"
+                disabled={locked}
                 onClick={() => {
                   ask(added)
                 }}
@@ -471,6 +500,7 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
                 spellCheck={false}
                 value={typed}
                 placeholder={ADDRESS_PLACEHOLDER}
+                disabled={locked}
                 aria-invalid={addProblem !== null || undefined}
                 aria-describedby={addProblem !== null ? addNoteId : undefined}
                 className="touch:text-body"
@@ -479,7 +509,7 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
                   setAddProblem(null)
                 }}
               />
-              <Button type="submit" variant="outline">
+              <Button type="submit" variant="outline" disabled={locked}>
                 {ADD}
               </Button>
             </div>
@@ -504,6 +534,8 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
     <AlertDialog
       open={open}
       onOpenChange={(next) => {
+        // While it sends, nothing closes it: it goes, or says why it didn't.
+        if (!next && locked) return
         // Cancel or Esc: nothing was sent, so the focus goes back to Check and send.
         if (!next) {
           sent.current = false
@@ -513,7 +545,12 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
     >
       <AlertDialogContent
         data-slot="send-dialog"
-        className="max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain data-open:slide-in-from-bottom-2 sm:max-w-2xl"
+        // A column whose middle scrolls: the title and the buttons stay in view. Twice the safe
+        // area comes off its height, so centred on a phone it ends above the safe area.
+        className="flex max-h-[calc(100dvh-2rem-2*env(safe-area-inset-bottom))] flex-col data-open:slide-in-from-bottom-2 sm:max-w-2xl"
+        onEscapeKeyDown={(event) => {
+          if (locked) event.preventDefault()
+        }}
         onCloseAutoFocus={(event) => {
           // Sent: the button that opened it is gone, so the focus goes to who got it.
           if (!sent.current) return
@@ -524,18 +561,24 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
           }
         }}
       >
-        <AlertDialogHeader>
+        <AlertDialogHeader className="shrink-0">
           <AlertDialogTitle>{SEND_TITLE}</AlertDialogTitle>
           <AlertDialogDescription>{SEND_DESCRIPTION}</AlertDialogDescription>
         </AlertDialogHeader>
-        {body}
+        {/* The middle scrolls. Its edge room (-mx-6 px-6, -my-1 py-1) keeps focus rings whole. */}
+        <div
+          data-slot="send-dialog-body"
+          className="-mx-6 -my-1 flex min-h-0 flex-col gap-6 overflow-y-auto overscroll-contain px-6 py-1"
+        >
+          {body}
+        </div>
         {shown !== null && block !== null ? (
-          <p id={blockId} className="text-ui text-muted-foreground">
+          <p id={blockId} className="shrink-0 text-ui text-muted-foreground">
             {block}
           </p>
         ) : null}
-        <AlertDialogFooter>
-          <AlertDialogCancel>{CANCEL}</AlertDialogCancel>
+        <AlertDialogFooter className="shrink-0">
+          <AlertDialogCancel disabled={locked}>{CANCEL}</AlertDialogCancel>
           <Button
             type="button"
             disabled={!canSend}

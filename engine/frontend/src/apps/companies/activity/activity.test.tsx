@@ -175,6 +175,8 @@ interface Server {
   skip: Record<string, string>
   /** Try again answers 422 `change_off_the_list` (T3-11). */
   retryRefused: boolean
+  /** The preview's totals as before Track 2's `37ba1e5`: no `meeting_notes`, each counted a call. */
+  oldTotals: boolean
   sent: Sent[]
 }
 
@@ -241,6 +243,7 @@ function mockServer(changes: Partial<Omit<Server, 'sent' | 'release'>> = {}): Se
     listsOff: false,
     skip: {},
     retryRefused: false,
+    oldTotals: false,
     sent: [],
     ...changes,
   }
@@ -297,12 +300,16 @@ function mockServer(changes: Partial<Omit<Server, 'sent' | 'release'>> = {}): Se
             ...(server.hubspotNow[change.id] ?? {}),
           })),
         }))
+      // As Track 2 counts: the calls, and a logged meeting's notes on their own. Without the
+      // skipped notes, which aren't among the items.
+      const meetings = items.filter((item) => item.source === 'transcript').length
       return json({
         items,
         sending_ready: server.options?.sending_ready ?? false,
         waiting_for: server.options?.waiting_for ?? null,
         totals: {
-          calls: items.length,
+          calls: server.oldTotals ? items.length : items.length - meetings,
+          ...(server.oldTotals ? {} : { meeting_notes: meetings }),
           tasks: items.reduce((sum, item) => sum + item.tasks.length, 0),
           changes: items.reduce((sum, item) => sum + item.changes.length, 0),
         },
@@ -1151,6 +1158,16 @@ describe('on a phone', () => {
     expect(bar).toHaveClass('fixed', 'bottom-0', 'pb-[max(0.75rem,env(safe-area-inset-bottom))]')
     // Nothing to say beside the button: no empty line above it.
     expect(bar?.children).toHaveLength(1)
+    // A card the keyboard lands on scrolls above the bar (WCAG 2.4.11).
+    expect(document.documentElement.style.scrollPaddingBottom).toBe('7rem')
+  })
+
+  it('but on a laptop the bar sits at the top, so the page keeps no room at the bottom', async () => {
+    mockServer({ notes: threeNotes() })
+    renderActivity()
+    await toConfirmList()
+    expect(screen.getByRole('button', { name: 'Send 3 to HubSpot' })).toBeInTheDocument()
+    expect(document.documentElement.style.scrollPaddingBottom).toBe('')
   })
 })
 
@@ -1276,9 +1293,50 @@ describe("a logged meeting's notes (T3-11)", () => {
     const card = screen.getByRole('article', { name: 'Sample Logistics Pty Ltd' })
     expect(within(card).getByText('Meeting notes · 13 Nov 2026, 10:00 am')).toBeInTheDocument()
     expect(within(card).queryByText(/No outcome/)).toBeNull()
+    // A short summary has nothing more to show.
+    expect(within(card).queryByRole('button', { name: 'Show all' })).toBeNull()
     await user.click(within(card).getByRole('button', { name: /^Edit/ }))
     expect(within(card).queryByRole('heading', { name: 'Outcome' })).toBeNull()
     expect(within(card).queryByRole('checkbox', { name: 'Connected' })).toBeNull()
+  })
+
+  it('folds a long transcript on its card, with Show all and Show less, and leaves the note as it is', async () => {
+    // The AI is off: no summary, so the card's text is the whole transcript.
+    const words = Array.from(
+      { length: 60 },
+      (_, index) => `Jo Sample: Line ${String(index + 1)} of what was said.`,
+    ).join('\n')
+    const server = mockServer({
+      notes: [
+        meetingNotes('m1', {
+          text: words,
+          sorted_by: 'person',
+          call: { summary: '', outcome: null },
+        }),
+      ],
+    })
+    const { user } = renderActivity()
+    await toConfirmList()
+    const card = screen.getByRole('article', { name: 'Sample Logistics Pty Ltd' })
+    const showAll = within(card).getByRole('button', { name: 'Show all' })
+    expect(showAll).toHaveAttribute('aria-expanded', 'false')
+    // Folded to two lines, the card holds only the start of it.
+    const text = document.getElementById(showAll.getAttribute('aria-controls') ?? '')
+    expect(text).toHaveClass('line-clamp-2')
+    expect(text?.textContent).toMatch(/^Jo Sample: Line 1 of what was said\./)
+    expect(text?.textContent?.length).toBeLessThanOrEqual(401)
+
+    await user.click(showAll)
+    const showLess = within(card).getByRole('button', { name: 'Show less' })
+    expect(showLess).toHaveAttribute('aria-expanded', 'true')
+    expect(text?.textContent).toBe(words)
+    expect(text).not.toHaveClass('line-clamp-2')
+
+    await user.click(showLess)
+    expect(within(card).getByRole('button', { name: 'Show all' })).toBeInTheDocument()
+    expect(text).toHaveClass('line-clamp-2')
+    // Only the card changed: the note wasn't touched.
+    expect(server.sent.filter((one) => one.method === 'PATCH')).toEqual([])
   })
 
   it('names the meeting notes in Logged and in Needs a look', async () => {
@@ -1311,6 +1369,31 @@ describe("a logged meeting's notes (T3-11)", () => {
       ),
     ).toBeInTheDocument()
   })
+
+  it.each([
+    ['totals with meeting notes apart', false],
+    ['an older server, whose totals count them as calls', true],
+  ])(
+    'the send names the meeting notes apart, and counts only what will go (%s)',
+    async (_name, oldTotals) => {
+      mockServer({
+        notes: [...threeNotes(), meetingNotes('m1', { called_at: '2026-11-10T04:00:00Z' })],
+        skip: { n2: OFF_THE_LIST },
+        oldTotals,
+      })
+      const { user } = renderActivity()
+      await toConfirmList()
+      await user.click(screen.getByRole('button', { name: 'Send 4 to HubSpot' }))
+      // The cards say 3 calls and 1 meeting note; the server leaves one call out.
+      const dialog = await screen.findByRole('alertdialog', {
+        name: 'Send 2 calls and 1 meeting note to HubSpot?',
+      })
+      expect(
+        await within(dialog).findByText('2 calls, 1 meeting note, 1 task, 1 field change'),
+      ).toBeInTheDocument()
+      expect(within(dialog).getByText("1 call won't be sent:")).toBeInTheDocument()
+    },
+  )
 })
 
 describe('a call the server leaves out of a send (T3-11)', () => {
@@ -1319,8 +1402,8 @@ describe('a call the server leaves out of a send (T3-11)', () => {
     const { user } = renderActivity()
     const list = await toConfirmList()
     await user.click(screen.getByRole('button', { name: 'Send 3 to HubSpot' }))
-    const dialog = await screen.findByRole('alertdialog', { name: 'Send 3 calls to HubSpot?' })
-    // The totals are the server's, without it.
+    // The title counts only what will go, and the totals are the server's, without it.
+    const dialog = await screen.findByRole('alertdialog', { name: 'Send 2 calls to HubSpot?' })
     expect(await within(dialog).findByText('2 calls, 1 task, 1 field change')).toBeInTheDocument()
     const skipped = within(dialog)
       .getByText("1 call won't be sent:")
@@ -1361,8 +1444,11 @@ describe('a call the server leaves out of a send (T3-11)', () => {
     const { user } = renderActivity()
     await toConfirmList()
     await user.click(screen.getByRole('button', { name: 'Send 1 to HubSpot' }))
-    const dialog = await screen.findByRole('alertdialog', { name: 'Send 1 call to HubSpot?' })
+    const dialog = await screen.findByRole('alertdialog')
     expect(await within(dialog).findByText("1 call won't be sent:")).toBeInTheDocument()
+    // Nothing will go: the title counts nothing, and there are no totals of nothing.
+    expect(dialog).toHaveAccessibleName('Send to HubSpot?')
+    expect(dialog.querySelector('[data-slot=send-totals]')).toBeNull()
     const send = within(dialog).getByRole('button', { name: 'Send to HubSpot' })
     expect(send).toBeDisabled()
     expect(send).toHaveAccessibleDescription('None of these can be sent now.')

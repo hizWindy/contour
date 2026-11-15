@@ -3,7 +3,7 @@
  * setting or file name (the screen-words test reads them). The wording is Al-khair's to change.
  */
 import { toApiProblem } from '@/api/client'
-import type { MeetingWhen, MeetingWhere } from '@/api/v17'
+import type { Meeting, MeetingWhen, MeetingWhere } from '@/api/v17'
 import { addDays } from '@/lib/due-date'
 import { formatNumber, formatTime, melbourneDate } from '@/lib/format'
 import { changeDetail } from '@/lib/problems'
@@ -30,13 +30,30 @@ export const GROUP_LABELS: Readonly<Record<DayGroup, string>> = {
 export const PAST_LIST = 'Past meetings'
 
 /**
- * Teams or in person, as a word beside its icon (the plan's words). `online` is any video call,
- * which is Teams at Contour (TBC: a client's own video link would also read "Teams"). A meeting
- * whose place isn't known, a phone call included, says nothing.
+ * Teams or in person (the plan's words), for New pre-read's choice. On a meeting's row, use
+ * `whereWords`, which names a client's own Zoom or Google Meet too.
  */
 export const WHERE_WORDS: Readonly<Record<Exclude<MeetingWhere, 'unknown'>, string>> = {
   online: 'Teams',
   in_person: 'In person',
+}
+
+/** A video call's service, named in HubSpot's location (usually its link), as Track 2 reads it. */
+const ZOOM = /zoom\.(?:us|com)|\bzoom\b/i
+const GOOGLE_MEET = /meet\.google\.com|\bgoogle meet\b/i
+
+/**
+ * Where a meeting is, as a word beside its icon: "In person", or for a video call "Teams", which
+ * Contour uses, unless HubSpot's location names Zoom or Google Meet. The pre-read's facts say the
+ * same (Track 2, `0ef8754`). Null when the place isn't known, a phone call included: nothing shows.
+ */
+export function whereWords(meeting: Pick<Meeting, 'where' | 'location'>): string | null {
+  if (meeting.where === 'in_person') return WHERE_WORDS.in_person
+  if (meeting.where !== 'online') return null
+  const location = meeting.location ?? ''
+  if (ZOOM.test(location)) return 'Zoom'
+  if (GOOGLE_MEET.test(location)) return 'Google Meet'
+  return WHERE_WORDS.online
 }
 
 export const STATUS_WORDS: Readonly<Record<RowStatus, string>> = {

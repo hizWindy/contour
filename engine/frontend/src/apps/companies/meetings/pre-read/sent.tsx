@@ -4,11 +4,14 @@
  * icon and words for each state: saved, waiting (for HubSpot write access), off (the company isn't
  * in HubSpot) or failed, in the server's sentence when it sends one.
  *
- * - **The copy again** (T3-11): while it waits or failed, a quiet "Try the HubSpot copy again"
+ * - **The copy again** (T3-11): after a copy that failed, a quiet "Try the HubSpot copy again"
  *   sends it to the same people. On a pre-read that hasn't changed since it went, the server emails
- *   nobody then and only tries the copy, and the button says so.
+ *   nobody then and only tries the copy, and the button says so. A copy that waits (for HubSpot
+ *   write access) can't be tried yet: its line says what it waits for, with no button.
  * - **A pre-read changed after it went** is a draft again: it says when it was last sent, and that
- *   sending again shares the new words. Check and send comes back then.
+ *   sending again shares the new words. Check and send comes back then. The server keeps the last
+ *   send's copy state, but its line and "Try the HubSpot copy again" are left out: on a draft, Send
+ *   emails the new words, so a retry that emails nobody no longer fits.
  *
  * It takes the focus after the send dialog closes, so a screen reader hears who got it.
  */
@@ -46,13 +49,16 @@ const COPY_LOOK: Readonly<Record<HubSpotCopy['state'], { icon: LucideIcon; ink: 
   failed: { icon: CircleAlert, ink: 'text-destructive-ink' },
 }
 
-/** Where the copy stands, and for one that waits or failed, the way to try it again. */
+/**
+ * Where the copy stands, and for one that failed, the way to try it again. One that waits for
+ * write access says so, with no button: trying it again then can't work.
+ */
 function CopyLine({ form, copy }: { form: MeetingFormOut; copy: HubSpotCopy }) {
   const send = useSendMeetingForm(form.id)
   const [problem, setProblem] = useState<string | null>(null)
   const hintId = useId()
   const { icon: Icon, ink } = COPY_LOOK[copy.state]
-  const again = copy.state === 'waiting' || copy.state === 'failed'
+  const again = copy.state === 'failed'
   const to = form.sent_to.map((person) => person.email)
 
   const tryAgain = (): void => {
@@ -119,6 +125,7 @@ export function SentNote({ form }: { form: MeetingFormOut }) {
       />
       <div className="flex min-w-0 flex-col gap-2">
         <p className="text-foreground">{sentWords(form, !sent)}</p>
+        {/* A draft again: the last send's copy is no longer the one to act on. */}
         {sent && form.hubspot_copy ? <CopyLine form={form} copy={form.hubspot_copy} /> : null}
         <p className="text-caption text-muted-foreground">
           {sent ? CHANGED_AFTER_SENT : CHANGED_SINCE_SENT}

@@ -105,6 +105,8 @@ interface Server {
   transcript: 'ok' | 'not_past' | 'too_long'
   /** The transcript route waits for `release()` before it answers. */
   transcriptWaits: boolean
+  /** The options' `transcript_max_chars`, or none, as before Track 2 added it. */
+  transcriptMax: number | null
   release: () => void
   sent: Sent[]
 }
@@ -117,7 +119,7 @@ function problem(status: number, title: string, detail: string, code: string): R
   return json({ title, detail, status, code }, status)
 }
 
-function options(enabled: boolean): CallNoteOptions {
+function options(enabled: boolean, transcriptMax: number | null = 60_000): CallNoteOptions {
   return {
     enabled,
     ai_enabled: false,
@@ -127,6 +129,7 @@ function options(enabled: boolean): CallNoteOptions {
     fields: [],
     soft_seconds: 180,
     max_chars: 6000,
+    ...(transcriptMax === null ? {} : { transcript_max_chars: transcriptMax }),
   }
 }
 
@@ -136,6 +139,7 @@ function mockServer(changes: Partial<Omit<Server, 'sent' | 'release'>> = {}): Se
     notesOn: true,
     transcript: 'ok',
     transcriptWaits: false,
+    transcriptMax: 60_000,
     release: () => undefined,
     sent: [],
     ...changes,
@@ -160,7 +164,7 @@ function mockServer(changes: Partial<Omit<Server, 'sent' | 'release'>> = {}): Se
         sentence: null,
       })
     }
-    if (path === `${NOTES}/options`) return json(options(server.notesOn))
+    if (path === `${NOTES}/options`) return json(options(server.notesOn, server.transcriptMax))
     if (path === `${NOTES}/summary`) {
       return json({ to_confirm: 3, needs_look: 0, logged_today: 0 })
     }
@@ -269,7 +273,16 @@ describe('Log meeting on a past meeting', () => {
       within(row('Sample Mining Pty Ltd')).getByRole('button', { name: /^Log meeting/ }),
     ).toBeInTheDocument()
     expect(within(row('Sample Retail Pty Ltd')).queryByRole('button')).toBeNull()
-    expect(within(row('Sample Health Pty Ltd')).queryByRole('button')).toBeNull()
+    // Typed in: no notes to log, so no notes line either. It says where its pre-read stands, and
+    // opens it.
+    const typed = within(row('Sample Health Pty Ltd'))
+    expect(typed.queryByRole('button')).toBeNull()
+    expect(typed.queryByText('No notes yet')).toBeNull()
+    expect(typed.getByText('Sent')).toBeInTheDocument()
+    expect(typed.getByRole('link', { name: /^Open/ })).toHaveAttribute(
+      'href',
+      '/companies/meetings/f-typed',
+    )
   })
 
   it('is not there while call notes are off', async () => {
@@ -398,7 +411,8 @@ describe('the transcript box', () => {
   })
 
   it('shows the count near the limit, and says so over it without sending', async () => {
-    const server = mockServer()
+    // A server that sends no limit: 60,000, the plan's.
+    const server = mockServer({ transcriptMax: null })
     const { user } = renderPast()
     const { panel, box } = await openLog(user)
     await waitFor(() => {
@@ -416,6 +430,25 @@ describe('the transcript box', () => {
     await user.click(within(panel).getByRole('button', { name: 'Save notes' }))
     expect(transcripts(server)).toEqual([])
     expect(screen.getByRole('dialog', { name: 'Log meeting' })).toBeInTheDocument()
+  })
+
+  it("counts against the server's own limit (transcript_max_chars)", async () => {
+    const server = mockServer({ transcriptMax: 1_000 })
+    const { user } = renderPast()
+    const { panel, box } = await openLog(user)
+    await waitFor(() => {
+      expect(box).toHaveFocus()
+    })
+    await user.paste('a'.repeat(900))
+    expect(await within(panel).findByText('900 of 1,000 characters')).toBeInTheDocument()
+    await user.paste('a'.repeat(101))
+    expect(
+      within(panel).getByText(
+        'Too long: 1,001 of 1,000 characters. Shorten it, or split it into two.',
+      ),
+    ).toBeInTheDocument()
+    await user.click(within(panel).getByRole('button', { name: 'Save notes' }))
+    expect(transcripts(server)).toEqual([])
   })
 
   it('says to paste something first, and sends nothing', async () => {

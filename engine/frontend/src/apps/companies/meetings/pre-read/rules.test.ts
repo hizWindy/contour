@@ -1,7 +1,7 @@
 /**
  * The pre-read's rules and words without a screen (PLAN-V17 T3-10, T3-11): when "Check and send"
- * may be pressed, a rep's edit to a summary, what a redraft says it costs, who got it, when the
- * meeting is, and who the send goes to. Made-up names only.
+ * may be pressed, a rep's edit to a summary, what a redraft says it costs, who got it, and who the
+ * send goes to. Made-up names only.
  */
 import { describe, expect, it } from 'vitest'
 import { FORM_POLL_MS, formPollMs, isFormMissing } from '@/api/hooks/meetings'
@@ -21,7 +21,6 @@ import {
   costSoFar,
   DRAFT_ESTIMATE,
   hubspotCopyWords,
-  meetingWhen,
   notSavedWords,
   recipientsWords,
   redraftHint,
@@ -209,18 +208,6 @@ describe('the words', () => {
       'Something went wrong. Not saved yet. Try again.',
     )
   })
-
-  it('writes when the meeting is, in Melbourne time, with the year only for another year', () => {
-    expect(meetingWhen('2026-11-26T23:00:00Z', '2026-11-27T00:00:00Z', '2026-11-18')).toBe(
-      'Fri 27 Nov, 10:00 am to 11:00 am',
-    )
-    expect(meetingWhen('2026-11-26T23:00:00Z', null, '2026-11-18')).toBe('Fri 27 Nov, 10:00 am')
-    expect(meetingWhen('2027-01-05T22:00:00Z', null, '2026-11-18')).toBe('Wed 6 Jan 2027, 9:00 am')
-    // A meeting that runs past midnight writes its last day too.
-    expect(meetingWhen('2026-11-27T12:00:00Z', '2026-11-27T14:00:00Z', '2026-11-18')).toBe(
-      'Fri 27 Nov, 11:00 pm to Sat 28 Nov, 1:00 am',
-    )
-  })
 })
 
 describe('who the send goes to (T3-11)', () => {
@@ -259,6 +246,37 @@ describe('who the send goes to (T3-11)', () => {
     expect(readAddresses('').found).toEqual([])
     const long = `${'a'.repeat(250)}@x.com`
     expect(readAddresses(long)).toEqual({ found: [], unreadable: [long] })
+  })
+
+  it('reads a pasted Outlook list whole, and never drops an address without a word', () => {
+    // A name with brackets, then a bare address: both are read.
+    expect(readAddresses('Jo Sample <jo@example.com>; mia@example.com')).toEqual({
+      found: ['jo@example.com', 'mia@example.com'],
+      unreadable: [],
+    })
+    // Names written "Last, First", with or without quotes: the comma doesn't split the name.
+    expect(readAddresses('Sample, Jo <jo@example.com>; Rossi, Mia <MIA@example.com>')).toEqual({
+      found: ['jo@example.com', 'mia@example.com'],
+      unreadable: [],
+    })
+    expect(readAddresses('"Sample, Jo" <jo@example.com>, "jo@example.com" <jo@example.com>')).toEqual(
+      { found: ['jo@example.com'], unreadable: [] },
+    )
+    // Something after the brackets has no comma before it: it is unreadable, not dropped.
+    expect(readAddresses('Jo <jo@example.com> mia@example.com')).toEqual({
+      found: ['jo@example.com'],
+      unreadable: ['mia@example.com'],
+    })
+    // A stray stop after the brackets is nothing.
+    expect(readAddresses('Jo <jo@example.com>.')).toEqual({
+      found: ['jo@example.com'],
+      unreadable: [],
+    })
+    // A word with no name after it isn't half of one.
+    expect(readAddresses('jo, <mia@example.com>')).toEqual({
+      found: ['mia@example.com'],
+      unreadable: ['jo'],
+    })
   })
 
   it("ticks the server's ticks, the rep's changes, and never an address that isn't Contour's", () => {

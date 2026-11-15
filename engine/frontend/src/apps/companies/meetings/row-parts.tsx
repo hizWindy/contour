@@ -6,7 +6,8 @@
  * - **Upcoming:** "Draft it" with no pre-read yet, "Check and send" for a draft ready, and "Open"
  *   for the rest. A cancelled meeting has no Draft it.
  * - **Past** (T3-11): "Log meeting" on a meeting from HubSpot that wasn't cancelled, while call
- *   notes are on (`onLogMeeting`). A meeting typed in isn't in HubSpot, so it has none.
+ *   notes are on (`onLogMeeting`). A meeting typed in isn't in HubSpot, so it has none: it has
+ *   "Open", for its pre-read.
  *
  * Each button's name ends with the meeting (`context`, for a screen reader, which hears many such
  * buttons in a list).
@@ -46,10 +47,8 @@ export interface RowActionProps {
 /** A row's one button, or nothing. */
 export function RowAction({ item, status, past, draftIt, context, onLogMeeting }: RowActionProps) {
   const heard = <span className="sr-only">{context}</span>
-  if (past) {
-    if (!onLogMeeting || item.typed || item.meeting.id === '' || status === 'cancelled') {
-      return null
-    }
+  if (past && !item.typed) {
+    if (!onLogMeeting || item.meeting.id === '' || status === 'cancelled') return null
     return (
       <Button
         type="button"
@@ -69,13 +68,13 @@ export function RowAction({ item, status, past, draftIt, context, onLogMeeting }
     return (
       <Button asChild variant="outline" size="sm" className="touch:h-11">
         <Link to={preReadHref(item.form.id)}>
-          {status === 'draft' ? CHECK_AND_SEND : OPEN}
+          {status === 'draft' && !past ? CHECK_AND_SEND : OPEN}
           {heard}
         </Link>
       </Button>
     )
   }
-  if (status !== 'cancelled' && draftIt.possible) {
+  if (!past && status !== 'cancelled' && draftIt.possible) {
     return (
       <Button
         type="button"

@@ -13,29 +13,43 @@ import type { MeetingFormOut } from '@/api/v17'
 import { Skeleton } from '@/components/ui/skeleton'
 import { FACTS, FACTS_COMING, FACTS_NOTE, NO_FACTS } from './words'
 
-/** As many rows as a pre-read usually has, so nothing jumps when the facts come. */
-const ROWS = 6
+/**
+ * As many rows as a pre-read of a meeting in HubSpot has (when, where, who we meet, the Contour
+ * people, staff, offices, the lease end and the deal stage), so nothing jumps when the facts come.
+ */
+const ROWS = 8
 
-/** The still rows while the facts are read: a label, a value and its source each. */
+/**
+ * The still rows of the facts, at their size: a label, a value and its source each. The page's own
+ * loading shape uses them too.
+ */
+export function FactsRowsPending() {
+  return (
+    <div
+      aria-hidden="true"
+      data-slot="facts-pending"
+      className="grid gap-x-6 gap-y-3 rounded-lg border bg-card p-4 sm:grid-cols-[10rem_minmax(0,1fr)]"
+    >
+      {Array.from({ length: ROWS }, (_, index) => (
+        <Fragment key={index}>
+          <Skeleton className="h-5 w-24" />
+          {/* As the value sits under its label on a phone. */}
+          <div className="flex flex-col gap-1 max-sm:-mt-2">
+            <Skeleton className="h-5 w-2/3" />
+            <Skeleton className="h-4 w-28" />
+          </div>
+        </Fragment>
+      ))}
+    </div>
+  )
+}
+
+/** While the facts are read: a line that says so, over their still rows. */
 function FactsComing() {
   return (
     <div className="flex flex-col gap-3">
       <p className="text-caption text-muted-foreground">{FACTS_COMING}</p>
-      <div
-        aria-hidden="true"
-        data-slot="facts-pending"
-        className="grid gap-x-6 gap-y-3 rounded-lg border bg-card p-4 sm:grid-cols-[10rem_minmax(0,1fr)]"
-      >
-        {Array.from({ length: ROWS }, (_, index) => (
-          <Fragment key={index}>
-            <Skeleton className="h-5 w-24" />
-            <div className="flex flex-col gap-1">
-              <Skeleton className="h-5 w-2/3" />
-              <Skeleton className="h-4 w-28" />
-            </div>
-          </Fragment>
-        ))}
-      </div>
+      <FactsRowsPending />
     </div>
   )
 }

@@ -30,7 +30,8 @@ export function MeetingsPending({ rows = 4 }: { rows?: number }) {
               </div>
               <div className="flex items-center justify-between gap-3 sm:w-72">
                 <Skeleton className="h-4 w-28" />
-                <Skeleton className="h-8 w-28" />
+                {/* As tall as the row's button: 32px, or 44px on a touch screen. */}
+                <Skeleton className="h-8 w-28 touch:h-11" />
               </div>
             </div>
           ))}

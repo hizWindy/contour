@@ -71,6 +71,9 @@ export const KIND = 'Kind'
 export const WHEN = 'When'
 export const NOT_CHANGED = "Your change wasn't saved"
 export const VALUE_UNREADABLE = "That value couldn't be read. Try 30/6/2028 or 1200."
+/** A card's text folded to two lines, and open in full. */
+export const SHOW_ALL = 'Show all'
+export const SHOW_LESS = 'Show less'
 
 export const KIND_LABELS: Readonly<Record<TaskKind, string>> = {
   call: 'Call',
@@ -208,17 +211,37 @@ export function waitingLine(sentence: string | null): string {
   return `${/[.!?]$/.test(reason) ? reason : `${reason}.`} You can still check and change your calls.`
 }
 
-/** The send dialog's title: "Send 7 calls to HubSpot?" */
-export function sendTitle(count: number): string {
-  return `Send ${pluralise(count, 'call')} to HubSpot?`
+/**
+ * Calls and meeting notes, each kind as words: ["2 calls", "1 meeting note"], ["1 meeting note"],
+ * ["3 calls"]. The calls show unless there are only meeting notes.
+ */
+function kinds(calls: number, meetingNotes: number): string[] {
+  const parts: string[] = []
+  if (calls > 0 || meetingNotes === 0) parts.push(pluralise(calls, 'call'))
+  if (meetingNotes > 0) parts.push(pluralise(meetingNotes, 'meeting note'))
+  return parts
 }
 
-/** "7 calls, 3 tasks, 2 field changes" */
-export function totalsWords(totals: { calls: number; tasks: number; changes: number }): string {
+/**
+ * The send dialog's title, with only what will go: "Send 2 calls and 1 meeting note to HubSpot?".
+ * With nothing to go: "Send to HubSpot?".
+ */
+export function sendTitle(calls: number, meetingNotes = 0): string {
+  if (calls + meetingNotes === 0) return 'Send to HubSpot?'
+  return `Send ${kinds(calls, meetingNotes).join(' and ')} to HubSpot?`
+}
+
+/** "2 calls, 1 meeting note, 3 tasks, 2 field changes": the meeting notes only when there are some. */
+export function totalsWords(counts: {
+  calls: number
+  meetingNotes: number
+  tasks: number
+  changes: number
+}): string {
   return [
-    pluralise(totals.calls, 'call'),
-    pluralise(totals.tasks, 'task'),
-    pluralise(totals.changes, 'field change'),
+    ...kinds(counts.calls, counts.meetingNotes),
+    pluralise(counts.tasks, 'task'),
+    pluralise(counts.changes, 'field change'),
   ].join(', ')
 }
 
@@ -227,9 +250,12 @@ export function heldWords(count: number): string {
   return `${pluralise(count, 'field change')} ${count === 1 ? 'is' : 'are'} held: HubSpot's value changed since you saw it.`
 }
 
-/** Over the notes the send leaves out (`skipped`, T3-11): "1 call won't be sent:" */
-export function notSentHead(count: number): string {
-  return `${pluralise(count, 'call')} won't be sent:`
+/**
+ * Over the notes the send leaves out (`skipped`, T3-11): "1 call won't be sent:", "1 call and 1
+ * meeting note won't be sent:".
+ */
+export function notSentHead(calls: number, meetingNotes = 0): string {
+  return `${kinds(calls, meetingNotes).join(' and ')} won't be sent:`
 }
 
 /** At the top of a card the send left out, before the server's why. */

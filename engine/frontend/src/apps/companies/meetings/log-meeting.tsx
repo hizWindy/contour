@@ -6,9 +6,10 @@
  * to the meeting, in the same batch on Activity as the calls (`log-meeting-save.ts`), with the same
  * toast and Undo as Log call.
  *
- * - **The limit:** 60,000 characters (the plan's, TBC: the contract doesn't say it). The count shows
- *   in the last tenth, and over it the box says so. A .vtt's times come out on the server, so for
- *   one the box says that, and the server says if its words are still too long.
+ * - **The limit** is the server's (`transcript_max_chars` on the call notes options, 60,000 now),
+ *   or 60,000 when it sends none. The count shows in the last tenth, and over it the box says so.
+ *   A .vtt's times come out on the server, so for one the box says that, and the server says if
+ *   its words are still too long.
  * - **Nothing is lost:** the panel stays open while it saves, with the words in the box. A save
  *   that fails says why, in the server's words, and the words stay. Closed before it is saved, the
  *   transcript is kept for this meeting while the page is open.
@@ -23,7 +24,7 @@ import { FileText, FileUp, X } from 'lucide-react'
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
 import { toast } from 'sonner'
 import { useMe } from '@/api/hooks'
-import { useCallNoteSummary } from '@/api/hooks/call-notes'
+import { useCallNoteOptions, useCallNoteSummary } from '@/api/hooks/call-notes'
 import type { MeetingItem } from '@/api/v17'
 import { Button } from '@/components/ui/button'
 import { Kbd, KbdGroup } from '@/components/ui/kbd'
@@ -89,6 +90,8 @@ function TranscriptView({ item, onPhone, onSaved }: TranscriptViewProps) {
   const owner = draftOwner(useMe().data)
   // Asked for now, so the toast can say the count the moment the notes are saved.
   useCallNoteSummary()
+  // The server's limit for a transcript (60,000 when it sends none).
+  const limit = useCallNoteOptions().data?.transcript_max_chars
   const today = melbourneDate()
   const [mac] = useState(isMac)
   const [draft, setDraft] = useState<TranscriptDraft>(() =>
@@ -114,8 +117,8 @@ function TranscriptView({ item, onPhone, onSaved }: TranscriptViewProps) {
   const countId = useId()
   const problemId = useId()
 
-  const check = checkTranscript(draft.text, draft.fileName)
-  const near = nearCount(draft.text, draft.fileName)
+  const check = checkTranscript(draft.text, draft.fileName, limit)
+  const near = nearCount(draft.text, draft.fileName, limit)
   const vtt = draft.text.trim() !== '' && isVtt(draft.text, draft.fileName)
   const empty = tried && check.kind === 'empty'
   const tooLong = check.kind === 'too_long' ? check : null

@@ -59,6 +59,12 @@ export interface CallNoteOptions {
   soft_seconds: number
   /** The longest note (notes_max_chars). */
   max_chars: number
+  /**
+   * The longest meeting transcript, in characters, once a .vtt's times are out (60,000 now). A
+   * longer one answers 422 `transcript_too_long`. Optional in the contract; the server always
+   * sends it (Track 2, `716fe55`).
+   */
+  transcript_max_chars?: number
 }
 
 /** POST /call-notes. An Idempotency-Key header makes a double press one note. */
@@ -194,8 +200,12 @@ export interface CallNotePreview {
   items: CallNoteOut[]
   sending_ready: boolean
   waiting_for: string | null
-  /** A logged meeting's notes count as one call. */
-  totals: { calls: number; tasks: number; changes: number }
+  /**
+   * What sending adds, without the notes it won't send (`skipped`) or those left out. `calls` is
+   * calls only, and `meeting_notes` a logged meeting's notes (Track 2, `37ba1e5`). It is optional in
+   * the contract and always sent; before it, a meeting's notes counted as a call.
+   */
+  totals: { calls: number; tasks: number; changes: number; meeting_notes?: number }
   /** The notes it won't send, with why. Optional in the contract. */
   skipped?: CallNoteSkipped[]
 }

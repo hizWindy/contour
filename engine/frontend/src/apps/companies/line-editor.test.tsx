@@ -121,6 +121,10 @@ describe('the line editor', () => {
     expect(box).toHaveFocus()
     expect(box).toHaveValue('I wanted to follow up on Perth fit-out.')
     expect(screen.getByText('Only for this call, and only you see it.')).toBeInTheDocument()
+    // The script's Save stays the Navy one; Save and Cancel are 44px tall on a touch screen.
+    expect(screen.getByRole('button', { name: 'Save' })).toHaveAttribute('data-variant', 'default')
+    expect(screen.getByRole('button', { name: 'Save' })).toHaveClass('touch:h-11')
+    expect(screen.getByRole('button', { name: 'Cancel' })).toHaveClass('touch:h-11')
     await user.clear(box)
     await user.type(box, 'Calling about the Perth move.')
     await user.click(screen.getByRole('button', { name: 'Save' }))

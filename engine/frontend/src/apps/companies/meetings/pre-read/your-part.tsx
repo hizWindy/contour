@@ -7,6 +7,7 @@
  *   so leaving a sent pre-read untouched never makes it a draft again (the server does that on a
  *   change). After a save the field shows what the server keeps, unless the rep has typed on.
  * - **A failed save keeps the text**, says why and "Not saved yet. Try again.", with Try again.
+ *   One that fails after the rep has left the page says so in a toast, as Log meeting does.
  * - **"Check and send"** is the page's one Navy button. It stays greyed until both blanks are
  *   filled, with the reason beside it in plain words (`sendBlock`), and while the summaries are
  *   written or after a draft failed, since the server sends only a written pre-read. On a phone
@@ -18,13 +19,14 @@
  * asks every 2 seconds while the summaries are written) doesn't touch them.
  */
 import { Send } from 'lucide-react'
-import { useId, useState } from 'react'
-import type { ApiProblem } from '@/api/client'
+import { useEffect, useId, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { useEditMeetingForm } from '@/api/hooks/meetings'
 import type { MeetingFormOut, MeetingFormPatch } from '@/api/v17'
 import { Button } from '@/components/ui/button'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
+import { useBarRoom } from '@/lib/use-bar-room'
 import { PHONE, useMediaQuery } from '@/lib/use-media-query'
 import { cn } from '@/lib/utils'
 import { BLANK_MAX_CHARS, sendBlock } from './rules'
@@ -32,6 +34,7 @@ import {
   CHECK_AND_SEND,
   GOING,
   GOING_PLACEHOLDER,
+  leftNotSavedWords,
   NEXT_STEP,
   NEXT_STEP_PLACEHOLDER,
   notSavedWords,
@@ -60,8 +63,11 @@ interface Blank {
   retry: () => void
 }
 
-/** One blank: the text as the rep sees it, and its save to the server. */
-function useBlank(form: MeetingFormOut, name: BlankName): Blank {
+/**
+ * One blank: the text as the rep sees it, and its save to the server. `label` names it in the
+ * toast of a save that fails once the rep has left the page.
+ */
+function useBlank(form: MeetingFormOut, name: BlankName, label: string): Blank {
   const edit = useEditMeetingForm(form.id)
   const [text, setText] = useState(form[name] ?? '')
   // What the server holds, as far as the page knows: a field the same as it has nothing to save.
@@ -69,6 +75,16 @@ function useBlank(form: MeetingFormOut, name: BlankName): Blank {
   const [state, setState] = useState<SaveState>('idle')
   const [problem, setProblem] = useState<string | null>(null)
   const tooLong = text.trim().length > BLANK_MAX_CHARS
+  // Only the newest save's answer counts, as one left on its way may answer after it.
+  const newest = useRef(0)
+  // Still on screen: a save that fails after the rep left the page says so in a toast instead.
+  const shownNow = useRef(true)
+  useEffect(() => {
+    shownNow.current = true
+    return () => {
+      shownNow.current = false
+    }
+  }, [])
 
   const save = (value: string): void => {
     const next = value.trim()
@@ -77,20 +93,27 @@ function useBlank(form: MeetingFormOut, name: BlankName): Blank {
     setProblem(null)
     const patch: MeetingFormPatch = {}
     patch[name] = next
-    edit.mutate(
-      { patch },
-      {
-        onSuccess: (answer) => {
-          const kept = answer[name] ?? ''
-          setSaved(kept)
-          // Show what the server keeps (it tidies spaces), unless the rep has typed on since.
-          setText((now) => (now === value ? kept : now))
-          setState('saved')
-        },
-        onError: (error: ApiProblem) => {
-          setState('failed')
-          setProblem(notSavedWords(error))
-        },
+    newest.current += 1
+    const mine = newest.current
+    // Its promise answers even once the page is gone, which a callback given to `mutate` doesn't.
+    void edit.mutateAsync({ patch }).then(
+      (answer) => {
+        if (mine !== newest.current) return
+        const kept = answer[name] ?? ''
+        setSaved(kept)
+        // Show what the server keeps (it tidies spaces), unless the rep has typed on since.
+        setText((now) => (now === value ? kept : now))
+        setState('saved')
+      },
+      (error: unknown) => {
+        if (mine !== newest.current) return
+        if (!shownNow.current) {
+          const words = leftNotSavedWords(label, form.meeting.company_name, error)
+          toast.error(words.title, { description: words.description })
+          return
+        }
+        setState('failed')
+        setProblem(notSavedWords(error))
       },
     )
   }
@@ -203,8 +226,10 @@ export function YourPart({
   const headingId = useId()
   const reasonId = useId()
   const onPhone = useMediaQuery(PHONE)
-  const nextStep = useBlank(form, 'next_step')
-  const going = useBlank(form, 'going')
+  // On a phone the bar is fixed at the bottom: a field the keyboard lands on scrolls above it.
+  const barRoom = useBarRoom(onPhone)
+  const nextStep = useBlank(form, 'next_step', NEXT_STEP)
+  const going = useBlank(form, 'going', GOING)
   const block = sendBlock({
     status: form.status,
     nextStep: nextStep.text,
@@ -228,6 +253,7 @@ export function YourPart({
       {/* Sent and unchanged: nothing to send. An edit makes it a draft, and this comes back. */}
       {form.status === 'sent' ? null : (
         <div
+          ref={barRoom}
           data-slot="send-bar"
           className={cn(
             'flex flex-wrap items-center justify-end gap-x-4 gap-y-2',

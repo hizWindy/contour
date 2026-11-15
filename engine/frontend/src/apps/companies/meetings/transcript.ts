@@ -9,11 +9,16 @@
  */
 
 /**
- * The most the server takes, counted once a .vtt's times are out (`transcript_max_chars`, 60,000,
- * TBC). The contract doesn't say it, so this is the plan's number, and the server's 422
- * `transcript_too_long` has the last word.
+ * The most the server takes, counted once a .vtt's times are out, when it doesn't say: the server
+ * sends its own (`transcript_max_chars` on the call notes options, 60,000 now), which wins. Its
+ * 422 `transcript_too_long` has the last word either way.
  */
 export const TRANSCRIPT_MAX_CHARS = 60_000
+
+/** The server's limit, or 60,000 when it sends none (or one that can't be a limit). */
+function limitOf(max: number | undefined): number {
+  return max !== undefined && Number.isInteger(max) && max > 0 ? max : TRANSCRIPT_MAX_CHARS
+}
 
 /** The most `text` itself may hold (the contract's own limit): a .vtt before its times go. */
 export const TEXT_MAX_CHARS = 200_000
@@ -80,29 +85,37 @@ export type TranscriptCheck =
   { kind: 'ok' } | { kind: 'empty' } | { kind: 'too_long'; length: number; max: number }
 
 /**
- * Plain text may hold up to 60,000 characters. A .vtt's times come out on the server, so here only
- * the contract's 200,000 holds for it: the server's 422 says if its words are still too long.
+ * Plain text may hold up to the server's limit (`max`, 60,000 when it sends none). A .vtt's times
+ * come out on the server, so here only the contract's 200,000 holds for it: the server's 422 says
+ * if its words are still too long.
  */
-export function checkTranscript(text: string, fileName: string | null): TranscriptCheck {
+export function checkTranscript(
+  text: string,
+  fileName: string | null,
+  max?: number,
+): TranscriptCheck {
   const length = transcriptLength(text)
   if (length === 0) return { kind: 'empty' }
   const raw = characters(text)
   if (raw > TEXT_MAX_CHARS) return { kind: 'too_long', length: raw, max: TEXT_MAX_CHARS }
-  if (!isVtt(text, fileName) && length > TRANSCRIPT_MAX_CHARS) {
-    return { kind: 'too_long', length, max: TRANSCRIPT_MAX_CHARS }
-  }
+  const limit = limitOf(max)
+  if (!isVtt(text, fileName) && length > limit) return { kind: 'too_long', length, max: limit }
   return { kind: 'ok' }
 }
 
-/** The count to show under the box, once it is near its limit (the last tenth), or null. */
+/**
+ * The count to show under the box, once it is near its limit (the last tenth), or null. Plain
+ * text counts against the server's limit (`max`), a .vtt against the 200,000 its text may hold.
+ */
 export function nearCount(
   text: string,
   fileName: string | null,
+  max?: number,
 ): { length: number; max: number } | null {
   const vtt = isVtt(text, fileName)
   const length = vtt ? characters(text) : transcriptLength(text)
-  const max = vtt ? TEXT_MAX_CHARS : TRANSCRIPT_MAX_CHARS
-  return length >= Math.floor(max * 0.9) ? { length, max } : null
+  const most = vtt ? TEXT_MAX_CHARS : limitOf(max)
+  return length >= Math.floor(most * 0.9) ? { length, max: most } : null
 }
 
 /** A file read, or why it wasn't. */
