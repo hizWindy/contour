@@ -13,22 +13,29 @@
  *   Meetings from here shows it at once. A cancelled meeting needs nothing, so it isn't one of the
  *   three.
  * - **Empty:** "No meetings in the next few days." in the serif voice. While HubSpot's meetings
- *   can't be read, or the rep's own can't be picked out, the server's sentence says so under it.
- *   A list that fails says so in one quiet line.
+ *   can't be read, or the rep's own can't be picked out, the server's sentence says so under it,
+ *   in Meetings' own quiet line (`WaitingLine`). A list that fails says so in one quiet line.
+ *
+ * **The first visit:** this file's imports decide how the bundler (Rolldown) splits the code that
+ * every first visit loads, so three of them are chosen by measuring (`node
+ * scripts/bundle-report.js`, T3-11). Importing the Card part, or Reveal by its own file, from here
+ * split five small parts out of the main file into files of their own: the first visit grew from 34
+ * files to 39 and by about 1.6 kB gzip, though no byte of this card was in it. So the card draws
+ * the Card part's own classes, and takes Reveal from the motion kit's index, as Home does (Home
+ * loads that file already). Using Meetings' `states.tsx` keeps two icons in one file, as before.
  */
-import { ArrowRight, CalendarCheck, Hourglass } from 'lucide-react'
+import { ArrowRight, CalendarCheck } from 'lucide-react'
 import { Link } from 'react-router'
 import { isMeetingFormsOff, useMeetings, useMeetingSummary } from '@/api/hooks/meetings'
 import type { MeetingItem } from '@/api/v17'
-// By its own file: the kit's index would bring every part into this late file.
-import { Reveal } from '@/components/motion/reveal'
-import { Card } from '@/components/ui/card'
+import { Reveal } from '@/components/motion'
 import { melbourneDate } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { TONE_CLASSES } from '@/shell/tone'
 import { FIRST_VIEW, meetingsQuery, MEETINGS_PATH } from './params'
 import { RowAction, StatusLine } from './row-parts'
 import { isCancelled, rowKey, rowStatus } from './rows'
+import { WaitingLine } from './states'
 import { useDraftIt } from './use-draft-it'
 import {
   MEETINGS_NOT_LOADED,
@@ -45,11 +52,12 @@ const TITLE_ID = 'home-meetings'
 /** How many of the next meetings the card shows. */
 const SHOWN = 3
 
-/** Ends a sentence that has no stop yet. */
-function sentence(text: string): string {
-  const trimmed = text.trim()
-  return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`
-}
+/**
+ * The Card part's own classes (`components/ui/card.tsx`), drawn here instead of importing the part:
+ * see "The first visit" above. Keep them the same as the part's.
+ */
+const CARD =
+  'flex h-full flex-col gap-4 overflow-hidden rounded-lg border bg-card py-6 text-ui text-card-foreground'
 
 function UpcomingRow({ item, today }: { item: MeetingItem; today: string }) {
   const draftIt = useDraftIt(item)
@@ -89,7 +97,7 @@ export function UpcomingMeetings() {
   const words = upcomingSentence(summary.data.need_pre_read, summary.data.draft_ready)
   const page = list.data
   const shown = page ? page.items.filter((item) => !isCancelled(item)).slice(0, SHOWN) : []
-  const waiting = page?.sentence?.trim() ? sentence(page.sentence) : null
+  const waiting = page?.sentence?.trim() || null
 
   let body
   if (!page) {
@@ -115,7 +123,7 @@ export function UpcomingMeetings() {
 
   return (
     <Reveal className="h-full">
-      <Card role="region" aria-labelledby={TITLE_ID} className="h-full gap-4">
+      <section data-slot="card" aria-labelledby={TITLE_ID} className={CARD}>
         <div className="flex items-center gap-3 px-6">
           <span
             aria-hidden="true"
@@ -140,16 +148,12 @@ export function UpcomingMeetings() {
         </div>
         {words ? <p className="px-6 text-ui text-foreground">{words}</p> : null}
         {waiting ? (
-          <p
-            role="status"
-            className="flex items-start gap-2 px-6 text-caption text-muted-foreground"
-          >
-            <Hourglass aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
-            {waiting}
-          </p>
+          <div className="px-6">
+            <WaitingLine sentence={waiting} />
+          </div>
         ) : null}
         {body}
-      </Card>
+      </section>
     </Reveal>
   )
 }

@@ -22,13 +22,12 @@
  * email it shows holds it. The people the rep added, and their ticks, stay while the page is open.
  * It rises 8px as it fades in, and fades out in 150ms, as Activity's does.
  */
-import { useIsMutating } from '@tanstack/react-query'
 import { CalendarCheck, CircleAlert, Hourglass, Send, X } from 'lucide-react'
 import { useEffect, useEffectEvent, useId, useRef, useState, type FormEvent } from 'react'
 import type { ApiProblem } from '@/api/client'
 import {
-  editFormKey,
   isOutsideAddress,
+  useFormEditing,
   useMeetingFormPreview,
   useSendMeetingForm,
 } from '@/api/hooks/meetings'
@@ -261,7 +260,7 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
   const preview = useMeetingFormPreview(form.id)
   const send = useSendMeetingForm(form.id)
   // A blank the rep has just left is still being saved.
-  const saving = useIsMutating({ mutationKey: editFormKey(form.id) }) > 0
+  const saving = useFormEditing(form.id)
   const [shown, setShown] = useState<FormEmailPreview | null>(null)
   const [added, setAdded] = useState<readonly string[]>([])
   const [picks, setPicks] = useState<Readonly<Record<string, boolean>>>({})

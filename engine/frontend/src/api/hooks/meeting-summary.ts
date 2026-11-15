@@ -22,10 +22,19 @@ export function isMeetingFormsOff(error: unknown): boolean {
   return isApiProblem(error) && error.status === 409 && error.code === 'meeting_forms_off'
 }
 
+/**
+ * The counts' key, under every meetings query (`queryKeys.companies.meetings()`), so marking all
+ * of those old marks it too. It lives here, not in `queryKeys`: that file is in every first visit,
+ * and only the meetings files use this key.
+ */
+export function meetingSummaryKey() {
+  return [...queryKeys.companies.meetings(), 'summary'] as const
+}
+
 /** GET /companies/meetings/summary: the rep's upcoming meetings that need a pre-read, and ready. */
 export function meetingSummaryQueryOptions() {
   return queryOptions({
-    queryKey: queryKeys.companies.meetingSummary(),
+    queryKey: meetingSummaryKey(),
     queryFn: async ({ signal }): Promise<MeetingSummary> =>
       unwrap(await apiV17.GET('/companies/meetings/summary', { signal })),
   })
@@ -41,8 +50,5 @@ export function useMeetingSummary(enabled = true) {
  * sent. The next place that shows them asks again.
  */
 export function markMeetingSummaryOld(client: QueryClient): void {
-  void client.invalidateQueries({
-    queryKey: queryKeys.companies.meetingSummary(),
-    refetchType: 'none',
-  })
+  void client.invalidateQueries({ queryKey: meetingSummaryKey(), refetchType: 'none' })
 }

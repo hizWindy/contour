@@ -203,11 +203,7 @@ export const queryKeys = {
     meeting: (meetingId: string) => ['companies', 'meetings', 'meeting', meetingId] as const,
     /** One pre-meeting form, by its id (the pre-read page, T3-10). */
     meetingForm: (id: string) => ['companies', 'meetings', 'form', id] as const,
-    /**
-     * The counts for Home, which also say whether pre-meeting forms are on (a 409 while they are
-     * off): Home's "Upcoming meetings" card and Ctrl+K's entry read it (T3-11).
-     */
-    meetingSummary: () => ['companies', 'meetings', 'summary'] as const,
+    // The counts for Home (T3-11) have their key in `hooks/meeting-summary.ts`, under `meetings()`.
   },
   hubspot: {
     all: ['hubspot'] as const,

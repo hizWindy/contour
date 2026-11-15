@@ -84,6 +84,8 @@ interface Backend {
   /** The counts, or 'off' for the 409 the server answers while pre-meeting forms are off. */
   summary?: MeetingSummary | 'off'
   items?: MeetingItem[]
+  /** The list's sentence while it can't show what was asked. */
+  sentence?: string | null
   /** Who is signed in. Left out: sign-in is off, so everyone sees every project. */
   user?: { role: 'admin' | 'staff'; apps: string[] }
 }
@@ -103,6 +105,7 @@ const OFF = () =>
 function stubBackend({
   summary = { need_pre_read: 2, draft_ready: 1 },
   items = upcoming(),
+  sentence = null,
   user,
 }: Backend = {}): string[] {
   const requests: string[] = []
@@ -141,8 +144,8 @@ function stubBackend({
             : Response.json({
                 items,
                 total: items.length,
-                meetings_state: 'ready',
-                sentence: null,
+                meetings_state: sentence ? 'waiting' : 'ready',
+                sentence,
               }),
         )
       }
@@ -250,6 +253,24 @@ describe("Home's Upcoming meetings", () => {
     )
     expect(card.getByText('No meetings in the next few days.')).toHaveClass('font-serif')
     expect(card.queryByRole('listitem')).toBeNull()
+  })
+
+  it("says in the server's words, in Meetings' own quiet line, when meetings can't be read yet", async () => {
+    asLaptop()
+    stubBackend({
+      summary: { need_pre_read: 0, draft_ready: 0 },
+      items: [],
+      sentence: 'Waiting for HubSpot access to meetings.',
+    })
+    renderAt('/')
+    await home()
+    const card = within(
+      await screen.findByRole('region', { name: 'Upcoming meetings' }, { timeout: LAZY }),
+    )
+    expect(card.getByRole('status')).toHaveTextContent(
+      'Waiting for HubSpot access to meetings. You can still start a new pre-read.',
+    )
+    expect(card.getByText('No meetings in the next few days.')).toBeInTheDocument()
   })
 
   it('is not there while pre-meeting forms are off, and asks for no meetings', async () => {

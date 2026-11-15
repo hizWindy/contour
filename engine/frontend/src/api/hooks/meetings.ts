@@ -27,6 +27,7 @@ import {
   useQueryClient,
   type QueryClient,
 } from '@tanstack/react-query'
+import { useCallback, useSyncExternalStore } from 'react'
 import { isApiProblem, unwrap, type ApiProblem } from '../client'
 import { queryKeys } from '../query'
 import type {
@@ -233,6 +234,24 @@ interface EditFormContext {
  */
 export function editFormKey(formId: string) {
   return [...queryKeys.companies.meetings(), 'edit', formId] as const
+}
+
+/**
+ * Whether an edit of this pre-read is on its way: a blank the rep has just left, or a summary.
+ * Read from the query client itself rather than with TanStack's `useIsMutating`, which nothing else
+ * uses: TanStack Query sits in the framework file every first visit loads, so using one more of
+ * its hooks grew that file by about 150 bytes gzip (T3-11, measured).
+ */
+export function useFormEditing(formId: string): boolean {
+  const client = useQueryClient()
+  const subscribe = useCallback(
+    (onChange: () => void) => client.getMutationCache().subscribe(onChange),
+    [client],
+  )
+  return useSyncExternalStore(
+    subscribe,
+    () => client.isMutating({ mutationKey: editFormKey(formId) }) > 0,
+  )
 }
 
 /**
