@@ -62,8 +62,10 @@ export function MeetingList({ page, view, today, dimmed, onPage }: MeetingListPr
     <div aria-busy={dimmed || undefined} className={cn('flex flex-col gap-6', dim)}>
       {groupUpcoming(page.items, today).map(({ group, items }) => {
         const headingId = `${id}-${group}`
+        // A heading and its list, not a landmark each: four regions would crowd a screen reader's
+        // list of landmarks. The list takes the heading as its name.
         return (
-          <section key={group} aria-labelledby={headingId} className="flex flex-col gap-2">
+          <div key={group} className="flex flex-col gap-2">
             <h2 id={headingId} className="text-ui font-semibold text-foreground">
               {GROUP_LABELS[group]}
             </h2>
@@ -81,7 +83,7 @@ export function MeetingList({ page, view, today, dimmed, onPage }: MeetingListPr
                 />
               ))}
             </ul>
-          </section>
+          </div>
         )
       })}
       {page.total > page.items.length ? (
