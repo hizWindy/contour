@@ -749,6 +749,23 @@ Newest first.
 
 Newest first.
 
+- 2026-11-15: **T3-8: the independent design review** (a fresh review-agent, given the diff, the plan and the screenshots). **Verdict: not ready to tag**, two Must fixes:
+  - In a card being edited, the fields sit on the selected tint (border 2.76:1, under 3:1).
+  - In edit mode, a follow-up's due date re-reads its words against today, so it shows a day that isn't stored.
+  - Also found and being fixed with them: a change's value opens as "2028-03-31" instead of "31 Mar 2028"; Logged rows say "15 Nov 2026" beside "Today"; "Sending is off until then." leans on a line that may be out of view; a draft note isn't tied to the signed-in person (privacy, on a shared browser); and the pre-meeting forms switch shows in Stage A, where it does nothing.
+  - **TBC for Al-khair** (not built): `sm` buttons and `Segmented` are 40px on touch (a change for every screen); no button shrinks when pressed, though DESIGN.md says so; an uncertain note with no HubSpot link has no way into HubSpot (a contract question for Track 2: the company's link on `CallNoteOut`); edit mode's follow-ups are boxes inside a card; with the AI on, a card shows only the sorter's summary, not the rep's words.
+  - The review read the five earlier fixes (`77b3b31` to `3ac84b6`) and found them right in the code.
+- 2026-11-15: **The session's own full check** after those five fixes and two of its own (`0842897`: the write log's line for Admins only; `9646b1b`: the hand-typed paths use `{note_id}` and `{user_id}`). Lint and types pass. Tests: 99 files, 1,389 passed. The build passes. First visit: 230 kB gzip (716 kB raw).
+- 2026-11-15: **The laptop ran out of memory** (0.1 GB free at the worst, with three sessions' test runs, the preview and Docker).
+  - Claude Code stopped the mic test page, the preview and the first final browser pass. Docker Desktop stopped too, which took the shared database down.
+  - On Al-khair's word, the preview was stopped to free memory, and Docker was started again: `contour-engine-db` reported healthy at 22:41.
+  - The preview's database is intact (at `0021`, with its 3 notes). Track 1 was told.
+  - The final browser pass waits for the review's fixes. Al-khair approved running it.
+- 2026-11-15: **Track 1's message (session contour-7e), checked against `feee0f5` on `plan-v17-track1`:**
+  - The owners' routes and shapes are as Track 3 reads them: `GET /hubspot/owners` answers `{ owners: [{ id, name }] }`, and `PUT /people/{user_id}/hubspot-owner` takes `{ owner_id }` and answers the person row. Every owner has a name, never an email.
+  - With no key, the connection check now says "The HubSpot key isn't set on the server." A switched-off write reads "sending is switched off on the server". Both asks from the Log are done.
+  - Before M1, Track 3 renames the key in its hand-typed paths: `{user_id}` for the owner route, and `{note_id}` for the call note routes (Track 2's name).
+  - Track 3's reply: T3-4 stays typing-only until T3-2, so `index.html` needs no mic or WebAssembly change yet.
 - 2026-11-15: **T3-8 in progress: the browser check so far.**
   - **The setup:** a throwaway preview, the worktree `../contour-v17-t3-preview`. It joins `plan-v17-track2` (Track 2's real call notes routes) into this branch.
     - It runs on its own database (`leadfinder_v17c_preview`, now at `0021_call_notes`), with no keys: backend 8053, website 5223.
