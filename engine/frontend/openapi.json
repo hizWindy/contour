@@ -1157,13 +1157,18 @@
       "CallNoteTotals": {
         "properties": {
           "calls": {
-            "description": "The calls not yet in HubSpot. A logged meeting's notes count as one",
+            "description": "The calls not yet in HubSpot",
             "title": "Calls",
             "type": "integer"
           },
           "changes": {
             "description": "The field changes not yet in HubSpot, and not held",
             "title": "Changes",
+            "type": "integer"
+          },
+          "meeting_notes": {
+            "description": "The logged meetings' notes not yet in HubSpot. Each goes as a note, not a call",
+            "title": "Meeting Notes",
             "type": "integer"
           },
           "tasks": {
