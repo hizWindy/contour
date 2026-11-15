@@ -259,9 +259,9 @@ describe('who the send goes to (T3-11)', () => {
       found: ['jo@example.com', 'mia@example.com'],
       unreadable: [],
     })
-    expect(readAddresses('"Sample, Jo" <jo@example.com>, "jo@example.com" <jo@example.com>')).toEqual(
-      { found: ['jo@example.com'], unreadable: [] },
-    )
+    expect(
+      readAddresses('"Sample, Jo" <jo@example.com>, "jo@example.com" <jo@example.com>'),
+    ).toEqual({ found: ['jo@example.com'], unreadable: [] })
     // Something after the brackets has no comma before it: it is unreadable, not dropped.
     expect(readAddresses('Jo <jo@example.com> mia@example.com')).toEqual({
       found: ['jo@example.com'],

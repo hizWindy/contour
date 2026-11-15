@@ -31,7 +31,7 @@ export default function CompanyPage() {
   const phone = useMediaQuery(PHONE)
   // The bar at the bottom of a phone: what the keyboard lands on scrolls above it.
   const barRoom = useBarRoom()
-  const prepCall =(detail: CompanyDetail, person: CompanyPerson | null): void => {
+  const prepCall = (detail: CompanyDetail, person: CompanyPerson | null): void => {
     setPrep({
       companyKey: detail.key,
       companyName: detail.name,

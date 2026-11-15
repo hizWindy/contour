@@ -86,7 +86,11 @@ function note(id: string, changes: Partial<CallNoteOut> = {}): CallNoteOut {
     status: 'to_confirm',
     sorted_by: 'ai',
     unsure: null,
-    call: { summary: 'Jo says the Perth lease now ends in June 2028.', outcome: 'Connected', in_hubspot: false },
+    call: {
+      summary: 'Jo says the Perth lease now ends in June 2028.',
+      outcome: 'Connected',
+      in_hubspot: false,
+    },
     changes: [],
     tasks: [],
     left_out: false,
@@ -108,14 +112,22 @@ function threeNotes(): CallNoteOut[] {
       company_name: 'Sample Mining Pty Ltd',
       person: null,
       called_at: '2026-11-10T02:00:00Z',
-      call: { summary: 'Left a message with reception.', outcome: 'Left voicemail', in_hubspot: false },
+      call: {
+        summary: 'Left a message with reception.',
+        outcome: 'Left voicemail',
+        in_hubspot: false,
+      },
     }),
     note('n3', {
       company_key: '105',
       company_name: 'Sample Freight Pty Ltd',
       person: { id: '301', name: 'Sam Sample', title: null },
       called_at: '2026-11-10T03:00:00Z',
-      call: { summary: 'Sam wants a floor plan by Friday.', outcome: 'Connected', in_hubspot: false },
+      call: {
+        summary: 'Sam wants a floor plan by Friday.',
+        outcome: 'Connected',
+        in_hubspot: false,
+      },
     }),
   ]
 }
@@ -897,7 +909,9 @@ describe('To confirm', () => {
   // frame loop waiting for a frame that never comes, and every later test's cards stop leaving.
   it('a note still being sorted shows a still line, then its parts when they come', async () => {
     const server = mockServer({
-      notes: [note('n1', { status: 'sorting', call: { summary: '', outcome: null, in_hubspot: false } })],
+      notes: [
+        note('n1', { status: 'sorting', call: { summary: '', outcome: null, in_hubspot: false } }),
+      ],
     })
     renderActivity()
     const list = await toConfirmList()
@@ -1285,7 +1299,11 @@ describe("a logged meeting's notes (T3-11)", () => {
       source: 'transcript',
       text: 'Jo Sample: Thanks for coming in.\nSam Sample: Our Perth lease ends in June.',
       called_at: '2026-11-12T23:00:00Z',
-      call: { summary: 'They walked us through the Perth office.', outcome: null, in_hubspot: false },
+      call: {
+        summary: 'They walked us through the Perth office.',
+        outcome: null,
+        in_hubspot: false,
+      },
       ...changes,
     })
   }
