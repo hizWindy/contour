@@ -968,6 +968,48 @@ class MeetingFormPatch(BaseModel):
     going: SafeText | None = Field(None, max_length=FORM_BLANK_MAX_CHARS)
 
 
+ADDRESS_MAX_CHARS = 254
+MAX_RECIPIENTS = 20  # the email service's limit for one email
+
+
+class FormPreviewIn(BaseModel):
+    """The addresses the rep added, to see the email with them. Empty: only the people on the
+    meeting."""
+
+    to: list[SafeText] = Field(
+        default_factory=list,
+        max_length=MAX_RECIPIENTS,
+        description="Addresses the rep added, each checked against Contour's own domains",
+    )
+
+
+class FormSendIn(BaseModel):
+    to: list[SafeText] = Field(
+        min_length=1,
+        max_length=MAX_RECIPIENTS,
+        description="Who gets it: Contour addresses only. One that isn't refuses the whole send",
+    )
+
+
+class FormPerson(Out):
+    """Someone the pre-read would go to."""
+
+    name: str | None = Field(description="Their name, when they have an account here")
+    email: str
+    why: str = Field(description="Like 'on the meeting', or 'added by you'")
+    ticked: bool = Field(description="Ticked to get it")
+    allowed: bool = Field(description="False for an address that isn't Contour's: it can't")
+
+
+class FormEmailPreview(Out):
+    """The email as it would arrive, and the people it would go to."""
+
+    subject: str
+    text: str = Field(description="The plain text version")
+    html: str = Field(description="The HTML version, with every value escaped")
+    people: list[FormPerson]
+
+
 class MeetingDetail(Out):
     meeting: Meeting
     company_name: str = Field(description="The company it is linked to, from our copy")

@@ -826,7 +826,8 @@ async def read_form(
 async def edit_form(session: AsyncSession, form: MeetingForm, patch: MeetingFormPatch) -> None:
     """The rep's edits: a summary's text (from then on the rep's own, with its sources kept),
     the ideal next step, and who is going. Each edit adds one to the version, so the email for
-    the new words is a new email."""
+    the new words is a new email. A sent pre-read that changes is a draft again (T2-14): "sent"
+    always means these words went, and its last send stays in `sent_to` and `sent_at`."""
     locked = await session.get(MeetingForm, form.id, with_for_update=True, populate_existing=True)
     if locked is None:
         raise form_not_found()
@@ -845,6 +846,8 @@ async def edit_form(session: AsyncSession, form: MeetingForm, patch: MeetingForm
         locked.going = _rep_text(patch.going) or None
     if given:
         locked.version += 1
+        if locked.status == "sent":
+            locked.status = "draft"
     await session.commit()
 
 

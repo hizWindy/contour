@@ -90,6 +90,8 @@ ROUTES = [
     ("GET", f"{API}/companies/meetings/forms/{{form_id}}"),
     ("PATCH", f"{API}/companies/meetings/forms/{{form_id}}"),
     ("POST", f"{API}/companies/meetings/forms/{{form_id}}/redraft"),
+    ("POST", f"{API}/companies/meetings/forms/{{form_id}}/preview"),
+    ("POST", f"{API}/companies/meetings/forms/{{form_id}}/send"),
     ("GET", f"{API}/companies/meetings/{{meeting_id}}"),
     ("POST", f"{API}/auth/login"),
     ("POST", f"{API}/auth/logout"),

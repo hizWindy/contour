@@ -3,7 +3,8 @@
 Behind the Companies tick, like every Companies route. Each answers 409 `meeting_forms_off` while
 meetings and pre-reads are switched off. A rep sees their own meetings, or the team's. The fixed
 paths come before `/meetings/{meeting_id}`, and the whole router before `/{key}`. The services
-are meeting_store.py (the reads) and meeting_form.py (the pre-read's draft).
+are meeting_store.py (the reads), meeting_form.py (the pre-read's draft) and meeting_send.py
+(sending it, T2-14).
 """
 
 import uuid
@@ -11,11 +12,15 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path, Query, Request, Response
 
-from apps.companies import meeting_form, meeting_store
+from apps.companies import meeting_form, meeting_send, meeting_store
 from apps.companies.deps import LeadsDep
 from apps.companies.meeting_form import MeetingFormRunner
 from apps.companies.meeting_store import MeetingSource
+from apps.companies.note_batch import ActivityWriter
 from apps.companies.schemas import (
+    FormEmailPreview,
+    FormPreviewIn,
+    FormSendIn,
     MeetingDetail,
     MeetingFormOut,
     MeetingFormPatch,
@@ -65,7 +70,15 @@ async def meetings_on(settings: SettingsDep) -> Settings:
     return settings
 
 
+def activity_writer(request: Request) -> ActivityWriter:
+    """Core's activity writer, for the pre-read's copy in HubSpot. A test puts its own in
+    app.state."""
+    writer: ActivityWriter | None = getattr(request.app.state, "activity_writer", None)
+    return writer or ActivityWriter()
+
+
 RunnerDep = Annotated[MeetingFormRunner, Depends(meeting_form_runner)]
+WriterDep = Annotated[ActivityWriter, Depends(activity_writer)]
 MeetingsOnDep = Annotated[Settings, Depends(meetings_on)]
 MeetingId = Annotated[
     str,
@@ -200,7 +213,8 @@ async def get_form(
         "The rep's edits: a summary's new text (`summaries`), the ideal next step "
         "(`next_step`) and who is going (`going`). Only the parts sent change. A summary "
         "changed here is the rep's own from then on (`by: person`): a redraft leaves it, and "
-        "it keeps its sources. 404 `form_not_found`. 409 `meeting_forms_off`."
+        "it keeps its sources. A sent pre-read that changes is a draft again, so sending it "
+        "again emails the new words. 404 `form_not_found`. 409 `meeting_forms_off`."
     ),
 )
 async def edit_form(
@@ -241,6 +255,70 @@ async def redraft_form(
     form = await meeting_form.read_form(session, form_id, leads=leads, runner=runner, now=now)
     await meeting_form.redraft_form(session, form, runner=runner, leads=leads)
     return await meeting_store.form_out(session, form)
+
+
+@router.post(
+    "/meetings/forms/{form_id}/preview",
+    response_model=FormEmailPreview,
+    summary="See the pre-read's email",
+    description=(
+        "The email as it would arrive (a subject, plain text, and HTML with every value "
+        "escaped), and the people it would go to, each with why: the Contour people on the "
+        "meeting who have an account here, ticked, then the addresses I add (`to`). Each says "
+        "whether it may get it: only Contour addresses can. Nothing is sent. 404 "
+        "`form_not_found`. 409 `meeting_forms_off`."
+    ),
+)
+async def preview_form(
+    form_id: FormId,
+    body: FormPreviewIn,
+    session: SessionDep,
+    settings: MeetingsOnDep,
+    leads: LeadsDep,
+    runner: RunnerDep,
+    source: SourceDep,
+    now: NowDep,
+) -> FormEmailPreview:
+    form = await meeting_form.read_form(session, form_id, leads=leads, runner=runner, now=now)
+    return await meeting_send.preview(
+        session, form, source=source, settings=settings, added=body.to
+    )
+
+
+@router.post(
+    "/meetings/forms/{form_id}/send",
+    response_model=MeetingFormOut,
+    summary="Send the pre-read",
+    description=(
+        "Emails the pre-read to these addresses (in the body, never an attachment), then saves "
+        "its copy in HubSpot: a note on the company, and on its deal when it has exactly one "
+        "open deal. Every address must be Contour's: one that isn't refuses the whole send (422 "
+        "`outside_address`, naming it). The ideal next step and who is going must be filled in "
+        "(422 `blanks_empty`). Sent already: nobody is emailed again, and a copy that is "
+        "waiting or failed is tried again. `hubspot_copy` says how the copy went: saved, "
+        "waiting (writing to HubSpot isn't on: the email still went), off (the company isn't in "
+        "HubSpot), or failed. 409 `form_not_ready` while it is drafting or failed, "
+        "`email_not_set_up`. 502 `email_failed`: nothing was sent. 404 `form_not_found`. 409 "
+        "`meeting_forms_off`."
+    ),
+)
+async def send_form(
+    form_id: FormId,
+    body: FormSendIn,
+    request: Request,
+    session: SessionDep,
+    settings: MeetingsOnDep,
+    auth: SignedInDep,
+    leads: LeadsDep,
+    runner: RunnerDep,
+    writer: WriterDep,
+    now: NowDep,
+) -> MeetingFormOut:
+    form = await meeting_form.read_form(session, form_id, leads=leads, runner=runner, now=now)
+    sent = await meeting_send.send_form(
+        session, form, body.to, auth, app=request.app, settings=settings, writer=writer, now=now
+    )
+    return await meeting_store.form_out(session, sent)
 
 
 @router.get(
