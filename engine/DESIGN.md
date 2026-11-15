@@ -166,7 +166,7 @@ Smooth and quick, like a well-made phone app (PLAN-V13, 11 Nov 2026). Motion sho
 - **Springs with no bounce** move panels, tabs and indicators. A very small bounce (0.1) is only for toggles and chips. The motion kit (`src/components/motion/`, built on the `motion` package) holds them: `snappy` (250ms, an indicator or a chip), `smooth` (400ms, a panel arriving or content revealing), `soft` (350ms, bounce 0.1, a toggle or a tick). `tokens.css` carries the same curves as CSS `linear()` for a shadcn part that only needs a transition.
 - **Leaving is quicker than arriving:** anything that closes goes in 150ms on the one curve, so closing feels instant. A sheet slides out, a dialog fades out, a chip's tick fades.
 - **Only `transform` and `opacity` move.** Nothing animates its height, a shadow, a blur, or a colour over a big area. A colour change on a small part (a switch's track, a chip's border) uses the one curve, `cubic-bezier(0.4, 0, 0.2, 1)`, at 150ms, and a dialog's fade 250ms.
-- **The tick draws its line:** the 16px tick a call gets as it lands in HubSpot draws once (`TickIn`, Motion's `pathLength`, on `soft`, about 350ms). It is the one exception to "only `transform` and `opacity` move", kept to that one small icon. With reduced motion it is simply there. (Al-khair, 15 Nov 2026; PLAN-V17 T3-3)
+- **The tick draws its line:** the 16px tick a call gets as it lands in HubSpot draws once (`TickIn`, Motion's `pathLength`, on `soft`, about 350ms). It is the one agreed exception to "only `transform` and `opacity` move", kept to that one small icon. With reduced motion it is simply there. (Al-khair, 15 Nov 2026; PLAN-V17 T3-3)
 - **The indicator slides:** the selected tab's underline, the segmented control's highlight and the selected menu item move from the old place to the new (`TabIndicator`, `Segmented`; `layoutId` in Motion).
 - **Menus grow from where they open:** a popover, menu or tooltip scales from its trigger, using Radix's transform origin (like `origin-(--radix-popover-content-transform-origin)`). (principles 01 #10)
 - **What you use all day barely moves:** the menu's rows and table rows never stagger or reveal. Only the selection indicator moves. (principles 02 #20)
@@ -267,7 +267,7 @@ PLAN-V15 (12 Nov 2026). The words for every case are in `src/api/words.ts` ("Wor
 3. Every status has an icon and a word.
 4. The focus ring shows, and the screen works by keyboard.
 5. Text contrast is 4.5:1 or more, in light and dark mode.
-6. Motion: springs from the kit, only `transform` and `opacity` move (the sent tick's line is the one exception), leaving is 150ms, nothing loops, and with reduced motion everything changes at once. No animation in a table of more than 50 rows.
+6. Motion: springs from the kit, only `transform` and `opacity` move (the sent tick's line is the one agreed exception), leaving is 150ms, nothing loops, and with reduced motion everything changes at once. No animation in a table of more than 50 rows.
 7. Checked at 1440px, 1280px and 390px, in light and dark.
 8. No banned item, and no em dash anywhere, including tooltips and page titles.
 9. Any number or chart that needs reading has its plain sentence, and the screen has one Navy button.
