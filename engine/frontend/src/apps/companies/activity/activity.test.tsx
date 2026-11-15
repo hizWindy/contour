@@ -1,4 +1,6 @@
-import { act, screen, waitFor, within } from '@testing-library/react'
+import { QueryClientProvider } from '@tanstack/react-query'
+import { act, renderHook, screen, waitFor, within } from '@testing-library/react'
+import type { ReactNode } from 'react'
 import { toast } from 'sonner'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { queryKeys } from '@/api/query'
@@ -21,6 +23,8 @@ import { createTestQueryClient, renderWithProviders } from '@/test/render'
 import { asPhone } from '@/test/screen'
 import { dueWords } from '../call-notes/words'
 import ActivityPage from './index'
+import { ToConfirm } from './to-confirm'
+import { useBatch } from './use-batch'
 import { batchSentence } from './words'
 
 /*
@@ -1039,6 +1043,44 @@ describe('on a phone', () => {
     expect(bar).toHaveClass('fixed', 'bottom-0', 'pb-[max(0.75rem,env(safe-area-inset-bottom))]')
     // Nothing to say beside the button: no empty line above it.
     expect(bar?.children).toHaveLength(1)
+  })
+})
+
+describe('the batch while it lands', () => {
+  it('keeps one object until something in it changes, so "To confirm" draws only for a change', async () => {
+    mockServer({ notes: [note('n1', { status: 'sending' })] })
+    const client = createTestQueryClient()
+    function Wrapper({ children }: { children: ReactNode }) {
+      return <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    }
+    const { result, rerender } = renderHook(() => useBatch(), { wrapper: Wrapper })
+
+    // The page draws again (its counts moved): the same batch, so the list (a memo) skips it.
+    const idle = result.current
+    rerender()
+    expect(result.current).toBe(idle)
+    expect(ToConfirm).toHaveProperty('$$typeof', Symbol.for('react.memo'))
+
+    act(() => {
+      result.current.start(['n1'])
+    })
+    expect(result.current).not.toBe(idle)
+    await waitFor(() => {
+      expect(result.current.landing('n1')).toBe('logged')
+    })
+    const landed = result.current
+    expect(landed.done).toBe(1)
+    rerender()
+    expect(result.current).toBe(landed)
+
+    // The card leaves after its hold: that is a change, so a new batch.
+    await waitFor(
+      () => {
+        expect(result.current.gone.has('n1')).toBe(true)
+      },
+      { timeout: 3000 },
+    )
+    expect(result.current).not.toBe(landed)
   })
 })
 

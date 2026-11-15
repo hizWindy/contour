@@ -14,9 +14,13 @@
  *
  * It expects the server to mark every note it takes `sending` before the confirm answers (asked of
  * Track 2), so a note seen as "to confirm" after that is one the server didn't send.
+ *
+ * The batch keeps its identity until something in it changes (a note's answer, a card leaving, a
+ * new batch), so "To confirm" (a `memo`) doesn't draw every card again when only the page's
+ * counts move (found in T3-8: each landed card moved the counts, and the whole list drew again).
  */
 import { useQueries, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { isMissing } from '@/api/client'
 import {
@@ -64,6 +68,24 @@ interface Run {
   ids: readonly string[]
 }
 
+/** No batch: the same empty list on every draw. */
+const NO_IDS: readonly string[] = []
+
+/** What the batch reads of each note's answer. */
+interface Answer {
+  data: CallNoteOut | undefined
+  /** The note is gone from the server: it counts as come back. */
+  missing: boolean
+}
+
+/**
+ * The answers, through `useQueries`' `combine`: TanStack keeps the list's identity until an answer
+ * changes, so an answer that brings nothing new makes no new batch.
+ */
+function toAnswers(results: readonly { data?: CallNoteOut; error: unknown }[]): Answer[] {
+  return results.map((result) => ({ data: result.data, missing: isMissing(result.error) }))
+}
+
 export interface Batch {
   /** The notes of the batch being sent, or of the one that has just finished. */
   ids: readonly string[]
@@ -86,9 +108,9 @@ export function useBatch(): Batch {
   const [run, setRun] = useState<Run | null>(null)
   const [gone, setGone] = useState<ReadonlySet<string>>(() => new Set())
   const holds = useRef(new Map<string, number>())
-  const ids = run?.ids ?? []
+  const ids = run?.ids ?? NO_IDS
 
-  const results = useQueries({
+  const answers = useQueries({
     queries: ids.map((id) => ({
       ...callNoteQueryOptions(id),
       // Every second until it lands. A note that is no longer there stops being asked for.
@@ -97,35 +119,43 @@ export function useBatch(): Batch {
           ? SENDING_POLL_MS
           : false,
     })),
+    combine: toAnswers,
   })
 
-  const landings = new Map<string, Landing>()
-  const latest = new Map<string, CallNoteOut>()
-  ids.forEach((id, index) => {
-    const result = results[index]
-    const data = result?.data
-    landings.set(id, isMissing(result?.error) ? 'back' : landingOf(data))
-    if (data && !gone.has(id)) latest.set(id, data)
-  })
-  const landingFor = (id: string): Landing => landings.get(id) ?? 'waiting'
-  const done = ids.filter((id) => landingFor(id) !== 'waiting').length
-  const finished =
-    run !== null &&
-    ids.every((id) => {
-      const landing = landingFor(id)
-      return landing === 'back' || (landed(landing) && gone.has(id))
+  // Where the batch stands, worked out again only when an answer, the batch or a card left.
+  const standing = useMemo(() => {
+    const landings = new Map<string, Landing>()
+    const latest = new Map<string, CallNoteOut>()
+    ids.forEach((id, index) => {
+      const answer = answers[index]
+      landings.set(id, answer?.missing ? 'back' : landingOf(answer?.data))
+      if (answer?.data && !gone.has(id)) latest.set(id, answer.data)
     })
-  const counts = {
-    logged: ids.filter((id) => landingFor(id) === 'logged').length,
-    needsLook: ids.filter((id) => landingFor(id) === 'needs_look').length,
-    back: ids.filter((id) => landingFor(id) === 'back').length,
-  }
+    const landingFor = (id: string): Landing => landings.get(id) ?? 'waiting'
+    const count = (landing: Landing): number =>
+      ids.filter((id) => landingFor(id) === landing).length
+    return {
+      landingFor,
+      latest,
+      done: ids.filter((id) => landingFor(id) !== 'waiting').length,
+      finished:
+        run !== null &&
+        ids.every((id) => {
+          const landing = landingFor(id)
+          return landing === 'back' || (landed(landing) && gone.has(id))
+        }),
+      logged: count('logged'),
+      needsLook: count('needs_look'),
+      back: count('back'),
+      landedKey: ids
+        .filter((id) => landed(landingFor(id)))
+        .map((id) => `${id}|${landingFor(id)}`)
+        .join(','),
+    }
+  }, [answers, gone, ids, run])
+  const { finished, landedKey } = standing
 
   // Each landed card holds, then leaves: out of "to confirm" in the cache, and the counts move.
-  const landedKey = ids
-    .filter((id) => landed(landingFor(id)))
-    .map((id) => `${id}|${landingFor(id)}`)
-    .join(',')
   useEffect(() => {
     if (landedKey === '') return
     for (const entry of landedKey.split(',')) {
@@ -160,7 +190,7 @@ export function useBatch(): Batch {
   // The end: say what happened, then read the pages afresh before letting go of the batch, so a
   // card that came back never shows its old "sending" copy.
   // Once per batch: nothing lands after it has finished, so the counts stay as they are.
-  const { logged, needsLook, back } = counts
+  const { logged, needsLook, back } = standing
   useEffect(() => {
     if (!finished || run === null) return
     toast(batchDoneWords(logged, needsLook, back))
@@ -184,13 +214,17 @@ export function useBatch(): Batch {
     [client],
   )
 
-  return {
-    ids,
-    running: run !== null && !finished,
-    done,
-    landing: landingFor,
-    latest,
-    gone,
-    start,
-  }
+  // One object until something in it changes, so the list (a memo) draws only for a change.
+  return useMemo(
+    () => ({
+      ids,
+      running: run !== null && !finished,
+      done: standing.done,
+      landing: standing.landingFor,
+      latest: standing.latest,
+      gone,
+      start,
+    }),
+    [finished, gone, ids, run, standing, start],
+  )
 }

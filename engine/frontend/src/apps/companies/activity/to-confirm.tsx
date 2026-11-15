@@ -20,7 +20,7 @@
  */
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Send } from 'lucide-react'
-import { useEffect, useEffectEvent, useId, useState } from 'react'
+import { memo, useEffect, useEffectEvent, useId, useState } from 'react'
 import { toast } from 'sonner'
 import {
   confirmCallNotesOptions,
@@ -103,7 +103,17 @@ export interface ToConfirmProps {
   batch: Batch
 }
 
-export function ToConfirm({ options, today, onPhone, batch }: ToConfirmProps) {
+/**
+ * A memo: the page draws again when its counts move (each landed card moves them), and the list
+ * needn't. It draws for its own reads, its own state, and a change in the batch (`useBatch` keeps
+ * one object until something in it changes). Found in T3-8.
+ */
+export const ToConfirm = memo(function ToConfirm({
+  options,
+  today,
+  onPhone,
+  batch,
+}: ToConfirmProps) {
   const client = useQueryClient()
   const removing = useRemoving()
   const list = useCallNotes(activityQuery('to_confirm'), { pollSending: !batch.running })
@@ -416,4 +426,4 @@ export function ToConfirm({ options, today, onPhone, batch }: ToConfirmProps) {
       />
     </div>
   )
-}
+})
