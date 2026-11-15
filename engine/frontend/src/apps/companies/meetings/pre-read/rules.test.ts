@@ -261,6 +261,37 @@ describe('who the send goes to (T3-11)', () => {
     expect(readAddresses(long)).toEqual({ found: [], unreadable: [long] })
   })
 
+  it('reads a pasted Outlook list whole, and never drops an address without a word', () => {
+    // A name with brackets, then a bare address: both are read.
+    expect(readAddresses('Jo Sample <jo@example.com>; mia@example.com')).toEqual({
+      found: ['jo@example.com', 'mia@example.com'],
+      unreadable: [],
+    })
+    // Names written "Last, First", with or without quotes: the comma doesn't split the name.
+    expect(readAddresses('Sample, Jo <jo@example.com>; Rossi, Mia <MIA@example.com>')).toEqual({
+      found: ['jo@example.com', 'mia@example.com'],
+      unreadable: [],
+    })
+    expect(readAddresses('"Sample, Jo" <jo@example.com>, "jo@example.com" <jo@example.com>')).toEqual(
+      { found: ['jo@example.com'], unreadable: [] },
+    )
+    // Something after the brackets has no comma before it: it is unreadable, not dropped.
+    expect(readAddresses('Jo <jo@example.com> mia@example.com')).toEqual({
+      found: ['jo@example.com'],
+      unreadable: ['mia@example.com'],
+    })
+    // A stray stop after the brackets is nothing.
+    expect(readAddresses('Jo <jo@example.com>.')).toEqual({
+      found: ['jo@example.com'],
+      unreadable: [],
+    })
+    // A word with no name after it isn't half of one.
+    expect(readAddresses('jo, <mia@example.com>')).toEqual({
+      found: ['mia@example.com'],
+      unreadable: ['jo'],
+    })
+  })
+
   it("ticks the server's ticks, the rep's changes, and never an address that isn't Contour's", () => {
     const jo = person('Jo@example.com', { name: 'Jo Sample', why: 'on the meeting' })
     const outside = person('mia@elsewhere.com', { allowed: false })

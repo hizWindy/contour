@@ -85,29 +85,63 @@ export interface ReadAddresses {
   unreadable: string[]
 }
 
+/** Text with nothing in it but spaces and stray stops, quotes or brackets. */
+const NOTHING_LEFT = /^[\s.,;:'"()[\]]*$/
+
+/**
+ * The second half of a name split by a comma, as in Outlook's "Sample, Jo <jo@x.com>": words, then
+ * angle brackets.
+ */
+function endsName(part: string | undefined): boolean {
+  if (part === undefined) return false
+  const open = part.search(/<[^<>]*>/)
+  if (open < 0) return false
+  const name = part.slice(0, open)
+  return !NOTHING_LEFT.test(name) && !name.includes('@')
+}
+
 /**
  * The addresses in what the rep typed or pasted (DESIGN.md "Fields forgive"): one address, a list
- * split by commas, semicolons or spaces, or Outlook's "Jo Sample <jo@x.com>; Mia <mia@x.com>",
- * with or without "mailto:". Each is kept in lower case, as the server keeps it.
+ * split by commas, semicolons or spaces, or Outlook's "Jo Sample <jo@x.com>; mia@x.com", with or
+ * without "mailto:". Each is kept in lower case, as the server keeps it.
+ *
+ * It splits on commas and semicolons first. A part with angle brackets gives the address in them,
+ * and the words before them are the name. Anything after them is unreadable, so no address is ever
+ * dropped without a word: "Jo <jo@x.com> mia@x.com" asks for a comma. A part with no "@" just
+ * before a name with brackets is that name's first half ("Sample, Jo <jo@x.com>").
  */
 export function readAddresses(text: string): ReadAddresses {
-  const bracketed = [...text.matchAll(/<([^<>]*)>/g)].map((match) => match[1] ?? '')
-  const parts = bracketed.length > 0 ? bracketed : text.split(/[\s,;]+/)
   const found: string[] = []
   const unreadable: string[] = []
-  for (const part of parts) {
-    const address = part
+  const read = (raw: string): void => {
+    const address = raw
       .trim()
       .replace(/^mailto:/i, '')
       .replace(/^["'(]+|["').]+$/g, '')
       .toLowerCase()
-    if (address === '') continue
+    if (address === '') return
     if (address.length <= ADDRESS_MAX_CHARS && ADDRESS.test(address)) {
       if (!found.includes(address)) found.push(address)
     } else {
-      unreadable.push(part.trim())
+      unreadable.push(raw.trim())
     }
   }
+  const parts = text.split(/[,;]/)
+  parts.forEach((part, index) => {
+    const bracket = /<([^<>]*)>/.exec(part)
+    if (bracket) {
+      read(bracket[1] ?? '')
+      // A name that is an address itself ('"jo@x.com" <jo@x.com>') is read too: none is lost.
+      for (const word of part.slice(0, bracket.index).split(/\s+/)) {
+        if (word.includes('@')) read(word)
+      }
+      const after = part.slice(bracket.index + bracket[0].length)
+      if (!NOTHING_LEFT.test(after)) unreadable.push(after.trim())
+      return
+    }
+    if (!part.includes('@') && endsName(parts[index + 1])) return
+    for (const word of part.split(/\s+/)) read(word)
+  })
   return { found, unreadable }
 }
 
