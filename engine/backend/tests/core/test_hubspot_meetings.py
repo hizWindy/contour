@@ -136,10 +136,23 @@ def test_where_is_a_video_call_an_address_or_neither(
         ),
         ("Switchboard +61 3 9000 0000.", "Switchboard [number left out]."),
         ("(03) 9000-0000", "[number left out]"),
-        ("https://us02web.zoom.us/j/91234567890?pwd=abc", None),  # a link keeps its digits
+        # Digits in twos are still a number (the Stage B security check): only times keep them.
+        ("Mobile 04 12 34 56 78", "Mobile [number left out]"),
+        ("Paris +33 6 12 34 56 78", "Paris [number left out]"),
+        ("04.12.34.56.78", "[number left out]"),
+        # A video call's own link keeps its meeting number. Any other link is read as text.
+        ("https://us02web.zoom.us/j/91234567890?pwd=abc", None),
+        ("https://teams.microsoft.com/meet/41234567890?p=abc", None),
+        ("www.zoom.us/j/91234567890", None),
+        ("Text Jo https://wa.me/61400000000", "Text Jo https://wa.me/[number left out]"),
+        (
+            "https://zoom.us.sample.example/61400000000",
+            "https://zoom.us.sample.example/[number left out]",
+        ),
         ("Moved to 2026-11-20 10:30", None),
         ("20.11.2026 in the boardroom", None),
         ("10.30 - 11.30 in the boardroom", None),
+        ("9.00 - 10.00 then 11.00 to 12.00", None),
         ("Level 12, 123 Sample St, Melbourne VIC 3000", None),
     ],
 )

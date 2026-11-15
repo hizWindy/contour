@@ -185,12 +185,20 @@ def utc_now() -> datetime:
 
 EMAIL = re.compile(r"[\w.+'-]+@[\w-]+(?:\.[\w-]+)+")
 # A run of 8 or more digits with the marks people put in phone numbers, on one line: "0412 345
-# 678", "+61 8 9000 0000", "(08) 9000-0000". Kept: a date ("2026-11-20 10", "20.11.2026"), and
-# times ("10.30 - 11.30"), whose digits come in twos.
+# 678", "+61 8 9000 0000", "(08) 9000-0000", "04 12 34 56 78". Kept: a date ("2026-11-20 10",
+# "20.11.2026"), and times ("10.30 - 11.30").
 PHONE = re.compile(r"(?<![\w])\+?\(?\d[\d \t().-]{6,}\d(?![\w])")
 DATE = re.compile(r"(?:\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[./-]\d{1,2}[./-]\d{2,4})(?:[ T]\d{1,2})?")
+TIMES = re.compile(r"\d{1,2}[.:]\d{2}(?:\s*(?:-|to)\s*\d{1,2}[.:]\d{2})*")
 DIGITS = re.compile(r"\d+")
 LINK = re.compile(r"(?:https?://|www\.)\S+", re.IGNORECASE)
+# The link of a video call itself, by its host: its meeting number isn't a phone number. Any other
+# link is read like the rest ("wa.me/61400000000" loses its number).
+VIDEO_LINK = re.compile(
+    r"(?:https?://)?(?:[\w-]+\.)*(?:teams\.microsoft\.com|teams\.live\.com|meet\.google\.com"
+    r"|zoom\.us|zoom\.com)(?=[/:?#]|$)",
+    re.IGNORECASE,
+)
 VIDEO = re.compile(
     r"teams\.microsoft\.com|teams\.live\.com|\bteams\b|meet\.google\.com|\bgoogle meet\b"
     r"|zoom\.us|\bzoom\b",
@@ -234,19 +242,22 @@ NOT_A_PLACE = frozenset(
 
 def _phone_like(match: re.Match[str]) -> str:
     found = match.group(0)
-    groups = DIGITS.findall(found)
-    if sum(map(len, groups)) < 8 or max(map(len, groups)) <= 2 or DATE.fullmatch(found.strip()):
+    shape = found.strip()
+    if sum(map(len, DIGITS.findall(found))) < 8 or DATE.fullmatch(shape) or TIMES.fullmatch(shape):
         return found
     return PHONE_GONE
 
 
 def without_contact_details(text: str) -> str:
-    """`text` with every email address and phone number blanked. A web link keeps its digits (a
-    Zoom link's meeting number isn't a phone number), but never an email."""
+    """`text` with every email address and phone number blanked. A Teams, Google Meet or Zoom
+    link keeps its digits (its meeting number isn't a phone number). Any other link is read like
+    the rest of the text. Never an email."""
     text = EMAIL.sub(EMAIL_GONE, text)
     parts: list[str] = []
     last = 0
     for link in LINK.finditer(text):
+        if not VIDEO_LINK.match(link.group(0)):
+            continue
         parts += [PHONE.sub(_phone_like, text[last : link.start()]), link.group(0)]
         last = link.end()
     parts.append(PHONE.sub(_phone_like, text[last:]))
