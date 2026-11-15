@@ -411,7 +411,7 @@ describe('the transcript box', () => {
   })
 
   it('shows the count near the limit, and says so over it without sending', async () => {
-    // A server that sends no limit: 60,000, the plan's.
+    // A server that sends no limit: 58,000, what fits whole in a HubSpot note (Track 2).
     const server = mockServer({ transcriptMax: null })
     const { user } = renderPast()
     const { panel, box } = await openLog(user)
@@ -419,11 +419,11 @@ describe('the transcript box', () => {
       expect(box).toHaveFocus()
     })
     await user.paste('a'.repeat(54_000))
-    expect(within(panel).getByText('54,000 of 60,000 characters')).toBeInTheDocument()
-    await user.paste('a'.repeat(6_001))
+    expect(within(panel).getByText('54,000 of 58,000 characters')).toBeInTheDocument()
+    await user.paste('a'.repeat(4_001))
     expect(
       within(panel).getByText(
-        'Too long: 60,001 of 60,000 characters. Shorten it, or split it into two.',
+        'Too long: 58,001 of 58,000 characters. Shorten it, or split it into two.',
       ),
     ).toBeInTheDocument()
     expect(box).toHaveAttribute('aria-invalid', 'true')
