@@ -72,6 +72,24 @@ describe('whether it can go', () => {
     // A .vtt counts against the 200,000 its text may hold, times and all.
     expect(nearCount(`${VTT}\n${'a'.repeat(70_000)}`, 'meeting.vtt')).toBeNull()
   })
+
+  it("takes the server's own limit, and 60,000 when it sends none or one that can't be", () => {
+    expect(checkTranscript('a'.repeat(1_000), null, 1_000)).toEqual({ kind: 'ok' })
+    expect(checkTranscript('a'.repeat(1_001), null, 1_000)).toEqual({
+      kind: 'too_long',
+      length: 1_001,
+      max: 1_000,
+    })
+    expect(nearCount('a'.repeat(899), null, 1_000)).toBeNull()
+    expect(nearCount('a'.repeat(900), null, 1_000)).toEqual({ length: 900, max: 1_000 })
+    for (const none of [undefined, 0, -5, 1.5]) {
+      expect(checkTranscript('a'.repeat(60_001), null, none)).toMatchObject({ max: 60_000 })
+    }
+    // A .vtt still counts against the 200,000 its text may hold: its times come out first.
+    expect(checkTranscript(`${VTT}\n${'a'.repeat(5_000)}`, 'meeting.vtt', 1_000)).toEqual({
+      kind: 'ok',
+    })
+  })
 })
 
 describe('reading a file', () => {

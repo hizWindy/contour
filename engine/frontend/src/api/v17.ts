@@ -59,6 +59,12 @@ export interface CallNoteOptions {
   soft_seconds: number
   /** The longest note (notes_max_chars). */
   max_chars: number
+  /**
+   * The longest meeting transcript, in characters, once a .vtt's times are out (60,000 now). A
+   * longer one answers 422 `transcript_too_long`. Optional in the contract; the server always
+   * sends it (Track 2, `716fe55`).
+   */
+  transcript_max_chars?: number
 }
 
 /** POST /call-notes. An Idempotency-Key header makes a double press one note. */
