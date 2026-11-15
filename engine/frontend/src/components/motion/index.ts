@@ -19,6 +19,10 @@
  * Pages animate with `m.*` from 'motion/react' (never `motion.*`: MotionRoot is strict) and one of
  * the springs. Nothing loops, only transform and opacity move, and a table of more than 50 rows
  * gets no animation.
+ *
+ * Code in the first visit (main.tsx and the Home cards that modules.ts loads) imports a part from
+ * its own file, not from here. Through this file the build would put every part a page uses into
+ * the first visit (found in PLAN-V17 T3-5: Log call's PushView went there).
  */
 export { ChipGroup, type ChipGroupProps, type ChipOption } from './chip-group'
 export { LevelMeter, type LevelMeterProps } from './level-meter'
