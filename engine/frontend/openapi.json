@@ -2708,6 +2708,12 @@
       },
       "FieldChange": {
         "properties": {
+          "changed_since": {
+            "default": false,
+            "description": "An activity's field: HubSpot's value is not what the rep saw. A field held at the write (HubSpot changed it since the preview) has this, with write false",
+            "title": "Changed Since",
+            "type": "boolean"
+          },
           "current": {
             "anyOf": [
               {
@@ -2739,6 +2745,18 @@
             ],
             "description": "Why it is not written, in plain words",
             "title": "Reason"
+          },
+          "seen": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "An activity's field: the value the rep saw, in HubSpot's own form. null: the rep saw it empty, or a Lead Finder write",
+            "title": "Seen"
           },
           "value": {
             "description": "What would be written, in HubSpot's own form",
@@ -11442,6 +11460,14 @@
             ],
             "title": "Detail"
           },
+          "held": {
+            "description": "The fields step: HubSpot's names of the fields not written because HubSpot changed them since the preview",
+            "items": {
+              "type": "string"
+            },
+            "title": "Held",
+            "type": "array"
+          },
           "hubspot_id": {
             "anyOf": [
               {
@@ -11464,11 +11490,11 @@
             "type": "string"
           },
           "step": {
-            "enum": [
-              "company",
-              "note",
-              "list"
+            "description": "company, note or list (the Lead Finder); call, fields, task:1, task:2 ... or note (an activity)",
+            "examples": [
+              "task:1"
             ],
+            "pattern": "^(?:company|note|list|call|fields|task:[1-9][0-9]*)$",
             "title": "Step",
             "type": "string"
           }
@@ -13378,6 +13404,18 @@
             "title": "Action",
             "type": "string"
           },
+          "call": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The call in words: its title, outcome and time",
+            "title": "Call"
+          },
           "company_id": {
             "anyOf": [
               {
@@ -13404,6 +13442,30 @@
             ],
             "title": "Company Url"
           },
+          "contact_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "An activity's person in HubSpot",
+            "title": "Contact Id"
+          },
+          "deal_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "An activity's deal in HubSpot",
+            "title": "Deal Id"
+          },
           "domain": {
             "anyOf": [
               {
@@ -13421,6 +13483,16 @@
             },
             "title": "Fields",
             "type": "array"
+          },
+          "kind": {
+            "default": "company",
+            "description": "company: the Lead Finder's send (a company, a note, a list). activity: a call, field changes, follow-up tasks and a note on one company (PLAN-V17)",
+            "enum": [
+              "company",
+              "activity"
+            ],
+            "title": "Kind",
+            "type": "string"
           },
           "list_id": {
             "anyOf": [
@@ -13455,6 +13527,26 @@
             ],
             "description": "The note's text, as it would be added",
             "title": "Note"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The rep's HubSpot owner id. null: HubSpot shows it as unassigned",
+            "title": "Owner Id"
+          },
+          "tasks": {
+            "description": "Each follow-up task in words: what, when it is due, and for whom",
+            "items": {
+              "type": "string"
+            },
+            "title": "Tasks",
+            "type": "array"
           },
           "warnings": {
             "items": {
@@ -18960,7 +19052,7 @@
     },
     "/hubspot/writes/{write_id}/apply": {
       "post": {
-        "description": "Writes once only: applying a finished write returns its result. Needs the write scopes and HUBSPOT_WRITE_ENABLED=true; until then it answers 409 hubspot_write_off.",
+        "description": "Writes once only: applying a finished write returns its result. A Lead Finder send and a call note's activity (a call, field changes, tasks, a note) each go through their own writer. Needs the write scopes and HUBSPOT_WRITE_ENABLED=true; until then it answers 409 hubspot_write_off.",
         "operationId": "apply_hubspot_write",
         "parameters": [
           {

@@ -16,6 +16,12 @@ list. The core then:
    company is looked for by domain or name first, and a note that may have landed is not sent
    again (the log says to check HubSpot).
 4. Our copy of the company is updated at once after it is written, so pages show it.
+5. **Shared with the activity writer** (PLAN-V17 T1-5, `activities.py`: a call, field changes,
+   tasks and a note): the one open write per subject (`latest_write`, `save_preview`), the claim
+   (`claim_write`, `take_over_write`, `Claim`), the step log (`steps_of`, `steps_json`,
+   `save_steps`, `failed_step`, `status_of`, `error_of`), `note_html`, `choice_code`,
+   `refresh_copy` and the `core.hubspot_writes` table. One log for both. A plan's `kind` says
+   which writer made a row, and each writer refuses the other's rows.
 
 It is off unless `HUBSPOT_WRITE_ENABLED=true` (`HubSpotWritesOff`, "Waiting for write access").
 """
@@ -24,12 +30,13 @@ import html
 import logging
 import re
 import uuid
-from collections.abc import Awaitable, Callable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select, update
+from sqlalchemy import ColumnElement, and_, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -53,9 +60,13 @@ from core.logs import scrub
 
 log = logging.getLogger(__name__)
 
-StepName = Literal["company", "note", "list"]
+StepName = Literal["company", "note", "list"]  # the Lead Finder's steps
+# Every step's name: the Lead Finder's, and an activity's (PLAN-V17): call, fields, task:1 ...,
+# note. Text with a pattern, so old rows and new ones read the same way.
+STEP_NAME = r"^(?:company|note|list|call|fields|task:[1-9][0-9]*)$"
 StepStatus = Literal["done", "failed", "uncertain", "skipped"]
 WriteStatus = Literal["previewed", "writing", "done", "partial", "failed", "uncertain"]
+PlanKind = Literal["company", "activity"]
 OPEN = ("previewed", "failed")  # a new preview may plan these again
 CONTINUE = ("partial", "uncertain")  # applying again finishes these
 NOTE_MAX_CHARS = 60_000  # HubSpot's note body limit is 65,536
@@ -111,6 +122,20 @@ class FieldChange(BaseModel):
     current: str | None = Field(None, description="What HubSpot has now")
     write: bool = Field(description="False when it is kept as it is, or goes in the note")
     reason: str | None = Field(None, description="Why it is not written, in plain words")
+    seen: str | None = Field(
+        None,
+        description=(
+            "An activity's field: the value the rep saw, in HubSpot's own form. null: the rep "
+            "saw it empty, or a Lead Finder write"
+        ),
+    )
+    changed_since: bool = Field(
+        False,
+        description=(
+            "An activity's field: HubSpot's value is not what the rep saw. A field held at the "
+            "write (HubSpot changed it since the preview) has this, with write false"
+        ),
+    )
 
 
 class WritePlan(BaseModel):
@@ -124,13 +149,44 @@ class WritePlan(BaseModel):
     list_name: str | None
     list_id: str | None
     warnings: list[str] = Field(default_factory=list)
+    kind: PlanKind = Field(
+        "company",
+        description=(
+            "company: the Lead Finder's send (a company, a note, a list). activity: a call, "
+            "field changes, follow-up tasks and a note on one company (PLAN-V17)"
+        ),
+    )
+    contact_id: str | None = Field(None, description="An activity's person in HubSpot")
+    deal_id: str | None = Field(None, description="An activity's deal in HubSpot")
+    owner_id: str | None = Field(
+        None, description="The rep's HubSpot owner id. null: HubSpot shows it as unassigned"
+    )
+    call: str | None = Field(None, description="The call in words: its title, outcome and time")
+    tasks: list[str] = Field(
+        default_factory=list,
+        description="Each follow-up task in words: what, when it is due, and for whom",
+    )
 
 
 class StepResult(BaseModel):
-    step: StepName
+    step: str = Field(
+        pattern=STEP_NAME,
+        description=(
+            "company, note or list (the Lead Finder); call, fields, task:1, task:2 ... or note "
+            "(an activity)"
+        ),
+        examples=["task:1"],
+    )
     status: StepStatus
     detail: str | None = None
     hubspot_id: str | None = None
+    held: list[str] = Field(
+        default_factory=list,
+        description=(
+            "The fields step: HubSpot's names of the fields not written because HubSpot "
+            "changed them since the preview"
+        ),
+    )
 
 
 class WriteOut(BaseModel):
@@ -206,7 +262,7 @@ async def find_company(
 # --- Preview ---------------------------------------------------------------------------------
 
 
-def _choice_code(info: PropertyInfo, value: str) -> str | None:
+def choice_code(info: PropertyInfo, value: str) -> str | None:
     """The stored code for a pick-list value given as its label or as the code itself."""
     wanted = value.strip().casefold()
     for choice in info.choices:
@@ -242,7 +298,7 @@ async def plan_write(hubspot: HubSpot, request: WriteRequest) -> WritePlan:
             )
             continue
         if info.choices:
-            code = _choice_code(info, value)
+            code = choice_code(info, value)
             if code is None:
                 changes.append(
                     FieldChange(
@@ -313,39 +369,91 @@ def _note_text(note: str | None, changes: Sequence[FieldChange]) -> str | None:
 async def preview_write(session: AsyncSession, hubspot: HubSpot, request: WriteRequest) -> WriteOut:
     """Saves (or refreshes) the subject's one open write as a preview. A subject already sent,
     or being written, or part-written, gets that write back unchanged."""
-    existing = await session.scalar(
+    existing = await latest_write(session, request.app, request.subject)
+    if existing is not None and existing.status not in OPEN:
+        return write_out(existing)
+    existing_id = existing.id if existing is not None else None
+    plan = await plan_write(hubspot, request)
+    row = await save_preview(
+        session,
+        existing_id,
+        app=request.app,
+        subject=request.subject,
+        plan=plan.model_dump(mode="json"),
+        company_id=plan.company_id,
+        url=plan.company_url,
+    )
+    return write_out(row)
+
+
+async def latest_write(session: AsyncSession, app: str, subject: str) -> HubSpotWrite | None:
+    """The subject's newest write: one open write per subject (like one lead, or one call
+    note's send). A preview plans it again only while it is previewed or failed."""
+    found: HubSpotWrite | None = await session.scalar(
         select(HubSpotWrite)
-        .where(HubSpotWrite.app == request.app, HubSpotWrite.subject == request.subject)
+        .where(HubSpotWrite.app == app, HubSpotWrite.subject == subject)
         .where(HubSpotWrite.status.in_(("done", "writing", *CONTINUE, *OPEN)))
         .order_by(HubSpotWrite.created_at.desc())
         .limit(1)
     )
-    if existing is not None and existing.status not in OPEN:
-        return write_out(existing)
-    plan = await plan_write(hubspot, request)
-    if existing is None:
-        existing = HubSpotWrite(app=request.app, subject=request.subject, plan={})
-        session.add(existing)
-    existing.plan = plan.model_dump(mode="json")
-    existing.status = "previewed"
-    existing.result = {}
-    existing.error = None
-    existing.hubspot_company_id = plan.company_id
-    existing.hubspot_url = plan.company_url
-    existing.created_at = datetime.now(UTC)
+    return found
+
+
+async def save_preview(
+    session: AsyncSession,
+    write_id: uuid.UUID | None,
+    *,
+    app: str,
+    subject: str,
+    plan: dict[str, Any],
+    company_id: str | None,
+    url: str | None,
+) -> HubSpotWrite:
+    """Saves a subject's open write as "previewed": the write `write_id` planned again, or a new
+    one. If a click claimed or finished that write meanwhile, it comes back as it is."""
+    values: dict[str, Any] = {
+        "plan": plan,
+        "status": "previewed",
+        "result": {},
+        "error": None,
+        "hubspot_company_id": company_id,
+        "hubspot_url": url,
+        "created_at": datetime.now(UTC),
+    }
+    if write_id is None:
+        row = HubSpotWrite(app=app, subject=subject, **values)
+        session.add(row)
+        await session.commit()
+        await session.refresh(row)
+        return row
+    await session.execute(
+        update(HubSpotWrite)
+        .where(HubSpotWrite.id == write_id, HubSpotWrite.status.in_(OPEN))
+        .values(**values)
+        .execution_options(synchronize_session=False)
+    )
     await session.commit()
-    await session.refresh(existing)
-    return write_out(existing)
+    saved = await session.get(HubSpotWrite, write_id, populate_existing=True)
+    if saved is None:  # removed meanwhile: nothing removes writes today
+        raise WriteNotFound(str(write_id))
+    return saved
 
 
 # --- Write -----------------------------------------------------------------------------------
 
 
 async def get_write(session: AsyncSession, write_id: uuid.UUID) -> HubSpotWrite:
-    row = await session.get(HubSpotWrite, write_id)
+    """The write as the table has it now, even when this session read it before (another click
+    or apply may have changed it since)."""
+    row = await session.get(HubSpotWrite, write_id, populate_existing=True)
     if row is None:
         raise WriteNotFound(str(write_id))
     return row
+
+
+def is_activity(row: HubSpotWrite) -> bool:
+    """Whether the activity writer made this row (PLAN-V17). Only `apply_activity` writes it."""
+    return (row.plan or {}).get("kind") == "activity"
 
 
 async def apply_write(
@@ -357,15 +465,17 @@ async def apply_write(
 ) -> WriteOut:
     """Writes a previewed plan, step by step. A finished write is returned as it is."""
     row = await get_write(session, write_id)
+    if is_activity(row):  # a call note's write: `activities.apply_activity` writes it
+        raise WriteNotFound(str(write_id))
     if row.status == "done":
         return write_out(row)
     if row.status == "writing":
         raise WriteInProgress(str(write_id))
     if not getattr(hubspot, "writes_allowed", False):
         raise HubSpotWritesOff
-    claimed = await _claim(session, row)
+    claimed = await claim_write(session, row)
     plan = WritePlan.model_validate(claimed.plan)
-    steps = {step.step: step for step in _steps(claimed)}
+    steps = {step.step: step for step in steps_of(claimed)}
     company_id = claimed.hubspot_company_id
 
     company_step = steps.get("company")
@@ -375,27 +485,27 @@ async def apply_write(
         if url:
             claimed.hubspot_url = url
         claimed.hubspot_company_id = company_id
-        await _save_steps(session, claimed, steps)
+        await save_steps(session, claimed, steps)
         if result.status == "done" and company_id:
-            await _refresh_copy(session, hubspot, company_id)
+            await refresh_copy(session, hubspot, company_id)
 
     if company_id and steps["company"].status == "done":
         if plan.note and steps.get("note", _pending("note")).status in ("failed", "skipped"):
             steps["note"] = await _note_step(hubspot, plan, company_id)
-            await _save_steps(session, claimed, steps)
+            await save_steps(session, claimed, steps)
         if plan.list_id and steps.get("list", _pending("list")).status != "done":
             steps["list"] = await _list_step(hubspot, plan.list_id, company_id)
-            await _save_steps(session, claimed, steps)
+            await save_steps(session, claimed, steps)
         if plan.list_name and not plan.list_id:
             steps["list"] = StepResult(
                 step="list", status="skipped", detail=f"The list '{plan.list_name}' isn't ready."
             )
 
-    status = _status_of(steps.values())
+    status = status_of(steps.values())
     claimed.status = status
     claimed.finished_at = datetime.now(UTC)
-    claimed.error = _error_of(steps.values())
-    claimed.result = {"steps": [step.model_dump() for step in steps.values()]}
+    claimed.error = error_of(steps.values())
+    claimed.result = steps_json(steps.values())
     await session.commit()
     await session.refresh(claimed)
     out = write_out(claimed)
@@ -408,38 +518,108 @@ def _pending(step: StepName) -> StepResult:
     return StepResult(step=step, status="skipped")
 
 
-def _steps(row: HubSpotWrite) -> list[StepResult]:
+# --- The claim and the step log (shared with activities.py) ----------------------------------
+
+
+def steps_of(row: HubSpotWrite) -> list[StepResult]:
+    """Each step's result, as saved."""
     return [StepResult.model_validate(step) for step in (row.result or {}).get("steps", [])]
 
 
-async def _claim(session: AsyncSession, row: HubSpotWrite) -> HubSpotWrite:
+def steps_json(steps: Iterable[StepResult]) -> dict[str, Any]:
+    """The step log as the table keeps it (`result`)."""
+    return {"steps": [step.model_dump() for step in steps]}
+
+
+async def claim_write(session: AsyncSession, row: HubSpotWrite) -> HubSpotWrite:
     """Marks the write as being written, so a second click or a second tab can't write too."""
+    return await _claim_where(session, row, HubSpotWrite.status.in_((*OPEN, *CONTINUE)))
+
+
+async def take_over_write(
+    session: AsyncSession, row: HubSpotWrite, *, stalled_before: datetime
+) -> HubSpotWrite:
+    """Claims a write left "writing" by an apply that stopped part way (PLAN-V17 T1-5): only
+    while its claim hasn't been kept since `stalled_before`. A live one raises `WriteInProgress`."""
+    kept = func.coalesce(HubSpotWrite.applied_at, HubSpotWrite.created_at)
+    stalled = and_(HubSpotWrite.status == "writing", kept < stalled_before)
+    return await _claim_where(session, row, stalled)
+
+
+async def _claim_where(
+    session: AsyncSession, row: HubSpotWrite, allowed: ColumnElement[bool]
+) -> HubSpotWrite:
+    """The claim: the row becomes "writing", with `applied_at` now, only when `allowed` holds.
+    The row comes back as saved, and no database connection is held after it (HubSpot comes
+    next)."""
     try:
         result = await session.execute(
             update(HubSpotWrite)
-            .where(HubSpotWrite.id == row.id, HubSpotWrite.status.in_((*OPEN, *CONTINUE)))
+            .where(HubSpotWrite.id == row.id, allowed)
             .values(status="writing", applied_at=datetime.now(UTC))
             .returning(HubSpotWrite.id)
+            .execution_options(synchronize_session=False)
         )
-        claimed = result.first()
+        claimed = result.first() is not None
+        if claimed:
+            await session.refresh(row)
         await session.commit()
     except IntegrityError as error:  # another write for the same subject is being written
         await session.rollback()
         raise WriteInProgress(str(row.id)) from error
-    if claimed is None:  # another click claimed it, or finished it, between the read and now
+    if not claimed:  # another click claimed it, or finished it, between the read and now
         raise WriteInProgress(str(row.id))
-    await session.refresh(row)
     return row
 
 
-async def _save_steps(
-    session: AsyncSession, row: HubSpotWrite, steps: Mapping[StepName, StepResult]
+@dataclass
+class Claim:
+    """One apply's hold on a write it claimed (PLAN-V17 T1-5). `mark` is the `applied_at` this
+    apply wrote last. Each save moves it on, so a write still going is never taken for one that
+    stopped. A save lands only while the row is still "writing" with this mark: an apply whose
+    write was taken over stops before it sends anything else."""
+
+    write_id: uuid.UUID
+    mark: datetime
+
+    @classmethod
+    def of(cls, row: HubSpotWrite) -> "Claim":
+        if row.applied_at is None:  # never after `claim_write` or `take_over_write`
+            raise WriteInProgress(str(row.id))
+        return cls(row.id, row.applied_at)
+
+    async def save(self, session: AsyncSession, values: Mapping[str, Any]) -> None:
+        """Saves `values` (the step log, a status ...) and keeps the claim. Raises
+        `WriteInProgress` when another apply holds the write now."""
+        now = datetime.now(UTC)
+        result = await session.execute(
+            update(HubSpotWrite)
+            .where(
+                HubSpotWrite.id == self.write_id,
+                HubSpotWrite.status == "writing",
+                HubSpotWrite.applied_at == self.mark,
+            )
+            .values(**values, applied_at=now)
+            .returning(HubSpotWrite.id)
+            .execution_options(synchronize_session=False)
+        )
+        kept = result.first() is not None
+        await session.commit()
+        if not kept:
+            raise WriteInProgress(str(self.write_id))
+        self.mark = now
+
+
+async def save_steps(
+    session: AsyncSession, row: HubSpotWrite, steps: Mapping[str, StepResult]
 ) -> None:
-    row.result = {"steps": [step.model_dump() for step in steps.values()]}
+    """Saves each step's result as it lands."""
+    row.result = steps_json(steps.values())
     await session.commit()
 
 
-def _failed(step: StepName, error: HubSpotError) -> StepResult:
+def failed_step(step: str, error: HubSpotError) -> StepResult:
+    """A step HubSpot refused (failed), or didn't answer (uncertain), in its own plain words."""
     status: StepStatus = "uncertain" if isinstance(error, HubSpotWriteUncertain) else "failed"
     return StepResult(step=step, status=status, detail=scrub(f"{error.title}. {error.detail}"))
 
@@ -488,7 +668,7 @@ async def _company_step(
             made.url,
         )
     except HubSpotError as error:
-        return _failed("company", error), None, None
+        return failed_step("company", error), None, None
 
 
 async def _note_step(hubspot: HubSpot, plan: WritePlan, company_id: str) -> StepResult:
@@ -501,11 +681,11 @@ async def _note_step(hubspot: HubSpot, plan: WritePlan, company_id: str) -> Step
             links=[Link("companies", company_id)],
         )
     except HubSpotWriteUncertain as error:
-        result = _failed("note", error)
+        result = failed_step("note", error)
         result.detail = (result.detail or "") + " It is not sent again, so it can't be doubled."
         return result
     except HubSpotError as error:
-        return _failed("note", error)
+        return failed_step("note", error)
     return StepResult(step="note", status="done", detail="Added the note.", hubspot_id=made.id)
 
 
@@ -513,11 +693,13 @@ async def _list_step(hubspot: HubSpot, list_id: str, company_id: str) -> StepRes
     try:
         await hubspot.add_to_list(list_id, [company_id])  # adding a member twice changes nothing
     except HubSpotError as error:
-        return _failed("list", error)
+        return failed_step("list", error)
     return StepResult(step="list", status="done", detail="Added to the list.", hubspot_id=list_id)
 
 
-def _status_of(steps: Sequence[StepResult] | Any) -> WriteStatus:
+def status_of(steps: Iterable[StepResult]) -> WriteStatus:
+    """A write's status from its steps: any uncertain, uncertain; every step that ran done,
+    done; some done, partial; none, failed. A skipped step had nothing to do."""
     found = list(steps)
     states = {step.status for step in found}
     if "uncertain" in states:
@@ -528,7 +710,8 @@ def _status_of(steps: Sequence[StepResult] | Any) -> WriteStatus:
     return "partial" if done else "failed"
 
 
-def _error_of(steps: Any) -> str | None:
+def error_of(steps: Iterable[StepResult]) -> str | None:
+    """The failed and uncertain steps, in plain words, for the write's `error`."""
     problems = [
         f"{step.step}: {step.detail}" for step in steps if step.status in ("failed", "uncertain")
     ]
@@ -556,7 +739,7 @@ def note_html(text: str) -> str:
     return "".join(paragraphs)
 
 
-async def _refresh_copy(session: AsyncSession, hubspot: HubSpot, company_id: str) -> None:
+async def refresh_copy(session: AsyncSession, hubspot: HubSpot, company_id: str) -> None:
     """Saves HubSpot's record of the company into our copy at once. A failure here is logged,
     never raised: the write itself landed, and the next sync catches up."""
     try:

@@ -1,18 +1,17 @@
 """PLAN-V17 S0: the shapes Track 2 builds against, before Track 1 builds the real parts.
 
-Track 1 replaces these checks in T1-5 (the activity writer) and T1-8 (our copy of meetings).
+The activity writer is built (T1-5): its checks are in test_hubspot_activities.py. Track 1
+replaces the meeting checks in T1-8 (our copy of meetings).
 """
 
-import uuid
 from datetime import UTC, date, datetime
 from typing import Any
 
 import pytest
 from pydantic import ValidationError
 
-from core.hubspot import activities, meetings
+from core.hubspot import meetings
 from core.hubspot.activities import ActivityRequest, CallIn, FieldSet, NoteIn, TaskIn
-from core.hubspot.client import HubSpotWritesOff
 
 AT = datetime(2026, 11, 16, 9, 30, tzinfo=UTC)
 
@@ -49,19 +48,6 @@ def test_a_field_change_never_sends_an_empty_value() -> None:
     """An empty text clears a HubSpot field."""
     with pytest.raises(ValidationError):
         FieldSet(property="lease_end", label="Lease end", value="")
-
-
-async def test_every_write_waits_for_write_access_until_track_1_builds_it() -> None:
-    session: Any = object()
-    hubspot: Any = object()
-    request = a_request(note=NoteIn(body="A note"))
-    with pytest.raises(HubSpotWritesOff):
-        await activities.preview_activity(session, hubspot, request)
-    with pytest.raises(HubSpotWritesOff):
-        await activities.apply_activity(session, hubspot, uuid.uuid4())
-    with pytest.raises(HubSpotWritesOff):
-        await activities.resolve_step(session, uuid.uuid4(), "call", landed=True)
-    # owner_of is built (T1-4): tests/core/test_hubspot_owners.py.
 
 
 async def test_the_meeting_reads_find_nothing_yet() -> None:

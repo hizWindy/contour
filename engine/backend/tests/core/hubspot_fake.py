@@ -5,6 +5,11 @@ touches no real data. It follows the `HubSpot` protocol (core/hubspot/client.py)
   `HubSpotMissingScope`, like HubSpot's 403.
 - `writes_allowed` is the HUBSPOT_WRITE_ENABLED switch.
 - `fail` holds errors to raise, by call name, one per call (like a timeout on the next write).
+  They are raised before the call does anything.
+- `fail_after` holds errors raised AFTER a write has done its work (PLAN-V17 T1-5): a create
+  that landed, or a change that was saved, and then timed out.
+- `search_lag` is how many searches of a kind pass before a record made since shows in them,
+  as HubSpot's search lags behind a new record.
 - `calls` lists every call by name, so a test can see what was asked.
 - A record made with links keeps them (`companies`, `contacts`, `deals`), and `linked` answers
   from them. A link the client's table (`LINK_TYPES`) has no number for is refused with
@@ -138,6 +143,7 @@ class FakeRecord:
     companies: tuple[str, ...] = ()  # for a deal or an activity: its companies, the first primary
     contacts: tuple[str, ...] = ()  # for an activity: the people on it
     deals: tuple[str, ...] = ()  # for an activity: its deals
+    hidden_for: int = 0  # searches of its kind still to pass before it shows in them
 
     def links_to(self, kind: str) -> tuple[str, ...]:
         return {"companies": self.companies, "contacts": self.contacts, "deals": self.deals}.get(
@@ -185,6 +191,8 @@ class FakeHubSpot:
     writes_allowed: bool = False
     page_size: int = PAGE_SIZE
     fail: dict[str, list[HubSpotError]] = field(default_factory=dict)
+    fail_after: dict[str, list[HubSpotError]] = field(default_factory=dict)
+    search_lag: int = 0
     calls: list[str] = field(default_factory=list)
     time_zone: str = "Australia/Melbourne"
     closed: bool = False
@@ -320,7 +328,9 @@ class FakeHubSpot:
         limit: int = PAGE_SIZE,
     ) -> Page:
         self._call(f"search_{object_type}", SCOPE_FOR[object_type])
-        records = list(self._store(object_type).values())
+        records = [r for r in self._store(object_type).values() if r.hidden_for == 0]
+        for record in self._store(object_type).values():
+            record.hidden_for = max(0, record.hidden_for - 1)
         for item in filters:
             records = [r for r in records if _passes(r, item)]
         records.sort(key=lambda r: (r.updated_at, int(r.id)))
@@ -426,8 +436,10 @@ class FakeHubSpot:
             companies=ids("companies"),
             contacts=ids("contacts"),
             deals=ids("deals"),
+            hidden_for=self.search_lag,
         )
         self._store(object_type)[record.id] = record
+        self._after(f"create_{object_type}")
         return record.as_object(list(properties), False)
 
     async def update_object(
@@ -439,7 +451,14 @@ class FakeHubSpot:
             raise HubSpotNotFound("Not in HubSpot", "HubSpot has no record with this id.")
         record.properties.update(properties)
         record.updated_at = datetime.now(UTC)
+        self._after(f"update_{object_type}")
         return record.as_object(list(properties), False)
+
+    def _after(self, name: str) -> None:
+        """A write that did its work, then failed (like a timeout on the way back)."""
+        queued = self.fail_after.get(name)
+        if queued:
+            raise queued.pop(0)
 
     async def add_to_list(self, list_id: str, record_ids: Sequence[str]) -> None:
         self._write("add_to_list", "crm.lists.write")

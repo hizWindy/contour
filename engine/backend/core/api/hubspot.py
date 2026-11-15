@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from core.api.deps import EmbedderDep, SessionDep
 from core.api.errors import Problem
 from core.api.signin import AdminDep
+from core.hubspot.activities import apply_activity
 from core.hubspot.client import HubSpotError, HubSpotWritesOff
 from core.hubspot.connection import (
     HubSpotStatus,
@@ -38,6 +39,7 @@ from core.hubspot.writer import (
     WriteOut,
     apply_write,
     get_write,
+    is_activity,
     recent_writes,
 )
 
@@ -176,8 +178,10 @@ async def list_hubspot_writes(
     response_model=WriteOut,
     summary="Write a previewed change to HubSpot",
     description=(
-        "Writes once only: applying a finished write returns its result. Needs the write "
-        "scopes and HUBSPOT_WRITE_ENABLED=true; until then it answers 409 hubspot_write_off."
+        "Writes once only: applying a finished write returns its result. A Lead Finder send "
+        "and a call note's activity (a call, field changes, tasks, a note) each go through "
+        "their own writer. Needs the write scopes and HUBSPOT_WRITE_ENABLED=true; until then "
+        "it answers 409 hubspot_write_off."
     ),
 )
 async def apply_hubspot_write(
@@ -185,12 +189,14 @@ async def apply_hubspot_write(
 ) -> WriteOut:
     try:
         row = await get_write(session, write_id)
+        hook = written_hook(request.app, row.app)
+        activity = is_activity(row)
         async with open_hubspot(request.app) as client:
             if client is None:
                 raise KEY_MISSING
-            return await apply_write(
-                session, client, write_id, on_written=written_hook(request.app, row.app)
-            )
+            if activity:
+                return await apply_activity(session, client, write_id, on_written=hook)
+            return await apply_write(session, client, write_id, on_written=hook)
     except (WriteNotFound, WriteInProgress, HubSpotError) as error:
         raise write_problem(error) from error
 
