@@ -21,7 +21,8 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.companies.meeting_log import clean_vtt
-from apps.companies.notes import SYSTEM, NoteAnswer, NoteSorter
+from apps.companies.note_batch import meeting_body
+from apps.companies.notes import SYSTEM, CardCall, Dropped, NoteAnswer, NoteCard, NoteSorter
 from apps.companies.tables import CallNote
 from core.api.deps import settings_dependency
 from core.config import Settings
@@ -205,6 +206,33 @@ async def test_a_transcript_must_be_text_and_fit_and_its_meeting_past(
     assert (notes_off.status_code, notes_off.json()["code"]) == (409, "call_notes_off")
     assert (meetings_off.status_code, meetings_off.json()["code"]) == (409, "meeting_forms_off")
     assert await notes(world) == []
+
+
+async def test_a_transcript_always_reaches_hubspot_whole(
+    world: World, settings: dict[str, Any], meetings: Meetings
+) -> None:
+    """HubSpot keeps at most 60,000 characters of a note, so a transcript (or a note) may be at
+    most 58,000, whatever the setting says. Its first line, a full summary and ten lines of what
+    didn't change a field still fit, so the meeting's last words reach HubSpot."""
+    await a_company(world)
+    settings.update(transcript_max_chars=200_000, notes_max_chars=60_000)  # past what fits
+    ending = " Jo Sample: we sign on Friday."
+    longest_words = "a" * (58_000 - len(ending)) + ending
+    async with signed_in_as(world, "mia", ["companies"]) as client:
+        options = (await client.get(f"{API}/call-notes/options")).json()
+        too_long = await log(client, "8101", longest_words + "!")
+        saved = await log(client, "8101", longest_words)
+    assert (options["max_chars"], options["transcript_max_chars"]) == (58_000, 58_000)
+    assert (too_long.status_code, too_long.json()["code"]) == (422, "transcript_too_long")
+    assert too_long.json()["detail"] == (
+        "This transcript is longer than 58,000 characters. Shorten it, or split it into two."
+    )
+    assert saved.status_code == 201, saved.text
+    [note] = await notes(world)
+    dropped = Dropped(what="Other Office 2 lease end", said="in 2028", why="only a year was said")
+    body = meeting_body(note, NoteCard(call=CardCall(summary="s" * 600), dropped=[dropped] * 10))
+    assert ending.strip() in body
+    assert body.endswith("Not changed in HubSpot: Other Office 2 lease end: only a year was said.")
 
 
 # --- Data, never instructions ---------------------------------------------------------------------
