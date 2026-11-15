@@ -552,7 +552,7 @@ Newest first.
 
 ## Track 2: Companies backend (session 2)
 
-**Progress:** Stage A 8 of 9 (T2-8 waits for Al-khair's run). Stage B 2 of 7. Every step is `backend-agent` work.
+**Progress:** Stage A 8 of 9 (T2-8 waits for Al-khair's run). Stage B 3 of 7. Every step is `backend-agent` work.
 
 ### Stage A: call notes
 
@@ -616,13 +616,13 @@ Newest first.
 - [x] **T2-10. The table.** Done 2026-11-15, `6638fe8`: `companies.meeting_forms` and `call_notes.meeting_id`, up and down tested. Migration `0023_meeting_forms`: `companies.meeting_forms` (the `MeetingFormOut` fields, who made it, the job or a person). One form for each meeting. Schema map and table lists.
   - **Done when:** the migration runs up and down.
 
-- [x] **T2-11. The Meetings reads** Done 2026-11-15, `5a450de`. (the contract, part 3).
+- [x] **T2-11. The Meetings reads** (the contract, part 3). Done 2026-11-15, `5a450de`.
   - Upcoming is the next 7 days by default, the rep's own first. Only client meetings: ones linked to a company.
   - `q` finds a meeting by words in the company's name, the title and the date ("vitera 26 nov"). Plain code.
   - The company's record gains its meetings.
   - **Done when:** tests cover the groups, the search, a meeting with no company (left out), and the waiting state.
 
-- [ ] **T2-12. The draft** (`apps/companies/meeting_form.py`).
+- [x] **T2-12. The draft** (`apps/companies/meeting_form.py`). Done 2026-11-15, `3fc64d0`.
   - **The facts, with no AI:** from the meeting and the facts pack (`facts.py`): when, where, who we meet, the Contour people, staff, offices, the lease end, the deal stage. Each with its source.
   - **Three summaries,** one Claude request in a fixed form, the model `model_meeting_form`, at most `meeting_form_cap_usd`. Every sentence cites a fact id, or it is dropped, as call prep does. Emails and phone numbers are removed first. Names follow `HUBSPOT_NAMES_TO_CLAUDE_OK`, as call prep does.
   - **"Talks so far"** rests on the logged calls, the past meetings' notes and the rep's own call notes on this company.
@@ -658,6 +658,13 @@ Newest first.
 
 Newest first.
 
+- 2026-11-15, T2-12 done (`3fc64d0`). Choices made while building (each can be changed):
+  - The rep's own call notes go to Claude for "talks so far" only while "Claude sorts call notes" is on (choice 1 is Levi's; this is stricter than the step's words).
+  - With names off, every known person is hidden too (`{person 1}`, `{person 2}`), not only the company, and put back in the summaries afterwards.
+  - Anyone with the Companies tick may read, edit and redraft any pre-read (**TBC**). One on a Lead Finder lead is only for people who can see that lead.
+  - A sent pre-read can still be edited or redrafted: an edit adds one to `version`, so the next send is a new email.
+  - "Contour people" for a typed pre-read is the person who typed it. For the morning job it waits for the `rep_of_owner` join at M5.
+  - **For Track 3:** `POST /meetings/forms` (`{meeting_id}` or `{company_key, title, starts_at, ends_at?, where?}`) answers 201 `drafting` (200 for the meeting's existing form). `GET`/`PATCH /meetings/forms/{form_id}` (`{summaries?: {what_they_do?, what_we_know?, talks_so_far?}, next_step?, going?}`), `POST /meetings/forms/{form_id}/redraft` (202, or 409 `form_drafting`). The facts come a moment after the 201: poll until `draft` or `failed`. A typed pre-read is a `MeetingItem` with `typed: true` and `meeting.id` empty.
 - 2026-11-15, T2-10 and T2-11 done (`6638fe8`, `5a450de`).
   - **For Track 3, the Stage B names so far** (all under `/api/v1/companies`; 409 `meeting_forms_off` while Meetings are off): `GET /meetings` (`when` upcoming or past, `mine` default true, `q`, `limit`, `offset`) answers `MeetingPage {items, total, meetings_state, sentence}`; each `MeetingItem {meeting, company_name, group, form, notes_logged}`, `group` today, tomorrow, this_week, later, or null for a past one; `form` is `{id, status}` or null. `GET /meetings/summary` answers `{need_pre_read, draft_ready}`. `GET /meetings/{meeting_id}` (digits) answers `MeetingDetail {meeting, company_name, form}` or 404 `meeting_not_found`. `CompanyDetail.meetings`: the next three (soonest first) then the last three (newest first). `MeetingFormOut {id, meeting, status, facts, summaries, next_step, going, sent_to, sent_at, sent_by, hubspot_copy, cost_usd, error}`: its `meeting` is one shape for a HubSpot meeting and a typed one (`FormMeeting {meeting_id or null, company_key, company_name, title, starts_at, ends_at, where}`); `facts` are `{label, value, source}`; each summary is `{text, by, sources}` (sources as call prep's chips); `sent_to` is `{name, email}`; `hubspot_copy` is `{state, sentence}` (saved, waiting, off, failed).
   - **Windows:** Upcoming is the next 7 days (the plan), Past the last 30 days (**TBC**). Search: each word must start a word of the company's name, the title or the date in words.
