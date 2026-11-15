@@ -10,6 +10,7 @@ import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query'
 import { isAbort, isApiProblem } from './client'
 import { connectionOf, problemKind } from './connection'
 import type { QueryOf } from './types'
+import type { CallNoteQuery, MeetingQuery } from './v17'
 
 const MAX_RETRIES = 2
 
@@ -180,6 +181,29 @@ export const queryKeys = {
     edits: (key: string, contactId: string | null) =>
       ['companies', 'edits', key, contactId ?? null] as const,
     style: () => ['companies', 'style'] as const,
+    /** Call notes (PLAN-V17): every query about them, the switches and limits, the counts. */
+    callNotes: () => ['companies', 'call-notes'] as const,
+    callNoteOptions: () => ['companies', 'call-notes', 'options'] as const,
+    callNoteSummary: () => ['companies', 'call-notes', 'summary'] as const,
+    /** Every page of notes (Activity's tabs, T3-6), and one page by its filters. */
+    callNoteLists: () => ['companies', 'call-notes', 'list'] as const,
+    callNoteList: (query: CallNoteQuery) => ['companies', 'call-notes', 'list', query] as const,
+    callNote: (id: string) => ['companies', 'call-notes', 'note', id] as const,
+    /**
+     * HubSpot's values now, for a list of notes. Outside `callNotes()` on purpose: an edit asks
+     * for the lists again, and must not read every company in HubSpot again with them.
+     */
+    callNotePreview: (ids: readonly string[]) => ['companies', 'call-note-preview', ids] as const,
+    /** Meetings and the pre-meeting form (PLAN-V17 Stage B): every query about them. */
+    meetings: () => ['companies', 'meetings'] as const,
+    /** Every page of meetings (Upcoming and Past, mine and the team's), and one by its filters. */
+    meetingLists: () => ['companies', 'meetings', 'list'] as const,
+    meetingList: (query: MeetingQuery) => ['companies', 'meetings', 'list', query] as const,
+    /** One HubSpot meeting, by HubSpot's id (its link, on the pre-read page). */
+    meeting: (meetingId: string) => ['companies', 'meetings', 'meeting', meetingId] as const,
+    /** One pre-meeting form, by its id (the pre-read page, T3-10). */
+    meetingForm: (id: string) => ['companies', 'meetings', 'form', id] as const,
+    // The counts for Home (T3-11) have their key in `hooks/meeting-summary.ts`, under `meetings()`.
   },
   hubspot: {
     all: ['hubspot'] as const,
@@ -188,5 +212,11 @@ export const queryKeys = {
     syncs: () => ['hubspot', 'syncs'] as const,
     writes: () => ['hubspot', 'writes'] as const,
     lead: (leadId: string) => ['hubspot', 'lead', leadId] as const,
+    /** HubSpot's owners, for the People tab's pick list (PLAN-V17 T3-7). */
+    owners: () => ['hubspot', 'owners'] as const,
+  },
+  people: {
+    /** Everyone with an account (the People tab). */
+    all: ['people'] as const,
   },
 }

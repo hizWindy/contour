@@ -2,7 +2,7 @@
 
 How the Lead Finder website looks and behaves. This file is the one to update. It started as a copy of the design system section in [PLAN-V1.md](../plan/PLAN-V1.md) (25 Oct 2026).
 
-Last updated: 15 Nov 2026 (call prep moved to a side panel on Companies; 14 Nov: rules added from the design principles).
+Last updated: 15 Nov 2026 (the call notes rules Al-khair agreed for Log call and Activity, PLAN-V17 T3-8, and a left-out card dimmed with the quieter text colour; earlier that day, call prep moved to a side panel on Companies; 14 Nov: rules added from the design principles).
 
 The general principles behind these rules, with their sources, are in [design/principles/](../design/principles/README.md). A rule taken from there names it, like "(principles 03 #14)": library item 03, point 14. Where a principle and this file disagree, this file wins until it is changed. The `frontend-agent` (`.claude/agents/frontend-agent.md`) works from both.
 
@@ -130,6 +130,7 @@ Sizes are in rem, so browser zoom works. Nothing is smaller than 13px. Sentence 
 - **Width:** up to 1440px. Tables and the map can use the full width.
 - **List and detail:** clicking a result opens its lead card in a side panel, so the list stays in view. Each card also has its own page and link.
   - **Companies is the other way round,** because call prep is the job done all day: "Prep" on every row (or P on the active row) opens the prep card in a side panel, 576px wide, one column in the order of the call, and the list stays usable beside it. The company's record, the long read, opens in a dialog in the middle (768px). One of them at a time.
+- **A card list the rep works through keeps each card in place,** like Activity's "To confirm". New cards join at the end, so a card never jumps while it is read. (Al-khair, 15 Nov 2026; PLAN-V17 T3-6)
 - **Map page:** the map and the list sit side by side, with a divider you can drag.
 - **Screens:** the site works at every width, from a phone (360px) to a wide laptop.
   - **Laptop (1024px and up):** the menu is open, and a page may use two columns.
@@ -165,16 +166,19 @@ Smooth and quick, like a well-made phone app (PLAN-V13, 11 Nov 2026). Motion sho
 - **Springs with no bounce** move panels, tabs and indicators. A very small bounce (0.1) is only for toggles and chips. The motion kit (`src/components/motion/`, built on the `motion` package) holds them: `snappy` (250ms, an indicator or a chip), `smooth` (400ms, a panel arriving or content revealing), `soft` (350ms, bounce 0.1, a toggle or a tick). `tokens.css` carries the same curves as CSS `linear()` for a shadcn part that only needs a transition.
 - **Leaving is quicker than arriving:** anything that closes goes in 150ms on the one curve, so closing feels instant. A sheet slides out, a dialog fades out, a chip's tick fades.
 - **Only `transform` and `opacity` move.** Nothing animates its height, a shadow, a blur, or a colour over a big area. A colour change on a small part (a switch's track, a chip's border) uses the one curve, `cubic-bezier(0.4, 0, 0.2, 1)`, at 150ms, and a dialog's fade 250ms.
+- **The tick draws its line:** the 16px tick a call gets as it lands in HubSpot draws once (`TickIn`, Motion's `pathLength`, on `soft`, about 350ms). It is the one agreed exception to "only `transform` and `opacity` move", kept to that one small icon. With reduced motion it is simply there. (Al-khair, 15 Nov 2026; PLAN-V17 T3-3)
 - **The indicator slides:** the selected tab's underline, the segmented control's highlight and the selected menu item move from the old place to the new (`TabIndicator`, `Segmented`; `layoutId` in Motion).
 - **Menus grow from where they open:** a popover, menu or tooltip scales from its trigger, using Radix's transform origin (like `origin-(--radix-popover-content-transform-origin)`). (principles 01 #10)
 - **What you use all day barely moves:** the menu's rows and table rows never stagger or reveal. Only the selection indicator moves. (principles 02 #20)
 - **A press feels physical:** a button, a chip or a tile shrinks to 0.98 while it is held (`usePress`, through Motion's `whileTap`, never a CSS `active:scale` class). It springs back on release. Hover still never grows or moves anything: it changes the border, background or opacity.
 - **Content reveals once:** a card or a list fades and rises 4px when it first shows (`Reveal`), at most 8 items one after another, 40ms apart. A number that changes rolls to its new value in table digits (`RollingNumber`). A chart's bars grow once from the baseline when the page opens, as a `scaleY` transform (never an animated height), and not at all with reduced motion (Admin's Runs and cost, PLAN-V13 T1-8).
 - **A live run** shows a filling progress bar and a still dot. Nothing pulses, spins or loops, ever.
+- **The mic's level meter** (`LevelMeter`): five bars follow the mic's level as `scaleY`, about 12 times a second. It follows a real signal, so it isn't a loop: silence is still. With reduced motion it is a still dot and the word "Listening". (Al-khair, 15 Nov 2026; PLAN-V17 T3-3)
 - **Speed budget:** no animation in a table of more than 50 rows. Motion's features load through `LazyMotion` at the app's root (`MotionRoot`), late and in a file of their own: the first screen draws without them, and they arrive right after, so the main file stays small. Pages use the small `m.*` components and bring no features of their own. No dropped frames at 4x CPU slowdown in Chrome's performance panel on the Schedules control, a tab switch and the Companies table.
 - **Reduced motion:** if your computer asks for it, everything changes at once. `MotionConfig` follows the setting, and the base CSS turns transitions off.
 - **Loading:** content fades in. No shimmer and no bouncing dots, so shadcn's Skeleton is used without its pulse. A page that is loading shows the shape of what is coming (the rows of a table, a card, a detail page, the menu and top bar of the app), still and grey, and only after 200 ms, so a quick answer never flashes grey blocks (`src/components/skeletons.tsx`, `src/shell/shell-skeleton.tsx`). The skeleton keeps the real content's size, so nothing jumps when it arrives, and a screen reader hears one line ("Loading the leads.") in a hidden status, never the grey blocks. A click on a page whose code is still on its way dims the page you are leaving after 200 ms (`aria-busy`, 150ms), the way a table dims while its next page loads.
 - **The call prep panel** (PLAN-V10) slides in from the right over 250ms and out in 150ms, and a new person or company in it cross-fades in 150ms while the panel keeps its size. The company dialog rises 8px as it fades in.
+- **Log call comes into the call prep panel** like a phone app's next screen (`PushView`): the script slides 24px left and fades, and the note view comes 24px from the right (`smooth`). The panel keeps its size. Back reverses it, quicker (`exit`, 150ms). With reduced motion the views simply swap. (Al-khair, 15 Nov 2026; PLAN-V17 T3-3, T3-5)
 - **Second exception, waiting for an OK (TBC):** the sign-in avatar reacts to the form. Its eyes follow the login as it is typed (150ms), it shakes its head once after a wrong try (0.6s) and waves once after a sign-out (1.8s). Nothing loops, and reduced motion keeps it still (the face still changes).
 - **One exception, waiting for an OK (TBC):** the sign-in page's contour lines draw once, over 1.6s, when the page opens. They never loop, and reduced motion turns them off.
 
@@ -182,8 +186,12 @@ Smooth and quick, like a well-made phone app (PLAN-V13, 11 Nov 2026). Motion sho
 
 - **Act at once, undo after.** An action that can be undone (Reject, Watch, ticking a task) shows its result at once, with an Undo toast. If the server says no, the result rolls back and a toast says why. Whether each action does this today is **TBC**. (principles 01 #6; 04 #2, #5)
 - **A real confirmation** is only for what can't be undone or leaves Contour: Send to HubSpot (an Alert Dialog with the preview), and starting a run that costs money (the cost shows first). Never "Are you sure?" for something an Undo can fix.
+- **A batch send** (Activity's "Send 7 to HubSpot") opens an Alert Dialog with the totals from a fresh preview: "7 calls, 3 tasks, 2 field changes". Then a bar fills, and each card holds its tick about a second before it leaves. (Al-khair, 15 Nov 2026; PLAN-V17 T3-6)
 - **Fields forgive.** A field accepts any reasonable way of typing a value and stores one strict form. "$1.5M", "1,500,000" and "1.5m" are the same budget, and "300 staff" and "300" are the same count. Only a value it truly can't read gets an error, in plain words. Which fields do this today is **TBC**. (principles 02 #18)
 - **Long forms group:** about 5 to 7 fields to a group, each group with a title. (principles 02 #16)
+- **A note being written is kept in the browser** until the server has it, through a refresh or a closed panel. A failed save keeps the text and says so: "Not saved yet. Try again." (Al-khair, 15 Nov 2026; PLAN-V17 T3-5)
+- **A card edits in place:** Edit (or E) opens its fields. Each field saves when it is left, and Esc puts it back. (Al-khair, 15 Nov 2026; PLAN-V17 T3-6)
+- **Leaving a card out of a batch** (X, or "Leave out") keeps it in place, dimmed, with "Put back" instead of an Undo toast. Dimmed means its title, summary and parts take the quieter text colour (`--muted-foreground`), not lower opacity, so every line still passes 4.5:1: about 6.8:1 on a card and 5.8:1 on the selected tint in light mode, 7.0:1 and 6.1:1 in dark. Its status line and buttons stay at full strength. (Al-khair, 15 Nov 2026; PLAN-V17 T3-6, T3-8)
 
 ## Speed
 
@@ -259,7 +267,7 @@ PLAN-V15 (12 Nov 2026). The words for every case are in `src/api/words.ts` ("Wor
 3. Every status has an icon and a word.
 4. The focus ring shows, and the screen works by keyboard.
 5. Text contrast is 4.5:1 or more, in light and dark mode.
-6. Motion: springs from the kit, only `transform` and `opacity` move, leaving is 150ms, nothing loops, and with reduced motion everything changes at once. No animation in a table of more than 50 rows.
+6. Motion: springs from the kit, only `transform` and `opacity` move (the sent tick's line is the one agreed exception), leaving is 150ms, nothing loops, and with reduced motion everything changes at once. No animation in a table of more than 50 rows.
 7. Checked at 1440px, 1280px and 390px, in light and dark.
 8. No banned item, and no em dash anywhere, including tooltips and page titles.
 9. Any number or chart that needs reading has its plain sentence, and the screen has one Navy button.

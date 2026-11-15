@@ -7,12 +7,19 @@
  * PLAN-V10, "Companies". An Admin may use everything. Adding a person needs a starting
  * password under today's rules: give it to them in person, not by email. Changing your own
  * password is PLAN-V6 C4, still to come; a forgotten one is reset with `engine reset-password`.
+ *
+ * Each person's HubSpot owner (PLAN-V17 T3-7): the calls they send to HubSpot go in under it. The
+ * table says who it is and how it was found ("Matched by email", "Set by hand", or "No HubSpot
+ * owner"); the Edit sheet changes it with a pick list of HubSpot's owners, with "None" to clear it.
+ * Owners come with names only: an owner's email never shows here.
  */
-import { Eye, Pencil, ShieldCheck, UserPlus, UserRound } from 'lucide-react'
+import { ChevronsUpDown, Eye, Pencil, ShieldCheck, UserPlus, UserRound } from 'lucide-react'
 import { useId, useState } from 'react'
 import { toast } from 'sonner'
 import { useAddPerson, useChangePerson, useMe, usePeople, type Person } from '@/api/hooks'
 import { isApiProblem } from '@/api/client'
+import { ownerOf, useHubSpotOwners, useSetHubSpotOwner } from '@/api/hooks/hubspot-owners'
+import type { HubSpotOwnerLink, HubSpotOwnerOption } from '@/api/v17'
 import { ErrorState } from '@/components/error-state'
 import { PendingCards } from '@/components/skeletons'
 import { Badge } from '@/components/ui/badge'
@@ -26,8 +33,17 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command'
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
   Select,
   SelectContent,
@@ -54,6 +70,7 @@ import {
 } from '@/components/ui/table'
 import { formatRelative } from '@/lib/format'
 import { toastProblem } from '@/lib/problems'
+import { cn } from '@/lib/utils'
 import { MODULES } from '@/modules'
 import { ROLE_NAMES, roleName } from '@/shell/roles'
 
@@ -157,6 +174,151 @@ function projectsOf(person: Person): string {
   return names.length > 0 ? names.join(', ') : 'None yet'
 }
 
+// --- The HubSpot owner (PLAN-V17 T3-7) ---------------------------------------------------------
+
+const NO_OWNER = 'No HubSpot owner'
+const OWNER_PURPOSE = 'The calls they send to HubSpot go in under this owner.'
+const OWNERS_LOADING = 'Loading the HubSpot owners.'
+const OWNERS_FAILED = "The HubSpot owners couldn't be loaded."
+const OWNERS_EMPTY = 'No HubSpot owners to pick from yet.'
+const NO_SUCH_OWNER = 'No owner by that name.'
+
+/** How a person's owner was found, in words, or null when the server doesn't say. */
+function howFound(owner: HubSpotOwnerLink): string | null {
+  if (owner.matched_by === 'email') return 'Matched by email'
+  if (owner.matched_by === 'person') return 'Set by hand'
+  return null
+}
+
+/** The owner in the table: the name and how it was found, or that there is none. */
+function OwnerCell({ person }: { person: Person }) {
+  const owner = ownerOf(person)
+  if (!owner) return <span className="text-muted-foreground">{NO_OWNER}</span>
+  const how = howFound(owner)
+  return (
+    <span className="flex flex-col">
+      <span>{owner.name}</span>
+      {how ? <span className="text-caption text-muted-foreground">{how}</span> : null}
+    </span>
+  )
+}
+
+/**
+ * The owner in the Edit sheet: a pick list of HubSpot's owners that filters as you type (DESIGN.md
+ * "Pick one from many"), with "None" first, which clears it. A pick saves at once and shows at once.
+ * A list that can't load, or has nobody in it, says so inside the pick list, and the rest of the
+ * sheet still works.
+ */
+function OwnerField({ person }: { person: Person }) {
+  const id = useId()
+  const [open, setOpen] = useState(false)
+  const owners = useHubSpotOwners()
+  const setOwner = useSetHubSpotOwner()
+  const current = ownerOf(person)
+  const saving = setOwner.isPending ? setOwner.variables : undefined
+  const shown: HubSpotOwnerOption | null = saving ? saving.owner : current
+  const how = saving || !current ? null : howFound(current)
+  const list = owners.data ?? []
+
+  const pick = (owner: HubSpotOwnerOption | null): void => {
+    setOpen(false)
+    if ((owner?.id ?? null) === (current?.id ?? null)) return
+    setOwner.mutate(
+      { userId: person.id, owner },
+      {
+        onSuccess: () => {
+          toast(
+            owner
+              ? `${person.name}'s HubSpot owner is ${owner.name} now.`
+              : `${person.name} has no HubSpot owner now.`,
+          )
+        },
+        onError: toastProblem,
+      },
+    )
+  }
+
+  return (
+    <Field>
+      <FieldLabel htmlFor={`${id}-owner`}>HubSpot owner</FieldLabel>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            id={`${id}-owner`}
+            type="button"
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            aria-describedby={`${id}-owner-line`}
+            disabled={setOwner.isPending}
+            className="w-full justify-between font-normal"
+          >
+            <span className={cn('truncate', shown ? undefined : 'text-muted-foreground')}>
+              {shown?.name ?? NO_OWNER}
+            </span>
+            <ChevronsUpDown aria-hidden="true" className="opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-(--radix-popover-trigger-width) gap-0 p-0">
+          <Command label="Find a HubSpot owner">
+            <CommandInput placeholder="Find an owner" className="touch:text-body" />
+            <CommandList>
+              <CommandEmpty>{NO_SUCH_OWNER}</CommandEmpty>
+              <CommandGroup>
+                <CommandItem
+                  value="none"
+                  keywords={['clear', 'no owner']}
+                  data-checked={shown === null}
+                  onSelect={() => {
+                    pick(null)
+                  }}
+                >
+                  None
+                </CommandItem>
+                {list.map((owner) => (
+                  <CommandItem
+                    key={owner.id}
+                    value={owner.id}
+                    keywords={[owner.name]}
+                    data-checked={owner.id === shown?.id}
+                    onSelect={() => {
+                      pick(owner)
+                    }}
+                  >
+                    <span className="truncate">{owner.name}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+              {owners.isPending ? (
+                <p role="status" className="px-3 pb-3 text-ui text-muted-foreground">
+                  {OWNERS_LOADING}
+                </p>
+              ) : owners.isError ? (
+                <div role="alert" className="flex flex-col items-start gap-2 px-3 pb-3 text-ui">
+                  <p>{OWNERS_FAILED}</p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void owners.refetch()}
+                  >
+                    Try again
+                  </Button>
+                </div>
+              ) : list.length === 0 ? (
+                <p className="px-3 pb-3 text-ui text-muted-foreground">{OWNERS_EMPTY}</p>
+              ) : null}
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+      <FieldDescription id={`${id}-owner-line`}>
+        {how ? `${how}. ${OWNER_PURPOSE}` : OWNER_PURPOSE}
+      </FieldDescription>
+    </Field>
+  )
+}
+
 /** Edits to one person, applied at once as before: the ticks, the role, and signing in. */
 function EditPerson({ person, self }: { person: Person; self: boolean }) {
   const change = useChangePerson()
@@ -212,6 +374,7 @@ function EditPerson({ person, self }: { person: Person; self: boolean }) {
             <span className="text-ui font-semibold">Projects</span>
             <ProjectTicks person={person} self={self} />
           </div>
+          <OwnerField person={person} />
           <label
             htmlFor={`${id}-active`}
             className="flex items-center justify-between gap-3 text-ui"
@@ -248,6 +411,7 @@ function PeopleTable({ people, myId }: { people: Person[]; myId: string | null }
           <TableHead>Name</TableHead>
           <TableHead>Role</TableHead>
           <TableHead className="max-md:hidden">Projects</TableHead>
+          <TableHead className="max-lg:hidden">HubSpot owner</TableHead>
           <TableHead className="max-sm:hidden">Last signed in</TableHead>
           <TableHead>
             <span className="sr-only">Edit</span>
@@ -279,6 +443,9 @@ function PeopleTable({ people, myId }: { people: Person[]; myId: string | null }
                 </span>
               </TableCell>
               <TableCell className="max-md:hidden">{projectsOf(person)}</TableCell>
+              <TableCell className="max-lg:hidden">
+                <OwnerCell person={person} />
+              </TableCell>
               <TableCell className="text-muted-foreground max-sm:hidden">
                 {person.last_signed_in_at ? formatRelative(person.last_signed_in_at) : 'Not yet'}
               </TableCell>

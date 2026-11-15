@@ -1,3 +1,5 @@
+// Call notes (`./call-notes`) are left out on purpose: this file is in the first visit, so the
+// Companies pages import those hooks from their own file, and they load with those pages.
 export * from './auth'
 export * from './companies'
 export * from './health'

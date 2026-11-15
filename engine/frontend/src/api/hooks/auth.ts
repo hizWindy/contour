@@ -90,6 +90,31 @@ function startOver(queryClient: QueryClient, signIn: SignIn): void {
   queryClient.setQueryData(queryKeys.auth.me(), signIn)
 }
 
+/** What a page keeps for a person outside the query cache, forgotten when they sign out. */
+const signOutSteps = new Set<(userId: string) => void>()
+
+/**
+ * Runs `step` with the person's id when they sign out of this browser ("Sign out"). A page's own
+ * code adds its step when it loads, like the call note drafts (PLAN-V17 T3-8). Returns a function
+ * that takes the step away again.
+ */
+export function onSignOut(step: (userId: string) => void): () => void {
+  signOutSteps.add(step)
+  return () => {
+    signOutSteps.delete(step)
+  }
+}
+
+function runSignOutSteps(userId: string): void {
+  for (const step of signOutSteps) {
+    try {
+      step(userId)
+    } catch {
+      // A step that fails never stops the sign-out.
+    }
+  }
+}
+
 /** Signs in (`POST /auth/login`). The cookie is set by the answer; the page never sees it. */
 export function useLogin() {
   const queryClient = useQueryClient()
@@ -101,15 +126,24 @@ export function useLogin() {
   })
 }
 
-/** Signs this browser out (`POST /auth/logout`). Whatever the answer, the page forgets the user. */
+/**
+ * Signs this browser out (`POST /auth/logout`). Whatever the answer, the page forgets the user,
+ * and each `onSignOut` step runs for the person who pressed it.
+ */
 export function useLogout() {
   const queryClient = useQueryClient()
-  return useMutation<undefined, ApiProblem, undefined>({
+  return useMutation<undefined, ApiProblem, undefined, { userId: string | null }>({
     mutationFn: async () => {
       unwrap(await api.POST('/auth/logout'))
       return undefined
     },
-    onSettled: () => {
+    // Who is signing out, read as they press it, before anything changes "who is signed in".
+    onMutate: () => {
+      const signIn = queryClient.getQueryData<SignIn>(queryKeys.auth.me())
+      return { userId: signIn?.state === 'signed_in' ? signIn.user.id : null }
+    },
+    onSettled: (_data, _error, _variables, started) => {
+      if (started?.userId) runSignOutSteps(started.userId)
       startOver(queryClient, { state: 'signed_out', reason: 'signed_out', detail: null })
     },
   })

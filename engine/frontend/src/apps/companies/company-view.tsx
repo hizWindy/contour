@@ -1,14 +1,16 @@
 /**
  * What we know about one company (PLAN-V10 B5), the same in the side panel and on its full page:
  * four boxes (the next lease end, the last talk, the deal and the owner), then About, Offices,
- * Deals, People, Call history, News and research, Connections and, for people with the Lead
- * Finder tick, the Lead Finder.
+ * Deals, Meetings (PLAN-V17 T3-11: its next and last three, while it has any), People, Call
+ * history, News and research, Connections and, for people with the Lead Finder tick, the Lead
+ * Finder.
  *
  * People and Call history wait for HubSpot access to contacts and calls (PLAN-V10 C1). Call notes
  * are quotes from a source, so they are in the serif (DESIGN.md "Type").
  */
 import {
   Building2,
+  CalendarCheck,
   ExternalLink,
   Hourglass,
   Link2,
@@ -28,6 +30,7 @@ import type {
   CompanyOffice,
   CompanyPerson,
 } from '@/api/types'
+import type { CompanyDetailV17 } from '@/api/v17'
 import { ResultBadge } from '@/components/result-badge'
 import { SourceLink } from '@/components/source-link'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -39,6 +42,7 @@ import { websiteHref } from '@/lib/safe-href'
 import { cn } from '@/lib/utils'
 import { WAITING_FOR_PEOPLE } from './words'
 import { DealMark, LastTalk, LeaseEnd, NotInHubSpot, StageMark } from './marks'
+import { CompanyMeetings } from './meetings/company-meetings'
 
 function Section({
   id,
@@ -319,6 +323,8 @@ export function CompanyView({
   boxes = true,
 }: CompanyViewProps) {
   const waiting = company.people_status === 'waiting'
+  // Until M5 joins the contract, `meetings` is typed by hand (v17.ts).
+  const meetings = (company as CompanyDetailV17).meetings ?? []
   return (
     <div className="flex flex-col gap-5">
       {boxes && company.source === 'lead' ? <NotInHubSpot /> : null}
@@ -352,6 +358,12 @@ export function CompanyView({
           <Quiet>No deals on record.</Quiet>
         )}
       </Section>
+      {/* None while pre-meeting forms are off or HubSpot's meetings aren't read: no section then. */}
+      {meetings.length > 0 ? (
+        <Section id="company-meetings" title="Meetings" icon={CalendarCheck}>
+          <CompanyMeetings meetings={meetings} companyName={company.name} today={today} />
+        </Section>
+      ) : null}
       <Section id="company-people" title="People" icon={Phone}>
         {waiting ? (
           <Quiet icon={Hourglass}>{WAITING_FOR_PEOPLE}</Quiet>

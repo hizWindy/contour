@@ -28,9 +28,9 @@ import {
   type OnChangeFn,
   type SortingState,
 } from '@tanstack/react-table'
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, Rows4 } from 'lucide-react'
+import { ArrowDown, ArrowUp, ArrowUpDown, Rows4 } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import { Button } from '@/components/ui/button'
+import { Pager, type PagerPage } from '@/components/pager'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
@@ -43,7 +43,6 @@ import {
 } from '@/components/ui/table'
 import { Toggle } from '@/components/ui/toggle'
 import { useListKeyboard } from '@/hooks/useListKeyboard'
-import { formatNumber } from '@/lib/format'
 import { useAfter } from '@/lib/use-after'
 import { POINT_MS } from '@/lib/pointing'
 import { cn } from '@/lib/utils'
@@ -93,11 +92,7 @@ function LoadingRows({ columns }: { columns: number }) {
 }
 
 /** Which page is shown, and how many rows there are in all (from the server's `total`). */
-export interface DataTablePage {
-  pageIndex: number
-  pageSize: number
-  total: number
-}
+export type DataTablePage = PagerPage
 
 export interface DataTableProps<TData> {
   /** What the table lists, for screen readers: "Leads". */
@@ -419,53 +414,6 @@ export function DataTable<TData>({
       </div>
       {page && onPageChange ? <Pager page={page} onPageChange={onPageChange} /> : null}
     </div>
-  )
-}
-
-function Pager({
-  page,
-  onPageChange,
-}: {
-  page: DataTablePage
-  onPageChange: (index: number) => void
-}) {
-  const first = page.total === 0 ? 0 : page.pageIndex * page.pageSize + 1
-  const last = Math.min(page.total, (page.pageIndex + 1) * page.pageSize)
-  const lastPage = Math.max(0, Math.ceil(page.total / page.pageSize) - 1)
-  return (
-    <nav aria-label="Pages" className="flex items-center justify-between gap-4 text-ui">
-      <p className="text-muted-foreground" aria-live="polite">
-        {page.total === 0
-          ? 'No rows'
-          : `Showing ${formatNumber(first)} to ${formatNumber(last)} of ${formatNumber(page.total)}`}
-      </p>
-      <div className="flex items-center gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={page.pageIndex <= 0}
-          onClick={() => {
-            onPageChange(page.pageIndex - 1)
-          }}
-        >
-          <ChevronLeft aria-hidden="true" />
-          Previous
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={page.pageIndex >= lastPage}
-          onClick={() => {
-            onPageChange(page.pageIndex + 1)
-          }}
-        >
-          Next
-          <ChevronRight aria-hidden="true" />
-        </Button>
-      </div>
-    </nav>
   )
 }
 

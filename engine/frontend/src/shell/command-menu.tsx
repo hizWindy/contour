@@ -1,5 +1,5 @@
 import { Moon, Monitor, PanelLeft, Search, Sun } from 'lucide-react'
-import { useEffect, useState, type ReactNode } from 'react'
+import { Suspense, useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
 import { Button } from '@/components/ui/button'
 import {
@@ -16,7 +16,7 @@ import { Kbd, KbdGroup } from '@/components/ui/kbd'
 import { useSidebar } from '@/components/ui/sidebar'
 import { PLANNED } from '@/modules'
 import { useVisibleModules } from './visible-modules'
-import { ADMIN_TABS, HOME, type NavItem } from './nav'
+import { ADMIN_TABS, HOME, type CommandsProps, type NavItem } from './nav'
 import { applyTheme, type ThemeChoice } from './theme'
 
 /** True for Ctrl+K, or Cmd+K on a Mac. */
@@ -54,8 +54,9 @@ function PageItem({ item, onSelect }: { item: NavItem; onSelect: (to: string) =>
 
 /**
  * Jump to any page, or run an action, from the keyboard: Ctrl+K (Cmd+K on a Mac) opens it from
- * anywhere, also while typing in a field. It lists Home, each project's pages, the projects still to
- * be developed, the Admin tabs, and a few actions.
+ * anywhere, also while typing in a field. It lists Home, each project's pages and its own actions
+ * (Companies' "Log a call", PLAN-V17 T3-7), the projects still to be developed, the Admin tabs, and
+ * a few actions. Only the projects this person may use are listed.
  */
 export function CommandMenu(): ReactNode {
   const [open, setOpen] = useState(false)
@@ -80,7 +81,9 @@ export function CommandMenu(): ReactNode {
     setOpen(false)
     action()
   }
-  const go = (to: string): void => {
+  // As it closes, the menu puts the focus back nowhere (Radix's dialog returns it only to its own
+  // trigger, and this one has none), so a page that takes the focus keeps it: Log a call's picker.
+  const go: CommandsProps['go'] = (to) => {
     run(() => {
       void navigate(to)
     })
@@ -120,13 +123,22 @@ export function CommandMenu(): ReactNode {
             <CommandGroup heading="Pages">
               <PageItem item={HOME} onSelect={go} />
             </CommandGroup>
-            {modules.map((app) => (
-              <CommandGroup key={app.id} heading={app.name}>
-                {app.pages.map((item) => (
-                  <PageItem key={item.to} item={item} onSelect={go} />
-                ))}
-              </CommandGroup>
-            ))}
+            {modules.map((app) => {
+              const Commands = app.commands
+              return (
+                <CommandGroup key={app.id} heading={app.name}>
+                  {app.pages.map((item) => (
+                    <PageItem key={item.to} item={item} onSelect={go} />
+                  ))}
+                  {Commands ? (
+                    // A module's own entries may load late (Companies' do): nothing shows till then.
+                    <Suspense fallback={null}>
+                      <Commands go={go} />
+                    </Suspense>
+                  ) : null}
+                </CommandGroup>
+              )
+            })}
             <CommandGroup heading="To be developed">
               {PLANNED.map(({ to, name, icon }) => (
                 <PageItem key={to} item={{ to, label: name, icon }} onSelect={go} />

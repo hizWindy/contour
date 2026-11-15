@@ -2,18 +2,21 @@
  * One company on its own page (PLAN-V10 B5), at /companies/:key, so it can be shared. The same view
  * as the dialog on the Companies page, with room to read, and the same "Prep a call", which opens
  * the prep panel on the right. On a phone (PLAN-V10 G1) "Prep a call" is a full-width button that
- * stays at the bottom of the screen.
+ * stays at the bottom of the screen. With call notes on (PLAN-V17 T3-5), "Log call" sits beside
+ * it, and opens Log call's note view in the panel, which asks who the call was with.
  */
-import { Building2, PhoneCall } from 'lucide-react'
+import { Building2, NotebookPen, PhoneCall } from 'lucide-react'
 import { useState } from 'react'
 import { useParams } from 'react-router'
 import { useCompany } from '@/api/hooks'
+import { useCallNoteOptions } from '@/api/hooks/call-notes'
 import type { CompanyDetail, CompanyPerson } from '@/api/types'
 import { BackButton } from '@/components/back-button'
 import { ErrorState } from '@/components/error-state'
 import { PageHeader } from '@/components/page-header'
 import { Button } from '@/components/ui/button'
 import { PHONE, useMediaQuery } from '@/lib/use-media-query'
+import { LOG_CALL } from './call-notes/words'
 import { CompanyActions } from './company-dialog'
 import { CompanyView, CompanyViewPending } from './company-view'
 import { companyPlace } from './words'
@@ -32,6 +35,18 @@ export default function CompanyPage() {
       person: person ? { id: person.id, name: person.name, title: person.title } : null,
     })
   }
+  const notesOn = useCallNoteOptions().data?.enabled === true
+  const logCall =
+    notesOn && company.data
+      ? () => {
+          setPrep({
+            companyKey: company.data.key,
+            companyName: company.data.name,
+            person: null,
+            note: true,
+          })
+        }
+      : undefined
   return (
     <>
       <BackButton fallbackTo="/companies" fallbackLabel="Companies" />
@@ -48,7 +63,7 @@ export default function CompanyPage() {
           company.data ? (
             <CompanyActions
               company={company.data}
-              // On a phone "Prep a call" is the button at the bottom of the screen instead.
+              // On a phone "Prep a call" and "Log call" are the buttons at the bottom instead.
               onPrep={
                 phone
                   ? undefined
@@ -56,16 +71,23 @@ export default function CompanyPage() {
                       prepCall(company.data, null)
                     }
               }
+              onLogCall={phone ? undefined : logCall}
             />
           ) : null
         }
       />
       {phone && company.data ? (
-        <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-popover p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div className="fixed inset-x-0 bottom-0 z-20 flex gap-2 border-t bg-popover p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          {logCall ? (
+            <Button type="button" variant="outline" size="lg" onClick={logCall}>
+              <NotebookPen aria-hidden="true" />
+              {LOG_CALL}
+            </Button>
+          ) : null}
           <Button
             type="button"
             size="lg"
-            className="w-full"
+            className="min-w-0 flex-1"
             onClick={() => {
               prepCall(company.data, null)
             }}

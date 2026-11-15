@@ -8,26 +8,18 @@
  * sheet with a note filled in from the line. Nothing is shared by it.
  *
  * The script gives the call and the callbacks through `LineEditContext`. Without a call (a test, or
- * a card still picking who to call) there is no pencil.
+ * a card still picking who to call) there is no pencil. The pencil and the box themselves are in
+ * `line-box.tsx`, which the pre-read's summaries use too (PLAN-V17 T3-10).
  */
-import { PenLine, Pencil } from 'lucide-react'
-import {
-  useContext,
-  useEffect,
-  useEffectEvent,
-  useId,
-  useRef,
-  useState,
-  type ReactNode,
-  type RefObject,
-} from 'react'
+import { PenLine } from 'lucide-react'
+import { useContext, useRef, useState, type ReactNode } from 'react'
 import { toApiProblem } from '@/api/client'
 import { useResetScriptEdit, useSaveScriptEdit } from '@/api/hooks/script'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
 import { problemHint, toastProblem } from '@/lib/problems'
 import { cn } from '@/lib/utils'
+import { EditPencil, LineTextBox } from './line-box'
 import { LineEditContext } from './line-edit-context'
 import type { GuideLine, ScriptCall } from './playbook'
 
@@ -42,34 +34,7 @@ function problemWords(error: unknown): string {
     .join(' ')
 }
 
-/**
- * Esc closes the text box, not the call card around it. The card's dialog listens for Esc on the
- * document, before the box does, so the box listens on the window, which comes first, and stops
- * the key there while it is inside the box.
- */
-function useEscapeInside(
-  box: RefObject<HTMLElement | null>,
-  active: boolean,
-  onEscape: () => void,
-) {
-  const escape = useEffectEvent(onEscape)
-  useEffect(() => {
-    if (!active) return
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape') return
-      if (!(event.target instanceof Node) || !box.current?.contains(event.target)) return
-      event.stopPropagation()
-      event.preventDefault()
-      escape()
-    }
-    window.addEventListener('keydown', onKey, { capture: true })
-    return () => {
-      window.removeEventListener('keydown', onKey, { capture: true })
-    }
-  }, [active, box])
-}
-
-/** The text box a line turns into. */
+/** The text box a script line turns into: it saves the call's own wording, or resets it. */
 function LineBox({
   line,
   slot,
@@ -86,20 +51,21 @@ function LineBox({
   const { onSaved } = useContext(LineEditContext)
   const save = useSaveScriptEdit()
   const reset = useResetScriptEdit()
-  const [text, setText] = useState(line.text)
-  const box = useRef<HTMLFormElement>(null)
-  const id = useId()
-  useEscapeInside(box, true, onDone)
-  const trimmed = text.trim()
   const busy = save.isPending || reset.isPending
   const failed = save.isError ? save.error : reset.isError ? reset.error : null
   return (
-    <form
-      ref={box}
-      className="flex w-full flex-col gap-2"
-      onSubmit={(event) => {
-        event.preventDefault()
-        if (trimmed.length > LINE_MAX_CHARS) return
+    <LineTextBox
+      initial={line.text}
+      label={label}
+      maxChars={LINE_MAX_CHARS}
+      hint="Only for this call, and only you see it."
+      busy={busy}
+      problem={failed ? problemWords(failed) : null}
+      onCancel={onDone}
+      onType={() => {
+        if (save.isError) save.reset()
+      }}
+      onSubmit={(trimmed) => {
         if (trimmed === line.text.trim()) {
           onDone()
           return
@@ -128,50 +94,7 @@ function LineBox({
           },
         )
       }}
-    >
-      <Textarea
-        // The box opens on a click of the pencil, so it takes the focus at once.
-        autoFocus
-        value={text}
-        rows={2}
-        aria-label={`${label}, your wording`}
-        aria-describedby={`${id}-hint`}
-        aria-invalid={failed !== null || trimmed.length > LINE_MAX_CHARS || undefined}
-        className="text-body"
-        onFocus={(event) => {
-          const end = event.currentTarget.value.length
-          event.currentTarget.setSelectionRange(end, end)
-        }}
-        onChange={(event) => {
-          setText(event.target.value)
-          if (save.isError) save.reset()
-        }}
-      />
-      <p
-        id={`${id}-hint`}
-        className={cn(
-          'text-caption tabular-nums',
-          trimmed.length > LINE_MAX_CHARS ? 'text-destructive' : 'text-muted-foreground',
-        )}
-      >
-        {trimmed.length > LINE_MAX_CHARS
-          ? `Too long: ${String(trimmed.length)} of ${String(LINE_MAX_CHARS)} characters.`
-          : 'Only for this call, and only you see it.'}
-      </p>
-      {failed ? (
-        <p role="alert" className="text-ui text-destructive">
-          {problemWords(failed)}
-        </p>
-      ) : null}
-      <div className="flex flex-wrap gap-2 max-sm:*:flex-1">
-        <Button type="submit" size="sm" disabled={busy || trimmed.length > LINE_MAX_CHARS}>
-          Save
-        </Button>
-        <Button type="button" variant="outline" size="sm" disabled={busy} onClick={onDone}>
-          Cancel
-        </Button>
-      </div>
-    </form>
+    />
   )
 }
 
@@ -270,19 +193,13 @@ export function EditableLine({ line, slot, label, children, className }: Editabl
       ) : (
         <div className="flex min-w-0 items-start gap-1">
           <div className="min-w-0 flex-1">{children}</div>
-          <Button
+          <EditPencil
             ref={pencil}
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="-my-0.5 shrink-0 text-muted-foreground"
-            aria-label={`Edit ${label.charAt(0).toLowerCase()}${label.slice(1)}`}
+            label={label}
             onClick={() => {
               setEditing(true)
             }}
-          >
-            <Pencil aria-hidden="true" />
-          </Button>
+          />
         </div>
       )}
       {line.edited && !editing ? <YoursRow line={line} slot={slot} call={call} /> : null}

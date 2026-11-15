@@ -1,0 +1,321 @@
+/**
+ * The words of Meetings (PLAN-V17 "The screens", part 5): plain, sentence case, no em dash, and no
+ * setting or file name (the screen-words test reads them). The wording is Al-khair's to change.
+ */
+import { toApiProblem } from '@/api/client'
+import type { MeetingWhen, MeetingWhere } from '@/api/v17'
+import { addDays } from '@/lib/due-date'
+import { formatNumber, formatTime, melbourneDate } from '@/lib/format'
+import { changeDetail } from '@/lib/problems'
+import type { DayGroup, RowStatus } from './rows'
+
+export const MEETINGS_TITLE = 'Client meetings'
+export const MEETINGS_DESCRIPTION =
+  'Draft the pre-read for each client meeting, check it, then send it to the team.'
+
+export const UPCOMING = 'Upcoming'
+export const PAST = 'Past'
+export const WHEN_LABEL = 'Upcoming or past meetings'
+export const TEAM_SWITCH = "The team's meetings"
+export const SEARCH_LABEL = 'Find a meeting by company, title or date'
+export const SEARCH_PLACEHOLDER = 'Find a meeting'
+
+export const GROUP_LABELS: Readonly<Record<DayGroup, string>> = {
+  today: 'Today',
+  tomorrow: 'Tomorrow',
+  this_week: 'This week',
+  later: 'Later',
+}
+
+export const PAST_LIST = 'Past meetings'
+
+/**
+ * Teams or in person, as a word beside its icon (the plan's words). `online` is any video call,
+ * which is Teams at Contour (TBC: a client's own video link would also read "Teams"). A meeting
+ * whose place isn't known, a phone call included, says nothing.
+ */
+export const WHERE_WORDS: Readonly<Record<Exclude<MeetingWhere, 'unknown'>, string>> = {
+  online: 'Teams',
+  in_person: 'In person',
+}
+
+export const STATUS_WORDS: Readonly<Record<RowStatus, string>> = {
+  needs: 'Needs pre-read',
+  drafting: 'Drafting',
+  draft: 'Draft ready',
+  sent: 'Sent',
+  failed: 'Draft failed',
+  notes_logged: 'Notes logged',
+  no_notes: 'No notes yet',
+  cancelled: 'Cancelled',
+}
+
+export const DRAFT_IT = 'Draft it'
+export const CHECK_AND_SEND = 'Check and send'
+export const OPEN = 'Open'
+export const LOG_MEETING = 'Log meeting'
+/** Before the owner's name on the team's list, for a screen reader: whose meeting it is. */
+export const WHOSE = 'Whose meeting:'
+
+// --- The states -----------------------------------------------------------------------------
+
+export const LOADING = 'Loading your meetings.'
+export const LOAD_FAILED = "Your meetings couldn't be loaded."
+export const OFF_TITLE = 'Pre-meeting forms are switched off.'
+export const OFF_DESCRIPTION =
+  'Ask an admin to switch them on. Until then, prepare the pre-read as before.'
+
+interface Empty {
+  title: string
+  description: string
+}
+
+/** The serif voice of an empty list: what it is, and what puts something there. */
+export function emptyWords(when: MeetingWhen, team: boolean): Empty {
+  if (when === 'past') {
+    return {
+      title: 'No past meetings yet.',
+      description: team
+        ? "The team's client meetings show here once they are over."
+        : 'Your client meetings show here once they are over.',
+    }
+  }
+  return {
+    title: 'No meetings this week.',
+    description: team
+      ? "The team's client meetings from HubSpot show here."
+      : "Your client meetings from HubSpot show here. For one that isn't in HubSpot, start a new pre-read.",
+  }
+}
+
+/** An empty list while meetings can't come from HubSpot yet (waiting, or not connected). */
+export const EMPTY_WAITING: Empty = {
+  title: 'No meetings from HubSpot yet.',
+  description: 'For a meeting coming up, start a new pre-read.',
+}
+
+/**
+ * An empty list of the rep's own while their own can't be picked out (their account has no
+ * HubSpot owner yet). The line above it says to show the team's.
+ */
+export const EMPTY_NOT_YOURS: Empty = {
+  title: 'No meetings of your own to show yet.',
+  description: 'For a meeting coming up, start a new pre-read.',
+}
+
+/** A search that finds nothing, with where else to look. */
+export function noMatchWords(q: string, when: MeetingWhen): Empty {
+  return {
+    title: `No meeting matches "${q.trim()}".`,
+    description:
+      when === 'past'
+        ? 'Try the company, the title or a date, like 26 nov. Meetings still to come are under Upcoming.'
+        : 'Try the company, the title or a date, like 26 nov. Meetings that are over are under Past.',
+  }
+}
+
+/**
+ * The quiet line while the list can't show what was asked: the server's own sentence, like
+ * "HubSpot isn't connected, so meetings can't be read from it.", or that the rep's own can't be
+ * picked out yet, then what still works.
+ */
+export function waitingLine(sentence: string | null): string {
+  const reason = sentence?.trim() || "Meetings can't be read from HubSpot yet."
+  return `${/[.!?]$/.test(reason) ? reason : `${reason}.`} You can still start a new pre-read.`
+}
+
+/** Under a list cut at its limit: "Showing the first 100 of 120." */
+export function firstOfWords(shown: number, total: number): string {
+  return `Showing the first ${formatNumber(shown)} of ${formatNumber(total)}.`
+}
+
+// --- New pre-read ---------------------------------------------------------------------------
+
+export const NEW_PRE_READ = 'New pre-read'
+export const NEW_DESCRIPTION =
+  "For a meeting that isn't in HubSpot. It is drafted from what we know about the company."
+export const COMPANY = 'Company'
+export const PICK_COMPANY = 'Pick a company'
+export const WHICH_MEETING_COMPANY = 'Which company is the meeting with?'
+export const TITLE = 'Title'
+export const TITLE_PLACEHOLDER = 'Like: Office walk-through'
+export const DAY = 'Day'
+export const DAY_PLACEHOLDER = 'Like thu or 26 nov'
+export const TIME = 'Time'
+export const TIME_PLACEHOLDER = 'Like 10am or 14:30'
+export const WHERE = 'Teams or in person'
+export const DRAFT_THE_PRE_READ = 'Draft the pre-read'
+export const CANCEL = 'Cancel'
+
+export const PICK_THE_COMPANY = 'Pick the company.'
+export const TITLE_EMPTY = 'Give the meeting a title.'
+export const DAY_EMPTY = 'Type the day of the meeting.'
+export const DAY_UNREADABLE = "That day couldn't be read. Try 26 nov, 26/11 or thu."
+export const DAY_PAST = 'That day has gone. Type a day still to come.'
+export const TIME_EMPTY = 'Type the time it starts.'
+export const TIME_UNREADABLE = "That time couldn't be read. Try 10am or 14:30."
+
+// --- When a meeting is ----------------------------------------------------------------------
+
+const dayParts = new Intl.DateTimeFormat('en-AU', {
+  timeZone: 'UTC',
+  weekday: 'short',
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+})
+
+/** "Thu 26 Nov", or "Tue 5 Jan 2027" in another year, for a Melbourne day (YYYY-MM-DD). */
+export function dayText(day: string, today: string): string {
+  const parts = dayParts.formatToParts(new Date(`${day}T12:00:00Z`))
+  const part = (type: Intl.DateTimeFormatPartTypes): string =>
+    parts.find((item) => item.type === type)?.value ?? ''
+  const words = `${part('weekday')} ${part('day')} ${part('month')}`
+  return day.slice(0, 4) === today.slice(0, 4) ? words : `${words} ${part('year')}`
+}
+
+/**
+ * When an upcoming meeting starts, as its group needs it: only the time under Today and Tomorrow
+ * ("10:00 am"), the weekday too under This week ("Thu, 10:00 am"), and the day under Later
+ * ("Tue 1 Dec, 10:00 am"). In Melbourne time.
+ */
+export function upcomingWhen(at: string, group: DayGroup, today: string): string {
+  const time = formatTime(at)
+  if (group === 'today' || group === 'tomorrow') return time
+  const day = dayText(melbourneDate(at), today)
+  return group === 'this_week' ? `${day.split(' ')[0] ?? day}, ${time}` : `${day}, ${time}`
+}
+
+/** When a past meeting was: "Today, 9:00 am", "Yesterday, 4:00 pm" or "Thu 12 Nov, 9:00 am". */
+export function pastWhen(at: string, today: string): string {
+  const day = melbourneDate(at)
+  const time = formatTime(at)
+  if (day === today) return `Today, ${time}`
+  if (day === addDays(today, -1)) return `Yesterday, ${time}`
+  return `${dayText(day, today)}, ${time}`
+}
+
+/**
+ * When a meeting is, with no group heading above it (Home's card, a company's record): "Today,
+ * 10:00 am", "Tomorrow, 2:00 pm", "Yesterday, 4:00 pm" or "Thu 26 Nov, 10:00 am".
+ */
+export function meetingDay(at: string, today: string): string {
+  return melbourneDate(at) === addDays(today, 1)
+    ? `Tomorrow, ${formatTime(at)}`
+    : pastWhen(at, today)
+}
+
+// --- Log meeting (T3-11) --------------------------------------------------------------------
+
+export const TRANSCRIPT = 'Transcript'
+export const TRANSCRIPT_PLACEHOLDER = 'Paste the transcript here.'
+export const LOG_MEETING_NOTE =
+  'Paste the transcript, or read a .txt or .vtt file. It joins your calls to confirm on Activity, and nothing goes to HubSpot until you send it.'
+export const READ_A_FILE = 'Read a file'
+export const VTT_HINT = 'The times and cue numbers are taken out when it is saved.'
+export const SAVE_NOTES = 'Save notes'
+export const SAVING_NOTES = 'Saving.'
+export const NOTHING_PASTED = 'Paste the transcript or read a file first.'
+export const FILE_TYPE = 'Only a .txt or .vtt file can be read here. Paste the words instead.'
+export const FILE_TOO_BIG = 'That file is too big to be a transcript. Paste the words instead.'
+export const FILE_UNREADABLE = "That file couldn't be read as text. Paste the words instead."
+export const TRANSCRIPT_UNDONE = 'Undone. The transcript is back as a draft.'
+export const TRANSCRIPT_NOT_UNDONE = 'Not undone. The meeting notes still wait for you to confirm.'
+/** A save that failed after the panel was closed: the words aren't lost. */
+export const TRANSCRIPT_KEPT = 'Your transcript is kept. Open Log meeting again to save it.'
+
+/** "From Sample meeting.vtt" */
+export function fromFileWords(name: string): string {
+  return `From ${name}`
+}
+
+/** "Remove Sample meeting.vtt" */
+export function removeFileWords(name: string): string {
+  return `Remove ${name}`
+}
+
+/** "54,210 of 60,000 characters", shown only near the end. */
+export function charactersWords(length: number, max: number): string {
+  return `${formatNumber(length)} of ${formatNumber(max)} characters`
+}
+
+/** "Too long: 61,200 of 60,000 characters. Shorten it, or split it into two." */
+export function transcriptTooLongWords(length: number, max: number): string {
+  return `Too long: ${charactersWords(length, max)}. Shorten it, or split it into two.`
+}
+
+/** Ends a sentence that has no stop yet. */
+function sentence(text: string): string {
+  const trimmed = text.trim()
+  return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`
+}
+
+/**
+ * Why a transcript wasn't saved, in the server's own words, after "Not saved yet.": "Not saved
+ * yet. This meeting hasn't happened yet. Log the meeting once it has been." A lost connection says
+ * what every change says. The words stay in the box.
+ */
+export function transcriptNotSavedWords(error: unknown): string {
+  const problem = toApiProblem(error)
+  const fields = problem.errors.map((field) => sentence(field.message))
+  return [
+    'Not saved yet.',
+    problem.title.trim() ? sentence(problem.title) : null,
+    changeDetail(problem),
+    ...fields,
+  ]
+    .filter(Boolean)
+    .join(' ')
+}
+
+/**
+ * The line under Log meeting's title: "Sample Logistics Pty Ltd · Office walk-through · Thu 12 Nov,
+ * 9:00 am".
+ */
+export function logMeetingLine(
+  companyName: string,
+  title: string,
+  at: string,
+  today: string,
+): string {
+  return [companyName, title.trim(), meetingDay(at, today)].filter(Boolean).join(' · ')
+}
+
+// --- Around the app (T3-11): Home's card and a company's record -----------------------------
+
+export const UPCOMING_MEETINGS = 'Upcoming meetings'
+export const OPEN_MEETINGS = 'Open Meetings'
+export const NO_MEETINGS_SOON = 'No meetings in the next few days.'
+export const NO_MEETINGS_SOON_NOTE =
+  'Your client meetings from HubSpot show here, with their pre-reads.'
+export const MEETINGS_NOT_LOADED = "Your meetings couldn't be loaded right now."
+export const COMING_UP = 'Coming up'
+export const OPEN_PRE_READ = 'Open the pre-read'
+
+/**
+ * Home's sentence over the rows, from the counts for the next 7 days: "2 need a pre-read, and 1 is
+ * ready to check and send." Null with nothing to do.
+ */
+export function upcomingSentence(needPreRead: number, draftReady: number): string | null {
+  const need =
+    needPreRead > 0
+      ? `${formatNumber(needPreRead)} ${needPreRead === 1 ? 'needs' : 'need'} a pre-read`
+      : null
+  const ready =
+    draftReady > 0
+      ? `${formatNumber(draftReady)} ${draftReady === 1 ? 'is' : 'are'} ready to check and send`
+      : null
+  if (need && ready) return `${need}, and ${ready}.`
+  if (need) return `${need}.`
+  if (ready) {
+    return draftReady === 1
+      ? '1 pre-read is ready to check and send.'
+      : `${formatNumber(draftReady)} pre-reads are ready to check and send.`
+  }
+  return null
+}
+
+/** Meetings, found by the company's name, everyone's: where a meeting with no pre-read is. */
+export function companyMeetingsQuery(companyName: string): string {
+  return companyName.replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
+}

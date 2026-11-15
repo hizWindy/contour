@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { mockApi, type Call } from '@/test/mock-api'
 import { renderWithProviders } from '@/test/render'
@@ -118,5 +118,126 @@ describe('Admin, Settings', () => {
         'Used for every step that has no model of its own. A longer second sentence.',
       ),
     ).toBeInTheDocument()
+  })
+
+  it('puts the call notes and pre-meeting forms switches in a group of their own, last', async () => {
+    const toggle = (key: string, label: string, description: string) => ({
+      ...SETTING,
+      key,
+      label,
+      description,
+      type: 'bool',
+      min: null,
+      max: null,
+      default: false,
+      value: false,
+    })
+    const runs = {
+      ...SETTING,
+      key: 'run_max_companies',
+      label: 'Companies in one run',
+      description: 'The most companies one run researches.',
+      type: 'int',
+      min: 1,
+      max: 50,
+      default: 20,
+      value: 20,
+    }
+    const calls = mockApi({
+      '/api/v1/settings': (call: Call) =>
+        Response.json(
+          call.method === 'PATCH'
+            ? settingsOut()
+            : {
+                ...settingsOut(),
+                fields: [
+                  ...settingsOut().fields,
+                  runs,
+                  toggle(
+                    'call_notes_enabled',
+                    'Call notes are on',
+                    'Shows Log call in call prep and the Activity page.',
+                  ),
+                  toggle(
+                    'call_notes_ai_enabled',
+                    'Claude sorts call notes',
+                    "Sends a rep's note to Claude to sort it.",
+                  ),
+                  toggle(
+                    'meeting_forms_enabled',
+                    'Pre-meeting forms are on',
+                    'Shows Meetings and the pre-read.',
+                  ),
+                ],
+              },
+        ),
+    })
+    const { user } = renderWithProviders(<AdminSettingsTab />)
+    await screen.findByRole('list', { name: 'Money' })
+    const groups = within(screen.getByRole('radiogroup', { name: 'Settings group' }))
+    expect(groups.getAllByRole('radio').map((radio) => radio.textContent)).toEqual([
+      'Money',
+      'Runs',
+      'Call notes',
+    ])
+
+    await user.click(groups.getByRole('radio', { name: 'Runs' }))
+    expect(screen.getByRole('list', { name: 'Runs' })).toHaveTextContent('Companies in one run')
+    expect(screen.queryByText('Call notes are on')).toBeNull()
+
+    await user.click(groups.getByRole('radio', { name: 'Call notes' }))
+    const notes = screen.getByRole('list', { name: 'Call notes' })
+    expect(
+      within(notes)
+        .getAllByRole('switch')
+        .map((item) => item.getAttribute('id')),
+    ).toEqual([
+      'setting-call_notes_enabled',
+      'setting-call_notes_ai_enabled',
+      'setting-meeting_forms_enabled',
+    ])
+    // Meetings came in Stage B (T3-9), so its switch shows again, beside the call notes ones.
+    for (const label of [
+      'Call notes are on',
+      'Claude sorts call notes',
+      'Pre-meeting forms are on',
+    ]) {
+      expect(within(notes).getByRole('switch', { name: label })).not.toBeChecked()
+    }
+    await user.click(within(notes).getByRole('switch', { name: 'Call notes are on' }))
+    await user.click(within(notes).getByRole('switch', { name: 'Pre-meeting forms are on' }))
+    await user.click(screen.getByRole('button', { name: 'Save changes' }))
+    await waitFor(() => {
+      expect(calls.find((call) => call.method === 'PATCH')?.body).toEqual({
+        values: { call_notes_enabled: true, meeting_forms_enabled: true },
+      })
+    })
+  })
+
+  it('lists the forms switch under "Set on the server" when the server sets it', async () => {
+    mockApi({
+      '/api/v1/settings': {
+        ...settingsOut(),
+        fields: [
+          ...settingsOut().fields,
+          {
+            ...SETTING,
+            key: 'meeting_forms_enabled',
+            label: 'Pre-meeting forms are on',
+            description: 'Shows Meetings and the pre-read.',
+            type: 'bool',
+            min: null,
+            max: null,
+            default: false,
+            value: false,
+            editable: false,
+          },
+        ],
+      },
+    })
+    renderWithProviders(<AdminSettingsTab />)
+    // Levi's approval, and the forms switch.
+    expect(await screen.findByText(/Set on the server \(2\)/)).toBeInTheDocument()
+    expect(screen.getByText('Pre-meeting forms are on')).toBeInTheDocument()
   })
 })

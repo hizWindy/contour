@@ -40,6 +40,8 @@ export interface PrepTarget {
   cold?: boolean
   /** A saved prep to reopen (a "Today" chip). */
   prepId?: string
+  /** Opens on Log call's note view instead of the script (L, or Log call on the record). */
+  note?: boolean
 }
 
 /** How long the box waits after the last key before it asks. Short: matches should feel live. */

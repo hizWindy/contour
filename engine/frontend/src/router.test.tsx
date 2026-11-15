@@ -1,6 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { COMPANIES } from '@/apps/companies/module'
 import { LEAD_FINDER } from '@/apps/lead-finder/module'
 import { MODULES, PLANNED } from '@/modules'
 import { routes } from '@/router'
@@ -54,6 +55,16 @@ describe('the router', () => {
     ['/leads/99999999-2222-3333-4444-555555555555', 'Lead', ['Lead']],
     ['/rules', 'Rules', ['Rules']],
     ['/test-set', 'Test set', ['Test set']],
+    // Before a company's own address, so neither is ever read as one (PLAN-V17 T3-6, T3-9).
+    ['/companies/activity', 'Your call notes', ['Companies', 'Activity']],
+    ['/companies/meetings', 'Client meetings', ['Companies', 'Meetings']],
+    // A pre-read's own page sits under Meetings (T3-10). Every call answers 404 here, so it
+    // says, under its own title, that it can't find the pre-read.
+    [
+      '/companies/meetings/0f3c9a2e-1111-2222-3333-444444444444',
+      'Pre-read',
+      ['Companies', 'Meetings', 'Pre-read'],
+    ],
   ])('shows the page at %s with its title and breadcrumbs', async (path, title, trail) => {
     renderAt(path)
 
@@ -192,9 +203,14 @@ describe('the router', () => {
         expect(group.getByRole('link', { name: item.label })).toHaveAttribute('href', item.to)
       }
     }
-    // The Companies page sits right under Home.
-    const links = menu.getAllByRole('link').map((link) => link.getAttribute('href'))
-    expect(links.slice(0, 2)).toEqual(['/', '/companies'])
+    // Companies is a group of its own since Activity (PLAN-V17 T3-6): its list first, then
+    // Meetings (T3-9), then Activity. The group follows the order of the projects (T3-7).
+    const companies = within(menu.getByRole('group', { name: COMPANIES.name }))
+    expect(companies.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual([
+      '/companies',
+      '/companies/meetings',
+      '/companies/activity',
+    ])
     expect(menu.getByRole('link', { name: ADMIN.label })).toHaveAttribute('href', '/admin')
     // Rules and the Test set are the Lead Finder's own, not shared Admin tabs.
     const leadFinder = within(menu.getByRole('group', { name: LEAD_FINDER.name }))
@@ -204,6 +220,26 @@ describe('the router', () => {
     expect(menu.getByRole('link', { name: 'Runs' })).toHaveAttribute('aria-current', 'page')
     expect(menu.getByRole('link', { name: 'Results' })).not.toHaveAttribute('aria-current')
     expect(menu.getByRole('link', { name: 'Home' })).not.toHaveAttribute('aria-current')
+  })
+
+  it('marks Activity in the menu on its page, and not Companies, whose address it sits in', async () => {
+    renderAt('/companies/activity')
+    await screen.findByRole('heading', { level: 1, name: 'Your call notes' }, { timeout: LAZY })
+    const menu = within(screen.getByRole('navigation', { name: 'Main menu' }))
+    expect(menu.getByRole('link', { name: 'Activity' })).toHaveAttribute('aria-current', 'page')
+    expect(menu.getByRole('link', { name: 'Companies' })).not.toHaveAttribute('aria-current')
+  })
+
+  it.each([
+    ['/companies/meetings', 'Client meetings'],
+    // A pre-read's own page sits under Meetings (T3-10): here every call answers 404.
+    ['/companies/meetings/0f3c9a2e-1111-2222-3333-444444444444', 'Pre-read'],
+  ])('marks Meetings in the menu at %s, and not Companies', async (path, title) => {
+    renderAt(path)
+    await screen.findByRole('heading', { level: 1, name: title }, { timeout: LAZY })
+    const menu = within(screen.getByRole('navigation', { name: 'Main menu' }))
+    expect(menu.getByRole('link', { name: 'Meetings' })).toHaveAttribute('aria-current', 'page')
+    expect(menu.getByRole('link', { name: 'Companies' })).not.toHaveAttribute('aria-current')
   })
 
   it('marks Admin in the menu on every Admin tab', async () => {

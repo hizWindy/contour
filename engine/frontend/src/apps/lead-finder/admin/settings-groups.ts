@@ -1,9 +1,12 @@
 /**
- * Which group each setting is in, on Admin's Settings (PLAN-V13 T1-9): Money, Claude, Runs, Why now
- * and Call prep. A setting the backend adds later and nobody placed yet goes under Runs, so it is
- * never hidden.
+ * Which group each setting is in, on Admin's Settings (PLAN-V13 T1-9): Money, Claude, Runs, Why now,
+ * Call prep and Call notes. A setting the backend adds later and nobody placed yet goes under Runs,
+ * so it is never hidden.
+ *
+ * Call notes (PLAN-V17 T3-7) holds the switches: call notes on, Claude sorts them, and pre-meeting
+ * forms on (shown again with Meetings, T3-9).
  */
-export type GroupId = 'money' | 'claude' | 'runs' | 'why' | 'prep'
+export type GroupId = 'money' | 'claude' | 'runs' | 'why' | 'prep' | 'notes'
 
 export const GROUPS: { value: GroupId; label: string }[] = [
   { value: 'money', label: 'Money' },
@@ -11,6 +14,7 @@ export const GROUPS: { value: GroupId; label: string }[] = [
   { value: 'runs', label: 'Runs' },
   { value: 'why', label: 'Why now' },
   { value: 'prep', label: 'Call prep' },
+  { value: 'notes', label: 'Call notes' },
 ]
 
 const GROUP_OF: Record<string, GroupId> = {
@@ -48,10 +52,24 @@ const GROUP_OF: Record<string, GroupId> = {
   prep_reuse_days: 'prep',
   model_prep: 'prep',
   search_ahead_cap_usd: 'prep',
+  call_notes_enabled: 'notes',
+  call_notes_ai_enabled: 'notes',
+  meeting_forms_enabled: 'notes',
 }
 
 export function groupOf(key: string): GroupId {
   return GROUP_OF[key] ?? 'runs'
+}
+
+/**
+ * Settings the page doesn't show yet, because they do nothing yet. Each is still placed in a group
+ * above, so it lands there when it shows. None now: `meeting_forms_enabled` was here through
+ * PLAN-V17 Stage A, and shows again with Meetings (T3-9).
+ */
+export const HIDDEN_SETTINGS: ReadonlySet<string> = new Set<string>()
+
+export function isShown(key: string): boolean {
+  return !HIDDEN_SETTINGS.has(key)
 }
 
 /** The first sentence of a description: the one line a row shows until "Show the details". */

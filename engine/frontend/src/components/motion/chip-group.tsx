@@ -3,10 +3,13 @@
  * its ink and a tick that grows in on the `soft` spring (the one place with a very small bounce).
  * A chip shrinks to 0.98 while it is held (`usePress`). Unpicking fades the tick in 150ms.
  *
- * Two modes. `many` (the default) picks any number: each chip is a button with `aria-pressed`,
+ * Three modes. `many` (the default) picks any number: each chip is a button with `aria-pressed`,
  * and Tab moves between them. `one` picks exactly one, like radio buttons: the arrows move the
- * choice, and only the chosen chip is in the Tab order. In both, `value` is the list of picked
- * values (one item at most in `one` mode), so a page keeps one shape of state.
+ * choice, and only the chosen chip is in the Tab order. `one-or-none` picks one or none, like a
+ * call's outcome: picking a chip lets go of the other, and a second press on the picked chip lets
+ * go of it. A radio button can't be unpicked, so these chips are pressed buttons, as in `many`,
+ * and Tab moves between them. In every mode, `value` is the list of picked values (one item at
+ * most in `one` and `one-or-none`), so a page keeps one shape of state.
  *
  * With reduced motion the tick simply appears, and nothing presses.
  */
@@ -32,7 +35,7 @@ export interface ChipGroupProps<T extends string = string> {
   options: readonly ChipOption<T>[]
   value: readonly T[]
   onChange: (value: T[]) => void
-  mode?: 'many' | 'one'
+  mode?: 'many' | 'one' | 'one-or-none'
   'aria-label'?: string
   'aria-labelledby'?: string
   className?: string
@@ -59,6 +62,10 @@ export function ChipGroup<T extends string = string>({
   function toggle(option: ChipOption<T>) {
     if (one) {
       onChange([option.value])
+      return
+    }
+    if (mode === 'one-or-none') {
+      onChange(value.includes(option.value) ? [] : [option.value])
       return
     }
     onChange(

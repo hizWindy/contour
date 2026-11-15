@@ -35,6 +35,24 @@ export interface NavItem {
   purpose?: string
   /** Other addresses that count as this page in the menu: a lead card ("/leads") is in Results. */
   alsoActiveOn?: readonly string[]
+  /**
+   * Addresses inside this one that are another page of the menu, so this page isn't marked there:
+   * Activity ("/companies/activity") is not Companies.
+   */
+  notActiveOn?: readonly string[]
+  /**
+   * A count at the end of the page's row in the menu, like Activity's calls to confirm (PLAN-V17
+   * T3-7). It asks for its own data, gives the link its words for a screen reader ("Activity, 7
+   * calls to confirm"), and draws nothing when there is nothing to count. It may be a `lazy`
+   * component: the menu draws it inside a `Suspense`. Folded to icons, the menu hides it.
+   */
+  count?: ComponentType
+}
+
+/** What a project's own Ctrl+K entries get from the menu (`AppModule.commands`). */
+export interface CommandsProps {
+  /** Closes the menu and opens `to`. A page that takes the focus as it opens keeps it. */
+  go: (to: string) => void
 }
 
 /**
@@ -73,6 +91,12 @@ export interface AppModule {
   prefetchSummary?: (client: QueryClient) => void
   /** Its pages, in menu order. On Home each shows with its `purpose`. */
   pages: readonly NavItem[]
+  /**
+   * Its own actions in Ctrl+K, after its pages, like "Log a call" (PLAN-V17 T3-7). The component
+   * draws `CommandItem`s, or nothing, and asks for its own data. It is drawn only while Ctrl+K is
+   * open, inside a `Suspense`, so it may be a `lazy` component. Optional.
+   */
+  commands?: ComponentType<CommandsProps>
   /** Its addresses, inside the app frame. */
   routes: RouteObject[]
 }
@@ -85,6 +109,14 @@ export interface HomeCard {
   component: ComponentType
   /** The project's main card: two columns wide on a laptop, beside the narrow cards. */
   wide?: boolean
+  /**
+   * A card that may draw nothing, or come after Home has drawn, because it waits for a switch
+   * (Companies' "Upcoming meetings", PLAN-V17 T3-11). It goes after every other card, Runs and
+   * cost too, so its coming moves none of them; it takes no place while it draws nothing; and it
+   * brings its own fade (`Reveal`) for when it comes. Home draws it inside a `Suspense` with no
+   * fallback, so it may be a `lazy` component.
+   */
+  late?: boolean
 }
 
 /**
@@ -202,5 +234,8 @@ export function isWithin(pathname: string, to: string): boolean {
 
 /** True when the menu should mark `item` as the page you are on. */
 export function isHere(pathname: string, item: NavItem): boolean {
+  if ((item.notActiveOn ?? []).some((to) => isWithin(pathname, to))) {
+    return false
+  }
   return [item.to, ...(item.alsoActiveOn ?? [])].some((to) => isWithin(pathname, to))
 }

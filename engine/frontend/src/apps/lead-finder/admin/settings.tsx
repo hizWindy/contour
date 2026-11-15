@@ -1,7 +1,8 @@
 /**
- * Admin, Settings (PLAN-V13 T1-9): the limits, models and switches a person may change, in five
- * groups (Money, Claude, Runs, Why now, Call prep) with one group shown at a time, so a group fits
- * on one laptop screen. Each setting is one row: its name and one line, and the field. "Show the
+ * Admin, Settings (PLAN-V13 T1-9): the limits, models and switches a person may change, in six
+ * groups (Money, Claude, Runs, Why now, Call prep, and Call notes since PLAN-V17 T3-7) with one
+ * group shown at a time, so a group fits on one laptop screen. On a phone the group control scrolls
+ * sideways inside its own box (`Segmented`), so the page never does. Each setting is one row: its name and one line, and the field. "Show the
  * details" adds the full words and the allowed range. The values only the server's own settings
  * (`engine/.env` on the laptop) can change are under "Set on the server" (PLAN-V15 T2-3: no file name
  * on screen).
@@ -40,7 +41,7 @@ import {
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { toastProblem } from '@/lib/problems'
-import { firstSentence, groupOf, GROUPS, type GroupId } from './settings-groups'
+import { firstSentence, groupOf, GROUPS, isShown, type GroupId } from './settings-groups'
 
 const DEFAULT_CHOICE = '__default__'
 
@@ -190,7 +191,8 @@ export default function AdminSettingsTab() {
   if (!settings.data) {
     return <PendingForm label="Loading the settings." fields={8} />
   }
-  const fields = settings.data.fields
+  // A setting that does nothing yet stays off the page, in both lists (`HIDDEN_SETTINGS`).
+  const fields = settings.data.fields.filter((field) => isShown(field.key))
   const editable = fields.filter((field) => field.editable)
   const fixed = fields.filter((field) => !field.editable)
   const changed = Object.fromEntries(

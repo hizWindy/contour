@@ -870,11 +870,11 @@ Newest first.
 
 ## Track 3: the website (session 3)
 
-**Progress:** Stage A 0 of 8. Stage B 0 of 4. Every step is `frontend-agent` work, follows `engine/DESIGN.md` and "The screens, and how they move", uses the `ui-build` skill, and builds against the contract with `mockApi`.
+**Progress:** Stage A 4 of 8. Stage B 2 of 4. Every step is `frontend-agent` work, follows `engine/DESIGN.md` and "The screens, and how they move", uses the `ui-build` skill, and builds against the contract with `mockApi`.
 
 ### Stage A: call notes
 
-- [ ] **T3-1. Own copy and a baseline.** Make the worktree. Run lint, types, the tests and the build once. Note the counts and the first-visit size from `node scripts/bundle-report.js`.
+- [x] **T3-1. Own copy and a baseline.** Make the worktree. Run lint, types, the tests and the build once. Note the counts and the first-visit size from `node scripts/bundle-report.js`. Done 2026-11-15 (`437a2ee`, the website unchanged from `master`): lint 0 warnings, types pass, tests 90 files and 1,246 passed (203 s, one worker). The build: `tsc -b` passes, and the bundle report's build passes. First visit: JavaScript 230 kB gzip (717 kB raw) in 30 files, CSS 23 kB gzip. Motion's late file adds 32 kB gzip (14 kB of its own). Opening Companies adds 72 kB.
 
 - [ ] **T3-2. Is the free mic good enough?** Needs Al-khair at the keyboard. Free.
   - Read the current Transformers.js docs first (the Whisper models, Web Workers, WebGPU and its fallback). Don't build from memory.
@@ -884,13 +884,14 @@ Newest first.
   - The 10 notes' text goes to Track 2 for T2-8. No recording is kept.
   - **Done when:** the Log has the numbers and the decision.
 
-- [ ] **T3-3. Four motion parts** (in the motion kit).
+- [x] **T3-3. Four motion parts** (in the motion kit).
   - `PushView`: one view replaces another inside a box that keeps its size (the Log call view in the panel).
   - `ListExit`: a row leaves and the rows under it glide up, with Motion's `layout` (already loaded: `domMax`).
   - `LevelMeter`: five bars that follow a level from 0 to 1, as `scaleY`.
   - `TickIn`: a tick that draws once.
   - Each follows reduced motion (`useStill`), uses the kit's springs, and has a test in `motion.test.tsx`.
   - **Done when:** the tests pass, the design-lint test passes (nothing loops), and the late motion file's size is in the Log.
+  - Done 2026-11-15 (`73a72d0`). Lint, types, and the motion and design-lint tests pass (2 files, 120 tests). Motion's late file is unchanged: 14 kB gzip of its own, adding 32 kB, as in T3-1. It was measured on this branch just before the new files went in. `features.ts` didn't change and no page uses the parts yet. T3-4's bundle check measures it again. Five design questions wait for Al-khair (Log).
 
 - [ ] **T3-4. The mic** (only if T3-2 said yes; else the typing-only version).
   - A Web Worker (`stt.worker.ts`) holds the model and the library. Nothing of it is in the first visit.
@@ -901,6 +902,7 @@ Newest first.
   - The audio never leaves the browser. A test proves no request carries it.
   - `index.html`'s content policy matches Track 1's line (T1-6), and `csp.test.ts` follows.
   - **Done when:** tests cover each state with a fake worker and a fake mic, the first-visit size is the same as T3-1, and Al-khair has dictated one note in the real page.
+  - 2026-11-15: the typing-only version is built (`8aeac74`), as `NoteMic` in `apps/companies/call-notes/note-mic.tsx`. A Windows laptop shows "Type the note, or press Win+H to dictate.", and a phone shows nothing. The browser model waits for T3-2.
 
 - [ ] **T3-5. Log call in the panel** ("The screens", part 1).
   - The footer button and the L key (through `useListKeyboard`'s `letters`, as P does).
@@ -910,6 +912,7 @@ Newest first.
   - With call notes off, the button isn't there. Waiting for the sort never blocks the rep: the note sorts in the background.
   - **Phone:** the view fills the screen, the text box is first, the keyboard's own dictation does the talking, and "Save and next" sits at the bottom above the safe area.
   - **Done when:** tests cover L, a save, Undo, a failed save that keeps the text, the AI-off form, and the phone layout. Al-khair has seen it.
+  - 2026-11-15: **built, waiting for a look** (`43037f6` to `fefd0f5`, then `2d06369`). The tests cover all six: 94 files and 1,308 pass, up from 1,246. The build passes. The first visit is 229 kB gzip, under T3-1's 230 kB. It hasn't been seen in a browser yet.
 
 - [ ] **T3-6. Activity** ("The screens", part 3).
   - The route `/companies/activity`, its prefetch, and its three tabs with `TabIndicator`.
@@ -919,14 +922,16 @@ Newest first.
   - "Needs a look": each state's words and buttons. Waiting for write access: one quiet line at the top, and the button greyed with the reason.
   - The keys J, K, E, X and Ctrl+Enter.
   - **Done when:** tests cover an edit, leaving one out, a batch with one failure, an uncertain note resolved both ways, the waiting state and the keys. Al-khair has seen it.
+  - 2026-11-15: **built, waiting for a look** (`05fb38d` to `e13cf4d`). The tests cover all six: 96 files and 1,352 pass, up from 1,308. Lint, types and the build pass. The first visit is 230 kB gzip (715 kB raw), the same as T3-1 (230 kB, 717 kB raw) and about 1 kB over T3-5, for Activity's menu entry and its prefetch. No call notes code is in it. Opening Activity adds 41 kB (14 kB of its own). It hasn't been seen in a browser yet.
 
-- [ ] **T3-7. Around the app** ("The screens", part 4).
+- [x] **T3-7. Around the app** ("The screens", part 4).
   - The menu group with the count, Home's quick button, the Ctrl+K entries.
   - "Last talk" in the panel shows the rep's own note that isn't in HubSpot yet, marked "Your note, not in HubSpot yet".
   - Admin: the three switches on Settings, the Companies line on the HubSpot page, and the owner on the People tab.
   - **Done when:** each has tests, and a person without the Companies tick sees none of it.
+  - Done 2026-11-15 (`049e973` to `0a9b240`). Each part has tests, and one proves that a person without the Companies tick sees none of it and asks for nothing. The session's own run: lint and types pass, tests 99 files and 1,380 passed, and the build passes. The first visit is 230 kB gzip (715 kB raw), the same as T3-1. Not seen in a browser yet: T3-8 does that.
 
-- [ ] **T3-8. Stage A check.**
+- [x] **T3-8. Stage A check.**
   - Lint, types, the tests, the build and `node scripts/bundle-report.js`.
   - The `design-review` skill on every new screen, and `speed-check` on Companies with the mic.
   - Each screen at 1440px, 1280px and 390px, light and dark, by keyboard only, and with reduced motion.
@@ -935,17 +940,35 @@ Newest first.
   - DESIGN.md gains the lines Al-khair agreed to (the level meter, the in-panel push).
   - Tag `v17-notes-t3`. Send the others a message.
   - **Done when:** all checks pass and the Log says "Track 3 Stage A ready".
+  - Done 2026-11-15, tag `v17-notes-t3`. The numbers are in the Log ("Track 3 Stage A ready").
+    - Lint and types pass. Tests: 99 files and 1,401 passed. The build passes. The first visit is 230 kB gzip (716 kB raw).
+    - The frontend-agent's `design-review`, and a fresh review-agent's own: every Must fix and Should fix is fixed.
+    - 108 screenshots: 18 screens at 1440, 1280 and 390px, light and dark. Keyboard only and reduced motion pass.
+    - DESIGN.md has Al-khair's six rules.
+    - **One exception, TBC with Al-khair:** at 4x CPU slowdown, two moments still drop frames: the first L (one 210 to 420ms frame while the note view is built; 35ms at full speed), and a batch landing (11 frames over 33ms in 5 seconds). The slide itself runs smoothly. There is no level meter yet: the mic is typing-only until T3-2.
 
 ### Stage B: the pre-meeting form
 
-- [ ] **T3-9. Meetings** ("The screens", part 5). The route, the `Segmented` control, the groups, the statuses with one button each, the team switch, the search box, "New pre-read", and the waiting state.
+- [x] **T3-9. Meetings** ("The screens", part 5). The route, the `Segmented` control, the groups, the statuses with one button each, the team switch, the search box, "New pre-read", and the waiting state.
   - **Done when:** tests cover each status, the search, the empty state ("No meetings this week.") and the waiting state.
+  - Done 2026-11-16 (`de23bea` to `9d3b637`).
+    - Checks: lint shows 0 warnings and types pass; tests 102 files and 1,448 passed; the build passes. The first visit is 230 kB gzip (718 kB raw, +2 kB for the menu entry).
+    - Built on Track 3's own contract guesses. T3-10's first commits move it to Track 2's real routes.
+    - Not seen in a browser yet.
 
-- [ ] **T3-10. The pre-read page** ("The screens", part 6). The facts, the three summaries with the pencil, the two blanks, "Redraft" with its cost, and the skeleton while it drafts.
+- [x] **T3-10. The pre-read page** ("The screens", part 6). The facts, the three summaries with the pencil, the two blanks, "Redraft" with its cost, and the skeleton while it drafts.
   - **Done when:** tests cover a draft, an edit kept through a redraft, the two blanks, and a failed draft with its plain words.
+  - Done 2026-11-16 (`69bdc65` to `f4fe65d`).
+    - The page is at `/companies/meetings/{form_id}`. `v17.ts` Part 3, and T3-9, now follow Track 2's real routes.
+    - Checks: lint shows 0 warnings and types pass; tests 104 files and 1,479 passed; the build passes.
+    - The first visit is 34 files and 718 kB raw. Gzip is 236,144 bytes, which the report rounds to 231 kB (T3-9: 230). That 0.16 kB is the new route's own entry (**TBC**: accept as a route's cost).
+    - Not seen in a browser yet.
 
 - [ ] **T3-11. Send, and around the app.** The Alert Dialog with the email and the people, a refused address in plain words, the sent state, Home's "Upcoming meetings" card, the company's meetings, Ctrl+K, and "Log meeting" on a past meeting.
   - **Done when:** tests cover a send, a refused address, each `hubspot_copy` state and the transcript box. Al-khair has seen them.
+  - 2026-11-16: **built, waiting for a look** (`82102b7` to `abae49c`).
+    - The tests cover all of it: 109 files and 1,538 passed. Lint, types and the build pass.
+    - The first visit is 34 files, 719 kB raw (+767 bytes) and 236,463 bytes gzip (+319 bytes; the report still says 231 kB). The extra is Vite's list of each late page's files, and Home's late card (**TBC**: accept).
 
 - [ ] **T3-12. Track 3 check.** The same checks as T3-8, on the Stage B screens.
   - **Done when:** all checks pass and the Log says "Track 3 ready to merge".
@@ -953,6 +976,238 @@ Newest first.
 ### Track 3 Log
 
 Newest first.
+
+- 2026-11-16: **T3-12, the browser pass on Stage B** (the preview, with Track 2's real meetings routes, the built site, and made-up meetings and pre-reads for what a preview without HubSpot meetings or a Claude key can't show):
+  - **96 screenshots, with no failures and no console errors:** 16 screens at 1440, 1280 and 390px, light and dark.
+  - **Keyboard only:** every stop shows a focus ring (27 on Meetings, 24 on the pre-read page, 10 in the send dialog).
+  - **Reduced motion:** Meetings' rows are in place at once.
+  - **4x CPU slowdown:** Meetings' Upcoming and Past switch drops no frames (the longest is 28ms).
+  - **On the real routes:** the off state (409 "Meetings and pre-reads are switched off...") and the waiting state ("Meetings from HubSpot aren't read yet.") answer as the website reads them.
+- 2026-11-16: **T3-11 built.**
+  - Track 2's follow-ups are in:
+    - Redraft says the plan's "about US$0.03", and the total reads "so far";
+    - the team's list shows `owner_name`;
+    - a repeated New pre-read gives back the first.
+  - **TBC, Al-khair's look:**
+    - Home's Upcoming meetings card comes last, so its late arrival moves no other card;
+    - Log meeting keeps the transcript in the page only, never in browser storage;
+    - a company's record shows Meetings only when the server sends some;
+    - the tick draws only on the rep's own send;
+    - "Copy" for when email isn't set up is not built.
+  - **For Track 2**, from building it:
+    - the copy-failed words say "Press Send again", but a sent pre-read now offers "Try the HubSpot copy again";
+    - the transcript limit isn't in the contract (`transcript_max_chars` on the options would help);
+    - the preview sends `ticked: true` for a refused address;
+    - the website shows a 422 `outside_address`'s `detail` exactly as sent.
+
+- 2026-11-16: **T3-10 built.**
+  - **TBC, Al-khair's look:**
+    - one 768px column, the status beside "Open in HubSpot";
+    - "Written by AI" with the chip icon and "Edited by you" with call prep's pen;
+    - When and Where show both in the header and as the server's first two facts (DESIGN.md "say it once": one should go);
+    - not found shows the serif empty state with Back to Meetings;
+    - Check and send stays pressable on a sent pre-read (T3-11 decides what it does then);
+    - an open summary box's Save is a second Navy button (the line editor's own).
+  - **Four contract points, sent to Track 2:**
+    - `cost_usd` adds up every draft, so "Redraft (about US$0.06)" overstates the next one. Track 3 asks for the last draft's own cost, or else the page says "so far".
+    - `FormMeeting` has no `hubspot_url`, so the page asks `GET /meetings/{meeting_id}` for it.
+    - `POST /meetings/forms` takes no `Idempotency-Key`, so a retried New pre-read could make two.
+    - `MeetingItem` has no owner name, so the team's list can't say whose a meeting is.
+- 2026-11-16: **Track 2's news** (session contour-bd, now reachable by message):
+  - Log meeting is `POST /companies/meetings/{meeting_id}/transcript` (`{ text, file_name? }`).
+  - A logged meeting goes to HubSpot as a note, with a `note` step.
+  - A note naming a field off the list is `skipped` with why.
+  - A pre-read address is at most 254 characters.
+  - `FormEmailPreview.meeting_note` (a sentence, or null) comes at M5. Track 1's security review asked for it, and the send dialog shows it.
+  - Track 2's `openapi.json` is current (`8c97d73`). Track 2 is ready to merge, apart from two paid checks that wait for Al-khair.
+- 2026-11-16: **Track 1** is ready to merge (`plan-v17-track1` at `1a96b10`; Stage A tag `v17-notes-t1` = `20345a5`). T1-9 (`ff2dbf3`): a write may have a `meeting` step, which needs no website change.
+
+- 2026-11-16: **Stage B follows Track 2's real routes.**
+  - Track 2 has built T2-10 to T2-14 (`aaba2ca`), so Track 3 generated their contract from the preview (Track 2 joined with Track 3). T3-10's first commits move `v17.ts` Part 3, and T3-9's code, to those real names. The Log's earlier Stage B guesses (`GET /meetings/options`, a flat `MeetingItem`, `addresses`, `hubspot_copy.words`) are dropped.
+  - **The pre-read's address is `/companies/meetings/{form_id}`.** It is Track 2's choice, and its morning email already links there, so Track 2 has nothing to change.
+  - A meeting's company key is `meeting.company_id`: a HubSpot company's key is its id, and a typed meeting carries its key there. So `MeetingItem` needs no `company_key`.
+  - **Track 1's T1-8** (`355bf2b`, its message):
+    - the meetings state can be `off` with "HubSpot isn't connected, so meetings can't be read from it.", which Meetings shows like `waiting`, apart from the pre-meeting forms switch;
+    - `outcome` is spelled `CANCELED`;
+    - `where` is `unknown` for a phone call;
+    - `Meeting` gains two optional fields, `attendee_owner_ids` and `more_companies`.
+- 2026-11-16: **T3-9 built** (6 commits).
+  - The route, the menu (Companies, Meetings, Activity), Upcoming and Past, one status and one button per row, the team switch, the search, New pre-read, every state, and the Settings switch shown again.
+  - **TBC, Al-khair's look:**
+    - the title "Client meetings";
+    - no Navy button on the list (the rows' buttons are quiet);
+    - "Teams" for any video meeting, as the plan says, though a Zoom link reads "Teams" too;
+    - Past as one list, 25 a page;
+    - in New pre-read, the title is required and Teams or in person is optional.
+
+- 2026-11-15: **Track 3 Stage A ready.** Tag `v17-notes-t3`, on the commit that ticks T3-8. Built against the hand-typed contract; M1's type check joins it to Tracks 1 and 2.
+  - **The final browser pass** ran on the preview: Track 2's real routes, no keys, and the built site served by `vite preview`.
+    - All 108 screenshots were taken with no failures and no console errors.
+    - Keyboard only: every stop shows a focus ring (18 in Log call, 26 on Activity), and J, X and Put back work.
+    - Reduced motion: Log call is in place at once.
+    - Home's layout shift (CLS) is 0.
+  - **Frames at 4x CPU slowdown, after the fixes:**
+    - Back to the script: 118 to 174ms, down from 830 to 1,180ms.
+    - First L: 208 to 424ms, down from 670 to 1,070ms.
+    - Activity's tabs: no dropped frames.
+    - Settings' group switch: one 49ms frame, down from 215ms.
+    - A batch landing: 11 frames over 33ms, the longest 174ms (it was 13 frames, the longest 229ms).
+    - At full speed, L takes 35ms and Back 15ms.
+    - The earlier numbers were taken on the dev server, which is slower than the built site. Part of the gain is that.
+  - **Fixed after the independent review**, in 10 commits (`ac346a1` to `d6522e5`):
+    - a card being edited loses the tint;
+    - a follow-up shows its stored day until the rep types;
+    - a change's value opens as the card shows it;
+    - "Logged today";
+    - "Sending waits for HubSpot.";
+    - each rep's drafts are their own;
+    - the pre-meeting forms switch hides until Stage B.
+  - **Still open in Stage A, waiting for Al-khair:**
+    - T3-2: dictate 10 notes on the test page. It decides T3-4's free in-browser mic. Until then T3-4 is typing-only, and Stage A ships that way.
+    - His look at T3-5, T3-6 and T3-7.
+    - The TBCs in the entries below: the `sm` button and `Segmented` at 44px on touch, a press shrink on buttons, a HubSpot link for an uncertain note, the boxes inside a card, and the rep's own words with the AI on.
+    - The 4x frame exception in T3-8.
+  - **Drafts** (`92cefd5`): a signed-in rep's drafts are kept under their own browser entry. Signing out keeps a note that isn't saved yet in that entry, for that rep's next sign-in (**TBC**: or wipe it). Drafts from before this change, in the shared entry, show only with sign-in off.
+- 2026-11-15: **Track 1 says its Stage A is ready:** tag `v17-notes-t1` = `20345a5` on `plan-v17-track1`. Its full run: 3,742 passed, 25 skipped. The owner routes and the Admin-only write log are as Track 3 reads them (`0842897`, `9646b1b`).
+
+- 2026-11-15: **T3-8: the independent design review** (a fresh review-agent, given the diff, the plan and the screenshots). **Verdict: not ready to tag**, two Must fixes:
+  - In a card being edited, the fields sit on the selected tint (border 2.76:1, under 3:1).
+  - In edit mode, a follow-up's due date re-reads its words against today, so it shows a day that isn't stored.
+  - Also found and being fixed with them: a change's value opens as "2028-03-31" instead of "31 Mar 2028"; Logged rows say "15 Nov 2026" beside "Today"; "Sending is off until then." leans on a line that may be out of view; a draft note isn't tied to the signed-in person (privacy, on a shared browser); and the pre-meeting forms switch shows in Stage A, where it does nothing.
+  - **TBC for Al-khair** (not built): `sm` buttons and `Segmented` are 40px on touch (a change for every screen); no button shrinks when pressed, though DESIGN.md says so; an uncertain note with no HubSpot link has no way into HubSpot (a contract question for Track 2: the company's link on `CallNoteOut`); edit mode's follow-ups are boxes inside a card; with the AI on, a card shows only the sorter's summary, not the rep's words.
+  - The review read the five earlier fixes (`77b3b31` to `3ac84b6`) and found them right in the code.
+- 2026-11-15: **The session's own full check** after those five fixes and two of its own (`0842897`: the write log's line for Admins only; `9646b1b`: the hand-typed paths use `{note_id}` and `{user_id}`). Lint and types pass. Tests: 99 files, 1,389 passed. The build passes. First visit: 230 kB gzip (716 kB raw).
+- 2026-11-15: **The laptop ran out of memory** (0.1 GB free at the worst, with three sessions' test runs, the preview and Docker).
+  - Claude Code stopped the mic test page, the preview and the first final browser pass. Docker Desktop stopped too, which took the shared database down.
+  - On Al-khair's word, the preview was stopped to free memory, and Docker was started again: `contour-engine-db` reported healthy at 22:41.
+  - The preview's database is intact (at `0021`, with its 3 notes). Track 1 was told.
+  - The final browser pass waits for the review's fixes. Al-khair approved running it.
+- 2026-11-15: **Track 1's message (session contour-7e), checked against `feee0f5` on `plan-v17-track1`:**
+  - The owners' routes and shapes are as Track 3 reads them: `GET /hubspot/owners` answers `{ owners: [{ id, name }] }`, and `PUT /people/{user_id}/hubspot-owner` takes `{ owner_id }` and answers the person row. Every owner has a name, never an email.
+  - With no key, the connection check now says "The HubSpot key isn't set on the server." A switched-off write reads "sending is switched off on the server". Both asks from the Log are done.
+  - Before M1, Track 3 renames the key in its hand-typed paths: `{user_id}` for the owner route, and `{note_id}` for the call note routes (Track 2's name).
+  - Track 3's reply: T3-4 stays typing-only until T3-2, so `index.html` needs no mic or WebAssembly change yet.
+- 2026-11-15: **T3-8 in progress: the browser check so far.**
+  - **The setup:** a throwaway preview, the worktree `../contour-v17-t3-preview`. It joins `plan-v17-track2` (Track 2's real call notes routes) into this branch.
+    - It runs on its own database (`leadfinder_v17c_preview`, now at `0021_call_notes`), with no keys: backend 8053, website 5223.
+    - Call notes are on and the AI is off. Three made-up notes were saved through the real routes.
+    - Headless Chrome answers the states the preview can't reach with made-up data: sending ready, a batch, Needs a look, Logged, call notes off, and HubSpot owners.
+    - Screenshots are in `plan/shots/v17-t3/` (git-ignored).
+  - **Works on the real routes before M1:**
+    - Saving a note, and a change and a follow-up added to it.
+    - The counts in the menu, on Home and on the tabs, which agree.
+    - Last talk showing "Your note, not in HubSpot yet" from Track 2's `my_last_note`.
+    - The waiting line ("Waiting for HubSpot to be connected.").
+    - No console errors.
+  - **Passes:**
+    - Reduced motion: Log call is in place at once.
+    - Keyboard only: every stop in Log call (18) and on Activity (26) shows a focus ring. J, X and Put back work.
+    - Home's layout shift (CLS) is 0.027, under 0.1.
+    - Activity's tab switches drop no frames at 4x CPU slowdown.
+  - **Found, being fixed** (one frontend-agent run):
+    1. **A bug:** L takes the script view down, so Back builds it again with the guided questions' "Asked" ticks cleared and the scroll at the top. Back also costs one long frame: about 85ms at full speed, 830 to 1,180ms at 4x. The fix keeps the script built under the note view.
+    2. A rolling number beside words sits about 0.2em too high ("Send ³ to HubSpot"). The cause is the digit columns' `overflow: hidden`.
+    3. A left-out card dimmed with `opacity-60` falls under 4.5:1. It will dim with the quieter text colour: Al-khair's "dim it, with Put back" stays.
+    4. The send bar said the count twice ("7 calls to send." beside "Send 7 to HubSpot").
+    5. A batch landing had 13 frames over 33ms at 4x, the longest 229ms. Being looked at.
+  - **Measured, not a Stage A change:** at 4x CPU, opening call prep takes one 660ms frame and building the script 1,600ms. Log call's first L takes about 670ms (97ms at full speed). Each time the slide itself runs smoothly once the view is built.
+  - **The design review** (`design-review`, by the frontend-agent): 2 Must fix and 1 Should fix, all fixed (`eb005cf`, `47f91db`, `3584fe3`). Two ideas wait for Al-khair (**TBC**):
+    - the `sm` button is 40px on touch everywhere, so make it 44px in one line;
+    - Edit mode's follow-ups are boxes inside a card.
+  - **DESIGN.md** gains his six rules, the drawn tick and the dimmed card (`f84a8bb`, `9677630`).
+  - **For Track 1:** with no key, the HubSpot page's "Connected" row shows "HUBSPOT_SERVICE_KEY is not set in engine/.env". That puts a setting's name and a file's name on screen. It comes from `core/hubspot/` (the connection check), not from Stage A. Suggested: "The HubSpot key isn't set on the server."
+- 2026-11-15: **Al-khair's answers** (in chat, 15 Nov):
+  1. Activity (and Meetings in Stage B) stays in the menu for anyone who sees Companies, while its switch is off. The page says it is off.
+  2. DESIGN.md gains all six proposed rules: the level meter, the in-panel push, a note kept in the browser until the server has it, a card list that keeps each card in place, a card that edits in place, and the batch send. T3-8 writes them.
+  3. X keeps the card in To confirm, dimmed, with "Put back".
+  4. The tick draws its line (`TickIn`, `pathLength`).
+  - The other choices waiting for a look (T3-3's 4 and 5, T3-5's 1 to 4, T3-6's 1, 3 and 4, T3-7's) stand as built unless he changes them.
+- 2026-11-15: **T3-7 built** (`049e973` to `0a9b240`).
+  - What it adds: Activity's count in the menu, Home's "7 calls to confirm" and "2 need a look", and Ctrl+K's "Log a call" and "Calls to confirm". Also Last talk with "Your note, not in HubSpot yet", Settings' Call notes group, an icon on each project's HubSpot line, and each person's HubSpot owner on People.
+  - The parts around the app load late (`call-note-parts.ts`), so the first visit stays at 230 kB gzip (715 kB raw).
+  - The agent's checks: lint, types, and the full suite (99 files, 1,380 passed, up from 1,352). The build passes.
+  - The planned "Call notes" project is gone: Activity replaces it.
+  - Track 3's own choices (**TBC**, his look): Companies' group comes after the Lead Finder's, in the same order as Home and Ctrl+K. The count sits inside Activity's link, so a screen reader hears "Activity, 7 calls to confirm". The owner column shows from 1024px wide. The owner pick list has "None" first.
+- 2026-11-15: **For M1** (read from Track 2's branch, `49ad168`, and from building T3-7):
+  - **Track 2's code answers T3-6's four questions, all yes.**
+    - The lists group the statuses as Track 3 assumed.
+    - Confirm marks each note `sending` before it answers.
+    - "Keep mine" clears `current_changed`.
+    - A change or follow-up sent back with `id: null` is taken as new. A second change to the same field and office answers 422 `change_twice`.
+  - **What M1's type check will find:**
+    - The call note routes' key is `{note_id}`, not `{id}`. The addresses are the same.
+    - Save answers 201 (200 for a repeated `Idempotency-Key`). Confirm and Try again answer 202.
+    - The call, each change and each task carry `in_hubspot`. Track 3 doesn't use it yet: Needs a look offers Try again and resolve, not edits.
+    - Extras Track 3 doesn't read: `skipped`, `batch_id` and `notes` on preview and confirm, and `status` on `my_last_note`.
+  - **For Track 1:**
+    - `core/hubspot/needs.py` words a switched-off write as "sending is switched off (HUBSPOT_WRITE_ENABLED)". The HubSpot page shows that line as it comes, so a setting's name would show on screen. Suggested: "sending is switched off on the server".
+    - An owner with no name in HubSpot needs a stand-in name, never an email.
+    - If T1-4's route uses `{user_id}`, M1 renames it in `hubspot-owners.ts`.
+  - **For Track 2:** Activity's prefetch asks for the counts beside the switches. So with call notes off, its 409 `call_notes_off` is expected, and nothing shows. The menu and Home ask only once the switches say on.
+- 2026-11-15: **Ready for T3-8 and T3-2:**
+  - Track 3's database `leadfinder_v17c` is made, a copy of the dev database at `0017_call_prep`.
+  - For the screen checks: a throwaway worktree `../contour-v17-t3-preview` (detached, never a branch). It joins `plan-v17-track2` into `plan-v17-track3` on its own database, `leadfinder_v17c_preview`, with no keys. Removed after T3-8.
+  - T3-2's test page (Transformers.js 4.3.2, Whisper base and small, English) is in the session's scratchpad, never in git. It waits for Al-khair at the keyboard.
+
+- 2026-11-15: **T3-6 built, waiting for a look.**
+  - Activity reads only the rep's own notes (`mine=true`). A team view for Admins is **TBC** and not built.
+  - With two pages, Companies became a menu group, so for now it sits after the Lead Finder's group, not right under Home. T3-7 settles where it goes.
+  - Built against the hand-typed contract and a fake server. M1's type check confirms it against Track 2's routes.
+- 2026-11-15: **For Track 2: four questions from building Activity** (none blocks Track 3):
+  1. **Lists:** does `state=to_confirm` return `sorting`, `to_confirm` and `sending` notes, and `needs_look` return `partial`, `failed` and `uncertain`? Track 3 assumes so. It also expects a 409 `call_notes_off` on the lists, and a 404 for someone else's note (the website stops asking for it).
+  2. **Confirm:** does it mark every note it takes `sending` before it answers? Track 3 reads a note that still shows `to_confirm` after that as "not sent, still waiting".
+  3. **A change that moved in HubSpot:** "Keep mine" sends a PATCH with the change unchanged. Track 3 expects that to clear `current_changed`, because the rep has now seen HubSpot's value.
+  4. **Undo:** a removed change or follow-up that Undo puts back is sent with `id: null`, as a new one. Will the server take that?
+- 2026-11-15: **Waiting for Al-khair's look (T3-6's choices, TBC):**
+  1. One Edit (or E) per card turns its parts into fields. Each field saves when you leave it, and Esc puts it back. The other way: fields always open.
+  2. X keeps the card in the list, dimmed to 60%, with "Put back", so a slip is easy to undo. The motion table above says a card leaves on X.
+  3. The counts show on the To confirm and Needs a look tabs. The active card gets the Navy edge and tint of a selected row. The send bar sticks to the top on a laptop and sits at the bottom on a phone.
+  4. A change that moved in HubSpot says so, with a "Keep mine" button. The page's title is "Your call notes", with the ClipboardCheck icon.
+  5. Proposed for DESIGN.md: "A card list the rep works through keeps each card in place; new cards join at the end." "A card edits in place: Edit or E opens its fields, each saves when left, Esc puts it back." "A batch send: an Alert Dialog with totals from a fresh preview, then a bar fills, and each card holds its tick about a second before it leaves."
+
+- 2026-11-15: **T3-5 built, waiting for a look.**
+  - The first visit had grown to 232 kB: the hooks index carried the call-notes hooks, and the motion kit's index carried `PushView`. Now the Companies pages import call-notes hooks from their own file. `main.tsx` and the two Home cards import kit parts by file. That brings it to 229 kB (`2d06369`).
+  - **Known for T3-7:** `src/modules.ts` still has the planned "Call notes" project under "To be developed" (`/call-notes`). Activity replaces it.
+- 2026-11-15: **For Track 2: five questions from building Log call** (none blocks Track 3):
+  1. POST `/call-notes` should take `text: ""` when an outcome is set: a "No answer" call needs no words.
+  2. The same `Idempotency-Key` with a different body (the rep edited after a failed save): the website keeps one key for each draft until the server has the note. Track 3 expects the first note back if the first try did land.
+  3. Should `to_confirm` count notes still `sorting`? The toast shows the count plus one at once, so yes.
+  4. A Lead Finder-only company (a `lead:` key): Log call shows on every row. If the server refuses it, the toast shows the server's own sentence.
+  5. Dates in words: "next tue" is the Tuesday of next week (weeks run Monday to Sunday), and "tue" alone is the next Tuesday after today. T2-4's date code should read words the same way. The website's version is `src/lib/due-date.ts`.
+- 2026-11-15: **Waiting for Al-khair's look (T3-5's choices, TBC):**
+  1. The push moves the whole panel. The note view has its own top line (a back arrow, "Log call", then who) instead of the script's header.
+  2. On a phone the prep footer gets a 48px row: Call, then Log call at full width, then Copy number and Copy script.
+  3. "Who was the call with?" starts on "No one in particular", so L, talk, Ctrl+Enter needs no pick. With the AI off, the follow-up folds behind "Add a follow-up".
+  4. A small L inside Log call, and "Ctrl Enter" beside Save and next, on a laptop. An empty note says "Type a note or pick an outcome first." instead of greying the button. After Undo: "Undone. Your note is back as a draft." The timer sits in the footer, and turns Ochre with an hourglass.
+  5. Proposed for DESIGN.md: "A note being written is kept in the browser until the server has it", the date rules under "Fields forgive", and `ChipGroup`'s one-or-none mode.
+
+- 2026-11-15: **T3-3 done** (`73a72d0`). The parts, for the next steps:
+  - `PushView` takes `viewKey` and `direction` (`forward` or `back`). The caller moves the focus at once: into the note's text box going forward, back to Log call going back.
+  - `ListExit` holds `ListExitItem` rows. With more than 50 rows, or reduced motion, nothing moves.
+  - `LevelMeter` takes `level` (0 to 1) and `label` (default "Listening"). The bars use the text colour.
+  - `TickIn` is always `aria-hidden`: the word beside it ("Logged") says it.
+  - Nothing has been seen in a browser yet. T3-8 checks it at each width, in both themes and at 4x slowdown.
+- 2026-11-15: **Waiting for Al-khair's look (T3-3's design questions):**
+  1. Add the level meter line to DESIGN.md's "Motion"? Five bars follow the mic's level as `scaleY`. Silence is still, so it isn't a loop. Reduced motion: a still dot and the word.
+  2. Add the in-panel push line? Log call comes into the panel like a phone app's next screen. The panel keeps its size.
+  3. The tick draws its line (Motion's `pathLength`), which bends "only `transform` and `opacity` move" for one 16px part. The other way: it scales and fades in like ChipGroup's tick.
+  4. A card leaving the batch moves 8px to the right, toward the Logged tab. The plan doesn't say which way.
+  5. The meter is in the text colour. The accent ("live") is allowed too.
+
+- 2026-11-15: **T3-1 done.** The numbers are in the step. The bundle report ran on the main folder's website code (`master`, the same as `437a2ee`), so nothing half-built from T3-3 could get into the baseline.
+
+- 2026-11-15: **For Track 2: the names Track 3 chose** where the contract left them open. They are in `engine/frontend/src/api/v17.ts` (commit `8c4d767`). A different name is fine: M1's type check finds it.
+  - `GET /call-notes/options`: `enabled`, `ai_enabled`, `sending_ready`, `waiting_for` (the sentence, or none), `outcomes` (the names, in order), `fields` (each `id`, `label`, `kind`: `date` or `number`), `soft_seconds`, `max_chars`.
+  - `GET /call-notes`: `{ total, items }`, with `limit` and `offset`, like `CompanyPage`.
+  - `CallNoteOut.steps`: each `{ step, status, words }`, and `status` is `pending`, `done`, `failed`, `uncertain` or `skipped`. `tasks[].owner` is a name, or none for the rep. `made_by` is a name.
+  - `PATCH /call-notes/{id}`: `summary`, `outcome`, `contact_id`, `changes` (each `id` or none, `field`, `office`, `value`), `tasks` (each `id` or none, `subject`, `due`, `due_words`, `kind`), `left_out`. The two lists replace the old ones.
+  - `POST /call-notes/preview` answers `{ items, sending_ready, waiting_for, totals: { calls, tasks, changes } }`. `POST /call-notes/confirm` answers `{ sending, already_sending }`. `POST /call-notes/{id}/resolve` takes `{ step, landed }`.
+  - `PrepFacts.my_last_note`: `{ id, summary, called_at, outcome }`, or none.
+- 2026-11-15: **For Track 1: the names Track 3 chose** (contract part 4): `PUT /people/{id}/hubspot-owner` takes `{ owner_id }` (null clears it). `GET /hubspot/owners` answers `{ owners: [{ id, name }] }`. A people row's `hubspot_owner` is `{ id, name, matched_by }`.
+- 2026-11-15: **Messages can't reach the other tracks.** Tracks 1 and 2 run in another Claude account, and `ListAgents` here shows no other session. So this Log is how Track 3 sends news. Track 3 reads the other tracks' Logs with `git show plan-v17-track1:plan/PLAN-V17.md`.
+- 2026-11-15: **For T1-6 and T3-4: the headers.** App Platform serves the website as a static site, so its content policy is the `<meta>` in `index.html`. A `<meta>` can't set `Permissions-Policy`, but a browser lets a page's own origin use the mic by default, so App Platform needs nothing for the mic. The Caddyfile (server mode) says `microphone=()` today, which T1-6 changes. Running WebAssembly needs `'wasm-unsafe-eval'` in `script-src`, in both places. More than one thread on the processor path would need two more headers on every page (cross-origin isolation). App Platform's static site can't send them, so that path runs on one thread there (**TBC**: how slow that is). The graphics card path doesn't need them.
+- 2026-11-15: **For T3-4: App Platform and large files.** DigitalOcean's limits page (read 15 Nov) gives no size limit for one file on a static site. Static sites go through its Spaces CDN, and a build has 24 GiB of disk and 1 hour. So 80 to 250 MB of model files isn't ruled out, but it isn't confirmed until a deploy tries it (**TBC**).
+- 2026-11-15: **T3-1 started, not done.** Worktree `../contour-v17-t3`, branch `plan-v17-track3` (from `437a2ee`), `npm ci` done. Lint and types pass. The tests, the build and the bundle report wait for memory: the laptop had 0.3 GB free of 15.6 GB, with Track 1's baseline running. Track 3 made S0 first (see S0), because no other V17 session was running then.
 
 ## Merge and deploy
 

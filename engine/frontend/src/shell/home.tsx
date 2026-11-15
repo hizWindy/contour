@@ -7,7 +7,9 @@
  * - **The cards** come from src/modules.ts. A project with its own Home cards (`homeCards`) shows
  *   them; its main card is two columns wide on a laptop, with the narrow cards stacked beside it. A
  *   project without its own cards gets the plain card: its name, what it does, where it stands and
- *   its pages as rows. "Runs and cost" is shared, like the Admin tab it opens, and comes last.
+ *   its pages as rows. "Runs and cost" is shared, like the Admin tab it opens, and comes after
+ *   them. A card that waits for a switch, like Companies' "Upcoming meetings", comes last, so its
+ *   coming moves no other card (`HomeCard.late`).
  * - **To be developed:** a card for each project with a place in the queue ("Next", "Third"), and
  *   one "Later" card listing the rest.
  *
@@ -16,7 +18,7 @@
  */
 import { ChevronRight } from 'lucide-react'
 import { m } from 'motion/react'
-import { useId, type ReactNode } from 'react'
+import { Suspense, useId, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { useMe } from '@/api/hooks'
 import { EmptyState } from '@/components/empty-state'
@@ -160,44 +162,59 @@ function Greeting({ modules }: { modules: readonly AppModule[] }) {
 interface Placed {
   key: string
   wide: boolean
+  late: boolean
   node: ReactNode
 }
 
-/** Every card in order: each project's own cards (or its plain card), then Runs and cost. */
+/**
+ * Every card in order: each project's own cards (or its plain card), then Runs and cost, then the
+ * cards that come late (`HomeCard.late`), so their coming moves none of the others.
+ */
 function placeCards(modules: readonly AppModule[]): Placed[] {
   const placed: Placed[] = modules.flatMap((app) =>
     app.homeCards && app.homeCards.length > 0
-      ? app.homeCards.map(({ id, component: Component, wide }: HomeCard) => ({
+      ? app.homeCards.map(({ id, component: Component, wide, late }: HomeCard) => ({
           key: id,
           wide: wide === true,
+          late: late === true,
           node: <Component />,
         }))
-      : [{ key: app.id, wide: false, node: <PlainCard app={app} /> }],
+      : [{ key: app.id, wide: false, late: false, node: <PlainCard app={app} /> }],
   )
+  const steady = placed.filter((card) => !card.late)
+  const late = placed.filter((card) => card.late)
   return modules.length > 0
-    ? [...placed, { key: 'runs-cost', wide: false, node: <RunsCostCard /> }]
-    : placed
+    ? [...steady, { key: 'runs-cost', wide: false, late: false, node: <RunsCostCard /> }, ...late]
+    : [...steady, ...late]
 }
 
 function Cards({ modules }: { modules: readonly AppModule[] }) {
   const placed = placeCards(modules)
-  // A wide card is two rows tall only when two narrow cards can stand beside it.
-  const tall = placed.filter((card) => !card.wide).length >= 2
+  // A wide card is two rows tall only when two narrow cards, always there, can stand beside it.
+  const tall = placed.filter((card) => !card.wide && !card.late).length >= 2
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-flow-dense lg:grid-cols-3">
-      {placed.map((card, index) => (
-        <Reveal
-          key={card.key}
-          index={index}
-          className={cn(
-            'min-w-0',
-            card.wide && 'lg:col-span-2',
-            card.wide && tall && 'lg:row-span-2',
-          )}
-        >
-          {card.node}
-        </Reveal>
-      ))}
+      {placed.map((card, index) =>
+        card.late ? (
+          // It brings its own fade when it comes, and takes no place while it draws nothing. Its
+          // code may load late: nothing shows till then, and the rest of Home never waits for it.
+          <div key={card.key} className="min-w-0 empty:hidden">
+            <Suspense fallback={null}>{card.node}</Suspense>
+          </div>
+        ) : (
+          <Reveal
+            key={card.key}
+            index={index}
+            className={cn(
+              'min-w-0',
+              card.wide && 'lg:col-span-2',
+              card.wide && tall && 'lg:row-span-2',
+            )}
+          >
+            {card.node}
+          </Reveal>
+        ),
+      )}
     </div>
   )
 }
