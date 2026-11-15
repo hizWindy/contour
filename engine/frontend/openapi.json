@@ -971,7 +971,7 @@
             "type": "string"
           },
           "step": {
-            "description": "call, fields or task:1 ..., as the newest send to HubSpot names it. The name to send back when saying whether HubSpot has an unsure step",
+            "description": "call (note for a logged meeting's notes), fields or task:1 ..., as the newest send to HubSpot names it. The name to send back when saying whether HubSpot has an unsure step",
             "title": "Step",
             "type": "string"
           },
@@ -1152,7 +1152,7 @@
       "CallNoteTotals": {
         "properties": {
           "calls": {
-            "description": "The calls not yet in HubSpot",
+            "description": "The calls not yet in HubSpot. A logged meeting's notes count as one",
             "title": "Calls",
             "type": "integer"
           },
@@ -1683,6 +1683,14 @@
               }
             ],
             "title": "Linkedin Staff"
+          },
+          "meetings": {
+            "description": "Its next three meetings, soonest first, then its last three, newest first (PLAN-V17). A past one has no group. Empty while meetings are off or not read yet",
+            "items": {
+              "$ref": "#/components/schemas/MeetingItem"
+            },
+            "title": "Meetings",
+            "type": "array"
           },
           "name": {
             "title": "Name",
@@ -3849,6 +3857,342 @@
         "title": "FollowUp",
         "type": "object"
       },
+      "FormEmailPreview": {
+        "description": "The email as it would arrive, and the people it would go to.",
+        "properties": {
+          "html": {
+            "description": "The HTML version, with every value escaped",
+            "title": "Html",
+            "type": "string"
+          },
+          "people": {
+            "items": {
+              "$ref": "#/components/schemas/FormPerson"
+            },
+            "title": "People",
+            "type": "array"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          },
+          "text": {
+            "description": "The plain text version",
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "subject",
+          "text",
+          "html",
+          "people"
+        ],
+        "title": "FormEmailPreview",
+        "type": "object"
+      },
+      "FormFact": {
+        "description": "A fact on the pre-read, with no AI.",
+        "properties": {
+          "label": {
+            "description": "Like When, Where, Who we meet, Staff, Lease end",
+            "title": "Label",
+            "type": "string"
+          },
+          "source": {
+            "description": "Where it comes from, like HubSpot meeting",
+            "title": "Source",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "value",
+          "source"
+        ],
+        "title": "FormFact",
+        "type": "object"
+      },
+      "FormMeeting": {
+        "description": "The meeting a pre-read is for, as it was when the form was made: from HubSpot, or typed\nin for \"New pre-read\".",
+        "properties": {
+          "company_key": {
+            "title": "Company Key",
+            "type": "string"
+          },
+          "company_name": {
+            "title": "Company Name",
+            "type": "string"
+          },
+          "ends_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ends At"
+          },
+          "meeting_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "HubSpot's meeting, or none for a typed one",
+            "title": "Meeting Id"
+          },
+          "starts_at": {
+            "format": "date-time",
+            "title": "Starts At",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "where": {
+            "description": "online (Teams), in_person, or unknown",
+            "enum": [
+              "online",
+              "in_person",
+              "unknown"
+            ],
+            "title": "Where",
+            "type": "string"
+          }
+        },
+        "required": [
+          "meeting_id",
+          "company_key",
+          "company_name",
+          "title",
+          "starts_at",
+          "ends_at",
+          "where"
+        ],
+        "title": "FormMeeting",
+        "type": "object"
+      },
+      "FormPerson": {
+        "description": "Someone the pre-read would go to.",
+        "properties": {
+          "allowed": {
+            "description": "False for an address that isn't Contour's: it can't",
+            "title": "Allowed",
+            "type": "boolean"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Their name, when they have an account here",
+            "title": "Name"
+          },
+          "ticked": {
+            "description": "Ticked to get it",
+            "title": "Ticked",
+            "type": "boolean"
+          },
+          "why": {
+            "description": "Like 'on the meeting', or 'added by you'",
+            "title": "Why",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "email",
+          "why",
+          "ticked",
+          "allowed"
+        ],
+        "title": "FormPerson",
+        "type": "object"
+      },
+      "FormPreviewIn": {
+        "description": "The addresses the rep added, to see the email with them. Empty: only the people on the\nmeeting.",
+        "properties": {
+          "to": {
+            "description": "Addresses the rep added, each checked against Contour's own domains",
+            "items": {
+              "pattern": "^[^\\x00]*$",
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "To",
+            "type": "array"
+          }
+        },
+        "title": "FormPreviewIn",
+        "type": "object"
+      },
+      "FormRecipient": {
+        "properties": {
+          "email": {
+            "description": "A Contour address",
+            "title": "Email",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Their name, when they have an account here",
+            "title": "Name"
+          }
+        },
+        "required": [
+          "name",
+          "email"
+        ],
+        "title": "FormRecipient",
+        "type": "object"
+      },
+      "FormSendIn": {
+        "properties": {
+          "to": {
+            "description": "Who gets it: Contour addresses only. One that isn't refuses the whole send",
+            "items": {
+              "pattern": "^[^\\x00]*$",
+              "type": "string"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "To",
+            "type": "array"
+          }
+        },
+        "required": [
+          "to"
+        ],
+        "title": "FormSendIn",
+        "type": "object"
+      },
+      "FormSummaries": {
+        "properties": {
+          "talks_so_far": {
+            "$ref": "#/components/schemas/FormSummary"
+          },
+          "what_they_do": {
+            "$ref": "#/components/schemas/FormSummary"
+          },
+          "what_we_know": {
+            "$ref": "#/components/schemas/FormSummary",
+            "description": "What we know about the project"
+          }
+        },
+        "required": [
+          "what_they_do",
+          "what_we_know",
+          "talks_so_far"
+        ],
+        "title": "FormSummaries",
+        "type": "object"
+      },
+      "FormSummariesPatch": {
+        "description": "The new text of each summary the rep changed. Null or empty clears it.",
+        "properties": {
+          "talks_so_far": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Talks So Far"
+          },
+          "what_they_do": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "What They Do"
+          },
+          "what_we_know": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "What We Know"
+          }
+        },
+        "title": "FormSummariesPatch",
+        "type": "object"
+      },
+      "FormSummary": {
+        "properties": {
+          "by": {
+            "description": "ai: written by AI. person: the rep wrote or changed it",
+            "enum": [
+              "ai",
+              "person"
+            ],
+            "title": "By",
+            "type": "string"
+          },
+          "sources": {
+            "description": "The facts it rests on",
+            "items": {
+              "$ref": "#/components/schemas/PrepSource"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "text": {
+            "description": "Empty until it is written",
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "by",
+          "sources"
+        ],
+        "title": "FormSummary",
+        "type": "object"
+      },
       "GuidedQuestion": {
         "description": "A question to ask on the call, with what to ask next for each likely answer.",
         "properties": {
@@ -3961,6 +4305,40 @@
           "apps"
         ],
         "title": "HealthOut",
+        "type": "object"
+      },
+      "HubSpotCopy": {
+        "description": "The pre-read's copy in HubSpot, once it is sent: a note on the company (choice 9).",
+        "properties": {
+          "sentence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "One plain sentence, unless it is saved",
+            "title": "Sentence"
+          },
+          "state": {
+            "description": "saved; waiting (writing to HubSpot isn't ready); off; or failed",
+            "enum": [
+              "saved",
+              "waiting",
+              "off",
+              "failed"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "sentence"
+        ],
+        "title": "HubSpotCopy",
         "type": "object"
       },
       "HubSpotField": {
@@ -6156,6 +6534,605 @@
           "session"
         ],
         "title": "MeOut",
+        "type": "object"
+      },
+      "Meeting": {
+        "properties": {
+          "company_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The first company it is linked to",
+            "title": "Company Id"
+          },
+          "contact_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Contact Ids",
+            "type": "array"
+          },
+          "ends_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ends At"
+          },
+          "hubspot_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hubspot Url"
+          },
+          "id": {
+            "description": "The meeting in HubSpot",
+            "title": "Id",
+            "type": "string"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Plain text",
+            "title": "Notes"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Like scheduled, completed or canceled",
+            "title": "Outcome"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "starts_at": {
+            "format": "date-time",
+            "title": "Starts At",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "where": {
+            "default": "unknown",
+            "description": "online: Teams, Meet or Zoom. in_person: an address.",
+            "enum": [
+              "online",
+              "in_person",
+              "unknown"
+            ],
+            "title": "Where",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "starts_at"
+        ],
+        "title": "Meeting",
+        "type": "object"
+      },
+      "MeetingDetail": {
+        "properties": {
+          "company_name": {
+            "description": "The company it is linked to, from our copy",
+            "title": "Company Name",
+            "type": "string"
+          },
+          "form": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MeetingFormOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Its pre-read, or none yet"
+          },
+          "meeting": {
+            "$ref": "#/components/schemas/Meeting"
+          }
+        },
+        "required": [
+          "meeting",
+          "company_name",
+          "form"
+        ],
+        "title": "MeetingDetail",
+        "type": "object"
+      },
+      "MeetingFormOut": {
+        "description": "A pre-read: the meeting, the facts, the three summaries, the rep's two blanks, and who it\nwent to.",
+        "properties": {
+          "cost_usd": {
+            "title": "Cost Usd",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the draft failed, in plain words",
+            "title": "Error"
+          },
+          "facts": {
+            "items": {
+              "$ref": "#/components/schemas/FormFact"
+            },
+            "title": "Facts",
+            "type": "array"
+          },
+          "going": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who is going: the rep's, never the AI's",
+            "title": "Going"
+          },
+          "hubspot_copy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HubSpotCopy"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "None until it is sent"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "meeting": {
+            "$ref": "#/components/schemas/FormMeeting"
+          },
+          "next_step": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The ideal next step: the rep's, never the AI's",
+            "title": "Next Step"
+          },
+          "sent_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent At"
+          },
+          "sent_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who sent it",
+            "title": "Sent By"
+          },
+          "sent_to": {
+            "items": {
+              "$ref": "#/components/schemas/FormRecipient"
+            },
+            "title": "Sent To",
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "drafting",
+              "draft",
+              "sent",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "summaries": {
+            "$ref": "#/components/schemas/FormSummaries"
+          }
+        },
+        "required": [
+          "id",
+          "meeting",
+          "status",
+          "facts",
+          "summaries",
+          "next_step",
+          "going",
+          "sent_to",
+          "sent_at",
+          "sent_by",
+          "hubspot_copy",
+          "cost_usd",
+          "error"
+        ],
+        "title": "MeetingFormOut",
+        "type": "object"
+      },
+      "MeetingFormPatch": {
+        "description": "The rep's edits. Only the parts sent change. A summary sent here is the rep's own from\nthen on (`by: person`): a redraft leaves it alone, and it keeps its sources.",
+        "properties": {
+          "going": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Going"
+          },
+          "next_step": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Step"
+          },
+          "summaries": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FormSummariesPatch"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "MeetingFormPatch",
+        "type": "object"
+      },
+      "MeetingFormStart": {
+        "description": "Starts a pre-read: for a HubSpot meeting (`meeting_id`), or for one typed in\n(`company_key`, `title`, `starts_at`, and `ends_at` and `where` when known).",
+        "properties": {
+          "company_key": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A typed meeting's company: a HubSpot id, or lead:<id>",
+            "title": "Company Key"
+          },
+          "ends_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ends At"
+          },
+          "meeting_id": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "pattern": "^[0-9]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "HubSpot's meeting",
+            "title": "Meeting Id"
+          },
+          "starts_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "With its time zone",
+            "title": "Starts At"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "where": {
+            "default": "unknown",
+            "enum": [
+              "online",
+              "in_person",
+              "unknown"
+            ],
+            "title": "Where",
+            "type": "string"
+          }
+        },
+        "title": "MeetingFormStart",
+        "type": "object"
+      },
+      "MeetingFormState": {
+        "description": "A meeting's pre-read, in short, for a list.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "status": {
+            "description": "drafting (being written), draft (ready to check), sent, or failed",
+            "enum": [
+              "drafting",
+              "draft",
+              "sent",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status"
+        ],
+        "title": "MeetingFormState",
+        "type": "object"
+      },
+      "MeetingItem": {
+        "description": "One client meeting in a list: the meeting as HubSpot has it, and where its pre-read is.",
+        "properties": {
+          "company_name": {
+            "description": "The company it is linked to, from our copy",
+            "title": "Company Name",
+            "type": "string"
+          },
+          "form": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MeetingFormState"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Its pre-read, or none yet"
+          },
+          "group": {
+            "anyOf": [
+              {
+                "enum": [
+                  "today",
+                  "tomorrow",
+                  "this_week",
+                  "later"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "An upcoming meeting's day, by the Melbourne date: today, tomorrow, this_week (to Sunday) or later. None for a past one",
+            "title": "Group"
+          },
+          "meeting": {
+            "$ref": "#/components/schemas/Meeting"
+          },
+          "notes_logged": {
+            "description": "A call note is linked to it (Log meeting)",
+            "title": "Notes Logged",
+            "type": "boolean"
+          },
+          "typed": {
+            "default": false,
+            "description": "True for a meeting typed in for New pre-read: it isn't in HubSpot, its `meeting.id` is empty, and `form` is its pre-read",
+            "title": "Typed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "meeting",
+          "company_name",
+          "group",
+          "form",
+          "notes_logged",
+          "typed"
+        ],
+        "title": "MeetingItem",
+        "type": "object"
+      },
+      "MeetingPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MeetingItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "meetings_state": {
+            "description": "ready, waiting (HubSpot's meetings aren't read yet) or off",
+            "enum": [
+              "ready",
+              "waiting",
+              "off"
+            ],
+            "title": "Meetings State",
+            "type": "string"
+          },
+          "sentence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "One plain sentence when the list can't show what was asked: meetings aren't ready, or your own can't be picked out yet",
+            "title": "Sentence"
+          },
+          "total": {
+            "description": "How many match, on every page",
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "meetings_state",
+          "sentence"
+        ],
+        "title": "MeetingPage",
+        "type": "object"
+      },
+      "MeetingSummary": {
+        "properties": {
+          "draft_ready": {
+            "description": "My upcoming meetings whose pre-read waits for me",
+            "title": "Draft Ready",
+            "type": "integer"
+          },
+          "need_pre_read": {
+            "description": "My upcoming meetings (the next 7 days) with no pre-read, or one that failed",
+            "title": "Need Pre Read",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "need_pre_read",
+          "draft_ready"
+        ],
+        "title": "MeetingSummary",
+        "type": "object"
+      },
+      "MeetingTranscriptIn": {
+        "description": "A past meeting's transcript: pasted, or the text of a .txt or .vtt file the website read.",
+        "properties": {
+          "file_name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The file it came from, if any: a .txt or .vtt file",
+            "title": "File Name"
+          },
+          "text": {
+            "description": "The transcript. A .vtt file's text is cleaned of its times here",
+            "maxLength": 200000,
+            "pattern": "^[^\\x00]*$",
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "MeetingTranscriptIn",
         "type": "object"
       },
       "MemoryHitOut": {
@@ -17183,7 +18160,7 @@
     },
     "/companies/call-notes/{note_id}/retry": {
       "post": {
-        "description": "Sends what didn't land, for my note that failed or was partly saved: a field held because HubSpot's value changed goes with the value now shown. It answers at once with the note being sent. 409 `note_uncertain` until I say whether HubSpot has an unsure step, `nothing_to_retry` for a note that didn't fail, `already_sending` while a batch is being sent, and `hubspot_writes_off` while sending waits for HubSpot write access. 403 `not_your_note`, 404 `note_not_found`, 409 `call_notes_off`.",
+        "description": "Sends what didn't land, for my note that failed or was partly saved: a field held because HubSpot's value changed goes with the value now shown. It answers at once with the note being sent. 409 `note_uncertain` until I say whether HubSpot has an unsure step, `nothing_to_retry` for a note that didn't fail, `already_sending` while a batch is being sent, and `hubspot_writes_off` while sending waits for HubSpot write access. 422 `change_off_the_list` for a change that isn't one a call may change. 403 `not_your_note`, 404 `note_not_found`, 409 `call_notes_off`.",
         "operationId": "retry_call_note",
         "parameters": [
           {
@@ -17464,6 +18441,1635 @@
           }
         ],
         "summary": "What the filters offer",
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/meetings": {
+      "get": {
+        "description": "A page of client meetings from HubSpot (one with no company is left out; a cancelled one stays, with its outcome). `when`: `upcoming` (the next 7 days, soonest first, each with its `group` by the Melbourne date: today, tomorrow, this_week or later) or `past` (the last 30 days, newest first). `mine` (true by default): my own, as my HubSpot owner; false: the team's, mine first. My own pre-reads for meetings typed in (New pre-read) join the list in the same window, marked `typed`, even while HubSpot's meetings aren't read. `q`: each word must start a word of the company's name, the title or the date in words, like 'sample 26 nov', 'thu' or '26/11'. Each meeting comes with its pre-read's state (`form`) and, once past, whether notes were logged. While HubSpot's meetings aren't read, `meetings_state` and `sentence` say why. 409 `meeting_forms_off`.",
+        "operationId": "list_meetings",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "when",
+            "required": false,
+            "schema": {
+              "default": "upcoming",
+              "enum": [
+                "upcoming",
+                "past"
+              ],
+              "title": "When",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "mine",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Mine",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "pattern": "^[^\\x00]*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 1000000,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeetingPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "My meetings",
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/meetings/forms": {
+      "post": {
+        "description": "For a HubSpot meeting (`meeting_id`), or for one typed in (`company_key`, `title`, `starts_at`, and `ends_at` and `where` when known). It answers at once with the form `drafting`: the facts come first, with no AI, then the three summaries from one Claude request (this costs money: about US$0.03, at most the pre-read cap). A HubSpot meeting has one pre-read: a second start gives back the first (200). 404 `meeting_not_found` or `company_not_found`. 422 for a body that is neither kind. 409 `meeting_forms_off`.",
+        "operationId": "start_form",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MeetingFormStart"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeetingFormOut"
+                }
+              }
+            },
+            "description": "This meeting's pre-read, as it is"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeetingFormOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Start a pre-read",
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/meetings/forms/{form_id}": {
+      "get": {
+        "description": "The pre-read: the meeting, the facts, the three summaries, the rep's two blanks, and who it went to. One a restart left drafting comes back failed, so it can be drafted again. 404 `form_not_found`. 409 `meeting_forms_off`.",
+        "operationId": "get_form",
+        "parameters": [
+          {
+            "description": "The pre-read's id",
+            "in": "path",
+            "name": "form_id",
+            "required": true,
+            "schema": {
+              "description": "The pre-read's id",
+              "format": "uuid",
+              "title": "Form Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeetingFormOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "One pre-read",
+        "tags": [
+          "Companies"
+        ]
+      },
+      "patch": {
+        "description": "The rep's edits: a summary's new text (`summaries`), the ideal next step (`next_step`) and who is going (`going`). Only the parts sent change. A summary changed here is the rep's own from then on (`by: person`): a redraft leaves it, and it keeps its sources. A sent pre-read that changes is a draft again, so sending it again emails the new words. 404 `form_not_found`. 409 `meeting_forms_off`.",
+        "operationId": "edit_form",
+        "parameters": [
+          {
+            "description": "The pre-read's id",
+            "in": "path",
+            "name": "form_id",
+            "required": true,
+            "schema": {
+              "description": "The pre-read's id",
+              "format": "uuid",
+              "title": "Form Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MeetingFormPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeetingFormOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Change a pre-read",
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/meetings/forms/{form_id}/preview": {
+      "post": {
+        "description": "The email as it would arrive (a subject, plain text, and HTML with every value escaped), and the people it would go to, each with why: the Contour people on the meeting who have an account here, ticked, then the addresses I add (`to`). Each says whether it may get it: only Contour addresses can. Nothing is sent. 404 `form_not_found`. 409 `meeting_forms_off`.",
+        "operationId": "preview_form",
+        "parameters": [
+          {
+            "description": "The pre-read's id",
+            "in": "path",
+            "name": "form_id",
+            "required": true,
+            "schema": {
+              "description": "The pre-read's id",
+              "format": "uuid",
+              "title": "Form Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FormPreviewIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormEmailPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "See the pre-read's email",
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/meetings/forms/{form_id}/redraft": {
+      "post": {
+        "description": "Writes the three summaries again with one more Claude request. This costs money: about US$0.03, at most the pre-read cap. The facts are read again. A summary the rep changed, the ideal next step and who is going stay as they are. It answers at once with the form `drafting`. 409 `form_drafting` while it is being written. 404 `form_not_found`. 409 `meeting_forms_off`.",
+        "operationId": "redraft_form",
+        "parameters": [
+          {
+            "description": "The pre-read's id",
+            "in": "path",
+            "name": "form_id",
+            "required": true,
+            "schema": {
+              "description": "The pre-read's id",
+              "format": "uuid",
+              "title": "Form Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeetingFormOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Write the summaries again",
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/meetings/forms/{form_id}/send": {
+      "post": {
+        "description": "Emails the pre-read to these addresses (in the body, never an attachment), then saves its copy in HubSpot: a note on the company, and on its deal when it has exactly one open deal. Every address must be Contour's: one that isn't refuses the whole send (422 `outside_address`, naming it). The ideal next step and who is going must be filled in (422 `blanks_empty`). Sent already: nobody is emailed again, and a copy that is waiting or failed is tried again. `hubspot_copy` says how the copy went: saved, waiting (writing to HubSpot isn't on: the email still went), off (the company isn't in HubSpot), or failed. 409 `form_not_ready` while it is drafting or failed, `email_not_set_up`. 502 `email_failed`: nothing was sent. 404 `form_not_found`. 409 `meeting_forms_off`.",
+        "operationId": "send_form",
+        "parameters": [
+          {
+            "description": "The pre-read's id",
+            "in": "path",
+            "name": "form_id",
+            "required": true,
+            "schema": {
+              "description": "The pre-read's id",
+              "format": "uuid",
+              "title": "Form Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FormSendIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeetingFormOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Send the pre-read",
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/meetings/summary": {
+      "get": {
+        "description": "For Home: my upcoming client meetings (the next 7 days, my typed ones too) that need a pre-read (none yet, or one that failed; a cancelled meeting needs none), and those whose draft waits for me. 409 `meeting_forms_off`.",
+        "operationId": "meeting_summary",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeetingSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "My meeting counts",
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/meetings/{meeting_id}": {
+      "get": {
+        "description": "A client meeting from HubSpot, its company's name, and its pre-read if it has one. 404 `meeting_not_found` when it isn't in our copy or has no company. 409 `meeting_forms_off`.",
+        "operationId": "get_meeting",
+        "parameters": [
+          {
+            "description": "HubSpot's meeting id",
+            "in": "path",
+            "name": "meeting_id",
+            "required": true,
+            "schema": {
+              "description": "HubSpot's meeting id",
+              "maxLength": 32,
+              "minLength": 1,
+              "pattern": "^[0-9]+$",
+              "title": "Meeting Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeetingDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "One meeting",
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/meetings/{meeting_id}/transcript": {
+      "post": {
+        "description": "A past client meeting's transcript, pasted or read from a .txt or .vtt file (`file_name`): a .vtt file is cleaned of its header, cue numbers, times and tags, and keeps who said what. It becomes a call note like any other, linked to the meeting, with the source `transcript`: sorted the same way, in the same batch, and nothing goes to HubSpot until I confirm it. The transcript is data, never instructions. Send an `Idempotency-Key`: the same key from the same person gives back the first note (200). 404 `meeting_not_found`, `company_not_found`. 409 `meeting_not_past` for a meeting still to come, `call_notes_off`, `meeting_forms_off`. 422 `transcript_file` (not a .txt or .vtt file), `transcript_empty`, `transcript_too_long`.",
+        "operationId": "log_meeting",
+        "parameters": [
+          {
+            "description": "HubSpot's meeting id",
+            "in": "path",
+            "name": "meeting_id",
+            "required": true,
+            "schema": {
+              "description": "HubSpot's meeting id",
+              "maxLength": 32,
+              "minLength": 1,
+              "pattern": "^[0-9]+$",
+              "title": "Meeting Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Any unique text (a UUID is fine). The same key gives back the same note",
+            "in": "header",
+            "name": "idempotency-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "minLength": 1,
+                  "pattern": "^[A-Za-z0-9._:-]+$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Any unique text (a UUID is fine). The same key gives back the same note",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MeetingTranscriptIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallNoteOut"
+                }
+              }
+            },
+            "description": "The note saved first with this key"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallNoteOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Log a meeting",
         "tags": [
           "Companies"
         ]
@@ -19718,7 +22324,7 @@
     },
     "/companies/{key}": {
       "get": {
-        "description": "What it does, its offices, deals and owner, the last talk, saved notes under 30 days old from any project, and (with HubSpot's contacts and calls) its people and calls. The Lead Finder section comes only with the Lead Finder tick. 404 `company_not_found` when there is no such company, or it isn't open to this account.",
+        "description": "What it does, its offices, deals and owner, the last talk, saved notes under 30 days old from any project, and (with HubSpot's contacts and calls) its people and calls. The Lead Finder section comes only with the Lead Finder tick. `meetings`: its next three client meetings and its last three, while Meetings are on and HubSpot's meetings are read. 404 `company_not_found` when there is no such company, or it isn't open to this account.",
         "operationId": "get_company",
         "parameters": [
           {
