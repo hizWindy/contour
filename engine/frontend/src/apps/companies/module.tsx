@@ -10,10 +10,10 @@
  * the Lead Finder's, in the order of MODULES, as on Home and in Ctrl+K (T3-7). Meetings and
  * Activity stay in the group for everyone who sees Companies, even while their switches are off
  * (each page says so), so the menu never changes shape once it has loaded. A pre-read's own page
- * (`/companies/pre-reads/...`, T3-10) counts as Meetings in the menu. Activity's row shows how
- * many calls wait to be confirmed, and Ctrl+K gains "Log a call" and "Calls to confirm"
- * (`call-note-links.tsx`, which loads late through `call-note-parts.ts`, so the first visit
- * doesn't grow).
+ * sits under Meetings (`/companies/meetings/{form_id}`, T3-10), so the menu marks Meetings there.
+ * Activity's row shows how many calls wait to be confirmed, and Ctrl+K gains "Log a call" and
+ * "Calls to confirm" (`call-note-links.tsx`, which loads late through `call-note-parts.ts`, so the
+ * first visit doesn't grow).
  */
 import { Building2, CalendarCheck, ClipboardCheck } from 'lucide-react'
 import type { PrefetchArgs, RouteHandle } from '@/shell/crumbs'
@@ -25,7 +25,6 @@ import { prefetchCompanies, prefetchCompaniesHome, prefetchCompany } from './pre
 
 /** The pages' addresses, as in each page's `params.ts`, which loads with the page, not here. */
 const MEETINGS = '/companies/meetings'
-const PRE_READS = '/companies/pre-reads'
 const ACTIVITY = '/companies/activity'
 
 type Prefetch = (args: PrefetchArgs) => void
@@ -64,7 +63,7 @@ export const COMPANIES: AppModule = {
       icon: Building2,
       keywords: ['clients', 'prospects', 'call', 'prep', 'script', 'hubspot'],
       purpose: 'Find a company, see what we know, and prep a call in seconds.',
-      notActiveOn: [MEETINGS, PRE_READS, ACTIVITY],
+      notActiveOn: [MEETINGS, ACTIVITY],
     },
     {
       to: MEETINGS,
@@ -72,7 +71,6 @@ export const COMPANIES: AppModule = {
       icon: CalendarCheck,
       keywords: ['pre-read', 'pre-meeting form', 'client meeting', 'teams', 'in person'],
       purpose: 'Draft the pre-read for each client meeting, then send it to the team.',
-      alsoActiveOn: [PRE_READS],
     },
     {
       to: ACTIVITY,

@@ -350,7 +350,7 @@ function renderMeetings(path = '/companies/meetings') {
   const router = createMemoryRouter(
     [
       { path: '/companies/meetings', element: <MeetingsPage /> },
-      { path: '/companies/pre-reads/:formId', element: <PreReadStub /> },
+      { path: '/companies/meetings/:formId', element: <PreReadStub /> },
     ],
     { initialEntries: [path] },
   )
@@ -433,7 +433,7 @@ describe('Upcoming', () => {
       expect(one.getByText(status)).toBeInTheDocument()
       expect(one.getByRole('link', { name: link })).toHaveAttribute(
         'href',
-        `/companies/pre-reads/${id}`,
+        `/companies/meetings/${id}`,
       )
       expect(one.getAllByRole('link').length + one.queryAllByRole('button').length).toBe(1)
     }
@@ -478,7 +478,7 @@ describe('Upcoming', () => {
 
     server.release()
     expect(await screen.findByRole('heading', { name: 'Pre-read f-m1' })).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/companies/pre-reads/f-m1')
+    expect(router.state.location.pathname).toBe('/companies/meetings/f-m1')
   })
 
   it('a refused draft puts the row back and says why', async () => {
@@ -665,7 +665,7 @@ describe('the states', () => {
     expect(companies(today)).toEqual(['Sample Logistics Pty Ltd'])
     expect(
       within(row('Sample Logistics Pty Ltd')).getByRole('link', { name: /^Check and send/ }),
-    ).toHaveAttribute('href', '/companies/pre-reads/f-typed')
+    ).toHaveAttribute('href', '/companies/meetings/f-typed')
     await user.click(screen.getByRole('button', { name: 'New pre-read' }))
     expect(await screen.findByRole('dialog', { name: 'New pre-read' })).toBeInTheDocument()
   })
@@ -797,7 +797,7 @@ describe('New pre-read', () => {
     await user.click(dialog.getByRole('button', { name: 'Draft the pre-read' }))
 
     expect(await screen.findByRole('heading', { name: 'Pre-read f-typed' })).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/companies/pre-reads/f-typed')
+    expect(router.state.location.pathname).toBe('/companies/meetings/f-typed')
     const started = server.sent.filter((one) => one.path === FORMS)
     expect(started).toHaveLength(1)
     expect(started[0]?.body).toEqual({

@@ -178,6 +178,6 @@ describe("Meetings' address", () => {
   })
 
   it('links each pre-read to its own page', () => {
-    expect(preReadHref('f 1')).toBe('/companies/pre-reads/f%201')
+    expect(preReadHref('f 1')).toBe('/companies/meetings/f%201')
   })
 })

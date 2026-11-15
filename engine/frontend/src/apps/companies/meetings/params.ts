@@ -4,16 +4,13 @@
  * search (`?q=vitera+26+nov`) and Past's page (`?page=2`). A change of view goes back to page 1.
  * The page and its prefetch build the request the same way, from here.
  *
- * A pre-read has its own address, `/companies/pre-reads/{form_id}` (T3-10 builds the page), so
- * the email can link to it. The rows open it.
+ * A pre-read has its own address under Meetings, `/companies/meetings/{form_id}` (T3-10), where
+ * Track 2's morning email links. The rows, New pre-read and the email open it.
  */
 import type { MeetingQuery, MeetingWhen } from '@/api/v17'
 
 /** Meetings' address. */
 export const MEETINGS_PATH = '/companies/meetings'
-
-/** Where each pre-read's page is (T3-10). */
-export const PRE_READS_PATH = '/companies/pre-reads'
 
 /** Upcoming is the next 7 days or so: one page holds them (TBC). */
 export const UPCOMING_LIMIT = 100
@@ -91,7 +88,7 @@ export function meetingsQuery(view: MeetingsView): MeetingQuery {
   return query
 }
 
-/** A pre-read's own page, like "/companies/pre-reads/f-12". */
+/** A pre-read's own page, under Meetings, like "/companies/meetings/0f3c9a2e-...". */
 export function preReadHref(formId: string): string {
-  return `${PRE_READS_PATH}/${encodeURIComponent(formId)}`
+  return `${MEETINGS_PATH}/${encodeURIComponent(formId)}`
 }
