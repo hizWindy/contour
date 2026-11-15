@@ -433,8 +433,9 @@ function taskLine(task: CallNoteTask): string {
 /**
  * The line under a follow-up's date: the day that will be stored. Until the rep changes the
  * words, that is the day already stored, because the words were read on the day of the call and
- * today they may mean another day ("tomorrow" said on Monday is Tuesday, not Thursday). A stored
- * day that has gone says so. Once the rep types, the line follows what they type.
+ * today they may mean another day ("tomorrow" said on Monday is Tuesday, even when the rep checks
+ * it on Wednesday). A stored day that has gone says so. Once the rep types, the line follows what
+ * they type.
  */
 function dueHint(
   text: string,
@@ -444,7 +445,8 @@ function dueHint(
 ): { words: string; gone: boolean } {
   const read = readDueDate(text, today)
   const changed = text.trim() !== start.trim()
-  // The words still read as the stored day: say how, with the weekend move if there was one.
+  // New words, or the stored words if today they still read as the stored day: say the day they
+  // read, with the weekend move if there was one.
   if (read.kind === 'date' && (changed || read.date === task.due)) {
     return { words: dueWords(read.date, read.moved), gone: false }
   }
