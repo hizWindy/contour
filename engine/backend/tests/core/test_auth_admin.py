@@ -303,6 +303,7 @@ def conninfo(database_url: str) -> Iterator[str]:
             "TRUNCATE companies.script_edits, companies.script_styles, companies.script_prefs, "
             "companies.preps, "
             "companies.call_notes, "
+            "companies.meeting_forms, "
             "core.audit_log, core.sessions, core.users"
         )
     yield info

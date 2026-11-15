@@ -24,7 +24,14 @@ from sqlalchemy.ext.asyncio import (
 )
 from sse_starlette.sse import AppStatus, EventSourceResponse
 
-from apps.companies.tables import CallNote, Prep, ScriptEdit, ScriptPref, ScriptStyle
+from apps.companies.tables import (
+    CallNote,
+    MeetingForm,
+    Prep,
+    ScriptEdit,
+    ScriptPref,
+    ScriptStyle,
+)
 from apps.lead_finder.tables import Lead, Rival, SignalHireDetails
 from core.auth.models import AuditEntry, User, UserSession
 from core.config import get_settings
@@ -126,6 +133,14 @@ async def fill_every_table(factory: async_sessionmaker[AsyncSession]) -> None:
                     source="typed",
                     called_at=datetime.now(UTC),
                     status="to_confirm",
+                ),
+                MeetingForm(
+                    made_by=person.id,
+                    company_key="1",
+                    company_name="Acme",
+                    title="Fit-out walk-through",
+                    starts_at=datetime.now(UTC),
+                    status="draft",
                 ),
                 HubSpotDeal(hubspot_deal_id="9", hubspot_company_id="1", name="Acme fit-out"),
                 RunEvent(run_id=run.id, seq=1, type="run_started", data={}),

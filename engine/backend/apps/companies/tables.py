@@ -14,6 +14,10 @@ default.
 
 `companies.call_notes` keeps each call a rep logs (PLAN-V17 T2-2): the note as typed or said, what
 the sorter made of it, the rep's edits, what it cost, and the write it became in HubSpot.
+
+`companies.meeting_forms` keeps each pre-read for a client meeting (PLAN-V17 T2-10): the meeting it
+is for, the facts and the three summaries, the rep's two blanks, who it went to, and its copy in
+HubSpot.
 """
 
 import uuid
@@ -261,6 +265,8 @@ class CallNote(Base):
         Index("ix_call_notes_made_by_status", "made_by", "status", text("created_at DESC")),
         # The rep's newest note on a company, for call prep's "Last talk".
         Index("ix_call_notes_company", "company_key", text("created_at DESC")),
+        # The notes logged for a meeting (Meetings' "Notes logged", PLAN-V17 T2-15).
+        Index("ix_call_notes_meeting", "meeting_id"),
         {"schema": SCHEMA},
     )
     __mapper_args__ = {"eager_defaults": True}  # noqa: RUF012  (SQLAlchemy reads it)
@@ -297,6 +303,8 @@ class CallNote(Base):
     )
     hubspot_url: Mapped[str | None] = mapped_column(String(500))
     error: Mapped[str | None] = mapped_column(Text)  # plain words, for "Needs a look"
+    # The HubSpot meeting a transcript came from (Log meeting, PLAN-V17 T2-15), or none.
+    meeting_id: Mapped[str | None] = mapped_column(String(32))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=_now())
     # Moves on every change through SQLAlchemy, and is read back in the same statement.
     updated_at: Mapped[datetime] = mapped_column(
@@ -305,3 +313,95 @@ class CallNote(Base):
     sorted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+MEETING_WHERE: Final = ("online", "in_person", "unknown")
+# drafting: the facts are in and the summaries are being written. draft: ready for the rep.
+# sent: emailed to the team. failed: the summaries couldn't be written (the facts still show).
+FORM_STATUSES: Final = ("drafting", "draft", "sent", "failed")
+# Its copy in HubSpot, once sent: saved; waiting (writing is off, or HubSpot isn't connected);
+# off (no copy is made); failed.
+HUBSPOT_COPIES: Final = ("saved", "waiting", "off", "failed")
+FORM_TRIGGERS: Final = ("person", "job")  # a person asked, or the morning job (T2-13)
+
+
+class MeetingForm(Base):
+    """One pre-read for a client meeting (PLAN-V17 T2-10): the meeting it is for, what we know
+    (`facts`, no AI), the three summaries (`summaries`: what they do, what we know about the
+    project, the talks so far; each written by the AI or a person, with its sources), the rep's
+    two blanks, who it went to, and its copy in HubSpot.
+
+    A HubSpot meeting has one form (`meeting_id`, unique). "New pre-read" types the meeting in, so
+    its form has no `meeting_id`. Both keep the meeting as it was (company, title, times, where),
+    so the form still reads if the meeting changes or goes. `version` goes up with each edit or
+    redraft: the email's key is the form's id and its version, so a retry can't send twice.
+    """
+
+    __tablename__ = "meeting_forms"
+    __table_args__ = (
+        # "where" is a word SQL keeps for itself, so the check quotes it.
+        CheckConstraint(_in_list('"where"', MEETING_WHERE), name="where"),
+        CheckConstraint(_in_list("status", FORM_STATUSES), name="status"),
+        CheckConstraint(_in_list("hubspot_copy", HUBSPOT_COPIES), name="hubspot_copy"),
+        CheckConstraint(_in_list("trigger", FORM_TRIGGERS), name="trigger"),
+        CheckConstraint("version >= 1", name="version"),
+        # One form for each HubSpot meeting, so a second start (or the job) never drafts twice.
+        Index(
+            "ux_meeting_forms_meeting",
+            "meeting_id",
+            unique=True,
+            postgresql_where=text("meeting_id IS NOT NULL"),
+        ),
+        # A company's pre-reads, and a person's own.
+        Index("ix_meeting_forms_company", "company_key", text("starts_at DESC")),
+        Index("ix_meeting_forms_made_by", "made_by", text("created_at DESC")),
+        {"schema": SCHEMA},
+    )
+    __mapper_args__ = {"eager_defaults": True}  # noqa: RUF012  (SQLAlchemy reads it)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    meeting_id: Mapped[str | None] = mapped_column(String(32))  # HubSpot's meeting, if any
+    # The meeting as it was when the form was made (or as typed).
+    company_key: Mapped[str] = mapped_column(String(64))
+    company_name: Mapped[str] = mapped_column(String(300))
+    title: Mapped[str] = mapped_column(String(300))
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    where: Mapped[str] = mapped_column(String(16), server_default="unknown")
+    status: Mapped[str] = mapped_column(String(16))
+    # Each: label, value, source. No AI.
+    facts: Mapped[list[Any]] = mapped_column(
+        JSONB, default=list, server_default=_sql("'[]'::jsonb")
+    )
+    # what_they_do, what_we_know, talks_so_far: each text, by (ai or person), sources.
+    summaries: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, default=dict, server_default=_sql("'{}'::jsonb")
+    )
+    next_step: Mapped[str | None] = mapped_column(Text)  # the rep's, never the AI's
+    going: Mapped[str | None] = mapped_column(Text)  # who is going: the rep's, never the AI's
+    # Who it went to: each the name (if known) and the Contour address.
+    sent_to: Mapped[list[Any]] = mapped_column(
+        JSONB, default=list, server_default=_sql("'[]'::jsonb")
+    )
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    sent_by: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey(f"{CORE_SCHEMA}.users.id", ondelete="SET NULL")
+    )
+    version: Mapped[int] = mapped_column(Integer, default=1, server_default=_sql("1"))
+    hubspot_copy: Mapped[str | None] = mapped_column(String(16))  # none until it is sent
+    hubspot_copy_sentence: Mapped[str | None] = mapped_column(Text)  # plain words
+    hubspot_write_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey(f"{CORE_SCHEMA}.hubspot_writes.id", ondelete="SET NULL")
+    )
+    cost_usd: Mapped[Decimal] = mapped_column(Numeric(10, 6), server_default=_sql("0"))
+    error: Mapped[str | None] = mapped_column(Text)  # plain words
+    # Who started it: a person, or none for the morning job.
+    made_by: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey(f"{CORE_SCHEMA}.users.id", ondelete="SET NULL")
+    )
+    trigger: Mapped[str] = mapped_column(String(8), server_default="person")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=_now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=_now(), onupdate=func.now()
+    )
+    drafted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
