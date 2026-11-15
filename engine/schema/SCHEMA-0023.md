@@ -1,17 +1,47 @@
 # Database schema 0023
 
-Migration `0023_meeting_forms`, the newest one applied to the database `leadfinder_v17b`.
+Migration `0023_meeting_forms`, the newest one applied to the database `leadfinder_v17j`.
 
-- **Tables:** 30 in 4 schemas (`core`, `lead_finder`, `langgraph`, `companies`).
-- **Links:** 20 foreign keys and 4 soft links.
+- **Tables:** 36 in 4 schemas (`core`, `lead_finder`, `langgraph`, `companies`).
+- **Links:** 20 foreign keys and 5 soft links.
 - **Extensions:** `vector`.
 - **Made by** `engine/backend/scripts/schema_map.py` from the live database. Don't edit it by hand. Run the script after every migration. `--check` says whether this file is out of date.
 
-## Changes since 0021
+## Changes since 0022
 
+- New table `companies.call_notes` (27 columns).
 - New table `companies.meeting_forms` (27 columns).
-- `companies.call_notes`: new column `meeting_id` (varchar(32)).
-- `companies.call_notes`: new index `ix_call_notes_meeting`.
+- New table `core.property_lookups` (8 columns).
+- New table `core.property_records` (21 columns).
+- New table `core.source_reads` (8 columns).
+- New table `core.source_state` (7 columns).
+- `companies.preps`: check `ck_preps_kind` changed.
+- `companies.preps`: check `ck_preps_status` changed.
+- `companies.preps`: check `ck_preps_trigger` changed.
+- `companies.script_prefs`: check `ck_script_prefs_scope` changed.
+- `companies.script_prefs`: check `ck_script_prefs_tone` changed.
+- `companies.script_styles`: check `ck_script_styles_scope` changed.
+- `companies.script_styles`: check `ck_script_styles_status` changed.
+- `core.audit_log`: check `ck_audit_log_event` changed.
+- `core.hubspot_companies`: check `ck_hubspot_companies_source` changed.
+- `core.hubspot_deals`: check `ck_hubspot_deals_source` changed.
+- `core.hubspot_syncs`: check `ck_hubspot_syncs_mode` changed.
+- `core.hubspot_syncs`: check `ck_hubspot_syncs_phase` changed.
+- `core.hubspot_syncs`: check `ck_hubspot_syncs_status` changed.
+- `core.hubspot_syncs`: check `ck_hubspot_syncs_trigger` changed.
+- `core.hubspot_writes`: check `ck_hubspot_writes_status` changed.
+- `core.memory`: check `ck_memory_kind` changed.
+- `core.runs`: check `ck_runs_status` changed.
+- `core.schedules`: check `ck_schedules_last_status` changed.
+- `core.schedules`: check `ck_schedules_unit` changed.
+- `core.users`: check `ck_users_role` changed.
+- `lead_finder.leads`: check `ck_leads_origin` changed.
+- `lead_finder.leads`: check `ck_leads_status` changed.
+- `lead_finder.leads`: new column `confidence` (varchar(8)).
+- `lead_finder.leads`: new column `tier` (varchar(8)).
+- `lead_finder.leads`: new index `ix_leads_confidence`.
+- `lead_finder.leads`: new index `ix_leads_tier`.
+- `lead_finder.rivals`: check `ck_rivals_status` changed.
 
 ## Diagram
 
@@ -42,6 +72,7 @@ erDiagram
     core_runs |o..o{ core_searches : "run_id (soft)"
     core_hubspot_owners |o..o{ core_hubspot_companies : "owner_id (soft)"
     core_hubspot_owners |o..o{ core_hubspot_deals : "owner_id (soft)"
+    core_hubspot_companies |o..o{ core_hubspot_meetings : "hubspot_company_id (soft)"
     core_audit_log {
         bigint id PK
         timestamptz created_at
@@ -128,6 +159,33 @@ erDiagram
         varchar source
         timestamptz imported_at
     }
+    core_hubspot_meeting_reads {
+        integer id PK
+        varchar kind
+        varchar state
+        text sentence
+        integer changed
+        timestamptz started_at
+        timestamptz finished_at
+    }
+    core_hubspot_meetings {
+        varchar hubspot_id PK
+        varchar hubspot_company_id "soft link"
+        boolean more_companies
+        varchar[] contact_ids
+        varchar owner_id
+        varchar[] attendee_owner_ids
+        varchar title
+        timestamptz starts_at
+        timestamptz ends_at
+        varchar where
+        text location
+        varchar outcome
+        text notes
+        text hubspot_url
+        timestamptz hubspot_updated_at
+        timestamptz imported_at
+    }
     core_hubspot_offices {
         integer id PK
         varchar hubspot_company_id FK
@@ -203,6 +261,39 @@ erDiagram
         date source_date
         jsonb meta
         vector embedding
+        timestamptz created_at
+    }
+    core_property_lookups {
+        varchar source PK
+        text company_key PK
+        text company
+        text city
+        varchar status
+        integer records
+        timestamptz looked_up_at
+        uuid run_id
+    }
+    core_property_records {
+        uuid id PK
+        varchar source
+        varchar kind
+        varchar via
+        text company
+        text company_key
+        text city
+        text address
+        text building
+        text floor
+        integer area_m2
+        date lease_start
+        date lease_end
+        date happened_on
+        date published_on
+        text summary
+        text url
+        varchar ref
+        varchar record_key
+        timestamptz read_at
         timestamptz created_at
     }
     core_run_events {
@@ -296,6 +387,25 @@ erDiagram
         jsonb value
         timestamptz updated_at
     }
+    core_source_reads {
+        bigint id PK
+        varchar source
+        varchar kind
+        timestamptz at
+        boolean ok
+        varchar outcome
+        integer ms
+        uuid run_id
+    }
+    core_source_state {
+        varchar source PK
+        timestamptz paused_until
+        varchar pause_reason
+        varchar last_problem
+        timestamptz last_problem_at
+        timestamptz signed_in_at
+        timestamptz updated_at
+    }
     core_users {
         uuid id PK
         varchar email
@@ -310,6 +420,8 @@ erDiagram
         timestamptz created_at
         timestamptz last_signed_in_at
         varchar[] apps
+        varchar hubspot_owner_id
+        varchar hubspot_owner_matched_by
     }
     lead_finder_leads {
         uuid id PK
@@ -347,6 +459,8 @@ erDiagram
         timestamptz updated_at
         integer score_checked
         text reject_note
+        varchar tier
+        varchar confidence
     }
     lead_finder_rivals {
         uuid id PK
@@ -635,6 +749,61 @@ HubSpot deals: the stage label, the pipeline, amount and close date.
 
 - `ck_hubspot_deals_source`: (((source) = ANY ((ARRAY['export', 'api']))))
 
+### core.hubspot_meeting_reads
+
+One row for each read of HubSpot's meetings (the daily one, or a refresh): how it ended and how many changed. The 15-minute rule and the meetings' status read it.
+
+| Column | Type | Null | Key | Note |
+|---|---|---|---|---|
+| `id` | integer | no | PK |  |
+| `kind` | varchar(16) | no |  |  |
+| `state` | varchar(16) | no |  |  |
+| `sentence` | text | yes |  |  |
+| `changed` | integer | no |  |  |
+| `started_at` | timestamptz | no |  |  |
+| `finished_at` | timestamptz | no |  |  |
+
+**Indexes**
+
+- `ix_hubspot_meeting_reads_started_at`: btree (started_at DESC)
+
+**Checks**
+
+- `ck_hubspot_meeting_reads_kind`: (((kind) = ANY ((ARRAY['full', 'changes']))))
+- `ck_hubspot_meeting_reads_state`: (((state) = ANY ((ARRAY['done', 'waiting', 'failed']))))
+
+### core.hubspot_meetings
+
+Our copy of HubSpot's meetings from 90 days back to 60 days ahead (TBC): the company, the people as ids only, when, where, the outcome and the internal notes, with emails and phone numbers left out (PLAN-V17).
+
+| Column | Type | Null | Key | Note |
+|---|---|---|---|---|
+| `hubspot_id` | varchar(32) | no | PK |  |
+| `hubspot_company_id` | varchar(32) | yes | soft -> core.hubspot_companies.hubspot_id | a meeting's company may not be in our copy, and one must not stop a read |
+| `more_companies` | boolean | no |  |  |
+| `contact_ids` | varchar(32)[] | no |  |  |
+| `owner_id` | varchar(32) | yes |  |  |
+| `attendee_owner_ids` | varchar(32)[] | no |  | Contour's other people on it, as owner ids. |
+| `title` | varchar(300) | no |  |  |
+| `starts_at` | timestamptz | no |  |  |
+| `ends_at` | timestamptz | yes |  |  |
+| `where` | varchar(16) | no |  |  |
+| `location` | text | yes |  |  |
+| `outcome` | varchar(32) | yes |  |  |
+| `notes` | text | yes |  |  |
+| `hubspot_url` | text | yes |  |  |
+| `hubspot_updated_at` | timestamptz | yes |  |  |
+| `imported_at` | timestamptz | no |  |  |
+
+**Indexes**
+
+- `ix_hubspot_meetings_company_starts_at`: btree (hubspot_company_id, starts_at)
+- `ix_hubspot_meetings_starts_at`: btree (starts_at)
+
+**Checks**
+
+- `ck_hubspot_meetings_where`: ((("where") = ANY ((ARRAY['online', 'in_person', 'unknown']))))
+
 ### core.hubspot_offices
 
 One row per office of a HubSpot company. In HubSpot these are company fields, one group per city, so an office is replaced with its company.
@@ -772,6 +941,68 @@ Saved notes with a vector, for finding similar companies (pgvector).
 **Checks**
 
 - `ck_memory_kind`: (((kind) = ANY ((ARRAY['source_note', 'company_profile', 'lead_outcome', 'note']))))
+
+### core.property_lookups
+
+When each tool was last asked about each company, what it said and how many records it gave. A lookup is reused for 30 days.
+
+| Column | Type | Null | Key | Note |
+|---|---|---|---|---|
+| `source` | varchar(20) | no | PK |  |
+| `company_key` | text | no | PK |  |
+| `company` | text | no |  |  |
+| `city` | text | yes |  |  |
+| `status` | varchar(16) | no |  |  |
+| `records` | integer | no |  |  |
+| `looked_up_at` | timestamptz | no |  |  |
+| `run_id` | uuid | yes |  |  |
+
+**Checks**
+
+- `ck_property_lookups_records`: ((records >= 0))
+- `ck_property_lookups_source`: (((source) = ANY ((ARRAY['property_daily', 'arealytics']))))
+- `ck_property_lookups_status`: (((status) = ANY ((ARRAY['found', 'not_found', 'error']))))
+
+### core.property_records
+
+Our copy of what Property Daily (or Arealytics) told us about a company's office: a lease, a move, a need for space or a fitout, with its link and date. Each fact is saved once.
+
+| Column | Type | Null | Key | Note |
+|---|---|---|---|---|
+| `id` | uuid | no | PK |  |
+| `source` | varchar(20) | no |  |  |
+| `kind` | varchar(16) | no |  |  |
+| `via` | varchar(16) | no |  |  |
+| `company` | text | no |  |  |
+| `company_key` | text | no |  |  |
+| `city` | text | yes |  |  |
+| `address` | text | yes |  |  |
+| `building` | text | yes |  |  |
+| `floor` | text | yes |  |  |
+| `area_m2` | integer | yes |  |  |
+| `lease_start` | date | yes |  |  |
+| `lease_end` | date | yes |  |  |
+| `happened_on` | date | yes |  |  |
+| `published_on` | date | yes |  |  |
+| `summary` | text | no |  |  |
+| `url` | text | no |  |  |
+| `ref` | varchar(64) | yes |  |  |
+| `record_key` | varchar(64) | no |  |  |
+| `read_at` | timestamptz | no |  |  |
+| `created_at` | timestamptz | no |  |  |
+
+**Indexes**
+
+- `ix_property_records_company_key`: btree (company_key)
+- `ix_property_records_via_read_at`: btree (via, read_at)
+- `uq_property_records_record`: unique btree (source, record_key)
+
+**Checks**
+
+- `ck_property_records_area_m2`: (((area_m2 IS NULL) OR (area_m2 >= 0)))
+- `ck_property_records_kind`: (((kind) = ANY ((ARRAY['lease', 'move', 'requirement', 'fitout', 'building', 'occupier', 'news']))))
+- `ck_property_records_source`: (((source) = ANY ((ARRAY['property_daily', 'arealytics']))))
+- `ck_property_records_via`: (((via) = ANY ((ARRAY['feed', 'lease_endings', 'lookup']))))
 
 ### core.run_events
 
@@ -934,6 +1165,52 @@ The settings changed on the Settings page: a key and a JSON value.
 | `value` | jsonb | no |  |  |
 | `updated_at` | timestamptz | no |  |  |
 
+### core.source_reads
+
+One row for every page a tool served us: the kind of page, when, how it went and how long it took. Never the page itself. It counts the pages of a day and of a run.
+
+| Column | Type | Null | Key | Note |
+|---|---|---|---|---|
+| `id` | bigint | no | PK |  |
+| `source` | varchar(20) | no |  |  |
+| `kind` | varchar(24) | no |  |  |
+| `at` | timestamptz | no |  |  |
+| `ok` | boolean | no |  |  |
+| `outcome` | varchar(16) | no |  |  |
+| `ms` | integer | no |  |  |
+| `run_id` | uuid | yes |  |  |
+
+**Indexes**
+
+- `ix_source_reads_run_id`: btree (run_id) WHERE (run_id IS NOT NULL)
+- `ix_source_reads_source_at`: btree (source, at)
+
+**Checks**
+
+- `ck_source_reads_ms`: ((ms >= 0))
+- `ck_source_reads_outcome`: (((outcome) = ANY ((ARRAY['ok', 'not_found', 'signin_page', 'signin_failed', 'signin_twice', 'captcha', 'lockout', 'forbidden', 'rate_limited', 'timeout', 'error']))))
+- `ck_source_reads_source`: (((source) = ANY ((ARRAY['property_daily', 'arealytics']))))
+
+### core.source_state
+
+One row for each tool: a 24-hour pause after a block and why, the last problem, and the last good sign-in.
+
+| Column | Type | Null | Key | Note |
+|---|---|---|---|---|
+| `source` | varchar(20) | no | PK |  |
+| `paused_until` | timestamptz | yes |  |  |
+| `pause_reason` | varchar(16) | yes |  |  |
+| `last_problem` | varchar(16) | yes |  |  |
+| `last_problem_at` | timestamptz | yes |  |  |
+| `signed_in_at` | timestamptz | yes |  |  |
+| `updated_at` | timestamptz | no |  |  |
+
+**Checks**
+
+- `ck_source_state_last_problem`: (((last_problem IS NULL) OR ((last_problem) = ANY ((ARRAY['ok', 'not_found', 'signin_page', 'signin_failed', 'signin_twice', 'captcha', 'lockout', 'forbidden', 'rate_limited', 'timeout', 'error'])))))
+- `ck_source_state_pause_reason`: (((pause_reason IS NULL) OR ((pause_reason) = ANY ((ARRAY['ok', 'not_found', 'signin_page', 'signin_failed', 'signin_twice', 'captcha', 'lockout', 'forbidden', 'rate_limited', 'timeout', 'error'])))))
+- `ck_source_state_source`: (((source) = ANY ((ARRAY['property_daily', 'arealytics']))))
+
 ### core.users
 
 The people who may sign in: the login names, the password's argon2id hash, and the count of wrong tries and the lock. One Admin today.
@@ -953,6 +1230,8 @@ The people who may sign in: the login names, the password's argon2id hash, and t
 | `created_at` | timestamptz | no |  |  |
 | `last_signed_in_at` | timestamptz | yes |  |  |
 | `apps` | varchar(64)[] | no |  |  |
+| `hubspot_owner_id` | varchar(32) | yes |  |  |
+| `hubspot_owner_matched_by` | varchar(16) | yes |  |  |
 
 **Indexes**
 
@@ -963,6 +1242,8 @@ The people who may sign in: the login names, the password's argon2id hash, and t
 
 - `ck_users_email`: ((((email) = lower(btrim((email)))) AND (POSITION(('@') IN (email)) > 1)))
 - `ck_users_failed_attempts`: ((failed_attempts >= 0))
+- `ck_users_hubspot_owner_link`: (((hubspot_owner_id IS NULL) = (hubspot_owner_matched_by IS NULL)))
+- `ck_users_hubspot_owner_matched_by`: (((hubspot_owner_matched_by IS NULL) OR ((hubspot_owner_matched_by) = ANY ((ARRAY['email', 'person'])))))
 - `ck_users_role`: (((role) = ANY ((ARRAY['admin', 'staff', 'viewer']))))
 - `ck_users_username`: (((username IS NULL) OR ((username) ~ '^[a-z0-9][a-z0-9._-]{2,63}$')))
 
@@ -1011,17 +1292,21 @@ One row per researched company. `card` holds the whole lead card. The other colu
 | `updated_at` | timestamptz | no |  |  |
 | `score_checked` | integer | yes |  |  |
 | `reject_note` | text | yes |  |  |
+| `tier` | varchar(8) | yes |  |  |
+| `confidence` | varchar(8) | yes |  |  |
 
 **Indexes**
 
 - `ix_leads_city`: btree (city)
 - `ix_leads_company`: btree (company)
 - `ix_leads_company_key`: btree (company_key)
+- `ix_leads_confidence`: btree (confidence)
 - `ix_leads_created_at`: btree (created_at DESC)
 - `ix_leads_domain`: btree (domain)
 - `ix_leads_hubspot_status`: btree (hubspot_status)
 - `ix_leads_result`: btree (result)
 - `ix_leads_run_id`: btree (run_id)
+- `ix_leads_tier`: btree (tier)
 - `ix_leads_trigger_ids`: gin (trigger_ids)
 - `uq_leads_run_id_company_key`: unique btree (run_id, company_key) WHERE (run_id IS NOT NULL)
 
