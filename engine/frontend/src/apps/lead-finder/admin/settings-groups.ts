@@ -1,9 +1,12 @@
 /**
- * Which group each setting is in, on Admin's Settings (PLAN-V13 T1-9): Money, Claude, Runs, Why now
- * and Call prep. A setting the backend adds later and nobody placed yet goes under Runs, so it is
- * never hidden.
+ * Which group each setting is in, on Admin's Settings (PLAN-V13 T1-9): Money, Claude, Runs, Why now,
+ * Call prep and Call notes. A setting the backend adds later and nobody placed yet goes under Runs,
+ * so it is never hidden.
+ *
+ * Call notes (PLAN-V17 T3-7) holds the three switches: call notes on, Claude sorts them, and the
+ * pre-meeting forms, which sit there until Stage B brings their own settings (TBC).
  */
-export type GroupId = 'money' | 'claude' | 'runs' | 'why' | 'prep'
+export type GroupId = 'money' | 'claude' | 'runs' | 'why' | 'prep' | 'notes'
 
 export const GROUPS: { value: GroupId; label: string }[] = [
   { value: 'money', label: 'Money' },
@@ -11,6 +14,7 @@ export const GROUPS: { value: GroupId; label: string }[] = [
   { value: 'runs', label: 'Runs' },
   { value: 'why', label: 'Why now' },
   { value: 'prep', label: 'Call prep' },
+  { value: 'notes', label: 'Call notes' },
 ]
 
 const GROUP_OF: Record<string, GroupId> = {
@@ -48,6 +52,9 @@ const GROUP_OF: Record<string, GroupId> = {
   prep_reuse_days: 'prep',
   model_prep: 'prep',
   search_ahead_cap_usd: 'prep',
+  call_notes_enabled: 'notes',
+  call_notes_ai_enabled: 'notes',
+  meeting_forms_enabled: 'notes',
 }
 
 export function groupOf(key: string): GroupId {
