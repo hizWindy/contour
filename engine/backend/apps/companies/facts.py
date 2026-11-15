@@ -27,6 +27,7 @@ from apps.companies import store
 from apps.companies.schemas import (
     CompanyCall,
     CompanyDetail,
+    MyLastNote,
     PrepFact,
     PrepFacts,
     PrepPerson,
@@ -57,23 +58,62 @@ STAGE_WORDS: Final = {
 COMPANY_MARK = "{company}"
 PERSON_MARK = "{person}"
 
-EMAIL = re.compile(r"[\w.+'-]+@[\w-]+(?:\.[\w-]+)+")
+# Every repeat in these patterns has an upper limit (an email's name part is at most 64
+# characters, a domain part 63), so the time grows in step with the text: a long run of letters
+# with no "@" or "at" can't hold up the backend (engine AGENTS.md, heavy work off the loop).
+EMAIL = re.compile(r"[\w.+'-]{1,64}@[\w-]{1,63}(?:\.[\w-]{1,63}){1,10}")
 # A run of 8 or more digits with phone-like separators: "0412 345 678", "+61 8 9000 0000",
-# "(08) 9000-0000". Dates in the pack are written in words, and money with commas, so they
-# never look like this.
-PHONE = re.compile(r"(?<![\w])\+?\(?\d[\d\s().-]{6,}\d(?![\w])")
+# "(08) 9000-0000", "0412/345/678". Dates in the pack are written in words, so they never look
+# like this. A comma is not a separator: the pack writes money with commas, and A$12,500,000 has
+# 8 digits. Known limits: a number written with commas, or said in words ("oh four one two ..."),
+# isn't caught.
+PHONE = re.compile(r"(?<![\w])\+?\(?\d[\d\s()./-]{6,}\d(?![\w])")
+# A date written with dashes, dots or slashes has 8 digits too: 31-03-2028, 31.03.2028,
+# 31/03/2028, 2028-03-31 or 2028/03/31. A match of exactly that shape is kept (PLAN-V17 T2-5), so
+# a lease date typed in a call note isn't lost. Anything else with 8 or more digits is blanked.
+_DAY = r"(?:0?[1-9]|[12]\d|3[01])"
+_MONTH = r"(?:0?[1-9]|1[0-2])"
+_YEAR = r"(?:19|20)\d{2}"
+DATE_SHAPED = re.compile(
+    rf"{_DAY}(?P<a>[-./]){_MONTH}(?P=a){_YEAR}|{_YEAR}(?P<b>[-./]){_MONTH}(?P=b){_DAY}"
+)
+# An email said out loud, or typed half way: "jo at sample dot com dot au", "jo at
+# sample.com.au", "jo dot sample (at) sample dot com", "jo @ sample.com". It needs "at" (or @),
+# then a domain with at least one " dot ", or dots and a last part of letters only. So "meeting
+# at 10.30" and "at level 3" stay. A typed "at St.Kilda" is blanked too: too much is the safe
+# side. Known limits: spelled-out letters, "underscore" and "dash" aren't caught.
+_NAME_PART = r"[\w+'-]{1,64}"
+_DOMAIN_PART = r"[\w-]{1,63}"
+_SAID_DOT = r"(?:\s{1,5}dot\s{1,5}|\.)"
+_SAID_AT = r"(?:\s{0,5}@\s{0,5}|\s{1,5}at\s{1,5}|\s{0,5}[\[(]at[\])]\s{0,5})"
+SAID_EMAIL = re.compile(
+    rf"{_NAME_PART}(?:{_SAID_DOT}{_NAME_PART}){{0,10}}{_SAID_AT}"
+    rf"(?P<domain>{_DOMAIN_PART}(?:{_SAID_DOT}{_DOMAIN_PART}){{1,10}})",
+    re.IGNORECASE,
+)
+SPOKEN_DOT = re.compile(r"\s+dot\s+", re.IGNORECASE)
 EMAIL_GONE = "[email left out]"
 PHONE_GONE = "[number left out]"
 
 
 def _phone_like(match: re.Match[str]) -> str:
-    digits = sum(character.isdigit() for character in match.group(0))
-    return PHONE_GONE if digits >= 8 else match.group(0)
+    found = match.group(0)
+    digits = sum(character.isdigit() for character in found)
+    return PHONE_GONE if digits >= 8 and not DATE_SHAPED.fullmatch(found) else found
+
+
+def _said_email(match: re.Match[str]) -> str:
+    domain = match.group("domain")
+    last = re.split(_SAID_DOT, domain, flags=re.IGNORECASE)[-1]
+    spoken = SPOKEN_DOT.search(domain) is not None
+    return EMAIL_GONE if spoken or (last.isalpha() and len(last) >= 2) else match.group(0)
 
 
 def scrub(text: str) -> str:
-    """The text with every email address and phone number blanked."""
-    return PHONE.sub(_phone_like, EMAIL.sub(EMAIL_GONE, text))
+    """The text with every email address and phone number blanked. Typed emails go first, then
+    numbers (so no half of a number is left beside a said email), then said emails."""
+    text = PHONE.sub(_phone_like, EMAIL.sub(EMAIL_GONE, text))
+    return SAID_EMAIL.sub(_said_email, text)
 
 
 def day(value: date | datetime | None) -> str:
@@ -321,6 +361,7 @@ def facts_out(
     people_ready: bool,
     prep_cap_usd: Decimal,
     copy_at: datetime | None = None,
+    my_last_note: MyLastNote | None = None,
 ) -> PrepFacts:
     company = pack.company
     return PrepFacts(
@@ -344,6 +385,7 @@ def facts_out(
         names_ok=names_ok,
         prep_cap_usd=prep_cap_usd,
         copy_at=copy_at,
+        my_last_note=my_last_note,
     )
 
 

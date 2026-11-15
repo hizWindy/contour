@@ -11,8 +11,8 @@
 Both tables are new and empty, so nothing that exists changes.
 
 Revision ID: 0022_hubspot_meetings
-Revises: 0020_hubspot_owner_link (Track 2's 0021 comes in at the PLAN-V17 merge, and its 0023
-    then follows this one)
+Revises: 0021_call_notes (Track 1 wrote it after 0020; at the PLAN-V17 merge, 16 Nov, it
+    follows Track 2's 0021, and Track 2's 0023 follows this one)
 Create Date: 2026-11-16
 """
 
@@ -23,7 +23,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision: str = "0022_hubspot_meetings"
-down_revision: str | Sequence[str] | None = "0020_hubspot_owner_link"
+down_revision: str | Sequence[str] | None = "0021_call_notes"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

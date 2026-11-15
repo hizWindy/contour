@@ -68,6 +68,8 @@ os.environ["SESSION_COOKIE_SECURE"] = "false"
 get_settings.cache_clear()
 
 TEST_TABLES = (
+    "companies.meeting_forms",
+    "companies.call_notes",
     "companies.script_edits",
     "companies.script_styles",
     "companies.script_prefs",

@@ -4,12 +4,14 @@ import uuid
 from collections.abc import Callable
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Literal
+from typing import Annotated, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 from pydantic.config import JsonDict
 
 from apps.companies.deals import DealState, StageKind
+from core.api.models import SafeText
+from core.hubspot.meetings import Meeting, MeetingsState, MeetingWhere
 
 Source = Literal["hubspot", "lead"]
 # For a field named `date` with a default: in the class body the name `date` is the field by the
@@ -171,7 +173,7 @@ class Relationship(Out):
 class CompanyDetail(Out):
     model_config = ConfigDict(
         json_schema_serialization_defaults_required=True,
-        json_schema_extra=optional_in_types("relationship"),
+        json_schema_extra=optional_in_types("relationship", "meetings"),
     )
 
     key: str
@@ -204,6 +206,11 @@ class CompanyDetail(Out):
     relationship: Relationship = Field(
         description="Where we stand: open deal, customer, past customer, lost deal, contacted "
         "before, or cold (PLAN-V15). The API always sends it"
+    )
+    meetings: list["MeetingItem"] = Field(
+        default_factory=list,
+        description="Its next three meetings, soonest first, then its last three, newest first "
+        "(PLAN-V17). A past one has no group. Empty while meetings are off or not read yet",
     )
 
 
@@ -265,7 +272,7 @@ class PrepFacts(Out):
 
     model_config = ConfigDict(
         json_schema_serialization_defaults_required=True,
-        json_schema_extra=optional_in_types("copy_at"),
+        json_schema_extra=optional_in_types("copy_at", "my_last_note"),
     )
 
     company_key: str
@@ -296,6 +303,11 @@ class PrepFacts(Out):
         None,
         description="When the last HubSpot sync finished, so the card can say an old copy is old "
         "(PLAN-V15). None before the first sync",
+    )
+    my_last_note: "MyLastNote | None" = Field(
+        None,
+        description="My newest call note on this company that isn't in HubSpot yet, for Last talk "
+        "(PLAN-V17). None when there is none, or while call notes are off",
     )
 
 
@@ -515,3 +527,527 @@ class StyleMineIn(BaseModel):
 
 class StyleNoteIn(BaseModel):
     text: str = Field(min_length=1, max_length=TEAM_MAX_CHARS)
+
+
+# --- Call notes (PLAN-V17 T2-5) -------------------------------------------------------------------
+
+NoteSource = Literal["mic", "typed", "transcript"]
+NoteStatus = Literal["sorting", "to_confirm", "sending", "logged", "partial", "failed", "uncertain"]
+NoteSortedBy = Literal["ai", "person"]
+NoteState = Literal["to_confirm", "logged", "needs_look"]
+# HubSpot's six standard call outcomes (core.hubspot.activities.OUTCOME_NAMES; a test checks).
+OutcomeName = Literal[
+    "Connected", "No answer", "Left voicemail", "Left live message", "Busy", "Wrong number"
+]
+NoteTaskKind = Literal["call", "email", "todo"]
+NoteFieldKind = Literal["date", "number"]
+StepStatus = Literal["pending", "done", "failed", "uncertain", "skipped"]
+NOTE_MAX_CHARS = 60_000  # the most a note can ever hold; the setting notes_max_chars is less
+NOTE_SUMMARY_MAX_CHARS = 600
+NOTE_SUBJECT_MAX_CHARS = 200
+NOTE_VALUE_MAX_CHARS = 120
+NOTE_BATCH_MAX = 50
+CARD_ID_PATTERN = r"^[ct][0-9]{1,3}$"  # c1 for a change, t2 for a task
+STEP_PATTERN = r"^(?:call|fields|note|task:[0-9]{1,2})$"
+
+
+class NoteFieldOption(Out):
+    id: str = Field(description="Like lease_end")
+    label: str = Field(description="Like Lease end")
+    kind: NoteFieldKind
+
+
+SENDING_READY = "True when confirmed notes can be sent to HubSpot now"
+WAITING_FOR = (
+    "What sending waits for, in plain words, like 'Waiting for HubSpot write access.' None when "
+    "ready"
+)
+
+
+class CallNoteOptions(Out):
+    model_config = ConfigDict(json_schema_extra=optional_in_types("transcript_max_chars"))
+
+    enabled: bool = Field(description="True when Log call and Activity show")
+    ai_enabled: bool = Field(
+        description="True when Claude sorts a note: its switch is on and Claude is set up. "
+        "False: the rep picks the outcome and adds follow-ups by hand"
+    )
+    sending_ready: bool = Field(description=SENDING_READY)
+    waiting_for: str | None = Field(description=WAITING_FOR)
+    outcomes: list[OutcomeName] = Field(description="HubSpot's call outcomes, for the chips")
+    fields: list[NoteFieldOption] = Field(description="The fields a call may change")
+    soft_seconds: int = Field(description="When the timer turns Ochre (it never cuts the rep off)")
+    max_chars: int = Field(description="The longest note, in characters")
+    transcript_max_chars: int = Field(
+        description="The longest meeting transcript, in characters, once a .vtt file's times are "
+        "taken out. A longer one answers 422 `transcript_too_long`"
+    )
+
+
+class CallNoteIn(BaseModel):
+    company_key: str = Field(
+        min_length=1, max_length=64, description="A HubSpot company id, or lead:<id>"
+    )
+    contact_id: SafeText | None = Field(
+        None, max_length=32, description="HubSpot's contact id: who the call was with, if known"
+    )
+    prep_id: uuid.UUID | None = Field(None, description="The call prep it came from, if any")
+    text: SafeText = Field(
+        max_length=NOTE_MAX_CHARS,
+        description="The note as typed or said. It may be empty when an outcome is picked (No "
+        "answer needs no words). An email address or a phone number in it is saved as "
+        "[email left out] or [number left out]",
+    )
+    source: NoteSource
+    called_at: AwareDatetime = Field(description="When the call was, with its time zone")
+    outcome: OutcomeName | None = Field(None, description="How the call went, if the rep picked it")
+
+
+class CallNoteCall(Out):
+    model_config = ConfigDict(json_schema_extra=optional_in_types("in_hubspot"))
+
+    summary: str = Field(description="Two short lines, or empty until sorted or written")
+    outcome: OutcomeName | None
+    in_hubspot: bool = Field(
+        False, description="True once it is in HubSpot: it can't change here any more"
+    )
+
+
+class CallNoteChange(Out):
+    model_config = ConfigDict(json_schema_extra=optional_in_types("in_hubspot"))
+
+    id: str = Field(description="Like c1")
+    field: str = Field(description="Like lease_end")
+    label: str = Field(description="Like Lease end")
+    office: str = Field(description="Like Perth, or the city of a group like Other Office 2")
+    current: str | None = Field(description="What HubSpot has now: a date, or the text")
+    value: str = Field(description="The new value: a date as YYYY-MM-DD, or a whole number")
+    current_changed: bool = Field(description="True when HubSpot's value changed since you saw it")
+    in_hubspot: bool = Field(
+        False, description="True once it is in HubSpot: it can't change here any more"
+    )
+
+
+class CallNoteTask(Out):
+    model_config = ConfigDict(json_schema_extra=optional_in_types("in_hubspot"))
+
+    id: str = Field(description="Like t1")
+    subject: str
+    due: date
+    due_words: str = Field(description="When, in the rep's own words. Empty when a date was typed")
+    kind: NoteTaskKind
+    owner: str | None = Field(description="Who it is for. None: the rep who logged the call")
+    in_hubspot: bool = Field(
+        False, description="True once it is in HubSpot: it can't change here any more"
+    )
+
+
+class CallNoteStep(Out):
+    step: str = Field(
+        description="call (note for a logged meeting's notes), fields or task:1 ..., as the "
+        "newest send to HubSpot names it. The name to send back when saying whether HubSpot has "
+        "an unsure step"
+    )
+    status: StepStatus = Field(
+        description="pending (waiting to be sent), done, failed, uncertain (HubSpot didn't "
+        "answer), or skipped (not written: a field HubSpot changed since you saw it is held)"
+    )
+    words: str = Field(description="What happened, in plain words, like 'Call logged.'")
+
+
+class CallNoteOut(Out):
+    id: uuid.UUID
+    company_key: str
+    company_name: str
+    person: PrepPerson | None
+    text: str
+    source: NoteSource
+    called_at: datetime
+    status: NoteStatus
+    sorted_by: NoteSortedBy
+    unsure: str | None = Field(
+        description="When something needs a look before sending, in plain words. These notes "
+        "sort first"
+    )
+    call: CallNoteCall
+    changes: list[CallNoteChange]
+    tasks: list[CallNoteTask]
+    left_out: bool = Field(description="True when it is left out of the next send")
+    steps: list[CallNoteStep] = Field(description="Each step of the send, empty until it is sent")
+    hubspot_url: str | None = Field(description="The call in HubSpot, once it is logged")
+    made_by: str | None = Field(description="Who logged it. None with sign-in off")
+    created_at: datetime
+    confirmed_at: datetime | None
+
+
+class CallNotePage(Out):
+    total: int
+    items: list[CallNoteOut]
+
+
+class CallNoteChangeIn(BaseModel):
+    id: str | None = Field(
+        None, pattern=CARD_ID_PATTERN, description="Its id on the card, or none for a new change"
+    )
+    field: str = Field(
+        min_length=1, max_length=32, pattern=r"^[a-z][a-z0-9_]*$", description="Like lease_end"
+    )
+    office: SafeText | None = Field(
+        max_length=64, description="One of the company's offices, as the card names it"
+    )
+    value: SafeText = Field(
+        min_length=1,
+        max_length=NOTE_VALUE_MAX_CHARS,
+        description="A date as YYYY-MM-DD, or a whole number of staff",
+    )
+
+
+class CallNoteTaskIn(BaseModel):
+    id: str | None = Field(
+        None, pattern=CARD_ID_PATTERN, description="Its id on the card, or none for a new task"
+    )
+    subject: SafeText = Field(min_length=1, max_length=NOTE_SUBJECT_MAX_CHARS)
+    due: date = Field(description="Not before today, Melbourne time")
+    due_words: SafeText | None = Field(
+        None,
+        max_length=NOTE_VALUE_MAX_CHARS,
+        description="The words the date came from, like 'next Tuesday'. Empty when a date was "
+        "picked. Left out: kept as they were while the day is the same",
+    )
+    kind: NoteTaskKind = "todo"
+    owner_id: SafeText | None = Field(
+        None, max_length=32, description="The HubSpot owner it is for. None: the rep"
+    )
+
+
+class CallNotePatch(BaseModel):
+    """The rep's edits. Only the parts sent change: `outcome` or `contact_id` sent as null clears
+    it, and `changes` or `tasks` replace the card's whole list."""
+
+    summary: SafeText | None = Field(None, max_length=NOTE_SUMMARY_MAX_CHARS)
+    outcome: OutcomeName | None = None
+    contact_id: SafeText | None = Field(
+        None, max_length=32, description="Who the call was with: one of the company's people"
+    )
+    changes: list[CallNoteChangeIn] | None = Field(None, max_length=10)
+    tasks: list[CallNoteTaskIn] | None = Field(None, max_length=10)
+    left_out: bool | None = Field(None, description="True leaves it out of the next send")
+
+
+class CallNoteIds(BaseModel):
+    ids: list[uuid.UUID] = Field(
+        min_length=1, max_length=NOTE_BATCH_MAX, description="The notes, in the order to send them"
+    )
+
+
+class CallNoteSkipped(Out):
+    id: uuid.UUID
+    why: str = Field(description="Why it was left out, in plain words")
+
+
+class CallNoteTotals(Out):
+    calls: int = Field(
+        description="The calls not yet in HubSpot. A logged meeting's notes count as one"
+    )
+    tasks: int = Field(description="The follow-ups not yet in HubSpot")
+    changes: int = Field(description="The field changes not yet in HubSpot, and not held")
+
+
+class CallNotePreview(Out):
+    model_config = ConfigDict(json_schema_extra=optional_in_types("skipped"))
+
+    items: list[CallNoteOut] = Field(description="Each note, with what HubSpot has now")
+    sending_ready: bool = Field(description=SENDING_READY)
+    waiting_for: str | None = Field(description=WAITING_FOR)
+    totals: CallNoteTotals = Field(description="What sending these notes would add, in all")
+    skipped: list[CallNoteSkipped] = Field(description="The notes that can't be sent, with why")
+
+
+class CallNoteConfirm(Out):
+    model_config = ConfigDict(json_schema_extra=optional_in_types("batch_id", "notes", "skipped"))
+
+    sending: int = Field(description="How many notes started sending. 0 when one was already")
+    already_sending: bool = Field(
+        description="True when a batch was being sent already: nothing new started"
+    )
+    batch_id: uuid.UUID | None = Field(description="The batch being sent")
+    notes: list[CallNoteOut] = Field(description="The notes that started sending, in order")
+    skipped: list[CallNoteSkipped] = Field(description="The notes left out, with why")
+
+
+class CallNoteResolve(BaseModel):
+    step: str = Field(
+        pattern=STEP_PATTERN, description="The step to settle: call, fields, task:1 ... or note"
+    )
+    landed: bool = Field(
+        description="True: it is in HubSpot. False: it isn't, so sending again adds it"
+    )
+
+
+class CallNoteSummary(Out):
+    to_confirm: int = Field(description="My notes waiting for me to confirm them")
+    needs_look: int = Field(description="My notes that failed, were partly saved, or are unsure")
+    logged_today: int = Field(description="My notes logged in HubSpot today, Melbourne time")
+
+
+class MyLastNote(Out):
+    """The asking person's newest note on a company that isn't in HubSpot yet (PLAN-V17 T2-7)."""
+
+    model_config = ConfigDict(json_schema_extra=optional_in_types("status"))
+
+    id: uuid.UUID
+    summary: str = Field(description="The card's summary, or the note's first 200 characters")
+    called_at: datetime
+    outcome: OutcomeName | None
+    status: NoteStatus = Field(description="Where it is: any status but logged")
+
+
+PrepFacts.model_rebuild()  # it names MyLastNote, which comes after it
+
+
+# --- Meetings and the pre-read (PLAN-V17 T2-11) --------------------------------------------------
+
+MeetingWhen = Literal["upcoming", "past"]
+# By the Melbourne date: today, tomorrow, the rest of this week (to Sunday), or later.
+MeetingGroup = Literal["today", "tomorrow", "this_week", "later"]
+FormStatus = Literal["drafting", "draft", "sent", "failed"]
+SummaryBy = Literal["ai", "person"]
+HubSpotCopyState = Literal["saved", "waiting", "off", "failed"]
+
+
+class MeetingFormState(Out):
+    """A meeting's pre-read, in short, for a list."""
+
+    id: uuid.UUID
+    status: FormStatus = Field(
+        description="drafting (being written), draft (ready to check), sent, or failed"
+    )
+
+
+class MeetingItem(Out):
+    """One client meeting in a list: the meeting as HubSpot has it, and where its pre-read is."""
+
+    model_config = ConfigDict(json_schema_extra=optional_in_types("owner_name"))
+
+    meeting: Meeting
+    company_name: str = Field(description="The company it is linked to, from our copy")
+    owner_name: str | None = Field(
+        None,
+        description="Whose meeting it is: its owner in HubSpot, from our copy of owners. None for "
+        "a typed one (always mine) or an owner we don't know",
+    )
+    group: MeetingGroup | None = Field(
+        description="An upcoming meeting's day, by the Melbourne date: today, tomorrow, "
+        "this_week (to Sunday) or later. None for a past one"
+    )
+    form: MeetingFormState | None = Field(description="Its pre-read, or none yet")
+    notes_logged: bool = Field(description="A call note is linked to it (Log meeting)")
+    typed: bool = Field(
+        False,
+        description="True for a meeting typed in for New pre-read: it isn't in HubSpot, its "
+        "`meeting.id` is empty, and `form` is its pre-read",
+    )
+
+
+class MeetingPage(Out):
+    items: list[MeetingItem]
+    total: int = Field(description="How many match, on every page")
+    meetings_state: MeetingsState = Field(
+        description="ready, waiting (HubSpot's meetings aren't read yet) or off"
+    )
+    sentence: str | None = Field(
+        description="One plain sentence when the list can't show what was asked: meetings "
+        "aren't ready, or your own can't be picked out yet"
+    )
+
+
+class MeetingSummary(Out):
+    need_pre_read: int = Field(
+        description="My upcoming meetings (the next 7 days) with no pre-read, or one that failed"
+    )
+    draft_ready: int = Field(description="My upcoming meetings whose pre-read waits for me")
+
+
+class FormMeeting(Out):
+    """The meeting a pre-read is for, as it was when the form was made: from HubSpot, or typed
+    in for "New pre-read"."""
+
+    meeting_id: str | None = Field(description="HubSpot's meeting, or none for a typed one")
+    company_key: str
+    company_name: str
+    title: str
+    starts_at: datetime
+    ends_at: datetime | None
+    where: MeetingWhere = Field(description="online (Teams), in_person, or unknown")
+
+
+class FormFact(Out):
+    """A fact on the pre-read, with no AI."""
+
+    label: str = Field(description="Like When, Where, Who we meet, Staff, Lease end")
+    value: str
+    source: str = Field(description="Where it comes from, like HubSpot meeting")
+
+
+class FormSummary(Out):
+    text: str = Field(description="Empty until it is written")
+    by: SummaryBy = Field(description="ai: written by AI. person: the rep wrote or changed it")
+    sources: list[PrepSource] = Field(description="The facts it rests on")
+
+
+class FormSummaries(Out):
+    what_they_do: FormSummary
+    what_we_know: FormSummary = Field(description="What we know about the project")
+    talks_so_far: FormSummary
+
+
+class FormRecipient(Out):
+    name: str | None = Field(description="Their name, when they have an account here")
+    email: str = Field(description="A Contour address")
+
+
+class HubSpotCopy(Out):
+    """The pre-read's copy in HubSpot, once it is sent: a note on the company (choice 9)."""
+
+    state: HubSpotCopyState = Field(
+        description="saved; waiting (writing to HubSpot isn't ready); off; or failed"
+    )
+    sentence: str | None = Field(description="One plain sentence, unless it is saved")
+
+
+class MeetingFormOut(Out):
+    """A pre-read: the meeting, the facts, the three summaries, the rep's two blanks, and who it
+    went to."""
+
+    id: uuid.UUID
+    meeting: FormMeeting
+    status: FormStatus
+    facts: list[FormFact]
+    summaries: FormSummaries
+    next_step: str | None = Field(description="The ideal next step: the rep's, never the AI's")
+    going: str | None = Field(description="Who is going: the rep's, never the AI's")
+    sent_to: list[FormRecipient]
+    sent_at: datetime | None
+    sent_by: str | None = Field(description="Who sent it")
+    hubspot_copy: HubSpotCopy | None = Field(description="None until it is sent")
+    cost_usd: Decimal
+    error: str | None = Field(description="Why the draft failed, in plain words")
+
+
+FORM_SUMMARY_MAX_CHARS = 2_000
+FORM_BLANK_MAX_CHARS = 1_000
+
+
+class MeetingFormStart(BaseModel):
+    """Starts a pre-read: for a HubSpot meeting (`meeting_id`), or for one typed in
+    (`company_key`, `title`, `starts_at`, and `ends_at` and `where` when known)."""
+
+    meeting_id: str | None = Field(
+        None, max_length=32, pattern=r"^[0-9]+$", description="HubSpot's meeting"
+    )
+    company_key: SafeText | None = Field(
+        None, max_length=64, description="A typed meeting's company: a HubSpot id, or lead:<id>"
+    )
+    title: SafeText | None = Field(None, max_length=300)
+    starts_at: AwareDatetime | None = Field(None, description="With its time zone")
+    ends_at: AwareDatetime | None = None
+    where: MeetingWhere = "unknown"
+
+    @model_validator(mode="after")
+    def _one_kind(self) -> Self:
+        typed = (self.company_key, self.title, self.starts_at, self.ends_at)
+        if self.meeting_id is not None and any(part is not None for part in typed):
+            raise ValueError("send a meeting_id, or a typed meeting, not both")
+        if self.meeting_id is None and not (
+            (self.company_key or "").strip() and (self.title or "").strip() and self.starts_at
+        ):
+            raise ValueError("a typed meeting needs a company_key, a title and starts_at")
+        if self.starts_at and self.ends_at and self.ends_at < self.starts_at:
+            raise ValueError("ends_at is before starts_at")
+        return self
+
+
+class FormSummariesPatch(BaseModel):
+    """The new text of each summary the rep changed. Null or empty clears it."""
+
+    what_they_do: SafeText | None = Field(None, max_length=FORM_SUMMARY_MAX_CHARS)
+    what_we_know: SafeText | None = Field(None, max_length=FORM_SUMMARY_MAX_CHARS)
+    talks_so_far: SafeText | None = Field(None, max_length=FORM_SUMMARY_MAX_CHARS)
+
+
+class MeetingFormPatch(BaseModel):
+    """The rep's edits. Only the parts sent change. A summary sent here is the rep's own from
+    then on (`by: person`): a redraft leaves it alone, and it keeps its sources."""
+
+    summaries: FormSummariesPatch | None = None
+    next_step: SafeText | None = Field(None, max_length=FORM_BLANK_MAX_CHARS)
+    going: SafeText | None = Field(None, max_length=FORM_BLANK_MAX_CHARS)
+
+
+ADDRESS_MAX_CHARS = 254
+MAX_RECIPIENTS = 20  # the email service's limit for one email
+# One address, at most 254 characters (an email address's limit), so a long one is refused
+# before any check reads it.
+Address = Annotated[SafeText, Field(max_length=ADDRESS_MAX_CHARS)]
+
+
+class FormPreviewIn(BaseModel):
+    """The addresses the rep added, to see the email with them. Empty: only the people on the
+    meeting."""
+
+    to: list[Address] = Field(
+        default_factory=list,
+        max_length=MAX_RECIPIENTS,
+        description="Addresses the rep added, each checked against Contour's own domains",
+    )
+
+
+class FormSendIn(BaseModel):
+    to: list[Address] = Field(
+        min_length=1,
+        max_length=MAX_RECIPIENTS,
+        description="Who gets it: Contour addresses only. One that isn't refuses the whole send",
+    )
+
+
+class FormPerson(Out):
+    """Someone the pre-read would go to."""
+
+    name: str | None = Field(description="Their name, when they have an account here")
+    email: str
+    why: str = Field(description="Like 'on the meeting', or 'added by you'")
+    ticked: bool = Field(description="Ticked to get it. Never ticked when it isn't allowed")
+    allowed: bool = Field(description="False for an address that isn't Contour's: it can't")
+
+
+class FormEmailPreview(Out):
+    """The email as it would arrive, and the people it would go to."""
+
+    subject: str
+    text: str = Field(description="The plain text version")
+    html: str = Field(description="The HTML version, with every value escaped")
+    people: list[FormPerson]
+
+
+TRANSCRIPT_MAX_CHARS = 200_000  # the most a transcript can ever send; the setting is less
+
+
+class MeetingTranscriptIn(BaseModel):
+    """A past meeting's transcript: pasted, or the text of a .txt or .vtt file the website read."""
+
+    text: SafeText = Field(
+        max_length=TRANSCRIPT_MAX_CHARS,
+        description="The transcript. A .vtt file's text is cleaned of its times here",
+    )
+    file_name: SafeText | None = Field(
+        None, max_length=255, description="The file it came from, if any: a .txt or .vtt file"
+    )
+
+
+class MeetingDetail(Out):
+    meeting: Meeting
+    company_name: str = Field(description="The company it is linked to, from our copy")
+    form: MeetingFormOut | None = Field(description="Its pre-read, or none yet")
+
+
+CompanyDetail.model_rebuild()  # it names MeetingItem, which comes after it
