@@ -3,6 +3,7 @@
  */
 import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, unwrap, type ApiProblem } from '../client'
+import { queryKeys } from '../query'
 import type { Schemas } from '../types'
 import { refreshLeads } from './leads'
 
@@ -17,7 +18,7 @@ export type PersonPatch = Schemas['PersonPatch']
 const KEYS = {
   review: (runId: string) => ['review', runId] as const,
   rejectReasons: (days: number) => ['leads', 'reject-reasons', days] as const,
-  people: ['people'] as const,
+  people: queryKeys.people.all,
 }
 
 /** The review bar for one run: its numbers, and whether HubSpot writing is on. */

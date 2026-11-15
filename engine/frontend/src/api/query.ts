@@ -202,5 +202,11 @@ export const queryKeys = {
     syncs: () => ['hubspot', 'syncs'] as const,
     writes: () => ['hubspot', 'writes'] as const,
     lead: (leadId: string) => ['hubspot', 'lead', leadId] as const,
+    /** HubSpot's owners, for the People tab's pick list (PLAN-V17 T3-7). */
+    owners: () => ['hubspot', 'owners'] as const,
+  },
+  people: {
+    /** Everyone with an account (the People tab). */
+    all: ['people'] as const,
   },
 }
