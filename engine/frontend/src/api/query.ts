@@ -10,7 +10,7 @@ import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query'
 import { isAbort, isApiProblem } from './client'
 import { connectionOf, problemKind } from './connection'
 import type { QueryOf } from './types'
-import type { CallNoteQuery } from './v17'
+import type { CallNoteQuery, MeetingQuery } from './v17'
 
 const MAX_RETRIES = 2
 
@@ -194,6 +194,14 @@ export const queryKeys = {
      * for the lists again, and must not read every company in HubSpot again with them.
      */
     callNotePreview: (ids: readonly string[]) => ['companies', 'call-note-preview', ids] as const,
+    /** Meetings and the pre-meeting form (PLAN-V17 Stage B): every query about them. */
+    meetings: () => ['companies', 'meetings'] as const,
+    meetingOptions: () => ['companies', 'meetings', 'options'] as const,
+    /** Every page of meetings (Upcoming and Past, mine and the team's), and one by its filters. */
+    meetingLists: () => ['companies', 'meetings', 'list'] as const,
+    meetingList: (query: MeetingQuery) => ['companies', 'meetings', 'list', query] as const,
+    /** One pre-meeting form, by its id (the pre-read page, T3-10). */
+    meetingForm: (id: string) => ['companies', 'meetings', 'form', id] as const,
   },
   hubspot: {
     all: ['hubspot'] as const,
