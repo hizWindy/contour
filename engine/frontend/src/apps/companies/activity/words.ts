@@ -223,6 +223,16 @@ export function removedWords(companyName: string): string {
   return `Removed the call with ${companyName}.`
 }
 
+/** "Removed the change to Lease end · Perth." */
+export function removedChangeWords(label: string): string {
+  return `Removed the change to ${label}.`
+}
+
+/** "Removed the follow-up: Call Jo back about the lease." */
+export function removedTaskWords(subject: string): string {
+  return `Removed the follow-up: ${/[.!?]$/.test(subject) ? subject : `${subject}.`}`
+}
+
 // --- Needs a look ---------------------------------------------------------------------------
 
 export const STATUS_WORDS = {

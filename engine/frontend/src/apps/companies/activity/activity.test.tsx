@@ -515,6 +515,46 @@ describe('To confirm', () => {
     })
   })
 
+  it('a follow-up removed while editing goes at once, and Undo puts it back as a new one', async () => {
+    const server = mockServer({ notes: threeNotes() })
+    const { user } = renderActivity()
+    await toConfirmList()
+    const logistics = card('Sample Logistics Pty Ltd')
+    await user.click(within(logistics).getByRole('button', { name: /^Edit/ }))
+    await user.click(
+      within(logistics).getByRole('button', {
+        name: 'Remove follow-up 1: Call Jo back about the lease',
+      }),
+    )
+    await waitFor(() => {
+      expect(sent(server, 'PATCH', `${NOTES}/n1`)[0]?.body).toEqual({ tasks: [] })
+    })
+    expect(
+      await screen.findByText('Removed the follow-up: Call Jo back about the lease.'),
+    ).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Undo' }))
+    await waitFor(() => {
+      expect(sent(server, 'PATCH', `${NOTES}/n1`)).toHaveLength(2)
+    })
+    expect(sent(server, 'PATCH', `${NOTES}/n1`)[1]?.body).toEqual({
+      tasks: [
+        {
+          id: null,
+          subject: 'Call Jo back about the lease',
+          due: '2026-11-24',
+          due_words: 'next Tuesday',
+          kind: 'call',
+        },
+      ],
+    })
+    expect(
+      await within(card('Sample Logistics Pty Ltd')).findByRole('textbox', {
+        name: 'Follow-up 1: what to do',
+      }),
+    ).toHaveValue('Call Jo back about the lease')
+  })
+
   it('an edit the server refuses goes back, and a toast says why', async () => {
     const server = mockServer({ notes: threeNotes(), patch: 'fail' })
     const { user } = renderActivity()

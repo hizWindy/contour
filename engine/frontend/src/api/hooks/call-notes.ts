@@ -191,6 +191,17 @@ export function updateNoteInLists(
   )
 }
 
+/** The newest copy of a note in the cached pages, or undefined. */
+export function noteInLists(client: QueryClient, id: string): CallNoteOut | undefined {
+  for (const [, page] of client.getQueriesData<CallNotePage>({
+    queryKey: queryKeys.companies.callNoteLists(),
+  })) {
+    const found = page?.items.find((note) => note.id === id)
+    if (found) return found
+  }
+  return undefined
+}
+
 /** Puts the server's copy of a note in every page of notes that holds it. */
 export function putNoteInLists(client: QueryClient, note: CallNoteOut): void {
   updateNoteInLists(client, note.id, () => note)

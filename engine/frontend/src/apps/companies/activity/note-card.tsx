@@ -4,7 +4,8 @@
  *
  * - **Edit** (or E) turns its parts into fields: the summary, the outcome, each change's value,
  *   each follow-up's words, kind and day, and "Add a follow-up". Each field saves when it is left
- *   (`note-parts.tsx`). Done, or Esc, ends it.
+ *   (`note-parts.tsx`). Done, or Esc, ends it. A change or a follow-up removed meanwhile goes at
+ *   once, with Undo in a toast.
  * - **Leave out** (or X) keeps it here, dimmed, out of this batch. "Put back" brings it back.
  * - **Remove** takes it away at once, with Undo in a toast (`remove.ts`).
  * - **A note the sorter was unsure of** says so at the top, in words, and sits first in the list.
@@ -24,18 +25,28 @@ import {
   Undo2,
   X,
 } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Fragment, useId, useState, type ReactNode } from 'react'
-import type { CallNoteOptions, CallNoteOut, CallNotePatch } from '@/api/v17'
+import { toast } from 'sonner'
+import { noteInLists } from '@/api/hooks/call-notes'
+import type {
+  CallNoteChange,
+  CallNoteOptions,
+  CallNoteOut,
+  CallNotePatch,
+  CallNoteTask,
+} from '@/api/v17'
 import { ChipGroup, Reveal, TickIn } from '@/components/motion'
 import { Pending } from '@/components/skeletons'
 import { Button } from '@/components/ui/button'
 import { Kbd } from '@/components/ui/kbd'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
-import { NEW_TASK, ChangeList, SummaryField, TaskList } from './note-parts'
+import { NEW_PART, ChangeList, SummaryField, TaskList } from './note-parts'
 import type { Landing } from './use-batch'
 import {
   callWhen,
+  changeLabel,
   CHECK_THIS_ONE,
   DONE,
   EDIT,
@@ -48,9 +59,12 @@ import {
   personLine,
   PUT_BACK,
   REMOVE,
+  removedChangeWords,
+  removedTaskWords,
   SENDING,
   SORTING,
   SUMMARY,
+  UNDO,
 } from './words'
 
 /** Sends an edit: what the server is told, and the same change made on screen at once. */
@@ -233,8 +247,63 @@ export function NoteCard({
   const summary = note.call.summary.trim() || note.text
   const outcome = note.call.outcome
   const fieldKinds = options.fields
+  const client = useQueryClient()
   const stop = (): void => {
     onEditing(false)
+  }
+
+  // Changes and follow-ups go as whole lists. A part made here goes with no id.
+  const saveChanges = (changes: CallNoteChange[]): void => {
+    edit(
+      {
+        changes: changes.map((change) => ({
+          id: change.id.startsWith(NEW_PART) ? null : change.id,
+          field: change.field,
+          office: change.office,
+          value: change.value,
+        })),
+      },
+      (now) => ({ ...now, changes }),
+    )
+  }
+  const saveTasks = (tasks: CallNoteTask[]): void => {
+    edit(
+      {
+        tasks: tasks.map((task) => ({
+          id: task.id.startsWith(NEW_PART) ? null : task.id,
+          subject: task.subject,
+          due: task.due,
+          due_words: task.due_words,
+          kind: task.kind,
+        })),
+      },
+      (now) => ({ ...now, tasks }),
+    )
+  }
+  /**
+   * A removed part, with Undo in a toast. Undo puts it back where it was, in the note as it is
+   * then (other edits since stay), as a new part.
+   */
+  const offerUndo = <Part extends { id: string }>(
+    words: string,
+    part: Part,
+    index: number,
+    listOf: (now: CallNoteOut) => Part[],
+    save: (list: Part[]) => void,
+  ): void => {
+    toast(words, {
+      action: {
+        label: UNDO,
+        onClick: () => {
+          const list = [...listOf(noteInLists(client, note.id) ?? note)]
+          list.splice(Math.min(index, list.length), 0, {
+            ...part,
+            id: `${NEW_PART}${crypto.randomUUID()}`,
+          })
+          save(list)
+        },
+      },
+    })
   }
 
   const outcomes =
@@ -290,18 +359,17 @@ export function NoteCard({
           changes={note.changes}
           fields={fieldKinds}
           editing={editing}
-          onSave={(changes) => {
-            edit(
-              {
-                changes: changes.map((change) => ({
-                  id: change.id,
-                  field: change.field,
-                  office: change.office,
-                  value: change.value,
-                })),
-              },
-              (now) => ({ ...now, changes }),
-            )
+          onSave={(changes, removed) => {
+            saveChanges(changes)
+            if (removed) {
+              offerUndo(
+                removedChangeWords(changeLabel(removed.label, removed.office)),
+                removed,
+                note.changes.findIndex((change) => change.id === removed.id),
+                (now) => now.changes,
+                saveChanges,
+              )
+            }
           }}
           onCancel={stop}
         />
@@ -316,19 +384,17 @@ export function NoteCard({
           tasks={note.tasks}
           editing={editing}
           today={today}
-          onSave={(tasks) => {
-            edit(
-              {
-                tasks: tasks.map((task) => ({
-                  id: task.id.startsWith(NEW_TASK) ? null : task.id,
-                  subject: task.subject,
-                  due: task.due,
-                  due_words: task.due_words,
-                  kind: task.kind,
-                })),
-              },
-              (now) => ({ ...now, tasks }),
-            )
+          onSave={(tasks, removed) => {
+            saveTasks(tasks)
+            if (removed) {
+              offerUndo(
+                removedTaskWords(removed.subject),
+                removed,
+                note.tasks.findIndex((task) => task.id === removed.id),
+                (now) => now.tasks,
+                saveTasks,
+              )
+            }
           }}
           onCancel={stop}
         />

@@ -60,8 +60,11 @@ import {
   WHEN,
 } from './words'
 
-/** A follow-up added on this card that the server hasn't given an id yet. */
-export const NEW_TASK = 'new-'
+/**
+ * The start of the id of a part made on this card (a follow-up added, or a part put back by
+ * Undo) that the server hasn't given an id yet. It goes to the server with no id.
+ */
+export const NEW_PART = 'new-'
 
 const KIND_ICONS: Readonly<Record<TaskKind, LucideIcon>> = {
   call: PhoneCall,
@@ -598,7 +601,7 @@ function AddFollowUp({ today, onAdd }: { today: string; onAdd: (task: CallNoteTa
     }
     if (check.task) {
       onAdd({
-        id: `${NEW_TASK}${crypto.randomUUID()}`,
+        id: `${NEW_PART}${crypto.randomUUID()}`,
         subject: check.task.subject,
         due: check.task.due,
         due_words: check.task.due_words ?? null,
