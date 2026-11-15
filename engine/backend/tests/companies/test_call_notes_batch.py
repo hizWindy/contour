@@ -15,7 +15,8 @@
 - the request for a note: the title, the body with what wasn't changed, `seen`, a date as
   YYYY-MM-DD, the owner, and the deal only when the company has one open deal; a company not in
   HubSpot yet isn't sent;
-- a note a restart left "sending" settles from its write.
+- a note a restart left "sending" settles from its write;
+- a card naming a field off the list is never sent.
 
 Made-up companies and people only (Sample Logistics Pty Ltd, Jo Sample).
 """
@@ -35,7 +36,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.companies.app import stop_background
-from apps.companies.note_batch import LEAD_ONLY, ActivityWriter, NoteSender
+from apps.companies.note_batch import LEAD_ONLY, OFF_THE_LIST, ActivityWriter, NoteSender
 from apps.companies.note_fields import hubspot_property
 from apps.companies.notes import CardCall, CardChange, CardTask, Dropped, NoteCard
 from apps.companies.tables import CallNote
@@ -892,3 +893,45 @@ async def test_a_note_a_restart_left_sending_settles_from_its_write(
         }
     ]
     assert (await the_row(world, landed)).hubspot_url == CALL_URL
+
+
+# --- Only the listed fields ---------------------------------------------------------------------
+
+
+async def test_a_card_naming_a_field_off_the_list_is_never_sent(
+    world: World, fake: FakeWriter, sender: NoteSender
+) -> None:
+    """Core's writer takes any company field, so the list (note_fields.yaml, choice 3) is kept
+    by the batch: a stored card that names anything else, like the company's owner, is not
+    previewed or sent at all, whatever the card says the field is, and the rep is told why."""
+    await a_company(world)
+    tampered = NoteCard(
+        call=CardCall(summary="Spoke to Jo Sample.", outcome="Connected"),
+        changes=[
+            CardChange(
+                id="c1",
+                field="lease_end",
+                label="Lease end",
+                office="Perth",
+                office_label="Perth",
+                property="hubspot_owner_id",  # not what the list gives for a Perth lease end
+                current=None,
+                value="2028-03-31",
+                said="",
+            )
+        ],
+    )
+    async with signed_in_as(world, "mia", ["companies"]) as client:
+        note = await log_call(client)
+        await set_note(world, note["id"], card=tampered.model_dump(mode="json"))
+        preview = (await client.post(f"{NOTES}/preview", json={"ids": [note["id"]]})).json()
+        sent = await confirm(client, note)
+        after = await one(client, note)
+        await set_note(world, note["id"], status="failed")
+        retried = await client.post(f"{NOTES}/{note['id']}/retry")
+    assert preview["skipped"] == [{"id": note["id"], "why": OFF_THE_LIST}]
+    assert (sent["sending"], sent["skipped"]) == (0, [{"id": note["id"], "why": OFF_THE_LIST}])
+    assert after["status"] == "to_confirm"
+    assert (retried.status_code, retried.json()["code"]) == (422, "change_off_the_list")
+    assert retried.json()["detail"] == OFF_THE_LIST
+    assert fake.previews == [] and fake.written == []

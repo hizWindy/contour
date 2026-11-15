@@ -347,6 +347,7 @@ async def delete_call_note(
         "the note being sent. 409 `note_uncertain` until I say whether HubSpot has an unsure "
         "step, `nothing_to_retry` for a note that didn't fail, `already_sending` while a batch "
         "is being sent, and `hubspot_writes_off` while sending waits for HubSpot write access. "
+        "422 `change_off_the_list` for a change that isn't one a call may change. "
         "403 `not_your_note`, 404 `note_not_found`, 409 `call_notes_off`."
     ),
 )

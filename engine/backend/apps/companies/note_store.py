@@ -34,9 +34,11 @@ from apps.companies.facts import scrub
 from apps.companies.note_batch import (
     ALREADY_SENDING,
     LEAD_ONLY,
+    OFF_THE_LIST,
     STOPPED_MID_SEND,
     NoteSender,
     mark_sending,
+    off_the_list,
     parts_of,
     sending_stuck,
     settle_cut_off,
@@ -916,6 +918,8 @@ async def batch_notes(
             why = "You left it out of this send."
         elif note.company_key.startswith("lead:"):
             why = LEAD_ONLY
+        elif off_the_list(NoteCard.model_validate(note.card or {})):
+            why = OFF_THE_LIST
         if why is None and note is not None:
             notes.append(note)
         else:
@@ -1064,6 +1068,8 @@ async def retry(
         )
     if note.status not in ("failed", "partial"):
         raise nothing_to_retry()
+    if off_the_list(NoteCard.model_validate(note.card or {})):
+        raise refused("This note can't be sent", OFF_THE_LIST, code="change_off_the_list")
     sending = sending_state(app, settings)
     if not sending.ready:
         raise writes_off(sending.waiting_for or WAITING_FOR_WRITES)

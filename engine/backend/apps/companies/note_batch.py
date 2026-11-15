@@ -35,6 +35,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from apps.companies.deals import stage_kind
 from apps.companies.facts import day
+from apps.companies.note_fields import NotOnTheList, hubspot_property
 from apps.companies.notes import (
     STUCK_MINUTES,
     CardCall,
@@ -75,6 +76,9 @@ LEAD_ONLY = (
     "again."
 )
 NOTHING_LEFT = "Everything in it is in HubSpot already."
+OFF_THE_LIST = (
+    "A change on this note isn't one a call may change. Remove it, then send the note again."
+)
 # One batch at a time in this backend, whoever pressed Send, so the words don't say whose it is.
 ALREADY_SENDING = "Notes are being sent right now. Try again in a few seconds."
 CHECK = "Check HubSpot, then tell us: it's there, or it's not."
@@ -148,6 +152,23 @@ async def one_open_deal(session: AsyncSession, company_id: str) -> str | None:
     return found[0] if len(found) == 1 else None
 
 
+def off_the_list(card: NoteCard) -> bool:
+    """Whether a change not yet in HubSpot names a field the list doesn't give for its office.
+    Core's writer takes any company field, so the list of what a call may change
+    (note_fields.yaml, choice 3) is kept here: each field is worked out from the list again
+    before it is previewed or sent, and a card that names anything else is not sent at all."""
+    for change in card.changes:
+        if change.state == "landed":
+            continue
+        try:
+            listed = hubspot_property(change.field, change.office_label)
+        except NotOnTheList:
+            return True
+        if listed != change.property:
+            return True
+    return False
+
+
 @dataclass(frozen=True)
 class Planned:
     """One send of one note: the request for the writer, and the parts of the card it carries."""
@@ -165,6 +186,8 @@ async def plan_send(
     call, changes, tasks = unsent(card)
     if not (call or changes or tasks):
         return NOTHING_LEFT
+    if off_the_list(card):
+        return OFF_THE_LIST
     number = len(card.writes) + 1
     subject = f"call_note:{note.id}" if number == 1 else f"call_note:{note.id}:{number}"
     outcome = card.call.outcome if card.call.outcome in OUTCOME_NAMES else None
