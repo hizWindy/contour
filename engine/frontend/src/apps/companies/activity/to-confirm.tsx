@@ -12,6 +12,9 @@
  *   dialog. J, K, E and X never fire inside a text field; Ctrl+Enter does.
  * - **Sending:** the dialog's Send, then POST /call-notes/confirm, which answers at once. The bar
  *   fills as each note lands (`use-batch.ts`). A second press meanwhile does nothing.
+ * - **A call the server won't send** (`skipped`, T3-11): the dialog names it with why before it
+ *   goes. After the send it stays here, out of the batch, and its card says why at the top, until
+ *   it is changed or sent again, so it never looks forgotten.
  * - **The line beside the button** says only what the button doesn't: the count is on the button,
  *   so the line is "1 left out." or "2 still sorting.", or nothing (DESIGN.md "Say it once").
  * - **Waiting for write access:** the button is greyed, with the reason beside it. Everything up
@@ -45,7 +48,7 @@ import { NoteCard, type EditNote } from './note-card'
 import { applyPreview, isCallNotesOff, sortForConfirm } from './notes'
 import { activityQuery } from './params'
 import { removeCallNote, useRemoving } from './remove'
-import { SendDialog } from './send-dialog'
+import { SendDialog, type SkippedCall } from './send-dialog'
 import { CallNotesOff, CardsPending, TabEmpty } from './states'
 import type { Batch, Landing } from './use-batch'
 import { useEditCallNote } from './use-edit'
@@ -57,10 +60,14 @@ import {
   LOAD_FAILED,
   NONE_READY,
   NOT_SENT,
+  NOTHING_SENT,
   REST_NEXT,
   SEND_OFF,
   sendingWords,
 } from './words'
+
+/** No call left out by the last send: the same empty map on every draw. */
+const NONE_LEFT: ReadonlyMap<string, string> = new Map()
 
 /** The words of the list, for a screen reader. */
 const LIST_LABEL = 'Calls to confirm'
@@ -122,6 +129,8 @@ export const ToConfirm = memo(function ToConfirm({
   const [editingId, setEditingId] = useState<string | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [sendIds, setSendIds] = useState<readonly string[]>([])
+  // The calls the last send left out, with the server's why, until each is changed or sent again.
+  const [leftBehind, setLeftBehind] = useState<ReadonlyMap<string, string>>(NONE_LEFT)
   const [mac] = useState(isMac)
   const reasonId = useId()
 
@@ -162,7 +171,20 @@ export const ToConfirm = memo(function ToConfirm({
         void refreshCallNoteLists(client)
         return
       }
-      batch.start(ids)
+      // A call the server left out wasn't sent: it is back to confirm, and its card says why.
+      const skipped = answer.skipped ?? []
+      const left = new Map(skipped.map((call) => [call.id, call.why]))
+      for (const id of left.keys()) {
+        updateNoteInLists(client, id, (note) => ({ ...note, status: 'to_confirm' }))
+      }
+      setLeftBehind(left.size > 0 ? left : NONE_LEFT)
+      const started = ids.filter((id) => !left.has(id))
+      if (started.length === 0) {
+        toast(NOTHING_SENT)
+        void refreshCallNoteLists(client)
+        return
+      }
+      batch.start(started)
     },
     onError: (error) => {
       void refreshCallNoteLists(client)
@@ -203,6 +225,13 @@ export const ToConfirm = memo(function ToConfirm({
     (id: string): EditNote =>
     (patch, apply) => {
       editMutation.mutate({ id, patch, apply })
+      // Changed since the send left it out: the why may no longer hold.
+      setLeftBehind((now) => {
+        if (!now.has(id)) return now
+        const next = new Map(now)
+        next.delete(id)
+        return next.size > 0 ? next : NONE_LEFT
+      })
     }
   const toggleLeftOut = (note: CallNoteOut): void => {
     const leave = !note.left_out
@@ -240,6 +269,12 @@ export const ToConfirm = memo(function ToConfirm({
     sendPreview.mutate(next)
     setDialogOpen(true)
   }
+  // The calls the preview says won't be sent, by their company, for the dialog.
+  const skippedNow: SkippedCall[] = (sendPreview.data?.skipped ?? []).map((call) => ({
+    id: call.id,
+    name: byId.get(call.id)?.company_name ?? null,
+    why: call.why,
+  }))
   const send = (): void => {
     setDialogOpen(false)
     confirm.mutate(sendIds)
@@ -386,6 +421,7 @@ export const ToConfirm = memo(function ToConfirm({
               active={note.id === activeId}
               editing={note.id === editingId}
               landing={landingOf(note.id)}
+              skippedWhy={leftBehind.get(note.id) ?? null}
               onActivate={() => {
                 if (activeId !== note.id) setActiveId(note.id)
               }}
@@ -417,6 +453,7 @@ export const ToConfirm = memo(function ToConfirm({
         onOpenChange={setDialogOpen}
         count={sendIds.length}
         preview={sendPreview.data}
+        skipped={skippedNow}
         loading={sendPreview.isPending}
         error={sendPreview.error}
         onRetry={() => {

@@ -15,7 +15,7 @@ import { isCallNotesOff } from './notes'
 import { OpenInHubSpot } from './open-in-hubspot'
 import { activityQuery, LOGGED_PAGE_SIZE } from './params'
 import { CallNotesOff, RowsPending, TabEmpty } from './states'
-import { callWhen, LOAD_FAILED, loggedWhen, NO_OUTCOME, personLine } from './words'
+import { isMeetingNotes, LOAD_FAILED, loggedWhen, noteLine } from './words'
 
 const LIST_LABEL = 'Logged calls'
 
@@ -25,13 +25,7 @@ function LoggedRow({ note, today }: { note: CallNoteOut; today: string }) {
     <li className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
       <div className="flex min-w-0 flex-col gap-0.5">
         <p className="font-semibold text-foreground">{note.company_name}</p>
-        <p className="text-caption text-muted-foreground">
-          {[
-            personLine(note.person),
-            callWhen(note.called_at, today),
-            note.call.outcome ?? NO_OUTCOME,
-          ].join(' · ')}
-        </p>
+        <p className="text-caption text-muted-foreground">{noteLine(note, today)}</p>
         <p className="line-clamp-1 max-w-prose break-words text-foreground">{summary}</p>
       </div>
       <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1">
@@ -39,7 +33,11 @@ function LoggedRow({ note, today }: { note: CallNoteOut; today: string }) {
           <CircleCheck aria-hidden="true" className="size-3.5 shrink-0" />
           {loggedWhen(note.confirmed_at, today)}
         </span>
-        <OpenInHubSpot href={note.hubspot_url} company={note.company_name} />
+        <OpenInHubSpot
+          href={note.hubspot_url}
+          company={note.company_name}
+          meeting={isMeetingNotes(note)}
+        />
       </div>
     </li>
   )

@@ -171,8 +171,16 @@ interface Server {
   hubspotNow: Record<string, Pick<CallNoteChange, 'current' | 'current_changed'>>
   /** The lists answer 409 `call_notes_off`. */
   listsOff: boolean
+  /** Notes the preview and the confirm won't send, by id, with why (T3-11). */
+  skip: Record<string, string>
+  /** Try again answers 422 `change_off_the_list` (T3-11). */
+  retryRefused: boolean
   sent: Sent[]
 }
+
+/** Track 2's words for a note naming a field off the list (T3-11). */
+const OFF_THE_LIST =
+  "A change on this note isn't one a call may change. Remove it, then send the note again."
 
 const IN_STATE: Record<CallNoteState, readonly CallNoteStatus[]> = {
   to_confirm: ['sorting', 'to_confirm', 'sending'],
@@ -231,9 +239,13 @@ function mockServer(changes: Partial<Omit<Server, 'sent' | 'release'>> = {}): Se
     alreadySending: false,
     hubspotNow: {},
     listsOff: false,
+    skip: {},
+    retryRefused: false,
     sent: [],
     ...changes,
   }
+  const skippedOf = (ids: readonly string[]) =>
+    ids.filter((id) => id in server.skip).map((id) => ({ id, why: server.skip[id] ?? '' }))
   const find = (id: string): CallNoteOut | undefined => server.notes.find((item) => item.id === id)
   const put = (next: CallNoteOut): CallNoteOut => {
     server.notes = server.notes.map((item) => (item.id === next.id ? next : item))
@@ -273,7 +285,9 @@ function mockServer(changes: Partial<Omit<Server, 'sent' | 'release'>> = {}): Se
       return json(saved, 201)
     }
     if (path === `${NOTES}/preview`) {
-      const items = (body as { ids: string[] }).ids
+      const asked = (body as { ids: string[] }).ids
+      const items = asked
+        .filter((id) => !(id in server.skip))
         .map(find)
         .filter((item): item is CallNoteOut => item !== undefined)
         .map((item) => ({
@@ -292,16 +306,18 @@ function mockServer(changes: Partial<Omit<Server, 'sent' | 'release'>> = {}): Se
           tasks: items.reduce((sum, item) => sum + item.tasks.length, 0),
           changes: items.reduce((sum, item) => sum + item.changes.length, 0),
         },
+        skipped: skippedOf(asked),
       })
     }
     if (path === `${NOTES}/confirm`) {
       if (server.alreadySending) return json({ sending: 0, already_sending: true })
-      const ids = (body as { ids: string[] }).ids
+      const asked = (body as { ids: string[] }).ids
+      const ids = asked.filter((id) => !(id in server.skip))
       for (const id of ids) {
         const item = find(id)
         if (item) put({ ...item, status: 'sending' })
       }
-      return json({ sending: ids.length, already_sending: false })
+      return json({ sending: ids.length, already_sending: false, skipped: skippedOf(asked) })
     }
     const one = /^\/api\/v1\/companies\/call-notes\/([^/]+?)(?:\/(retry|resolve))?$/.exec(path)
     if (one) {
@@ -309,6 +325,9 @@ function mockServer(changes: Partial<Omit<Server, 'sent' | 'release'>> = {}): Se
       const action = one[2]
       const item = find(id)
       if (!item) return problem(404, 'Not found', 'That note is gone.')
+      if (action === 'retry' && server.retryRefused) {
+        return problem(422, "This note can't be sent", OFF_THE_LIST, 'change_off_the_list')
+      }
       if (action === 'retry') return json(put({ ...item, status: 'sending' }))
       if (action === 'resolve') {
         const { step, landed } = body as { step: string; landed: boolean }
@@ -1234,5 +1253,138 @@ describe('what Activity asks for first (PLAN-V7 C1)', () => {
     for (const query of client.getQueryCache().getAll()) {
       expect(query.getObserversCount(), JSON.stringify(query.queryKey)).toBeGreaterThan(0)
     }
+  })
+})
+
+describe("a logged meeting's notes (T3-11)", () => {
+  /** A past meeting's transcript, logged with "Log meeting": it goes to HubSpot as a note. */
+  function meetingNotes(id: string, changes: Partial<CallNoteOut> = {}): CallNoteOut {
+    return note(id, {
+      person: null,
+      source: 'transcript',
+      text: 'Jo Sample: Thanks for coming in.\nSam Sample: Our Perth lease ends in June.',
+      called_at: '2026-11-12T23:00:00Z',
+      call: { summary: 'They walked us through the Perth office.', outcome: null },
+      ...changes,
+    })
+  }
+
+  it('reads as meeting notes, with no call outcome to show or to pick', async () => {
+    mockServer({ notes: [meetingNotes('m1')] })
+    const { user } = renderActivity()
+    await toConfirmList()
+    const card = screen.getByRole('article', { name: 'Sample Logistics Pty Ltd' })
+    expect(within(card).getByText('Meeting notes · 13 Nov 2026, 10:00 am')).toBeInTheDocument()
+    expect(within(card).queryByText(/No outcome/)).toBeNull()
+    await user.click(within(card).getByRole('button', { name: /^Edit/ }))
+    expect(within(card).queryByRole('heading', { name: 'Outcome' })).toBeNull()
+    expect(within(card).queryByRole('checkbox', { name: 'Connected' })).toBeNull()
+  })
+
+  it('names the meeting notes in Logged and in Needs a look', async () => {
+    mockServer({
+      notes: [
+        meetingNotes('m1', {
+          status: 'logged',
+          hubspot_url: HUBSPOT_URL,
+          confirmed_at: '2026-11-15T04:00:00Z',
+        }),
+        meetingNotes('m2', {
+          company_name: 'Sample Mining Pty Ltd',
+          status: 'failed',
+          steps: [{ step: 'note', status: 'failed', words: "HubSpot didn't answer." }],
+        }),
+      ],
+    })
+    const { user } = renderActivity('/companies/activity?tab=logged')
+    const list = await screen.findByRole('list', { name: 'Logged calls' })
+    expect(within(list).getByText('Meeting notes · 13 Nov 2026, 10:00 am')).toBeInTheDocument()
+    expect(within(list).getByRole('link', { name: /^Open in HubSpot/ })).toHaveAccessibleName(
+      'Open in HubSpot: the meeting notes for Sample Logistics Pty Ltd (opens in a new tab)',
+    )
+
+    await user.click(screen.getByRole('tab', { name: /^Needs a look/ }))
+    const look = await screen.findByRole('article', { name: 'Sample Mining Pty Ltd' })
+    expect(
+      within(within(look).getByRole('list', { name: 'What happened' })).getByText(
+        'The meeting notes:',
+      ),
+    ).toBeInTheDocument()
+  })
+})
+
+describe('a call the server leaves out of a send (T3-11)', () => {
+  it('names it with why before the send, and after it the card stays with why', async () => {
+    const server = mockServer({ notes: threeNotes(), skip: { n2: OFF_THE_LIST } })
+    const { user } = renderActivity()
+    const list = await toConfirmList()
+    await user.click(screen.getByRole('button', { name: 'Send 3 to HubSpot' }))
+    const dialog = await screen.findByRole('alertdialog', { name: 'Send 3 calls to HubSpot?' })
+    // The totals are the server's, without it.
+    expect(await within(dialog).findByText('2 calls, 1 task, 1 field change')).toBeInTheDocument()
+    const skipped = within(dialog)
+      .getByText("1 call won't be sent:")
+      .closest('[data-slot=send-skipped]')
+    if (!(skipped instanceof HTMLElement)) throw new Error('No skipped calls')
+    expect(within(skipped).getByRole('listitem')).toHaveTextContent(
+      `Sample Mining Pty Ltd: ${OFF_THE_LIST}`,
+    )
+    await user.click(within(dialog).getByRole('button', { name: 'Send to HubSpot' }))
+
+    // The other two go and leave; the one left out stays, and says why at its top.
+    expect(
+      await screen.findByText('2 logged in HubSpot.', {}, { timeout: 5000 }),
+    ).toBeInTheDocument()
+    const mining = within(list).getByRole('article', { name: 'Sample Mining Pty Ltd' })
+    expect(mining.querySelector('[data-slot=left-behind]')).toHaveTextContent(
+      `Not sent. ${OFF_THE_LIST}`,
+    )
+    expect(within(mining).queryByText('Sending to HubSpot.')).toBeNull()
+    // The landed cards fade out (150ms), then only the one left out is there.
+    await waitFor(() => {
+      expect(cardNames(list)).toEqual(['Sample Mining Pty Ltd'])
+    })
+    expect(sent(server, 'POST', `${NOTES}/confirm`)[0]?.body).toEqual({ ids: ['n1', 'n2', 'n3'] })
+
+    // Changed since: the why may no longer hold, so it goes.
+    await user.click(within(mining).getByRole('button', { name: /^Edit/ }))
+    const summary = within(mining).getByRole('textbox', { name: 'Summary: Sample Mining Pty Ltd' })
+    await user.type(summary, ' Asked for the lease.')
+    await user.tab()
+    await waitFor(() => {
+      expect(mining.querySelector('[data-slot=left-behind]')).toBeNull()
+    })
+  }, 15_000)
+
+  it('with every call left out, Send is greyed with why', async () => {
+    mockServer({ notes: [note('n1')], skip: { n1: OFF_THE_LIST } })
+    const { user } = renderActivity()
+    await toConfirmList()
+    await user.click(screen.getByRole('button', { name: 'Send 1 to HubSpot' }))
+    const dialog = await screen.findByRole('alertdialog', { name: 'Send 1 call to HubSpot?' })
+    expect(await within(dialog).findByText("1 call won't be sent:")).toBeInTheDocument()
+    const send = within(dialog).getByRole('button', { name: 'Send to HubSpot' })
+    expect(send).toBeDisabled()
+    expect(send).toHaveAccessibleDescription('None of these can be sent now.')
+  })
+
+  it("Try again on such a note says why in the server's own words", async () => {
+    mockServer({
+      notes: [
+        note('f1', {
+          status: 'failed',
+          steps: [{ step: 'call', status: 'failed', words: OFF_THE_LIST }],
+        }),
+      ],
+      retryRefused: true,
+    })
+    const { user } = renderActivity('/companies/activity?tab=needs-look')
+    const card = await screen.findByRole('article', { name: 'Sample Logistics Pty Ltd' })
+    await user.click(within(card).getByRole('button', { name: 'Try again' }))
+    const shown = (await screen.findByText("That didn't go through")).closest('[data-sonner-toast]')
+    if (!(shown instanceof HTMLElement)) throw new Error('No toast')
+    // The toast's own line is the server's words, as they came.
+    expect(within(shown).getByText(OFF_THE_LIST)).toBeInTheDocument()
+    expect(within(card).getByRole('button', { name: 'Try again' })).toBeEnabled()
   })
 })

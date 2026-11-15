@@ -20,6 +20,11 @@
  * - **The active card** (J and K move it) has the Navy edge and the tint of a selected row. While
  *   it is edited it keeps the edge but not the tint: its fields sit on the card colour, where
  *   their borders reach 3:1.
+ * - **A logged meeting** (T3-11, `source` transcript) reads as meeting notes: its line says
+ *   "Meeting notes", not a call outcome, and editing it offers no outcome. It goes to HubSpot as a
+ *   note.
+ * - **A note the last send left out** (`skipped`, T3-11) says so at the top, in the server's words,
+ *   until it is changed or sent again, so it never looks forgotten.
  */
 import {
   CircleAlert,
@@ -51,18 +56,18 @@ import { cn } from '@/lib/utils'
 import { NEW_PART, ChangeList, SummaryField, TaskList } from './note-parts'
 import type { Landing } from './use-batch'
 import {
-  callWhen,
   changeLabel,
   CHECK_THIS_ONE,
   DONE,
   EDIT,
+  isMeetingNotes,
   LEAVE_OUT,
+  LEFT_BEHIND,
   LEFT_OUT,
   LOGGED,
   NEEDS_LOOK,
-  NO_OUTCOME,
+  noteLine,
   OUTCOME,
-  personLine,
   PUT_BACK,
   REMOVE,
   removedChangeWords,
@@ -85,6 +90,8 @@ export interface NoteCardProps {
   editing: boolean
   /** Where the batch stands for this note while it is sent, or null. */
   landing: Landing | null
+  /** Why the last send left this note out, in the server's words, or null (T3-11). */
+  skippedWhy?: string | null
   onActivate: () => void
   /** Starts or ends the editing. Ending puts the focus back on the card. */
   onEditing: (editing: boolean) => void
@@ -246,6 +253,7 @@ export function NoteCard({
   active,
   editing: editingWanted,
   landing,
+  skippedWhy = null,
   onActivate,
   onEditing,
   onToggleLeftOut,
@@ -321,8 +329,10 @@ export function NoteCard({
     })
   }
 
-  const outcomes =
-    outcome && !options.outcomes.includes(outcome)
+  // A logged meeting's notes have no call outcome to pick: they go to HubSpot as a note.
+  const outcomes = isMeetingNotes(note)
+    ? []
+    : outcome && !options.outcomes.includes(outcome)
       ? [...options.outcomes, outcome]
       : options.outcomes
 
@@ -431,6 +441,17 @@ export function NoteCard({
         active && !editing && 'bg-selected',
       )}
     >
+      {skippedWhy ? (
+        <p
+          data-slot="left-behind"
+          className="flex items-start gap-2 border-b border-review bg-review-soft px-4 py-2 text-review-ink sm:px-5"
+        >
+          <TriangleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+          <span>
+            <span className="font-semibold">{LEFT_BEHIND}</span> {skippedWhy}
+          </span>
+        </p>
+      ) : null}
       {note.unsure ? (
         <p className="flex items-start gap-2 border-b border-review bg-review-soft px-4 py-2 text-review-ink sm:px-5">
           <TriangleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
@@ -451,11 +472,7 @@ export function NoteCard({
           <h2 id={titleId} className="text-section font-semibold text-balance">
             {note.company_name}
           </h2>
-          <p className="text-caption text-muted-foreground">
-            {[personLine(note.person), callWhen(note.called_at, today), outcome ?? NO_OUTCOME].join(
-              ' · ',
-            )}
-          </p>
+          <p className="text-caption text-muted-foreground">{noteLine(note, today)}</p>
         </header>
         {sorting ? (
           <SortingLine />

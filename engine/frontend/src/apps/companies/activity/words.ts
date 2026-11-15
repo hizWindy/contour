@@ -89,6 +89,39 @@ export function callWhen(at: string, today: string = melbourneDate()): string {
   return melbourneDate(at) === today ? `Today, ${formatTime(at)}` : formatDateTime(at)
 }
 
+/** A logged meeting's notes (T3-11): they go to HubSpot as a note, not a call. */
+export const MEETING_NOTES = 'Meeting notes'
+
+/** A note from a meeting's transcript ("Log meeting", T3-11), not from a call. */
+export function isMeetingNotes(note: Pick<CallNoteOut, 'source'>): boolean {
+  return note.source === 'transcript'
+}
+
+/**
+ * The line under a card's company: who, when and the outcome, "Jo Sample, Office Manager · Today,
+ * 3:05 pm · Connected". A logged meeting reads as meeting notes, with no call outcome: "Meeting
+ * notes · 12 Nov 2026, 9:00 am".
+ */
+export function noteLine(
+  note: Pick<CallNoteOut, 'source' | 'person' | 'called_at' | 'call'>,
+  today: string = melbourneDate(),
+): string {
+  if (isMeetingNotes(note)) {
+    return [
+      MEETING_NOTES,
+      note.person ? personLine(note.person) : null,
+      callWhen(note.called_at, today),
+    ]
+      .filter(Boolean)
+      .join(' · ')
+  }
+  return [
+    personLine(note.person),
+    callWhen(note.called_at, today),
+    note.call.outcome ?? NO_OUTCOME,
+  ].join(' · ')
+}
+
 /** "Lease end · Perth", or the label alone when the change is for the whole company. */
 export function changeLabel(label: string, office: string | null): string {
   return office ? `${label} · ${office}` : label
@@ -119,11 +152,14 @@ export function fromWords(words: string): string {
   return `from "${words}"`
 }
 
-/** A step of the write, by name: "The call", "Follow-up 2". */
-export function stepName(step: string): string {
+/**
+ * A step of the write, by name: "The call", "Follow-up 2". A logged meeting's notes go as a note,
+ * its step `note`: "The meeting notes".
+ */
+export function stepName(step: string, meeting = false): string {
   if (step === 'call') return 'The call'
   if (step === 'fields') return 'The field changes'
-  if (step === 'note') return 'The note'
+  if (step === 'note') return meeting ? 'The meeting notes' : 'The note'
   const task = /^task:(\d+)$/.exec(step)
   if (task) return `Follow-up ${task[1] ?? ''}`
   return humanise(step)
@@ -190,6 +226,20 @@ export function totalsWords(totals: { calls: number; tasks: number; changes: num
 export function heldWords(count: number): string {
   return `${pluralise(count, 'field change')} ${count === 1 ? 'is' : 'are'} held: HubSpot's value changed since you saw it.`
 }
+
+/** Over the notes the send leaves out (`skipped`, T3-11): "1 call won't be sent:" */
+export function notSentHead(count: number): string {
+  return `${pluralise(count, 'call')} won't be sent:`
+}
+
+/** At the top of a card the send left out, before the server's why. */
+export const LEFT_BEHIND = 'Not sent.'
+
+/** Every call of a send was left out: each card says why. */
+export const NOTHING_SENT = 'Nothing was sent. Each card says why.'
+
+/** With every call left out, Send has nothing to send. */
+export const NOTHING_TO_SEND = 'None of these can be sent now.'
 
 /** Under a list cut at its limit: "Showing the first 100 of 120." */
 export function firstOfWords(shown: number, total: number): string {

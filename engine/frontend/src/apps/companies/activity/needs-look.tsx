@@ -50,16 +50,15 @@ import { activityQuery } from './params'
 import { CallNotesOff, CardsPending, TabEmpty } from './states'
 import { HOLD_LOGGED_MS } from './use-batch'
 import {
-  callWhen,
   CHECK_HUBSPOT,
   firstOfWords,
+  isMeetingNotes,
   ITS_NOT_THERE,
   ITS_THERE,
   LOAD_FAILED,
   LOGGED,
-  NO_OUTCOME,
+  noteLine,
   NOT_DONE,
-  personLine,
   SEND_OFF,
   SENDING,
   STATUS_WORDS,
@@ -79,7 +78,7 @@ const STEP_ICONS: Readonly<Record<CallNoteStep['status'], { icon: LucideIcon; to
   pending: { icon: CircleDashed, tone: 'text-muted-foreground' },
 }
 
-function Steps({ steps }: { steps: readonly CallNoteStep[] }) {
+function Steps({ steps, meeting }: { steps: readonly CallNoteStep[]; meeting: boolean }) {
   if (steps.length === 0) return null
   return (
     <ul aria-label={WHAT_HAPPENED} className="flex flex-col gap-1.5">
@@ -89,7 +88,7 @@ function Steps({ steps }: { steps: readonly CallNoteStep[] }) {
           <li key={step.step} className="flex items-start gap-2">
             <Icon aria-hidden="true" className={cn('mt-0.5 size-4 shrink-0', tone)} />
             <span>
-              <span className="font-semibold">{stepName(step.step)}:</span> {step.words}
+              <span className="font-semibold">{stepName(step.step, meeting)}:</span> {step.words}
             </span>
           </li>
         )
@@ -161,6 +160,8 @@ function LookCard({
   const uncertain = note.steps.find((step) => step.status === 'uncertain')
   const busy = retry.isPending || resolve.isPending
   const summary = note.call.summary.trim() || note.text
+  // A logged meeting's notes (T3-11): its step is `note`, and its link the note in HubSpot.
+  const meeting = isMeetingNotes(note)
   const status =
     note.status === 'failed' || note.status === 'partial' || note.status === 'uncertain'
       ? note.status
@@ -210,7 +211,7 @@ function LookCard({
           {ITS_NOT_THERE}
         </Button>
         <span className="sm:ml-auto">
-          <OpenInHubSpot href={note.hubspot_url} company={note.company_name} />
+          <OpenInHubSpot href={note.hubspot_url} company={note.company_name} meeting={meeting} />
         </span>
       </>
     )
@@ -235,7 +236,7 @@ function LookCard({
           {ready ? TRY_AGAIN_HINT : SEND_OFF}
         </span>
         <span className="sm:ml-auto">
-          <OpenInHubSpot href={note.hubspot_url} company={note.company_name} />
+          <OpenInHubSpot href={note.hubspot_url} company={note.company_name} meeting={meeting} />
         </span>
       </>
     )
@@ -251,13 +252,7 @@ function LookCard({
           <h2 id={titleId} className="text-section font-semibold text-balance text-foreground">
             {note.company_name}
           </h2>
-          <p className="text-caption text-muted-foreground">
-            {[
-              personLine(note.person),
-              callWhen(note.called_at, today),
-              note.call.outcome ?? NO_OUTCOME,
-            ].join(' · ')}
-          </p>
+          <p className="text-caption text-muted-foreground">{noteLine(note, today)}</p>
         </header>
         {status ? (
           <p
@@ -279,7 +274,7 @@ function LookCard({
         <p className="line-clamp-2 max-w-prose text-pretty break-words text-foreground">
           {summary}
         </p>
-        <Steps steps={note.steps} />
+        <Steps steps={note.steps} meeting={meeting} />
       </div>
       <div className="flex flex-wrap items-center gap-2 border-t px-4 py-2.5 sm:px-5">
         {actions}
