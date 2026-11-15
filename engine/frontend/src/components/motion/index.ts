@@ -8,7 +8,8 @@
  *   TabIndicator    the sliding underline for tabs
  *   Reveal          content fades and rises 4px once, at most 8 items one after another
  *   RollingNumber   a number that rolls to its new value, in table digits
- *   PushView        one view replaces another in a box that keeps its size, forward and back
+ *   PushView        a view pushed over another in a box that keeps its size; the one under stays
+ *   useViewShown    whether the view a part sits in is the one on show
  *   ListExit        a list whose rows leave: the row fades, the rows under it glide up
  *   LevelMeter      five bars that follow the mic's level, still at silence
  *   TickIn          a tick that draws once, when it mounts
@@ -34,7 +35,7 @@ export {
   type ListExitProps,
 } from './list-exit'
 export { MotionRoot } from './motion-root'
-export { PushView, type PushDirection, type PushViewProps } from './push-view'
+export { PushView, type PushViewProps } from './push-view'
 export { Reveal, type RevealProps } from './reveal'
 export { focusRadio, handleRovingKey, rovingTarget } from './roving'
 export { RollingNumber, type RollingNumberProps } from './rolling-number'
@@ -44,3 +45,4 @@ export { TabIndicator, type TabIndicatorProps } from './tab-indicator'
 export { TickIn, type TickInProps } from './tick-in'
 export { PRESS_SCALE, usePress } from './use-press'
 export { useStill, useTransition } from './use-still'
+export { useViewShown } from './view-shown'

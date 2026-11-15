@@ -112,7 +112,7 @@ function facts(): PrepFacts {
   }
 }
 
-function prep(): PrepOut {
+function prep(script: Partial<PrepOut['script']> = {}): PrepOut {
   return {
     id: PREP_ID,
     company_key: '101',
@@ -133,6 +133,7 @@ function prep(): PrepOut {
       if_they_say: [],
       goal: null,
       dropped: 0,
+      ...script,
     },
     sources: [{ id: 'F1', kind: 'hubspot', label: 'HubSpot: Perth office', url: null, date: null }],
     web_checked: true,
@@ -199,6 +200,8 @@ interface Backend {
   /** null: the route isn't there (404), as before Track 2's routes are merged. */
   options: CallNoteOptions | null
   summary: CallNoteSummary | null
+  /** The call prep the panel opens. */
+  prep: PrepOut
   /** What POST /call-notes does: answer, refuse, or wait until `release()`. */
   save: 'ok' | 'fail' | 'wait'
   release: () => void
@@ -217,6 +220,7 @@ function mockBackend(changes: Partial<Omit<Backend, 'sent' | 'release'>> = {}): 
   const backend: Backend = {
     options: options(),
     summary: { to_confirm: 6, needs_look: 0, logged_today: 2 },
+    prep: prep(),
     save: 'ok',
     release: () => undefined,
     sent: [],
@@ -262,8 +266,8 @@ function mockBackend(changes: Partial<Omit<Backend, 'sent' | 'release'>> = {}): 
     if (path === API) return json({ total: ROWS.length, items: ROWS, leads_shown: false })
     if (path === `${API}/facets`) return json({ cities: [], owners: [], leads_shown: false })
     if (path === `${API}/preps/today`) return json([])
-    if (path === `${API}/preps` && method === 'POST') return json(prep(), 202)
-    if (path === `${API}/preps/${PREP_ID}`) return json(prep())
+    if (path === `${API}/preps` && method === 'POST') return json(backend.prep, 202)
+    if (path === `${API}/preps/${PREP_ID}`) return json(backend.prep)
     if (path === `${API}/101/facts`) return json(facts())
     if (path === `${API}/101`) return json(detail())
     if (path === `${API}/103`) {
@@ -301,6 +305,16 @@ function count(view: ReturnType<typeof renderCompanies>): number | undefined {
     ?.to_confirm
 }
 
+/**
+ * The note view in the panel. The script stays in the panel under it (`PushView`, inert), so a
+ * test reads the note view, not the whole panel.
+ */
+function noteViewIn(panel: HTMLElement): HTMLElement {
+  const note = panel.querySelector<HTMLElement>('[data-slot=note-view]')
+  if (!note) throw new Error('no note view')
+  return note
+}
+
 /** L on the first row: the panel opens on the note view. */
 async function logFirstRow(view: ReturnType<typeof renderCompanies>): Promise<HTMLElement> {
   await ready(view)
@@ -310,7 +324,7 @@ async function logFirstRow(view: ReturnType<typeof renderCompanies>): Promise<HT
   await waitFor(() => {
     expect(within(panel).getByRole('textbox', { name: 'Call note' })).toHaveFocus()
   })
-  return panel
+  return noteViewIn(panel)
 }
 
 /** Prep for Jo Sample from the row, then the panel's own Log call. */
@@ -329,7 +343,7 @@ async function logFromScript(view: ReturnType<typeof renderCompanies>): Promise<
   await waitFor(() => {
     expect(within(panel).getByRole('textbox', { name: 'Call note' })).toHaveFocus()
   })
-  return panel
+  return noteViewIn(panel)
 }
 
 function storedDrafts(): Record<string, { key: string; text: string }> {
@@ -382,6 +396,54 @@ describe('L and the Log call button', () => {
       expect(logCall).toHaveFocus()
     })
     expect(logCall).toHaveAttribute('aria-keyshortcuts', 'L')
+  })
+
+  it('Back finds the script as it was: a question ticked before L is still ticked', async () => {
+    mockBackend({
+      prep: prep({
+        questions: [
+          { text: 'When does the Perth lease end?', sources: ['F1'], follow_ups: [] },
+          { text: 'Who else decides on the office?', sources: ['F1'], follow_ups: [] },
+        ],
+      }),
+    })
+    const view = renderCompanies()
+    await ready(view)
+    await view.user.click(
+      screen.getByRole('button', { name: 'Prep a call to Sample Logistics Pty Ltd' }),
+    )
+    const picker = await screen.findByRole('dialog', { name: 'Who are you calling?' })
+    await view.user.click(
+      await within(picker).findByRole('button', { name: 'Prep a call with Jo Sample' }),
+    )
+    const script = await screen.findByRole('dialog', { name: 'Jo Sample' })
+    const asked = await within(script).findByRole('checkbox', {
+      name: 'Asked: When does the Perth lease end?',
+    })
+    await view.user.click(asked)
+    expect(within(script).getByText('1 of 2 asked.')).toBeInTheDocument()
+
+    // L: the note view comes over the script, which stays where it was, inert.
+    await view.user.keyboard('l')
+    const panel = await screen.findByRole('dialog', { name: 'Log call' })
+    await waitFor(() => {
+      expect(within(panel).getByRole('textbox', { name: 'Call note' })).toHaveFocus()
+    })
+    const scriptView = asked.closest('[data-view=base]')
+    expect(scriptView).toHaveAttribute('inert')
+    expect(asked).toBeInTheDocument()
+
+    // Back: the same script, with the tick and the count as they were.
+    await view.user.click(
+      within(noteViewIn(panel)).getByRole('button', { name: 'Back to the script' }),
+    )
+    const again = await screen.findByRole('dialog', { name: 'Jo Sample' })
+    expect(scriptView).not.toHaveAttribute('inert')
+    expect(
+      within(again).getByRole('checkbox', { name: 'Asked: When does the Perth lease end?' }),
+    ).toBe(asked)
+    expect(asked).toBeChecked()
+    expect(within(again).getByText('1 of 2 asked.')).toBeInTheDocument()
   })
 
   it('with call notes off there is no Log call button, and L does nothing', async () => {

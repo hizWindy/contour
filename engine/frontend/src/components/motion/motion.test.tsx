@@ -24,7 +24,7 @@ import {
   usePress,
   useStill,
   useTransition,
-  type PushDirection,
+  useViewShown,
 } from '.'
 import { handleRovingKey, nextEnabled, rovingTarget } from './roving'
 
@@ -443,37 +443,82 @@ function wrapMoving(ui: ReactNode) {
   return render(ui, { wrapper: WithFeatures })
 }
 
-function PushHarness() {
-  const [view, setView] = useState<{ key: string; direction: PushDirection }>({
-    key: 'script',
-    direction: 'forward',
-  })
+/** The script: a tick, and a button, so a test can see it kept and skipped. */
+function PushScript() {
+  const shown = useViewShown()
+  const [asked, setAsked] = useState(false)
+  return (
+    <div>
+      <p>{shown ? 'The script' : 'The script, covered'}</p>
+      <label>
+        <input
+          type="checkbox"
+          checked={asked}
+          onChange={(event) => {
+            setAsked(event.target.checked)
+          }}
+        />
+        Asked
+      </label>
+      <button type="button">Copy script</button>
+    </div>
+  )
+}
+
+/** The note view. */
+function PushNote() {
+  const shown = useViewShown()
+  return <textarea aria-label={shown ? 'Note' : 'Note, leaving'} />
+}
+
+function PushHarness({ start = false }: { start?: boolean }) {
+  const [noting, setNoting] = useState(start)
   return (
     <>
-      <button type="button" onClick={() => setView({ key: 'note', direction: 'forward' })}>
+      <button
+        type="button"
+        onClick={() => {
+          setNoting(true)
+        }}
+      >
         Log call
       </button>
-      <button type="button" onClick={() => setView({ key: 'script', direction: 'back' })}>
+      <button
+        type="button"
+        onClick={() => {
+          setNoting(false)
+        }}
+      >
         Back
       </button>
-      <PushView viewKey={view.key} direction={view.direction} className="min-h-0 flex-1">
-        {view.key === 'script' ? <p>The script</p> : <textarea aria-label="Note" />}
+      <PushView pushed={noting ? <PushNote /> : null} className="min-h-0 flex-1">
+        <PushScript />
       </PushView>
     </>
   )
 }
 
-/** The views in the box now, in order: the leaving one first. */
+/** The views in the box now: the base view, then the pushed one while it is there. */
 function views(): HTMLElement[] {
   return [...document.querySelectorAll<HTMLElement>('[data-slot=push-view] > [data-view]')]
 }
 
-function viewNames(list = views()): (string | undefined)[] {
-  return list.map((view) => view.dataset.view)
+function baseView(): HTMLElement {
+  const base = document.querySelector<HTMLElement>('[data-slot=push-view] > [data-view=base]')
+  if (!base) throw new Error('no base view')
+  return base
+}
+
+function pressLogCall(): void {
+  fireEvent.click(screen.getByRole('button', { name: 'Log call' }))
+}
+
+function pressBack(): void {
+  fireEvent.click(screen.getByRole('button', { name: 'Back' }))
 }
 
 describe('PushView', () => {
-  it('shows the first view at once, in a box that clips the slide sideways', () => {
+  it('shows the base view at once, in a box that clips the slide sideways', () => {
     wrapMoving(<PushHarness />)
     expect(document.querySelector('[data-slot=push-view]')).toHaveClass(
       'relative',
@@ -481,55 +526,141 @@ describe('PushView', () => {
       'min-h-0',
       'flex-1',
     )
-    expect(viewNames()).toEqual(['script'])
-    const [script] = views()
-    expect(script).not.toHaveAttribute('inert')
+    const base = baseView()
+    expect(views()).toEqual([base])
+    expect(base).not.toHaveAttribute('inert')
     // The first view doesn't move in: the panel around it does.
-    expect(script).toHaveStyle({ opacity: '1' })
+    expect(base).toHaveStyle({ opacity: '1' })
+    expect(screen.getByText('The script')).toBeInTheDocument()
   })
 
-  it('forward: the new view starts 24px to the right, faded, and the old one leaves, inert', async () => {
+  it('push: the base view stays, inert at once, and stops painting when its leave has ended', async () => {
     wrapMoving(<PushHarness />)
-    fireEvent.click(screen.getByRole('button', { name: 'Log call' }))
-    expect(viewNames()).toEqual(['script', 'note'])
-    const [script, note] = views()
-    expect(script).toHaveAttribute('inert')
+    const base = baseView()
+    pressLogCall()
+    const [stays, note] = views()
+    expect(stays).toBe(base)
+    expect(base).toHaveAttribute('inert')
+    // It keeps its place in the layout, and paints while it leaves.
+    expect(base).not.toHaveAttribute('hidden')
+    expect(base.style.visibility).toBe('')
+    expect(note).toHaveAttribute('data-view', 'pushed')
     expect(note).not.toHaveAttribute('inert')
-    // Where it starts, before the first frame.
+    // Where the note view starts, before the first frame.
     expect(note).toHaveStyle({ opacity: '0', transform: 'translateX(24px)' })
-    expect(screen.getByRole('textbox', { name: 'Note' })).toBeInTheDocument()
-    // Then the old view is gone, and the box holds one view.
+    // Its leave ends 24px to the left, faded, and then it doesn't paint.
     await waitFor(() => {
-      expect(viewNames()).toEqual(['note'])
+      expect(base).toHaveStyle({ visibility: 'hidden' })
     })
+    expect(base).toHaveStyle({ opacity: '0', transform: 'translateX(-24px)' })
+    expect(views()).toEqual([base, note])
+    // Out of sight is out of reach of a screen reader too.
+    expect(screen.queryByRole('button', { name: 'Copy script' })).toBeNull()
   })
 
-  it('back, pressed half way: the script comes back as the same element, and the note leaves', async () => {
+  it('keeps what the base view holds: a tick made before Log call is there after Back', async () => {
+    const user = userEvent.setup()
     wrapMoving(<PushHarness />)
-    const [script] = views()
-    fireEvent.click(screen.getByRole('button', { name: 'Log call' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
-    const [again, note] = views()
-    // The same element, so its spring carries on from where it is and nothing jumps.
-    expect(again).toBe(script)
-    expect(again).not.toHaveAttribute('inert')
-    expect(note?.dataset.view).toBe('note')
+    const base = baseView()
+    await user.click(screen.getByRole('checkbox', { name: 'Asked' }))
+    pressLogCall()
+    await waitFor(() => {
+      expect(base).toHaveStyle({ visibility: 'hidden' })
+    })
+    pressBack()
+    expect(baseView()).toBe(base)
+    expect(screen.getByRole('checkbox', { name: 'Asked' })).toBeChecked()
+  })
+
+  it('takes the covered base view out of the tab order, and puts it back on Back', async () => {
+    const user = userEvent.setup()
+    wrapMoving(<PushHarness />)
+    const base = baseView()
+    pressLogCall()
+    await waitFor(() => {
+      expect(base).toHaveStyle({ visibility: 'hidden' })
+    })
+    screen.getByRole('textbox', { name: 'Note' }).focus()
+    for (let step = 0; step < 6; step += 1) {
+      await user.tab()
+      expect(base.contains(document.activeElement)).toBe(false)
+    }
+    pressBack()
+    screen.getByRole('button', { name: 'Back' }).focus()
+    await user.tab()
+    expect(screen.getByRole('checkbox', { name: 'Asked' })).toHaveFocus()
+  })
+
+  it('back: the base view is shown at once, so it can take the focus, and the note view leaves', async () => {
+    // Opened on the note view: the script is out of sight from the start, and nothing slides.
+    wrapMoving(<PushHarness start />)
+    const base = baseView()
+    const [, note] = views()
+    expect(base).toHaveAttribute('inert')
+    expect(base).toHaveStyle({ visibility: 'hidden' })
+    expect(note).toHaveStyle({ opacity: '1' })
+
+    pressBack()
+    expect(baseView()).toBe(base)
+    expect(base).not.toHaveAttribute('inert')
+    expect(base.style.visibility).toBe('')
+    screen.getByRole('button', { name: 'Copy script' }).focus()
+    expect(screen.getByRole('button', { name: 'Copy script' })).toHaveFocus()
     expect(note).toHaveAttribute('inert')
     await waitFor(() => {
-      expect(views()).toEqual([script])
+      expect(views()).toEqual([base])
     })
   })
 
-  it('simply swaps with reduced motion: only the new view shows, at once, where it ends', async () => {
+  it('a second press half way never jumps: each view is the same element all along', async () => {
+    wrapMoving(<PushHarness />)
+    const base = baseView()
+    pressLogCall()
+    const [, note] = views()
+    // Back half way: the script comes back, and the note view leaves, inert.
+    pressBack()
+    expect(views()).toEqual([base, note])
+    expect(base).not.toHaveAttribute('inert')
+    expect(note).toHaveAttribute('inert')
+    // Log call half way back: the note view comes back as the same element.
+    pressLogCall()
+    expect(views()).toEqual([base, note])
+    expect(note).not.toHaveAttribute('inert')
+    expect(base).toHaveAttribute('inert')
+    await waitFor(() => {
+      expect(base).toHaveStyle({ visibility: 'hidden' })
+    })
+    expect(views()).toEqual([base, note])
+  })
+
+  it('tells each view whether it is the one on show', () => {
+    wrapMoving(<PushHarness />)
+    pressLogCall()
+    expect(screen.getByText('The script, covered')).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Note' })).toBeInTheDocument()
+    pressBack()
+    expect(screen.getByText('The script')).toBeInTheDocument()
+    expect(screen.getByLabelText('Note, leaving')).toBeInTheDocument()
+  })
+
+  it('simply swaps with reduced motion: the base view is hidden at once, and the note view is there', async () => {
     askForReducedMotion()
     wrapMoving(<PushHarness />)
-    fireEvent.click(screen.getByRole('button', { name: 'Log call' }))
-    const shown = views().filter((view) => !view.hidden)
-    expect(viewNames(shown)).toEqual(['note'])
-    expect(shown[0]).toHaveStyle({ opacity: '1' })
-    expect(shown[0]?.style.transform).not.toContain('translate')
+    const base = baseView()
+    pressLogCall()
+    const [, note] = views()
+    expect(base).toHaveAttribute('inert')
+    expect(base).toHaveStyle({ visibility: 'hidden' })
+    expect(note).toHaveStyle({ opacity: '1' })
+    expect(note?.style.transform).not.toContain('translate')
+
+    pressBack()
+    expect(base.style.visibility).toBe('')
+    expect(base).toHaveStyle({ opacity: '1' })
+    expect(base.style.transform).not.toContain('translate')
+    expect(note).toHaveAttribute('hidden')
     await waitFor(() => {
-      expect(viewNames()).toEqual(['note'])
+      expect(views()).toEqual([base])
     })
   })
 })

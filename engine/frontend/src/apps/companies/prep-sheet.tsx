@@ -20,7 +20,9 @@
  * - **Log call** (PLAN-V17 T3-5): with call notes on, "Log call" in the footer, or L anywhere in
  *   the panel outside a text field, brings the note view in from the right (`call-notes/`). The
  *   panel keeps its size. Esc or the arrow goes back to the script, and focus lands on Log call.
- *   "Save and next" closes the panel, and focus goes back to the row.
+ *   The script stays under the note view the whole time (`PushView`), so Back finds the ticked
+ *   questions, an open line edit and the scroll as they were (T3-8). "Save and next" closes the
+ *   panel, and focus goes back to the row.
  * - **Motion:** the panel slides in over 250 ms and out in 150 ms. Another person in the same
  *   panel cross-fades in 150 ms. The note view pushes in like a phone app's next screen.
  * - **Phone:** it fills the screen and blocks the page, and the number with a Call button stays at
@@ -456,11 +458,14 @@ export function PrepSheet({ target, onClose, onChangeTarget, onOpenCompany }: Pr
         onKeyDown={onPanelKey}
         // Focus goes to the panel itself, not its first button (the company link), so a stray
         // Enter does nothing and a screen reader starts at the person's name. The note view puts
-        // it in its text box as it mounts, so this only runs if that didn't happen.
+        // it in its text box as it mounts, so this only runs if that didn't happen. The script
+        // stays under the note view, so the box is looked for in the note view only.
         onOpenAutoFocus={(event) => {
           event.preventDefault()
           if (!(event.currentTarget instanceof HTMLElement)) return
-          const box = noting ? event.currentTarget.querySelector('textarea') : null
+          const box = noting
+            ? event.currentTarget.querySelector<HTMLElement>('[data-slot=note-view] textarea')
+            : null
           ;(box ?? event.currentTarget).focus()
         }}
         onCloseAutoFocus={(event) => {
@@ -479,235 +484,233 @@ export function PrepSheet({ target, onClose, onChangeTarget, onOpenCompany }: Pr
         }}
       >
         <PushView
-          viewKey={noting ? 'note' : 'script'}
-          direction={noting ? 'forward' : 'back'}
           className="min-h-0 flex-1"
+          pushed={
+            noting ? (
+              <NoteView
+                // Another call in the same panel starts from its own draft.
+                key={`${companyKey ?? ''}|${person?.id ?? ''}`}
+                companyKey={companyKey ?? ''}
+                companyName={companyName}
+                person={person}
+                company={company.data}
+                companyFailed={Boolean(company.error)}
+                prepId={prepId ?? null}
+                options={notes}
+                onPhone={onPhone}
+                onBack={backToScript}
+                onSaved={onClose}
+              />
+            ) : null
+          }
         >
-          {noting ? (
-            <NoteView
-              // Another call in the same panel starts from its own draft.
-              key={`${companyKey ?? ''}|${person?.id ?? ''}`}
-              companyKey={companyKey ?? ''}
-              companyName={companyName}
-              person={person}
-              company={company.data}
-              companyFailed={Boolean(company.error)}
-              prepId={prepId ?? null}
-              options={notes}
-              onPhone={onPhone}
-              onBack={backToScript}
-              onSaved={onClose}
-            />
-          ) : (
-            <div className="flex h-full flex-col">
-              <SheetHeader className="gap-3 border-b p-5 pr-14 text-left max-sm:p-4 max-sm:pt-[max(1rem,env(safe-area-inset-top))] max-sm:pr-14">
-                <div className="flex min-w-0 items-start gap-3">
-                  {picking ? (
-                    <Avatar icon={Building2} />
-                  ) : person ? (
-                    <Avatar name={person.name} />
-                  ) : (
-                    <Avatar icon={PhoneOutgoing} />
-                  )}
-                  <div className="flex min-w-0 flex-col gap-0.5">
-                    <PanelTitle className="text-section">{title}</PanelTitle>
-                    <PanelDescription className="text-ui text-foreground">
-                      {picking ? null : person ? (
-                        <span>{personTitle ?? 'No title on record'} · </span>
-                      ) : (
-                        <span>Cold call, no name yet · </span>
-                      )}
-                      {onOpenCompany && companyKey ? (
-                        <button
-                          type="button"
-                          onClick={openCompany}
-                          className="rounded-sm underline decoration-input underline-offset-4 transition-colors hover:decoration-current"
-                        >
-                          {companyName}
-                        </button>
-                      ) : (
-                        companyName
-                      )}
-                    </PanelDescription>
-                  </div>
-                </div>
-                {picking ? null : (
-                  // Under the person's name, and out of the scroll, so it stays in view.
-                  <SourcesContext.Provider value={sources}>
-                    <div className="-mr-9 max-sm:-mr-10">
-                      <BeforeYouDial
-                        company={company.data}
-                        facts={facts.data}
-                        script={claude}
-                        checking={checking}
-                        person={person}
-                        today={today}
-                      />
-                    </div>
-                  </SourcesContext.Provider>
+          {/* The script stays here under the note view, so Back finds its ticks and scroll. */}
+          <div className="flex h-full flex-col">
+            <SheetHeader className="gap-3 border-b p-5 pr-14 text-left max-sm:p-4 max-sm:pt-[max(1rem,env(safe-area-inset-top))] max-sm:pr-14">
+              <div className="flex min-w-0 items-start gap-3">
+                {picking ? (
+                  <Avatar icon={Building2} />
+                ) : person ? (
+                  <Avatar name={person.name} />
+                ) : (
+                  <Avatar icon={PhoneOutgoing} />
                 )}
-              </SheetHeader>
-              <SourcesContext.Provider value={sources}>
-                <div
-                  key={key}
-                  className="min-h-0 flex-1 animate-in overflow-y-auto overscroll-contain p-5 duration-150 fade-in-0 max-sm:p-4"
-                >
-                  {picking ? (
-                    <WhoPicker
+                <div className="flex min-w-0 flex-col gap-0.5">
+                  <PanelTitle className="text-section">{title}</PanelTitle>
+                  <PanelDescription className="text-ui text-foreground">
+                    {picking ? null : person ? (
+                      <span>{personTitle ?? 'No title on record'} · </span>
+                    ) : (
+                      <span>Cold call, no name yet · </span>
+                    )}
+                    {onOpenCompany && companyKey ? (
+                      <button
+                        type="button"
+                        onClick={openCompany}
+                        className="rounded-sm underline decoration-input underline-offset-4 transition-colors hover:decoration-current"
+                      >
+                        {companyName}
+                      </button>
+                    ) : (
+                      companyName
+                    )}
+                  </PanelDescription>
+                </div>
+              </div>
+              {picking ? null : (
+                // Under the person's name, and out of the scroll, so it stays in view.
+                <SourcesContext.Provider value={sources}>
+                  <div className="-mr-9 max-sm:-mr-10">
+                    <BeforeYouDial
                       company={company.data}
-                      onPick={(picked) => {
-                        if (!shown) return
-                        // The script for that person: not the note view the panel may have opened on.
-                        onChangeTarget(
-                          picked
-                            ? {
-                                ...shown,
-                                person: { id: picked.id, name: picked.name, title: picked.title },
-                                note: false,
-                              }
-                            : { ...shown, cold: true, note: false },
-                        )
-                      }}
+                      facts={facts.data}
+                      script={claude}
+                      checking={checking}
+                      person={person}
+                      today={today}
                     />
-                  ) : (
-                    <div className="flex flex-col gap-6">
-                      {problem ? (
-                        <ErrorState
-                          error={start.error}
-                          context="Call prep couldn't start. The script below is from our HubSpot copy."
-                          onRetry={() => {
-                            ask(false)
-                          }}
-                        />
-                      ) : prep.data?.status === 'failed' ? (
-                        // What happened and what to do come from the server, in one sentence each
-                        // (PLAN-V15 T3-7); the card says what it means for the script.
-                        <div
-                          role="alert"
-                          className="flex items-start gap-2 rounded-lg border border-destructive bg-destructive-soft p-3 text-ui text-destructive-ink"
-                        >
+                  </div>
+                </SourcesContext.Provider>
+              )}
+            </SheetHeader>
+            <SourcesContext.Provider value={sources}>
+              <div
+                key={key}
+                className="min-h-0 flex-1 animate-in overflow-y-auto overscroll-contain p-5 duration-150 fade-in-0 max-sm:p-4"
+              >
+                {picking ? (
+                  <WhoPicker
+                    company={company.data}
+                    onPick={(picked) => {
+                      if (!shown) return
+                      // The script for that person: not the note view the panel may have opened on.
+                      onChangeTarget(
+                        picked
+                          ? {
+                              ...shown,
+                              person: { id: picked.id, name: picked.name, title: picked.title },
+                              note: false,
+                            }
+                          : { ...shown, cold: true, note: false },
+                      )
+                    }}
+                  />
+                ) : (
+                  <div className="flex flex-col gap-6">
+                    {problem ? (
+                      <ErrorState
+                        error={start.error}
+                        context="Call prep couldn't start. The script below is from our HubSpot copy."
+                        onRetry={() => {
+                          ask(false)
+                        }}
+                      />
+                    ) : prep.data?.status === 'failed' ? (
+                      // What happened and what to do come from the server, in one sentence each
+                      // (PLAN-V15 T3-7); the card says what it means for the script.
+                      <div
+                        role="alert"
+                        className="flex items-start gap-2 rounded-lg border border-destructive bg-destructive-soft p-3 text-ui text-destructive-ink"
+                      >
+                        <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+                        <span>
+                          {prep.data.error ?? "Call prep couldn't finish. Try again."} The script
+                          below is from our HubSpot copy.
+                        </span>
+                      </div>
+                    ) : lost ? (
+                      <div
+                        role="alert"
+                        className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-destructive bg-destructive-soft p-3 text-ui text-destructive-ink"
+                      >
+                        <span className="flex min-w-0 flex-1 items-start gap-2">
                           <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
                           <span>
-                            {prep.data.error ?? "Call prep couldn't finish. Try again."} The script
-                            below is from our HubSpot copy.
+                            Lost touch with the server. The script below is from our HubSpot copy.
                           </span>
-                        </div>
-                      ) : lost ? (
-                        <div
-                          role="alert"
-                          className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-destructive bg-destructive-soft p-3 text-ui text-destructive-ink"
+                        </span>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={prep.isFetching}
+                          onClick={() => {
+                            void prep.refetch()
+                          }}
                         >
-                          <span className="flex min-w-0 flex-1 items-start gap-2">
-                            <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-                            <span>
-                              Lost touch with the server. The script below is from our HubSpot copy.
-                            </span>
-                          </span>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            disabled={prep.isFetching}
-                            onClick={() => {
-                              void prep.refetch()
-                            }}
-                          >
-                            Try again
-                          </Button>
-                        </div>
-                      ) : null}
-                      <LastTalk company={company.data} facts={facts.data} />
-                      {guide ? (
-                        <section
-                          key={guide.madeFrom}
-                          aria-labelledby={SCRIPT_TITLE_ID}
-                          className="flex min-w-0 animate-in flex-col gap-4 duration-150 fade-in-0"
-                        >
-                          <ScriptHeader
-                            madeFrom={guide.madeFrom}
-                            prep={prep.data}
-                            enabled={enabled}
-                            namesOk={facts.data?.names_ok !== false}
-                            capUsd={facts.data?.prep_cap_usd ?? null}
-                            running={checking || start.isPending}
-                            stage={prep.data?.stage ?? 0}
-                            failed={Boolean(problem) || prep.data?.status === 'failed'}
-                            toneNow={toneNow}
-                            copyAt={facts.data?.copy_at ?? null}
-                            onResearch={() => {
-                              ask(true)
-                            }}
-                          />
-                          <SalesScript guide={guide} />
-                        </section>
-                      ) : company.error ? (
-                        <ErrorState
-                          error={company.error}
-                          context="The company couldn't be loaded, so there is no script."
+                          Try again
+                        </Button>
+                      </div>
+                    ) : null}
+                    <LastTalk company={company.data} facts={facts.data} />
+                    {guide ? (
+                      <section
+                        key={guide.madeFrom}
+                        aria-labelledby={SCRIPT_TITLE_ID}
+                        className="flex min-w-0 animate-in flex-col gap-4 duration-150 fade-in-0"
+                      >
+                        <ScriptHeader
+                          madeFrom={guide.madeFrom}
+                          prep={prep.data}
+                          enabled={enabled}
+                          namesOk={facts.data?.names_ok !== false}
+                          capUsd={facts.data?.prep_cap_usd ?? null}
+                          running={checking || start.isPending}
+                          stage={prep.data?.stage ?? 0}
+                          failed={Boolean(problem) || prep.data?.status === 'failed'}
+                          toneNow={toneNow}
+                          copyAt={facts.data?.copy_at ?? null}
+                          onResearch={() => {
+                            ask(true)
+                          }}
                         />
-                      ) : (
-                        <SalesScriptPending />
-                      )}
-                      <MoreAbout
-                        company={company.data}
-                        companyName={companyName}
-                        today={today}
-                        onOpenCompany={openCompany}
+                        <SalesScript guide={guide} />
+                      </section>
+                    ) : company.error ? (
+                      <ErrorState
+                        error={company.error}
+                        context="The company couldn't be loaded, so there is no script."
                       />
-                    </div>
-                  )}
+                    ) : (
+                      <SalesScriptPending />
+                    )}
+                    <MoreAbout
+                      company={company.data}
+                      companyName={companyName}
+                      today={today}
+                      onOpenCompany={openCompany}
+                    />
+                  </div>
+                )}
+              </div>
+            </SourcesContext.Provider>
+            {!picking && onPhone ? (
+              // On a phone: one big Call button, where a thumb reaches it, and the rest under it.
+              <div className="flex flex-col gap-2 border-t bg-popover p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+                {phone && tel ? (
+                  <Button asChild size="lg" className="w-full">
+                    <a href={tel}>
+                      <PhoneCall aria-hidden="true" />
+                      Call {phone}
+                    </a>
+                  </Button>
+                ) : (
+                  <p className="py-1 text-center text-ui text-muted-foreground">
+                    No number on record
+                  </p>
+                )}
+                {/* After the call, the next step: its own row, where the thumb is. */}
+                {logCallButton}
+                <div className="flex gap-2 *:flex-1">
+                  {phone ? <CopyButton text={phone} label="Copy number" /> : null}
+                  <CopyButton
+                    text={guide ? guideText(guide, who) : ''}
+                    label="Copy script"
+                    disabled={!guide}
+                  />
                 </div>
-              </SourcesContext.Provider>
-              {!picking && onPhone ? (
-                // On a phone: one big Call button, where a thumb reaches it, and the rest under it.
-                <div className="flex flex-col gap-2 border-t bg-popover p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-                  {phone && tel ? (
-                    <Button asChild size="lg" className="w-full">
-                      <a href={tel}>
-                        <PhoneCall aria-hidden="true" />
-                        Call {phone}
-                      </a>
-                    </Button>
-                  ) : (
-                    <p className="py-1 text-center text-ui text-muted-foreground">
-                      No number on record
-                    </p>
-                  )}
-                  {/* After the call, the next step: its own row, where the thumb is. */}
+              </div>
+            ) : !picking ? (
+              <div className="flex flex-wrap items-center gap-2 border-t bg-popover px-5 py-3">
+                {phone && tel ? (
+                  <>
+                    <span className="text-body font-semibold tabular-nums select-all">{phone}</span>
+                    <CopyButton text={phone} label="Copy number" variant="default" />
+                  </>
+                ) : (
+                  <span className="text-ui text-muted-foreground">No number on record</span>
+                )}
+                <div className="ml-auto flex flex-wrap items-center gap-2">
+                  <CopyButton
+                    text={guide ? guideText(guide, who) : ''}
+                    label="Copy script"
+                    disabled={!guide}
+                  />
                   {logCallButton}
-                  <div className="flex gap-2 *:flex-1">
-                    {phone ? <CopyButton text={phone} label="Copy number" /> : null}
-                    <CopyButton
-                      text={guide ? guideText(guide, who) : ''}
-                      label="Copy script"
-                      disabled={!guide}
-                    />
-                  </div>
                 </div>
-              ) : !picking ? (
-                <div className="flex flex-wrap items-center gap-2 border-t bg-popover px-5 py-3">
-                  {phone && tel ? (
-                    <>
-                      <span className="text-body font-semibold tabular-nums select-all">
-                        {phone}
-                      </span>
-                      <CopyButton text={phone} label="Copy number" variant="default" />
-                    </>
-                  ) : (
-                    <span className="text-ui text-muted-foreground">No number on record</span>
-                  )}
-                  <div className="ml-auto flex flex-wrap items-center gap-2">
-                    <CopyButton
-                      text={guide ? guideText(guide, who) : ''}
-                      label="Copy script"
-                      disabled={!guide}
-                    />
-                    {logCallButton}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          )}
+              </div>
+            ) : null}
+          </div>
         </PushView>
       </SheetContent>
     </Sheet>
