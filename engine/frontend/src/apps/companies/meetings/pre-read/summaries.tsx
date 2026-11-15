@@ -23,7 +23,7 @@ import type { FormSummariesPatch, MeetingFormOut, SummaryBy } from '@/api/v17'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toastProblem } from '@/lib/problems'
-import { SourceChip } from '../../guide-parts'
+import { SourceChip } from '../../source-chip'
 import { EditPencil, LineTextBox } from '../../line-box'
 import { FadeSwap } from './fade-swap'
 import {
