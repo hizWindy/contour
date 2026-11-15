@@ -463,11 +463,23 @@ describe('the pencil', () => {
     })
     expect(box).toHaveFocus()
     expect(box).toHaveValue('Their Perth lease ends in June 2028.')
+    // The open box's Save is quiet: the page keeps one Navy button, "Check and send". Save and
+    // Cancel are 44px tall on a touch screen.
+    const save = summaryOf('What we know about the project').getByRole('button', { name: 'Save' })
+    const cancel = summaryOf('What we know about the project').getByRole('button', {
+      name: 'Cancel',
+    })
+    expect(save).toHaveAttribute('data-variant', 'outline')
+    expect(save).toHaveClass('touch:h-11')
+    expect(cancel).toHaveClass('touch:h-11')
+    expect(
+      [...document.querySelectorAll('[data-slot=button][data-variant=default]')].map(
+        (button) => button.textContent,
+      ),
+    ).toEqual(['Check and send'])
     await user.clear(box)
     await user.type(box, words)
-    await user.click(
-      summaryOf('What we know about the project').getByRole('button', { name: 'Save' }),
-    )
+    await user.click(save)
 
     // At once, before the server answers: the new words, and the mark turns.
     expect(summaryOf('What we know about the project').getByText(words)).toBeInTheDocument()

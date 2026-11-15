@@ -139,6 +139,8 @@ function SummaryBlock({ form, name }: SummaryBlockProps) {
         maxChars={SUMMARY_MAX_CHARS}
         hint={SUMMARY_HINT}
         rows={4}
+        // The page's one Navy button is "Check and send": an open box's Save stays quiet.
+        quietSave
         problem={kept?.problem ?? null}
         onCancel={close}
         onSubmit={save}

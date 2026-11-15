@@ -54,6 +54,11 @@ export interface LineTextBoxProps {
   problem?: string | null
   /** How tall the box opens, in lines. */
   rows?: number
+  /**
+   * Save as a quiet outline button, for a page whose one Navy button is elsewhere (the pre-read's
+   * "Check and send"). Call prep's script keeps the Navy Save.
+   */
+  quietSave?: boolean
   /** Save, with the text trimmed. Only called when it fits. */
   onSubmit: (text: string) => void
   /** Cancel or Esc. */
@@ -75,6 +80,7 @@ export function LineTextBox({
   busy = false,
   problem = null,
   rows = 2,
+  quietSave = false,
   onSubmit,
   onCancel,
   onType,
@@ -129,11 +135,25 @@ export function LineTextBox({
           {problem}
         </p>
       ) : null}
+      {/* 44px tall on a touch screen, as every button there is. */}
       <div className="flex flex-wrap gap-2 max-sm:*:flex-1">
-        <Button type="submit" size="sm" disabled={busy || tooLong}>
+        <Button
+          type="submit"
+          variant={quietSave ? 'outline' : 'default'}
+          size="sm"
+          className="touch:h-11"
+          disabled={busy || tooLong}
+        >
           Save
         </Button>
-        <Button type="button" variant="outline" size="sm" disabled={busy} onClick={onCancel}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="touch:h-11"
+          disabled={busy}
+          onClick={onCancel}
+        >
           Cancel
         </Button>
       </div>
