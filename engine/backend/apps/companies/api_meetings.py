@@ -3,21 +3,23 @@
 Behind the Companies tick, like every Companies route. Each answers 409 `meeting_forms_off` while
 meetings and pre-reads are switched off. A rep sees their own meetings, or the team's. The fixed
 paths come before `/meetings/{meeting_id}`, and the whole router before `/{key}`. The services
-are meeting_store.py (the reads), meeting_form.py (the pre-read's draft) and meeting_send.py
-(sending it, T2-14).
+are meeting_store.py (the reads), meeting_form.py (the pre-read's draft), meeting_send.py
+(sending it, T2-14) and meeting_log.py (a past meeting's transcript, T2-15).
 """
 
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Path, Query, Request, Response
+from fastapi import APIRouter, Depends, Header, Path, Query, Request, Response
 
-from apps.companies import meeting_form, meeting_send, meeting_store
+from apps.companies import meeting_form, meeting_log, meeting_send, meeting_store, note_store
+from apps.companies.api_notes import SorterDep
 from apps.companies.deps import LeadsDep
 from apps.companies.meeting_form import MeetingFormRunner
 from apps.companies.meeting_store import MeetingSource
 from apps.companies.note_batch import ActivityWriter
 from apps.companies.schemas import (
+    CallNoteOut,
     FormEmailPreview,
     FormPreviewIn,
     FormSendIn,
@@ -27,11 +29,13 @@ from apps.companies.schemas import (
     MeetingFormStart,
     MeetingPage,
     MeetingSummary,
+    MeetingTranscriptIn,
     MeetingWhen,
 )
 from core.api.access import SignedInDep
 from core.api.deps import SessionDep, SettingsDep
 from core.api.models import OFFSET_MAX, SafeText
+from core.api.runs import IDEMPOTENCY_PATTERN
 from core.api.signin import NowDep
 from core.claude.client import get_claude
 from core.config import Settings
@@ -335,3 +339,60 @@ async def get_meeting(
     meeting_id: MeetingId, session: SessionDep, settings: MeetingsOnDep, source: SourceDep
 ) -> MeetingDetail:
     return await meeting_store.meeting_detail(session, meeting_id, source=source)
+
+
+@router.post(
+    "/meetings/{meeting_id}/transcript",
+    response_model=CallNoteOut,
+    status_code=201,
+    summary="Log a meeting",
+    description=(
+        "A past client meeting's transcript, pasted or read from a .txt or .vtt file "
+        "(`file_name`): a .vtt file is cleaned of its header, cue numbers, times and tags, and "
+        "keeps who said what. It becomes a call note like any other, linked to the meeting, "
+        "with the source `transcript`: sorted the same way, in the same batch, and nothing goes "
+        "to HubSpot until I confirm it. The transcript is data, never instructions. Send an "
+        "`Idempotency-Key`: the same key from the same person gives back the first note (200). "
+        "404 `meeting_not_found`, `company_not_found`. 409 `meeting_not_past` for a meeting "
+        "still to come, `call_notes_off`, `meeting_forms_off`. 422 `transcript_file` (not a "
+        ".txt or .vtt file), `transcript_empty`, `transcript_too_long`."
+    ),
+    responses={200: {"model": CallNoteOut, "description": "The note saved first with this key"}},
+)
+async def log_meeting(
+    meeting_id: MeetingId,
+    body: MeetingTranscriptIn,
+    response: Response,
+    session: SessionDep,
+    settings: MeetingsOnDep,
+    auth: SignedInDep,
+    leads: LeadsDep,
+    source: SourceDep,
+    sorter: SorterDep,
+    now: NowDep,
+    idempotency_key: Annotated[
+        str | None,
+        Header(
+            min_length=1,
+            max_length=64,
+            pattern=IDEMPOTENCY_PATTERN,
+            description="Any unique text (a UUID is fine). The same key gives back the same note",
+        ),
+    ] = None,
+) -> CallNoteOut:
+    note, new = await meeting_log.log_transcript(
+        session,
+        meeting_id,
+        body,
+        auth,
+        source=source,
+        settings=settings,
+        leads=leads,
+        idempotency_key=idempotency_key,
+        now=now,
+    )
+    if new and note.status == "sorting":
+        sorter.start(note.id)
+    if not new:
+        response.status_code = 200
+    return await note_store.one_out(session, note)

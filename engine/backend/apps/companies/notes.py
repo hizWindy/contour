@@ -247,6 +247,9 @@ class CardWrite(BaseModel):
     id: str  # the write's id in core.hubspot_writes
     subject: str  # call_note:<note id>, then call_note:<note id>:2 ...
     call: bool  # it carried the call
+    # A logged meeting's note (T2-15): a meeting isn't a phone call, so its call part went as a
+    # note on the company, as the step `note`.
+    meeting: bool = False
     tasks: list[str] = Field(default_factory=list)  # the card's task ids, as task:1, task:2 ...
     changes: list[str] = Field(default_factory=list)  # the card's change ids, in its fields step
 

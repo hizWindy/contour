@@ -9,6 +9,8 @@ answer about an unsure step.
   deal (choice 5, TBC); its field changes; and its follow-ups. Each part keeps its own state on
   the card (`notes.Sent`), so a later send carries only what hasn't landed, as
   `call_note:<id>:2`.
+- **A logged meeting** (T2-15, a transcript) isn't a phone call: its summary and words go as a note
+  on the company and its one open deal (the step `note`), with its field changes and follow-ups.
 - **A held field** (choice 4, TBC). The writer reads the company again right before writing. A
   field whose value changed since the rep saw it isn't written: it comes back held, with
   HubSpot's value, and waits for the rep, who checks it and sends again.
@@ -37,6 +39,7 @@ from apps.companies.deals import stage_kind
 from apps.companies.facts import day
 from apps.companies.note_fields import NotOnTheList, hubspot_property
 from apps.companies.notes import (
+    MELBOURNE,
     STUCK_MINUTES,
     CardCall,
     CardChange,
@@ -57,6 +60,7 @@ from core.hubspot.activities import (
     ActivityRequest,
     CallIn,
     FieldSet,
+    NoteIn,
     TaskIn,
 )
 from core.hubspot.client import HubSpot, HubSpotWritesOff
@@ -135,6 +139,24 @@ def call_body(note: CallNote, card: NoteCard) -> str:
     return "\n\n".join(part for part in parts if part)[:BODY_MAX_CHARS]
 
 
+def is_meeting(note: CallNote) -> bool:
+    """A logged meeting's note (T2-15): its call part goes to HubSpot as a note, not a call."""
+    return note.source == "transcript"
+
+
+def call_step(meeting: bool) -> str:
+    """The step that carries a note's call part: `note` for a logged meeting, else `call`."""
+    return "note" if meeting else "call"
+
+
+def meeting_body(note: CallNote, card: NoteCard) -> str:
+    """A logged meeting's note in HubSpot: the day it was, the summary, then the transcript and
+    anything said that didn't change a field."""
+    held_on = day(note.called_at.astimezone(MELBOURNE).date())
+    parts = [f"Meeting notes, {held_on}", card.call.summary.strip(), call_text(note.text, card)]
+    return "\n\n".join(part for part in parts if part)[:BODY_MAX_CHARS]
+
+
 def change_label(change: CardChange) -> str:
     """Like "Melbourne lease end"."""
     return f"{change.office} {change.label.lower()}"
@@ -191,6 +213,7 @@ async def plan_send(
     number = len(card.writes) + 1
     subject = f"call_note:{note.id}" if number == 1 else f"call_note:{note.id}:{number}"
     outcome = card.call.outcome if card.call.outcome in OUTCOME_NAMES else None
+    meeting = is_meeting(note)
     request = ActivityRequest(
         app=APP,
         subject=subject,
@@ -206,9 +229,10 @@ async def plan_send(
                 outcome=outcome,
                 direction="outbound",
             )
-            if call
+            if call and not meeting
             else None
         ),
+        note=NoteIn(body=meeting_body(note, card)) if call and meeting else None,
         fields=[
             FieldSet(
                 property=change.property,
@@ -233,6 +257,7 @@ async def plan_send(
         id="",
         subject=subject,
         call=call,
+        meeting=meeting,
         tasks=[task.id for task in tasks],
         changes=[change.id for change in changes],
     )
@@ -339,7 +364,7 @@ def record_of(card: NoteCard, write_id: str) -> CardWrite | None:
 
 def carried(card: NoteCard, record: CardWrite) -> list[tuple[str, Sent]]:
     """The parts one write carried, each with its step's name in that write."""
-    found: list[tuple[str, Sent]] = [("call", card.call)] if record.call else []
+    found: list[tuple[str, Sent]] = [(call_step(record.meeting), card.call)] if record.call else []
     changes = {change.id: change for change in card.changes}
     found += [
         ("fields", changes[change_id]) for change_id in record.changes if change_id in changes
@@ -523,7 +548,14 @@ def _words(part: Sent, what: str, *, landed: str, waiting: str) -> str:
             )
 
 
-def _call_words(call: CardCall) -> str:
+def _call_words(call: CardCall, *, meeting: bool) -> str:
+    if meeting:
+        return _words(
+            call,
+            "Meeting notes",
+            landed="Meeting notes added.",
+            waiting="Meeting notes waiting to be sent.",
+        )
     return _words(call, "Call", landed="Call logged.", waiting="Call waiting to be sent.")
 
 
@@ -552,16 +584,16 @@ def _task_words(task: CardTask) -> str:
     )
 
 
-def steps_of(card: NoteCard, status: str) -> list[CallNoteStep]:
-    """Each part's step, as the note shows it once it is on its way: the call, the changes, then
-    the follow-ups, as the writer sends them. Empty before that."""
+def steps_of(card: NoteCard, status: str, *, meeting: bool = False) -> list[CallNoteStep]:
+    """Each part's step, as the note shows it once it is on its way: the call (a logged
+    meeting's note), the changes, then the follow-ups. Empty before that."""
     if status != "sending" and all(part.state == "new" for part in parts_of(card)):
         return []
     steps = [
         CallNoteStep(
-            step=card.call.step or "call",
+            step=card.call.step or call_step(meeting),
             status=STEP_STATUS[card.call.state],
-            words=_call_words(card.call),
+            words=_call_words(card.call, meeting=meeting),
         )
     ]
     steps += [

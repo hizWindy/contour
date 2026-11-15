@@ -16,7 +16,8 @@
   YYYY-MM-DD, the owner, and the deal only when the company has one open deal; a company not in
   HubSpot yet isn't sent;
 - a note a restart left "sending" settles from its write;
-- a card naming a field off the list is never sent.
+- a card naming a field off the list is never sent;
+- a logged meeting (a transcript, T2-15) goes as a note, not a call.
 
 Made-up companies and people only (Sample Logistics Pty Ltd, Jo Sample).
 """
@@ -36,9 +37,10 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.companies.app import stop_background
+from apps.companies.facts import day
 from apps.companies.note_batch import LEAD_ONLY, OFF_THE_LIST, ActivityWriter, NoteSender
 from apps.companies.note_fields import hubspot_property
-from apps.companies.notes import CardCall, CardChange, CardTask, Dropped, NoteCard
+from apps.companies.notes import MELBOURNE, CardCall, CardChange, CardTask, Dropped, NoteCard
 from apps.companies.tables import CallNote
 from core.api.deps import settings_dependency
 from core.hubspot.activities import ActivityRequest, FieldSet, TaskIn
@@ -116,8 +118,9 @@ def out_of(row: HubSpotWrite) -> WriteOut:
 @dataclass
 class FakeWriter:
     """Core's activity writer, made up. It saves real write rows (a note points at its write),
-    reads "HubSpot" from `hubspot_has`, and answers as a test sets: a call HubSpot refuses or
-    doesn't answer, a break on our side, writing switched off, a write that waits part way."""
+    reads "HubSpot" from `hubspot_has`, and answers as a test sets: a call (or a logged meeting's
+    note) HubSpot refuses or doesn't answer, a break on our side, writing switched off, a write
+    that waits part way."""
 
     hubspot_has: dict[str, str | None] = field(default_factory=dict)  # by HubSpot's field name
     refuse_call: set[uuid.UUID] = field(default_factory=set)
@@ -139,6 +142,14 @@ class FakeWriter:
 
     def off(self) -> bool:
         return self.off_after is not None and len(self.written) >= self.off_after
+
+    def answer(self, name: str, note_id: uuid.UUID) -> dict[str, Any]:
+        """The call's step, or a logged meeting's note step, as the test set it."""
+        if note_id in self.refuse_call:
+            return step(name, "failed", BUSY)
+        if note_id in self.unsure_call:
+            return step(name, "uncertain", "HubSpot didn't answer in time.")
+        return step(name, "done")
 
     async def owner_of(self, session: AsyncSession, user_id: uuid.UUID | None) -> str | None:
         return "o1" if user_id is not None else None
@@ -190,14 +201,7 @@ class FakeWriter:
         note_id = uuid.UUID(row.subject.split(":")[1])
         if note_id in self.breaks:
             raise RuntimeError("a made-up break")
-        called: list[dict[str, Any]] = []
-        if request.call is not None:
-            if note_id in self.refuse_call:
-                called.append(step("call", "failed", BUSY))
-            elif note_id in self.unsure_call:
-                called.append(step("call", "uncertain", "HubSpot didn't answer in time."))
-            else:
-                called.append(step("call", "done"))
+        called = [self.answer("call", note_id)] if request.call is not None else []
         row.status, row.result = "writing", {"steps": called}  # each step is saved as it lands
         await session.commit()
         if note_id == self.hold:
@@ -221,10 +225,12 @@ class FakeWriter:
                 self.hubspot_has[item.property] = item.value
         steps = [*called, *([step("fields", "done")] if request.fields else [])]
         steps += [step(f"task:{number}", "done") for number in range(1, len(request.tasks) + 1)]
+        steps += [self.answer("note", note_id)] if request.note is not None else []
         row.plan = plan_of(request.company_id, changes)
         row.result = {"steps": steps}
         row.status = status_of(steps)
-        row.hubspot_url = CALL_URL if step("call", "done") in steps else None
+        landed = any(item in steps for item in (step("call", "done"), step("note", "done")))
+        row.hubspot_url = CALL_URL if landed else None
         await session.commit()
         self.written.append(row.subject)
         return out_of(row)
@@ -242,7 +248,7 @@ class FakeWriter:
         row.result = {"steps": steps}
         if steps and row.status != "writing":
             row.status = status_of(steps)
-        if name == "call" and landed:
+        if name in ("call", "note") and landed:
             row.hubspot_url = CALL_URL
         await session.commit()
         return out_of(row)
@@ -935,3 +941,64 @@ async def test_a_card_naming_a_field_off_the_list_is_never_sent(
     assert (retried.status_code, retried.json()["code"]) == (422, "change_off_the_list")
     assert retried.json()["detail"] == OFF_THE_LIST
     assert fake.previews == [] and fake.written == []
+
+
+# --- A logged meeting ---------------------------------------------------------------------------
+
+
+async def test_a_logged_meeting_goes_as_a_note_not_a_call(
+    world: World, fake: FakeWriter, sender: NoteSender
+) -> None:
+    """A meeting's transcript (Log meeting, T2-15) isn't a phone call: its summary and words go
+    to HubSpot as a note on the company and its one open deal (the step `note`), with its
+    follow-ups. An unsure note is settled like an unsure call."""
+    await a_company(world)
+    await add(world, deal("d1", "201", "Proposal"))
+    said = "Jo Sample: The Perth lease ends in March 2028."
+    card = NoteCard(
+        call=CardCall(summary="Met Jo about the Perth lease."),
+        tasks=[
+            CardTask(
+                id="t1",
+                subject="Send the floor plan",
+                due=date(2026, 11, 24),
+                due_words="next Tuesday",
+                kind="email",
+            )
+        ],
+    )
+    async with signed_in_as(world, "mia", ["companies"]) as client:
+        meeting = await log_call(client, source="transcript", text=said, outcome=None)
+        await set_note(world, meeting["id"], card=card.model_dump(mode="json"))
+        fake.unsure_call.add(uuid.UUID(meeting["id"]))
+        await confirm(client, meeting)
+        await sender.wait()
+        unsure = await one(client, meeting)
+        landed = await client.post(
+            f"{NOTES}/{meeting['id']}/resolve", json={"step": "note", "landed": True}
+        )
+    request = fake.requests[subject(meeting)]
+    held_on = day((START - timedelta(minutes=10)).astimezone(MELBOURNE))
+    assert request.call is None and request.note is not None
+    assert request.note.body == (
+        f"Meeting notes, {held_on}\n\nMet Jo about the Perth lease.\n\n{said}"
+    )
+    assert request.deal_id == "d1"
+    assert [task.subject for task in request.tasks] == ["Send the floor plan"]
+    assert unsure["status"] == "uncertain"
+    assert unsure["steps"] == [
+        {
+            "step": "note",
+            "status": "uncertain",
+            "words": f"Meeting notes: HubSpot didn't answer. {CHECK}",
+        },
+        {"step": "task:1", "status": "done", "words": "Task added: Send the floor plan."},
+    ]
+    assert landed.status_code == 200, landed.text
+    assert landed.json()["status"] == "logged"
+    assert landed.json()["steps"][0] == {
+        "step": "note",
+        "status": "done",
+        "words": "Meeting notes added.",
+    }
+    assert fake.answers == [("note", True)]

@@ -37,6 +37,7 @@ from apps.companies.note_batch import (
     OFF_THE_LIST,
     STOPPED_MID_SEND,
     NoteSender,
+    is_meeting,
     mark_sending,
     off_the_list,
     parts_of,
@@ -269,7 +270,7 @@ def note_out(
             for task in card.tasks
         ],
         left_out=note.left_out,
-        steps=steps_of(card, note.status),
+        steps=steps_of(card, note.status, meeting=is_meeting(note)),
         hubspot_url=note.hubspot_url,
         made_by=made_by,
         created_at=note.created_at,
@@ -402,6 +403,20 @@ async def _by_key(session: AsyncSession, maker: uuid.UUID | None, key: str) -> C
     return found
 
 
+@dataclass(frozen=True)
+class NewNote:
+    """A note to save: from Log call, or a meeting's transcript (Log meeting, PLAN-V17 T2-15)."""
+
+    company_key: str
+    text: str
+    source: str
+    called_at: datetime
+    contact_id: str | None = None
+    prep_id: uuid.UUID | None = None
+    outcome: str | None = None
+    meeting_id: str | None = None  # the HubSpot meeting a transcript came from
+
+
 async def save_note(
     session: AsyncSession,
     body: CallNoteIn,
@@ -412,41 +427,73 @@ async def save_note(
     idempotency_key: str | None,
     now: datetime,
 ) -> tuple[CallNote, bool]:
+    """Saves a note from Log call, and says whether it is new (see `store_note`)."""
+    new = NewNote(
+        company_key=body.company_key,
+        text=body.text,
+        source=body.source,
+        called_at=body.called_at,
+        contact_id=body.contact_id,
+        prep_id=body.prep_id,
+        outcome=body.outcome,
+    )
+    return await store_note(
+        session,
+        new,
+        auth=auth,
+        settings=settings,
+        leads=leads,
+        idempotency_key=idempotency_key,
+        now=now,
+        max_chars=settings.notes_max_chars,
+    )
+
+
+async def store_note(
+    session: AsyncSession,
+    new: NewNote,
+    *,
+    auth: AuthContext | None,
+    settings: Settings,
+    leads: Sequence[CompanyLeads],
+    idempotency_key: str | None,
+    now: datetime,
+    max_chars: int,
+) -> tuple[CallNote, bool]:
     """Saves a note, and says whether it is new. The same person and key give back the first
     note. With the AI on it is saved `sorting` (the caller starts the sorter); with it off, or
-    with no words to sort (just an outcome), it goes to the rep's batch at once, sorted by hand."""
+    with no words to sort (just an outcome), it goes to the rep's batch at once, sorted by hand.
+    Either way nothing reaches HubSpot until the rep confirms it."""
     maker = maker_of(auth)
     if idempotency_key is not None:
         first = await _by_key(session, maker, idempotency_key)
         if first is not None:
             return first, False
-    name = await company_named(session, body.company_key, leads)
+    name = await company_named(session, new.company_key, leads)
     if name is None:
         raise company_not_found()
-    text = body.text.strip()
-    if not text and body.outcome is None:  # "No answer" needs no words, but something must be said
+    text = new.text.strip()
+    if not text and new.outcome is None:  # "No answer" needs no words, but something must be said
         raise refused(
             "Nothing to save",
             "Write or say something, or pick how the call went.",
             code="note_empty",
         )
-    if len(text) > settings.notes_max_chars:
+    if len(text) > max_chars:
         raise refused(
             "This note is too long",
-            f"This note is longer than {settings.notes_max_chars:,} characters. Shorten it, or "
-            "split it into two notes.",
+            f"This note is longer than {max_chars:,} characters. Shorten it, or split it into "
+            "two notes.",
             code="note_too_long",
         )
-    if body.called_at > now + FUTURE_GRACE:
+    if new.called_at > now + FUTURE_GRACE:
         raise refused(
             "That call is in the future", "Check the call's date and time.", code="called_later"
         )
-    contact = (
-        await person_at(session, body.company_key, body.contact_id) if body.contact_id else None
-    )
-    if body.prep_id is not None:
-        prep = await session.get(Prep, body.prep_id)
-        if prep is None or prep.company_key != body.company_key:
+    contact = await person_at(session, new.company_key, new.contact_id) if new.contact_id else None
+    if new.prep_id is not None:
+        prep = await session.get(Prep, new.prep_id)
+        if prep is None or prep.company_key != new.company_key:
             raise refused(
                 "We can't find that call prep",
                 "It may have been removed. Save the note without it.",
@@ -456,22 +503,23 @@ async def save_note(
     note = CallNote(
         made_by=maker,
         idempotency_key=idempotency_key,
-        company_key=body.company_key,
+        company_key=new.company_key,
         company_name=name,
         contact_id=contact.hubspot_id if contact is not None else None,
         person_name=contact.name if contact is not None else None,
         person_title=contact.job_title if contact is not None else None,
-        prep_id=body.prep_id,
+        prep_id=new.prep_id,
         text=scrub(text),
-        source=body.source,
-        called_at=body.called_at.astimezone(UTC),
+        source=new.source,
+        called_at=new.called_at.astimezone(UTC),
         status="sorting" if sorts else "to_confirm",
         # The rep's own pick, kept on the card: it wins over the sorter's.
-        card={"call": {"summary": "", "outcome": body.outcome}},
+        card={"call": {"summary": "", "outcome": new.outcome}},
+        meeting_id=new.meeting_id,
     )
     if not sorts:  # free: code finds the person the note names, and the rep sorts it by hand
-        if contact is None and not body.company_key.startswith("lead:"):
-            match_person(note, await people_of(session, body.company_key))
+        if contact is None and not new.company_key.startswith("lead:"):
+            match_person(note, await people_of(session, new.company_key))
         settle_by_hand(note, now)
     session.add(note)
     try:

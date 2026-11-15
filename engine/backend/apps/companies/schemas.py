@@ -638,8 +638,9 @@ class CallNoteTask(Out):
 
 class CallNoteStep(Out):
     step: str = Field(
-        description="call, fields or task:1 ..., as the newest send to HubSpot names it. The "
-        "name to send back when saying whether HubSpot has an unsure step"
+        description="call (note for a logged meeting's notes), fields or task:1 ..., as the "
+        "newest send to HubSpot names it. The name to send back when saying whether HubSpot has "
+        "an unsure step"
     )
     status: StepStatus = Field(
         description="pending (waiting to be sent), done, failed, uncertain (HubSpot didn't "
@@ -739,7 +740,9 @@ class CallNoteSkipped(Out):
 
 
 class CallNoteTotals(Out):
-    calls: int = Field(description="The calls not yet in HubSpot")
+    calls: int = Field(
+        description="The calls not yet in HubSpot. A logged meeting's notes count as one"
+    )
     tasks: int = Field(description="The follow-ups not yet in HubSpot")
     changes: int = Field(description="The field changes not yet in HubSpot, and not held")
 
@@ -1008,6 +1011,21 @@ class FormEmailPreview(Out):
     text: str = Field(description="The plain text version")
     html: str = Field(description="The HTML version, with every value escaped")
     people: list[FormPerson]
+
+
+TRANSCRIPT_MAX_CHARS = 200_000  # the most a transcript can ever send; the setting is less
+
+
+class MeetingTranscriptIn(BaseModel):
+    """A past meeting's transcript: pasted, or the text of a .txt or .vtt file the website read."""
+
+    text: SafeText = Field(
+        max_length=TRANSCRIPT_MAX_CHARS,
+        description="The transcript. A .vtt file's text is cleaned of its times here",
+    )
+    file_name: SafeText | None = Field(
+        None, max_length=255, description="The file it came from, if any: a .txt or .vtt file"
+    )
 
 
 class MeetingDetail(Out):
