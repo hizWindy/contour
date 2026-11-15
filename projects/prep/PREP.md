@@ -1,6 +1,6 @@
 # Call prep
 
-Last updated: 2026-11-15 (call notes added). **TBC** means to be confirmed.
+Last updated: 2026-11-15 (call notes and the pre-meeting form added). **TBC** means to be confirmed.
 
 **Status (11 Nov):** PLAN-V10 built call prep, and [PLAN-V14](../../plan/PLAN-V14.md) refined it: "Research again", the three answers in the card's header, news with no age limit, the call technique in both scripts, and editable scripts with Your style and a team style. Both are merged into `master`, not deployed, and call prep is not switched on yet. The new prompt hasn't been tried on real companies (PLAN-V14 T1-5, paid, on Al-khair's word). What works now, from our HubSpot copy: the Companies page, the company's record, the prep box, "Sync with HubSpot", and the prep card with a sales script and guided questions (free, written from the copy). Call prep's web check (news, "still there?") stays off until Al-khair switches it on. People and call history wait for HubSpot access to contacts. The questions for Levi are in [EMAIL.md](EMAIL.md).
 
@@ -35,7 +35,7 @@ The company's full information is not in the script. It is in the company's reco
 
 ## Decisions (8 Nov, Al-khair and Claude)
 
-- **It is for calls, not meetings.** Levi only spoke about phone calls ("the person they're about to ring", 2 Nov; "when we're ringing a company", 5 Nov). The meeting-based idea was Meeting prep, on hold since 23 Oct. The same card can serve meetings later.
+- **Call prep is for calls; a meeting gets its own pre-read** (changed 15 Nov). On 8 Nov call prep was for calls only, because Levi had only spoken about phone calls (2 and 5 Nov). On 12 Nov he asked for a pre-meeting form that replaces the Word pre-read. It is built beside call prep: see "Pre-meeting form" below.
 - **Its own feature, not part of the Lead Finder.** The Lead Finder is for Levi, Marcus and one other person (5 Nov). Call prep is for the whole sales and BD team.
 - **It lives on a new Companies page** in the sidebar. The page lists every company: the HubSpot copy (13,913 companies) plus the researched leads.
 - **The prep box and the list search are separate.** The prep box answers "who am I calling?". The list search only filters the list.
@@ -136,6 +136,25 @@ After a call, a rep presses **Log call** in the call prep panel (or L), says or 
 - **Sending** needs writing to HubSpot switched on, after one real test call (PLAN-V17 M2). The key can already write calls, tasks, notes and company fields (checked 15 Nov, PLAN-V17 T1-2).
 - **Picking the person** on a call needs HubSpot's "read contacts" permission. Until then a call is logged on the company only.
 
+## Pre-meeting form (PLAN-V17 Stage B, built 15 Nov, not switched on)
+
+Before a client meeting, a pre-read is drafted from HubSpot, the rep fills two blanks, and it goes to the Contour team by email. It replaces the Word pre-read (Levi, 12 Nov). See [PLAN-V17](../../plan/PLAN-V17.md).
+
+**How it works:**
+- **Where:** Companies, then Meetings. Upcoming is grouped Today, Tomorrow, This week and Later. Each meeting has one status: Needs pre-read, Draft ready or Sent. Past meetings say whether notes are logged. "New pre-read" starts one for a meeting that isn't in HubSpot.
+- **The facts come from HubSpot, with no AI:** when, Teams or in person, who we meet, the Contour people, staff, offices, the lease end and the deal stage.
+- **Claude (Sonnet 5.5) writes three short summaries:** what they do, what we know about the project, and the talks so far. Each is marked "Written by AI". Every sentence must point at a fact, or it is dropped. There is no web search. Contact details are removed first. With names off, the company and its people are hidden from Claude. About US$0.03 a pre-read (estimate, not measured yet).
+- **The rep fills two blanks:** the ideal next step and who is going. AI never fills them, because Levi asked for blanks. Both must be filled before it is sent (**TBC** with Levi).
+- **It goes in the email body, to Contour addresses only** (`contourinteriors.com.au`, **TBC**). Any other address stops the whole send.
+- **A copy is saved in HubSpot** as a note on the company, and on its open deal. It is not saved on the meeting itself, so it can't reach the client (until a test shows the meeting is safe).
+- **Each weekday at 6:40 am,** a job drafts the pre-reads for meetings in the next 2 working days (**TBC**), and emails the rep "Your pre-read for Sample Logistics is ready". It is off until switched on.
+- **"Log meeting":** after a meeting, the rep pastes a transcript, or a `.txt` or `.vtt` file. It goes through the call notes sorter and joins the same batch to confirm. In HubSpot it becomes a note on the company (and its one open deal), not a call, with any field changes and follow-ups. A transcript is the client's words, so it can only suggest: nothing is written without the rep's confirm.
+
+**What it waits for:**
+- HubSpot meetings in our copy (PLAN-V17 T1-8). The key can already read them (checked 15 Nov).
+- A sender address for email, and the link from each account to its HubSpot owner (for "your pre-read is ready").
+- Levi's answers: the Word pre-read template, who usually gets it, whether a manager always gets a copy, and whether 2 working days ahead is right.
+
 ## Proposed, not decided
 
 - **Where the facts come from, in three layers.**
@@ -165,5 +184,5 @@ After a call, a rep presses **Log call** in the call prep panel (or L), says or 
 - The names "Call prep" and "Companies".
 - The cost per prep. It should be well under a Lead Finder company (about US$0.34 to US$0.42 each).
 - How many days a saved prep is reused.
-- Whether Levi wants meetings added later.
+- For meetings (asked 12 Nov, built as the pre-meeting form): the template, who gets it, and how many days ahead it is drafted.
 - Whether Levi wants a full call script, and whether the team already uses an opener or script that Claude should copy the style of.
