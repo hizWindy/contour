@@ -10,6 +10,9 @@
  *   With nothing on the web, the Lead Finder's newest saved note shows ("Saved research, 3 Oct"),
  *   and with none either, "No news found".
  * - **On a phone** the three stack as short rows of one line each, so nothing scrolls sideways.
+ * - **Last talk** (PLAN-V17 T3-7) shows the rep's own call note that isn't in HubSpot yet, when it
+ *   is newer than HubSpot's last call (or there is none): its date, "Your note, not in HubSpot
+ *   yet" and its outcome, and in full its summary. Otherwise HubSpot's last call, as before.
  * - **Connections** waits for Levi's customer list (PREP.md, **TBC**). Its answer is here, ready,
  *   and shows with `connections`.
  *
@@ -24,15 +27,17 @@ import {
   Link2,
   MessageSquare,
   Newspaper,
+  NotebookPen,
   UserX,
   Users,
   type LucideIcon,
 } from 'lucide-react'
 import { useContext, type ReactNode } from 'react'
 import type { CompanyDetail, CompanyNote, PrepFacts, PrepScript } from '@/api/types'
+import type { MyLastNote, PrepFactsV17 } from '@/api/v17'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Skeleton } from '@/components/ui/skeleton'
-import { formatDate } from '@/lib/format'
+import { formatDate, melbourneDate } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { agoWords, talkStale } from './dates'
 import { GuideText } from './guide-parts'
@@ -272,7 +277,55 @@ function stillAnswer({ facts, script, checking, person, company }: BeforeYouDial
   }
 }
 
-function talkAnswer({ company, facts, today }: BeforeYouDialProps): Answer {
+/** The words that mark the rep's own note in Last talk. */
+const MY_NOTE_WORDS = 'Your note, not in HubSpot yet'
+
+/**
+ * The rep's own newest note on this company that isn't in HubSpot yet, when it is newer than
+ * HubSpot's last call, or there is none. A last talk known only by its day (no call time) counts
+ * as older on the same day: the note is the rep's own, and most likely the newest.
+ */
+function newerNote({ company, facts }: BeforeYouDialProps): MyLastNote | null {
+  // Until M1: `my_last_note` isn't in schema.d.ts yet, so it is read through v17.ts's type.
+  const v17: PrepFactsV17 | undefined = facts
+  const note = v17?.my_last_note ?? null
+  if (!note) return null
+  const call = facts?.last_call?.called_at ?? null
+  if (call) return Date.parse(note.called_at) > Date.parse(call) ? note : null
+  const day = company?.last_talk ?? facts?.last_talk ?? null
+  return !day || melbourneDate(note.called_at) >= day.slice(0, 10) ? note : null
+}
+
+/**
+ * Last talk from the rep's own note: its date, the mark and the outcome; in full, how long ago,
+ * and the note's summary. Ochre after 6 months, like HubSpot's.
+ */
+function noteTalkAnswer(note: MyLastNote, today: string): Answer {
+  const day = melbourneDate(note.called_at)
+  return {
+    label: 'Last talk',
+    icon: NotebookPen,
+    tone: talkStale(day, today) ? 'attention' : 'quiet',
+    value: formatDate(note.called_at),
+    detail: note.outcome ? `${MY_NOTE_WORDS} · ${note.outcome}` : MY_NOTE_WORDS,
+    full: {
+      value: `${formatDate(note.called_at)}, ${agoWords(day, today)}`,
+      detail: (
+        <>
+          {MY_NOTE_WORDS}.{note.outcome ? ` Outcome: ${note.outcome}.` : null}
+          {note.summary ? (
+            <span className="mt-1.5 block text-ui text-foreground">{note.summary}</span>
+          ) : null}
+        </>
+      ),
+    },
+  }
+}
+
+function talkAnswer(props: BeforeYouDialProps): Answer {
+  const { company, facts, today } = props
+  const mine = newerNote(props)
+  if (mine) return noteTalkAnswer(mine, today)
   const date = facts?.last_call?.called_at?.slice(0, 10) ?? company?.last_talk ?? null
   if (!date) {
     return {

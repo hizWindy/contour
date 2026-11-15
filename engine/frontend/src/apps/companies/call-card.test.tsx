@@ -6,6 +6,7 @@
 import { screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { CompanyDetail, PrepFacts, PrepOut, PrepScript, PrepSource } from '@/api/types'
+import type { MyLastNote, PrepFactsV17 } from '@/api/v17'
 import { renderWithProviders } from '@/test/render'
 import { BeforeYouDial, type BeforeYouDialProps } from './before-you-dial'
 import { SourcesContext } from './guide-sources'
@@ -187,6 +188,95 @@ describe('the answers in the card header', () => {
   it('asks for the switchboard on a cold call', () => {
     renderAnswers({ person: null })
     expect(screen.getByRole('button', { name: /^Who/ })).toHaveTextContent('Nobody named')
+  })
+})
+
+describe("Last talk with the rep's own note (PLAN-V17 T3-7)", () => {
+  // The rep's note from 10 Nov, 9:30 am in Melbourne, not in HubSpot yet.
+  const NOTE: MyLastNote = {
+    id: 'n1',
+    summary: 'Jason says the Perth lease ends in June 2028.',
+    called_at: '2026-11-09T22:30:00Z',
+    outcome: 'Connected',
+  }
+  const HUBSPOT_CALL = {
+    id: 'c1',
+    called_at: '2026-11-03T01:00:00Z',
+    hubspot_url: null,
+    minutes: 4,
+    note: null,
+    outcome: 'Connected',
+    owner: 'Levi',
+    person: 'Jason Reeds',
+  }
+
+  function withNote(changes: Partial<PrepFactsV17> = {}): PrepFactsV17 {
+    return { ...facts({ last_call: HUBSPOT_CALL }), my_last_note: NOTE, ...changes }
+  }
+
+  function lastTalk() {
+    return screen.getByRole('button', { name: /^Last talk/ })
+  }
+
+  it("shows my note when it is newer than HubSpot's last call, marked as not in HubSpot", async () => {
+    const { user } = renderAnswers({ facts: withNote() })
+    // The day in Melbourne, not in UTC (9 Nov there).
+    expect(lastTalk()).toHaveTextContent(/^Last talk10 Nov 2026/)
+    expect(lastTalk()).toHaveTextContent('Your note, not in HubSpot yet · Connected')
+    expect(lastTalk()).not.toHaveTextContent('Levi')
+
+    await user.click(lastTalk())
+    const full = await screen.findByRole('dialog', { name: 'Last talk' })
+    expect(within(full).getByText('10 Nov 2026, 1 day ago')).toBeInTheDocument()
+    expect(full).toHaveTextContent('Your note, not in HubSpot yet. Outcome: Connected.')
+    expect(
+      within(full).getByText('Jason says the Perth lease ends in June 2028.'),
+    ).toBeInTheDocument()
+  })
+
+  it('shows my note when HubSpot has no call, and leaves out an outcome it lacks', () => {
+    renderAnswers({
+      company: company({ last_talk: null }),
+      facts: withNote({
+        last_call: null,
+        last_talk: null,
+        my_last_note: { ...NOTE, outcome: null },
+      }),
+    })
+    expect(lastTalk()).toHaveTextContent(/^Last talk10 Nov 2026/)
+    expect(lastTalk()).toHaveTextContent(/Your note, not in HubSpot yet$/)
+    expect(lastTalk()).not.toHaveTextContent('None on record')
+  })
+
+  it("shows HubSpot's last call as before when it is newer than my note", () => {
+    renderAnswers({
+      facts: withNote({ last_call: { ...HUBSPOT_CALL, called_at: '2026-11-10T03:00:00Z' } }),
+    })
+    expect(lastTalk()).toHaveTextContent(/^Last talk10 Nov 2026/)
+    expect(lastTalk()).toHaveTextContent('Levi')
+    expect(lastTalk()).not.toHaveTextContent('Your note')
+  })
+
+  it('counts my note as newer on the day HubSpot knows only the date of', () => {
+    const sameDay = renderAnswers({
+      company: company({ last_talk: '2026-11-10' }),
+      facts: withNote({ last_call: null, last_talk: '2026-11-10' }),
+    })
+    expect(lastTalk()).toHaveTextContent('Your note, not in HubSpot yet')
+    sameDay.unmount()
+
+    renderAnswers({
+      company: company({ last_talk: '2026-11-11' }),
+      facts: withNote({ last_call: null, last_talk: '2026-11-11' }),
+    })
+    expect(lastTalk()).toHaveTextContent(/^Last talk11 Nov 2026/)
+    expect(lastTalk()).not.toHaveTextContent('Your note')
+  })
+
+  it('looks as before with no note of mine', () => {
+    renderAnswers({ facts: facts({ last_call: HUBSPOT_CALL }) })
+    expect(lastTalk()).toHaveTextContent(/^Last talk3 Nov 2026/)
+    expect(lastTalk()).not.toHaveTextContent('Your note')
   })
 })
 
