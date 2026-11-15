@@ -520,6 +520,33 @@ describe('To confirm', () => {
     })
   })
 
+  it('a change opens as the card shows it, and the same day left or typed again saves nothing', async () => {
+    const server = mockServer({ notes: threeNotes() })
+    const { user } = renderActivity()
+    await toConfirmList()
+    const logistics = card('Sample Logistics Pty Ltd')
+    await user.click(within(logistics).getByRole('button', { name: /^Edit/ }))
+    const value = within(logistics).getByRole('textbox', { name: 'Lease end · Perth: new value' })
+    expect(value).toHaveValue(formatDate('2028-06-30'))
+
+    // In and out again, then the same day typed another way: no change, so nothing is sent.
+    await user.click(value)
+    await user.tab()
+    await user.clear(value)
+    await user.type(value, '30/6/2028')
+    await user.tab()
+    // A new day goes in the one strict form. It is the only edit the server hears of.
+    await user.clear(value)
+    await user.type(value, '31 Mar 2029')
+    await user.keyboard('{Enter}')
+    await waitFor(() => {
+      expect(sent(server, 'PATCH', `${NOTES}/n1`)).toHaveLength(1)
+    })
+    expect(sent(server, 'PATCH', `${NOTES}/n1`)[0]?.body).toEqual({
+      changes: [{ id: 'c1', field: 'lease_end', office: 'Perth', value: '2029-03-31' }],
+    })
+  })
+
   it('a follow-up shows the day stored until the rep types, and says so when that day has gone', async () => {
     // The words were read on the day of the call. Read again today, "tomorrow" is another day.
     const later: CallNoteTask = { ...TASK, due: '2030-01-07', due_words: 'tomorrow' }

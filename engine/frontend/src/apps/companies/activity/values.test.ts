@@ -38,6 +38,24 @@ describe('a change value forgives (DESIGN.md "Fields forgive")', () => {
     expect(fieldValue(null, 'date')).toBe('Empty')
     expect(fieldValue('mid 2027', 'date')).toBe('mid 2027')
   })
+
+  it('reads back the form a card shows as the same value, so an untouched field saves nothing', () => {
+    // A field opens as the card shows it ("31 Mar 2028"), in every month's short name.
+    const days = [
+      ...Array.from({ length: 12 }, (_, index) => `2028-${String(index + 1).padStart(2, '0')}-01`),
+      '2028-02-29',
+      '2028-03-31',
+      '2028-09-30',
+      '2027-12-31',
+    ]
+    for (const day of days) {
+      expect(readFieldValue('date', fieldValue(day, 'date')), day).toBe(day)
+    }
+    for (const count of ['7', '1200', '1500000']) {
+      expect(readFieldValue('number', fieldValue(count, 'number')), count).toBe(count)
+    }
+    expect(readFieldValue(undefined, fieldValue('Level 3', undefined))).toBe('Level 3')
+  })
 })
 
 describe('the order of "To confirm"', () => {

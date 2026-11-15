@@ -256,8 +256,11 @@ function ValueField({
   onCancel: () => void
 }) {
   const noteId = useId()
+  // It opens as the card shows it ("31 Mar 2028", "1,200"), which reads back as the same value,
+  // so a field left as it was saves nothing. An empty value opens empty, not as "Empty".
+  const start = change.value.trim() === '' ? '' : fieldValue(change.value, kind)
   const field = useCommit(
-    change.value,
+    start,
     (text) => {
       const value = readFieldValue(kind, text)
       if (value === null) return VALUE_UNREADABLE
