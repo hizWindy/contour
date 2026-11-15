@@ -72,7 +72,9 @@ async def test_without_the_scope_the_sync_goes_on_and_says_it_waits(
     assert check.state_of("crm.objects.contacts.read") == "no"
     ready = readiness("companies", "Companies", HUBSPOT_NEEDS, check, write_enabled=False)
     assert ready.reading == "waiting"
-    assert ready.waiting_for == ["crm.objects.contacts.read"]
+    # Reading waits for the contacts scope; sending call notes (PLAN-V17) waits for this fake
+    # key's missing write scope too.
+    assert ready.waiting_for == ["crm.objects.contacts.read", "crm.objects.companies.write"]
 
 
 async def test_with_the_scope_people_and_two_years_of_calls_are_copied(
