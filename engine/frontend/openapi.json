@@ -552,6 +552,11 @@
             "title": "Soft Seconds",
             "type": "integer"
           },
+          "transcript_max_chars": {
+            "description": "The longest meeting transcript, in characters, once a .vtt file's times are taken out. A longer one answers 422 `transcript_too_long`",
+            "title": "Transcript Max Chars",
+            "type": "integer"
+          },
           "waiting_for": {
             "anyOf": [
               {
@@ -4009,7 +4014,7 @@
             "title": "Name"
           },
           "ticked": {
-            "description": "Ticked to get it",
+            "description": "Ticked to get it. Never ticked when it isn't allowed",
             "title": "Ticked",
             "type": "boolean"
           },
@@ -17140,7 +17145,7 @@
     },
     "/companies/call-notes/options": {
       "get": {
-        "description": "Whether call notes are on, whether Claude sorts a note, whether sending to HubSpot is ready (and what it waits for, in plain words), the call outcomes, the fields a call may change, when the timer turns Ochre, and the longest note. It answers while call notes are off too.",
+        "description": "Whether call notes are on, whether Claude sorts a note, whether sending to HubSpot is ready (and what it waits for, in plain words), the call outcomes, the fields a call may change, when the timer turns Ochre, the longest note, and the longest meeting transcript. It answers while call notes are off too.",
         "operationId": "call_note_options",
         "responses": {
           "200": {
@@ -19134,7 +19139,7 @@
     },
     "/companies/meetings/forms/{form_id}/preview": {
       "post": {
-        "description": "The email as it would arrive (a subject, plain text, and HTML with every value escaped), and the people it would go to, each with why: the Contour people on the meeting who have an account here, ticked, then the addresses I add (`to`). Each says whether it may get it: only Contour addresses can. Nothing is sent. 404 `form_not_found`. 409 `meeting_forms_off`.",
+        "description": "The email as it would arrive (a subject, plain text, and HTML with every value escaped), and the people it would go to, each with why: the Contour people on the meeting who have an account here, then the addresses I add (`to`). Each says whether it may get it: only Contour addresses can, and only they are ticked. Nothing is sent. 404 `form_not_found`. 409 `meeting_forms_off`.",
         "operationId": "preview_form",
         "parameters": [
           {
