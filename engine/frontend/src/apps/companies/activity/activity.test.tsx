@@ -819,7 +819,8 @@ describe('To confirm', () => {
     ).toBeInTheDocument()
     const button = screen.getByRole('button', { name: 'Send 3 to HubSpot' })
     expect(button).toBeDisabled()
-    expect(button).toHaveAccessibleDescription('Sending is off until then.')
+    // The reason stands alone: on a phone the line above has scrolled away by then.
+    expect(button).toHaveAccessibleDescription('Sending waits for HubSpot.')
 
     await user.click(
       within(card('Sample Freight Pty Ltd')).getByRole('button', { name: /^Leave out/ }),
@@ -973,6 +974,23 @@ describe('Needs a look', () => {
       await screen.findByText('Nothing needs a look.', {}, { timeout: 5000 }),
     ).toBeInTheDocument()
   }, 15_000)
+
+  it('while HubSpot is not ready, Try again is greyed, with a reason that stands alone', async () => {
+    mockServer({
+      notes: [
+        note('f1', {
+          status: 'failed',
+          steps: [{ step: 'call', status: 'failed', words: "HubSpot didn't answer." }],
+        }),
+      ],
+      options: options({ sending_ready: false, waiting_for: 'Waiting for HubSpot write access.' }),
+    })
+    renderActivity('/companies/activity?tab=needs-look')
+    const failed = await screen.findByRole('article', { name: 'Sample Logistics Pty Ltd' })
+    const tryAgain = within(failed).getByRole('button', { name: 'Try again' })
+    expect(tryAgain).toBeDisabled()
+    expect(tryAgain).toHaveAccessibleDescription('Sending waits for HubSpot.')
+  })
 })
 
 describe('Logged', () => {

@@ -132,7 +132,12 @@ export function stepName(step: string): string {
 // --- Sending --------------------------------------------------------------------------------
 
 export const SEND_TO_HUBSPOT = 'Send to HubSpot'
-export const SEND_OFF = 'Sending is off until then.'
+/**
+ * Why Send (or Try again) is greyed out while HubSpot isn't ready. It stands alone: on a phone the
+ * waiting line has scrolled away by the time the bar at the bottom is read, and Needs a look says
+ * it on every card.
+ */
+export const SEND_OFF = 'Sending waits for HubSpot.'
 export const ALL_LEFT_OUT = 'Every call is left out. Put one back to send it.'
 export const NONE_READY = 'Nothing is ready to send yet.'
 export const SEND_DESCRIPTION = 'Check the totals. Nothing is written until you send.'
