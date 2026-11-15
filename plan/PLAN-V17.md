@@ -552,7 +552,7 @@ Newest first.
 
 ## Track 2: Companies backend (session 2)
 
-**Progress:** Stage A 6 of 9. Stage B 0 of 7. Every step is `backend-agent` work.
+**Progress:** Stage A 7 of 9. Stage B 0 of 7. Every step is `backend-agent` work.
 
 ### Stage A: call notes
 
@@ -593,7 +593,7 @@ Newest first.
   - A note becomes `logged`, `partial`, `failed` or `uncertain` from its steps. `retry` and `resolve` follow the contract.
   - **Done when:** tests with a fake HubSpot prove a batch of 10 with one failure in the middle, a shutdown half way, two presses, writing off, and a field that changed since the preview.
 
-- [ ] **T2-7. Call prep knows about the note.**
+- [x] **T2-7. Call prep knows about the note.** Done 2026-11-15, `61f126e`: `PrepFacts.my_last_note`, 4 tests.
   - `PrepFacts.my_last_note` (the contract, part 2).
   - The facts pack counts a logged call as the last talk at once, from our copy.
   - `GET /call-notes/summary` for Home and the menu.
@@ -658,6 +658,7 @@ Newest first.
 
 Newest first.
 
+- 2026-11-15, T2-7 done (`61f126e`). `my_last_note` uses Track 3's shape (`id`, `summary`, `called_at`, `outcome`), with `status` as an extra. A logged call counts as the last talk at once: `relationship.last_talk()` already prefers the newest call in our copy, so a row Track 1's writer adds shows on the next facts read. `PrepFacts.last_talk` itself stays HubSpot's own "last contacted" date until the next sync (it is labelled "per HubSpot"). Also: a failed note with nothing in HubSpot can now be removed, like an unsent one (Track 2's call; Al-khair can reverse it).
 - 2026-11-15, T2-6 done (`d1f5289`). The batch sends through an injected writer, so its tests use a fake one until Track 1's real writer meets it at M1.
   - **Each part keeps a state:** new, landed, failed, held or uncertain, with its step and the reason. A later send carries only what hasn't landed, as a new write (`call_note:<id>:<n>`). A field whose HubSpot value moved since the rep looked is held and shown again. If HubSpot already has the rep's value, the part counts as landed.
   - **A hard stop** (no clean shutdown) could leave a note `sending` for ever. Reading it settles it from its write once it has sat 5 minutes with no batch behind it.
