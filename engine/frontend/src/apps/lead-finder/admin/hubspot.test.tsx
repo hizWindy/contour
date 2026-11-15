@@ -326,3 +326,30 @@ describe('Admin, HubSpot: the Companies line (PLAN-V17 T3-7)', () => {
     expect(lines[1].querySelector('svg')).toHaveClass(icon)
   })
 })
+
+describe('Admin, HubSpot: the write log is for Admins (PLAN-V17, Track 1)', () => {
+  it('says so in a plain line on a 403, and the rest of the page still works', async () => {
+    mockApi({
+      '/api/v1/hubspot/status': HUBSPOT_STATUS,
+      '/api/v1/hubspot/writes': () =>
+        Response.json(
+          {
+            title: 'Only an admin can do this',
+            status: 403,
+            code: 'admin_only',
+            detail: 'Ask an admin.',
+          },
+          { status: 403 },
+        ),
+    })
+    renderWithProviders(<AdminHubSpotTab />)
+    expect(
+      await screen.findByText('Only an Admin can see the writes to HubSpot.'),
+    ).toBeInTheDocument()
+    // Not the whole-page words, and no table.
+    expect(screen.queryByText("This page isn't open to you")).not.toBeInTheDocument()
+    expect(screen.queryByRole('table', { name: 'Writes to HubSpot' })).not.toBeInTheDocument()
+    // The connection still shows.
+    expect(await screen.findByRole('button', { name: /of \d+ permissions/ })).toBeInTheDocument()
+  })
+})

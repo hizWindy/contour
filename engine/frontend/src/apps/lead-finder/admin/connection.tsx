@@ -350,8 +350,17 @@ export function SyncCard() {
   )
 }
 
+/**
+ * The write log is for Admins (PLAN-V17, Track 1's security fix): once writing is on it holds what
+ * call notes sent (a call's outcome, follow-ups, field values, note text), and a rep sees only
+ * their own notes. Everyone else who opens this page gets a 403 on this one list, which is a plain
+ * line here, not an error: the rest of the page stays as it is.
+ */
+const WRITES_ADMIN_ONLY = 'Only an Admin can see the writes to HubSpot.'
+
 export function WritesCard() {
   const writes = useHubSpotWrites(50)
+  const adminOnly = isApiProblem(writes.error) && writes.error.status === 403
   return (
     <Card>
       <CardHeader>
@@ -361,7 +370,9 @@ export function WritesCard() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {writes.error ? (
+        {adminOnly ? (
+          <p className="text-ui text-muted-foreground">{WRITES_ADMIN_ONLY}</p>
+        ) : writes.error ? (
           <ErrorState error={writes.error} />
         ) : (
           <DataTable
