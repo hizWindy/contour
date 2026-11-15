@@ -473,7 +473,7 @@ The first two and `meeting_forms_enabled` are on the Settings page. `internal_em
 
 ## Track 1: HubSpot (session 1)
 
-**Progress:** Stage A 7 of 7 (tag `v17-notes-t1`). Stage B 3 of 4. Every step is `backend-agent` work.
+**Progress:** Stage A 7 of 7 (tag `v17-notes-t1`). Stage B 4 of 4: Track 1 ready to merge. Every step is `backend-agent` work.
 
 ### Stage A: call notes
 
@@ -543,13 +543,24 @@ The first two and `meeting_forms_enabled` are on the Settings page. `internal_em
   - `core/email/internal.py`: `only_internal(addresses, domains)` returns the ones allowed and the ones refused. Exact domain match, no sub-domain tricks ("contourinteriors.com.au.evil.com" is refused).
   - **Done when:** tests cover a good address, a look-alike domain, upper case and an empty list.
 
-- [ ] **T1-11. Track 1 check.** All backend tests, Ruff and mypy, `uv run engine openapi`, and the `review-agent`'s `security-check`.
+- [x] **T1-11. Track 1 check.** Done 2026-11-16 (checks on 2f54cff). All backend tests, Ruff and mypy, `uv run engine openapi`, and the `review-agent`'s `security-check`.
   - **Done when:** all checks pass and the Log says "Track 1 ready to merge".
 
 ### Track 1 Log
 
 Newest first.
 
+- 2026-11-16: **T1-11 done. Track 1 ready to merge.** Stage A is tag `v17-notes-t1` (20345a5). Stage B is the branch tip.
+  - **Full run on 2f54cff** (with the review's fixes): 3,840 passed, 25 skipped (the usual 25 in the routes list), none failed. Core 2,099, Companies 108, Lead Finder 1,622, gates and e2e 11, from 01:01 to 01:09. It ran in the foreground in six parts under the heavy lock, with the database up and no extra skips. The run before the fixes, on b0302ff, also passed: 3,831.
+  - Ruff, mypy and the fast tests pass (the hook on 2f54cff). The contract gate passes, so `openapi.json` matches the code.
+  - **Security check** (a new `review-agent`, on `v17-notes-t1..b0302ff`): Ready with notes, no blocker for Track 1.
+  - **Fixed in 2f54cff:**
+    1. Our copy of meetings kept some phone numbers. A number in twos ("04 12 34 56 78", "+33 6 12 34 56 78") was kept, and so was any digit in a link ("https://wa.me/61400000000"). Now only a date or a time keeps its digits, and only a Teams, Google Meet or Zoom link (by its own host) keeps its meeting number.
+    2. The screen-words guard now reads the status sentences (like meetings' "not read yet"). It catches a setting by its own lower-case name ("meeting_note_on_meeting"), and skips an error's `code=`.
+  - **For Track 2 at M5** (told by message):
+    - The "your pre-read is ready" email (`meeting_job.tell_rep`) goes to the rep's account address with no `only_internal` check. An account can have any address, so it could leave Contour (choice 10). Check it as `meeting_send` does.
+    - With `meeting_id` passed and the switch on, Send also changes the meeting's internal notes, but no person sees that step (preview and apply run back to back). The email preview or the Send screen should say so (Track 3 too).
+  - **For M2 (a made-up meeting):** the meeting step reads the notes, then writes them. A line someone types into the meeting's internal notes in between is lost, and HubSpot has no "only if unchanged". The gap is short.
 - 2026-11-16: **T1-9 done** (ff2dbf3), built by the `backend-agent`.
   - **The note:** it goes on the company (190) and the deal (214), as before, and now carries the rep's owner id. A note that timed out is looked for by that owner too.
   - **`ActivityRequest.meeting_id`** (new, optional, digits only). A request with a meeting but no note is refused: dropping it quietly would hide that nothing reached the meeting.
