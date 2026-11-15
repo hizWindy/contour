@@ -296,9 +296,9 @@ def test_a_writes_status_counts_every_planned_step() -> None:
 
 
 def test_a_step_name_is_one_the_writers_know() -> None:
-    for name in ("company", "note", "list", "call", "fields", "task:1", "task:12"):
+    for name in ("company", "note", "list", "call", "fields", "task:1", "task:12", "meeting"):
         assert StepResult(step=name, status="done").step == name
-    for wrong in ("task:0", "task:", "tasks", "Call", "task:1 "):
+    for wrong in ("task:0", "task:", "tasks", "Call", "task:1 ", "meetings"):
         with pytest.raises(ValueError):
             StepResult(step=wrong, status="done")
 

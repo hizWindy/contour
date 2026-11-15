@@ -11494,11 +11494,11 @@
             "type": "string"
           },
           "step": {
-            "description": "company, note or list (the Lead Finder); call, fields, task:1, task:2 ... or note (an activity)",
+            "description": "company, note or list (the Lead Finder); call, fields, task:1, task:2 ..., note or meeting (an activity)",
             "examples": [
               "task:1"
             ],
-            "pattern": "^(?:company|note|list|call|fields|task:[1-9][0-9]*)$",
+            "pattern": "^(?:company|note|list|call|fields|task:[1-9][0-9]*|meeting)$",
             "title": "Step",
             "type": "string"
           }
@@ -13519,6 +13519,30 @@
               }
             ],
             "title": "List Name"
+          },
+          "meeting": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the note adds to the meeting, in words. null: the meeting isn't changed (no meeting, or adding notes to meetings is switched off)",
+            "title": "Meeting"
+          },
+          "meeting_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "An activity's meeting in HubSpot: the one its note is about",
+            "title": "Meeting Id"
           },
           "note": {
             "anyOf": [

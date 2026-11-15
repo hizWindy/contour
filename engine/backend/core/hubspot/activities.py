@@ -1,5 +1,6 @@
 """Writing activities to HubSpot (PLAN-V17 T1-5): a call, field changes, follow-up tasks and a note,
-on one company, each written once only.
+on one company, each written once only. The note can also go on a meeting (T1-9, the pre-read's
+copy): see 6.
 
 It is the Lead Finder's writer (`writer.py`) for activities, built on the same parts, not copies:
 the one open write per subject, the claim (two clicks can't both write), the step log,
@@ -16,9 +17,10 @@ link to a HubSpot owner, or None, and HubSpot then shows the call as unassigned)
    isn't what the rep saw (`seen`; None means the rep saw the field empty). The request is kept
    in the plan, so the write sends exactly what was previewed. It works while writing is off.
 2. **Write** (`apply_activity`), after a person confirms: `call`, `fields`, `task:1`, `task:2`
-   ..., `note`, in that order, each saved as it lands. A failed step never stops the others (each
-   record is separate), and the write's status comes from all of them. Applying a partial or
-   uncertain write again redoes only the steps that aren't done.
+   ..., `note`, `meeting`, in that order, each saved as it lands. A failed step never stops the
+   others (each record is separate), and the write's status comes from all of them. Applying a
+   partial or uncertain write again redoes only the steps that aren't done. The note is the
+   rep's: it carries the owner, as the call and the tasks do.
    - The fields: the company is read again right before writing. A field is written only while
      HubSpot still has the value the preview showed and the rep saw. Otherwise it is held: not
      written, named in the step's `held`, and its plan entry shows HubSpot's value now. The
@@ -37,13 +39,26 @@ link to a HubSpot owner, or None, and HubSpot then shows the call as unassigned)
    names the step on its way (`sending` in the plan), and the save of its answer clears it. The
    next `apply_activity` or `resolve_step` takes the write over: the create that was on its way
    may be in HubSpot, so it is "uncertain" and the look-first rule applies to it, even when it
-   had failed before (a retry). A change to the fields is safe to send twice, so it is just sent
-   again. A row saved before the plan kept `sending`: the first step it didn't record is
-   "uncertain". An apply stopped by a cancel (the backend shutting down) or an error settles its
-   write at once, the same way.
+   had failed before (a retry). The fields and the meeting read HubSpot before they send, so
+   they are just run again (`RUN_AGAIN`). A row saved before the plan kept `sending`: the first
+   step it didn't record is "uncertain". An apply stopped by a cancel (the backend shutting
+   down) or an error settles its write at once, the same way.
 5. **Our copy at once:** a call that lands goes into `core.hubspot_calls`, and changed fields
    refresh the company and its offices, so "Last talk" and the company are right before the next
-   sync. A failure there is logged and never fails the write.
+   sync. A failure there is logged and never fails the write. (A meeting's notes in our copy
+   catch up at the next meetings refresh: the change moves the meeting's modified date.)
+6. **The note on a meeting** (`meeting`, T1-9, choice 9): only for a request with a note and a
+   `meeting_id`, and only while the switch `meeting_note_on_meeting` is on at the preview (off
+   by default; the preview says what it will do). The note's text goes at the end of the
+   meeting's `hs_internal_meeting_notes`, after an empty line. What is there is kept byte for
+   byte (HubSpot keeps rich text), and no other field of the meeting is ever sent: never
+   `hs_meeting_body` or the location, which the client sees. It reads the meeting first: notes
+   that already hold the note's text (as plain text, spaces squeezed) are done, and nothing is
+   sent, so running it again never adds it twice. A change that timed out is checked the same
+   way: there is done; not there is failed, and sending it again is safe (it reads first). A
+   switch turned off since the preview: skipped, and nothing is sent. A meeting not in HubSpot:
+   failed, and the note on the company still counts. HubSpot doesn't document a note linked to
+   a meeting, so the note itself is never linked to one.
 
 Log lines hold ids, step names and states only: never a call's text, a field's value, an email
 or a phone number.
@@ -68,6 +83,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.config import get_settings
 from core.hubspot.client import (
     Filter,
     HubSpot,
@@ -131,6 +147,18 @@ STALLED_AFTER = timedelta(minutes=5)  # TBC: a "writing" write not kept this lon
 # before the send until the save of its answer, else None. Every activity row has it from its
 # preview on, so a row without it was saved before the writer kept it.
 SENDING = "sending"
+MEETING = "meeting"  # the step that adds the note to the meeting's internal notes (T1-9)
+MEETING_NOTES = "hs_internal_meeting_notes"  # the only field of a meeting ever read or sent
+# The plan's key for whether the note also goes on the meeting (the `meeting` step): decided at
+# the preview, from the request and the switch (`meeting_note_on_meeting`) then.
+ON_MEETING = "on_meeting"
+# Between what a meeting's internal notes hold and the note added after them: an empty line
+# (how HubSpot shows it is TBC, M2's test on a made-up meeting).
+MEETING_BREAK = "<p><br></p>"
+# Steps that read HubSpot before they send, so a write taken over just runs them again: a field
+# change sent twice can't double anything, and the meeting step adds the note only when the
+# meeting doesn't hold it yet.
+RUN_AGAIN = frozenset({"fields", MEETING})
 LOOKS = 3  # a create that timed out is looked for this many times,
 LOOK_GAP_SECONDS = 15.0  # this far apart: about 30 seconds in all, as HubSpot's search lags
 SETTLE_SECONDS = 5.0  # the most a cut-off apply waits to settle its write
@@ -169,6 +197,26 @@ STOPPED_DETAIL = "Contour stopped while sending this. HubSpot may or may not hav
 LANDED_DETAIL = "A person checked: it is in HubSpot."
 NOT_LANDED_DETAIL = "A person checked: it isn't in HubSpot. Send it again."
 NO_OWNER_DETAIL = "No HubSpot owner is linked to this account, so HubSpot shows it as unassigned."
+NOT_A_MEETING_DETAIL = "The meeting isn't one of HubSpot's records."
+MEETING_PLAN_DETAIL = (
+    "Also adds the note to the end of the meeting's internal notes, and keeps what is there. "
+    "HubSpot leaves these notes out of the client's invite."
+)
+MEETING_DONE_DETAIL = "Added the note to the end of the meeting's internal notes."
+MEETING_THERE_DETAIL = (
+    "The meeting's internal notes already have this note, so it wasn't added again."
+)
+MEETING_OFF_DETAIL = (
+    "Not added to the meeting: adding notes to meetings was switched off after the preview."
+)
+MEETING_GONE_DETAIL = (
+    "This meeting isn't in HubSpot, so the note wasn't added to it. It may have been deleted there."
+)
+MEETING_UNREAD_DETAIL = (
+    "HubSpot didn't answer. Send it again: the meeting is read first, so the note is never added "
+    "twice."
+)
+MEETING_EMPTY_DETAIL = "The note has no text to add to the meeting."
 UNNAMED = "This company"
 
 
@@ -239,11 +287,27 @@ class ActivityRequest(BaseModel):
     tasks: list[TaskIn] = Field(default_factory=list, max_length=10)
     fields: list[FieldSet] = Field(default_factory=list, max_length=20)
     note: NoteIn | None = None
+    meeting_id: str | None = Field(
+        None,
+        max_length=64,
+        description=(
+            "The HubSpot meeting the note is about. While the switch is on, the note also goes "
+            "at the end of its internal notes. It never links the note to the meeting"
+        ),
+    )
 
     @model_validator(mode="after")
     def _something_to_write(self) -> "ActivityRequest":
         if self.call is None and not self.tasks and not self.fields and self.note is None:
             raise ValueError("an activity needs a call, a task, a field or a note")
+        return self
+
+    @model_validator(mode="after")
+    def _a_meeting_needs_a_note(self) -> "ActivityRequest":
+        """Only a note goes on a meeting, so a meeting with no note is the caller's mistake:
+        dropping it quietly would hide that nothing reached the meeting."""
+        if self.meeting_id is not None and self.note is None:
+            raise ValueError("a meeting_id needs a note: only the note is added to a meeting")
         return self
 
 
@@ -256,12 +320,15 @@ class StepNotUncertain(Exception):
         self.step = step
 
 
-def planned_steps(request: ActivityRequest) -> list[str]:
-    """The steps a request makes, in the order they are written."""
+def planned_steps(request: ActivityRequest, *, on_meeting: bool = False) -> list[str]:
+    """The steps a request makes, in the order they are written. `on_meeting`: the switch that
+    adds the note to the meeting was on at the preview (the plan keeps it as `ON_MEETING`)."""
     names = ["call"] if request.call is not None else []
     names += ["fields"] if request.fields else []
     names += [f"task:{number}" for number in range(1, len(request.tasks) + 1)]
     names += ["note"] if request.note is not None else []
+    if on_meeting and request.note is not None and request.meeting_id is not None:
+        names.append(MEETING)
     return names
 
 
@@ -287,10 +354,12 @@ async def preview_activity(
 ) -> WriteOut:
     """What would be written, with HubSpot's value now for each field. Saved as "previewed";
     nothing is written, and it works while writing is off. A subject already done, being
-    written, part written or uncertain gets that write back unchanged.
+    written, part written or uncertain gets that write back unchanged. Whether the note also
+    goes on the meeting is decided here, from the switch now (the plan's `meeting` says so).
 
-    Raises `HubSpotNotFound` (plain words) when the company isn't in HubSpot, and any other
-    `HubSpotError` from reading it."""
+    Raises `HubSpotNotFound` (plain words) when the company isn't in HubSpot, `HubSpotRejected`
+    for a person, deal or meeting id that isn't HubSpot's, and any other `HubSpotError` from
+    reading the company."""
     _check_ids(request)
     existing = await latest_write(session, request.app, request.subject)
     if existing is not None and existing.status not in OPEN:
@@ -332,6 +401,9 @@ async def preview_activity(
             kinds[item.property] = _kind(info)
 
     unassigned = request.owner_id is None and (request.call is not None or bool(request.tasks))
+    on_meeting = MEETING in planned_steps(
+        request, on_meeting=get_settings().meeting_note_on_meeting
+    )
     plan = WritePlan(
         kind="activity",
         action="update",
@@ -349,12 +421,16 @@ async def preview_activity(
         owner_id=request.owner_id,
         call=_call_words(request.call) if request.call is not None else None,
         tasks=[_task_words(task, owners, request.owner_id) for task in request.tasks],
+        meeting_id=request.meeting_id,
+        meeting=MEETING_PLAN_DETAIL if on_meeting else None,
     )
     # The request rides along in the plan (WritePlan doesn't read it), so the write sends exactly
-    # what was previewed, with each field's kind for comparing values. Nothing is on its way yet.
+    # what was previewed, with each field's kind for comparing values, and whether the note goes
+    # on the meeting. Nothing is on its way yet.
     saved = plan.model_dump(mode="json") | {
         "request": request.model_dump(mode="json"),
         "kinds": kinds,
+        ON_MEETING: on_meeting,
         SENDING: None,
     }
     row = await save_preview(
@@ -377,6 +453,8 @@ def _check_ids(request: ActivityRequest) -> None:
     for other in (request.contact_id, request.deal_id):
         if other is not None and not _digits(other):
             raise HubSpotRejected(NOT_HUBSPOT_IDS_TITLE, NOT_HUBSPOT_IDS_DETAIL)
+    if request.meeting_id is not None and not _digits(request.meeting_id):
+        raise HubSpotRejected(NOT_HUBSPOT_IDS_TITLE, NOT_A_MEETING_DETAIL)
 
 
 def _digits(value: str) -> bool:
@@ -582,7 +660,7 @@ class _Run:
 
     @property
     def planned(self) -> list[str]:
-        return planned_steps(self.request)
+        return planned_steps(self.request, on_meeting=self.plan.get(ON_MEETING) is True)
 
     def ordered(self) -> list[StepResult]:
         planned = self.planned
@@ -610,13 +688,14 @@ class _Run:
     def stopped_step(self) -> str | None:
         """A write taken over: the step its stopped apply may have sent, or None. That is the
         create the plan names as on its way (`SENDING`), unless it is done: even one that failed
-        before may have landed this time. The fields' change is safe to send again, and None
-        means nothing was on its way. A row saved before the plan kept `SENDING`: the first
-        planned step with no result, as before."""
+        before may have landed this time. The fields and the meeting read HubSpot before they
+        send, so they are just run again (`RUN_AGAIN`), and None means nothing was on its way.
+        A row saved before the plan kept `SENDING`: the first planned step with no result, as
+        before."""
         if SENDING not in self.plan:
             return next((name for name in self.planned if name not in self.steps), None)
         name = self.plan[SENDING]
-        if not isinstance(name, str) or name == "fields" or name not in self.planned:
+        if not isinstance(name, str) or name in RUN_AGAIN or name not in self.planned:
             return None
         before = self.steps.get(name)
         if before is not None and before.status in ("done", "skipped"):
@@ -663,11 +742,12 @@ async def apply_activity(
     on_written: OnWritten | None = None,
     pause: Pause = asyncio.sleep,
 ) -> WriteOut:
-    """Writes a previewed activity, step by step, each step saved as it lands. A finished write
-    is returned as it is. Raises `WriteInProgress` while it is being written (unless that stopped
-    5 minutes ago: then it is taken over), and `HubSpotWritesOff` while writing is off, before
-    anything is claimed. `pause` waits between the looks for a create that timed out (tests
-    give one that doesn't wait). `on_written` runs when the write is done."""
+    """Writes a previewed activity, step by step (`call`, `fields`, `task:1` ..., `note`,
+    `meeting`), each step saved as it lands. A finished write is returned as it is. Raises
+    `WriteInProgress` while it is being written (unless that stopped 5 minutes ago: then it is
+    taken over), and `HubSpotWritesOff` while writing is off, before anything is claimed.
+    `pause` waits between the looks for a create that timed out (tests give one that doesn't
+    wait). `on_written` runs when the write is done."""
     row = await get_write(session, write_id)
     if not is_activity(row):  # a Lead Finder write: `writer.apply_write` writes it
         raise WriteNotFound(str(write_id))
@@ -781,6 +861,8 @@ async def _write_steps(session: AsyncSession, hubspot: HubSpot, run: _Run, pause
         record: HubSpotObject | None = None
         if name == "fields":
             result = await _fields_step(session, hubspot, run)
+        elif name == MEETING:
+            result = await _meeting_step(session, hubspot, run)
         else:
             result, record = await _create_step(session, hubspot, run, name, before, pause)
         run.steps[name] = result
@@ -866,8 +948,10 @@ def _create_of(run: _Run, name: str) -> _Create:
     if name == "note" and request.note is not None:
         at = str(run.plan.get("note_at") or _ms(datetime.now(UTC)))
         properties = {"hs_timestamp": at, "hs_note_body": note_html(request.note.body)}
+        _put(properties, "hubspot_owner_id", request.owner_id)  # the rep's note (T1-9)
         links = _links(request, company, person=False)
-        return _Create("notes", properties, links, _found_by(at, None), "Added the note.")
+        filters = _found_by(at, request.owner_id)
+        return _Create("notes", properties, links, filters, "Added the note.")
     raise ValueError(f"this write has no step {name[:40]!r}")
 
 
@@ -1057,6 +1141,65 @@ def _held_words(held: Sequence[FieldChange]) -> str:
 
 def _join(*parts: str) -> str:
     return " ".join(part for part in parts if part)
+
+
+async def _meeting_step(session: AsyncSession, hubspot: HubSpot, run: _Run) -> StepResult:
+    """The note, added to the end of the meeting's internal notes (T1-9). It reads the meeting
+    first: notes that already hold the note's text are done, and nothing is sent, so running it
+    again never adds it twice. Only `hs_internal_meeting_notes` is read or sent, and what it
+    holds is kept byte for byte. A switch turned off since the preview sends nothing."""
+    if not get_settings().meeting_note_on_meeting:
+        return StepResult(step=MEETING, status="skipped", detail=MEETING_OFF_DETAIL)
+    note, meeting_id = run.request.note, (run.request.meeting_id or "").strip()
+    added = note_html(note.body) if note is not None else ""
+    wanted = _squeezed(added)
+    if not wanted or not meeting_id:
+        return StepResult(step=MEETING, status="skipped", detail=MEETING_EMPTY_DETAIL)
+    try:
+        found = await hubspot.get_object("meetings", meeting_id, properties=[MEETING_NOTES])
+    except HubSpotError as error:
+        return failed_step(MEETING, error)
+    except ValueError:  # the client refused an id that isn't HubSpot's, before sending
+        return StepResult(step=MEETING, status="failed", detail=NOT_A_MEETING_DETAIL)
+    if found is None:
+        return StepResult(step=MEETING, status="failed", detail=MEETING_GONE_DETAIL)
+    there = found.properties.get(MEETING_NOTES) or ""
+    if wanted in _squeezed(there):
+        return StepResult(step=MEETING, status="done", detail=MEETING_THERE_DETAIL)
+
+    value = f"{there}{MEETING_BREAK}{added}" if there.strip() else f"{there}{added}"
+    run.sending = MEETING
+    await run.save(session)  # still this apply's: nothing is sent once another holds the write
+    try:
+        await hubspot.update_object("meetings", meeting_id, {MEETING_NOTES: value})
+    except HubSpotWriteUncertain:
+        return await _meeting_checked(hubspot, meeting_id, wanted)
+    except HubSpotNotFound:
+        return StepResult(step=MEETING, status="failed", detail=MEETING_GONE_DETAIL)
+    except HubSpotError as error:
+        return failed_step(MEETING, error)
+    return StepResult(step=MEETING, status="done", detail=MEETING_DONE_DETAIL)
+
+
+async def _meeting_checked(hubspot: HubSpot, meeting_id: str, wanted: str) -> StepResult:
+    """After a change to the meeting that timed out: it is read again. The note's text there:
+    done. Not there: failed, as a change that didn't land changed nothing, and sending it again
+    reads the meeting first."""
+    try:
+        found = await hubspot.get_object("meetings", meeting_id, properties=[MEETING_NOTES])
+    except HubSpotError:
+        return StepResult(step=MEETING, status="failed", detail=MEETING_UNREAD_DETAIL)
+    if found is None:
+        return StepResult(step=MEETING, status="failed", detail=MEETING_GONE_DETAIL)
+    if wanted in _squeezed(found.properties.get(MEETING_NOTES)):
+        return StepResult(step=MEETING, status="done", detail=FOUND_DETAIL)
+    return StepResult(step=MEETING, status="failed", detail=PATCH_UNSURE_DETAIL)
+
+
+def _squeezed(text: str | None) -> str:
+    """HTML as plain text, each run of spaces and line breaks made one space, so a note reads the
+    same however HubSpot lays out its paragraphs."""
+    return " ".join((plain(text) or "").split())
 
 
 async def _save_call_copy(session: AsyncSession, run: _Run, record: HubSpotObject) -> None:

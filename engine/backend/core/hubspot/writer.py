@@ -63,8 +63,8 @@ log = logging.getLogger(__name__)
 
 StepName = Literal["company", "note", "list"]  # the Lead Finder's steps
 # Every step's name: the Lead Finder's, and an activity's (PLAN-V17): call, fields, task:1 ...,
-# note. Text with a pattern, so old rows and new ones read the same way.
-STEP_NAME = r"^(?:company|note|list|call|fields|task:[1-9][0-9]*)$"
+# note, meeting. Text with a pattern, so old rows and new ones read the same way.
+STEP_NAME = r"^(?:company|note|list|call|fields|task:[1-9][0-9]*|meeting)$"
 StepStatus = Literal["done", "failed", "uncertain", "skipped"]
 WriteStatus = Literal["previewed", "writing", "done", "partial", "failed", "uncertain"]
 PlanKind = Literal["company", "activity"]
@@ -171,14 +171,24 @@ class WritePlan(BaseModel):
         default_factory=list,
         description="Each follow-up task in words: what, when it is due, and for whom",
     )
+    meeting_id: str | None = Field(
+        None, description="An activity's meeting in HubSpot: the one its note is about"
+    )
+    meeting: str | None = Field(
+        None,
+        description=(
+            "What the note adds to the meeting, in words. null: the meeting isn't changed (no "
+            "meeting, or adding notes to meetings is switched off)"
+        ),
+    )
 
 
 class StepResult(BaseModel):
     step: str = Field(
         pattern=STEP_NAME,
         description=(
-            "company, note or list (the Lead Finder); call, fields, task:1, task:2 ... or note "
-            "(an activity)"
+            "company, note or list (the Lead Finder); call, fields, task:1, task:2 ..., note or "
+            "meeting (an activity)"
         ),
         examples=["task:1"],
     )
