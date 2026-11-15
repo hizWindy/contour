@@ -41,7 +41,7 @@ import {
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { toastProblem } from '@/lib/problems'
-import { firstSentence, groupOf, GROUPS, type GroupId } from './settings-groups'
+import { firstSentence, groupOf, GROUPS, isShown, type GroupId } from './settings-groups'
 
 const DEFAULT_CHOICE = '__default__'
 
@@ -191,7 +191,8 @@ export default function AdminSettingsTab() {
   if (!settings.data) {
     return <PendingForm label="Loading the settings." fields={8} />
   }
-  const fields = settings.data.fields
+  // A setting that does nothing yet stays off the page, in both lists (`HIDDEN_SETTINGS`).
+  const fields = settings.data.fields.filter((field) => isShown(field.key))
   const editable = fields.filter((field) => field.editable)
   const fixed = fields.filter((field) => !field.editable)
   const changed = Object.fromEntries(

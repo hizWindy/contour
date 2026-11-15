@@ -120,7 +120,7 @@ describe('Admin, Settings', () => {
     ).toBeInTheDocument()
   })
 
-  it('puts the three call notes switches in a group of their own, last (PLAN-V17 T3-7)', async () => {
+  it('puts the call notes switches in a group of their own, last, and hides the forms switch until Stage B', async () => {
     const toggle = (key: string, label: string, description: string) => ({
       ...SETTING,
       key,
@@ -187,13 +187,16 @@ describe('Admin, Settings', () => {
 
     await user.click(groups.getByRole('radio', { name: 'Call notes' }))
     const notes = screen.getByRole('list', { name: 'Call notes' })
-    for (const label of [
-      'Call notes are on',
-      'Claude sorts call notes',
-      'Pre-meeting forms are on',
-    ]) {
+    expect(
+      within(notes)
+        .getAllByRole('switch')
+        .map((item) => item.getAttribute('id')),
+    ).toEqual(['setting-call_notes_enabled', 'setting-call_notes_ai_enabled'])
+    for (const label of ['Call notes are on', 'Claude sorts call notes']) {
       expect(within(notes).getByRole('switch', { name: label })).not.toBeChecked()
     }
+    // The pre-meeting forms do nothing until Stage B (T3-9 shows the switch again).
+    expect(screen.queryByText('Pre-meeting forms are on')).toBeNull()
     await user.click(within(notes).getByRole('switch', { name: 'Call notes are on' }))
     await user.click(screen.getByRole('button', { name: 'Save changes' }))
     await waitFor(() => {
@@ -201,5 +204,32 @@ describe('Admin, Settings', () => {
         values: { call_notes_enabled: true },
       })
     })
+  })
+
+  it('keeps the forms switch out of "Set on the server" too, while it does nothing', async () => {
+    mockApi({
+      '/api/v1/settings': {
+        ...settingsOut(),
+        fields: [
+          ...settingsOut().fields,
+          {
+            ...SETTING,
+            key: 'meeting_forms_enabled',
+            label: 'Pre-meeting forms are on',
+            description: 'Shows Meetings and the pre-read.',
+            type: 'bool',
+            min: null,
+            max: null,
+            default: false,
+            value: false,
+            editable: false,
+          },
+        ],
+      },
+    })
+    renderWithProviders(<AdminSettingsTab />)
+    // Only Levi's approval is set on the server.
+    expect(await screen.findByText(/Set on the server \(1\)/)).toBeInTheDocument()
+    expect(screen.queryByText('Pre-meeting forms are on')).toBeNull()
   })
 })

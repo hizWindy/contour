@@ -3,8 +3,8 @@
  * Call prep and Call notes. A setting the backend adds later and nobody placed yet goes under Runs,
  * so it is never hidden.
  *
- * Call notes (PLAN-V17 T3-7) holds the three switches: call notes on, Claude sorts them, and the
- * pre-meeting forms, which sit there until Stage B brings their own settings (TBC).
+ * Call notes (PLAN-V17 T3-7) holds the switches: call notes on, and Claude sorts them. The
+ * pre-meeting forms switch is placed there too, but hidden until Stage B (`HIDDEN_SETTINGS`).
  */
 export type GroupId = 'money' | 'claude' | 'runs' | 'why' | 'prep' | 'notes'
 
@@ -59,6 +59,19 @@ const GROUP_OF: Record<string, GroupId> = {
 
 export function groupOf(key: string): GroupId {
   return GROUP_OF[key] ?? 'runs'
+}
+
+/**
+ * Settings the page doesn't show yet, because they do nothing yet. Each is still placed in a group
+ * above, so it lands there when it shows.
+ *
+ * - `meeting_forms_enabled`: the pre-meeting forms are Stage B of PLAN-V17. T3-9 shows the switch
+ *   again, when Meetings comes.
+ */
+export const HIDDEN_SETTINGS: ReadonlySet<string> = new Set(['meeting_forms_enabled'])
+
+export function isShown(key: string): boolean {
+  return !HIDDEN_SETTINGS.has(key)
 }
 
 /** The first sentence of a description: the one line a row shows until "Show the details". */
