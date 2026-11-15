@@ -552,7 +552,7 @@ Newest first.
 
 ## Track 2: Companies backend (session 2)
 
-**Progress:** Stage A 8 of 9 (T2-8 waits for Al-khair's run). Stage B 0 of 7. Every step is `backend-agent` work.
+**Progress:** Stage A 8 of 9 (T2-8 waits for Al-khair's run). Stage B 2 of 7. Every step is `backend-agent` work.
 
 ### Stage A: call notes
 
@@ -613,10 +613,10 @@ Newest first.
 
 ### Stage B: the pre-meeting form
 
-- [ ] **T2-10. The table.** Migration `0023_meeting_forms`: `companies.meeting_forms` (the `MeetingFormOut` fields, who made it, the job or a person). One form for each meeting. Schema map and table lists.
+- [x] **T2-10. The table.** Done 2026-11-15, `6638fe8`: `companies.meeting_forms` and `call_notes.meeting_id`, up and down tested. Migration `0023_meeting_forms`: `companies.meeting_forms` (the `MeetingFormOut` fields, who made it, the job or a person). One form for each meeting. Schema map and table lists.
   - **Done when:** the migration runs up and down.
 
-- [ ] **T2-11. The Meetings reads** (the contract, part 3).
+- [x] **T2-11. The Meetings reads** Done 2026-11-15, `5a450de`. (the contract, part 3).
   - Upcoming is the next 7 days by default, the rep's own first. Only client meetings: ones linked to a company.
   - `q` finds a meeting by words in the company's name, the title and the date ("vitera 26 nov"). Plain code.
   - The company's record gains its meetings.
@@ -658,6 +658,11 @@ Newest first.
 
 Newest first.
 
+- 2026-11-15, T2-10 and T2-11 done (`6638fe8`, `5a450de`).
+  - **For Track 3, the Stage B names so far** (all under `/api/v1/companies`; 409 `meeting_forms_off` while Meetings are off): `GET /meetings` (`when` upcoming or past, `mine` default true, `q`, `limit`, `offset`) answers `MeetingPage {items, total, meetings_state, sentence}`; each `MeetingItem {meeting, company_name, group, form, notes_logged}`, `group` today, tomorrow, this_week, later, or null for a past one; `form` is `{id, status}` or null. `GET /meetings/summary` answers `{need_pre_read, draft_ready}`. `GET /meetings/{meeting_id}` (digits) answers `MeetingDetail {meeting, company_name, form}` or 404 `meeting_not_found`. `CompanyDetail.meetings`: the next three (soonest first) then the last three (newest first). `MeetingFormOut {id, meeting, status, facts, summaries, next_step, going, sent_to, sent_at, sent_by, hubspot_copy, cost_usd, error}`: its `meeting` is one shape for a HubSpot meeting and a typed one (`FormMeeting {meeting_id or null, company_key, company_name, title, starts_at, ends_at, where}`); `facts` are `{label, value, source}`; each summary is `{text, by, sources}` (sources as call prep's chips); `sent_to` is `{name, email}`; `hubspot_copy` is `{state, sentence}` (saved, waiting, off, failed).
+  - **Windows:** Upcoming is the next 7 days (the plan), Past the last 30 days (**TBC**). Search: each word must start a word of the company's name, the title or the date in words.
+  - **Joins at M5:** `0023`'s `down_revision` becomes `0022_hubspot_meetings`, and `SCHEMA-0023.md` is made again. The `MeetingSource` seam's default is core's `meetings.py`. A cancelled meeting is read as HubSpot spells it ("CANCELED"; "cancelled" is accepted too): Track 1's T1-8 decides the word.
+  - **mine** uses `owner_of`, which is a stub today: with sign-in on, "mine" is empty with one sentence until Track 1's owner link joins.
 - 2026-11-15: **Track 2 Stage A ready.** Tag `v17-notes-t2` on the commit after this tick. T2-1 to T2-7 and T2-9 are done. T2-8 (the sorter on 10 made-up notes, well under US$0.01) is built and waits for Al-khair: the auto-mode safety check refused the paid run from this session, so he runs it with one command (in the session's summary). Its 10 notes and the expected answers are in the script; the result goes in this Log. If it shows the prompt needs a change, the change comes before M1 and the tag moves.
 - 2026-11-15, T2-9 checks (Stage A):
   - **Full backend run** on `49ad168` (`RUN_GATES=1`, so the contract file and the stub checks too): 3,824 passed, 25 skipped, none failed, in 12 min 57 s. The baseline was 3,643: the 181 more are Track 2's tests. Ruff and mypy strict pass. `openapi.json` written again (`49ad168`): 20 new models, the 11 routes, and `PrepFacts.my_last_note`. Nothing else changed in it.
