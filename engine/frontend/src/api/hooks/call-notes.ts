@@ -26,7 +26,6 @@ import { queryKeys } from '../query'
 import type {
   CallNoteConfirm,
   CallNoteIn,
-  CallNoteOptions,
   CallNoteOut,
   CallNotePage,
   CallNotePatch,
@@ -37,8 +36,16 @@ import type {
 } from '../v17'
 import { apiV17 } from '../v17-client'
 
-/** The switches change rarely (an Admin, on the Settings page), so a minute of fresh is fine. */
-const OPTIONS_FRESH_MS = 60_000
+// The options and the counts sit in a small file of their own, because the menu, Home and Ctrl+K
+// need them in the first visit (T3-7). They are the same functions here, not copies.
+export {
+  callNoteOptionsQueryOptions,
+  callNoteSummaryQueryOptions,
+  useCallNoteCounts,
+  useCallNoteOptions,
+  useCallNoteSummary,
+  type CallNoteCounts,
+} from './call-note-counts'
 
 /** How often a page with a note still being sorted asks again. */
 export const SORTING_POLL_MS = 2000
@@ -51,34 +58,6 @@ export const SENDING_POLL_MS = 1000
  * doesn't read every company in HubSpot again. Sending always asks afresh.
  */
 const PREVIEW_FRESH_MS = 30_000
-
-/** Whether call notes are on, whether the AI sorts a note, the outcomes, the limits. */
-export function callNoteOptionsQueryOptions() {
-  return queryOptions({
-    queryKey: queryKeys.companies.callNoteOptions(),
-    queryFn: async ({ signal }): Promise<CallNoteOptions> =>
-      unwrap(await apiV17.GET('/companies/call-notes/options', { signal })),
-    staleTime: OPTIONS_FRESH_MS,
-  })
-}
-
-/** `enabled` false asks for nothing. */
-export function useCallNoteOptions(enabled = true) {
-  return useQuery({ ...callNoteOptionsQueryOptions(), enabled })
-}
-
-/** The counts for Home and the menu: to confirm, needs a look, logged today. */
-export function callNoteSummaryQueryOptions() {
-  return queryOptions({
-    queryKey: queryKeys.companies.callNoteSummary(),
-    queryFn: async ({ signal }): Promise<CallNoteSummary> =>
-      unwrap(await apiV17.GET('/companies/call-notes/summary', { signal })),
-  })
-}
-
-export function useCallNoteSummary(enabled = true) {
-  return useQuery({ ...callNoteSummaryQueryOptions(), enabled })
-}
 
 /**
  * Moves the counts in the cache at once (`{ to_confirm: -1, needs_look: 1 }`), so every place
