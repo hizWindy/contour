@@ -4035,6 +4035,7 @@
           "to": {
             "description": "Addresses the rep added, each checked against Contour's own domains",
             "items": {
+              "maxLength": 254,
               "pattern": "^[^\\x00]*$",
               "type": "string"
             },
@@ -4078,6 +4079,7 @@
           "to": {
             "description": "Who gets it: Contour addresses only. One that isn't refuses the whole send",
             "items": {
+              "maxLength": 254,
               "pattern": "^[^\\x00]*$",
               "type": "string"
             },
