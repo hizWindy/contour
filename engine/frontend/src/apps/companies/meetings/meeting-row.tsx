@@ -14,23 +14,13 @@
  *   opacity, so every line stays readable (as a card left out of a batch is). It keeps "Open"
  *   while it has a pre-read.
  *
+ * The team's list can't say whose each meeting is: a meeting carries its HubSpot owner's id, not
+ * a name (a question for Track 2).
+ *
  * Each button's name ends with the meeting ("Draft it: Sample Logistics Pty Ltd, 10:00 am") for a
  * screen reader, which hears many such buttons in a list.
  */
-import {
-  Ban,
-  CircleCheck,
-  CircleX,
-  FileCheck,
-  FilePlus,
-  Hourglass,
-  MailCheck,
-  MapPin,
-  Notebook,
-  UserRound,
-  Video,
-  type LucideIcon,
-} from 'lucide-react'
+import { MapPin, Video } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useStartMeetingForm } from '@/api/hooks/meetings'
@@ -40,27 +30,14 @@ import { toastProblem } from '@/lib/problems'
 import { cn } from '@/lib/utils'
 import { preReadHref } from './params'
 import { rowStatus, type RowStatus } from './rows'
-import { CHECK_AND_SEND, DRAFT_IT, NO_OWNER, OPEN, STATUS_WORDS, WHERE_WORDS, YOURS } from './words'
-
-/** Each status's icon and ink. Done is Olive and a failure Terracotta, as on Activity. */
-const STATUS_LOOK: Readonly<Record<RowStatus, { icon: LucideIcon; ink: string }>> = {
-  needs: { icon: FilePlus, ink: 'text-foreground' },
-  drafting: { icon: Hourglass, ink: 'text-muted-foreground' },
-  draft: { icon: FileCheck, ink: 'text-foreground' },
-  sent: { icon: MailCheck, ink: 'text-pass-ink' },
-  failed: { icon: CircleX, ink: 'text-destructive-ink' },
-  notes_logged: { icon: CircleCheck, ink: 'text-pass-ink' },
-  no_notes: { icon: Notebook, ink: 'text-muted-foreground' },
-  cancelled: { icon: Ban, ink: 'text-muted-foreground' },
-}
+import { STATUS_LOOK } from './status-look'
+import { CHECK_AND_SEND, DRAFT_IT, OPEN, STATUS_WORDS, WHERE_WORDS } from './words'
 
 export interface MeetingRowProps {
   item: MeetingItem
   /** When it is, as its group writes it: "10:00 am", "Thu, 10:00 am", "Yesterday, 4:00 pm". */
   when: string
   past: boolean
-  /** The team's list: each row says whose meeting it is. */
-  team: boolean
 }
 
 /** A past meeting's button. "Log meeting" and its transcript box come with T3-11. */
@@ -68,18 +45,19 @@ function PastAction(): ReactNode {
   return null
 }
 
-export function MeetingRow({ item, when, past, team }: MeetingRowProps) {
+export function MeetingRow({ item, when, past }: MeetingRowProps) {
   const start = useStartMeetingForm()
   const navigate = useNavigate()
+  const { meeting } = item
   // "Draft it" shows its result at once: the row says Drafting while the server answers.
   const status: RowStatus = start.isPending ? 'drafting' : rowStatus(item, past)
   const cancelled = status === 'cancelled'
   const { icon: StatusIcon, ink } = STATUS_LOOK[status]
-  const where = item.where === 'unknown' ? null : item.where
+  const where = meeting.where === 'unknown' ? null : meeting.where
   const WhereIcon = where === 'online' ? Video : MapPin
-  const owner = team ? (item.mine ? YOURS : (item.owner ?? NO_OWNER)) : null
   const context = <span className="sr-only">{`: ${item.company_name}, ${when}`}</span>
-  const meetingId = item.id
+  // Only a HubSpot meeting can be drafted from its row: a typed one always has its form.
+  const meetingId = item.typed ? '' : meeting.id
 
   let action: ReactNode = null
   if (past) {
@@ -93,7 +71,7 @@ export function MeetingRow({ item, when, past, team }: MeetingRowProps) {
         </Link>
       </Button>
     )
-  } else if (!cancelled && meetingId !== null) {
+  } else if (!cancelled && meetingId !== '') {
     action = (
       <Button
         type="button"
@@ -103,7 +81,8 @@ export function MeetingRow({ item, when, past, team }: MeetingRowProps) {
         disabled={start.isPending}
         onClick={() => {
           start.mutate(
-            { body: { meeting_id: meetingId } },
+            // The server reads a HubSpot meeting's own place; `where` must still be sent.
+            { meeting_id: meetingId, where: meeting.where },
             {
               onSuccess: (form) => {
                 void navigate(preReadHref(form.id))
@@ -142,30 +121,22 @@ export function MeetingRow({ item, when, past, team }: MeetingRowProps) {
         >
           {item.company_name}
         </p>
-        {item.title.trim() ? (
+        {meeting.title.trim() ? (
           <p
             className={cn(
               'line-clamp-1 break-words',
               cancelled ? 'text-muted-foreground' : 'text-foreground',
             )}
           >
-            {item.title}
+            {meeting.title}
           </p>
         ) : null}
-        {where || owner ? (
+        {where ? (
           <p className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-caption text-muted-foreground">
-            {where ? (
-              <span className="flex items-center gap-1.5">
-                <WhereIcon aria-hidden="true" className="size-3.5 shrink-0" />
-                {WHERE_WORDS[where]}
-              </span>
-            ) : null}
-            {owner ? (
-              <span className="flex items-center gap-1.5">
-                <UserRound aria-hidden="true" className="size-3.5 shrink-0" />
-                {owner}
-              </span>
-            ) : null}
+            <span className="flex items-center gap-1.5">
+              <WhereIcon aria-hidden="true" className="size-3.5 shrink-0" />
+              {WHERE_WORDS[where]}
+            </span>
           </p>
         ) : null}
       </div>

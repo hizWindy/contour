@@ -1,19 +1,21 @@
 /**
- * Meetings (PLAN-V17 T3-9), against the contract in v17.ts and a fake server that keeps its
- * meetings between requests. The clock is fixed at 9:00 am on Wednesday 18 Nov 2026, Melbourne
- * time, so the day groups are known. Made-up names only: Sample Logistics Pty Ltd, Jo Sample.
+ * Meetings (PLAN-V17 T3-9), against Track 2's real contract (v17.ts Part 3) and a fake server that
+ * keeps its meetings between requests and answers as Track 2's does: the soonest first, the rep's
+ * own first on the team's list, each with its day group. The clock is fixed at 9:00 am on
+ * Wednesday 18 Nov 2026, Melbourne time. Made-up names only: Sample Logistics Pty Ltd, Jo Sample.
  */
 import { act, screen, waitFor, within } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider, useParams } from 'react-router'
 import { toast } from 'sonner'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
+  FormMeeting,
+  FormSummary,
   Meeting,
   MeetingFormOut,
-  MeetingFormRef,
+  MeetingFormState,
   MeetingItem,
-  MeetingOptions,
-  MeetingsStatus,
+  MeetingsState,
 } from '@/api/v17'
 import { routes } from '@/router'
 import { prefetchPage } from '@/shell/prefetch'
@@ -29,81 +31,90 @@ const FORMS = `${MEETINGS}/forms`
 /** 9:00 am on Wednesday 18 Nov 2026 in Melbourne (daylight saving, +11:00). */
 const NOW = new Date('2026-11-17T22:00:00Z')
 
-/** A meeting as HubSpot has it: 10:00 am today in Melbourne, on Teams. */
-function plainMeeting(changes: Partial<Meeting> = {}): Meeting {
-  return {
-    id: 'm1',
-    company_id: 'c-m1',
-    contact_ids: [],
-    owner_id: 'o-1',
-    title: 'Office walk-through',
-    starts_at: '2026-11-17T23:00:00Z',
-    ends_at: '2026-11-18T00:00:00Z',
-    where: 'online',
-    location: null,
-    outcome: 'SCHEDULED',
-    notes: null,
-    hubspot_url: null,
-    ...changes,
-  }
-}
+/** The signed-in rep's HubSpot owner, and a teammate's. */
+const MINE = 'o-1'
+const MIA = 'o-2'
 
-function meeting(id: string, changes: Partial<MeetingItem> = {}): MeetingItem {
+type ItemChanges = Partial<Omit<MeetingItem, 'meeting'>> & { meeting?: Partial<Meeting> }
+
+/** A meeting as HubSpot has it: 10:00 am today in Melbourne, on Teams, the rep's own. */
+function meeting(id: string, { meeting: changes, ...rest }: ItemChanges = {}): MeetingItem {
   return {
-    ...plainMeeting({ id, company_id: `c-${id}` }),
-    company_key: '101',
+    meeting: {
+      id,
+      company_id: '101',
+      contact_ids: [],
+      owner_id: MINE,
+      title: 'Office walk-through',
+      starts_at: '2026-11-17T23:00:00Z',
+      ends_at: '2026-11-18T00:00:00Z',
+      where: 'online',
+      location: null,
+      outcome: 'scheduled',
+      notes: null,
+      hubspot_url: null,
+      ...changes,
+    },
     company_name: 'Sample Logistics Pty Ltd',
-    mine: true,
-    owner: 'Jo Sample',
-    people: [{ name: 'Sam Sample', title: 'Office Manager' }],
+    group: 'today',
     form: null,
     notes_logged: false,
-    ...changes,
+    typed: false,
+    ...rest,
   }
 }
 
-/** The days ahead: one meeting for each status, across the four groups, out of order. */
+/** The days ahead: one meeting for each status, across the four groups. */
 function upcoming(): MeetingItem[] {
   return [
+    meeting('m1'),
     meeting('m2', {
-      company_key: '102',
+      meeting: {
+        company_id: '102',
+        title: 'Lease options',
+        starts_at: '2026-11-18T03:00:00Z',
+        where: 'in_person',
+      },
       company_name: 'Sample Mining Pty Ltd',
-      title: 'Lease options',
-      starts_at: '2026-11-18T03:00:00Z',
-      where: 'in_person',
       form: { id: 'f2', status: 'drafting' },
     }),
-    meeting('m1'),
     meeting('m3', {
-      company_key: '103',
+      meeting: { company_id: '103', title: 'Fit-out budget', starts_at: '2026-11-19T00:00:00Z' },
       company_name: 'Sample Freight Pty Ltd',
-      title: 'Fit-out budget',
-      starts_at: '2026-11-19T00:00:00Z',
+      group: 'tomorrow',
       form: { id: 'f3', status: 'draft' },
     }),
     meeting('m6', {
-      company_key: '106',
+      meeting: {
+        company_id: '106',
+        title: 'First meeting',
+        starts_at: '2026-11-19T02:00:00Z',
+        outcome: 'canceled',
+      },
       company_name: 'Sample Retail Pty Ltd',
-      title: 'First meeting',
-      starts_at: '2026-11-19T02:00:00Z',
-      outcome: 'CANCELED',
+      group: 'tomorrow',
     }),
     meeting('m4', {
-      company_key: '104',
+      meeting: {
+        company_id: '104',
+        title: 'Workplace strategy',
+        starts_at: '2026-11-19T22:30:00Z',
+        where: 'unknown',
+      },
       company_name: 'Sample Health Pty Ltd',
-      title: 'Workplace strategy',
-      starts_at: '2026-11-19T22:30:00Z',
-      where: 'unknown',
+      group: 'this_week',
       form: { id: 'f4', status: 'sent' },
     }),
     meeting('m5', {
-      company_key: '105',
+      meeting: {
+        company_id: '105',
+        title: 'Site visit',
+        starts_at: '2026-11-24T04:00:00Z',
+        where: 'in_person',
+        owner_id: MIA,
+      },
       company_name: 'Sample Energy Pty Ltd',
-      title: 'Site visit',
-      starts_at: '2026-11-24T04:00:00Z',
-      where: 'in_person',
-      mine: false,
-      owner: 'Mia Sample',
+      group: 'later',
       form: { id: 'f5', status: 'failed' },
     }),
   ]
@@ -112,41 +123,59 @@ function upcoming(): MeetingItem[] {
 function past(): MeetingItem[] {
   return [
     meeting('p1', {
-      title: 'Intro meeting',
-      starts_at: '2026-11-17T03:00:00Z',
+      meeting: { title: 'Intro meeting', starts_at: '2026-11-17T03:00:00Z' },
+      group: null,
       notes_logged: true,
       form: { id: 'fp1', status: 'sent' },
     }),
     meeting('p2', {
-      company_key: '102',
+      meeting: { company_id: '102', title: 'Lease review', starts_at: '2026-11-12T23:00:00Z' },
       company_name: 'Sample Mining Pty Ltd',
-      title: 'Lease review',
-      starts_at: '2026-11-12T23:00:00Z',
+      group: null,
     }),
     meeting('p3', {
-      company_key: '106',
+      meeting: {
+        company_id: '106',
+        title: 'Site tour',
+        starts_at: '2026-11-10T03:00:00Z',
+        outcome: 'canceled',
+      },
       company_name: 'Sample Retail Pty Ltd',
-      title: 'Site tour',
-      starts_at: '2026-11-10T03:00:00Z',
-      outcome: 'CANCELED',
+      group: null,
     }),
   ]
 }
 
-function form(id: string, changes: Partial<Meeting> = {}): MeetingFormOut {
+const EMPTY_SUMMARY: FormSummary = { text: '', by: 'ai', sources: [] }
+
+/** A form as POST /meetings/forms answers it: still drafting, with no facts yet. */
+function form(id: string, changes: Partial<FormMeeting> = {}): MeetingFormOut {
   return {
     id,
-    meeting: plainMeeting(changes),
+    meeting: {
+      meeting_id: 'm1',
+      company_key: '101',
+      company_name: 'Sample Logistics Pty Ltd',
+      title: 'Office walk-through',
+      starts_at: '2026-11-17T23:00:00Z',
+      ends_at: '2026-11-18T00:00:00Z',
+      where: 'online',
+      ...changes,
+    },
     status: 'drafting',
     facts: [],
-    summaries: null,
+    summaries: {
+      what_they_do: EMPTY_SUMMARY,
+      what_we_know: EMPTY_SUMMARY,
+      talks_so_far: EMPTY_SUMMARY,
+    },
     next_step: null,
     going: null,
     sent_to: [],
     sent_at: null,
     sent_by: null,
-    hubspot_copy: { state: 'waiting', words: 'Saved in HubSpot once it is sent.' },
-    cost_usd: '0.00',
+    hubspot_copy: null,
+    cost_usd: '0',
     error: null,
   }
 }
@@ -156,18 +185,18 @@ interface Sent {
   path: string
   search: URLSearchParams
   body: unknown
-  idempotencyKey: string | null
+  headers: Headers
 }
 
 interface Server {
-  options: MeetingOptions
   upcoming: MeetingItem[]
   past: MeetingItem[]
-  /** What the list says about HubSpot. */
-  status: MeetingsStatus
-  waitingFor: string | null
-  /** The list answers 409 `meeting_forms_off`. */
-  listOff: boolean
+  /** Whether HubSpot's meetings are read. */
+  meetingsState: MeetingsState
+  /** The list's sentence while it can't show what was asked. */
+  sentence: string | null
+  /** Every meetings route answers 409 `meeting_forms_off`. */
+  off: boolean
   /**
    * What POST /meetings/forms does: answer, refuse (409), refuse one field (422), or wait until
    * `release()`.
@@ -185,6 +214,9 @@ function problem(status: number, title: string, detail: string, code: string): R
   return json({ title, detail, status, code }, status)
 }
 
+const OFF = (): Response =>
+  problem(409, 'Meetings are off', 'An admin can switch them on.', 'meeting_forms_off')
+
 const dayWords = new Intl.DateTimeFormat('en-AU', {
   timeZone: 'Australia/Melbourne',
   day: 'numeric',
@@ -193,8 +225,8 @@ const dayWords = new Intl.DateTimeFormat('en-AU', {
 
 /** As the server is to search (plain code): every word in the company, the title or the day. */
 function matches(item: MeetingItem, q: string): boolean {
-  const text =
-    `${item.company_name} ${item.title} ${dayWords.format(new Date(item.starts_at))}`.toLowerCase()
+  const { title, starts_at } = item.meeting
+  const text = `${item.company_name} ${title} ${dayWords.format(new Date(starts_at))}`.toLowerCase()
   return q
     .toLowerCase()
     .split(/\s+/)
@@ -202,14 +234,23 @@ function matches(item: MeetingItem, q: string): boolean {
     .every((word) => text.includes(word))
 }
 
+/** The server's order: the rep's own first on the team's list, then by time. */
+function serverOrder(items: MeetingItem[], when: string, mine: boolean): MeetingItem[] {
+  const moment = (item: MeetingItem) => Date.parse(item.meeting.starts_at)
+  return [...items].sort((a, b) => {
+    const theirs = (item: MeetingItem) => (!mine && item.meeting.owner_id !== MINE ? 1 : 0)
+    const time = when === 'past' ? moment(b) - moment(a) : moment(a) - moment(b)
+    return theirs(a) - theirs(b) || time
+  })
+}
+
 function mockServer(changes: Partial<Omit<Server, 'sent' | 'release'>> = {}): Server {
   const server: Server = {
-    options: { enabled: true, status: 'ready', waiting_for: null },
     upcoming: upcoming(),
     past: past(),
-    status: 'ready',
-    waitingFor: null,
-    listOff: false,
+    meetingsState: 'ready',
+    sentence: null,
+    off: false,
     start: 'ok',
     release: () => undefined,
     sent: [],
@@ -221,47 +262,30 @@ function mockServer(changes: Partial<Omit<Server, 'sent' | 'release'>> = {}): Se
     const method = request.method
     const text = method === 'GET' ? '' : await request.clone().text()
     const body: unknown = text ? JSON.parse(text) : null
-    server.sent.push({
-      method,
-      path,
-      search: url.searchParams,
-      body,
-      idempotencyKey: request.headers.get('idempotency-key'),
-    })
-    if (path === `${MEETINGS}/options`) return json(server.options)
+    server.sent.push({ method, path, search: url.searchParams, body, headers: request.headers })
+    if (path.startsWith(MEETINGS) && server.off) return OFF()
     if (path === MEETINGS && method === 'GET') {
-      if (server.listOff) {
-        return problem(
-          409,
-          'Pre-meeting forms are off',
-          'An admin can switch them on.',
-          'meeting_forms_off',
-        )
-      }
       const when = url.searchParams.get('when') ?? 'upcoming'
       const mine = url.searchParams.get('mine') !== 'false'
       const q = url.searchParams.get('q') ?? ''
       const limit = Number(url.searchParams.get('limit') ?? '50')
       const offset = Number(url.searchParams.get('offset') ?? '0')
-      const items = (when === 'past' ? server.past : server.upcoming).filter(
-        (item) => (!mine || item.mine) && matches(item, q),
+      const items = serverOrder(
+        (when === 'past' ? server.past : server.upcoming).filter(
+          (item) => (item.typed || !mine || item.meeting.owner_id === MINE) && matches(item, q),
+        ),
+        when,
+        mine,
       )
       return json({
-        total: items.length,
         items: items.slice(offset, offset + limit),
-        status: server.status,
-        waiting_for: server.waitingFor,
+        total: items.length,
+        meetings_state: server.meetingsState,
+        sentence: server.sentence,
       })
     }
     if (path === FORMS && method === 'POST') {
-      if (server.start === 'refuse') {
-        return problem(
-          409,
-          'Pre-meeting forms are off',
-          'An admin can switch them on.',
-          'meeting_forms_off',
-        )
-      }
+      if (server.start === 'refuse') return OFF()
       if (server.start === 'invalid') {
         return json(
           {
@@ -280,13 +304,13 @@ function mockServer(changes: Partial<Omit<Server, 'sent' | 'release'>> = {}): Se
       const start = body as { meeting_id?: string; title?: string }
       const meetingId = start.meeting_id
       if (meetingId !== undefined) {
-        const ref: MeetingFormRef = { id: `f-${meetingId}`, status: 'drafting' }
+        const state: MeetingFormState = { id: `f-${meetingId}`, status: 'drafting' }
         server.upcoming = server.upcoming.map((item) =>
-          item.id === meetingId ? { ...item, form: ref } : item,
+          item.meeting.id === meetingId ? { ...item, form: state } : item,
         )
-        return json(form(ref.id, { id: meetingId }))
+        return json(form(state.id, { meeting_id: meetingId }), 201)
       }
-      return json(form('f-typed', { id: null, title: start.title ?? '' }))
+      return json(form('f-typed', { meeting_id: null, title: start.title ?? '' }), 201)
     }
     if (path === `${API}/search`) {
       return json({
@@ -358,14 +382,19 @@ afterEach(() => {
 })
 
 describe('Upcoming', () => {
-  it('groups the meetings by day, each with its time, where, one status and one button', async () => {
-    mockServer({ upcoming: upcoming().map((item) => ({ ...item, mine: true })) })
+  it("groups the meetings under the server's days, each with its time, where, one status and one button", async () => {
+    mockServer({
+      upcoming: upcoming().map((item) => ({
+        ...item,
+        meeting: { ...item.meeting, owner_id: MINE },
+      })),
+    })
     renderMeetings()
     const today = await screen.findByRole('list', { name: 'Today' })
     expect(
       screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent),
     ).toEqual(['Today', 'Tomorrow', 'This week', 'Later'])
-    // The earliest first in each group, whatever order the server sent.
+    // In the server's order: the soonest first.
     expect(companies(today)).toEqual(['Sample Logistics Pty Ltd', 'Sample Mining Pty Ltd'])
     expect(companies(screen.getByRole('list', { name: 'Tomorrow' }))).toEqual([
       'Sample Freight Pty Ltd',
@@ -441,7 +470,11 @@ describe('Upcoming', () => {
     await waitFor(() => {
       expect(server.sent.filter((one) => one.path === FORMS)).toHaveLength(1)
     })
-    expect(server.sent.find((one) => one.path === FORMS)?.body).toEqual({ meeting_id: 'm1' })
+    // The meeting, and its place (the server reads a HubSpot meeting's own).
+    expect(server.sent.find((one) => one.path === FORMS)?.body).toEqual({
+      meeting_id: 'm1',
+      where: 'online',
+    })
 
     server.release()
     expect(await screen.findByRole('heading', { name: 'Pre-read f-m1' })).toBeInTheDocument()
@@ -455,7 +488,7 @@ describe('Upcoming', () => {
     await user.click(
       screen.getByRole('button', { name: 'Draft it: Sample Logistics Pty Ltd, 10:00 am' }),
     )
-    expect(await screen.findByText('Pre-meeting forms are off')).toBeInTheDocument()
+    expect(await screen.findByText('Meetings are off')).toBeInTheDocument()
     const logistics = within(row('Sample Logistics Pty Ltd'))
     expect(logistics.getByText('Needs pre-read')).toBeInTheDocument()
     expect(logistics.getByRole('button', { name: /^Draft it/ })).toBeEnabled()
@@ -548,14 +581,13 @@ describe('the search', () => {
 })
 
 describe('the team switch', () => {
-  it("shows the team's meetings, each with whose it is, and back to the rep's own", async () => {
+  it("shows the team's meetings too, and back to the rep's own", async () => {
     const server = mockServer()
     const { user, router } = renderMeetings()
     await screen.findByRole('list', { name: 'Today' })
     // The rep's own first: Mia's meeting isn't there.
     expect(lists(server).at(-1)?.get('mine')).toBe('true')
     expect(screen.queryByText('Sample Energy Pty Ltd')).toBeNull()
-    expect(screen.queryByText('Yours')).toBeNull()
 
     const team = screen.getByRole('switch', { name: "The team's meetings" })
     expect(team).not.toBeChecked()
@@ -563,8 +595,6 @@ describe('the team switch', () => {
     expect(await screen.findByText('Sample Energy Pty Ltd')).toBeInTheDocument()
     expect(router.state.location.search).toBe('?team=1')
     expect(lists(server).at(-1)?.get('mine')).toBe('false')
-    expect(within(row('Sample Energy Pty Ltd')).getByText('Mia Sample')).toBeInTheDocument()
-    expect(within(row('Sample Logistics Pty Ltd')).getByText('Yours')).toBeInTheDocument()
 
     await user.click(screen.getByRole('switch', { name: "The team's meetings" }))
     await waitFor(() => {
@@ -589,13 +619,8 @@ describe('the states', () => {
 
   it("waiting: one quiet line in the server's words, and New pre-read still works", async () => {
     mockServer({
-      options: {
-        enabled: true,
-        status: 'waiting',
-        waiting_for: 'Waiting for HubSpot access to meetings.',
-      },
-      status: 'waiting',
-      waitingFor: 'Waiting for HubSpot access to meetings.',
+      meetingsState: 'waiting',
+      sentence: 'Waiting for HubSpot access to meetings.',
       upcoming: [],
       past: [],
     })
@@ -614,20 +639,18 @@ describe('the states', () => {
     expect(await screen.findByRole('dialog', { name: 'New pre-read' })).toBeInTheDocument()
   })
 
-  it('HubSpot not connected (status off, switch on): the same quiet line, and the rows it has', async () => {
+  it('HubSpot not connected (off, forms on): the same quiet line, and the typed rows it has', async () => {
     // Track 1's sentence when no key is set and nothing was read yet.
     const notConnected = "HubSpot isn't connected, so meetings can't be read from it."
-    // A meeting typed in with New pre-read is still on the list.
+    // A meeting typed in with New pre-read is still on the list, with a Lead Finder lead's key.
     const typed = meeting('', {
-      id: null,
-      company_id: null,
-      title: 'Office walk-through',
+      meeting: { company_id: 'lead:7', owner_id: null, title: 'Office walk-through' },
+      typed: true,
       form: { id: 'f-typed', status: 'draft' },
     })
     mockServer({
-      options: { enabled: true, status: 'off', waiting_for: notConnected },
-      status: 'off',
-      waitingFor: notConnected,
+      meetingsState: 'off',
+      sentence: notConnected,
       upcoming: [typed],
     })
     const { user } = renderMeetings()
@@ -647,56 +670,54 @@ describe('the states', () => {
     expect(await screen.findByRole('dialog', { name: 'New pre-read' })).toBeInTheDocument()
   })
 
-  it('off: says pre-meeting forms are switched off, with nothing to press', async () => {
-    const server = mockServer({ options: { enabled: false, status: 'ready', waiting_for: null } })
+  it("the rep's own can't be picked out yet: the server's line, and words that don't say none", async () => {
+    const notLinked =
+      "Your account isn't linked to a HubSpot owner yet, so your own meetings can't be picked out. Show the team's meetings to see them."
+    mockServer({ sentence: notLinked, upcoming: [] })
+    renderMeetings()
+    expect(
+      await screen.findByText(`${notLinked} You can still start a new pre-read.`),
+    ).toHaveAttribute('role', 'status')
+    expect(
+      await screen.findByRole('heading', { name: 'No meetings of your own to show yet.' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('No meetings this week.')).toBeNull()
+  })
+
+  it('off: the list answers 409, and the page says pre-meeting forms are switched off', async () => {
+    const server = mockServer({ off: true })
     renderMeetings()
     expect(
       await screen.findByRole('heading', { name: 'Pre-meeting forms are switched off.' }),
     ).toBeInTheDocument()
     expect(screen.getByText(/Ask an admin to switch them on/)).toBeInTheDocument()
+    // Nothing to press, and no list asked for beyond the one that said so.
     expect(screen.queryByRole('button', { name: 'New pre-read' })).toBeNull()
     expect(screen.queryByRole('radiogroup')).toBeNull()
-    // The page asks for no list while they are off.
-    expect(lists(server)).toEqual([])
-  })
-
-  it('off: the same when the list says so (409), though the switch said on', async () => {
-    mockServer({ listOff: true })
-    renderMeetings()
-    expect(
-      await screen.findByRole('heading', { name: 'Pre-meeting forms are switched off.' }),
-    ).toBeInTheDocument()
-    expect(screen.queryByRole('radiogroup')).toBeNull()
+    expect(lists(server)).toHaveLength(1)
   })
 
   it('an error: the error box, in plain words, with Try again', async () => {
-    mockServer()
     vi.stubGlobal(
       'fetch',
-      vi.fn((request: Request) => {
-        const path = new URL(request.url).pathname
-        return Promise.resolve(
-          path === `${MEETINGS}/options`
-            ? json({ enabled: true, status: 'ready', waiting_for: null })
-            : json({ title: 'Something went wrong on our side', status: 500 }, 500),
-        )
-      }),
+      vi.fn(() =>
+        Promise.resolve(json({ title: 'Something went wrong on our side', status: 500 }, 500)),
+      ),
     )
     renderMeetings()
     expect(await screen.findByText("Your meetings couldn't be loaded.")).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
   })
 
-  it('the prefetch asks for the switch and the list in the address, as the page does', async () => {
+  it('the prefetch asks for the list in the address, as the page does', async () => {
     const server = mockServer()
     const client = createTestQueryClient()
     prefetchPage(routes, { pathname: '/companies/meetings', search: '?when=past&team=1' }, client)
     // The prefetch loads its own small file first.
     await waitFor(() => {
-      expect(server.sent).toHaveLength(2)
+      expect(server.sent).toHaveLength(1)
     })
-    expect(server.sent.map((one) => `${one.path}?${one.search.toString()}`).sort()).toEqual([
-      `${MEETINGS}/options?`,
+    expect(server.sent.map((one) => `${one.path}?${one.search.toString()}`)).toEqual([
       `${MEETINGS}?when=past&mine=false&limit=25&offset=0`,
     ])
   })
@@ -786,12 +807,10 @@ describe('New pre-read', () => {
       starts_at: '2026-11-26T10:00:00+11:00',
       where: 'in_person',
     })
-    // A key, so a retry after a lost answer is one form.
-    expect(started[0]?.idempotencyKey).toMatch(/\S{8,}/)
   })
 
   it.each<['refuse' | 'invalid', string, string]>([
-    ['refuse', 'Pre-meeting forms are off', 'An admin can switch them on.'],
+    ['refuse', 'Meetings are off', 'An admin can switch them on.'],
     ['invalid', 'Pick a day within the next 90 days.', ''],
   ])(
     'keeps the dialog and what was typed when the server says no (%s), and says why',

@@ -9,14 +9,15 @@
  *   stays a weekend: a meeting can be on a Saturday. Only what it truly can't read gets plain
  *   words, once the field is left or the form is sent.
  * - **Teams or in person** may be left unpicked: the pre-read then says nothing about where.
- * - **One key for each dialog** (`Idempotency-Key`), so a retry after a lost answer starts one
- *   form, not two.
+ * - **A double press is one form:** the button is greyed while the server answers. Track 2's
+ *   route takes no `Idempotency-Key`, so a retry after a lost answer could start a second form
+ *   (a question for Track 2).
  * - The dialog's one Navy button is "Draft the pre-read". It closes when the form has started.
  */
 import { ChevronsUpDown, FilePlus, MapPin, Video } from 'lucide-react'
 import { useId, useRef, useState, type FormEvent, type ReactNode, type RefObject } from 'react'
 import { useNavigate } from 'react-router'
-import { fieldErrorMap, newIdempotencyKey, toApiProblem } from '@/api/client'
+import { fieldErrorMap, toApiProblem } from '@/api/client'
 import { useStartMeetingForm } from '@/api/hooks/meetings'
 import type { MeetingWhere } from '@/api/v17'
 import { ChipGroup, type ChipOption } from '@/components/motion'
@@ -144,7 +145,6 @@ function NewPreReadForm({
   const [place, setPlace] = useState<Place[]>([])
   const [left, setLeft] = useState({ day: false, time: false })
   const [tried, setTried] = useState(false)
-  const [key] = useState(newIdempotencyKey)
   const start = useStartMeetingForm()
 
   const today = melbourneDate()
@@ -190,13 +190,10 @@ function NewPreReadForm({
     }
     start.mutate(
       {
-        body: {
-          company_key: company.key,
-          title: title.trim(),
-          starts_at: melbourneIso(day.date, time),
-          where: place[0] ?? 'unknown',
-        },
-        idempotencyKey: key,
+        company_key: company.key,
+        title: title.trim(),
+        starts_at: melbourneIso(day.date, time),
+        where: place[0] ?? 'unknown',
       },
       {
         onSuccess: (form) => {

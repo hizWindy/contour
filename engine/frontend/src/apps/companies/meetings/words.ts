@@ -52,10 +52,6 @@ export const DRAFT_IT = 'Draft it'
 export const CHECK_AND_SEND = 'Check and send'
 export const OPEN = 'Open'
 
-/** Whose meeting, on the team's list. */
-export const YOURS = 'Yours'
-export const NO_OWNER = 'No owner'
-
 // --- The states -----------------------------------------------------------------------------
 
 export const LOADING = 'Loading your meetings.'
@@ -93,6 +89,15 @@ export const EMPTY_WAITING: Empty = {
   description: 'For a meeting coming up, start a new pre-read.',
 }
 
+/**
+ * An empty list of the rep's own while their own can't be picked out (their account has no
+ * HubSpot owner yet). The line above it says to show the team's.
+ */
+export const EMPTY_NOT_YOURS: Empty = {
+  title: 'No meetings of your own to show yet.',
+  description: 'For a meeting coming up, start a new pre-read.',
+}
+
 /** A search that finds nothing, with where else to look. */
 export function noMatchWords(q: string, when: MeetingWhen): Empty {
   return {
@@ -105,9 +110,9 @@ export function noMatchWords(q: string, when: MeetingWhen): Empty {
 }
 
 /**
- * The quiet line while meetings can't come from HubSpot (waiting, or not connected): the server's
- * own sentence, like "HubSpot isn't connected, so meetings can't be read from it.", then what
- * still works.
+ * The quiet line while the list can't show what was asked: the server's own sentence, like
+ * "HubSpot isn't connected, so meetings can't be read from it.", or that the rep's own can't be
+ * picked out yet, then what still works.
  */
 export function waitingLine(sentence: string | null): string {
   const reason = sentence?.trim() || "Meetings can't be read from HubSpot yet."

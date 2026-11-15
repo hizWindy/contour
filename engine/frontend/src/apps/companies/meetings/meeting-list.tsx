@@ -1,8 +1,9 @@
 /**
  * The meetings of one view (PLAN-V17 "The screens", part 5).
  *
- * - **Upcoming** is grouped by its Melbourne day: Today, Tomorrow, This week and Later, each a list
- *   under its heading, the earliest first. One page holds them; if more come, a line says so.
+ * - **Upcoming** is grouped by its Melbourne day, as the server says: Today, Tomorrow, This week
+ *   and Later, each a list under its heading, in the server's order. One page holds them; if more
+ *   come, a line says so.
  * - **Past** is one list, newest first, 25 at a time with the pager.
  *
  * A new search or another page keeps the list on screen, dimmed, until the next one comes, as the
@@ -42,9 +43,8 @@ export function MeetingList({ page, view, today, dimmed, onPage }: MeetingListPr
             <MeetingRow
               key={rowKey(item)}
               item={item}
-              when={pastWhen(item.starts_at, today)}
+              when={pastWhen(item.meeting.starts_at, today)}
               past
-              team={view.team}
             />
           ))}
         </ul>
@@ -60,7 +60,7 @@ export function MeetingList({ page, view, today, dimmed, onPage }: MeetingListPr
 
   return (
     <div aria-busy={dimmed || undefined} className={cn('flex flex-col gap-6', dim)}>
-      {groupUpcoming(page.items, today).map(({ group, items }) => {
+      {groupUpcoming(page.items).map(({ group, items }) => {
         const headingId = `${id}-${group}`
         // A heading and its list, not a landmark each: four regions would crowd a screen reader's
         // list of landmarks. The list takes the heading as its name.
@@ -77,9 +77,8 @@ export function MeetingList({ page, view, today, dimmed, onPage }: MeetingListPr
                 <MeetingRow
                   key={rowKey(item)}
                   item={item}
-                  when={upcomingWhen(item.starts_at, group, today)}
+                  when={upcomingWhen(item.meeting.starts_at, group, today)}
                   past={false}
-                  team={view.team}
                 />
               ))}
             </ul>

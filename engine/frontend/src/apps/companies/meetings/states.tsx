@@ -53,9 +53,10 @@ export function MeetingFormsOff() {
 }
 
 /**
- * One quiet line while meetings can't come from HubSpot yet, in the server's words: waiting for a
- * permission, or HubSpot not connected. New pre-read still works, so the line says so. It is never
- * the switch-off page: the rows the server has still show under it.
+ * One quiet line while the list can't show what was asked, in the server's words: HubSpot's
+ * meetings waiting for a permission, HubSpot not connected, or the rep's own not known yet. New
+ * pre-read still works, so the line says so. It is never the switch-off page: the rows the server
+ * has still show under it.
  */
 export function WaitingLine({ sentence }: { sentence: string | null }) {
   return (

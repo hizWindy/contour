@@ -219,196 +219,277 @@ export interface MyLastNote {
 export type PrepFactsV17 = Schemas['PrepFacts'] & { my_last_note?: MyLastNote | null }
 
 // --- Part 3: meetings and the pre-meeting form (Track 2 builds, Track 3 reads). -------------
-// All under /api/v1/companies, behind the Companies tick. While `meeting_forms_enabled` is off,
-// every route but the options answers 409 `meeting_forms_off`.
+// As Track 2 built them (T2-10 to T2-14, `aaba2ca`): every name, optional or nullable field, path
+// key and status code here follows the contract generated from those routes, so M5 swaps each
+// type for its `Schemas[...]` with no change to the pages. All under /api/v1/companies, behind
+// the Companies tick. There is no options route: while pre-meeting forms are switched off, every
+// meetings route answers 409 `meeting_forms_off`, and the pages read the switch from that.
 
 /**
- * Where a meeting is (Track 1 reads it from HubSpot): `online` is a video call, `in_person` is at
- * an address, and `unknown` is anything else, a phone call included.
+ * Where a meeting is: `online` is a video call (Teams, Meet or Zoom), `in_person` is at an
+ * address, and `unknown` is anything else, a phone call included.
  */
 export type MeetingWhere = 'online' | 'in_person' | 'unknown'
 
 /**
- * A meeting (contract part 1, `core/hubspot/meetings.py`), from our copy of HubSpot. A meeting a
- * rep typed in with New pre-read isn't in HubSpot: it has no `id` and no `hubspot_url`.
+ * A client meeting as HubSpot has it, from our copy (Track 1's `core/hubspot/meetings.py`). A
+ * meeting typed in with New pre-read isn't in HubSpot: its `id` is empty and it has no link.
  */
 export interface Meeting {
-  /** HubSpot's id, or none for a meeting typed in. */
-  id: string | null
-  /** The HubSpot company it is with, or none (a typed meeting with a Lead Finder lead). */
-  company_id: string | null
-  contact_ids: string[]
-  /** The HubSpot owner it belongs to, or none. */
-  owner_id: string | null
+  /** HubSpot's id. Empty for a meeting typed in. */
+  id: string
+  /**
+   * The company it is with: its key on the Companies page. A HubSpot company's key is its HubSpot
+   * id; a meeting typed in carries its company's key here, which may be a Lead Finder lead's
+   * (`lead:<id>`).
+   */
+  company_id?: string | null
+  contact_ids?: string[]
+  /** The HubSpot owner it belongs to. */
+  owner_id?: string | null
   title: string
   starts_at: string
-  /** None for a typed meeting. */
-  ends_at: string | null
+  ends_at?: string | null
   where: MeetingWhere
-  location: string | null
-  /**
-   * HubSpot's outcome, as it names it: SCHEDULED, COMPLETED, RESCHEDULED, NO_SHOW or CANCELED, or
-   * none. The page only reads CANCELED.
-   */
-  outcome: string | null
-  /** The meeting's notes, as plain text, or none. */
-  notes: string | null
-  hubspot_url: string | null
-  /**
-   * The Contour people on it, by their HubSpot owner ids (Track 1's model). Track 2 decides
-   * whether it reaches a row. The page doesn't read it yet.
-   */
-  attendee_owner_ids?: string[]
-  /** HubSpot links it to more than one company, and the first is used (Track 1's model). */
-  more_companies?: boolean
+  location?: string | null
+  /** HubSpot's outcome, like scheduled, completed or canceled. The pages read only cancelled. */
+  outcome?: string | null
+  /** The meeting's notes, as plain text. */
+  notes?: string | null
+  hubspot_url?: string | null
 }
 
-/** drafting: the summaries are being written. draft: ready to check. sent: emailed. failed. */
+/** An upcoming meeting's day, by the Melbourne date (to Sunday for this_week). The server says. */
+export type MeetingGroup = 'today' | 'tomorrow' | 'this_week' | 'later'
+
+/** drafting: being written. draft: ready to check. sent: emailed. failed: the draft failed. */
 export type MeetingFormStatus = 'drafting' | 'draft' | 'sent' | 'failed'
 
-/** A meeting's form, in short, on a row of Meetings. */
-export interface MeetingFormRef {
+/** A meeting's pre-read, in short, on a list. */
+export interface MeetingFormState {
   id: string
   status: MeetingFormStatus
 }
 
-/** Someone we meet: a name and a job title. Never an email address or a phone number. */
-export interface MeetingPerson {
-  name: string
-  title: string | null
-}
-
-/** One row of Meetings: the meeting, its company, who we meet, and its form. */
-export interface MeetingItem extends Meeting {
-  company_key: string
+/** One client meeting on a list: the meeting as HubSpot has it, and where its pre-read is. */
+export interface MeetingItem {
+  meeting: Meeting
+  /** The company it is linked to, from our copy. */
   company_name: string
-  /** It is the signed-in rep's own meeting. */
-  mine: boolean
-  /** Whose meeting it is, by name, or none. */
-  owner: string | null
-  people: MeetingPerson[]
-  /** Its form, or none yet ("Needs pre-read"). */
-  form: MeetingFormRef | null
-  /** For a past meeting: what was said is logged (T3-11's Log meeting). */
+  /** An upcoming meeting's day. None for a past one. */
+  group: MeetingGroup | null
+  /** Its pre-read, or none yet ("Needs pre-read"). */
+  form: MeetingFormState | null
+  /** A call note is linked to it (a past meeting's "Log meeting", T3-11). */
   notes_logged: boolean
+  /** A meeting typed in for New pre-read: not in HubSpot, `meeting.id` empty, `form` its pre-read. */
+  typed: boolean
 }
 
 /**
- * Whether meetings can be read from HubSpot (Track 1's `meetings.status`), which is not the
- * pre-meeting forms switch (`enabled`). waiting: a permission or the first read is missing. off:
- * HubSpot isn't connected (no key, and nothing read yet). The page shows both the same way: one
- * quiet line in the server's words, the rows it has, and New pre-read, which works in all three.
+ * Whether HubSpot's meetings are read: ready, waiting (a permission or the first read is
+ * missing) or off (HubSpot isn't connected). Not the pre-meeting forms switch.
  */
-export type MeetingsStatus = 'ready' | 'waiting' | 'off'
-
-/** GET /companies/meetings/options: the switch, and whether meetings come from HubSpot yet. */
-export interface MeetingOptions {
-  /** meeting_forms_enabled: Meetings and the pre-read work. Off: the page says so. */
-  enabled: boolean
-  status: MeetingsStatus
-  /**
-   * One plain sentence while `status` isn't ready, like "HubSpot isn't connected, so meetings
-   * can't be read from it."
-   */
-  waiting_for: string | null
-}
+export type MeetingsState = 'ready' | 'waiting' | 'off'
 
 export type MeetingWhen = 'upcoming' | 'past'
 
 /**
- * GET /companies/meetings. `q` finds a meeting by words in the company's name, the title and the
- * date ("vitera 26 nov"), in plain code on the server.
+ * GET /companies/meetings. `mine` is true by default; false is the team's, the rep's own first.
+ * `q`: each word must start a word of the company's name, the title or the date in words
+ * ("sample 26 nov", "thu", "26/11"), in plain code on the server.
  */
 export interface MeetingQuery {
   when?: MeetingWhen
-  /** True: the rep's own meetings. False: the team's. */
   mine?: boolean
-  q?: string
+  q?: string | null
   limit?: number
   offset?: number
 }
 
-/** GET /companies/meetings: a page of meetings, and whether they come from HubSpot yet. */
+/** GET /companies/meetings: a page of meetings, and whether HubSpot's meetings are read. */
 export interface MeetingPage {
-  total: number
   items: MeetingItem[]
-  status: MeetingsStatus
-  waiting_for: string | null
+  /** How many match, on every page. */
+  total: number
+  meetings_state: MeetingsState
+  /**
+   * One plain sentence when the list can't show what was asked: HubSpot's meetings aren't read
+   * yet, or the rep's own can't be picked out (their account has no HubSpot owner yet).
+   */
+  sentence: string | null
 }
 
-/** One fact on the form, from HubSpot or our copy, never from AI. */
-export interface MeetingFormFact {
+/**
+ * The meeting a pre-read is for, as it was when the form was made: from HubSpot, or typed in.
+ * It has no HubSpot link: GET /companies/meetings/{meeting_id} has it.
+ */
+export interface FormMeeting {
+  /** HubSpot's meeting, or none for a meeting typed in. */
+  meeting_id: string | null
+  /** The company's key on the Companies page (a HubSpot id, or `lead:<id>`). */
+  company_key: string
+  company_name: string
+  title: string
+  starts_at: string
+  ends_at: string | null
+  where: MeetingWhere
+}
+
+/** A fact on the pre-read, with no AI: like When, Where, Who we meet, Staff, Lease end. */
+export interface FormFact {
   label: string
   value: string
-  /** Where it came from, in words. */
+  /** Where it comes from, in words, like "HubSpot meeting". */
   source: string
 }
 
-/** One of the form's three summaries. */
-export interface MeetingFormSummary {
+/** ai: written by AI. person: the rep wrote or changed it, and a redraft leaves it alone. */
+export type SummaryBy = 'ai' | 'person'
+
+/** One of the pre-read's three summaries. */
+export interface FormSummary {
+  /** Empty until it is written. */
   text: string
-  /** ai: "Written by AI". person: the rep edited it, and a redraft leaves it alone. */
-  by: 'ai' | 'person'
-  /** The facts it rests on. */
-  sources: string[]
+  by: SummaryBy
+  /** The facts it rests on, as call prep's sources. */
+  sources: Schemas['PrepSource'][]
 }
 
-export interface MeetingFormSummaries {
-  what_they_do: MeetingFormSummary
-  what_we_know: MeetingFormSummary
-  talks_so_far: MeetingFormSummary
+export interface FormSummaries {
+  what_they_do: FormSummary
+  /** What we know about the project. */
+  what_we_know: FormSummary
+  talks_so_far: FormSummary
+}
+
+/** Someone a sent pre-read went to: a Contour address, with their name when they have an account. */
+export interface FormRecipient {
+  email: string
+  name: string | null
 }
 
 /** Where the copy of a sent pre-read stands in HubSpot (a note on the company, choice 9). */
-export interface MeetingFormHubSpotCopy {
+export interface HubSpotCopy {
+  /** saved; waiting (writing to HubSpot isn't on: the email still went); off; or failed. */
   state: 'saved' | 'waiting' | 'off' | 'failed'
-  /** One plain sentence. */
-  words: string
+  /** One plain sentence, unless it is saved. */
+  sentence: string | null
 }
 
-/** The pre-meeting form (contract part 3). Its page is /companies/pre-reads/{form_id} (T3-10). */
+/**
+ * A pre-read (contract part 3): the meeting, the facts, the three summaries, the rep's two blanks,
+ * and who it went to. Its page is /companies/meetings/{form_id} (T3-10), where Track 2's morning
+ * email links.
+ */
 export interface MeetingFormOut {
   id: string
-  /** The meeting: from HubSpot, or the one typed in (no id). */
-  meeting: Meeting
+  meeting: FormMeeting
   status: MeetingFormStatus
-  facts: MeetingFormFact[]
-  /** None while it drafts, or when the draft failed. */
-  summaries: MeetingFormSummaries | null
-  /** The two blanks for the rep. Never filled by AI. */
+  /** Empty until the draft has read them, a moment after it starts. */
+  facts: FormFact[]
+  summaries: FormSummaries
+  /** The ideal next step: the rep's, never the AI's. */
   next_step: string | null
+  /** Who is going: the rep's, never the AI's. */
   going: string | null
-  sent_to: string[]
+  sent_to: FormRecipient[]
   sent_at: string | null
   /** Who sent it, by name. */
   sent_by: string | null
-  hubspot_copy: MeetingFormHubSpotCopy
-  /** What the draft cost, as a decimal string. */
+  /** None until it is sent. */
+  hubspot_copy: HubSpotCopy | null
+  /**
+   * What the pre-read has cost, as a decimal string. Track 2 adds each draft's cost to it, so
+   * after a redraft it is the drafts' total, not the last one's (a question for Track 2).
+   */
   cost_usd: string
-  /** Why the draft failed, in plain words, or none. */
+  /** Why the draft failed, in plain words. */
   error: string | null
 }
 
-/** GET /companies/meetings/{meeting_id}: the meeting, and its form if it has one. */
+/** GET /companies/meetings/{meeting_id}: a HubSpot meeting, its company, and its pre-read. */
 export interface MeetingDetail {
-  meeting: MeetingItem
+  meeting: Meeting
+  company_name: string
   form: MeetingFormOut | null
 }
 
 /**
- * POST /companies/meetings/forms: starts a draft, for a meeting in HubSpot (`meeting_id`), or for
- * a new one typed in. The same HubSpot meeting twice gives back its form. A typed one carries an
- * `Idempotency-Key`, so a retry is one form.
+ * POST /companies/meetings/forms: for a HubSpot meeting (`meeting_id`), or for one typed in
+ * (`company_key`, `title`, `starts_at`, and `ends_at` when known). It answers 201 with the form
+ * still drafting, or 200 with a HubSpot meeting's own form when it has one. `where` has a default
+ * on the server (`unknown`), which makes it a field to send: a HubSpot meeting's own place is used
+ * whatever is sent.
  */
-export type MeetingFormStart =
-  | { meeting_id: string }
-  | { company_key: string; title: string; starts_at: string; where: MeetingWhere }
+export interface MeetingFormStart {
+  meeting_id?: string | null
+  company_key?: string | null
+  title?: string | null
+  /** With its time zone. */
+  starts_at?: string | null
+  ends_at?: string | null
+  where: MeetingWhere
+}
+
+/** The new text of each summary the rep changed. Null or empty clears it. */
+export interface FormSummariesPatch {
+  what_they_do?: string | null
+  what_we_know?: string | null
+  talks_so_far?: string | null
+}
+
+/**
+ * PATCH /companies/meetings/forms/{form_id}: only the parts sent change. A summary sent here is
+ * the rep's own from then on (`by: person`), and keeps its sources. A sent pre-read that changes is
+ * a draft again, so sending it again emails the new words.
+ */
+export interface MeetingFormPatch {
+  summaries?: FormSummariesPatch | null
+  next_step?: string | null
+  going?: string | null
+}
+
+/** POST .../preview (T3-11): the addresses the rep added. Empty: only the people on the meeting. */
+export interface FormPreviewIn {
+  to?: string[]
+}
+
+/** Someone the pre-read would go to (T3-11). */
+export interface FormPerson {
+  email: string
+  name: string | null
+  /** Like "on the meeting", or "added by you". */
+  why: string
+  ticked: boolean
+  /** False for an address that isn't Contour's: it can't get it. */
+  allowed: boolean
+}
+
+/** The email as it would arrive (T3-11): HTML with every value escaped, and the people. */
+export interface FormEmailPreview {
+  subject: string
+  text: string
+  html: string
+  people: FormPerson[]
+}
+
+/** POST .../send (T3-11): Contour addresses only, 1 to 20. One that isn't refuses the whole send. */
+export interface FormSendIn {
+  to: string[]
+}
 
 /** GET /companies/meetings/summary: the counts for Home (T3-11). */
 export interface MeetingSummary {
   need_pre_read: number
   draft_ready: number
 }
+
+/**
+ * CompanyDetail gains `meetings` (T3-11): its next three, soonest first, then its last three,
+ * newest first. A past one has no group. Empty while meetings are off or not read yet.
+ */
+export type CompanyDetailV17 = Schemas['CompanyDetail'] & { meetings?: MeetingItem[] }
 
 // --- Part 4: Admin (Track 1 builds, Track 3 reads) ------------------------------------------
 
@@ -469,9 +550,17 @@ type BodyPart<Body> = [Body] extends [never]
   ? { requestBody?: never }
   : { requestBody: { content: { 'application/json': Body } } }
 
-type Operation<Out, Body = never, Path = never, Query = never, Header = never> = {
+/** `Ok` is the route's success status, or several (Start a pre-read answers 200 or 201). */
+type Operation<
+  Out,
+  Body = never,
+  Path = never,
+  Query = never,
+  Header = never,
+  Ok extends number = 200,
+> = {
   parameters: { query?: Query; header?: Header; cookie?: never } & PathPart<Path>
-  responses: { 200: Json<Out> } & Errors
+  responses: { [Status in Ok]: Json<Out> } & Errors
 } & BodyPart<Body>
 
 interface NoContent<Path> {
@@ -481,11 +570,12 @@ interface NoContent<Path> {
 }
 
 /**
- * The path keys, as the backend names them (Track 2: `note_id` and `meeting_id`, Track 1:
- * `user_id`).
+ * The path keys, as the backend names them (Track 2: `note_id`, `meeting_id` and `form_id`,
+ * Track 1: `user_id`).
  */
 type NoteId = { note_id: string }
 type MeetingId = { meeting_id: string }
+type FormId = { form_id: string }
 type UserId = { user_id: string }
 
 /** Lower case, as the backend's generated contract writes headers (see `create_run`). */
@@ -529,16 +619,31 @@ export interface V17Paths {
     parameters: NoParameters
     post: Operation<CallNoteOut, CallNoteResolve, NoteId>
   }
-  // The fixed paths before `{meeting_id}`, so "options" is never read as a meeting's id.
-  '/companies/meetings/options': { parameters: NoParameters; get: Operation<MeetingOptions> }
-  '/companies/meetings/summary': { parameters: NoParameters; get: Operation<MeetingSummary> }
   '/companies/meetings': {
     parameters: NoParameters
     get: Operation<MeetingPage, never, never, MeetingQuery>
   }
+  '/companies/meetings/summary': { parameters: NoParameters; get: Operation<MeetingSummary> }
   '/companies/meetings/forms': {
     parameters: NoParameters
-    post: Operation<MeetingFormOut, MeetingFormStart, never, never, IdempotencyHeader>
+    post: Operation<MeetingFormOut, MeetingFormStart, never, never, never, 200 | 201>
+  }
+  '/companies/meetings/forms/{form_id}': {
+    parameters: NoParameters
+    get: Operation<MeetingFormOut, never, FormId>
+    patch: Operation<MeetingFormOut, MeetingFormPatch, FormId>
+  }
+  '/companies/meetings/forms/{form_id}/redraft': {
+    parameters: NoParameters
+    post: Operation<MeetingFormOut, never, FormId, never, never, 202>
+  }
+  '/companies/meetings/forms/{form_id}/preview': {
+    parameters: NoParameters
+    post: Operation<FormEmailPreview, FormPreviewIn, FormId>
+  }
+  '/companies/meetings/forms/{form_id}/send': {
+    parameters: NoParameters
+    post: Operation<MeetingFormOut, FormSendIn, FormId>
   }
   '/companies/meetings/{meeting_id}': {
     parameters: NoParameters

@@ -2,26 +2,32 @@
  * Meetings (PLAN-V17 T3-9, "The screens" part 5), at /companies/meetings: the client meetings,
  * each with where its pre-read stands, and one button to move it on.
  *
- * - **Upcoming** (grouped Today, Tomorrow, This week, Later, in Melbourne days) and **Past**,
- *   picked with `Segmented`. The rep's own meetings first, with a switch for the team's. A search
- *   finds a meeting by company, title or date words. All of it is in the address (`params.ts`).
+ * - **Upcoming** (grouped Today, Tomorrow, This week, Later, in Melbourne days, as the server
+ *   groups them) and **Past**, picked with `Segmented`. The rep's own meetings first, with a
+ *   switch for the team's. A search finds a meeting by company, title or date words. All of it is
+ *   in the address (`params.ts`).
  * - **One status and one button a row** (`meeting-row.tsx`): Needs pre-read (Draft it), Drafting
  *   (Open), Draft ready (Check and send), Sent (Open), Draft failed (Open). Past rows say whether
  *   what was said is logged; T3-11 adds "Log meeting" there.
  * - **New pre-read** in the header, for a meeting that isn't in HubSpot (`new-pre-read.tsx`).
  * - **The states:** loading (a still skeleton after 200ms), empty, and an error. Two different
- *   "offs" stay apart. While meetings can't be read from HubSpot (`status` waiting, or off when
- *   HubSpot isn't connected), one quiet line says so in the server's words, the rows the server
- *   has still show, and New pre-read still works. With the pre-meeting forms switch off
- *   (`enabled`), the page says so, and stays in the menu (Al-khair, 15 Nov).
+ *   "offs" stay apart. While the list can't show what was asked (HubSpot's meetings aren't read
+ *   yet, or the rep's own can't be picked out), one quiet line says so in the server's words
+ *   (`sentence`), the rows the server has still show, and New pre-read still works. With the
+ *   pre-meeting forms switch off, the list answers 409 `meeting_forms_off`: the page says so, and
+ *   stays in the menu (Al-khair, 15 Nov). There is no other way to read the switch.
+ *
+ * The quiet line and New pre-read keep what the last list said while the next one loads, so the
+ * toolbar under the line never jumps up and back.
  *
  * The page has no Navy button of its own: the work is on the rows, and each row's button is
  * quiet, so a list of drafts ready never shows five Navy buttons. New pre-read's dialog has one.
  */
 import { CalendarCheck } from 'lucide-react'
+import { useState } from 'react'
 import { useSearchParams } from 'react-router'
-import { isMeetingFormsOff, useMeetingOptions, useMeetings } from '@/api/hooks/meetings'
-import type { MeetingOptions } from '@/api/v17'
+import { isMeetingFormsOff, useMeetings } from '@/api/hooks/meetings'
+import type { MeetingPage } from '@/api/v17'
 import { EmptyState } from '@/components/empty-state'
 import { ErrorState } from '@/components/error-state'
 import { PageHeader } from '@/components/page-header'
@@ -33,6 +39,7 @@ import { meetingsQuery, readMeetings, writeMeetings, type MeetingsView } from '.
 import { MeetingFormsOff, MeetingsPending, WaitingLine } from './states'
 import { MeetingsToolbar } from './toolbar'
 import {
+  EMPTY_NOT_YOURS,
   EMPTY_WAITING,
   emptyWords,
   LOAD_FAILED,
@@ -41,24 +48,48 @@ import {
   noMatchWords,
 } from './words'
 
-function MeetingsBody({
-  view,
-  options,
-  today,
-  onChange,
-}: {
-  view: MeetingsView
-  options: MeetingOptions
-  today: string
-  onChange: (changes: Partial<MeetingsView>) => void
-}) {
-  const list = useMeetings(meetingsQuery(view))
-  // The list's own word on HubSpot is the newer; the switches' stands in until it comes.
-  const status = list.data?.status ?? options.status
-  const waitingFor = list.data ? list.data.waiting_for : options.waiting_for
-  const waiting = status !== 'ready'
+/** What the last list said about HubSpot: whether it waits, and the server's sentence. */
+interface HubSpotLine {
+  waiting: boolean
+  sentence: string | null
+}
 
-  if (isMeetingFormsOff(list.error)) return <MeetingFormsOff />
+function lineOf(page: MeetingPage): HubSpotLine {
+  return { waiting: page.meetings_state !== 'ready', sentence: page.sentence }
+}
+
+/** The serif words of an empty list: no match, HubSpot not read, the rep's own not known, or none. */
+function emptyOf(view: MeetingsView, page: MeetingPage) {
+  if (view.q.trim() !== '') return noMatchWords(view.q, view.when)
+  if (page.meetings_state !== 'ready') return EMPTY_WAITING
+  if (page.sentence !== null) return EMPTY_NOT_YOURS
+  return emptyWords(view.when, view.team)
+}
+
+export default function MeetingsPage() {
+  const [params, setParams] = useSearchParams()
+  const view = readMeetings(params)
+  const onPhone = useMediaQuery(PHONE)
+  const today = melbourneDate()
+  const list = useMeetings(meetingsQuery(view))
+  const off = isMeetingFormsOff(list.error)
+
+  // Kept from the last list that answered, while the next one loads.
+  const [formsOn, setFormsOn] = useState(false)
+  const [line, setLine] = useState<HubSpotLine | null>(null)
+  if (list.data && !formsOn) setFormsOn(true)
+  if (off && formsOn) setFormsOn(false)
+  if (list.data) {
+    const next = lineOf(list.data)
+    if (line?.waiting !== next.waiting || line.sentence !== next.sentence) setLine(next)
+  }
+
+  const change = (changes: Partial<MeetingsView>): void => {
+    setParams((current) => writeMeetings(current, changes), {
+      replace: true,
+      preventScrollReset: true,
+    })
+  }
 
   let content
   if (list.error && !list.data) {
@@ -68,12 +99,7 @@ function MeetingsBody({
   } else if (!list.data) {
     content = <MeetingsPending />
   } else if (list.data.items.length === 0 && view.page === 0) {
-    const words =
-      view.q.trim() !== ''
-        ? noMatchWords(view.q, view.when)
-        : waiting
-          ? EMPTY_WAITING
-          : emptyWords(view.when, view.team)
+    const words = emptyOf(view, list.data)
     content = (
       <EmptyState
         title={words.title}
@@ -90,51 +116,10 @@ function MeetingsBody({
         today={today}
         dimmed={list.isPlaceholderData}
         onPage={(page) => {
-          onChange({ page })
+          change({ page })
         }}
       />
     )
-  }
-
-  return (
-    <>
-      {waiting ? <WaitingLine sentence={waitingFor} /> : null}
-      <MeetingsToolbar view={view} onChange={onChange} />
-      {content}
-    </>
-  )
-}
-
-export default function MeetingsPage() {
-  const [params, setParams] = useSearchParams()
-  const view = readMeetings(params)
-  const options = useMeetingOptions()
-  const onPhone = useMediaQuery(PHONE)
-  const today = melbourneDate()
-  const on = options.data?.enabled === true
-
-  const change = (changes: Partial<MeetingsView>): void => {
-    setParams((current) => writeMeetings(current, changes), {
-      replace: true,
-      preventScrollReset: true,
-    })
-  }
-
-  let body
-  if (options.error) {
-    body = (
-      <ErrorState
-        error={options.error}
-        context={LOAD_FAILED}
-        onRetry={() => void options.refetch()}
-      />
-    )
-  } else if (!options.data) {
-    body = <MeetingsPending />
-  } else if (!options.data.enabled) {
-    body = <MeetingFormsOff />
-  } else {
-    body = <MeetingsBody view={view} options={options.data} today={today} onChange={change} />
   }
 
   return (
@@ -144,9 +129,19 @@ export default function MeetingsPage() {
         tone="companies"
         title={MEETINGS_TITLE}
         description={onPhone ? undefined : MEETINGS_DESCRIPTION}
-        actions={on ? <NewPreRead /> : undefined}
+        actions={formsOn && !off ? <NewPreRead /> : undefined}
       />
-      {body}
+      {off ? (
+        <MeetingFormsOff />
+      ) : (
+        <>
+          {line && (line.waiting || line.sentence !== null) ? (
+            <WaitingLine sentence={line.sentence} />
+          ) : null}
+          <MeetingsToolbar view={view} onChange={change} />
+          {content}
+        </>
+      )}
     </>
   )
 }

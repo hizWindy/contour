@@ -4,73 +4,61 @@
  */
 import { describe, expect, it } from 'vitest'
 import { DRAFTING_POLL_MS, meetingsPollMs } from '@/api/hooks/meetings'
-import type { MeetingItem } from '@/api/v17'
+import type { Meeting, MeetingItem } from '@/api/v17'
 import { meetingsHref, meetingsQuery, preReadHref, readMeetings, writeMeetings } from './params'
-import { dayGroupOf, groupUpcoming, isCancelled, rowKey, rowStatus } from './rows'
+import { groupUpcoming, isCancelled, rowKey, rowStatus } from './rows'
 import { dayText, pastWhen, upcomingWhen, waitingLine } from './words'
 
 // Weeks run Monday to Sunday.
 const WEDNESDAY = '2026-11-18'
-const SATURDAY = '2026-11-21'
-const SUNDAY = '2026-11-22'
 
-function item(changes: Partial<MeetingItem> = {}): MeetingItem {
+type ItemChanges = Partial<Omit<MeetingItem, 'meeting'>> & { meeting?: Partial<Meeting> }
+
+function item({ meeting, ...changes }: ItemChanges = {}): MeetingItem {
   return {
-    id: 'm1',
-    company_id: 'c1',
-    contact_ids: [],
-    owner_id: 'o1',
-    title: 'Office walk-through',
-    starts_at: '2026-11-17T23:00:00Z',
-    ends_at: null,
-    where: 'online',
-    location: null,
-    outcome: null,
-    notes: null,
-    hubspot_url: null,
-    company_key: '101',
+    meeting: {
+      id: 'm1',
+      company_id: '101',
+      contact_ids: [],
+      owner_id: 'o1',
+      title: 'Office walk-through',
+      starts_at: '2026-11-17T23:00:00Z',
+      ends_at: null,
+      where: 'online',
+      location: null,
+      outcome: null,
+      notes: null,
+      hubspot_url: null,
+      ...meeting,
+    },
     company_name: 'Sample Logistics Pty Ltd',
-    mine: true,
-    owner: 'Jo Sample',
-    people: [],
+    group: 'today',
     form: null,
     notes_logged: false,
+    typed: false,
     ...changes,
   }
 }
 
 describe('the day groups', () => {
-  it('puts each Melbourne day in Today, Tomorrow, This week or Later', () => {
-    expect(dayGroupOf('2026-11-18', WEDNESDAY)).toBe('today')
-    expect(dayGroupOf('2026-11-19', WEDNESDAY)).toBe('tomorrow')
-    expect(dayGroupOf('2026-11-20', WEDNESDAY)).toBe('this_week')
-    expect(dayGroupOf('2026-11-22', WEDNESDAY)).toBe('this_week')
-    expect(dayGroupOf('2026-11-23', WEDNESDAY)).toBe('later')
-    // A meeting still going from earlier counts as today.
-    expect(dayGroupOf('2026-11-17', WEDNESDAY)).toBe('today')
-  })
-
-  it('has no This week on a Saturday or a Sunday', () => {
-    expect(dayGroupOf('2026-11-22', SATURDAY)).toBe('tomorrow')
-    expect(dayGroupOf('2026-11-23', SATURDAY)).toBe('later')
-    expect(dayGroupOf('2026-11-23', SUNDAY)).toBe('tomorrow')
-    expect(dayGroupOf('2026-11-24', SUNDAY)).toBe('later')
-  })
-
-  it('groups by the day in Melbourne, the earliest first, and leaves empty groups out', () => {
-    const groups = groupUpcoming(
-      [
-        // 2 pm, then 10 am, on Wednesday in Melbourne; 12:30 am on Tuesday 24 Nov there.
-        item({ id: 'b', starts_at: '2026-11-18T03:00:00Z' }),
-        item({ id: 'a', starts_at: '2026-11-17T23:00:00Z' }),
-        item({ id: 'c', starts_at: '2026-11-23T13:30:00Z' }),
-      ],
-      WEDNESDAY,
-    )
-    expect(groups.map(({ group, items }) => [group, items.map((one) => one.id)])).toEqual([
-      ['today', ['a', 'b']],
-      ['later', ['c']],
+  it("groups by the server's day, in the server's order, and leaves empty groups out", () => {
+    const groups = groupUpcoming([
+      // The server sends the rep's own first on the team's list: that order stays.
+      item({ meeting: { id: 'b', starts_at: '2026-11-18T03:00:00Z' }, group: 'today' }),
+      item({ meeting: { id: 'a', starts_at: '2026-11-17T23:00:00Z' }, group: 'today' }),
+      // The server's group wins over anything the page could work out from the date.
+      item({ meeting: { id: 'c', starts_at: '2026-11-23T13:30:00Z' }, group: 'this_week' }),
+      item({ meeting: { id: 'd', starts_at: '2026-11-30T23:00:00Z' }, group: 'later' }),
     ])
+    expect(groups.map(({ group, items }) => [group, items.map((one) => one.meeting.id)])).toEqual([
+      ['today', ['b', 'a']],
+      ['this_week', ['c']],
+      ['later', ['d']],
+    ])
+  })
+
+  it('puts an upcoming meeting with no group under Later, which writes its whole day', () => {
+    expect(groupUpcoming([item({ group: null })]).map(({ group }) => group)).toEqual(['later'])
   })
 })
 
@@ -85,16 +73,22 @@ describe('one status a row', () => {
   it('says whether a past meeting is logged, and that a cancelled one is cancelled', () => {
     expect(rowStatus(item({ notes_logged: true }), true)).toBe('notes_logged')
     expect(rowStatus(item(), true)).toBe('no_notes')
-    const cancelled = item({ outcome: 'CANCELED', form: { id: 'f1', status: 'draft' } })
+    const cancelled = item({ meeting: { outcome: 'CANCELED' }, form: { id: 'f1', status: 'draft' } })
     expect(isCancelled(cancelled)).toBe(true)
     expect(rowStatus(cancelled, false)).toBe('cancelled')
     expect(rowStatus(cancelled, true)).toBe('cancelled')
-    expect(isCancelled(item({ outcome: 'RESCHEDULED' }))).toBe(false)
+    // HubSpot's spelling, in any case, and the other spelling too.
+    expect(isCancelled(item({ meeting: { outcome: 'canceled' } }))).toBe(true)
+    expect(isCancelled(item({ meeting: { outcome: 'Cancelled' } }))).toBe(true)
+    expect(isCancelled(item({ meeting: { outcome: 'RESCHEDULED' } }))).toBe(false)
+    expect(isCancelled(item({ meeting: { outcome: null } }))).toBe(false)
   })
 
-  it('keys a meeting typed in (no HubSpot id) by its form', () => {
+  it('keys a meeting typed in (its HubSpot id is empty) by its form', () => {
     expect(rowKey(item())).toBe('m1')
-    expect(rowKey(item({ id: null, form: { id: 'f9', status: 'draft' } }))).toBe('f9')
+    expect(
+      rowKey(item({ typed: true, meeting: { id: '' }, form: { id: 'f9', status: 'draft' } })),
+    ).toBe('f9')
   })
 
   it('asks again every 3 seconds while a form is drafting, and stops after', () => {
@@ -125,7 +119,7 @@ describe('when a meeting is, in words', () => {
     expect(dayText('2027-01-05', WEDNESDAY)).toBe('Tue 5 Jan 2027')
   })
 
-  it("says the server's sentence while meetings can't come from HubSpot, then what still works", () => {
+  it("says the server's sentence while the list can't show it all, then what still works", () => {
     expect(waitingLine('Waiting for HubSpot access to meetings')).toBe(
       'Waiting for HubSpot access to meetings. You can still start a new pre-read.',
     )
