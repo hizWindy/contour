@@ -473,7 +473,7 @@ The first two and `meeting_forms_enabled` are on the Settings page. `internal_em
 
 ## Track 1: HubSpot (session 1)
 
-**Progress:** Stage A 7 of 7 (tag `v17-notes-t1`). Stage B 0 of 4. Every step is `backend-agent` work.
+**Progress:** Stage A 7 of 7 (tag `v17-notes-t1`). Stage B 1 of 4. Every step is `backend-agent` work.
 
 ### Stage A: call notes
 
@@ -539,7 +539,7 @@ The first two and `meeting_forms_enabled` are on the Settings page. `internal_em
   - With `meeting_note_on_meeting` on: the same text is added to the end of the meeting's `hs_internal_meeting_notes`. It never replaces what is there, and never touches `hs_meeting_body` or the location.
   - **Done when:** tests prove the note's links, that the meeting is untouched while the switch is off, and that existing internal notes are kept.
 
-- [ ] **T1-10. Only Contour addresses.**
+- [x] **T1-10. Only Contour addresses.** Done 2026-11-15 (1a7a6c4).
   - `core/email/internal.py`: `only_internal(addresses, domains)` returns the ones allowed and the ones refused. Exact domain match, no sub-domain tricks ("contourinteriors.com.au.evil.com" is refused).
   - **Done when:** tests cover a good address, a look-alike domain, upper case and an empty list.
 
@@ -550,6 +550,9 @@ The first two and `meeting_forms_enabled` are on the Settings page. `internal_em
 
 Newest first.
 
+- 2026-11-15: **T1-10 done** (1a7a6c4), and **`rep_of_owner`** for Track 2 (e4b5823).
+  - `core/email/internal.py`: `only_internal(addresses, domains)` gives the addresses whose domain is exactly one of `domains`, in lower case and each once, and the rest as typed. A look-alike, a sub-domain, a letter from another alphabet, two @, a display name or a broken address is refused. A blank is skipped. With no domains, nobody is allowed. It has the signature and the answer of Track 2's stand-in (`apps/companies/internal.py`), and Track 2's own ten cases pass against it, so M5 is one import line in `meeting_send.py`. 22 tests of its own.
+  - `owners.rep_of_owner(session, owner_id)`: the account linked to an owner, as (its name, its own address), or None. It is for Track 2's `RepOf` seam (`no_rep` until M5): who gets "your pre-read is ready", and who is ticked when a pre-read is sent. Only an account that can sign in and may open Companies (an Admin, or its tick). Two accounts on one owner: a link set by hand wins, then the oldest. Not in the contract: added because Track 2's seam needs it.
 - 2026-11-15: **T1-7 done. Track 1 Stage A ready.** Tag `v17-notes-t1` on this tick's commit.
   - **Full run on a2ce1a1** (with the review's fixes): 3,742 passed, 25 skipped (the usual 25 in the routes list), none failed. Core 2,001, Companies 108, Lead Finder 1,622, gates and e2e 11, from 23:28 to 23:42, with `RUN_GATES=1` on the test database `_v17a`.
   - How it ran: in the foreground, in six parts under the heavy lock, on Al-khair's word. Claude Code had stopped two background runs for low memory (0.2 to 0.4 GB free).
