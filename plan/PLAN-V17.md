@@ -552,7 +552,7 @@ Newest first.
 
 ## Track 2: Companies backend (session 2)
 
-**Progress:** Stage A 7 of 9. Stage B 0 of 7. Every step is `backend-agent` work.
+**Progress:** Stage A 8 of 9 (T2-8 waits for Al-khair's run). Stage B 0 of 7. Every step is `backend-agent` work.
 
 ### Stage A: call notes
 
@@ -604,7 +604,7 @@ Newest first.
   - Check by hand: the outcome, each change, each task and its date.
   - **Done when:** the Log has how many of the 10 were right, what was wrong, and the cost of one note.
 
-- [ ] **T2-9. Stage A check.**
+- [x] **T2-9. Stage A check.** Done 2026-11-15: the full run passed (3,824), the security check's fixes are in (`6091f3e`), tag `v17-notes-t2`. See the Log.
   - All backend tests, Ruff and mypy. `uv run engine openapi`.
   - The `review-agent` runs `security-check`: what goes to Claude, who reads whose notes, and that nothing is written without a confirm.
   - Add a "Call notes" section to `projects/prep/PREP.md`, and the permission list to `projects/prep/EMAIL.md` (W1).
@@ -658,6 +658,15 @@ Newest first.
 
 Newest first.
 
+- 2026-11-15: **Track 2 Stage A ready.** Tag `v17-notes-t2` on the commit after this tick. T2-1 to T2-7 and T2-9 are done. T2-8 (the sorter on 10 made-up notes, well under US$0.01) is built and waits for Al-khair: the auto-mode safety check refused the paid run from this session, so he runs it with one command (in the session's summary). Its 10 notes and the expected answers are in the script; the result goes in this Log. If it shows the prompt needs a change, the change comes before M1 and the tag moves.
+- 2026-11-15, T2-9 checks (Stage A):
+  - **Full backend run** on `49ad168` (`RUN_GATES=1`, so the contract file and the stub checks too): 3,824 passed, 25 skipped, none failed, in 12 min 57 s. The baseline was 3,643: the 181 more are Track 2's tests. Ruff and mypy strict pass. `openapi.json` written again (`49ad168`): 20 new models, the 11 routes, and `PrepFacts.my_last_note`. Nothing else changed in it.
+  - **Security check** (a new `review-agent`, on `437a2ee..49ad168`): Ready with notes, no blockers. Nothing reaches HubSpot without the owner pressing Send or Retry; no rep reads another's note; an Admin reads but can't change, send, retry, resolve or remove another's note; no contact detail is stored or logged by the new code; nothing Claude answers picks a company, person, deal or owner.
+  - **Fixed after it:** `scrub` also catches a phone written with slashes (0412/345/678) and a spoken email ("jo at sample dot com dot au"), and keeps a date with slashes (31/03/2028). Commas are not treated as phone separators, because call prep writes money like A$12,500,000. Spelled-out digits ("oh four one two") are a known limit. The call's text no longer carries Claude's own words for a dropped value (the card never showed them). A test proves another rep and an Admin can't preview, confirm or resolve someone's note. An edit locks the note first, so it can't race a send. The "already sending" words suit any rep.
+  - **Later, not built:** one batch at a time for the whole backend. While Mia's batch sends (a few seconds), Sam's Send answers `already_sending` and sends nothing of his yet. A queue for each person is a later fix (**TBC**).
+  - **For Levi (choice 1):** with "Claude sorts call notes" on, a note goes to Claude as the rep wrote it, names included ("Spoke to Jo Sample at Sample Logistics"), even while `HUBSPOT_NAMES_TO_CLAUDE_OK` is off. Code adds no company name, people list or HubSpot id. Say this when his OK is asked.
+  - **For Track 1:** the batch relies on two `writer.py` rules in the activity writer, or it could send twice: a subject already done, writing or part-written gets that write back unchanged; and the claim lets only one click write. `apply_activity` must refuse while writing is off, as `apply_write` does. Also: the screen-words guard (`tests/core/test_safe_deploys.py:139`) doesn't scan `apps/companies/`. The review checked Track 2's 150 new texts by hand and found no command, file or setting name. Adding `apps/companies/**` to that scan is a one-line change in Track 1's file.
+  - **For Track 3, answers to its four questions from Activity:** (1) yes: `state=to_confirm` returns `sorting`, `to_confirm` and `sending`; `needs_look` returns `partial`, `failed` and `uncertain`. The lists answer 409 `call_notes_off`, and someone else's note is 404. (2) yes: confirm locks each note it takes, marks it `sending` and commits before it answers. A note it can't take is in `skipped` with why. (3) yes, since `521c6dc`: "Keep mine" (the change sent back unchanged) clears `current_changed` and keeps HubSpot's value as `current`, so the next send isn't held again. (4) yes: a change or a follow-up with `id: null` is a new one. Only a second change to the same field at the same office is refused (422 `change_twice`).
 - 2026-11-15, T2-7 done (`61f126e`). `my_last_note` uses Track 3's shape (`id`, `summary`, `called_at`, `outcome`), with `status` as an extra. A logged call counts as the last talk at once: `relationship.last_talk()` already prefers the newest call in our copy, so a row Track 1's writer adds shows on the next facts read. `PrepFacts.last_talk` itself stays HubSpot's own "last contacted" date until the next sync (it is labelled "per HubSpot"). Also: a failed note with nothing in HubSpot can now be removed, like an unsent one (Track 2's call; Al-khair can reverse it).
 - 2026-11-15, T2-6 done (`d1f5289`). The batch sends through an injected writer, so its tests use a fake one until Track 1's real writer meets it at M1.
   - **Each part keeps a state:** new, landed, failed, held or uncertain, with its step and the reason. A later send carries only what hasn't landed, as a new write (`call_note:<id>:<n>`). A field whose HubSpot value moved since the rep looked is held and shown again. If HubSpot already has the rep's value, the part counts as landed.
