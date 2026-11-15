@@ -821,8 +821,15 @@ class MeetingFormState(Out):
 class MeetingItem(Out):
     """One client meeting in a list: the meeting as HubSpot has it, and where its pre-read is."""
 
+    model_config = ConfigDict(json_schema_extra=optional_in_types("owner_name"))
+
     meeting: Meeting
     company_name: str = Field(description="The company it is linked to, from our copy")
+    owner_name: str | None = Field(
+        None,
+        description="Whose meeting it is: its owner in HubSpot, from our copy of owners. None for "
+        "a typed one (always mine) or an owner we don't know",
+    )
     group: MeetingGroup | None = Field(
         description="An upcoming meeting's day, by the Melbourne date: today, tomorrow, "
         "this_week (to Sunday) or later. None for a past one"

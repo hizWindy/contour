@@ -246,6 +246,10 @@ async def test_the_teams_meetings_put_mine_first_and_past_ones_say_if_notes_were
         "9009",
     ]
     assert [item["group"] for item in team["items"]][-2:] == ["tomorrow", "later"]
+    # Whose each one is, as our copy of HubSpot's owners names them: o1 is Lee Sample there,
+    # and o2 isn't in it.
+    owners = {item["meeting"]["id"]: item["owner_name"] for item in team["items"]}
+    assert (owners["9001"], owners["9002"]) == ("Lee Sample", None)
     # The last 30 days, newest first. No groups.
     assert [(item["meeting"]["id"], item["group"]) for item in past["items"]] == [
         ("8001", None),

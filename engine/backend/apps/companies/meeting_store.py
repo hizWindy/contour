@@ -48,7 +48,7 @@ from core.config import Settings
 from core.hubspot import activities
 from core.hubspot import meetings as hubspot_meetings
 from core.hubspot.meetings import Meeting, MeetingsStatus
-from core.hubspot.models import HubSpotCompany
+from core.hubspot.models import HubSpotCompany, HubSpotOwner
 
 UPCOMING_DAYS: Final = 7  # Upcoming is the next 7 days
 PAST_DAYS: Final = 30  # how far back Past looks (TBC)
@@ -276,14 +276,27 @@ class Row:
     typed: MeetingFormState | None = None  # a typed meeting's own pre-read
 
 
+async def owner_names(session: AsyncSession, owner_ids: Iterable[str]) -> dict[str, str]:
+    """Each HubSpot owner's name, from our copy, in one read."""
+    wanted = {owner_id for owner_id in owner_ids if owner_id}
+    if not wanted:
+        return {}
+    rows = await session.execute(
+        select(HubSpotOwner.owner_id, HubSpotOwner.name).where(HubSpotOwner.owner_id.in_(wanted))
+    )
+    return {owner_id: name for owner_id, name in rows.all() if name}
+
+
 async def items_of(session: AsyncSession, rows: Sequence[Row]) -> list[MeetingItem]:
     ids = [row.meeting.id for row in rows if row.typed is None]
     forms = await forms_of(session, ids)
     noted = await with_notes(session, ids)
+    owners = await owner_names(session, (row.meeting.owner_id or "" for row in rows))
     return [
         MeetingItem(
             meeting=row.meeting,
             company_name=row.company_name,
+            owner_name=owners.get(row.meeting.owner_id or ""),
             group=row.group,
             form=row.typed or forms.get(row.meeting.id),
             notes_logged=row.typed is None and row.meeting.id in noted,
