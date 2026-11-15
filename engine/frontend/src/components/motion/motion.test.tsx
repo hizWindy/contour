@@ -389,18 +389,53 @@ describe('RollingNumber', () => {
     return <RollingNumber value={value} format={format} />
   }
 
-  it('reads as the plain number to a screen reader, and shows one column per digit', () => {
+  /** The digit columns, left to right. */
+  function columns(): HTMLElement[] {
+    return [
+      ...document.querySelectorAll<HTMLElement>(
+        '[data-slot=rolling-number] [data-slot=rolling-digit]',
+      ),
+    ]
+  }
+
+  /** The unseen copy in each column: the digit it stands on. */
+  function copies(): (string | null | undefined)[] {
+    return columns().map((column) => column.querySelector('.invisible')?.textContent)
+  }
+
+  it('reads as the plain number to a screen reader, once, and shows one column per digit', () => {
     wrap(<Harness value={1234} />)
     expect(screen.getByText('1,234')).toHaveClass('sr-only')
+    // The rest, columns and unseen copies too, is hidden from a screen reader.
     const visible = document.querySelector('[data-slot=rolling-number] [aria-hidden=true]')
-    expect(visible?.querySelectorAll('.overflow-hidden')).toHaveLength(4)
-    expect(visible?.textContent).toBe('0123456789,012345678901234567890123456789')
+    expect(visible?.querySelectorAll('[data-slot=rolling-digit]')).toHaveLength(4)
+    expect(columns().every((column) => visible?.contains(column))).toBe(true)
+    expect(copies()).toEqual(['1', '2', '3', '4'])
   })
 
-  it('takes a money format and rolls to a new value', () => {
+  it("sits on the words' baseline: each column has an unseen copy in the flow, and clips without moving it", () => {
+    wrap(
+      <p>
+        Send <Harness value={3} /> to HubSpot
+      </p>,
+    )
+    const [column] = columns()
+    // `overflow: clip`, not `hidden`: hidden puts an inline-block's baseline at its bottom edge.
+    expect(column).toHaveClass('overflow-clip', 'h-[1em]', 'w-[1ch]')
+    expect(column).not.toHaveClass('overflow-hidden')
+    // The copy is in the flow, and the strip that rolls is placed over it.
+    const copy = column?.firstElementChild
+    expect(copy).toHaveClass('invisible')
+    expect(copy).not.toHaveClass('absolute')
+    expect(copy).toHaveTextContent(/^3$/)
+    expect(column?.lastElementChild).toHaveClass('absolute', 'top-0')
+  })
+
+  it('takes a money format and rolls to a new value, and each copy follows at once', () => {
     const money = (n: number) => `US$${n.toFixed(2)}`
     const { rerender } = wrap(<Harness value={96.4} format={money} />)
     expect(screen.getByText('US$96.40')).toHaveClass('sr-only')
+    expect(copies()).toEqual(['9', '6', '4', '0'])
     act(() => {
       rerender(
         <MotionRoot>
@@ -409,13 +444,29 @@ describe('RollingNumber', () => {
       )
     })
     expect(screen.getByText('US$103.75')).toHaveClass('sr-only')
-    expect(document.querySelectorAll('[data-slot=rolling-number] .overflow-hidden')).toHaveLength(5)
+    expect(copies()).toEqual(['1', '0', '3', '7', '5'])
   })
 
-  it('renders with reduced motion', () => {
+  it('rolls on the smooth spring, and changes at once with reduced motion', async () => {
+    const strip = () => columns()[0]?.lastElementChild as HTMLElement | null | undefined
+    const moving = wrapMoving(<Harness value={2} />)
+    expect(strip()).toHaveStyle({ transform: 'translateY(-20%)' })
+    moving.rerender(<Harness value={8} />)
+    // A spring takes its time: a few frames later it is still on its way.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 40))
+    })
+    expect(strip()?.style.transform).not.toBe('translateY(-80%)')
+    moving.unmount()
+
     askForReducedMotion()
-    wrap(<Harness value={7} />)
-    expect(document.querySelector('[data-slot=rolling-number] .sr-only')).toHaveTextContent('7')
+    const still = wrapMoving(<Harness value={2} />)
+    still.rerender(<Harness value={8} />)
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 40))
+    })
+    expect(strip()).toHaveStyle({ transform: 'translateY(-80%)' })
+    expect(document.querySelector('[data-slot=rolling-number] .sr-only')).toHaveTextContent('8')
   })
 })
 
