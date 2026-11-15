@@ -1151,6 +1151,16 @@ describe('on a phone', () => {
     expect(bar).toHaveClass('fixed', 'bottom-0', 'pb-[max(0.75rem,env(safe-area-inset-bottom))]')
     // Nothing to say beside the button: no empty line above it.
     expect(bar?.children).toHaveLength(1)
+    // A card the keyboard lands on scrolls above the bar (WCAG 2.4.11).
+    expect(document.documentElement.style.scrollPaddingBottom).toBe('7rem')
+  })
+
+  it('but on a laptop the bar sits at the top, so the page keeps no room at the bottom', async () => {
+    mockServer({ notes: threeNotes() })
+    renderActivity()
+    await toConfirmList()
+    expect(screen.getByRole('button', { name: 'Send 3 to HubSpot' })).toBeInTheDocument()
+    expect(document.documentElement.style.scrollPaddingBottom).toBe('')
   })
 })
 

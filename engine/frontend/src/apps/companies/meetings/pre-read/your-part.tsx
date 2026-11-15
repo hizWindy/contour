@@ -25,6 +25,7 @@ import type { MeetingFormOut, MeetingFormPatch } from '@/api/v17'
 import { Button } from '@/components/ui/button'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
+import { useBarRoom } from '@/lib/use-bar-room'
 import { PHONE, useMediaQuery } from '@/lib/use-media-query'
 import { cn } from '@/lib/utils'
 import { BLANK_MAX_CHARS, sendBlock } from './rules'
@@ -203,6 +204,8 @@ export function YourPart({
   const headingId = useId()
   const reasonId = useId()
   const onPhone = useMediaQuery(PHONE)
+  // On a phone the bar is fixed at the bottom: a field the keyboard lands on scrolls above it.
+  const barRoom = useBarRoom(onPhone)
   const nextStep = useBlank(form, 'next_step')
   const going = useBlank(form, 'going')
   const block = sendBlock({
@@ -228,6 +231,7 @@ export function YourPart({
       {/* Sent and unchanged: nothing to send. An edit makes it a draft, and this comes back. */}
       {form.status === 'sent' ? null : (
         <div
+          ref={barRoom}
           data-slot="send-bar"
           className={cn(
             'flex flex-wrap items-center justify-end gap-x-4 gap-y-2',

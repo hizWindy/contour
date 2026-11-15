@@ -15,6 +15,7 @@ import { BackButton } from '@/components/back-button'
 import { ErrorState } from '@/components/error-state'
 import { PageHeader } from '@/components/page-header'
 import { Button } from '@/components/ui/button'
+import { useBarRoom } from '@/lib/use-bar-room'
 import { PHONE, useMediaQuery } from '@/lib/use-media-query'
 import { LOG_CALL } from './call-notes/words'
 import { CompanyActions } from './company-dialog'
@@ -28,7 +29,9 @@ export default function CompanyPage() {
   const company = useCompany(key)
   const [prep, setPrep] = useState<PrepTarget | null>(null)
   const phone = useMediaQuery(PHONE)
-  const prepCall = (detail: CompanyDetail, person: CompanyPerson | null): void => {
+  // The bar at the bottom of a phone: what the keyboard lands on scrolls above it.
+  const barRoom = useBarRoom()
+  const prepCall =(detail: CompanyDetail, person: CompanyPerson | null): void => {
     setPrep({
       companyKey: detail.key,
       companyName: detail.name,
@@ -77,7 +80,11 @@ export default function CompanyPage() {
         }
       />
       {phone && company.data ? (
-        <div className="fixed inset-x-0 bottom-0 z-20 flex gap-2 border-t bg-popover p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div
+          ref={barRoom}
+          data-slot="prep-bar"
+          className="fixed inset-x-0 bottom-0 z-20 flex gap-2 border-t bg-popover p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+        >
           {logCall ? (
             <Button type="button" variant="outline" size="lg" onClick={logCall}>
               <NotebookPen aria-hidden="true" />

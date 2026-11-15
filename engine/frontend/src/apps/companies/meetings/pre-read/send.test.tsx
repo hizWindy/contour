@@ -22,6 +22,7 @@ import type {
   MeetingFormPatch,
 } from '@/api/v17'
 import { renderWithProviders } from '@/test/render'
+import { asPhone } from '@/test/screen'
 import PreReadPage from './index'
 
 const FORM_ID = '0f3c9a2e-1111-2222-3333-444444444444'
@@ -511,6 +512,27 @@ describe('Check and send', () => {
     // The save went before the preview was asked for.
     const order = server.calls.map((call) => `${call.method} ${call.path}`)
     expect(order.indexOf(`PATCH ${FORM}`)).toBeLessThan(order.indexOf(`POST ${PREVIEW}`))
+  })
+})
+
+describe('on a phone', () => {
+  it('keeps what the keyboard lands on above Check and send, and no room once it is sent', async () => {
+    asPhone()
+    mockServer()
+    const { user } = renderPreRead()
+    const button = await screen.findByRole('button', { name: 'Check and send' })
+    expect(button.closest('[data-slot=send-bar]')).toHaveClass('fixed', 'bottom-0')
+    // WCAG 2.4.11: the page's scroller keeps room for the bar.
+    expect(document.documentElement.style.scrollPaddingBottom).toBe('7rem')
+
+    await user.click(button)
+    const dialog = await screen.findByRole('alertdialog', { name: 'Send the pre-read?' })
+    await within(dialog).findByRole('region', { name: 'The email as it will arrive' })
+    await user.click(within(dialog).getByRole('button', { name: 'Send to 1 person' }))
+    await screen.findByText('Sent to Jo Sample on 26 Nov 2026 at 9:12 am, by Al Sample.')
+    // Sent and unchanged: no bar, so no room for one.
+    expect(screen.queryByRole('button', { name: 'Check and send' })).toBeNull()
+    expect(document.documentElement.style.scrollPaddingBottom).toBe('')
   })
 })
 
