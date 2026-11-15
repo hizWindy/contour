@@ -12,13 +12,14 @@ sorter in notes.py.
   and its sort runs once.
 - **The AI.** Off: the note goes straight to the rep's batch (`to_confirm`), sorted by hand, free.
   On: it is `sorting`, and the sorter works in the background.
-- **Sending** (preview, confirm, retry, resolve) waits for HubSpot write access. The batch comes
-  in T2-6: until then preview shows each note with our copy's values, and the rest say what
+- **Sending** (preview, confirm, retry, resolve) goes through the batch (note_batch.py, T2-6). While
+  HubSpot can't be written, preview shows each note with our copy's values, and the rest say what
   sending waits for.
 """
 
 import uuid
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from typing import Any, Final, get_args
 from zoneinfo import ZoneInfo
@@ -30,6 +31,18 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.companies.facts import scrub
+from apps.companies.note_batch import (
+    ALREADY_SENDING,
+    LEAD_ONLY,
+    STOPPED_MID_SEND,
+    NoteSender,
+    mark_sending,
+    sending_stuck,
+    settle_cut_off,
+    steps_of,
+    totals_of,
+    unsure_steps,
+)
 from apps.companies.note_fields import note_fields
 from apps.companies.notes import (
     CardChange,
@@ -39,6 +52,7 @@ from apps.companies.notes import (
     NoteSorter,
     OfficeChoice,
     check_change,
+    field_value,
     is_stuck,
     match_person,
     office_choices,
@@ -46,19 +60,18 @@ from apps.companies.notes import (
     settle_stuck,
 )
 from apps.companies.schemas import (
-    CallNoteBatch,
+    NOTE_VALUE_MAX_CHARS,
     CallNoteCall,
     CallNoteChange,
     CallNoteChangeIn,
+    CallNoteConfirm,
     CallNoteIn,
     CallNoteOptions,
     CallNoteOut,
     CallNotePage,
     CallNotePatch,
     CallNotePreview,
-    CallNoteSending,
     CallNoteSkipped,
-    CallNoteStep,
     CallNoteSummary,
     CallNoteTask,
     CallNoteTaskIn,
@@ -74,8 +87,7 @@ from core.auth.models import User
 from core.auth.sessions import AuthContext
 from core.company_leads import CompanyLeads
 from core.config import Settings
-from core.hubspot.activities import OUTCOME_NAMES, resolve_step
-from core.hubspot.client import HubSpotWritesOff
+from core.hubspot.activities import OUTCOME_NAMES
 from core.hubspot.connection import hubspot_set_up, project_readiness
 from core.hubspot.models import HubSpotCompany, HubSpotContact, HubSpotOffice, HubSpotOwner
 
@@ -87,9 +99,10 @@ STATES: Final[dict[NoteState, tuple[str, ...]]] = {
     "logged": ("logged",),
     "needs_look": ("partial", "failed", "uncertain"),
 }
-CHANGEABLE: Final = ("to_confirm",)
+CHANGEABLE: Final = ("to_confirm", "partial", "failed")  # the parts not in HubSpot yet
 REMOVABLE: Final = ("sorting", "to_confirm")
 CARD_PARTS: Final = frozenset({"summary", "outcome", "changes", "tasks"})
+SENT_FIELDS: Final[set[str]] = {"state", "step", "detail"}  # where a part is with HubSpot
 WAITING_FOR_HUBSPOT = "Waiting for HubSpot to be connected."
 WAITING_FOR_WRITES = "Waiting for HubSpot write access."
 
@@ -141,11 +154,21 @@ def still_sorting() -> Problem:
     )
 
 
-def already_sent() -> Problem:
+SENT_WORDS: Final = {
+    "sending": "This note is being sent to HubSpot. Wait for it to finish.",
+    "uncertain": "Check HubSpot first, then tell us whether it's there.",
+    "partial": "Part of this note is in HubSpot already, so it can't be removed here.",
+    "failed": "This note was sent to HubSpot once, so it can't be removed here. Send it again.",
+}
+
+
+def already_sent(status: str | None = None) -> Problem:
     return Problem(
         409,
         "Already sent",
-        "This note has gone to HubSpot, so it can't be changed or removed here.",
+        SENT_WORDS.get(
+            status or "", "This note has gone to HubSpot, so it can't be changed or removed here."
+        ),
         code="note_sent",
     )
 
@@ -214,6 +237,7 @@ def note_out(
         call=CallNoteCall(
             summary=card.call.summary,
             outcome=outcome if outcome in OUTCOME_NAMES else None,
+            in_hubspot=card.call.state == "landed",
         ),
         changes=[
             CallNoteChange(
@@ -224,6 +248,7 @@ def note_out(
                 current=change.current,
                 value=change.value,
                 current_changed=change.current_changed,
+                in_hubspot=change.state == "landed",
             )
             for change in card.changes
         ],
@@ -235,11 +260,12 @@ def note_out(
                 due_words=task.due_words,
                 kind=task.kind,
                 owner=owners.get(task.owner_id) if task.owner_id else None,
+                in_hubspot=task.state == "landed",
             )
             for task in card.tasks
         ],
         left_out=note.left_out,
-        steps=[CallNoteStep(step=s.step, status=s.status, words=s.words) for s in card.steps],
+        steps=steps_of(card, note.status),
         hubspot_url=note.hubspot_url,
         made_by=made_by,
         created_at=note.created_at,
@@ -289,27 +315,35 @@ def ai_sorts(settings: Settings) -> bool:
     return settings.call_notes_ai_enabled and key is not None and bool(key.get_secret_value())
 
 
-def sending_state(app: FastAPI, settings: Settings) -> CallNoteSending:
+@dataclass(frozen=True)
+class Sending:
+    ready: bool
+    waiting_for: str | None  # in plain words, when it isn't ready
+
+
+def sending_state(app: FastAPI, settings: Settings) -> Sending:
     """Whether a confirmed note can go to HubSpot now, and what it waits for. It never calls
     HubSpot: it reads the key, the write switch, and a connection check already made."""
     if not hubspot_set_up(app):
-        return CallNoteSending(ready=False, waiting_for=WAITING_FOR_HUBSPOT)
+        return Sending(ready=False, waiting_for=WAITING_FOR_HUBSPOT)
     if not settings.hubspot_write_enabled:
-        return CallNoteSending(ready=False, waiting_for=WAITING_FOR_WRITES)
+        return Sending(ready=False, waiting_for=WAITING_FOR_WRITES)
     checked = getattr(app.state, "hubspot_check", None)  # (check, when): the Admin page's cache
     if checked is not None:
         specs = [spec for spec in getattr(app.state, "apps", []) if spec.name == APP]
         for state in project_readiness(specs, checked[0], settings):
             if state.sending in ("waiting", "off"):
-                return CallNoteSending(ready=False, waiting_for=WAITING_FOR_WRITES)
-    return CallNoteSending(ready=True, waiting_for=None)
+                return Sending(ready=False, waiting_for=WAITING_FOR_WRITES)
+    return Sending(ready=True, waiting_for=None)
 
 
 def options(app: FastAPI, settings: Settings) -> CallNoteOptions:
+    sending = sending_state(app, settings)
     return CallNoteOptions(
         enabled=settings.call_notes_enabled,
-        ai_sorts=ai_sorts(settings),
-        sending=sending_state(app, settings),
+        ai_enabled=ai_sorts(settings),
+        sending_ready=sending.ready,
+        waiting_for=sending.waiting_for,
         outcomes=list(get_args(OutcomeName)),
         fields=[
             NoteFieldOption(id=field.id, label=field.label, kind=field.kind)
@@ -375,8 +409,8 @@ async def save_note(
     now: datetime,
 ) -> tuple[CallNote, bool]:
     """Saves a note, and says whether it is new. The same person and key give back the first
-    note. With the AI on it is saved `sorting` (the caller starts the sorter); with it off it
-    goes to the rep's batch at once, sorted by hand."""
+    note. With the AI on it is saved `sorting` (the caller starts the sorter); with it off, or
+    with no words to sort (just an outcome), it goes to the rep's batch at once, sorted by hand."""
     maker = maker_of(auth)
     if idempotency_key is not None:
         first = await _by_key(session, maker, idempotency_key)
@@ -386,8 +420,12 @@ async def save_note(
     if name is None:
         raise company_not_found()
     text = body.text.strip()
-    if not text:
-        raise refused("Nothing to save", "Write or say something first.", code="note_empty")
+    if not text and body.outcome is None:  # "No answer" needs no words, but something must be said
+        raise refused(
+            "Nothing to save",
+            "Write or say something, or pick how the call went.",
+            code="note_empty",
+        )
     if len(text) > settings.notes_max_chars:
         raise refused(
             "This note is too long",
@@ -410,7 +448,7 @@ async def save_note(
                 "It may have been removed. Save the note without it.",
                 code="prep_not_found",
             )
-    sorts = ai_sorts(settings)
+    sorts = ai_sorts(settings) and bool(text)  # no words: nothing for Claude to sort
     note = CallNote(
         made_by=maker,
         idempotency_key=idempotency_key,
@@ -448,13 +486,23 @@ async def save_note(
 
 
 async def _settle_stuck(
-    session: AsyncSession, notes: Sequence[CallNote], sorter: NoteSorter, now: datetime
+    session: AsyncSession,
+    notes: Sequence[CallNote],
+    sorter: NoteSorter,
+    sender: NoteSender,
+    now: datetime,
 ) -> None:
-    """Notes a restart left "sorting" go to the rep's batch, to be sorted by hand."""
+    """Notes a restart left "sorting" go to the rep's batch, to be sorted by hand. Notes it left
+    "sending" take what their write says, and what was never sent goes back to the rep."""
     stuck = [note for note in notes if is_stuck(note, sorter, now)]
     for note in stuck:
         settle_stuck(note, now)
-    if stuck:
+    cut = [note for note in notes if sending_stuck(note, sender, now)]
+    for note in cut:
+        locked = await session.get(CallNote, note.id, with_for_update=True, populate_existing=True)
+        if locked is not None and sending_stuck(locked, sender, now):
+            await settle_cut_off(session, locked, now, unsure=STOPPED_MID_SEND, failed=None)
+    if stuck or cut:
         await session.commit()
 
 
@@ -463,10 +511,11 @@ async def get_note(
     note_id: uuid.UUID,
     auth: AuthContext | None,
     sorter: NoteSorter,
+    sender: NoteSender,
     now: datetime,
 ) -> CallNoteOut:
     note = await read_note(session, note_id, auth)
-    await _settle_stuck(session, [note], sorter, now)
+    await _settle_stuck(session, [note], sorter, sender, now)
     return await one_out(session, note)
 
 
@@ -480,6 +529,7 @@ async def list_notes(
     limit: int,
     offset: int,
     sorter: NoteSorter,
+    sender: NoteSender,
     now: datetime,
 ) -> CallNotePage:
     """A page of notes. Only an Admin sees other people's (`mine` false). To confirm: the unsure
@@ -498,7 +548,7 @@ async def list_notes(
     else:
         statement = statement.order_by(CallNote.called_at.desc(), CallNote.id)
     notes = list(await session.scalars(statement.offset(offset).limit(limit)))
-    await _settle_stuck(session, notes, sorter, now)
+    await _settle_stuck(session, notes, sorter, sender, now)
     return CallNotePage(total=total or 0, items=await notes_out(session, notes))
 
 
@@ -561,6 +611,25 @@ async def _offices(session: AsyncSession, key: str) -> list[OfficeChoice]:
     return office_choices(list(rows))
 
 
+def part_sent(what: str) -> Problem:
+    return Problem(
+        409,
+        "Already in HubSpot",
+        f"{what} is in HubSpot already, so it can't change here.",
+        code="part_sent",
+    )
+
+
+def _same_value(old: CardChange, item: CallNoteChangeIn, today: date) -> bool:
+    office = (item.office or "").strip().casefold()
+    value, _ = field_value(old.field, item.value, today)
+    return (
+        item.field == old.field
+        and office in (old.office.casefold(), old.office_label.casefold())
+        and value == old.value
+    )
+
+
 def _edited_changes(
     sent: Sequence[CallNoteChangeIn],
     before: Sequence[CardChange],
@@ -569,27 +638,52 @@ def _edited_changes(
     offices: Sequence[OfficeChoice],
     in_hubspot: bool,
 ) -> list[CardChange]:
-    """The card's new list of changes, each checked as the sorter checks one. A change the rep
-    kept keeps its id and, with the same value, the words that were said."""
+    """The card's new list of changes, each checked as the sorter checks one. One already in
+    HubSpot stays as it is. One the rep kept as it was keeps its state and the words said."""
     earlier = {change.id: change for change in before}
-    used = {item.id for item in sent if item.id in earlier}
-    seen: set[tuple[str, str]] = set()
-    out: list[CardChange] = []
+    landed = [change for change in before if change.state == "landed"]
+    used = {change.id for change in landed} | {item.id for item in sent if item.id in earlier}
+    seen = {(change.field, change.office_label.casefold()) for change in landed}
+    out: list[CardChange] = list(landed)  # what is in HubSpot stays
     for item in sent:
         old = earlier.get(item.id) if item.id else None
-        checked = check_change(
-            item.field,
-            item.office,
-            item.value,
-            old.said if old is not None else "",
-            today=today,
-            offices=offices,
-            in_hubspot=in_hubspot,
-        )
-        if isinstance(checked, Dropped):
-            what = checked.what[:1].upper() + checked.what[1:]
-            raise refused(
-                "This change can't be made", f"{what}: {checked.why}.", code="change_not_possible"
+        if old is not None and old.state == "landed":
+            if not _same_value(old, item, today):
+                raise part_sent(f"{old.office} {old.label.lower()}")
+            continue
+        if old is not None and _same_value(old, item, today):
+            checked = old  # as it was: it keeps its state
+        else:
+            found = check_change(
+                item.field,
+                item.office or "",
+                item.value,
+                old.said if old is not None else "",
+                today=today,
+                offices=offices,
+                in_hubspot=in_hubspot,
+            )
+            if isinstance(found, Dropped):
+                what = found.what[:1].upper() + found.what[1:]
+                raise refused(
+                    "This change can't be made", f"{what}: {found.why}.", code="change_not_possible"
+                )
+            same = old is not None and old.value == found.value
+            fresher = (
+                old is not None
+                and old.current_changed
+                and (old.field, old.office_label) == (found.field, found.office_label)
+            )
+            checked = found.model_copy(
+                update={
+                    "id": old.id if old is not None else _next_id("c", used),
+                    "said": found.said if same else "",
+                    **(
+                        {"current": old.current, "current_changed": True}
+                        if fresher and old is not None
+                        else {}
+                    ),
+                }
             )
         key = (checked.field, checked.office_label.casefold())
         if key in seen:
@@ -599,23 +693,16 @@ def _edited_changes(
                 code="change_twice",
             )
         seen.add(key)
-        same = old is not None and old.value == checked.value
-        out.append(
-            checked.model_copy(
-                update={
-                    "id": old.id if old is not None else _next_id("c", used),
-                    "said": checked.said if same else "",
-                }
-            )
-        )
+        out.append(checked)
     return out
 
 
 async def _edited_tasks(
     session: AsyncSession, sent: Sequence[CallNoteTaskIn], before: Sequence[CardTask], today: date
 ) -> list[CardTask]:
-    """The card's new list of follow-ups. None is due before today (Melbourne). A follow-up the
-    rep kept keeps its id and, on the same day, the words that were said."""
+    """The card's new list of follow-ups. None is due before today (Melbourne). One already in
+    HubSpot stays as it is. One the rep kept as it was keeps its state. `due_words` are the rep's
+    words for the day; left out, they stay while the day is the same."""
     owners = {item.owner_id for item in sent if item.owner_id}
     if owners:
         known = set(
@@ -630,10 +717,16 @@ async def _edited_tasks(
                 code="owner_not_found",
             )
     earlier = {task.id: task for task in before}
-    used = {item.id for item in sent if item.id in earlier}
-    out: list[CardTask] = []
+    landed = [task for task in before if task.state == "landed"]
+    used = {task.id for task in landed} | {item.id for item in sent if item.id in earlier}
+    out: list[CardTask] = list(landed)  # what is in HubSpot stays
     for item in sent:
         subject = _card_text(item.subject)
+        old = earlier.get(item.id) if item.id else None
+        if old is not None and old.state == "landed":
+            if (subject, item.due, item.kind) != (old.subject, old.due, old.kind):
+                raise part_sent(f"The task '{old.subject}'")
+            continue
         if not subject:
             raise refused(
                 "A follow-up needs words", "Say what the follow-up is.", code="task_empty"
@@ -644,35 +737,48 @@ async def _edited_tasks(
                 "A follow-up can't be due before today. Pick today or a later day.",
                 code="task_in_past",
             )
-        old = earlier.get(item.id) if item.id else None
-        out.append(
-            CardTask(
-                id=old.id if old is not None else _next_id("t", used),
-                subject=subject,
-                due=item.due,
-                due_words=old.due_words if old is not None and old.due == item.due else "",
-                kind=item.kind,
-                owner_id=item.owner_id,
-            )
+        if item.due_words is not None:
+            words = _card_text(item.due_words)[:NOTE_VALUE_MAX_CHARS]
+        else:
+            words = old.due_words if old is not None and old.due == item.due else ""
+        task = CardTask(
+            id=old.id if old is not None else _next_id("t", used),
+            subject=subject,
+            due=item.due,
+            due_words=words,
+            kind=item.kind,
+            owner_id=item.owner_id,
         )
+        kept = old is not None and task.model_dump(exclude=SENT_FIELDS) == old.model_dump(
+            exclude=SENT_FIELDS
+        )
+        out.append(old if kept and old is not None else task)
     return out
 
 
 async def edit_note(
     session: AsyncSession, note: CallNote, patch: CallNotePatch, now: datetime
 ) -> None:
-    """The rep's edits to a note in their batch. Each change and follow-up is checked as the
-    sorter checks them. The card is marked edited; `sorted` keeps what the sorter made."""
+    """The rep's edits to a note waiting for them, or to the parts not yet in HubSpot of a note
+    that failed or was partly saved. Each change and follow-up is checked as the sorter checks
+    them. The card is marked edited; `sorted` keeps what the sorter made."""
     if note.status == "sorting":
         raise still_sorting()
     if note.status not in CHANGEABLE:
-        raise already_sent()
+        raise already_sent(note.status)
     given = patch.model_fields_set
     card = NoteCard.model_validate(note.card or {})
     today = now.astimezone(MELBOURNE).date()
     in_hubspot = not note.company_key.startswith("lead:")
-    if "summary" in given:
-        card.call.summary = _card_text(patch.summary or "", lines=True)
+    summary = _card_text(patch.summary or "", lines=True) if "summary" in given else None
+    if card.call.state == "landed" and (
+        (summary is not None and summary != card.call.summary)
+        or ("outcome" in given and patch.outcome != card.call.outcome)
+        or ("contact_id" in given and (patch.contact_id or None) != note.contact_id)
+    ):
+        raise part_sent("The call")
+    if summary is not None:
+        card.call.summary = summary
     if "outcome" in given:
         card.call.outcome = patch.outcome
     if "changes" in given:
@@ -682,7 +788,7 @@ async def edit_note(
         )
     if "tasks" in given:
         card.tasks = await _edited_tasks(session, patch.tasks or [], card.tasks, today)
-    if "contact_id" in given:
+    if "contact_id" in given and (patch.contact_id or None) != note.contact_id:
         contact = (
             await person_at(session, note.company_key, patch.contact_id)
             if patch.contact_id
@@ -703,7 +809,7 @@ async def remove_note(session: AsyncSession, note: CallNote, sorter: NoteSorter)
     """Removes a note not yet sent (the toast's Undo). A sort still running is stopped first;
     what it spent stays in the search log."""
     if note.status not in REMOVABLE:
-        raise already_sent()
+        raise already_sent(note.status)
     note_id, sorting = note.id, note.status == "sorting"
     await session.commit()  # no connection waits while the sort stops
     if sorting:
@@ -717,10 +823,10 @@ async def remove_note(session: AsyncSession, note: CallNote, sorter: NoteSorter)
     await session.commit()
     if not gone.rowcount:
         left = await session.get(CallNote, note_id, populate_existing=True)
-        raise already_sent() if left is not None else note_not_found()
+        raise already_sent(left.status) if left is not None else note_not_found()
 
 
-# --- Sending (the batch comes in T2-6) ------------------------------------------------------------
+# --- Sending (the batch is note_batch.py) ---------------------------------------------------------
 
 NOT_SENDABLE: Final = {
     "sorting": "It is still being sorted.",
@@ -738,7 +844,8 @@ async def batch_notes(
     allowed: tuple[str, ...],
     skip_left_out: bool,
 ) -> tuple[list[CallNote], list[CallNoteSkipped]]:
-    """The notes to preview or send, in the order given, and the rest with why."""
+    """The notes to preview or send, in the order given, and the rest with why. A company that
+    isn't in HubSpot yet is the rest too."""
     notes: list[CallNote] = []
     skipped: list[CallNoteSkipped] = []
     for note_id in dict.fromkeys(ids):
@@ -752,6 +859,8 @@ async def batch_notes(
             why = NOT_SENDABLE.get(note.status, "It can't be sent now.")
         elif skip_left_out and note.left_out:
             why = "You left it out of this send."
+        elif note.company_key.startswith("lead:"):
+            why = LEAD_ONLY
         if why is None and note is not None:
             notes.append(note)
         else:
@@ -760,8 +869,8 @@ async def batch_notes(
 
 
 async def refresh_current(session: AsyncSession, note: CallNote) -> None:
-    """Each change's `current` from our copy now. One that moved since the rep saw it says so.
-    T2-6 reads HubSpot itself here, once it can."""
+    """Each change's `current` from our copy now, when HubSpot can't be asked. One that moved
+    since the rep saw it says so."""
     card = NoteCard.model_validate(note.card or {})
     if not card.changes or note.company_key.startswith("lead:"):
         return
@@ -770,6 +879,8 @@ async def refresh_current(session: AsyncSession, note: CallNote) -> None:
     }
     moved = False
     for change in card.changes:
+        if change.state == "landed":
+            continue
         office = offices.get(change.office_label.casefold())
         now_value = office.current.get(change.field) if office is not None else None
         if now_value != change.current:
@@ -787,28 +898,40 @@ async def preview(
     *,
     app: FastAPI,
     settings: Settings,
+    sender: NoteSender,
 ) -> CallNotePreview:
-    """Each note with what HubSpot has now, and what sending waits for. Until HubSpot can be
-    written, "now" is our copy's value."""
-    notes, skipped = await batch_notes(
+    """Each note with what HubSpot has now, read through the writer's preview; what sending
+    them would add; and what sending waits for. While HubSpot can't be written, "now" is our
+    copy's value. Nothing is written to HubSpot."""
+    items, skipped = await batch_notes(
         session, ids, auth, allowed=("to_confirm", "partial", "failed"), skip_left_out=False
     )
-    for note in notes:
-        await refresh_current(session, note)
+    sending = sending_state(app, settings)
+    missed = {note.id for note in items}
+    if sending.ready and items:
+        await session.commit()  # no connection waits on HubSpot
+        ready, missed = await sender.preview([note.id for note in items])
+        if not ready:
+            sending = Sending(ready=False, waiting_for=WAITING_FOR_WRITES)
+        fresh = [await session.get(CallNote, note.id, populate_existing=True) for note in items]
+        items = [note for note in fresh if note is not None]
+    for note in items:
+        if note.id in missed:
+            await refresh_current(session, note)
     await session.commit()
     return CallNotePreview(
-        notes=await notes_out(session, notes),
+        items=await notes_out(session, items),
+        sending_ready=sending.ready,
+        waiting_for=sending.waiting_for,
+        totals=totals_of(
+            NoteCard.model_validate(note.card or {}) for note in items if not note.left_out
+        ),
         skipped=skipped,
-        sending=sending_state(app, settings),
     )
 
 
-async def start_sending(
-    session: AsyncSession, notes: Sequence[CallNote], skipped: Sequence[CallNoteSkipped]
-) -> CallNoteBatch:
-    """Where the batch runner starts (T2-6). Until then nothing can be written, as the S0
-    writer says."""
-    raise HubSpotWritesOff()
+def already_sending() -> Problem:
+    return Problem(409, "Already sending", ALREADY_SENDING, code="already_sending")
 
 
 async def confirm(
@@ -818,20 +941,65 @@ async def confirm(
     *,
     app: FastAPI,
     settings: Settings,
-) -> CallNoteBatch:
-    """Sends the notes, one after another, in the background (T2-6). Nothing is sent while
-    sending waits for HubSpot."""
+    sender: NoteSender,
+    now: datetime,
+) -> CallNoteConfirm:
+    """Marks the notes `sending` and starts the batch: one note after another, in the order
+    given, in the background. While a batch runs, a second press starts nothing and says so.
+    Nothing is sent while sending waits for HubSpot (409)."""
     sending = sending_state(app, settings)
     if not sending.ready:
         raise writes_off(sending.waiting_for or WAITING_FOR_WRITES)
-    notes, skipped = await batch_notes(
-        session, ids, auth, allowed=("to_confirm",), skip_left_out=True
+    batch_id = sender.claim()
+    if batch_id is None:
+        return CallNoteConfirm(
+            sending=0, already_sending=True, batch_id=sender.batch_id, notes=[], skipped=[]
+        )
+    try:
+        notes, skipped = await batch_notes(
+            session, ids, auth, allowed=("to_confirm",), skip_left_out=True
+        )
+        claimed: list[CallNote] = []
+        for note in notes:
+            # Under a lock, so a second tab's press can't send the same note twice.
+            locked = await session.get(
+                CallNote, note.id, with_for_update=True, populate_existing=True
+            )
+            if locked is None or locked.status != "to_confirm" or locked.left_out:
+                skipped.append(CallNoteSkipped(id=note.id, why=NOT_SENDABLE["sending"]))
+                continue
+            mark_sending(locked, now)
+            claimed.append(locked)
+        await session.commit()
+    except BaseException:
+        sender.release()
+        raise
+    if not claimed:
+        sender.release()
+        return CallNoteConfirm(
+            sending=0, already_sending=False, batch_id=None, notes=[], skipped=skipped
+        )
+    sender.launch([note.id for note in claimed])
+    return CallNoteConfirm(
+        sending=len(claimed),
+        already_sending=False,
+        batch_id=batch_id,
+        notes=await notes_out(session, claimed),
+        skipped=skipped,
     )
-    return await start_sending(session, notes, skipped)
 
 
-async def retry(session: AsyncSession, note: CallNote, *, app: FastAPI, settings: Settings) -> None:
-    """Sends what didn't land, for a note that failed or was partly saved (T2-6)."""
+async def retry(
+    session: AsyncSession,
+    note: CallNote,
+    *,
+    app: FastAPI,
+    settings: Settings,
+    sender: NoteSender,
+    now: datetime,
+) -> None:
+    """Sends again what didn't land, for a note that failed or was partly saved: a held field
+    goes with the value the rep has now seen."""
     if note.status == "uncertain":
         raise Problem(
             409,
@@ -840,21 +1008,38 @@ async def retry(session: AsyncSession, note: CallNote, *, app: FastAPI, settings
             code="note_uncertain",
         )
     if note.status not in ("failed", "partial"):
-        raise Problem(
-            409,
-            "Nothing to send again",
-            "Only a note that failed, or was partly saved, can be sent again.",
-            code="nothing_to_retry",
-        )
+        raise nothing_to_retry()
     sending = sending_state(app, settings)
     if not sending.ready:
         raise writes_off(sending.waiting_for or WAITING_FOR_WRITES)
-    await start_sending(session, [note], [])
+    if sender.claim() is None:
+        raise already_sending()
+    try:
+        locked = await session.get(CallNote, note.id, with_for_update=True, populate_existing=True)
+        if locked is None or locked.status not in ("failed", "partial"):
+            raise nothing_to_retry()
+        mark_sending(locked, now)
+        await session.commit()
+    except BaseException:
+        sender.release()
+        raise
+    sender.launch([locked.id])
 
 
-async def resolve(session: AsyncSession, note: CallNote, step: str, landed: bool) -> None:
+def nothing_to_retry() -> Problem:
+    return Problem(
+        409,
+        "Nothing to send again",
+        "Only a note that failed, or was partly saved, can be sent again.",
+        code="nothing_to_retry",
+    )
+
+
+async def resolve(
+    session: AsyncSession, note: CallNote, step: str, landed: bool, *, sender: NoteSender
+) -> None:
     """A person says whether a step HubSpot may or may not have saved is there. The writer
-    settles the step (T2-6 then updates the note from it)."""
+    settles the step, and the note's status follows: not there, and a retry sends it again."""
     if note.status != "uncertain" or note.write_id is None:
         raise Problem(
             409,
@@ -862,4 +1047,11 @@ async def resolve(session: AsyncSession, note: CallNote, step: str, landed: bool
             "Only a note that HubSpot may or may not have saved needs this.",
             code="nothing_to_resolve",
         )
-    await resolve_step(session, note.write_id, step, landed)
+    if step not in unsure_steps(NoteCard.model_validate(note.card or {})):
+        raise Problem(
+            409,
+            "Nothing to check there",
+            "HubSpot gave a clear answer for that step. Pick a step marked unsure.",
+            code="step_not_unsure",
+        )
+    await sender.resolve(session, note.id, note.write_id, step, landed)

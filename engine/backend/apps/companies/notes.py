@@ -189,12 +189,26 @@ KIND_WORDS: Final = {"date": "a date", "number": "a whole number"}
 # --- The card: what the rep checks, and what is sent -------------------------------------------
 
 
-class CardCall(BaseModel):
+# Where each part of a note stands with HubSpot (the batch, T2-6): new (not sent yet), landed,
+# failed, skipped (not tried, like a task after its call failed), held (a field whose value HubSpot
+# changed since the rep saw it: shown again, not written), or uncertain (HubSpot didn't answer).
+PartState = Literal["new", "landed", "failed", "skipped", "held", "uncertain"]
+
+
+class Sent(BaseModel):
+    """A part's own state with HubSpot. A later send carries only what hasn't landed."""
+
+    state: PartState = "new"
+    step: str | None = None  # its step in the newest write that carried it: call, fields, task:2
+    detail: str | None = None  # why it didn't land, in plain words, from the writer
+
+
+class CardCall(Sent):
     summary: str = ""
     outcome: str | None = None  # one of HubSpot's outcome names, or none
 
 
-class CardChange(BaseModel):
+class CardChange(Sent):
     """One field change, with our copy's value now, so the card shows old and new."""
 
     id: str
@@ -203,14 +217,14 @@ class CardChange(BaseModel):
     office: str  # as the card shows it: the label, or the city for a group like Other Office 2
     office_label: str  # the office group in our copy and HubSpot, like Other Office 2
     property: str  # HubSpot's field, like lease_expiry_other_office_1_
-    current: str | None  # our copy's value now: an ISO date, or the text
+    current: str | None  # what HubSpot has now (from the newest preview, else our copy)
     value: str  # the new value: an ISO date, or a whole number
     said: str  # the rep's own words ("" when the rep typed the value on the card)
-    # HubSpot's value changed since the rep last saw it (a preview, or a held field in T2-6).
+    # HubSpot's value changed since the rep last saw it: a preview found it, or the write held it.
     current_changed: bool = False
 
 
-class CardTask(BaseModel):
+class CardTask(Sent):
     id: str
     subject: str
     due: date
@@ -227,12 +241,14 @@ class Dropped(BaseModel):
     why: str  # plain words, like "only a year was said"
 
 
-class CardStep(BaseModel):
-    """One step of the write to HubSpot, as the card says it (the batch fills these, T2-6)."""
+class CardWrite(BaseModel):
+    """One write to HubSpot that carried parts of this note, so its result maps back to them."""
 
-    step: str  # call, fields, task:1 ... note
-    status: str  # done, failed, uncertain, skipped or held
-    words: str  # plain words, like "Call logged."
+    id: str  # the write's id in core.hubspot_writes
+    subject: str  # call_note:<note id>, then call_note:<note id>:2 ...
+    call: bool  # it carried the call
+    tasks: list[str] = Field(default_factory=list)  # the card's task ids, as task:1, task:2 ...
+    changes: list[str] = Field(default_factory=list)  # the card's change ids, in its fields step
 
 
 class NoteCard(BaseModel):
@@ -241,8 +257,9 @@ class NoteCard(BaseModel):
     tasks: list[CardTask] = Field(default_factory=list)
     unsure: str | None = None
     dropped: list[Dropped] = Field(default_factory=list)
-    steps: list[CardStep] = Field(default_factory=list)
     edited: bool = False  # the rep changed something; `sorted` keeps what the sorter made
+    writes: list[CardWrite] = Field(default_factory=list)  # every write that carried a part
+    previewed: str | None = None  # the newest preview's write, while nothing is sent yet
 
 
 # --- Field values, checked by code ---------------------------------------------------------
@@ -710,11 +727,15 @@ class NoteSorter:
             except ClaudeError as error:  # its words are plain, and hold nothing from the note
                 log.warning("note_sort_failed", extra={"note_id": str(note_id), "why": str(error)})
             except Exception as error:
-                log.error("note_sort_failed", extra={"note_id": str(note_id), **_where(error)})
+                log.error(
+                    "note_sort_failed", extra={"note_id": str(note_id), **where_failed(error)}
+                )
             try:
                 await self._by_hand(note_id, SORT_FAILED)
             except Exception as error:
-                log.error("note_sort_not_saved", extra={"note_id": str(note_id), **_where(error)})
+                log.error(
+                    "note_sort_not_saved", extra={"note_id": str(note_id), **where_failed(error)}
+                )
         finally:
             self._busy.discard(note_id)
 
@@ -813,7 +834,7 @@ class NoteSorter:
         return reply
 
 
-def _where(error: BaseException) -> dict[str, str]:
+def where_failed(error: BaseException) -> dict[str, str]:
     """Where an error happened, for the log: its kind and line, never its message, which could
     quote the note."""
     frames = traceback.extract_tb(error.__traceback__)

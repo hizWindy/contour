@@ -284,11 +284,17 @@ def test_a_sorted_note_becomes_the_card() -> None:
     card = sort(an_answer())
     assert card.model_dump(mode="json") == {
         "call": {
+            "state": "new",
+            "step": None,
+            "detail": None,
             "summary": SUMMARY,
             "outcome": "Connected",
         },
         "changes": [
             {
+                "state": "new",
+                "step": None,
+                "detail": None,
                 "id": "c1",
                 "field": "lease_end",
                 "label": "Lease end",
@@ -301,6 +307,9 @@ def test_a_sorted_note_becomes_the_card() -> None:
                 "current_changed": False,
             },
             {
+                "state": "new",
+                "step": None,
+                "detail": None,
                 "id": "c2",
                 "field": "staff",
                 "label": "Staff",
@@ -315,6 +324,9 @@ def test_a_sorted_note_becomes_the_card() -> None:
         ],
         "tasks": [
             {
+                "state": "new",
+                "step": None,
+                "detail": None,
                 "id": "t1",
                 "subject": "Send the floor plan",
                 "due": "2026-11-24",
@@ -325,8 +337,9 @@ def test_a_sorted_note_becomes_the_card() -> None:
         ],
         "unsure": None,
         "dropped": [],
-        "steps": [],
         "edited": False,
+        "writes": [],
+        "previewed": None,
     }
 
 
@@ -521,13 +534,14 @@ def test_a_note_a_restart_cut_off_goes_to_the_rep() -> None:
     settle_stuck(note, NOW + timedelta(minutes=6))
     assert (note.status, note.sorted_by) == ("to_confirm", "person")
     assert note.card == {
-        "call": {"summary": "", "outcome": "Busy"},
+        "call": {"state": "new", "step": None, "detail": None, "summary": "", "outcome": "Busy"},
         "changes": [],
         "tasks": [],
         "unsure": SORT_STOPPED,
         "dropped": [],
-        "steps": [],
         "edited": False,
+        "writes": [],
+        "previewed": None,
     }
 
 
@@ -682,13 +696,20 @@ async def test_with_the_ai_off_no_request_is_made_and_the_rep_sorts_it(
         Decimal(0),
     )
     assert note.card == {
-        "call": {"summary": "", "outcome": "Connected"},  # the rep's own pick
+        "call": {  # the rep's own pick
+            "state": "new",
+            "step": None,
+            "detail": None,
+            "summary": "",
+            "outcome": "Connected",
+        },
         "changes": [],
         "tasks": [],
         "unsure": None,
         "dropped": [],
-        "steps": [],
         "edited": False,
+        "writes": [],
+        "previewed": None,
     }
     # The person is found by code, free: Jo Sample is named in the note.
     assert (note.contact_id, note.person_name, note.person_title) == (
@@ -824,7 +845,7 @@ async def test_a_failed_sort_never_loses_the_note_or_logs_its_words(
         await sorter_for(session_factory, FakeClaude(error)).run(note_id)
     note = await the_note(session_factory, note_id)
     assert (note.status, note.sorted_by) == ("to_confirm", "person")
-    assert note.card["call"] == {"summary": "", "outcome": "No answer"}
+    assert (note.card["call"]["summary"], note.card["call"]["outcome"]) == ("", "No answer")
     assert note.card["unsure"] == SORT_FAILED
     failed = [record for record in caplog.records if record.message == "note_sort_failed"]
     assert len(failed) == 1

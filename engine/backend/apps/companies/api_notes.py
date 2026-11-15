@@ -6,8 +6,7 @@ notes. An Admin reads everyone's (TBC: a team view), but only the person who log
 changes, removes or sends it.
 
 The fixed paths (options, summary, preview, confirm) come before `/call-notes/{note_id}`. The
-service is note_store.py, and the sorter notes.py. Sending waits for HubSpot write access: the
-batch itself comes in T2-6.
+service is note_store.py, the sorter notes.py, and the batch to HubSpot note_batch.py.
 """
 
 import uuid
@@ -17,9 +16,10 @@ from fastapi import APIRouter, Depends, Header, Path, Query, Request, Response
 
 from apps.companies import note_store
 from apps.companies.deps import LeadsDep
+from apps.companies.note_batch import NoteSender
 from apps.companies.notes import NoteSorter
 from apps.companies.schemas import (
-    CallNoteBatch,
+    CallNoteConfirm,
     CallNoteIds,
     CallNoteIn,
     CallNoteOptions,
@@ -40,6 +40,7 @@ from core.claude.client import get_claude
 from core.config import Settings
 from core.db.engine import get_sessionmaker
 from core.hubspot.client import HubSpotWritesOff
+from core.hubspot.connection import open_hubspot
 
 router = APIRouter()
 PAGE_SIZE = 50
@@ -55,6 +56,18 @@ def note_sorter(request: Request) -> NoteSorter:
     return sorter
 
 
+def note_sender(request: Request) -> NoteSender:
+    """The app's sender of call notes to HubSpot, made on first use. A test puts its own in
+    app.state, with a fake writer."""
+    sender: NoteSender | None = getattr(request.app.state, "note_sender", None)
+    if sender is None:
+        app = request.app
+        sessions = getattr(app.state, "session_factory", None) or get_sessionmaker()
+        sender = NoteSender(sessions=sessions, hubspot=lambda: open_hubspot(app))
+        app.state.note_sender = sender
+    return sender
+
+
 async def notes_on(settings: SettingsDep) -> Settings:
     """The settings in use, once call notes are on (409 `call_notes_off` while they are off)."""
     if not settings.call_notes_enabled:
@@ -63,6 +76,7 @@ async def notes_on(settings: SettingsDep) -> Settings:
 
 
 SorterDep = Annotated[NoteSorter, Depends(note_sorter)]
+SenderDep = Annotated[NoteSender, Depends(note_sender)]
 NotesOnDep = Annotated[Settings, Depends(notes_on)]
 NoteId = Annotated[uuid.UUID, Path(description="The note's id")]
 
@@ -103,10 +117,13 @@ async def call_note_summary(
     response_model=CallNotePreview,
     summary="Check notes before sending",
     description=(
-        "For a list of my notes: each one with what HubSpot has now for every change (until "
-        "HubSpot can be written, the value in our copy), and whether sending is ready. A change "
-        "whose value moved since I saw it says so (`current_changed`). Notes that can't be sent "
-        "are listed in `skipped` with why. Nothing is written. 409 `call_notes_off`."
+        "For a list of my notes (waiting to be sent, or the parts not yet sent of a note that "
+        "failed or was partly saved): each one with what HubSpot has now for every change, read "
+        "through the writer's preview (while HubSpot can't be written, our copy's value), "
+        "whether sending is ready, and `totals`: the calls, follow-ups and field changes "
+        "sending would add. A change whose value moved since I saw it says so "
+        "(`current_changed`). Notes that can't be sent are in `skipped`, with why. Nothing is "
+        "written. 409 `call_notes_off`."
     ),
 )
 async def preview_call_notes(
@@ -115,20 +132,26 @@ async def preview_call_notes(
     session: SessionDep,
     settings: NotesOnDep,
     auth: SignedInDep,
+    sender: SenderDep,
 ) -> CallNotePreview:
-    return await note_store.preview(session, body.ids, auth, app=request.app, settings=settings)
+    return await note_store.preview(
+        session, body.ids, auth, app=request.app, settings=settings, sender=sender
+    )
 
 
 @router.post(
     "/call-notes/confirm",
-    response_model=CallNoteBatch,
+    response_model=CallNoteConfirm,
     status_code=202,
     summary="Send notes to HubSpot",
     description=(
-        "Sends my notes to HubSpot, one after another, in the background, in the order given. "
-        "It answers at once with the notes being sent. A note left out, not mine, or not "
-        "waiting to be sent is skipped, with why. 409 `hubspot_writes_off` while sending waits "
-        "for HubSpot write access: nothing is sent. 409 `call_notes_off`."
+        "Sends my notes to HubSpot, one after another, in the background, in the order given, "
+        "each as one record (one failure never fails the rest). It answers at once: `sending` "
+        "is how many started. While a batch is being sent, a second press starts nothing and "
+        "says so (`already_sending`, still 202). A note left out, not mine, not waiting to be "
+        "sent, or for a company not in HubSpot yet is in `skipped`, with why. 409 "
+        "`hubspot_writes_off` while sending waits for HubSpot write access: nothing is sent. "
+        "409 `call_notes_off`."
     ),
 )
 async def confirm_call_notes(
@@ -137,11 +160,12 @@ async def confirm_call_notes(
     session: SessionDep,
     settings: NotesOnDep,
     auth: SignedInDep,
-) -> CallNoteBatch:
-    try:
-        return await note_store.confirm(session, body.ids, auth, app=request.app, settings=settings)
-    except HubSpotWritesOff as error:
-        raise note_store.writes_off(error.detail) from None
+    sender: SenderDep,
+    now: NowDep,
+) -> CallNoteConfirm:
+    return await note_store.confirm(
+        session, body.ids, auth, app=request.app, settings=settings, sender=sender, now=now
+    )
 
 
 @router.get(
@@ -161,6 +185,7 @@ async def list_call_notes(
     settings: NotesOnDep,
     auth: SignedInDep,
     sorter: SorterDep,
+    sender: SenderDep,
     now: NowDep,
     state: NoteState | None = None,
     company_key: Annotated[SafeText | None, Query(max_length=64)] = None,
@@ -177,6 +202,7 @@ async def list_call_notes(
         limit=limit,
         offset=offset,
         sorter=sorter,
+        sender=sender,
         now=now,
     )
 
@@ -187,10 +213,12 @@ async def list_call_notes(
     status_code=201,
     summary="Log a call",
     description=(
-        "Saves a note after a call. An email address or a phone number in it is saved as "
-        "[email left out] or [number left out]. With Claude sorting, it comes back `sorting` "
-        "and is sorted in the background; otherwise it is ready to confirm at once, and the rep "
-        "adds the outcome and any follow-ups. Send an `Idempotency-Key`: the same key from the "
+        "Saves a note after a call. The text may be empty when an outcome is picked (No "
+        "answer needs no words). An email address or a phone number in it is saved as "
+        "[email left out] or [number left out]. With Claude sorting, a note with words comes "
+        "back `sorting` and is sorted in the background; otherwise it is ready to confirm at "
+        "once, and the rep adds the outcome and any follow-ups. Send an `Idempotency-Key`: the "
+        "same key from the "
         "same person gives back the first note (200), so a double press is one note. 404 "
         "`company_not_found`. 422 `note_too_long`, `note_empty`, `person_not_at_company`, "
         "`prep_not_found` or `called_later`. 409 `call_notes_off`."
@@ -238,7 +266,8 @@ async def save_call_note(
     summary="One call note",
     description=(
         "Mine, or anyone's for an Admin. A note left `sorting` by a restart goes to the batch "
-        "to be sorted by hand. 404 `note_not_found`. 409 `call_notes_off`."
+        "to be sorted by hand. A note left `sending` by a restart takes what its write says, "
+        "and what was never sent goes back to me. 404 `note_not_found`. 409 `call_notes_off`."
     ),
 )
 async def get_call_note(
@@ -247,9 +276,10 @@ async def get_call_note(
     settings: NotesOnDep,
     auth: SignedInDep,
     sorter: SorterDep,
+    sender: SenderDep,
     now: NowDep,
 ) -> CallNoteOut:
-    return await note_store.get_note(session, note_id, auth, sorter, now)
+    return await note_store.get_note(session, note_id, auth, sorter, sender, now)
 
 
 @router.patch(
@@ -257,11 +287,14 @@ async def get_call_note(
     response_model=CallNoteOut,
     summary="Change a call note",
     description=(
-        "My edits while the note waits for me: the summary, the outcome, the person, the "
-        "changes, the follow-ups, and `left_out`. Only the parts sent change. Each change is "
-        "checked as the sorter checks one (a listed field, an office the company has, a value "
-        "that can be read), and no follow-up is due before today. 409 `note_sorting` while it is "
-        "being sorted, `note_sent` once it has gone to HubSpot. 422 `change_not_possible`, "
+        "My edits while the note waits for me, or to the parts not yet in HubSpot of a note "
+        "that failed or was partly saved: the summary, the outcome, the person, the changes, "
+        "the follow-ups (with `due_words`, the words the day came from), and `left_out`. Only "
+        "the parts sent change. Each change is checked as the sorter checks one (a listed "
+        "field, an office the company has, a value that can be read), and no follow-up is due "
+        "before today. 409 `note_sorting` while it is being sorted, `note_sent` while it is "
+        "being sent or once it is logged, `part_sent` for a part already in HubSpot. 422 "
+        "`change_not_possible`, "
         "`change_twice`, `task_in_past`, `task_empty`, `owner_not_found` or "
         "`person_not_at_company`. 403 `not_your_note` for an Admin's look at someone else's. "
         "404 `note_not_found`. 409 `call_notes_off`."
@@ -308,10 +341,12 @@ async def delete_call_note(
     status_code=202,
     summary="Send a note again",
     description=(
-        "Sends what didn't land, for my note that failed or was partly saved. 409 "
-        "`note_uncertain` until I say whether HubSpot has an unsure step, `nothing_to_retry` "
-        "for a note that didn't fail, and `hubspot_writes_off` while sending waits for HubSpot "
-        "write access. 403 `not_your_note`, 404 `note_not_found`, 409 `call_notes_off`."
+        "Sends what didn't land, for my note that failed or was partly saved: a field held "
+        "because HubSpot's value changed goes with the value now shown. It answers at once with "
+        "the note being sent. 409 `note_uncertain` until I say whether HubSpot has an unsure "
+        "step, `nothing_to_retry` for a note that didn't fail, `already_sending` while a batch "
+        "is being sent, and `hubspot_writes_off` while sending waits for HubSpot write access. "
+        "403 `not_your_note`, 404 `note_not_found`, 409 `call_notes_off`."
     ),
 )
 async def retry_call_note(
@@ -320,12 +355,13 @@ async def retry_call_note(
     session: SessionDep,
     settings: NotesOnDep,
     auth: SignedInDep,
+    sender: SenderDep,
+    now: NowDep,
 ) -> CallNoteOut:
     note = await note_store.read_note(session, note_id, auth, change=True)
-    try:
-        await note_store.retry(session, note, app=request.app, settings=settings)
-    except HubSpotWritesOff as error:
-        raise note_store.writes_off(error.detail) from None
+    await note_store.retry(
+        session, note, app=request.app, settings=settings, sender=sender, now=now
+    )
     return await note_store.one_out(session, note)
 
 
@@ -334,11 +370,12 @@ async def retry_call_note(
     response_model=CallNoteOut,
     summary="Say whether HubSpot has it",
     description=(
-        "For a step HubSpot may or may not have saved (HubSpot didn't answer): `landed` true "
-        "when it is there, false when it isn't, so sending again adds it. 409 "
-        "`nothing_to_resolve` for a note with nothing unsure, and `hubspot_writes_off` while "
-        "HubSpot can't be written. 403 `not_your_note`, 404 `note_not_found`, 409 "
-        "`call_notes_off`."
+        "For a step HubSpot may or may not have saved (HubSpot didn't answer): `step` as the "
+        "note's steps name it, and `landed` true when it is there, false when it isn't, so "
+        "sending again adds it. The note's status follows. 409 `nothing_to_resolve` for a note "
+        "with nothing unsure, `step_not_unsure` for a step HubSpot answered, and "
+        "`hubspot_writes_off` while HubSpot can't be written. 403 `not_your_note`, 404 "
+        "`note_not_found`, 409 `call_notes_off`."
     ),
 )
 async def resolve_call_note(
@@ -347,10 +384,11 @@ async def resolve_call_note(
     session: SessionDep,
     settings: NotesOnDep,
     auth: SignedInDep,
+    sender: SenderDep,
 ) -> CallNoteOut:
     note = await note_store.read_note(session, note_id, auth, change=True)
     try:
-        await note_store.resolve(session, note, body.step, body.landed)
+        await note_store.resolve(session, note, body.step, body.landed, sender=sender)
     except HubSpotWritesOff as error:
         raise note_store.writes_off(error.detail) from None
     return await note_store.one_out(session, note)

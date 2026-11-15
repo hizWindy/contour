@@ -12,7 +12,10 @@
 - the list pages and filters, the summary counts my own notes;
 - the rep's edits are checked as the sorter checks them;
 - removing a note, even one being sorted;
-- preview, confirm, retry and resolve wait for HubSpot write access, and say so.
+- a note with just an outcome is saved, and Claude gets nothing;
+- preview, confirm, retry and resolve wait for HubSpot write access, and say so; with
+  writing on, the batch gives a note back while the writer itself still waits (until
+  T1-5). The batch itself is in test_call_notes_batch.py.
 
 Made-up companies and people only (Sample Logistics Pty Ltd, Jo Sample).
 """
@@ -159,12 +162,10 @@ async def test_options_say_what_log_call_offers(world: World, settings: dict[str
         options = (await client.get(f"{NOTES}/options")).json()
         settings.update(call_notes_ai_enabled=True, anthropic_api_key=NOT_REAL_KEY)
         ai_on = (await client.get(f"{NOTES}/options")).json()
-    assert options["enabled"] is True and options["ai_sorts"] is False
-    assert ai_on["ai_sorts"] is True
-    assert options["sending"] == {
-        "ready": False,
-        "waiting_for": "Waiting for HubSpot to be connected.",
-    }
+    assert options["enabled"] is True and options["ai_enabled"] is False
+    assert ai_on["ai_enabled"] is True
+    assert options["sending_ready"] is False
+    assert options["waiting_for"] == "Waiting for HubSpot to be connected."
     assert options["outcomes"] == list(OUTCOME_NAMES)
     assert options["fields"] == [
         {"id": "lease_end", "label": "Lease end", "kind": "date"},
@@ -214,7 +215,7 @@ async def test_with_the_ai_off_a_note_waits_for_the_rep_and_claude_gets_nothing(
     async with signed_in_as(world, "mia", ["companies"]) as client:
         note = await log_call(client)
     assert (note["status"], note["sorted_by"]) == ("to_confirm", "person")
-    assert note["call"] == {"summary": "", "outcome": "Connected"}
+    assert note["call"] == {"summary": "", "outcome": "Connected", "in_hubspot": False}
     assert (note["changes"], note["tasks"], note["steps"]) == ([], [], [])
     assert note["person"] == {"id": "c201", "name": "Jo Sample", "title": "Manager"}  # named
     assert note["made_by"] == "Mia" and note["company_name"] == "Sample Logistics Pty Ltd"
@@ -245,6 +246,22 @@ async def test_with_the_ai_on_a_note_is_sorted_in_the_background(
         ("Canberra", "120"),
     ]
     assert sorted_note["person"]["id"] == "c202"  # the rep's own pick stays
+
+
+async def test_a_note_with_just_an_outcome_is_saved_and_claude_gets_nothing(
+    world: World, settings: dict[str, Any], claude: FakeClaude, sorter: NoteSorter
+) -> None:
+    await a_company(world)
+    settings.update(call_notes_ai_enabled=True, anthropic_api_key=NOT_REAL_KEY)
+    async with signed_in_as(world, "mia", ["companies"]) as client:
+        note = await log_call(client, text="", outcome="No answer")
+        empty = await client.post(NOTES, json=note_body(text="", outcome=None))
+    # No words: nothing for Claude to sort, so it waits for the rep at once, free.
+    assert (note["status"], note["sorted_by"]) == ("to_confirm", "person")
+    assert note["call"] == {"summary": "", "outcome": "No answer", "in_hubspot": False}
+    assert claude.asked == [] and not sorter.running(uuid.UUID(note["id"]))
+    assert (empty.status_code, empty.json()["code"]) == (422, "note_empty")
+    assert empty.json()["detail"] == "Write or say something, or pick how the call went."
 
 
 async def test_a_double_press_is_one_note(world: World, settings: dict[str, Any]) -> None:
@@ -278,7 +295,7 @@ async def test_a_note_that_doesnt_fit_is_refused_in_plain_words(
     async with signed_in_as(world, "mia", ["companies"]) as client:
         cases = {
             "note_too_long": note_body(text="x" * 501),
-            "note_empty": note_body(text="   "),
+            "note_empty": note_body(text="   ", outcome=None),
             "person_not_at_company": note_body(contact_id="c301"),
             "prep_not_found": note_body(prep_id=str(other_prep)),
             "called_later": note_body(called_at=(START + timedelta(days=1)).isoformat()),
@@ -435,6 +452,7 @@ async def test_the_reps_edits_are_checked_as_the_sorter_checks_them(
     assert body["call"] == {
         "summary": "Jo will send the floor plan.\nCall [number left out] after 2pm.",
         "outcome": None,
+        "in_hubspot": False,
     }
     assert body["person"] == {"id": "c202", "name": "Sam Sample", "title": None}
     assert body["changes"] == [
@@ -446,6 +464,7 @@ async def test_the_reps_edits_are_checked_as_the_sorter_checks_them(
             "current": str(START.date() + timedelta(days=500)),
             "value": "2028-03-31",
             "current_changed": False,
+            "in_hubspot": False,
         }
     ]
     assert body["tasks"] == [
@@ -456,6 +475,7 @@ async def test_the_reps_edits_are_checked_as_the_sorter_checks_them(
             "due_words": "",
             "kind": "email",
             "owner": "Lee Sample",
+            "in_hubspot": False,
         }
     ]
     assert body["left_out"] is True
@@ -560,14 +580,13 @@ async def test_preview_shows_what_our_copy_has_now_and_that_sending_waits(
         preview = await client.post(f"{NOTES}/preview", json={"ids": [note["id"], ANOTHER]})
     assert preview.status_code == 200, preview.text
     body = preview.json()
-    [checked] = body["notes"]
+    [checked] = body["items"]
     assert checked["changes"][0]["current"] == str(START.date() + timedelta(days=600))
     assert checked["changes"][0]["current_changed"] is True
     assert body["skipped"] == [{"id": ANOTHER, "why": "We can't find this note."}]
-    assert body["sending"] == {
-        "ready": False,
-        "waiting_for": "Waiting for HubSpot to be connected.",
-    }
+    assert body["sending_ready"] is False
+    assert body["waiting_for"] == "Waiting for HubSpot to be connected."
+    assert body["totals"] == {"calls": 1, "tasks": 0, "changes": 1}
 
 
 async def test_confirm_retry_and_resolve_wait_for_write_access(
@@ -577,6 +596,10 @@ async def test_confirm_retry_and_resolve_wait_for_write_access(
     await add(world, HubSpotWrite(app="companies", subject="call_note:x", plan={}))
     async with world.factory() as db:
         write_id = await db.scalar(select(HubSpotWrite.id))
+    unsure_call = {
+        "call": {"summary": "", "outcome": "Connected", "state": "uncertain", "step": "call"},
+        "writes": [{"id": str(write_id), "subject": "call_note:x", "call": True}],
+    }
     async with signed_in_as(world, "mia", ["companies"]) as client:
         note = await log_call(client)
         path = f"{NOTES}/{note['id']}"
@@ -587,14 +610,17 @@ async def test_confirm_retry_and_resolve_wait_for_write_access(
         )
         await set_note(world, note["id"], status="failed")
         retry_waits = await client.post(f"{path}/retry")
-        await set_note(world, note["id"], status="uncertain", write_id=write_id)
+        await set_note(world, note["id"], status="uncertain", write_id=write_id, card=unsure_call)
         check_first = await client.post(f"{path}/retry")
+        not_unsure = await client.post(f"{path}/resolve", json={"step": "fields", "landed": True})
         resolve_waits = await client.post(f"{path}/resolve", json={"step": "call", "landed": False})
-        await set_note(world, note["id"], status="to_confirm")
-        # With a key and writing on, the writer itself still can't write (until T1-5 and T2-6).
+        await set_note(world, note["id"], status="to_confirm", write_id=None, card={})
+        # With a key and writing on, the batch starts, and core's writer still waits (until T1-5):
+        # the note goes back to the rep, nothing sent.
         world.app.state.hubspot_provider = lambda: None
         settings.update(hubspot_write_enabled=True)
-        writer_waits = await client.post(f"{NOTES}/confirm", json={"ids": [note["id"]]})
+        started = await client.post(f"{NOTES}/confirm", json={"ids": [note["id"]]})
+        await world.app.state.note_sender.wait()
         after = (await client.get(path)).json()
     assert (no_key.status_code, no_key.json()["code"]) == (409, "hubspot_writes_off")
     assert no_key.json()["detail"] == "Waiting for HubSpot to be connected."
@@ -602,7 +628,9 @@ async def test_confirm_retry_and_resolve_wait_for_write_access(
     assert nothing_to_resolve.json()["code"] == "nothing_to_resolve"
     assert retry_waits.json()["code"] == "hubspot_writes_off"
     assert check_first.json()["code"] == "note_uncertain"
-    assert resolve_waits.json()["code"] == "hubspot_writes_off"
-    assert (writer_waits.status_code, writer_waits.json()["code"]) == (409, "hubspot_writes_off")
-    assert writer_waits.json()["title"] == "Waiting for write access"
-    assert after["status"] == "to_confirm"  # nothing was marked sending
+    assert (not_unsure.status_code, not_unsure.json()["code"]) == (409, "step_not_unsure")
+    assert (resolve_waits.status_code, resolve_waits.json()["code"]) == (409, "hubspot_writes_off")
+    assert resolve_waits.json()["title"] == "Waiting for write access"
+    assert started.status_code == 202, started.text
+    assert (started.json()["sending"], started.json()["already_sending"]) == (1, False)
+    assert (after["status"], after["steps"]) == ("to_confirm", [])  # nothing was sent

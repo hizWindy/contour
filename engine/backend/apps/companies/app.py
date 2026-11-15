@@ -5,6 +5,7 @@ from fastapi import FastAPI
 
 from apps.companies.api import router
 from apps.companies.jobs import JOBS
+from apps.companies.note_batch import NoteSender
 from apps.companies.note_fields import check_note_fields
 from apps.companies.notes import NoteSorter
 from apps.companies.prep import PrepRunner
@@ -43,13 +44,25 @@ async def stop_note_sorts(app: FastAPI) -> None:
         await sorter.stop()
 
 
+async def stop_note_sending(app: FastAPI) -> None:
+    """Stops the batch of call notes this backend is sending to HubSpot (PLAN-V17 T2-6). What was
+    sent stays sent, the note in flight takes what its write says, and the rest go back to the
+    rep's batch."""
+    sender: NoteSender | None = getattr(app.state, "note_sender", None)
+    if sender is not None:
+        await sender.stop()
+
+
 async def stop_background(app: FastAPI) -> None:
-    """What runs in the background stops when the backend does: the preps, then the sorts. One
-    that fails never keeps the other running."""
+    """What runs in the background stops when the backend does: the preps, the sorts, then the
+    sending. One that fails never keeps the others running."""
     try:
         await stop_preps(app)
     finally:
-        await stop_note_sorts(app)
+        try:
+            await stop_note_sorts(app)
+        finally:
+            await stop_note_sending(app)
 
 
 def check_rules() -> None:
