@@ -473,7 +473,7 @@ The first two and `meeting_forms_enabled` are on the Settings page. `internal_em
 
 ## Track 1: HubSpot (session 1)
 
-**Progress:** Stage A 7 of 7 (tag `v17-notes-t1`). Stage B 2 of 4. Every step is `backend-agent` work.
+**Progress:** Stage A 7 of 7 (tag `v17-notes-t1`). Stage B 3 of 4. Every step is `backend-agent` work.
 
 ### Stage A: call notes
 
@@ -534,7 +534,7 @@ The first two and `meeting_forms_enabled` are on the Settings page. `internal_em
   - Add the table to the four table lists.
   - **Done when:** tests prove the read, a meeting with two companies (the first wins, with a flag), a cancelled one, the 15-minute rule, and the waiting state.
 
-- [ ] **T1-9. The pre-read's copy in HubSpot.**
+- [x] **T1-9. The pre-read's copy in HubSpot.** Done 2026-11-16 (ff2dbf3).
   - `NoteIn` in the activity writer: a note on the company, and on the deal if there is one (190, 214).
   - With `meeting_note_on_meeting` on: the same text is added to the end of the meeting's `hs_internal_meeting_notes`. It never replaces what is there, and never touches `hs_meeting_body` or the location.
   - **Done when:** tests prove the note's links, that the meeting is untouched while the switch is off, and that existing internal notes are kept.
@@ -550,6 +550,19 @@ The first two and `meeting_forms_enabled` are on the Settings page. `internal_em
 
 Newest first.
 
+- 2026-11-16: **T1-9 done** (ff2dbf3), built by the `backend-agent`.
+  - **The note:** it goes on the company (190) and the deal (214), as before, and now carries the rep's owner id. A note that timed out is looked for by that owner too.
+  - **`ActivityRequest.meeting_id`** (new, optional, digits only). A request with a meeting but no note is refused: dropping it quietly would hide that nothing reached the meeting.
+  - **A new step, `meeting`,** after `note`. It is planned only when the request has a note and a meeting, and `meeting_note_on_meeting` is on at the preview. At send, the switch is read again: off since the preview, it sends nothing and says so.
+    - It reads the meeting's `hs_internal_meeting_notes`, then adds the note at the end after an empty line, keeping what is there byte for byte. Nothing else on the meeting is read or sent: not `hs_meeting_body`, not the location.
+    - Notes that already hold the note's text are left as they are, so applying again, or a takeover, never adds it twice. A change that timed out is read back: there is done, not there is failed (sending again is safe because it reads first).
+    - `WritePlan` gains `meeting_id` and `meeting` (what the step will do, in plain words).
+  - **Tests:** `test_hubspot_meeting_note.py` 15: the note's links and owner, the switch off leaves the meeting untouched, existing notes kept, never twice (again, after a takeover, after a cut-off change), a timeout found and not found, the switch turned off after the preview, a meeting not in HubSpot, only the internal notes sent, no note text in a log line. Also the activity writer 34, the writer and fake 15, the Lead Finder's send 7, the guard and stubs 6, the contract gate 2. Each of five rules was broken on purpose, and a test failed each time.
+  - **TBC (M2, on a made-up meeting):** how HubSpot shows the break, whether changing a meeting emails the client, and HubSpot's length limit for internal notes. Our copy of the meeting catches up at the next refresh.
+  - **For Track 2 at M5:**
+    1. `meeting_send.copy_in_hubspot` passes `meeting_id=form.meeting_id` (None for a typed meeting).
+    2. Read "saved" from the `note` step, not the whole write. With the switch on, a failed `meeting` step makes the write `partial` while the note on the company is saved.
+    3. The call-note batch (transcripts included) passes no `meeting_id`. With the switch on it would add a whole transcript (up to 60,000 characters) to the meeting's notes. That is Al-khair's call, not in this plan.
 - 2026-11-16: **T1-8 done** (355bf2b), built by the `backend-agent`.
   - **What it adds:**
     - Migration `0022_hubspot_meetings` (after `0020_hubspot_owner_link`): `core.hubspot_meetings` (the `Meeting` fields, people as contact ids) and `core.hubspot_meeting_reads` (each read: full or changes, done, waiting or failed, a sentence, how many). Both tables are in the four table lists. `SCHEMA-0022.md`.
