@@ -113,7 +113,8 @@ export interface HomeCard {
    * A card that may draw nothing, or come after Home has drawn, because it waits for a switch
    * (Companies' "Upcoming meetings", PLAN-V17 T3-11). It goes after every other card, Runs and
    * cost too, so its coming moves none of them; it takes no place while it draws nothing; and it
-   * brings its own fade (`Reveal`) for when it comes.
+   * brings its own fade (`Reveal`) for when it comes. Home draws it inside a `Suspense` with no
+   * fallback, so it may be a `lazy` component.
    */
   late?: boolean
 }

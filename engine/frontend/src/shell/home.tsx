@@ -18,7 +18,7 @@
  */
 import { ChevronRight } from 'lucide-react'
 import { m } from 'motion/react'
-import { useId, type ReactNode } from 'react'
+import { Suspense, useId, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { useMe } from '@/api/hooks'
 import { EmptyState } from '@/components/empty-state'
@@ -196,9 +196,10 @@ function Cards({ modules }: { modules: readonly AppModule[] }) {
     <div className="grid grid-cols-1 gap-6 lg:grid-flow-dense lg:grid-cols-3">
       {placed.map((card, index) =>
         card.late ? (
-          // It brings its own fade when it comes, and takes no place while it draws nothing.
+          // It brings its own fade when it comes, and takes no place while it draws nothing. Its
+          // code may load late: nothing shows till then, and the rest of Home never waits for it.
           <div key={card.key} className="min-w-0 empty:hidden">
-            {card.node}
+            <Suspense fallback={null}>{card.node}</Suspense>
           </div>
         ) : (
           <Reveal
