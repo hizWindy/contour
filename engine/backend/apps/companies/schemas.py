@@ -11,6 +11,7 @@ from pydantic.config import JsonDict
 
 from apps.companies.deals import DealState, StageKind
 from core.api.models import SafeText
+from core.hubspot.meetings import Meeting, MeetingsState, MeetingWhere
 
 Source = Literal["hubspot", "lead"]
 # For a field named `date` with a default: in the class body the name `date` is the field by the
@@ -172,7 +173,7 @@ class Relationship(Out):
 class CompanyDetail(Out):
     model_config = ConfigDict(
         json_schema_serialization_defaults_required=True,
-        json_schema_extra=optional_in_types("relationship"),
+        json_schema_extra=optional_in_types("relationship", "meetings"),
     )
 
     key: str
@@ -205,6 +206,11 @@ class CompanyDetail(Out):
     relationship: Relationship = Field(
         description="Where we stand: open deal, customer, past customer, lost deal, contacted "
         "before, or cold (PLAN-V15). The API always sends it"
+    )
+    meetings: list["MeetingItem"] = Field(
+        default_factory=list,
+        description="Its next three meetings, soonest first, then its last three, newest first "
+        "(PLAN-V17). A past one has no group. Empty while meetings are off or not read yet",
     )
 
 
@@ -788,3 +794,129 @@ class MyLastNote(Out):
 
 
 PrepFacts.model_rebuild()  # it names MyLastNote, which comes after it
+
+
+# --- Meetings and the pre-read (PLAN-V17 T2-11) --------------------------------------------------
+
+MeetingWhen = Literal["upcoming", "past"]
+# By the Melbourne date: today, tomorrow, the rest of this week (to Sunday), or later.
+MeetingGroup = Literal["today", "tomorrow", "this_week", "later"]
+FormStatus = Literal["drafting", "draft", "sent", "failed"]
+SummaryBy = Literal["ai", "person"]
+HubSpotCopyState = Literal["saved", "waiting", "off", "failed"]
+
+
+class MeetingFormState(Out):
+    """A meeting's pre-read, in short, for a list."""
+
+    id: uuid.UUID
+    status: FormStatus = Field(
+        description="drafting (being written), draft (ready to check), sent, or failed"
+    )
+
+
+class MeetingItem(Out):
+    """One client meeting in a list: the meeting as HubSpot has it, and where its pre-read is."""
+
+    meeting: Meeting
+    company_name: str = Field(description="The company it is linked to, from our copy")
+    group: MeetingGroup | None = Field(
+        description="An upcoming meeting's day, by the Melbourne date: today, tomorrow, "
+        "this_week (to Sunday) or later. None for a past one"
+    )
+    form: MeetingFormState | None = Field(description="Its pre-read, or none yet")
+    notes_logged: bool = Field(description="A call note is linked to it (Log meeting)")
+
+
+class MeetingPage(Out):
+    items: list[MeetingItem]
+    total: int = Field(description="How many match, on every page")
+    meetings_state: MeetingsState = Field(
+        description="ready, waiting (HubSpot's meetings aren't read yet) or off"
+    )
+    sentence: str | None = Field(
+        description="One plain sentence when the list can't show what was asked: meetings "
+        "aren't ready, or your own can't be picked out yet"
+    )
+
+
+class MeetingSummary(Out):
+    need_pre_read: int = Field(
+        description="My upcoming meetings (the next 7 days) with no pre-read, or one that failed"
+    )
+    draft_ready: int = Field(description="My upcoming meetings whose pre-read waits for me")
+
+
+class FormMeeting(Out):
+    """The meeting a pre-read is for, as it was when the form was made: from HubSpot, or typed
+    in for "New pre-read"."""
+
+    meeting_id: str | None = Field(description="HubSpot's meeting, or none for a typed one")
+    company_key: str
+    company_name: str
+    title: str
+    starts_at: datetime
+    ends_at: datetime | None
+    where: MeetingWhere = Field(description="online (Teams), in_person, or unknown")
+
+
+class FormFact(Out):
+    """A fact on the pre-read, with no AI."""
+
+    label: str = Field(description="Like When, Where, Who we meet, Staff, Lease end")
+    value: str
+    source: str = Field(description="Where it comes from, like HubSpot meeting")
+
+
+class FormSummary(Out):
+    text: str = Field(description="Empty until it is written")
+    by: SummaryBy = Field(description="ai: written by AI. person: the rep wrote or changed it")
+    sources: list[PrepSource] = Field(description="The facts it rests on")
+
+
+class FormSummaries(Out):
+    what_they_do: FormSummary
+    what_we_know: FormSummary = Field(description="What we know about the project")
+    talks_so_far: FormSummary
+
+
+class FormRecipient(Out):
+    name: str | None = Field(description="Their name, when they have an account here")
+    email: str = Field(description="A Contour address")
+
+
+class HubSpotCopy(Out):
+    """The pre-read's copy in HubSpot, once it is sent: a note on the company (choice 9)."""
+
+    state: HubSpotCopyState = Field(
+        description="saved; waiting (writing to HubSpot isn't ready); off; or failed"
+    )
+    sentence: str | None = Field(description="One plain sentence, unless it is saved")
+
+
+class MeetingFormOut(Out):
+    """A pre-read: the meeting, the facts, the three summaries, the rep's two blanks, and who it
+    went to."""
+
+    id: uuid.UUID
+    meeting: FormMeeting
+    status: FormStatus
+    facts: list[FormFact]
+    summaries: FormSummaries
+    next_step: str | None = Field(description="The ideal next step: the rep's, never the AI's")
+    going: str | None = Field(description="Who is going: the rep's, never the AI's")
+    sent_to: list[FormRecipient]
+    sent_at: datetime | None
+    sent_by: str | None = Field(description="Who sent it")
+    hubspot_copy: HubSpotCopy | None = Field(description="None until it is sent")
+    cost_usd: Decimal
+    error: str | None = Field(description="Why the draft failed, in plain words")
+
+
+class MeetingDetail(Out):
+    meeting: Meeting
+    company_name: str = Field(description="The company it is linked to, from our copy")
+    form: MeetingFormOut | None = Field(description="Its pre-read, or none yet")
+
+
+CompanyDetail.model_rebuild()  # it names MeetingItem, which comes after it
