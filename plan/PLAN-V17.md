@@ -756,6 +756,9 @@ Newest first.
 
 - [ ] **T3-11. Send, and around the app.** The Alert Dialog with the email and the people, a refused address in plain words, the sent state, Home's "Upcoming meetings" card, the company's meetings, Ctrl+K, and "Log meeting" on a past meeting.
   - **Done when:** tests cover a send, a refused address, each `hubspot_copy` state and the transcript box. Al-khair has seen them.
+  - 2026-11-16: **built, waiting for a look** (`82102b7` to `abae49c`).
+    - The tests cover all of it: 109 files and 1,538 passed. Lint, types and the build pass.
+    - The first visit is 34 files, 719 kB raw (+767 bytes) and 236,463 bytes gzip (+319 bytes; the report still says 231 kB). The extra is Vite's list of each late page's files, and Home's late card (**TBC**: accept).
 
 - [ ] **T3-12. Track 3 check.** The same checks as T3-8, on the Stage B screens.
   - **Done when:** all checks pass and the Log says "Track 3 ready to merge".
@@ -763,6 +766,29 @@ Newest first.
 ### Track 3 Log
 
 Newest first.
+
+- 2026-11-16: **T3-12, the browser pass on Stage B** (the preview, with Track 2's real meetings routes, the built site, and made-up meetings and pre-reads for what a preview without HubSpot meetings or a Claude key can't show):
+  - **96 screenshots, with no failures and no console errors:** 16 screens at 1440, 1280 and 390px, light and dark.
+  - **Keyboard only:** every stop shows a focus ring (27 on Meetings, 24 on the pre-read page, 10 in the send dialog).
+  - **Reduced motion:** Meetings' rows are in place at once.
+  - **4x CPU slowdown:** Meetings' Upcoming and Past switch drops no frames (the longest is 28ms).
+  - **On the real routes:** the off state (409 "Meetings and pre-reads are switched off...") and the waiting state ("Meetings from HubSpot aren't read yet.") answer as the website reads them.
+- 2026-11-16: **T3-11 built.**
+  - Track 2's follow-ups are in:
+    - Redraft says the plan's "about US$0.03", and the total reads "so far";
+    - the team's list shows `owner_name`;
+    - a repeated New pre-read gives back the first.
+  - **TBC, Al-khair's look:**
+    - Home's Upcoming meetings card comes last, so its late arrival moves no other card;
+    - Log meeting keeps the transcript in the page only, never in browser storage;
+    - a company's record shows Meetings only when the server sends some;
+    - the tick draws only on the rep's own send;
+    - "Copy" for when email isn't set up is not built.
+  - **For Track 2**, from building it:
+    - the copy-failed words say "Press Send again", but a sent pre-read now offers "Try the HubSpot copy again";
+    - the transcript limit isn't in the contract (`transcript_max_chars` on the options would help);
+    - the preview sends `ticked: true` for a refused address;
+    - the website shows a 422 `outside_address`'s `detail` exactly as sent.
 
 - 2026-11-16: **T3-10 built.**
   - **TBC, Al-khair's look:**
