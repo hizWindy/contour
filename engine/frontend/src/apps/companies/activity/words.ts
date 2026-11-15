@@ -270,10 +270,6 @@ export function loggedWhen(at: string | null, today: string = melbourneDate()): 
     : `Logged ${formatDateTime(at)}`
 }
 
-// --- Log call -------------------------------------------------------------------------------
+// --- Log call (the picker's own words are in ../words.ts) ------------------------------------
 
 export const WHICH_COMPANY = 'Which company was the call with?'
-export const FIND_COMPANY = 'Find a company'
-export const TYPE_TWO = 'Type 2 letters or more.'
-export const NO_MATCH = 'No company matches.'
-export const LOOKING = 'Looking.'

@@ -28,6 +28,13 @@ export function needsLookWords(count: number): string {
   return `${formatNumber(count)} ${needsLookTail(count)}`
 }
 
+// The company picker (`company-search.tsx`): Log call on Activity, New pre-read on Meetings.
+
+export const FIND_COMPANY = 'Find a company'
+export const TYPE_TWO = 'Type 2 letters or more.'
+export const NO_MATCH = 'No company matches.'
+export const LOOKING = 'Looking.'
+
 /** "Logistics · Perth · 300 staff", from what is known. */
 export function companyPlace(company: {
   industry: string | null
