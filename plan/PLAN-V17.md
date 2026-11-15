@@ -660,7 +660,7 @@ Newest first.
 
 ## Track 3: the website (session 3)
 
-**Progress:** Stage A 4 of 8. Stage B 1 of 4. Every step is `frontend-agent` work, follows `engine/DESIGN.md` and "The screens, and how they move", uses the `ui-build` skill, and builds against the contract with `mockApi`.
+**Progress:** Stage A 4 of 8. Stage B 2 of 4. Every step is `frontend-agent` work, follows `engine/DESIGN.md` and "The screens, and how they move", uses the `ui-build` skill, and builds against the contract with `mockApi`.
 
 ### Stage A: call notes
 
@@ -746,8 +746,13 @@ Newest first.
     - Built on Track 3's own contract guesses. T3-10's first commits move it to Track 2's real routes.
     - Not seen in a browser yet.
 
-- [ ] **T3-10. The pre-read page** ("The screens", part 6). The facts, the three summaries with the pencil, the two blanks, "Redraft" with its cost, and the skeleton while it drafts.
+- [x] **T3-10. The pre-read page** ("The screens", part 6). The facts, the three summaries with the pencil, the two blanks, "Redraft" with its cost, and the skeleton while it drafts.
   - **Done when:** tests cover a draft, an edit kept through a redraft, the two blanks, and a failed draft with its plain words.
+  - Done 2026-11-16 (`69bdc65` to `f4fe65d`).
+    - The page is at `/companies/meetings/{form_id}`. `v17.ts` Part 3, and T3-9, now follow Track 2's real routes.
+    - Checks: lint shows 0 warnings and types pass; tests 104 files and 1,479 passed; the build passes.
+    - The first visit is 34 files and 718 kB raw. Gzip is 236,144 bytes, which the report rounds to 231 kB (T3-9: 230). That 0.16 kB is the new route's own entry (**TBC**: accept as a route's cost).
+    - Not seen in a browser yet.
 
 - [ ] **T3-11. Send, and around the app.** The Alert Dialog with the email and the people, a refused address in plain words, the sent state, Home's "Upcoming meetings" card, the company's meetings, Ctrl+K, and "Log meeting" on a past meeting.
   - **Done when:** tests cover a send, a refused address, each `hubspot_copy` state and the transcript box. Al-khair has seen them.
@@ -758,6 +763,28 @@ Newest first.
 ### Track 3 Log
 
 Newest first.
+
+- 2026-11-16: **T3-10 built.**
+  - **TBC, Al-khair's look:**
+    - one 768px column, the status beside "Open in HubSpot";
+    - "Written by AI" with the chip icon and "Edited by you" with call prep's pen;
+    - When and Where show both in the header and as the server's first two facts (DESIGN.md "say it once": one should go);
+    - not found shows the serif empty state with Back to Meetings;
+    - Check and send stays pressable on a sent pre-read (T3-11 decides what it does then);
+    - an open summary box's Save is a second Navy button (the line editor's own).
+  - **Four contract points, sent to Track 2:**
+    - `cost_usd` adds up every draft, so "Redraft (about US$0.06)" overstates the next one. Track 3 asks for the last draft's own cost, or else the page says "so far".
+    - `FormMeeting` has no `hubspot_url`, so the page asks `GET /meetings/{meeting_id}` for it.
+    - `POST /meetings/forms` takes no `Idempotency-Key`, so a retried New pre-read could make two.
+    - `MeetingItem` has no owner name, so the team's list can't say whose a meeting is.
+- 2026-11-16: **Track 2's news** (session contour-bd, now reachable by message):
+  - Log meeting is `POST /companies/meetings/{meeting_id}/transcript` (`{ text, file_name? }`).
+  - A logged meeting goes to HubSpot as a note, with a `note` step.
+  - A note naming a field off the list is `skipped` with why.
+  - A pre-read address is at most 254 characters.
+  - `FormEmailPreview.meeting_note` (a sentence, or null) comes at M5. Track 1's security review asked for it, and the send dialog shows it.
+  - Track 2's `openapi.json` is current (`8c97d73`). Track 2 is ready to merge, apart from two paid checks that wait for Al-khair.
+- 2026-11-16: **Track 1** is ready to merge (`plan-v17-track1` at `1a96b10`; Stage A tag `v17-notes-t1` = `20345a5`). T1-9 (`ff2dbf3`): a write may have a `meeting` step, which needs no website change.
 
 - 2026-11-16: **Stage B follows Track 2's real routes.**
   - Track 2 has built T2-10 to T2-14 (`aaba2ca`), so Track 3 generated their contract from the preview (Track 2 joined with Track 3). T3-10's first commits move `v17.ts` Part 3, and T3-9's code, to those real names. The Log's earlier Stage B guesses (`GET /meetings/options`, a flat `MeetingItem`, `addresses`, `hubspot_copy.words`) are dropped.
