@@ -292,6 +292,28 @@ function renderCompanies() {
   return renderWithProviders(<CompaniesPage />, { route: '/companies' })
 }
 
+/** Two reps on one shared browser (made-up people), for the drafts that are each rep's own. */
+const MIA: SignedInUser = {
+  ...SAMPLE_USER,
+  id: 'aaaaaaaa-0000-0000-0000-00000000000a',
+  name: 'Mia Sample',
+  role: 'staff',
+  apps: ['companies'],
+}
+const SAM: SignedInUser = { ...MIA, id: 'bbbbbbbb-0000-0000-0000-00000000000b', name: 'Sam Sample' }
+
+/** "Who is signed in", as the sign-in guard has it before any page draws. */
+function signedInAs(user: SignedInUser): SignIn {
+  return { state: 'signed_in', user }
+}
+
+/** The Companies page with `user` signed in. */
+function renderCompaniesAs(user: SignedInUser) {
+  const queryClient = createTestQueryClient()
+  queryClient.setQueryData(queryKeys.auth.me(), signedInAs(user))
+  return renderWithProviders(<CompaniesPage />, { route: '/companies', queryClient })
+}
+
 /** The page is up, and it knows call notes are on (or off). */
 async function ready(view: ReturnType<typeof renderCompanies>): Promise<void> {
   await screen.findByRole('button', { name: 'Prep a call to Sample Logistics Pty Ltd' })
@@ -680,15 +702,7 @@ describe('Save and next', () => {
 
   it("a toast's Try again never sends the note for the next rep who signs in", async () => {
     const backend = mockBackend({ save: 'fail' })
-    const mia: SignedInUser = {
-      ...SAMPLE_USER,
-      id: 'aaaaaaaa-0000-0000-0000-00000000000a',
-      role: 'staff',
-      apps: ['companies'],
-    }
-    const queryClient = createTestQueryClient()
-    queryClient.setQueryData<SignIn>(queryKeys.auth.me(), { state: 'signed_in', user: mia })
-    const view = renderWithProviders(<CompaniesPage />, { route: '/companies', queryClient })
+    const view = renderCompaniesAs(MIA)
     const panel = await logFirstRow(view)
     await view.user.type(within(panel).getByRole('textbox', { name: 'Call note' }), 'Halfway')
     await view.user.keyboard('{Control>}{Enter}{/Control}')
@@ -697,10 +711,7 @@ describe('Save and next', () => {
     // Another rep signs in on the same browser while the toast is still up.
     backend.save = 'ok'
     act(() => {
-      queryClient.setQueryData<SignIn>(queryKeys.auth.me(), {
-        state: 'signed_in',
-        user: { ...mia, id: 'bbbbbbbb-0000-0000-0000-00000000000b' },
-      })
+      view.queryClient.setQueryData(queryKeys.auth.me(), signedInAs(SAM))
     })
     await view.user.click(screen.getByRole('button', { name: 'Try again' }))
     await act(async () => {
@@ -708,7 +719,7 @@ describe('Save and next', () => {
     })
     expect(posts(backend)).toHaveLength(1)
     // The note still waits for Mia, in her own entry.
-    expect(window.localStorage.getItem(`${DRAFTS}.${mia.id}`)).toContain('Halfway')
+    expect(window.localStorage.getItem(`${DRAFTS}.${MIA.id}`)).toContain('Halfway')
   })
 })
 
@@ -727,34 +738,20 @@ describe('the draft', () => {
 
   it("is the signed-in rep's own: the next rep on the same browser starts with an empty note", async () => {
     mockBackend()
-    const mia: SignedInUser = {
-      ...SAMPLE_USER,
-      id: 'aaaaaaaa-0000-0000-0000-00000000000a',
-      name: 'Mia Sample',
-      role: 'staff',
-      apps: ['companies'],
-    }
-    const sam: SignedInUser = { ...mia, id: 'bbbbbbbb-0000-0000-0000-00000000000b' }
-    const signedInAs = (user: SignedInUser) => {
-      const queryClient = createTestQueryClient()
-      queryClient.setQueryData<SignIn>(queryKeys.auth.me(), { state: 'signed_in', user })
-      return renderWithProviders(<CompaniesPage />, { route: '/companies', queryClient })
-    }
-
-    const first = signedInAs(mia)
+    const first = renderCompaniesAs(MIA)
     const panel = await logFirstRow(first)
     await first.user.type(within(panel).getByRole('textbox', { name: 'Call note' }), 'Halfway')
     first.unmount()
     // Kept in Mia's own entry, not the shared one sign-in off uses.
     expect(storedDrafts()).toEqual({})
-    expect(window.localStorage.getItem(`${DRAFTS}.${mia.id}`)).toContain('Halfway')
+    expect(window.localStorage.getItem(`${DRAFTS}.${MIA.id}`)).toContain('Halfway')
 
-    const next = signedInAs(sam)
+    const next = renderCompaniesAs(SAM)
     const empty = await logFirstRow(next)
     expect(within(empty).getByRole('textbox', { name: 'Call note' })).toHaveValue('')
     next.unmount()
 
-    const back = signedInAs(mia)
+    const back = renderCompaniesAs(MIA)
     const again = await logFirstRow(back)
     expect(within(again).getByRole('textbox', { name: 'Call note' })).toHaveValue('Halfway')
   })

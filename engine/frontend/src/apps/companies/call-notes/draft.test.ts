@@ -56,7 +56,8 @@ function stored(entry: string): Record<string, unknown> {
 async function signOut(user: SignedInUser): Promise<void> {
   stubAuthBackend({ me: signedOut() })
   const client = createTestQueryClient()
-  client.setQueryData<SignIn>(queryKeys.auth.me(), { state: 'signed_in', user })
+  const signedIn: SignIn = { state: 'signed_in', user }
+  client.setQueryData(queryKeys.auth.me(), signedIn)
   const { result } = renderHook(() => useLogout(), {
     wrapper: ({ children }: { children: ReactNode }) =>
       createElement(QueryClientProvider, { client }, children),
