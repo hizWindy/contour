@@ -36,6 +36,7 @@ from apps.companies.meeting_form import (
     FormAnswer,
     FormSentence,
     MeetingFormRunner,
+    where_words,
 )
 from apps.companies.meeting_store import MeetingSource
 from apps.companies.tables import MeetingForm
@@ -552,6 +553,31 @@ def test_the_answer_form_has_no_place_for_the_next_step_or_who_is_going() -> Non
     for part in schema.get("$defs", {}).values():
         places |= set(part.get("properties", {}))
     assert places == {"what_they_do", "what_we_know", "talks_so_far", "text", "sources"}
+
+
+@pytest.mark.parametrize(
+    ("where", "location", "words"),
+    [
+        ("online", None, "Teams"),
+        ("online", "Microsoft Teams Meeting", "Teams"),
+        ("online", "https://us02web.zoom.us/j/81234567890", "Zoom"),
+        ("online", "Google Meet: meet.google.com/abc-defg-hij", "Google Meet"),
+        ("in_person", "Level 3, 120 Sample St, Perth", "In person, Level 3, 120 Sample St, Perth"),
+        ("in_person", None, "In person"),
+        ("unknown", "Call Jo", None),
+    ],
+)
+def test_where_is_said_in_the_websites_words(
+    where: str, location: str | None, words: str | None
+) -> None:
+    """The plan's words, "Teams or in person", as the website says them, unless HubSpot's
+    location names Zoom or Google Meet. An unknown place says nothing: the facts leave it out."""
+    assert where_words(where, location) == words
+
+
+def test_claude_hears_where_without_the_address() -> None:
+    assert where_words("in_person", "Level 3, 120 Sample St, Perth", place=False) == "In person"
+    assert where_words("online", "https://zoom.us/j/81234567890", place=False) == "Zoom"
 
 
 # --- A typed meeting ------------------------------------------------------------------------------

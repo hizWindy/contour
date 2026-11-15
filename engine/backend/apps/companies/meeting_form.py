@@ -244,13 +244,27 @@ def when_words(starts_at: datetime, ends_at: datetime | None) -> str:
     return f"{words} to {clock(ends_at)}" if ends_at is not None else words
 
 
-def where_words(where: str, location: str | None) -> str:
+# A video call is Teams at Contour (the plan's "Teams or in person"), unless its location names
+# another: HubSpot's location for a Zoom or Google Meet call usually holds its link.
+ZOOM: Final = re.compile(r"zoom\.(?:us|com)|\bzoom\b", re.IGNORECASE)
+GOOGLE_MEET: Final = re.compile(r"meet\.google\.com|\bgoogle meet\b", re.IGNORECASE)
+
+
+def where_words(where: str, location: str | None, *, place: bool = True) -> str | None:
+    """Where the meeting is, in the website's words: "Teams" for a video call, or "Zoom" or
+    "Google Meet" when its location names one; "In person", with the place when `place` is set
+    and HubSpot has it. None when we don't know, a phone call included."""
     if where == "online":
-        return "Online"
+        text = location or ""
+        if ZOOM.search(text):
+            return "Zoom"
+        if GOOGLE_MEET.search(text):
+            return "Google Meet"
+        return "Teams"
     if where == "in_person":
-        place = _cut(scrub(location), 200) if location and location.strip() else ""
-        return f"In person, {place}" if place else "In person"
-    return "Not said"
+        said = _cut(scrub(location), 200) if place and location and location.strip() else ""
+        return f"In person, {said}" if said else "In person"
+    return None
 
 
 @dataclass(frozen=True)
@@ -270,16 +284,12 @@ def form_facts(
     company: CompanyDetail,
 ) -> list[FormFact]:
     """What the pre-read shows before any AI, each with its source. A fact we don't have is
-    left out, except when and where."""
+    left out, except when."""
     told = "HubSpot meeting" if meeting is not None else "Typed in"
-    facts = [
-        FormFact(label="When", value=when_words(form.starts_at, form.ends_at), source=told),
-        FormFact(
-            label="Where",
-            value=where_words(form.where, meeting.location if meeting else None),
-            source=told,
-        ),
-    ]
+    facts = [FormFact(label="When", value=when_words(form.starts_at, form.ends_at), source=told)]
+    place = where_words(form.where, meeting.location if meeting else None)
+    if place is not None:
+        facts.append(FormFact(label="Where", value=place, source=told))
     if attendees:
         who = "; ".join(attendee.words() for attendee in attendees)
         facts.append(FormFact(label="Who we meet", value=who, source="HubSpot contacts"))
@@ -344,9 +354,10 @@ def add_meeting(
     pack: FactsPack, form: MeetingForm, meeting: Meeting | None, attendees: Sequence[Attendee]
 ) -> None:
     """The meeting and who we meet, as facts with ids."""
-    where = where_words(form.where, None).lower()
+    where = where_words(form.where, meeting.location if meeting else None, place=False)
     title = _cut(form.title, TEXT_CHARS)
-    text = f"The meeting: '{title}', on {when_words(form.starts_at, form.ends_at)} ({where})."
+    held = f" ({where})" if where else ""
+    text = f"The meeting: '{title}', on {when_words(form.starts_at, form.ends_at)}{held}."
     if meeting is not None:
         pack.add(text, "hubspot", "HubSpot meeting", url=meeting.hubspot_url)
     else:
