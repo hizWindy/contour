@@ -475,15 +475,20 @@ async def settle_cut_off(
     settle_note(note, card, now, url)
 
 
-def totals_of(cards: Iterable[NoteCard]) -> CallNoteTotals:
-    """What sending these notes adds: each call and follow-up not in HubSpot yet, and each field
-    change not in HubSpot and not held."""
-    calls = tasks = changes = 0
-    for card in cards:
-        calls += card.call.state != "landed"
+def totals_of(cards: Iterable[tuple[NoteCard, bool]]) -> CallNoteTotals:
+    """What sending these notes adds: each call, meeting note and follow-up not in HubSpot yet,
+    and each field change not in HubSpot and not held. Each card comes with whether it is a
+    logged meeting's: its notes go as a note, not a call."""
+    calls = meeting_notes = tasks = changes = 0
+    for card, meeting in cards:
+        unsent = card.call.state != "landed"
+        if meeting:
+            meeting_notes += unsent
+        else:
+            calls += unsent
         tasks += sum(task.state != "landed" for task in card.tasks)
         changes += sum(change.state not in ("landed", "held") for change in card.changes)
-    return CallNoteTotals(calls=calls, tasks=tasks, changes=changes)
+    return CallNoteTotals(calls=calls, meeting_notes=meeting_notes, tasks=tasks, changes=changes)
 
 
 def unsure_steps(card: NoteCard) -> set[str]:

@@ -544,7 +544,7 @@ async def test_with_writing_off_nothing_is_sent_and_the_answer_says_why(
         "Waiting for HubSpot write access.",
     )
     assert [item["id"] for item in body["items"]] == [note["id"]]
-    assert body["totals"] == {"calls": 1, "tasks": 0, "changes": 0}
+    assert body["totals"] == {"calls": 1, "meeting_notes": 0, "tasks": 0, "changes": 0}
     assert (refused.status_code, refused.json()["code"]) == (409, "hubspot_writes_off")
     assert refused.json()["detail"] == "Waiting for HubSpot write access."
     assert (after["status"], after["steps"]) == ("to_confirm", [])
@@ -628,7 +628,7 @@ async def test_a_field_changed_in_hubspot_after_the_preview_is_held_and_a_retry_
     [shown] = preview["items"]
     assert shown["changes"][0]["current"] == "2027-03-31"  # HubSpot's, not our copy's
     assert shown["changes"][0]["current_changed"] is True
-    assert preview["totals"] == {"calls": 1, "tasks": 1, "changes": 1}
+    assert preview["totals"] == {"calls": 1, "meeting_notes": 0, "tasks": 1, "changes": 1}
     # Held: not written, shown again with HubSpot's value. The call and the follow-up landed.
     assert partial["status"] == "partial"
     assert partial["changes"][0]["current"] == "2027-06-30"
@@ -644,7 +644,7 @@ async def test_a_field_changed_in_hubspot_after_the_preview_is_held_and_a_retry_
         {"step": "task:1", "status": "done", "words": "Task added: Send the floor plan."},
     ]
     assert [task["in_hubspot"] for task in partial["tasks"]] == [True]
-    assert again["totals"] == {"calls": 0, "tasks": 0, "changes": 0}
+    assert again["totals"] == {"calls": 0, "meeting_notes": 0, "tasks": 0, "changes": 0}
     assert (frozen.status_code, frozen.json()["code"]) == (409, "part_sent")
     assert edited.status_code == 200, edited.text
     assert edited.json()["changes"][0]["value"] == "2028-06-30"
@@ -971,12 +971,16 @@ async def test_a_logged_meeting_goes_as_a_note_not_a_call(
         meeting = await log_call(client, source="transcript", text=said, outcome=None)
         await set_note(world, meeting["id"], card=card.model_dump(mode="json"))
         fake.unsure_call.add(uuid.UUID(meeting["id"]))
+        preview = await client.post(f"{NOTES}/preview", json={"ids": [meeting["id"]]})
         await confirm(client, meeting)
         await sender.wait()
         unsure = await one(client, meeting)
         landed = await client.post(
             f"{NOTES}/{meeting['id']}/resolve", json={"step": "note", "landed": True}
         )
+    # The batch counts it as a meeting note, not a call (Track 3 titles the send with it).
+    totals = preview.json()["totals"]
+    assert totals == {"calls": 0, "meeting_notes": 1, "tasks": 1, "changes": 0}
     request = fake.requests[subject(meeting)]
     held_on = day((START - timedelta(minutes=10)).astimezone(MELBOURNE))
     assert request.call is None and request.note is not None
