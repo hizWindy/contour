@@ -520,7 +520,7 @@ describe('Past', () => {
       within(row('Sample Mining Pty Ltd')).getByText('Fri 13 Nov, 10:00 am'),
     ).toBeInTheDocument()
     expect(within(row('Sample Retail Pty Ltd')).getByText('Cancelled')).toBeInTheDocument()
-    // "Log meeting" comes with T3-11: no button on a past row yet.
+    // Call notes aren't on here (the server has no switches to give): no "Log meeting" (T3-11).
     expect(within(list).queryAllByRole('button')).toEqual([])
     expect(within(list).queryAllByRole('link')).toEqual([])
   })
@@ -601,6 +601,32 @@ describe('the team switch', () => {
       expect(screen.queryByText('Sample Energy Pty Ltd')).toBeNull()
     })
     expect(router.state.location.search).toBe('')
+  })
+
+  it("says whose each meeting is on the team's list, and nothing when the server doesn't know", async () => {
+    mockServer({
+      upcoming: upcoming().map((item) => ({
+        ...item,
+        owner_name: item.meeting.owner_id === MIA ? 'Mia Sample' : null,
+      })),
+    })
+    renderMeetings('/companies/meetings?team=1')
+    expect(await screen.findByText('Sample Energy Pty Ltd')).toBeInTheDocument()
+    const energy = within(row('Sample Energy Pty Ltd'))
+    const owner = energy.getByText('Mia Sample').closest('[data-slot=meeting-owner]')
+    expect(owner).toHaveTextContent('Whose meeting: Mia Sample')
+    // A meeting whose owner the server doesn't name says nothing about whose it is.
+    expect(row('Sample Logistics Pty Ltd').querySelector('[data-slot=meeting-owner]')).toBeNull()
+  })
+
+  it("doesn't say whose on the rep's own list: they are all theirs", async () => {
+    mockServer({
+      upcoming: upcoming().map((item) => ({ ...item, owner_name: 'Jo Sample' })),
+    })
+    renderMeetings()
+    await screen.findByRole('list', { name: 'Today' })
+    expect(document.querySelector('[data-slot=meeting-owner]')).toBeNull()
+    expect(screen.queryByText('Jo Sample')).toBeNull()
   })
 })
 

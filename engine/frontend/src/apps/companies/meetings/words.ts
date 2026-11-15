@@ -2,9 +2,11 @@
  * The words of Meetings (PLAN-V17 "The screens", part 5): plain, sentence case, no em dash, and no
  * setting or file name (the screen-words test reads them). The wording is Al-khair's to change.
  */
+import { toApiProblem } from '@/api/client'
 import type { MeetingWhen, MeetingWhere } from '@/api/v17'
 import { addDays } from '@/lib/due-date'
 import { formatNumber, formatTime, melbourneDate } from '@/lib/format'
+import { changeDetail } from '@/lib/problems'
 import type { DayGroup, RowStatus } from './rows'
 
 export const MEETINGS_TITLE = 'Client meetings'
@@ -51,6 +53,9 @@ export const STATUS_WORDS: Readonly<Record<RowStatus, string>> = {
 export const DRAFT_IT = 'Draft it'
 export const CHECK_AND_SEND = 'Check and send'
 export const OPEN = 'Open'
+export const LOG_MEETING = 'Log meeting'
+/** Before the owner's name on the team's list, for a screen reader: whose meeting it is. */
+export const WHOSE = 'Whose meeting:'
 
 // --- The states -----------------------------------------------------------------------------
 
@@ -188,4 +193,127 @@ export function pastWhen(at: string, today: string): string {
   if (day === today) return `Today, ${time}`
   if (day === addDays(today, -1)) return `Yesterday, ${time}`
   return `${dayText(day, today)}, ${time}`
+}
+
+/**
+ * When a meeting is, with no group heading above it (Home's card, a company's record): "Today,
+ * 10:00 am", "Tomorrow, 2:00 pm", "Yesterday, 4:00 pm" or "Thu 26 Nov, 10:00 am".
+ */
+export function meetingDay(at: string, today: string): string {
+  return melbourneDate(at) === addDays(today, 1)
+    ? `Tomorrow, ${formatTime(at)}`
+    : pastWhen(at, today)
+}
+
+// --- Log meeting (T3-11) --------------------------------------------------------------------
+
+export const TRANSCRIPT = 'Transcript'
+export const TRANSCRIPT_PLACEHOLDER = 'Paste the transcript here.'
+export const LOG_MEETING_NOTE =
+  'Paste the transcript, or read a .txt or .vtt file. It joins your calls to confirm on Activity, and nothing goes to HubSpot until you send it.'
+export const READ_A_FILE = 'Read a file'
+export const VTT_HINT = 'The times and cue numbers are taken out when it is saved.'
+export const SAVE_NOTES = 'Save notes'
+export const SAVING_NOTES = 'Saving.'
+export const NOTHING_PASTED = 'Paste the transcript or read a file first.'
+export const FILE_TYPE = 'Only a .txt or .vtt file can be read here. Paste the words instead.'
+export const FILE_TOO_BIG = 'That file is too big to be a transcript. Paste the words instead.'
+export const FILE_UNREADABLE = "That file couldn't be read as text. Paste the words instead."
+export const TRANSCRIPT_UNDONE = 'Undone. The transcript is back as a draft.'
+export const TRANSCRIPT_NOT_UNDONE = 'Not undone. The meeting notes still wait for you to confirm.'
+
+/** "From Sample meeting.vtt" */
+export function fromFileWords(name: string): string {
+  return `From ${name}`
+}
+
+/** "Remove Sample meeting.vtt" */
+export function removeFileWords(name: string): string {
+  return `Remove ${name}`
+}
+
+/** "54,210 of 60,000 characters", shown only near the end. */
+export function charactersWords(length: number, max: number): string {
+  return `${formatNumber(length)} of ${formatNumber(max)} characters`
+}
+
+/** "Too long: 61,200 of 60,000 characters. Shorten it, or split it into two." */
+export function transcriptTooLongWords(length: number, max: number): string {
+  return `Too long: ${charactersWords(length, max)}. Shorten it, or split it into two.`
+}
+
+/** Ends a sentence that has no stop yet. */
+function sentence(text: string): string {
+  const trimmed = text.trim()
+  return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`
+}
+
+/**
+ * Why a transcript wasn't saved, in the server's own words, after "Not saved yet.": "Not saved
+ * yet. This meeting hasn't happened yet. Log the meeting once it has been." A lost connection says
+ * what every change says. The words stay in the box.
+ */
+export function transcriptNotSavedWords(error: unknown): string {
+  const problem = toApiProblem(error)
+  const fields = problem.errors.map((field) => sentence(field.message))
+  return [
+    'Not saved yet.',
+    problem.title.trim() ? sentence(problem.title) : null,
+    changeDetail(problem),
+    ...fields,
+  ]
+    .filter(Boolean)
+    .join(' ')
+}
+
+/**
+ * The line under Log meeting's title: "Sample Logistics Pty Ltd · Office walk-through · Thu 12 Nov,
+ * 9:00 am".
+ */
+export function logMeetingLine(
+  companyName: string,
+  title: string,
+  at: string,
+  today: string,
+): string {
+  return [companyName, title.trim(), meetingDay(at, today)].filter(Boolean).join(' · ')
+}
+
+// --- Around the app (T3-11): Home's card and a company's record -----------------------------
+
+export const UPCOMING_MEETINGS = 'Upcoming meetings'
+export const OPEN_MEETINGS = 'Open Meetings'
+export const NO_MEETINGS_SOON = 'No meetings in the next few days.'
+export const NO_MEETINGS_SOON_NOTE =
+  'Your client meetings from HubSpot show here, with their pre-reads.'
+export const MEETINGS_NOT_LOADED = "Your meetings couldn't be loaded right now."
+export const COMING_UP = 'Coming up'
+export const OPEN_PRE_READ = 'Open the pre-read'
+
+/**
+ * Home's sentence over the rows, from the counts for the next 7 days: "2 need a pre-read, and 1 is
+ * ready to check and send." Null with nothing to do.
+ */
+export function upcomingSentence(needPreRead: number, draftReady: number): string | null {
+  const need =
+    needPreRead > 0
+      ? `${formatNumber(needPreRead)} ${needPreRead === 1 ? 'needs' : 'need'} a pre-read`
+      : null
+  const ready =
+    draftReady > 0
+      ? `${formatNumber(draftReady)} ${draftReady === 1 ? 'is' : 'are'} ready to check and send`
+      : null
+  if (need && ready) return `${need}, and ${ready}.`
+  if (need) return `${need}.`
+  if (ready) {
+    return draftReady === 1
+      ? '1 pre-read is ready to check and send.'
+      : `${formatNumber(draftReady)} pre-reads are ready to check and send.`
+  }
+  return null
+}
+
+/** Meetings, found by the company's name, everyone's: where a meeting with no pre-read is. */
+export function companyMeetingsQuery(companyName: string): string {
+  return companyName.replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
 }

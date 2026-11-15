@@ -10,7 +10,7 @@
  * tables do. The rows themselves never fade in, slide or glide (principles 02 #20).
  */
 import { useId } from 'react'
-import type { MeetingPage } from '@/api/v17'
+import type { MeetingItem, MeetingPage } from '@/api/v17'
 import { Pager } from '@/components/pager'
 import { cn } from '@/lib/utils'
 import { MeetingRow } from './meeting-row'
@@ -25,9 +25,11 @@ export interface MeetingListProps {
   /** The list is the one before, while the next one loads. */
   dimmed: boolean
   onPage: (page: number) => void
+  /** "Log meeting" on a past meeting (T3-11). Left out while call notes are off. */
+  onLogMeeting?: (item: MeetingItem) => void
 }
 
-export function MeetingList({ page, view, today, dimmed, onPage }: MeetingListProps) {
+export function MeetingList({ page, view, today, dimmed, onPage, onLogMeeting }: MeetingListProps) {
   const id = useId()
   const dim = cn('transition-opacity', dimmed && 'opacity-60')
 
@@ -45,6 +47,8 @@ export function MeetingList({ page, view, today, dimmed, onPage }: MeetingListPr
               item={item}
               when={pastWhen(item.meeting.starts_at, today)}
               past
+              team={view.team}
+              onLogMeeting={onLogMeeting}
             />
           ))}
         </ul>
@@ -79,6 +83,7 @@ export function MeetingList({ page, view, today, dimmed, onPage }: MeetingListPr
                   item={item}
                   when={upcomingWhen(item.meeting.starts_at, group, today)}
                   past={false}
+                  team={view.team}
                 />
               ))}
             </ul>

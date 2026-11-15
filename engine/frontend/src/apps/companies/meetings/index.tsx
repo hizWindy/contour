@@ -8,7 +8,8 @@
  *   in the address (`params.ts`).
  * - **One status and one button a row** (`meeting-row.tsx`): Needs pre-read (Draft it), Drafting
  *   (Open), Draft ready (Check and send), Sent (Open), Draft failed (Open). Past rows say whether
- *   what was said is logged; T3-11 adds "Log meeting" there.
+ *   what was said is logged, with "Log meeting" (T3-11) while call notes are on: it opens the
+ *   transcript box (`log-meeting.tsx`). The team's rows say whose each meeting is.
  * - **New pre-read** in the header, for a meeting that isn't in HubSpot (`new-pre-read.tsx`).
  * - **The states:** loading (a still skeleton after 200ms), empty, and an error. Two different
  *   "offs" stay apart. While the list can't show what was asked (HubSpot's meetings aren't read
@@ -26,13 +27,15 @@
 import { CalendarCheck } from 'lucide-react'
 import { useState } from 'react'
 import { useSearchParams } from 'react-router'
+import { useCallNoteOptions } from '@/api/hooks/call-note-counts'
 import { isMeetingFormsOff, useMeetings } from '@/api/hooks/meetings'
-import type { MeetingPage } from '@/api/v17'
+import type { MeetingItem, MeetingPage } from '@/api/v17'
 import { EmptyState } from '@/components/empty-state'
 import { ErrorState } from '@/components/error-state'
 import { PageHeader } from '@/components/page-header'
 import { melbourneDate } from '@/lib/format'
 import { PHONE, useMediaQuery } from '@/lib/use-media-query'
+import { LogMeetingSheet } from './log-meeting'
 import { MeetingList } from './meeting-list'
 import { NewPreRead } from './new-pre-read'
 import { meetingsQuery, readMeetings, writeMeetings, type MeetingsView } from './params'
@@ -73,6 +76,9 @@ export default function MeetingsPage() {
   const today = melbourneDate()
   const list = useMeetings(meetingsQuery(view))
   const off = isMeetingFormsOff(list.error)
+  // "Log meeting" makes a call note, so it is there only while call notes are on.
+  const notesOn = useCallNoteOptions().data?.enabled === true
+  const [logging, setLogging] = useState<MeetingItem | null>(null)
 
   // Kept from the last list that answered, while the next one loads.
   const [formsOn, setFormsOn] = useState(false)
@@ -118,6 +124,7 @@ export default function MeetingsPage() {
         onPage={(page) => {
           change({ page })
         }}
+        onLogMeeting={notesOn ? setLogging : undefined}
       />
     )
   }
@@ -142,6 +149,13 @@ export default function MeetingsPage() {
           {content}
         </>
       )}
+      <LogMeetingSheet
+        target={logging}
+        onPhone={onPhone}
+        onClose={() => {
+          setLogging(null)
+        }}
+      />
     </>
   )
 }
