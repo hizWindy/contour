@@ -3,7 +3,7 @@
  * src/apps/. The router, the sidebar, the command menu and Home all read this list, so adding a
  * project is its folder plus one line here.
  */
-import { Briefcase, CalendarDays, LayoutDashboard, Megaphone, Mic, Telescope } from 'lucide-react'
+import { Briefcase, CalendarDays, LayoutDashboard, Megaphone, Telescope } from 'lucide-react'
 import { COMPANIES } from '@/apps/companies/module'
 import { LEAD_FINDER } from '@/apps/lead-finder/module'
 import type { AppModule, PlannedModule } from '@/shell/nav'
@@ -16,7 +16,8 @@ export const MODULES: readonly AppModule[] = [LEAD_FINDER, COMPANIES]
  * "minutes of meeting/". Dashboards was added at the end on 5 Nov and is not from those notes.
  * When one is built, it moves to MODULES. On Home, a project with `when` gets its own card and the
  * rest share one "Later" card. Meeting prep left the list on 9 Nov: the Companies page
- * and its call prep replace it (PLAN-V10 B1).
+ * and its call prep replace it (PLAN-V10 B1). Call notes left it on 15 Nov: Log call and the
+ * Activity page, under Companies, replace it (PLAN-V17 T3-7).
  */
 export const PLANNED: readonly PlannedModule[] = [
   {
@@ -30,18 +31,6 @@ export const PLANNED: readonly PlannedModule[] = [
     when: 'Next',
     short: 'Set up meetings and invites in Outlook, like "a meeting with James on Tuesday at 10".',
     needs: 'Needs Outlook admin access (TBC)',
-  },
-  {
-    id: 'call-notes',
-    name: 'Call notes',
-    icon: Mic,
-    to: '/call-notes',
-    description:
-      'Dictate notes after a call or meeting. It logs them in HubSpot, creates the follow-up task and updates details like a lease expiry, so nobody has to type and click.',
-    status: 'Next after the Lead Finder (Levi, 30 Oct). Needs HubSpot write access (TBC).',
-    when: 'Next',
-    short: 'Dictate notes after a call. It logs them in HubSpot and creates the follow-up task.',
-    needs: 'Needs HubSpot write access (TBC)',
   },
   {
     id: 'deal-review',
