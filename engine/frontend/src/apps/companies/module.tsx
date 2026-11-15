@@ -5,17 +5,20 @@
  *
  * Activity (PLAN-V17 T3-6, `/companies/activity`) is its second page: the calls a rep logged, to
  * confirm and send to HubSpot in one go. Its address sits before a company's (`:key`), so
- * "/companies/activity" never reads as a company. T3-7 makes Companies a proper menu group with
- * Activity's count; for now Activity is simply the module's second page.
+ * "/companies/activity" never reads as a company. With two pages, Companies is a group in the menu,
+ * after the Lead Finder's, in the order of MODULES, as on Home and in Ctrl+K (T3-7). Activity stays
+ * in the group for everyone who sees Companies, even while call notes are off (the page says so),
+ * so the menu never changes shape once it has loaded. Its row shows how many calls wait to be
+ * confirmed, and Ctrl+K gains "Log a call" and "Calls to confirm" (`call-note-links.tsx`).
  */
 import { Building2, ClipboardCheck } from 'lucide-react'
 import type { PrefetchArgs, RouteHandle } from '@/shell/crumbs'
 import type { AppModule } from '@/shell/nav'
 import { page } from '@/shell/page-route'
+import { ACTIVITY_PATH as ACTIVITY } from './activity/params'
+import { CallNoteCommands, ToConfirmCount } from './call-note-links'
 import { CompaniesHomeCard } from './home-card'
 import { prefetchCompanies, prefetchCompaniesHome, prefetchCompany } from './prefetch'
-
-const ACTIVITY = '/companies/activity'
 
 /**
  * What Activity asks for first. Its query options load with them, in a small file of their own,
@@ -54,8 +57,10 @@ export const COMPANIES: AppModule = {
       icon: ClipboardCheck,
       keywords: ['call notes', 'log a call', 'confirm', 'logged', 'send', 'hubspot'],
       purpose: 'Check the calls you logged, then send them to HubSpot in one go.',
+      count: ToConfirmCount,
     },
   ],
+  commands: CallNoteCommands,
   routes: [
     {
       path: 'companies',

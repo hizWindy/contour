@@ -35,9 +35,15 @@ export interface LogTarget {
   companyName: string
 }
 
+export interface LogCallPickerProps {
+  /** The picker is open. The page holds it, so Ctrl+K's "Log a call" (`?log=1`) can open it. */
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onPick: (target: LogTarget) => void
+}
+
 /** The button, and the company picker it opens. */
-export function LogCallPicker({ onPick }: { onPick: (target: LogTarget) => void }) {
-  const [open, setOpen] = useState(false)
+export function LogCallPicker({ open, onOpenChange: setOpen, onPick }: LogCallPickerProps) {
   const [text, setText] = useState('')
   // A company was picked: the note view takes the focus, so it doesn't go back to the button.
   const picked = useRef(false)

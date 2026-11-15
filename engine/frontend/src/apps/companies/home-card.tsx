@@ -1,6 +1,9 @@
 /**
  * The Companies page on Home (the "bento" Home, 11 Nov): how many companies we have and how fresh
- * the HubSpot copy is, a box to find a company, and the calls I prepped today.
+ * the HubSpot copy is, a box to find a company, the calls I prepped today, and, while call notes
+ * are on (PLAN-V17 T3-7), a quick button for each kind of work waiting: "7 calls to confirm",
+ * "2 need a look". Those come last: they arrive after two requests, and at the foot of the card
+ * they push nothing inside it.
  *
  * The count asks for the Companies page's own first page (the same request), so opening Companies
  * from here shows the list at once. The box opens Companies with the name typed in its search, and
@@ -19,6 +22,7 @@ import { Input } from '@/components/ui/input'
 import { formatRelative } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { TONE_CLASSES } from '@/shell/tone'
+import { CallNoteButtons } from './call-note-links'
 import { HOME_COMPANIES } from './prefetch'
 
 const TITLE_ID = 'home-companies'
@@ -165,6 +169,7 @@ export function CompaniesHomeCard() {
         <Count />
         <FindCompany />
         <Today />
+        <CallNoteButtons />
       </div>
     </Card>
   )

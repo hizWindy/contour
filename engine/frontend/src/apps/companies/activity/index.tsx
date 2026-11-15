@@ -10,12 +10,14 @@
  *
  * The rep sees their own notes (`mine`). A team view for Admins is TBC. The tab is in the address,
  * so a link or Back opens the same one. "Log call" in the header logs a call that wasn't prepped
- * (`log-call.tsx`). While HubSpot isn't ready for writing, one quiet line above the tabs says so,
- * in the server's words; everything up to the send still works. With call notes off, the page
- * says so in plain words.
+ * (`log-call.tsx`). Ctrl+K's "Log a call" opens this page with `?log=1` (T3-7): the company
+ * picker opens once call notes are known to be on, and the address drops `log` at once, so Back
+ * or a reload doesn't open it again. While HubSpot isn't ready for writing, one quiet line above
+ * the tabs says so, in the server's words; everything up to the send still works. With call notes
+ * off, the page says so in plain words.
  */
 import { ClipboardCheck, Hourglass } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { useCallNoteOptions, useCallNoteSummary } from '@/api/hooks/call-notes'
 import { ErrorState } from '@/components/error-state'
@@ -27,7 +29,7 @@ import { PHONE, useMediaQuery } from '@/lib/use-media-query'
 import { LogCallPicker, LogCallSheet, type LogTarget } from './log-call'
 import { Logged } from './logged'
 import { NeedsLook } from './needs-look'
-import { ACTIVITY_TABS, readTab, writeTab, type ActivityTab } from './params'
+import { ACTIVITY_TABS, readLog, readTab, withoutLog, writeTab, type ActivityTab } from './params'
 import { CallNotesOff, CardsPending } from './states'
 import { ToConfirm } from './to-confirm'
 import { useBatch } from './use-batch'
@@ -58,8 +60,28 @@ export default function ActivityPage() {
   const onPhone = useMediaQuery(PHONE)
   const today = melbourneDate()
   const [logging, setLogging] = useState<LogTarget | null>(null)
+  const [picking, setPicking] = useState(false)
   const notes = options.data
   const on = notes?.enabled === true
+
+  // `?log=1` (Ctrl+K's "Log a call"): the picker opens once call notes are known to be on. Set
+  // while rendering, not in an effect, so it opens with the page. `answered` stops it opening twice
+  // for the same ask, and resets once the address has dropped `log`.
+  const asked = readLog(params)
+  const [answered, setAnswered] = useState(false)
+  if (asked && on && !answered) {
+    setAnswered(true)
+    setPicking(true)
+  }
+  if (!asked && answered) {
+    setAnswered(false)
+  }
+  // The address drops `log` as soon as the switches are known (on or off), with `replace`.
+  useEffect(() => {
+    if (asked && notes) {
+      setParams((current) => withoutLog(current), { replace: true, preventScrollReset: true })
+    }
+  }, [asked, notes, setParams])
 
   // The counts on the tabs (To confirm and Needs a look), when there are some.
   const counts: Partial<Record<ActivityTab, number>> = {
@@ -147,7 +169,11 @@ export default function ActivityPage() {
         tone="companies"
         title={ACTIVITY_TITLE}
         description={onPhone ? undefined : ACTIVITY_DESCRIPTION}
-        actions={on ? <LogCallPicker onPick={setLogging} /> : undefined}
+        actions={
+          on ? (
+            <LogCallPicker open={picking} onOpenChange={setPicking} onPick={setLogging} />
+          ) : undefined
+        }
       />
       {body}
       <LogCallSheet

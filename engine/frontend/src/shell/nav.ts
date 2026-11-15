@@ -40,6 +40,19 @@ export interface NavItem {
    * Activity ("/companies/activity") is not Companies.
    */
   notActiveOn?: readonly string[]
+  /**
+   * A count at the end of the page's row in the menu, like Activity's calls to confirm (PLAN-V17
+   * T3-7). It asks for its own data, gives the link its words for a screen reader ("Activity, 7
+   * calls to confirm"), and draws nothing when there is nothing to count. Folded to icons, the
+   * menu hides it.
+   */
+  count?: ComponentType
+}
+
+/** What a project's own Ctrl+K entries get from the menu (`AppModule.commands`). */
+export interface CommandsProps {
+  /** Closes the menu and opens `to`. A page that takes the focus as it opens keeps it. */
+  go: (to: string) => void
 }
 
 /**
@@ -78,6 +91,12 @@ export interface AppModule {
   prefetchSummary?: (client: QueryClient) => void
   /** Its pages, in menu order. On Home each shows with its `purpose`. */
   pages: readonly NavItem[]
+  /**
+   * Its own actions in Ctrl+K, after its pages, like "Log a call" (PLAN-V17 T3-7). The component
+   * draws `CommandItem`s, or nothing, and asks for its own data. It is drawn only while Ctrl+K is
+   * open. Optional.
+   */
+  commands?: ComponentType<CommandsProps>
   /** Its addresses, inside the app frame. */
   routes: RouteObject[]
 }

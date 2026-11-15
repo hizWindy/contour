@@ -54,6 +54,7 @@ function MenuLink({
   iconClassName?: string
 }) {
   const Icon = item.icon
+  const Count = item.count
   const here = isHere(pathname, item)
   const closeOnPhone = useCloseOnPhone()
   return (
@@ -67,16 +68,18 @@ function MenuLink({
         {/* A plain Link: this menu decides what counts as "here" (a lead card is in Results). */}
         <Link to={item.to} aria-current={here ? 'page' : undefined} onClick={closeOnPhone}>
           <Icon aria-hidden="true" className={cn('size-5', iconClassName)} />
-          <span>{item.label}</span>
+          <span className="truncate">{item.label}</span>
+          {Count ? <Count /> : null}
         </Link>
       </SidebarMenuButton>
     </SidebarMenuItem>
   )
 }
 
-/** A page inside a project's dropdown, indented under the project's name. */
+/** A page inside a project's dropdown, indented under the project's name, with its count. */
 function SubLink({ item, pathname }: { item: NavItem; pathname: string }) {
   const Icon = item.icon
+  const Count = item.count
   const here = isHere(pathname, item)
   const closeOnPhone = useCloseOnPhone()
   return (
@@ -88,7 +91,8 @@ function SubLink({ item, pathname }: { item: NavItem; pathname: string }) {
       >
         <Link to={item.to} aria-current={here ? 'page' : undefined} onClick={closeOnPhone}>
           <Icon aria-hidden="true" />
-          <span>{item.label}</span>
+          <span className="truncate">{item.label}</span>
+          {Count ? <Count /> : null}
         </Link>
       </SidebarMenuSubButton>
     </SidebarMenuSubItem>
@@ -224,7 +228,9 @@ function PlannedGroup({ pathname }: { pathname: string }) {
  * projects still to be developed (one row that starts closed), and the shared Admin at the bottom, with the signed-in person's
  * name and role under it (PLAN-V13 T1-6). It folds to icons, and each icon keeps a tooltip with
  * the page name. A page shows as selected while you are on it or inside
- * it.
+ * it. A page may show a count at the end of its row, like Activity's calls to confirm (PLAN-V17
+ * T3-7, `NavItem.count`). Only the projects this person may use are drawn, so a count is asked
+ * for only by someone who sees its project.
  */
 export function AppSidebar() {
   const { pathname } = useLocation()
