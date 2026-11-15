@@ -660,7 +660,7 @@ Newest first.
 
 ## Track 3: the website (session 3)
 
-**Progress:** Stage A 3 of 8. Stage B 0 of 4. Every step is `frontend-agent` work, follows `engine/DESIGN.md` and "The screens, and how they move", uses the `ui-build` skill, and builds against the contract with `mockApi`.
+**Progress:** Stage A 4 of 8. Stage B 0 of 4. Every step is `frontend-agent` work, follows `engine/DESIGN.md` and "The screens, and how they move", uses the `ui-build` skill, and builds against the contract with `mockApi`.
 
 ### Stage A: call notes
 
@@ -721,7 +721,7 @@ Newest first.
   - **Done when:** each has tests, and a person without the Companies tick sees none of it.
   - Done 2026-11-15 (`049e973` to `0a9b240`). Each part has tests, and one proves that a person without the Companies tick sees none of it and asks for nothing. The session's own run: lint and types pass, tests 99 files and 1,380 passed, and the build passes. The first visit is 230 kB gzip (715 kB raw), the same as T3-1. Not seen in a browser yet: T3-8 does that.
 
-- [ ] **T3-8. Stage A check.**
+- [x] **T3-8. Stage A check.**
   - Lint, types, the tests, the build and `node scripts/bundle-report.js`.
   - The `design-review` skill on every new screen, and `speed-check` on Companies with the mic.
   - Each screen at 1440px, 1280px and 390px, light and dark, by keyboard only, and with reduced motion.
@@ -730,6 +730,12 @@ Newest first.
   - DESIGN.md gains the lines Al-khair agreed to (the level meter, the in-panel push).
   - Tag `v17-notes-t3`. Send the others a message.
   - **Done when:** all checks pass and the Log says "Track 3 Stage A ready".
+  - Done 2026-11-15, tag `v17-notes-t3`. The numbers are in the Log ("Track 3 Stage A ready").
+    - Lint and types pass. Tests: 99 files and 1,401 passed. The build passes. The first visit is 230 kB gzip (716 kB raw).
+    - The frontend-agent's `design-review`, and a fresh review-agent's own: every Must fix and Should fix is fixed.
+    - 108 screenshots: 18 screens at 1440, 1280 and 390px, light and dark. Keyboard only and reduced motion pass.
+    - DESIGN.md has Al-khair's six rules.
+    - **One exception, TBC with Al-khair:** at 4x CPU slowdown, two moments still drop frames: the first L (one 210 to 420ms frame while the note view is built; 35ms at full speed), and a batch landing (11 frames over 33ms in 5 seconds). The slide itself runs smoothly. There is no level meter yet: the mic is typing-only until T3-2.
 
 ### Stage B: the pre-meeting form
 
@@ -748,6 +754,36 @@ Newest first.
 ### Track 3 Log
 
 Newest first.
+
+- 2026-11-15: **Track 3 Stage A ready.** Tag `v17-notes-t3`, on the commit that ticks T3-8. Built against the hand-typed contract; M1's type check joins it to Tracks 1 and 2.
+  - **The final browser pass** ran on the preview: Track 2's real routes, no keys, and the built site served by `vite preview`.
+    - All 108 screenshots were taken with no failures and no console errors.
+    - Keyboard only: every stop shows a focus ring (18 in Log call, 26 on Activity), and J, X and Put back work.
+    - Reduced motion: Log call is in place at once.
+    - Home's layout shift (CLS) is 0.
+  - **Frames at 4x CPU slowdown, after the fixes:**
+    - Back to the script: 118 to 174ms, down from 830 to 1,180ms.
+    - First L: 208 to 424ms, down from 670 to 1,070ms.
+    - Activity's tabs: no dropped frames.
+    - Settings' group switch: one 49ms frame, down from 215ms.
+    - A batch landing: 11 frames over 33ms, the longest 174ms (it was 13 frames, the longest 229ms).
+    - At full speed, L takes 35ms and Back 15ms.
+    - The earlier numbers were taken on the dev server, which is slower than the built site. Part of the gain is that.
+  - **Fixed after the independent review**, in 10 commits (`ac346a1` to `d6522e5`):
+    - a card being edited loses the tint;
+    - a follow-up shows its stored day until the rep types;
+    - a change's value opens as the card shows it;
+    - "Logged today";
+    - "Sending waits for HubSpot.";
+    - each rep's drafts are their own;
+    - the pre-meeting forms switch hides until Stage B.
+  - **Still open in Stage A, waiting for Al-khair:**
+    - T3-2: dictate 10 notes on the test page. It decides T3-4's free in-browser mic. Until then T3-4 is typing-only, and Stage A ships that way.
+    - His look at T3-5, T3-6 and T3-7.
+    - The TBCs in the entries below: the `sm` button and `Segmented` at 44px on touch, a press shrink on buttons, a HubSpot link for an uncertain note, the boxes inside a card, and the rep's own words with the AI on.
+    - The 4x frame exception in T3-8.
+  - **Drafts** (`92cefd5`): a signed-in rep's drafts are kept under their own browser entry. Signing out keeps a note that isn't saved yet in that entry, for that rep's next sign-in (**TBC**: or wipe it). Drafts from before this change, in the shared entry, show only with sign-in off.
+- 2026-11-15: **Track 1 says its Stage A is ready:** tag `v17-notes-t1` = `20345a5` on `plan-v17-track1`. Its full run: 3,742 passed, 25 skipped. The owner routes and the Admin-only write log are as Track 3 reads them (`0842897`, `9646b1b`).
 
 - 2026-11-15: **T3-8: the independent design review** (a fresh review-agent, given the diff, the plan and the screenshots). **Verdict: not ready to tag**, two Must fixes:
   - In a card being edited, the fields sit on the selected tint (border 2.76:1, under 3:1).
