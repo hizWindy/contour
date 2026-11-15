@@ -41,8 +41,9 @@ export function CallNoteButtons() {
   if (toConfirm <= 0 && needsLook <= 0) return null
   return (
     <div data-slot="call-note-buttons" className="flex flex-wrap gap-2">
+      {/* 44px on a touch screen (DESIGN.md "Touch"), as Activity's buttons are. */}
       {toConfirm > 0 ? (
-        <Button asChild variant="outline" size="sm">
+        <Button asChild variant="outline" size="sm" className="touch:h-11">
           <Link to={activityHref('to_confirm')}>
             <ClipboardCheck aria-hidden="true" />
             <span>
@@ -52,7 +53,7 @@ export function CallNoteButtons() {
         </Button>
       ) : null}
       {needsLook > 0 ? (
-        <Button asChild variant="outline" size="sm">
+        <Button asChild variant="outline" size="sm" className="touch:h-11">
           <Link to={activityHref('needs_look')}>
             <TriangleAlert aria-hidden="true" />
             <span>
