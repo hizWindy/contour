@@ -692,6 +692,7 @@ Newest first.
   - The audio never leaves the browser. A test proves no request carries it.
   - `index.html`'s content policy matches Track 1's line (T1-6), and `csp.test.ts` follows.
   - **Done when:** tests cover each state with a fake worker and a fake mic, the first-visit size is the same as T3-1, and Al-khair has dictated one note in the real page.
+  - 2026-11-15: the typing-only version is built (`8aeac74`), as `NoteMic` in `apps/companies/call-notes/note-mic.tsx`. A Windows laptop shows "Type the note, or press Win+H to dictate.", and a phone shows nothing. The browser model waits for T3-2.
 
 - [ ] **T3-5. Log call in the panel** ("The screens", part 1).
   - The footer button and the L key (through `useListKeyboard`'s `letters`, as P does).
@@ -701,6 +702,7 @@ Newest first.
   - With call notes off, the button isn't there. Waiting for the sort never blocks the rep: the note sorts in the background.
   - **Phone:** the view fills the screen, the text box is first, the keyboard's own dictation does the talking, and "Save and next" sits at the bottom above the safe area.
   - **Done when:** tests cover L, a save, Undo, a failed save that keeps the text, the AI-off form, and the phone layout. Al-khair has seen it.
+  - 2026-11-15: **built, waiting for a look** (`43037f6` to `fefd0f5`, then `2d06369`). The tests cover all six: 94 files and 1,308 pass, up from 1,246. The build passes. The first visit is 229 kB gzip, under T3-1's 230 kB. It hasn't been seen in a browser yet.
 
 - [ ] **T3-6. Activity** ("The screens", part 3).
   - The route `/companies/activity`, its prefetch, and its three tabs with `TabIndicator`.
@@ -744,6 +746,22 @@ Newest first.
 ### Track 3 Log
 
 Newest first.
+
+- 2026-11-15: **T3-5 built, waiting for a look.**
+  - The first visit had grown to 232 kB: the hooks index carried the call-notes hooks, and the motion kit's index carried `PushView`. Now the Companies pages import call-notes hooks from their own file. `main.tsx` and the two Home cards import kit parts by file. That brings it to 229 kB (`2d06369`).
+  - **Known for T3-7:** `src/modules.ts` still has the planned "Call notes" project under "To be developed" (`/call-notes`). Activity replaces it.
+- 2026-11-15: **For Track 2: five questions from building Log call** (none blocks Track 3):
+  1. POST `/call-notes` should take `text: ""` when an outcome is set: a "No answer" call needs no words.
+  2. The same `Idempotency-Key` with a different body (the rep edited after a failed save): the website keeps one key for each draft until the server has the note. Track 3 expects the first note back if the first try did land.
+  3. Should `to_confirm` count notes still `sorting`? The toast shows the count plus one at once, so yes.
+  4. A Lead Finder-only company (a `lead:` key): Log call shows on every row. If the server refuses it, the toast shows the server's own sentence.
+  5. Dates in words: "next tue" is the Tuesday of next week (weeks run Monday to Sunday), and "tue" alone is the next Tuesday after today. T2-4's date code should read words the same way. The website's version is `src/lib/due-date.ts`.
+- 2026-11-15: **Waiting for Al-khair's look (T3-5's choices, TBC):**
+  1. The push moves the whole panel. The note view has its own top line (a back arrow, "Log call", then who) instead of the script's header.
+  2. On a phone the prep footer gets a 48px row: Call, then Log call at full width, then Copy number and Copy script.
+  3. "Who was the call with?" starts on "No one in particular", so L, talk, Ctrl+Enter needs no pick. With the AI off, the follow-up folds behind "Add a follow-up".
+  4. A small L inside Log call, and "Ctrl Enter" beside Save and next, on a laptop. An empty note says "Type a note or pick an outcome first." instead of greying the button. After Undo: "Undone. Your note is back as a draft." The timer sits in the footer, and turns Ochre with an hourglass.
+  5. Proposed for DESIGN.md: "A note being written is kept in the browser until the server has it", the date rules under "Fields forgive", and `ChipGroup`'s one-or-none mode.
 
 - 2026-11-15: **T3-3 done** (`73a72d0`). The parts, for the next steps:
   - `PushView` takes `viewKey` and `direction` (`forward` or `back`). The caller moves the focus at once: into the note's text box going forward, back to Log call going back.
