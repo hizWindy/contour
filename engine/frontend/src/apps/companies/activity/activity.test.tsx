@@ -21,6 +21,7 @@ import { createTestQueryClient, renderWithProviders } from '@/test/render'
 import { asPhone } from '@/test/screen'
 import { dueWords } from '../call-notes/words'
 import ActivityPage from './index'
+import { batchSentence } from './words'
 
 /*
   Activity (PLAN-V17 T3-6), against the contract in v17.ts and a fake server that keeps its notes
@@ -580,7 +581,11 @@ describe('To confirm', () => {
     const server = mockServer({ notes: threeNotes() })
     const { user } = renderActivity()
     await toConfirmList()
-    expect(screen.getByRole('button', { name: 'Send 3 to HubSpot' })).toBeEnabled()
+    const send = screen.getByRole('button', { name: 'Send 3 to HubSpot' })
+    expect(send).toBeEnabled()
+    // The count shows once, on the button: no line beside it says it again.
+    expect(screen.queryByText(/calls? to send\./)).toBeNull()
+    expect(send).not.toHaveAttribute('aria-describedby')
 
     await user.click(
       within(card('Sample Mining Pty Ltd')).getByRole('button', { name: /^Leave out/ }),
@@ -589,7 +594,11 @@ describe('To confirm', () => {
       await within(card('Sample Mining Pty Ltd')).findByText('Left out of this batch.'),
     ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Send 2 to HubSpot' })).toBeInTheDocument()
-    expect(screen.getByText('2 calls to send. 1 left out.')).toBeInTheDocument()
+    // The button says the count, so the line beside it says only the rest.
+    expect(screen.getByText('1 left out.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Send 2 to HubSpot' })).toHaveAccessibleDescription(
+      '1 left out.',
+    )
     await waitFor(() => {
       expect(sent(server, 'PATCH', `${NOTES}/n2`)[0]?.body).toEqual({ left_out: true })
     })
@@ -1012,6 +1021,19 @@ describe('on a phone', () => {
     expect(button).toHaveClass('w-full')
     const bar = button.closest('[data-slot=send-bar]')
     expect(bar).toHaveClass('fixed', 'bottom-0', 'pb-[max(0.75rem,env(safe-area-inset-bottom))]')
+    // Nothing to say beside the button: no empty line above it.
+    expect(bar?.children).toHaveLength(1)
+  })
+})
+
+describe('the line beside Send', () => {
+  it('says only what the button does not: the count is on the button', () => {
+    expect(batchSentence(7, 0, 0)).toBe('')
+    expect(batchSentence(7, 1, 0)).toBe('1 left out.')
+    expect(batchSentence(7, 0, 2)).toBe('2 still sorting.')
+    expect(batchSentence(7, 1, 2)).toBe('2 still sorting. 1 left out.')
+    // None to send: the button has no count, so the line says what is waiting.
+    expect(batchSentence(0, 1, 1)).toBe('1 call still sorting. 1 left out.')
   })
 })
 

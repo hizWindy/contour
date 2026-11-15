@@ -12,6 +12,8 @@
  *   dialog. J, K, E and X never fire inside a text field; Ctrl+Enter does.
  * - **Sending:** the dialog's Send, then POST /call-notes/confirm, which answers at once. The bar
  *   fills as each note lands (`use-batch.ts`). A second press meanwhile does nothing.
+ * - **The line beside the button** says only what the button doesn't: the count is on the button,
+ *   so the line is "1 left out." or "2 still sorting.", or nothing (DESIGN.md "Say it once").
  * - **Waiting for write access:** the button is greyed, with the reason beside it. Everything up
  *   to the click still works: edit, leave out, remove.
  * - **On a phone** the button sits at the bottom of the screen, above the safe area.
@@ -296,6 +298,7 @@ export function ToConfirm({ options, today, onPhone, batch }: ToConfirmProps) {
   if (!list.data) return <CardsPending />
   if (notes.length === 0) return <TabEmpty tab="to_confirm" />
 
+  // Only what the button doesn't say: the count is on the button. Often nothing.
   const reason = !ready
     ? SEND_OFF
     : included.length > 0 || sorting > 0
@@ -303,6 +306,7 @@ export function ToConfirm({ options, today, onPhone, batch }: ToConfirmProps) {
       : leftOut > 0
         ? ALL_LEFT_OUT
         : NONE_READY
+  const described = !batch.running && reason !== ''
   const total = batch.ids.length
   const more = list.data.total > list.data.items.length
 
@@ -317,23 +321,26 @@ export function ToConfirm({ options, today, onPhone, batch }: ToConfirmProps) {
             : 'sticky top-0 -mx-1 border-b bg-background px-1 py-3 max-md:top-14',
         )}
       >
-        <div className="min-w-0 flex-1">
-          {batch.running ? (
-            <div className="flex flex-col gap-1.5">
-              <p aria-live="polite" className="text-ui text-foreground">
-                {sendingWords(batch.done, total)}
+        {/* On a laptop it holds the button at the right even when empty; a phone stacks it. */}
+        {onPhone && !batch.running && !described ? null : (
+          <div className="min-w-0 flex-1">
+            {batch.running ? (
+              <div className="flex flex-col gap-1.5">
+                <p aria-live="polite" className="text-ui text-foreground">
+                  {sendingWords(batch.done, total)}
+                </p>
+                <Progress
+                  value={total > 0 ? (batch.done / total) * 100 : 0}
+                  aria-label="Sending to HubSpot"
+                />
+              </div>
+            ) : described ? (
+              <p id={reasonId} className="text-ui text-muted-foreground text-pretty">
+                {reason}
               </p>
-              <Progress
-                value={total > 0 ? (batch.done / total) * 100 : 0}
-                aria-label="Sending to HubSpot"
-              />
-            </div>
-          ) : (
-            <p id={reasonId} className="text-ui text-muted-foreground text-pretty">
-              {reason}
-            </p>
-          )}
-        </div>
+            ) : null}
+          </div>
+        )}
         <div className="flex items-center gap-2">
           <KbdGroup aria-hidden="true" className="touch:hidden max-sm:hidden">
             <Kbd>{mac ? 'Cmd' : 'Ctrl'}</Kbd>
@@ -344,7 +351,7 @@ export function ToConfirm({ options, today, onPhone, batch }: ToConfirmProps) {
             size={onPhone ? 'lg' : 'default'}
             className={onPhone ? 'w-full' : undefined}
             disabled={!canSend}
-            aria-describedby={batch.running ? undefined : reasonId}
+            aria-describedby={described ? reasonId : undefined}
             aria-keyshortcuts="Control+Enter Meta+Enter"
             onClick={openSend}
           >

@@ -143,12 +143,13 @@ export const ALREADY_SENDING =
 export const NOT_SENT = 'Not sent to HubSpot'
 
 /**
- * The plain sentence beside the button: what the number means. "7 calls to send. 1 left out.",
- * or, with only notes being sorted, "1 call still sorting."
+ * The quiet line beside the button says only what the button doesn't (DESIGN.md "Say it once").
+ * The button has the count ("Send 7 to HubSpot"), so the line has the rest: "2 still sorting.
+ * 1 left out.", or nothing. With none to send the button has no count, so a note being sorted
+ * says what it is: "1 call still sorting."
  */
 export function batchSentence(included: number, leftOut: number, sorting: number): string {
   const parts: string[] = []
-  if (included > 0) parts.push(`${pluralise(included, 'call')} to send.`)
   if (sorting > 0) {
     parts.push(
       included > 0
