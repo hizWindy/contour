@@ -5,8 +5,8 @@ This plan lets a rep log a call by talking, and replaces the Word pre-read with 
 **TBC** means to be confirmed.
 
 - **Built by:** Al-khair Pama. **Signed off by:** Al-khair for the code and every screen. Levi confirms the rules marked **TBC**.
-- **Last updated:** 2026-11-15 (written; nothing built yet).
-- **Progress:** each track keeps its own count, at the top of its part. S0: 1 of 1. Merge and deploy: 0 of 9.
+- **Last updated:** 2026-11-16 (the three tracks and PLAN-V16 joined on `plan-v17`, and `master` moved to it; not pushed, not deployed).
+- **Progress:** each track keeps its own count, at the top of its part. S0: 1 of 1. Merge and deploy: 4 of 9 (M1, M3, M5 and M7; the rest wait for Al-khair's word, or for Levi).
 - **Sources:**
   - Levi's 9 Nov and 12 Nov calls (`minutes of meeting/`), and the 15 Nov design session (AI Brain: "Call notes and meeting form (15 Nov)", and the six 15 Nov decisions);
   - the code as it is on `master` (`dab1fdf`);
@@ -1257,12 +1257,15 @@ Newest first.
 
 ### Stage A: call notes
 
-- [ ] **M1. Join Stage A** (`merge v17 notes`, on Al-khair's word).
+- [x] **M1. Join Stage A** (`merge v17 notes`, on Al-khair's word).
   - The `review-agent` runs the `merge-check` skill first. It must say Ready.
   - In a worktree on `plan-v17`: merge the tags `v17-notes-t1`, then `-t2`, then `-t3`, each with `--no-ff`.
   - The known joins: `0021`'s `down_revision` becomes `0020_hubspot_owner_link`; keep both sides in the table lists; run `uv run engine openapi` and `npm run types`; replace Track 3's hand-written types with the generated ones.
   - Run every test and build on the joined branch.
   - **Done when:** all of them pass on `plan-v17`.
+  - Done 2026-11-16, with M5, on Al-khair's word in chat ("merge the track2 and track1 to one branch and merge it to the main branch or master branch"), in the worktree `../contour-v17`.
+    - The three branch tips joined, not the tags: each tip holds its Stage A tag, and every track was ready to merge, so Stage A and Stage B joined at once. Then `master` (PLAN-V16) joined, as "Building beside PLAN-V16" says.
+    - The merge check was run by the agent that joined the tracks (it couldn't start a fresh review-agent): Ready with notes. The joins and the numbers are in the Log.
 
 - [ ] **M2. One real call, end to end** (on Al-khair's own words).
   - It needs the write scopes from Levi's admin (W1) and a test company in HubSpot that Levi names (**TBC**).
@@ -1271,7 +1274,8 @@ Newest first.
   - Then prove the safety: confirm the same note again (nothing doubles), and pull the network during a send (the note goes to "Needs a look").
   - **Done when:** the Log says what HubSpot showed. If the scopes haven't come, M2 waits, and M3 and M4 go ahead with sending off.
 
-- [ ] **M3. Move `master`** (part of `merge v17 notes`): `git merge --ff-only plan-v17` in the main folder. If it won't fast-forward, stop and ask.
+- [x] **M3. Move `master`** (part of `merge v17 notes`): `git merge --ff-only plan-v17` in the main folder. If it won't fast-forward, stop and ask.
+  - Done 2026-11-16, with M7: `master` fast-forwards to `plan-v17` at the commit of this line, from `adaf3fc` (kept as `backup/master-before-v17`). Not pushed, not deployed. M2 waits for the write scopes, as its last line allows.
 
 - [ ] **M4. Deploy and check live** (`deploy v17 notes`, on Al-khair's word).
   - This deploy also carries everything on `master` that isn't live yet (PLAN-V14, PLAN-V15 and the 15 Nov panels). Check PLAN-V15's deploy steps first.
@@ -1282,13 +1286,14 @@ Newest first.
 
 ### Stage B: the pre-meeting form
 
-- [ ] **M5. Join Stage B** (`merge v17`, on Al-khair's word). The same as M1, for the three branch tips. The known join: `0023`'s `down_revision` becomes `0022_hubspot_meetings`.
+- [x] **M5. Join Stage B** (`merge v17`, on Al-khair's word). The same as M1, for the three branch tips. The known join: `0023`'s `down_revision` becomes `0022_hubspot_meetings`.
   - **Done when:** every test and build passes on `plan-v17`.
+  - Done 2026-11-16, with M1 (above). The joins and the checks are in the Log.
 
 - [ ] **M6. Three real pre-reads** (on Al-khair's own words). Draft three, send one to Al-khair's own address only, and read the note it left on the company in HubSpot.
   - **Done when:** the Log has the cost of one draft, and what was right and wrong.
 
-- [ ] **M7. Move `master`** (part of `merge v17`), fast-forward only.
+- [x] **M7. Move `master`** (part of `merge v17`), fast-forward only. Done 2026-11-16, with M3.
 
 - [ ] **M8. Deploy and check live** (`deploy v17`, on Al-khair's word). The switches stay off until the meetings scope and the sender address are there.
   - **Done when:** the Meetings page shows real meetings, and one pre-read reaches a Contour inbox.
@@ -1343,4 +1348,20 @@ Newest first.
 
 Newest first.
 
+- 2026-11-16: **PLAN-V17 joined and on `master`** (M1, M3, M5 and M7), on Al-khair's word in chat. Not pushed, not deployed.
+  - **What joined,** in the worktree `../contour-v17` on `plan-v17`: Track 1 (`f7f468a`), Track 2 (`f94de4a`), Track 3 (`08938b3`), and `master` with PLAN-V16 (`adaf3fc`).
+  - **The joins it needed:**
+    - One migration line: `0020` follows PLAN-V16's `0019_lead_tier`, then `0021`, `0022` and `0023`. `SCHEMA-0023.md` is drawn again from `leadfinder_v17j`, a copy of Track 3's dev database moved from `0017` to `0023`.
+    - Both plans' lines are kept: the settings, the table lists, the deploy tests and Admin's settings groups (Sources, then Call notes).
+    - Track 1's parts in Track 2's seams (the M5 lists in both Logs): core's activity scope; the rep for an owner (`rep_of_owner`); the other Contour people on a meeting; the meetings refresh from Meetings and Home; the copy's meeting, with the copy saved once the note on the company is; the preview's `meeting_note`; and core's Contour-only check (Companies' stand-in goes).
+    - Resolve keeps its promised 409 `hubspot_writes_off` itself (S0's stand-in gave it before), and the writer's refusals answer in plain words, not a 500.
+    - The website reads the generated types: `v17.ts` and `v17-client.ts` are gone, and the "until M1/M5" stand-ins with them.
+  - **Checks on the joined branch:**
+    - Backend: ruff and mypy pass (392 files). Tests with `RUN_GATES=1`: 4,635 passed, 25 skipped (the usual 25), none failed (companies, gates and e2e 416; core 2,207; Lead Finder 2,012). One migration head, and `openapi.json`, `schema.d.ts` and the schema map match a fresh run.
+    - Website: lint (0 warnings), types and Prettier pass. Tests: 116 files and 1,640 passed. The build passes. The first visit is 232 kB gzip (722 kB raw) in 35 files, CSS 23 kB. PLAN-V16 alone was 231 kB in 31 files, and Track 3 alone 231 kB in 34 (**TBC**: accept).
+  - **The merge check** (`merge-check`, run by the agent that joined the tracks, not a fresh review-agent): **Ready with notes.**
+    - Every step is ticked, or built and waiting for Al-khair: T3-2 at the keyboard (T3-4 stays typing-only until then), and his look at T3-5, T3-6 and T3-11.
+    - Each track changed only its own files, except lines the plan or a Log records, and Track 1's `scripts/schema_map.py` (T1-8: tooling for its own maps).
+    - No new package. No key, client file or screenshot in the diff.
+  - **Open:** M2 (one real call: it needs the write scopes), M4 and M8 (the deploys), M6 (three real pre-reads), M9 (the docs), and the TBCs in each track's Log.
 - 2026-11-15: Plan written from Levi's 9 and 12 Nov asks, the 15 Nov design session in the AI Brain, the code on `master` and HubSpot's 2026-09 reference. Nothing built yet.
