@@ -1,6 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { COMPANIES } from '@/apps/companies/module'
 import { LEAD_FINDER } from '@/apps/lead-finder/module'
 import { MODULES, PLANNED } from '@/modules'
 import { routes } from '@/router'
@@ -54,6 +55,8 @@ describe('the router', () => {
     ['/leads/99999999-2222-3333-4444-555555555555', 'Lead', ['Lead']],
     ['/rules', 'Rules', ['Rules']],
     ['/test-set', 'Test set', ['Test set']],
+    // Before a company's own address, so it is never read as one (PLAN-V17 T3-6).
+    ['/companies/activity', 'Your call notes', ['Companies', 'Activity']],
   ])('shows the page at %s with its title and breadcrumbs', async (path, title, trail) => {
     renderAt(path)
 
@@ -192,9 +195,14 @@ describe('the router', () => {
         expect(group.getByRole('link', { name: item.label })).toHaveAttribute('href', item.to)
       }
     }
-    // The Companies page sits right under Home.
-    const links = menu.getAllByRole('link').map((link) => link.getAttribute('href'))
-    expect(links.slice(0, 2)).toEqual(['/', '/companies'])
+    // Companies has two pages since Activity (PLAN-V17 T3-6), so it is a group of its own, its
+    // list first. Where the group sits in the menu is T3-7's to settle (TBC); for now it follows
+    // the order of the projects.
+    const companies = within(menu.getByRole('group', { name: COMPANIES.name }))
+    expect(companies.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual([
+      '/companies',
+      '/companies/activity',
+    ])
     expect(menu.getByRole('link', { name: ADMIN.label })).toHaveAttribute('href', '/admin')
     // Rules and the Test set are the Lead Finder's own, not shared Admin tabs.
     const leadFinder = within(menu.getByRole('group', { name: LEAD_FINDER.name }))
@@ -204,6 +212,14 @@ describe('the router', () => {
     expect(menu.getByRole('link', { name: 'Runs' })).toHaveAttribute('aria-current', 'page')
     expect(menu.getByRole('link', { name: 'Results' })).not.toHaveAttribute('aria-current')
     expect(menu.getByRole('link', { name: 'Home' })).not.toHaveAttribute('aria-current')
+  })
+
+  it('marks Activity in the menu on its page, and not Companies, whose address it sits in', async () => {
+    renderAt('/companies/activity')
+    await screen.findByRole('heading', { level: 1, name: 'Your call notes' }, { timeout: LAZY })
+    const menu = within(screen.getByRole('navigation', { name: 'Main menu' }))
+    expect(menu.getByRole('link', { name: 'Activity' })).toHaveAttribute('aria-current', 'page')
+    expect(menu.getByRole('link', { name: 'Companies' })).not.toHaveAttribute('aria-current')
   })
 
   it('marks Admin in the menu on every Admin tab', async () => {

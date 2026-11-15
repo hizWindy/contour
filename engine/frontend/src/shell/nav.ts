@@ -35,6 +35,11 @@ export interface NavItem {
   purpose?: string
   /** Other addresses that count as this page in the menu: a lead card ("/leads") is in Results. */
   alsoActiveOn?: readonly string[]
+  /**
+   * Addresses inside this one that are another page of the menu, so this page isn't marked there:
+   * Activity ("/companies/activity") is not Companies.
+   */
+  notActiveOn?: readonly string[]
 }
 
 /**
@@ -202,5 +207,8 @@ export function isWithin(pathname: string, to: string): boolean {
 
 /** True when the menu should mark `item` as the page you are on. */
 export function isHere(pathname: string, item: NavItem): boolean {
+  if ((item.notActiveOn ?? []).some((to) => isWithin(pathname, to))) {
+    return false
+  }
   return [item.to, ...(item.alsoActiveOn ?? [])].some((to) => isWithin(pathname, to))
 }

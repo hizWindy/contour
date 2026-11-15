@@ -1,14 +1,33 @@
 /**
  * The Companies page as a module of the website (PLAN-V10 B1): every client and prospect in
- * HubSpot, a panel for each, and call prep. It has one page, so the menu shows it as a plain link
- * under Home. The router, the sidebar, the command menu and Home read it from src/modules.ts.
+ * HubSpot, a panel for each, and call prep. The router, the sidebar, the command menu and Home
+ * read it from src/modules.ts.
+ *
+ * Activity (PLAN-V17 T3-6, `/companies/activity`) is its second page: the calls a rep logged, to
+ * confirm and send to HubSpot in one go. Its address sits before a company's (`:key`), so
+ * "/companies/activity" never reads as a company. T3-7 makes Companies a proper menu group with
+ * Activity's count; for now Activity is simply the module's second page.
  */
-import { Building2 } from 'lucide-react'
-import type { RouteHandle } from '@/shell/crumbs'
+import { Building2, ClipboardCheck } from 'lucide-react'
+import type { PrefetchArgs, RouteHandle } from '@/shell/crumbs'
 import type { AppModule } from '@/shell/nav'
 import { page } from '@/shell/page-route'
 import { CompaniesHomeCard } from './home-card'
 import { prefetchCompanies, prefetchCompaniesHome, prefetchCompany } from './prefetch'
+
+const ACTIVITY = '/companies/activity'
+
+/**
+ * What Activity asks for first. Its query options load with them, in a small file of their own,
+ * because this module is in the first visit and the call notes hooks are not (T3-5's rule).
+ */
+function prefetchActivity(args: PrefetchArgs): void {
+  void import('./activity/prefetch')
+    .then(({ prefetchActivity: start }) => {
+      start(args)
+    })
+    .catch(() => undefined)
+}
 
 export const COMPANIES: AppModule = {
   id: 'companies',
@@ -27,6 +46,14 @@ export const COMPANIES: AppModule = {
       icon: Building2,
       keywords: ['clients', 'prospects', 'call', 'prep', 'script', 'hubspot'],
       purpose: 'Find a company, see what we know, and prep a call in seconds.',
+      notActiveOn: [ACTIVITY],
+    },
+    {
+      to: ACTIVITY,
+      label: 'Activity',
+      icon: ClipboardCheck,
+      keywords: ['call notes', 'log a call', 'confirm', 'logged', 'send', 'hubspot'],
+      purpose: 'Check the calls you logged, then send them to HubSpot in one go.',
     },
   ],
   routes: [
@@ -38,6 +65,12 @@ export const COMPANIES: AppModule = {
           index: true,
           handle: { prefetch: prefetchCompanies } satisfies RouteHandle,
           ...page(() => import('./index')),
+        },
+        {
+          // Before `:key`, so this address is never read as a company.
+          path: 'activity',
+          handle: { crumb: 'Activity', prefetch: prefetchActivity } satisfies RouteHandle,
+          ...page(() => import('./activity')),
         },
         {
           // A company has its own address, so it can be shared. The list also opens it in a panel.
