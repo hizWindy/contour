@@ -595,10 +595,16 @@ describe('sent', () => {
       'A copy is saved in HubSpot, as a note on the company.',
       false,
     ],
+    // Waiting for write access, trying again can't work: the line says so, with no button.
     [
       { state: 'waiting', sentence: null },
       'The copy waits for HubSpot write access. The email still went.',
-      true,
+      false,
+    ],
+    [
+      { state: 'waiting', sentence: 'Waiting for HubSpot write access.' },
+      'Waiting for HubSpot write access.',
+      false,
     ],
     [
       { state: 'off', sentence: "This company isn't in HubSpot yet, so no copy was saved there." },
@@ -645,6 +651,25 @@ describe('sent', () => {
     expect(
       screen.getByText('Sent to Jo Sample on 26 Nov 2026 at 9:12 am, by Al Sample.'),
     ).toBeInTheDocument()
+  })
+
+  it('a draft again keeps who got it last, but not the copy line or its Try again', async () => {
+    // Changed after it went: the server keeps the last send's copy, which failed.
+    mockServer({
+      form: sent(
+        { state: 'failed', sentence: "HubSpot didn't save the copy. The email won't go twice." },
+        { status: 'draft' },
+      ),
+    })
+    renderPreRead()
+    expect(
+      await screen.findByText('Last sent to Jo Sample on 26 Nov 2026 at 9:12 am, by Al Sample.'),
+    ).toBeInTheDocument()
+    expect(document.querySelector('[data-slot=hubspot-copy]')).toBeNull()
+    expect(screen.queryByText(/HubSpot didn't save the copy/)).toBeNull()
+    // On a draft, Send emails the new words: a retry that emails nobody isn't offered.
+    expect(screen.queryByRole('button', { name: 'Try the HubSpot copy again' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Check and send' })).toBeEnabled()
   })
 
   it('after an edit it is a draft again, and Check and send comes back', async () => {
