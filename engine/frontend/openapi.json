@@ -4505,6 +4505,18 @@
             "title": "Html",
             "type": "string"
           },
+          "meeting_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "One sentence when Send also adds the copy to the HubSpot meeting's internal notes (a HubSpot meeting, and that switch on); none when Send won't touch the meeting",
+            "title": "Meeting Note"
+          },
           "people": {
             "items": {
               "$ref": "#/components/schemas/FormPerson"
@@ -4526,7 +4538,8 @@
           "subject",
           "text",
           "html",
-          "people"
+          "people",
+          "meeting_note"
         ],
         "title": "FormEmailPreview",
         "type": "object"
@@ -21048,7 +21061,7 @@
     },
     "/companies/meetings": {
       "get": {
-        "description": "A page of client meetings from HubSpot (one with no company is left out; a cancelled one stays, with its outcome). `when`: `upcoming` (the next 7 days, soonest first, each with its `group` by the Melbourne date: today, tomorrow, this_week or later) or `past` (the last 30 days, newest first). `mine` (true by default): my own, as my HubSpot owner; false: the team's, mine first. My own pre-reads for meetings typed in (New pre-read) join the list in the same window, marked `typed`, even while HubSpot's meetings aren't read. `q`: each word must start a word of the company's name, the title or the date in words, like 'sample 26 nov', 'thu' or '26/11'. Each meeting comes with its pre-read's state (`form`) and, once past, whether notes were logged. While HubSpot's meetings aren't read, `meetings_state` and `sentence` say why. 409 `meeting_forms_off`.",
+        "description": "A page of client meetings from HubSpot (one with no company is left out; a cancelled one stays, with its outcome). `when`: `upcoming` (the next 7 days, soonest first, each with its `group` by the Melbourne date: today, tomorrow, this_week or later) or `past` (the last 30 days, newest first). `mine` (true by default): my own, as my HubSpot owner; false: the team's, mine first. My own pre-reads for meetings typed in (New pre-read) join the list in the same window, marked `typed`, even while HubSpot's meetings aren't read. `q`: each word must start a word of the company's name, the title or the date in words, like 'sample 26 nov', 'thu' or '26/11'. Each meeting comes with its pre-read's state (`form`) and, once past, whether notes were logged. While HubSpot's meetings aren't read, `meetings_state` and `sentence` say why. Opening it asks HubSpot for changed meetings in the background (at most every 15 minutes). 409 `meeting_forms_off`.",
         "operationId": "list_meetings",
         "parameters": [
           {
@@ -22193,7 +22206,7 @@
     },
     "/companies/meetings/summary": {
       "get": {
-        "description": "For Home: my upcoming client meetings (the next 7 days, my typed ones too) that need a pre-read (none yet, or one that failed; a cancelled meeting needs none), and those whose draft waits for me. 409 `meeting_forms_off`.",
+        "description": "For Home: my upcoming client meetings (the next 7 days, my typed ones too) that need a pre-read (none yet, or one that failed; a cancelled meeting needs none), and those whose draft waits for me. Opening it asks HubSpot for changed meetings in the background (at most every 15 minutes). 409 `meeting_forms_off`.",
         "operationId": "meeting_summary",
         "responses": {
           "200": {

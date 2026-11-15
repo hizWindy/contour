@@ -418,3 +418,31 @@ async def test_a_companys_record_lists_its_next_three_and_last_three_meetings(
         ("8004", None),
     ]
     assert logistics[0]["form"]["status"] == "draft"
+
+
+# --- The joins at the PLAN-V17 merge (M5) ---------------------------------------------------------
+
+
+@dataclass
+class Refresher:
+    """Core's meetings refresher, made up: it counts the asks."""
+
+    asked: int = 0
+
+    def soon(self) -> bool:
+        self.asked += 1
+        return True
+
+
+async def test_meetings_and_home_ask_hubspot_for_changed_meetings(
+    world: World, settings: dict[str, Any], fake: FakeMeetings
+) -> None:
+    """Opening Meetings or Home starts a refresh in the background (core keeps it to one read
+    every 15 minutes) and answers at once."""
+    refresher = Refresher()
+    world.app.state.hubspot_provider = object  # HubSpot is set up
+    world.app.state.meetings_refresher = refresher
+    async with signed_in_as(world, "mia", ["companies"]) as client:
+        assert (await client.get(MEETINGS)).status_code == 200
+        assert (await client.get(f"{MEETINGS}/summary")).status_code == 200
+    assert refresher.asked == 2

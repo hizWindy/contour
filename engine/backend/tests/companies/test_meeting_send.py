@@ -22,7 +22,13 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.companies import meeting_send
-from apps.companies.meeting_send import COPY_FAILED, COPY_FAULT, LEAD_ONLY
+from apps.companies.meeting_send import (
+    COPY_FAILED,
+    COPY_FAULT,
+    COPY_UNSURE,
+    LEAD_ONLY,
+    MEETING_NOTE,
+)
 from apps.companies.note_batch import ActivityWriter
 from apps.companies.tables import MeetingForm
 from core.api.deps import settings_dependency
@@ -35,13 +41,14 @@ from core.hubspot.writer import WriteOut
 from tests.companies.helpers import API, add, deal, signed_in_as
 from tests.companies.test_call_notes_api import a_company, notes_settings
 from tests.companies.test_call_notes_batch import out_of, plan_of, step
-from tests.companies.test_meeting_form import Meetings, melbourne
+from tests.companies.test_meeting_form import WALK_THROUGH, Meetings, melbourne
 from tests.core.auth_world import World
 
 pytestmark = pytest.mark.integration
 FORMS = f"{API}/meetings/forms"
 SITE = "https://hq.contour.example"
 LEE = "lee@contour.example"
+SAM = "sam@contour.example"
 
 
 class FakeHubSpot:
@@ -72,6 +79,7 @@ class CopyWriter:
 
     outcome: str = "done"
     breaks: bool = False
+    steps: list[tuple[str, str]] = field(default_factory=list)  # (name, status), if set
     requests: list[ActivityRequest] = field(default_factory=list)
 
     def writer(self) -> ActivityWriter:
@@ -108,7 +116,9 @@ class CopyWriter:
         assert row is not None
         row.status = self.outcome
         row.result = {
-            "steps": [step("note", self.outcome if self.outcome != "partial" else "failed")]
+            "steps": [step(name, status) for name, status in self.steps]
+            if self.steps
+            else [step("note", self.outcome if self.outcome != "partial" else "failed")]
         }
         await session.commit()
         return out_of(row)
@@ -411,3 +421,106 @@ async def test_a_draft_that_isnt_ready_cant_be_sent(world: World, sending: Sendi
         refused = await send(client, form, LEE)
     assert (refused.status_code, refused.json()["code"]) == (409, "form_not_ready")
     assert sending.emails.sent == []
+
+
+# --- The joins at the PLAN-V17 merge (M5) ---------------------------------------------------------
+
+
+async def test_the_preview_ticks_every_contour_person_on_the_meeting(
+    world: World, sending: Sending
+) -> None:
+    """The meeting's owner and the other Contour people HubSpot lists on it, each once, each
+    through the account linked to that owner. One with no account here is left out."""
+    meetings = Meetings()
+    meetings.meetings[0] = WALK_THROUGH.model_copy(
+        update={"attendee_owner_ids": ["o2", "o1", "o3"]}
+    )
+
+    async def reps(session: AsyncSession, owner_id: str) -> tuple[str, str] | None:
+        return {"o1": ("Lee Sample", LEE), "o2": ("Sam Sample", SAM)}.get(owner_id)
+
+    world.app.state.meeting_source = dataclasses.replace(meetings.source(), rep_of_owner=reps)
+    form = await a_saved_draft(world)
+    async with signed_in_as(world, "mia", ["companies"]) as client:
+        response = await client.post(f"{FORMS}/{form.id}/preview", json={"to": [SAM]})
+    assert response.status_code == 200, response.text
+    people = [(p["name"], p["email"], p["why"], p["ticked"]) for p in response.json()["people"]]
+    assert people == [
+        ("Lee Sample", LEE, "on the meeting", True),
+        ("Sam Sample", SAM, "on the meeting", True),  # added too, but shown once
+    ]
+
+
+@pytest.mark.parametrize(
+    ("switch", "typed", "note"),
+    [(True, False, MEETING_NOTE), (False, False, None), (True, True, None)],
+    ids=["switch_on", "switch_off", "typed_meeting"],
+)
+async def test_the_preview_says_when_the_copy_also_goes_on_the_meeting(
+    world: World,
+    sending: Sending,
+    settings: dict[str, Any],
+    switch: bool,
+    typed: bool,
+    note: str | None,
+) -> None:
+    """Send adds the copy to the meeting's internal notes only for a HubSpot meeting while the
+    switch is on, and the Send dialog says so in one line."""
+    settings["meeting_note_on_meeting"] = switch
+    form = await a_saved_draft(world, **({"meeting_id": None} if typed else {}))
+    async with signed_in_as(world, "mia", ["companies"]) as client:
+        response = await client.post(f"{FORMS}/{form.id}/preview", json={"to": [LEE]})
+    assert response.status_code == 200, response.text
+    assert response.json()["meeting_note"] == note
+
+
+def test_a_lead_only_company_says_nothing_about_the_meeting() -> None:
+    """No copy is saved for a company that isn't in HubSpot, so nothing goes on the meeting."""
+    switched_on = Settings(_env_file=None, meeting_note_on_meeting=True)
+    assert (
+        meeting_send.goes_on_meeting(a_draft(company_key=f"lead:{uuid.uuid4()}"), switched_on)
+        is False
+    )
+    assert meeting_send.goes_on_meeting(a_draft(), switched_on) is True
+
+
+@pytest.mark.parametrize(
+    ("typed", "meeting_id"),
+    [(False, "9101"), (True, None)],
+    ids=["hubspot_meeting", "typed_meeting"],
+)
+async def test_the_copy_names_its_meeting(
+    world: World, sending: Sending, typed: bool, meeting_id: str | None
+) -> None:
+    """Core adds the note to the meeting only while its switch is on, and reads it again then."""
+    form = await a_saved_draft(world, **({"meeting_id": None} if typed else {}))
+    async with signed_in_as(world, "mia", ["companies"]) as client:
+        assert (await send(client, form, LEE)).status_code == 200
+    [request] = sending.copies.requests
+    assert request.meeting_id == meeting_id
+
+
+@pytest.mark.parametrize(
+    ("steps", "outcome", "state", "sentence"),
+    [
+        ([("note", "done"), ("meeting", "failed")], "partial", "saved", None),
+        ([("note", "uncertain")], "uncertain", "failed", COPY_UNSURE),
+    ],
+    ids=["meeting_step_failed", "note_unsure"],
+)
+async def test_the_copy_is_saved_once_the_note_on_the_company_is(
+    world: World,
+    sending: Sending,
+    steps: list[tuple[str, str]],
+    outcome: str,
+    state: str,
+    sentence: str | None,
+) -> None:
+    """The copy is the note on the company. A failed meeting step makes the write partial, but
+    the note is saved, so the copy says saved."""
+    sending.copies.outcome = outcome
+    sending.copies.steps = steps
+    form = await a_saved_draft(world)
+    async with signed_in_as(world, "mia", ["companies"]) as client:
+        sent = (await send(client, form, LEE)).json()
+    assert sent["hubspot_copy"] == {"state": state, "sentence": sentence}

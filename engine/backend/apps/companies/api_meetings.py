@@ -40,6 +40,7 @@ from core.api.signin import NowDep
 from core.claude.client import get_claude
 from core.config import Settings
 from core.db.engine import get_sessionmaker
+from core.hubspot.connection import refresh_meetings_soon
 
 router = APIRouter()
 PAGE_SIZE = 50
@@ -105,11 +106,13 @@ FormId = Annotated[uuid.UUID, Path(description="The pre-read's id")]
         "meetings aren't read. `q`: each word must start a word of the company's name, the "
         "title or the date in words, like 'sample 26 nov', 'thu' or '26/11'. Each meeting comes "
         "with its pre-read's state (`form`) and, once past, whether notes were logged. While "
-        "HubSpot's meetings aren't read, `meetings_state` and `sentence` say why. 409 "
+        "HubSpot's meetings aren't read, `meetings_state` and `sentence` say why. Opening it "
+        "asks HubSpot for changed meetings in the background (at most every 15 minutes). 409 "
         "`meeting_forms_off`."
     ),
 )
 async def list_meetings(
+    request: Request,
     session: SessionDep,
     settings: MeetingsOnDep,
     auth: SignedInDep,
@@ -121,6 +124,7 @@ async def list_meetings(
     limit: Annotated[int, Query(ge=1, le=100)] = PAGE_SIZE,
     offset: Annotated[int, Query(ge=0, le=OFFSET_MAX)] = 0,
 ) -> MeetingPage:
+    refresh_meetings_soon(request.app)  # in the background, at most every 15 minutes
     return await meeting_store.list_meetings(
         session,
         auth,
@@ -141,16 +145,19 @@ async def list_meetings(
     description=(
         "For Home: my upcoming client meetings (the next 7 days, my typed ones too) that need "
         "a pre-read (none yet, or one that failed; a cancelled meeting needs none), and those "
-        "whose draft waits for me. 409 `meeting_forms_off`."
+        "whose draft waits for me. Opening it asks HubSpot for changed meetings in the "
+        "background (at most every 15 minutes). 409 `meeting_forms_off`."
     ),
 )
 async def meeting_summary(
+    request: Request,
     session: SessionDep,
     settings: MeetingsOnDep,
     auth: SignedInDep,
     source: SourceDep,
     now: NowDep,
 ) -> MeetingSummary:
+    refresh_meetings_soon(request.app)  # in the background, at most every 15 minutes
     return await meeting_store.summary(session, auth, source=source, now=now)
 
 

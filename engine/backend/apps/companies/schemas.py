@@ -1030,6 +1030,13 @@ class FormEmailPreview(Out):
     text: str = Field(description="The plain text version")
     html: str = Field(description="The HTML version, with every value escaped")
     people: list[FormPerson]
+    meeting_note: str | None = Field(
+        None,
+        description=(
+            "One sentence when Send also adds the copy to the HubSpot meeting's internal notes "
+            "(a HubSpot meeting, and that switch on); none when Send won't touch the meeting"
+        ),
+    )
 
 
 TRANSCRIPT_MAX_CHARS = 200_000  # the most a transcript can ever send; the setting is less

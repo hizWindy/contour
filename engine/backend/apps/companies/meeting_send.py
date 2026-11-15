@@ -2,8 +2,8 @@
 
 - **Who gets it:** Contour addresses only (`internal_email_domains`, choice 10). Every address
   goes through `only_internal`, and one that isn't Contour's refuses the whole send, naming it.
-  Ticked by default: the Contour people on the meeting who have an account here. Until Track 1
-  adds the other attendees (T1-8), that is the meeting's owner, through the `rep_of_owner` seam.
+  Ticked by default: the Contour people on the meeting who have an account here: its owner and
+  the other Contour people HubSpot lists on it, each through the `rep_of_owner` seam.
   An address the rep adds is ticked too, unless it isn't Contour's.
 - **Before it goes:** the ideal next step and who is going are filled in (TBC with Levi).
 - **The email:** in the body, never an attachment. The meeting, the facts, the three summaries
@@ -14,7 +14,9 @@
   one open deal, through the activity writer, after the email. Writing off: the email still goes,
   and the copy says "waiting". A company not in HubSpot: "off". Sending a sent pre-read again
   (the website's "Try the HubSpot copy again") tries a copy that is waiting or failed, without a
-  second email.
+  second email. For a HubSpot meeting, while `meeting_note_on_meeting` is on, the note also goes
+  at the end of the meeting's internal notes (the preview's `meeting_note` says so). The copy is
+  saved once the note on the company is, whatever happens on the meeting.
 """
 
 import html
@@ -30,7 +32,6 @@ from fastapi import FastAPI
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.companies.internal import only_internal
 from apps.companies.meeting_form import SUMMARY_NAMES, form_not_found, when_words
 from apps.companies.meeting_job import app_url, email_sender
 from apps.companies.meeting_store import EMPTY_SUMMARY, MeetingSource
@@ -49,6 +50,7 @@ from core.api.errors import Problem
 from core.auth.models import User
 from core.auth.sessions import AuthContext
 from core.config import Settings
+from core.email.internal import only_internal
 from core.email.sender import EmailError, EmailNotSetUp, send
 from core.hubspot.activities import BODY_MAX_CHARS, ActivityRequest, NoteIn
 from core.hubspot.client import HubSpotWritesOff
@@ -67,6 +69,8 @@ SUMMARY_TITLES: Final = {
 ON_MEETING = "on the meeting"
 TYPED_IT = "typed this meeting in"
 ADDED = "added by you"
+# The preview's line when Send also adds the copy to the meeting (Track 3's Send dialog).
+MEETING_NOTE = "The copy also goes at the end of the meeting's internal notes in HubSpot."
 
 # --- The words (PLAN-V15 "Words for errors") ---------------------------------------------------
 
@@ -251,13 +255,18 @@ async def meeting_people(
     session: AsyncSession, form: MeetingForm, source: MeetingSource
 ) -> list[tuple[str, str, str]]:
     """The Contour people on the meeting who have an account here (name, address, why): its
-    owner, for now, or for a typed meeting the person who typed it."""
+    owner and the other Contour people on it, or for a typed meeting the person who typed it.
+    The same account twice is the caller's to skip."""
     if form.meeting_id is not None:
         meeting = await source.get(session, form.meeting_id)
-        if meeting is None or not meeting.owner_id:
+        if meeting is None:
             return []
-        rep = await source.rep_of_owner(session, meeting.owner_id)
-        return [(rep[0], rep[1], ON_MEETING)] if rep is not None else []
+        people: list[tuple[str, str, str]] = []
+        for owner_id in dict.fromkeys([meeting.owner_id, *meeting.attendee_owner_ids]):
+            rep = await source.rep_of_owner(session, owner_id) if owner_id else None
+            if rep is not None:
+                people.append((rep[0], rep[1], ON_MEETING))
+        return people
     if form.made_by is None:
         return []
     person = await session.get(User, form.made_by)
@@ -294,7 +303,24 @@ async def preview(
     for address in added:
         add(names.get(address.strip().lower()), address, ADDED)
     await session.commit()
-    return FormEmailPreview(subject=email.subject, text=email.text, html=email.html, people=people)
+    return FormEmailPreview(
+        subject=email.subject,
+        text=email.text,
+        html=email.html,
+        people=people,
+        meeting_note=MEETING_NOTE if goes_on_meeting(form, settings) else None,
+    )
+
+
+def goes_on_meeting(form: MeetingForm, settings: Settings) -> bool:
+    """Whether Send also adds the copy to the meeting's internal notes: a HubSpot meeting, a
+    company in HubSpot (else no copy is saved), and the switch on. Core's writer reads the
+    switch again when it writes."""
+    return (
+        form.meeting_id is not None
+        and not form.company_key.startswith("lead:")
+        and settings.meeting_note_on_meeting
+    )
 
 
 # --- Sending --------------------------------------------------------------------------------------
@@ -426,6 +452,7 @@ async def copy_in_hubspot(
         deal_id=await one_open_deal(session, form.company_key),
         owner_id=await writer.owner_of(session, form.sent_by),
         note=NoteIn(body=copy_body(form, settings)),
+        meeting_id=form.meeting_id,  # None for a typed one; core adds it only while switched on
     )
     form_id = form.id
     await session.commit()  # no lock is held while HubSpot works
@@ -442,10 +469,18 @@ async def copy_in_hubspot(
             "meeting_form_copy_failed", extra={"form_id": str(form_id), **where_failed(error)}
         )
         return "failed", COPY_FAULT, None
-    status = str(written.status)
-    if status == "done":
+    # The copy is the note on the company. With the meeting step on, a failed meeting step makes
+    # the write `partial` while the note is saved, so the note's own step says how it went.
+    note = next((item for item in written.steps if item.step == "note"), None)
+    state = str(note.status) if note is not None else str(written.status)
+    if state == "done":
+        if written.status != "done":
+            log.warning(
+                "meeting_form_copy_meeting_step_not_done",
+                extra={"form_id": str(form_id), "status": str(written.status)},
+            )
         return "saved", None, previewed.id
-    return "failed", COPY_UNSURE if status == "uncertain" else COPY_FAILED, previewed.id
+    return "failed", COPY_UNSURE if state == "uncertain" else COPY_FAILED, previewed.id
 
 
 async def save_copy(

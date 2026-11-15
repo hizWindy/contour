@@ -3,8 +3,8 @@ pre-read is; the counts for Home; one meeting with its pre-read; and a company's
 routes are in api_meetings.py.
 
 - **From our copy,** through core's meeting reads (`core/hubspot/meetings.py`), injected as a
-  `MeetingSource` so tests use made-up meetings. Until Track 1's reads land they find nothing, and
-  the status says meetings aren't read yet.
+  `MeetingSource` so tests use made-up meetings. While HubSpot's meetings aren't read yet, the
+  status says so.
 - **Only client meetings:** one with no company, or with a company not in our copy, is left out.
   A cancelled one stays, with its outcome.
 - **Mine** is the rep's own, by their HubSpot owner (`owner_of`). With sign-in off nobody is
@@ -47,6 +47,7 @@ from core.auth.sessions import AuthContext
 from core.config import Settings
 from core.hubspot import activities
 from core.hubspot import meetings as hubspot_meetings
+from core.hubspot import owners as hubspot_owners
 from core.hubspot.meetings import Meeting, MeetingsStatus
 from core.hubspot.models import HubSpotCompany, HubSpotOwner
 
@@ -112,8 +113,7 @@ class RepOf(Protocol):
 
 
 async def no_rep(session: AsyncSession, owner_id: str) -> tuple[str, str] | None:
-    """Until M5: the link from a person's account to their HubSpot owner is Track 1's (the
-    owner id on `core.users`), and it isn't in this branch yet. So no owner has a rep here."""
+    """No owner has a rep: a source that knows nobody (tests use it)."""
     return None
 
 
@@ -129,7 +129,7 @@ class MeetingSource:
     get: GetOne = hubspot_meetings.get
     status: Status = hubspot_meetings.status
     owner_of: OwnerOf = activities.owner_of
-    rep_of_owner: RepOf = no_rep
+    rep_of_owner: RepOf = hubspot_owners.rep_of_owner  # the account linked to the owner
 
 
 # --- Groups and the search ------------------------------------------------------------------------

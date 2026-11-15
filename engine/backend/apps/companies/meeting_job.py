@@ -12,9 +12,9 @@ meeting coming up soon.
   the daily limit for all Claude spending. One morning costs about US$0.03 a meeting (TBC).
 - **Telling the rep:** when a draft is ready, the meeting's owner gets one email, "Your pre-read
   for Sample Logistics is ready", with a link to `/companies/meetings/<form id>` on the website.
-  The owner's name and address come through the `rep_of_owner` seam, which knows nobody until M5
-  (Track 1's link from an account to its HubSpot owner). No rep, or no email set up: no email, and
-  the pre-read still shows on the website.
+  The owner's name and address come through the `rep_of_owner` seam: the account linked to that
+  HubSpot owner (Track 1's link). No rep, or no email set up: no email, and the pre-read still
+  shows on the website.
 
 Its drafts are made without the Lead Finder's facts, so everyone with the Companies tick may read
 them, and with no person behind them (`trigger` job).
@@ -37,13 +37,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from apps.companies.facts import scrub
-from apps.companies.internal import only_internal
 from apps.companies.meeting_form import MeetingFormRunner, when_words
 from apps.companies.meeting_store import MeetingSource, cancelled, client_meetings, forms_of
 from apps.companies.tables import MeetingForm
 from core.claude.client import get_claude
 from core.config import Settings
 from core.db.engine import get_sessionmaker
+from core.email.internal import only_internal
 from core.email.sender import EmailError, EmailSender, get_sender, send
 from core.hubspot.meetings import Meeting
 from core.prefs.service import effective_settings

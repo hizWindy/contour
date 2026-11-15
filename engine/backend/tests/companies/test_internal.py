@@ -4,7 +4,7 @@
 
 import pytest
 
-from apps.companies.internal import only_internal
+from core.email.internal import only_internal
 
 OURS = ["contourinteriors.com.au"]
 

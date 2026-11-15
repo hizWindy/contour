@@ -36,6 +36,7 @@ from apps.companies.meeting_form import (
     FormAnswer,
     FormSentence,
     MeetingFormRunner,
+    contour_people,
     where_words,
 )
 from apps.companies.meeting_store import MeetingSource
@@ -46,7 +47,7 @@ from core.claude.client import ClaudeError, Reply, WebTools
 from core.claude.pricing import Usage
 from core.config import Settings
 from core.hubspot.meetings import Meeting, MeetingsStatus
-from core.hubspot.models import HubSpotCall, HubSpotCompany
+from core.hubspot.models import HubSpotCall, HubSpotCompany, HubSpotOwner
 from tests.companies.helpers import API, add, deal, signed_in_as
 from tests.companies.test_call_notes_api import a_company, log_call, notes_settings, set_note
 from tests.core.auth_world import START, World
@@ -689,3 +690,22 @@ async def test_bad_starts_are_refused_in_plain_words(
     assert (missing.status_code, missing.json()["code"]) == (404, "form_not_found")
     assert (off.status_code, off.json()["code"]) == (409, "meeting_forms_off")
     assert drafts.claude.asked == []
+
+
+# --- The joins at the PLAN-V17 merge (M5) ---------------------------------------------------------
+
+
+async def test_the_contour_people_are_the_owner_and_the_others_on_the_meeting(
+    world: World,
+) -> None:
+    """HubSpot's attendee owners join the meeting's owner, each once, by their names in our copy
+    of the owners. One we have no name for is left out."""
+    await add(
+        world,
+        HubSpotOwner(owner_id="o1", name="Lee Sample"),
+        HubSpotOwner(owner_id="o2", name="Sam Sample"),
+    )
+    meeting = WALK_THROUGH.model_copy(update={"attendee_owner_ids": ["o2", "o1", "o9"]})
+    async with world.factory() as db:
+        found = await contour_people(db, meeting, MeetingForm(meeting_id="9101"))
+    assert found == ["Lee Sample", "Sam Sample"]

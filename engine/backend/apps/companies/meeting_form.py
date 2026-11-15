@@ -336,11 +336,16 @@ async def attendees_of(session: AsyncSession, meeting: Meeting | None) -> list[A
 async def contour_people(
     session: AsyncSession, meeting: Meeting | None, form: MeetingForm
 ) -> list[str]:
-    """The Contour people on the meeting: its owner in HubSpot (Track 1 may add the others,
-    T1-8), or, for a typed one, the person who typed it."""
-    if meeting is not None and meeting.owner_id:
-        owner = await session.get(HubSpotOwner, meeting.owner_id)
-        return [owner.name] if owner is not None and owner.name else []
+    """The Contour people on the meeting: its owner in HubSpot and the other Contour people
+    on it (HubSpot's attendee owners), by their names in our copy of the owners, each once.
+    For a typed one, the person who typed it."""
+    if meeting is not None:
+        names: list[str] = []
+        for owner_id in dict.fromkeys([meeting.owner_id, *meeting.attendee_owner_ids]):
+            owner = await session.get(HubSpotOwner, owner_id) if owner_id else None
+            if owner is not None and owner.name and owner.name not in names:
+                names.append(owner.name)
+        return names
     if meeting is None and form.made_by is not None:
         person = await session.get(User, form.made_by)
         return [person.name] if person is not None and person.name else []
