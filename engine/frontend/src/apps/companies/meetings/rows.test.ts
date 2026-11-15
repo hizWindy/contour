@@ -73,7 +73,10 @@ describe('one status a row', () => {
   it('says whether a past meeting is logged, and that a cancelled one is cancelled', () => {
     expect(rowStatus(item({ notes_logged: true }), true)).toBe('notes_logged')
     expect(rowStatus(item(), true)).toBe('no_notes')
-    const cancelled = item({ meeting: { outcome: 'CANCELED' }, form: { id: 'f1', status: 'draft' } })
+    const cancelled = item({
+      meeting: { outcome: 'CANCELED' },
+      form: { id: 'f1', status: 'draft' },
+    })
     expect(isCancelled(cancelled)).toBe(true)
     expect(rowStatus(cancelled, false)).toBe('cancelled')
     expect(rowStatus(cancelled, true)).toBe('cancelled')
