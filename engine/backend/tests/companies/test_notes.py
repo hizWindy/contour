@@ -298,6 +298,7 @@ def test_a_sorted_note_becomes_the_card() -> None:
                 "current": "2027-03-31",
                 "value": "2028-03-31",
                 "said": "the end of March 2028",
+                "current_changed": False,
             },
             {
                 "id": "c2",
@@ -309,6 +310,7 @@ def test_a_sorted_note_becomes_the_card() -> None:
                 "current": None,
                 "value": "120",
                 "said": "about 120 people",
+                "current_changed": False,
             },
         ],
         "tasks": [
@@ -323,6 +325,8 @@ def test_a_sorted_note_becomes_the_card() -> None:
         ],
         "unsure": None,
         "dropped": [],
+        "steps": [],
+        "edited": False,
     }
 
 
@@ -522,6 +526,8 @@ def test_a_note_a_restart_cut_off_goes_to_the_rep() -> None:
         "tasks": [],
         "unsure": SORT_STOPPED,
         "dropped": [],
+        "steps": [],
+        "edited": False,
     }
 
 
@@ -681,6 +687,8 @@ async def test_with_the_ai_off_no_request_is_made_and_the_rep_sorts_it(
         "tasks": [],
         "unsure": None,
         "dropped": [],
+        "steps": [],
+        "edited": False,
     }
     # The person is found by code, free: Jo Sample is named in the note.
     assert (note.contact_id, note.person_name, note.person_title) == (
@@ -837,7 +845,7 @@ async def test_a_shutdown_mid_sort_leaves_the_note_to_the_rep(
     app.state.note_sorter = sorter
     note_id = await a_note(session_factory, NOTE)
     sorter.start(note_id)
-    await claude.waiting.wait()  # the sort waits on Claude
+    await asyncio.wait_for(claude.waiting.wait(), timeout=10)  # the sort waits on Claude
     pool = engine.sync_engine.pool
     assert isinstance(pool, QueuePool)
     assert pool.checkedout() == 0  # and holds no database connection
@@ -861,7 +869,7 @@ async def test_a_note_removed_while_it_is_sorted_is_left_alone(
     sorter = sorter_for(session_factory, claude)
     note_id = await a_note(session_factory, NOTE)
     sorter.start(note_id)
-    await claude.waiting.wait()
+    await asyncio.wait_for(claude.waiting.wait(), timeout=10)
     async with session_factory() as db:  # the rep presses Undo
         stored = await db.get(CallNote, note_id)
         assert stored is not None

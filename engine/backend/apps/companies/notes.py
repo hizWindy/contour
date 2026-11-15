@@ -205,7 +205,9 @@ class CardChange(BaseModel):
     property: str  # HubSpot's field, like lease_expiry_other_office_1_
     current: str | None  # our copy's value now: an ISO date, or the text
     value: str  # the new value: an ISO date, or a whole number
-    said: str  # the rep's own words
+    said: str  # the rep's own words ("" when the rep typed the value on the card)
+    # HubSpot's value changed since the rep last saw it (a preview, or a held field in T2-6).
+    current_changed: bool = False
 
 
 class CardTask(BaseModel):
@@ -225,12 +227,22 @@ class Dropped(BaseModel):
     why: str  # plain words, like "only a year was said"
 
 
+class CardStep(BaseModel):
+    """One step of the write to HubSpot, as the card says it (the batch fills these, T2-6)."""
+
+    step: str  # call, fields, task:1 ... note
+    status: str  # done, failed, uncertain, skipped or held
+    words: str  # plain words, like "Call logged."
+
+
 class NoteCard(BaseModel):
     call: CardCall = Field(default_factory=CardCall)
     changes: list[CardChange] = Field(default_factory=list)
     tasks: list[CardTask] = Field(default_factory=list)
     unsure: str | None = None
     dropped: list[Dropped] = Field(default_factory=list)
+    steps: list[CardStep] = Field(default_factory=list)
+    edited: bool = False  # the rep changed something; `sorted` keeps what the sorter made
 
 
 # --- Field values, checked by code ---------------------------------------------------------
@@ -363,6 +375,55 @@ def _sentence(text: str) -> str:
     return text if not text or text.endswith((".", "?", "!")) else f"{text}."
 
 
+def check_change(
+    field_id: str,
+    office_name: str,
+    value: str,
+    said: str,
+    *,
+    today: date,
+    offices: Sequence[OfficeChoice],
+    in_hubspot: bool,
+) -> CardChange | Dropped:
+    """One change, checked by code: a listed field, an office the company has, a value code can
+    read. The sorter and the rep's own edits use the same rules. A change that can't be made
+    comes back as Dropped, with why in plain words."""
+    said = _cut(said, SAID_CHARS)
+    office = _office_named(office_name, offices) if in_hubspot else None
+    where = office.name if office else _cut(office_name, OFFICE_CHARS)
+    try:
+        field = note_field(field_id)
+    except NotOnTheList:  # the form allows only listed fields, but code never trusts it
+        return Dropped(
+            what=f"{where} {field_id}".strip(), said=said, why="a call can't change that field"
+        )
+    what = f"{where} {field.label.lower()}".strip()
+    if not in_hubspot:
+        return Dropped(what=what, said=said, why=NOT_IN_HUBSPOT)
+    if office is None:
+        why = f"this company has no {where} office in HubSpot" if where else "no office was said"
+        return Dropped(what=what, said=said, why=why)
+    try:
+        hubspot_field = hubspot_property(field.id, office.label)
+    except NotOnTheList:
+        why = f"HubSpot has no {field.label.lower()} field for this office"
+        return Dropped(what=what, said=said, why=why)
+    checked, reason = field_value(field.id, value, today)
+    if checked is None:
+        return Dropped(what=what, said=said, why=reason or "the value couldn't be read")
+    return CardChange(
+        id="",
+        field=field.id,
+        label=field.label,
+        office=office.name,
+        office_label=office.label,
+        property=hubspot_field,
+        current=office.current.get(field.id),
+        value=checked,
+        said=said,
+    )
+
+
 class _Changes:
     """The changes code can make, and what it dropped, with why. Two different values for one
     field of one office are both dropped: code never picks one."""
@@ -376,54 +437,30 @@ class _Changes:
         self.dropped: list[Dropped] = []
 
     def add(self, change: NoteChange) -> None:
-        said = _cut(change.said or change.value, SAID_CHARS)
-        office = _office_named(change.office, self.offices) if self.in_hubspot else None
-        where = office.name if office else _cut(change.office, OFFICE_CHARS)
-        try:
-            field = note_field(change.field)
-        except NotOnTheList:  # the form allows only listed fields, but code never trusts it
-            self._drop(f"{where} {change.field}".strip(), said, "a call can't change that field")
+        checked = check_change(
+            change.field,
+            change.office,
+            change.value,
+            change.said or change.value,
+            today=self.today,
+            offices=self.offices,
+            in_hubspot=self.in_hubspot,
+        )
+        if isinstance(checked, Dropped):
+            self.dropped.append(checked)
             return
-        what = f"{where} {field.label.lower()}".strip()
-        if not self.in_hubspot:
-            self._drop(what, said, NOT_IN_HUBSPOT)
-            return
-        if office is None:
-            why = (
-                f"this company has no {where} office in HubSpot" if where else "no office was said"
-            )
-            self._drop(what, said, why)
-            return
-        try:
-            hubspot_field = hubspot_property(field.id, office.label)
-        except NotOnTheList:
-            self._drop(what, said, f"HubSpot has no {field.label.lower()} field for this office")
-            return
-        value, reason = field_value(field.id, change.value, self.today)
-        if value is None:
-            self._drop(what, said, reason or "the value couldn't be read")
-            return
-        key = (field.id, office.label.casefold())
+        what = f"{checked.office} {checked.label.lower()}"
+        key = (checked.field, checked.office_label.casefold())
         if key in self.clashing:
-            self._drop(what, said, TWO_VALUES)
+            self._drop(what, checked.said, TWO_VALUES)
         elif key in self.kept:
-            if self.kept[key].value != value:
+            if self.kept[key].value != checked.value:
                 first = self.kept.pop(key)
                 self.clashing.add(key)
                 self._drop(what, first.said, TWO_VALUES)
-                self._drop(what, said, TWO_VALUES)
+                self._drop(what, checked.said, TWO_VALUES)
         else:
-            self.kept[key] = CardChange(
-                id="",
-                field=field.id,
-                label=field.label,
-                office=office.name,
-                office_label=office.label,
-                property=hubspot_field,
-                current=office.current.get(field.id),
-                value=value,
-                said=said,
-            )
+            self.kept[key] = checked
 
     def _drop(self, what: str, said: str, why: str) -> None:
         self.dropped.append(Dropped(what=what, said=said, why=why))
@@ -625,6 +662,13 @@ class NoteSorter:
         """Waits for every sort that is running (tests, and a clean shutdown)."""
         while self._tasks:
             await asyncio.gather(*list(self._tasks.values()), return_exceptions=True)
+
+    async def cancel(self, note_id: uuid.UUID, *, wait_seconds: float = 5.0) -> None:
+        """Stops one note's sort, when the rep removes the note. What it spent stays logged."""
+        task = self._tasks.get(note_id)
+        if task is not None and not task.done():
+            task.cancel()
+            await asyncio.wait([task], timeout=wait_seconds)
 
     async def stop(self, *, wait_seconds: float = 5.0) -> list[uuid.UUID]:
         """Stops every sort this sorter started, for a clean shutdown. Each note goes to the

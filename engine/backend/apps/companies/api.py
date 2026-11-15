@@ -12,7 +12,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Path, Query
 
-from apps.companies import api_preps, api_script, store
+from apps.companies import api_notes, api_preps, api_script, store
 from apps.companies.deals import DealState
 from apps.companies.deps import LeadsDep
 from apps.companies.schemas import (
@@ -115,10 +115,11 @@ async def search_companies(
     return await store.search(session, q, leads)
 
 
-# The prep and script routes have fixed paths (/preps/..., /script-edits, /script-style/...), so
-# they go before /{key}.
+# The prep, script and call note routes have fixed paths (/preps/..., /script-edits,
+# /script-style/..., /call-notes/...), so they go before /{key}.
 router.include_router(api_preps.router)
 router.include_router(api_script.router)
+router.include_router(api_notes.router)
 
 
 @router.get(

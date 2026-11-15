@@ -118,11 +118,17 @@ def read_when(words: str, today: date, *, back: bool = False) -> When | None:
 
     `today` is Melbourne's date. A date with no year is the next one on or after today, or with
     `back` (a move) the latest one on or before it. Case, spaces, "the", "of" and "3rd" are
-    forgiven, and "Tue" reads as "Tuesday". Anything else raises Unreadable: it is never guessed.
+    forgiven, and "Tue" reads as "Tuesday". A date as YYYY-MM-DD (what the website sends for a
+    date the rep picked) reads as that day. Anything else raises Unreadable: it is never guessed.
     """
     text = _tidy(words)
     if text in NO_DATE:
         return None
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", text):
+        exact = _day_in(_year(text[:4]), int(text[5:7]), int(text[8:10]))
+        if exact is None:
+            raise Unreadable(words)
+        return When(exact, "day")
     if text == "today":
         return When(today, "day")
     if text == "tomorrow":

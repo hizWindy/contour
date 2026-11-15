@@ -62,13 +62,23 @@ EMAIL = re.compile(r"[\w.+'-]+@[\w-]+(?:\.[\w-]+)+")
 # "(08) 9000-0000". Dates in the pack are written in words, and money with commas, so they
 # never look like this.
 PHONE = re.compile(r"(?<![\w])\+?\(?\d[\d\s().-]{6,}\d(?![\w])")
+# A date written with dashes or dots has 8 digits too: 31-03-2028, 31.03.2028 or 2028-03-31. A
+# match of exactly that shape is kept (PLAN-V17 T2-5), so a lease date typed in a call note isn't
+# lost. Anything else with 8 or more digits is still blanked.
+_DAY = r"(?:0?[1-9]|[12]\d|3[01])"
+_MONTH = r"(?:0?[1-9]|1[0-2])"
+_YEAR = r"(?:19|20)\d{2}"
+DATE_SHAPED = re.compile(
+    rf"{_DAY}(?P<a>[-.]){_MONTH}(?P=a){_YEAR}|{_YEAR}(?P<b>[-.]){_MONTH}(?P=b){_DAY}"
+)
 EMAIL_GONE = "[email left out]"
 PHONE_GONE = "[number left out]"
 
 
 def _phone_like(match: re.Match[str]) -> str:
-    digits = sum(character.isdigit() for character in match.group(0))
-    return PHONE_GONE if digits >= 8 else match.group(0)
+    found = match.group(0)
+    digits = sum(character.isdigit() for character in found)
+    return PHONE_GONE if digits >= 8 and not DATE_SHAPED.fullmatch(found) else found
 
 
 def scrub(text: str) -> str:

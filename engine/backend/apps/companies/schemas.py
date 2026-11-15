@@ -6,10 +6,11 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 from pydantic.config import JsonDict
 
 from apps.companies.deals import DealState, StageKind
+from core.api.models import SafeText
 
 Source = Literal["hubspot", "lead"]
 # For a field named `date` with a default: in the class body the name `date` is the field by the
@@ -515,3 +516,212 @@ class StyleMineIn(BaseModel):
 
 class StyleNoteIn(BaseModel):
     text: str = Field(min_length=1, max_length=TEAM_MAX_CHARS)
+
+
+# --- Call notes (PLAN-V17 T2-5) -------------------------------------------------------------------
+
+NoteSource = Literal["mic", "typed", "transcript"]
+NoteStatus = Literal["sorting", "to_confirm", "sending", "logged", "partial", "failed", "uncertain"]
+NoteSortedBy = Literal["ai", "person"]
+NoteState = Literal["to_confirm", "logged", "needs_look"]
+# HubSpot's six standard call outcomes (core.hubspot.activities.OUTCOME_NAMES; a test checks).
+OutcomeName = Literal[
+    "Connected", "No answer", "Left voicemail", "Left live message", "Busy", "Wrong number"
+]
+NoteTaskKind = Literal["call", "email", "todo"]
+NoteFieldKind = Literal["date", "number"]
+NOTE_MAX_CHARS = 60_000  # the most a note can ever hold; the setting notes_max_chars is less
+NOTE_SUMMARY_MAX_CHARS = 600
+NOTE_SUBJECT_MAX_CHARS = 200
+NOTE_VALUE_MAX_CHARS = 120
+NOTE_BATCH_MAX = 50
+CARD_ID_PATTERN = r"^[ct][0-9]{1,3}$"  # c1 for a change, t2 for a task
+STEP_PATTERN = r"^(?:call|fields|note|task:[0-9]{1,2})$"
+
+
+class CallNoteSending(Out):
+    ready: bool = Field(description="True when confirmed notes can be sent to HubSpot now")
+    waiting_for: str | None = Field(
+        description="What sending waits for, in plain words, like 'Waiting for HubSpot write "
+        "access.' None when ready"
+    )
+
+
+class NoteFieldOption(Out):
+    id: str = Field(description="Like lease_end")
+    label: str = Field(description="Like Lease end")
+    kind: NoteFieldKind
+
+
+class CallNoteOptions(Out):
+    enabled: bool = Field(description="True when Log call and Activity show")
+    ai_sorts: bool = Field(
+        description="True when Claude sorts a note: its switch is on and Claude is set up. "
+        "False: the rep picks the outcome and adds follow-ups by hand"
+    )
+    sending: CallNoteSending
+    outcomes: list[OutcomeName] = Field(description="HubSpot's call outcomes, for the chips")
+    fields: list[NoteFieldOption] = Field(description="The fields a call may change")
+    soft_seconds: int = Field(description="When the timer turns Ochre (it never cuts the rep off)")
+    max_chars: int = Field(description="The longest note, in characters")
+
+
+class CallNoteIn(BaseModel):
+    company_key: str = Field(
+        min_length=1, max_length=64, description="A HubSpot company id, or lead:<id>"
+    )
+    contact_id: SafeText | None = Field(
+        None, max_length=32, description="HubSpot's contact id: who the call was with, if known"
+    )
+    prep_id: uuid.UUID | None = Field(None, description="The call prep it came from, if any")
+    text: SafeText = Field(
+        max_length=NOTE_MAX_CHARS,
+        description="The note as typed or said. An email address or a phone number in it is "
+        "saved as [email left out] or [number left out]",
+    )
+    source: NoteSource
+    called_at: AwareDatetime = Field(description="When the call was, with its time zone")
+    outcome: OutcomeName | None = Field(None, description="How the call went, if the rep picked it")
+
+
+class CallNoteCall(Out):
+    summary: str = Field(description="Two short lines, or empty until sorted or written")
+    outcome: OutcomeName | None
+
+
+class CallNoteChange(Out):
+    id: str = Field(description="Like c1")
+    field: str = Field(description="Like lease_end")
+    label: str = Field(description="Like Lease end")
+    office: str = Field(description="Like Perth, or the city of a group like Other Office 2")
+    current: str | None = Field(description="What HubSpot has now: a date, or the text")
+    value: str = Field(description="The new value: a date as YYYY-MM-DD, or a whole number")
+    current_changed: bool = Field(description="True when HubSpot's value changed since you saw it")
+
+
+class CallNoteTask(Out):
+    id: str = Field(description="Like t1")
+    subject: str
+    due: date
+    due_words: str = Field(description="When, in the rep's own words. Empty when a date was typed")
+    kind: NoteTaskKind
+    owner: str | None = Field(description="Who it is for. None: the rep who logged the call")
+
+
+class CallNoteStep(Out):
+    step: str = Field(description="call, fields, task:1 ... note")
+    status: str = Field(description="done, failed, uncertain, skipped or held")
+    words: str = Field(description="What happened, in plain words, like 'Call logged.'")
+
+
+class CallNoteOut(Out):
+    id: uuid.UUID
+    company_key: str
+    company_name: str
+    person: PrepPerson | None
+    text: str
+    source: NoteSource
+    called_at: datetime
+    status: NoteStatus
+    sorted_by: NoteSortedBy
+    unsure: str | None = Field(
+        description="When something needs a look before sending, in plain words. These notes "
+        "sort first"
+    )
+    call: CallNoteCall
+    changes: list[CallNoteChange]
+    tasks: list[CallNoteTask]
+    left_out: bool = Field(description="True when it is left out of the next send")
+    steps: list[CallNoteStep] = Field(description="Each step of the send, empty until it is sent")
+    hubspot_url: str | None = Field(description="The call in HubSpot, once it is logged")
+    made_by: str | None = Field(description="Who logged it. None with sign-in off")
+    created_at: datetime
+    confirmed_at: datetime | None
+
+
+class CallNotePage(Out):
+    total: int
+    items: list[CallNoteOut]
+
+
+class CallNoteChangeIn(BaseModel):
+    id: str | None = Field(
+        None, pattern=CARD_ID_PATTERN, description="Its id on the card, or none for a new change"
+    )
+    field: str = Field(
+        min_length=1, max_length=32, pattern=r"^[a-z][a-z0-9_]*$", description="Like lease_end"
+    )
+    office: SafeText = Field(
+        min_length=1,
+        max_length=64,
+        description="One of the company's offices, as the card names it",
+    )
+    value: SafeText = Field(
+        min_length=1,
+        max_length=NOTE_VALUE_MAX_CHARS,
+        description="A date as YYYY-MM-DD, or a whole number of staff",
+    )
+
+
+class CallNoteTaskIn(BaseModel):
+    id: str | None = Field(
+        None, pattern=CARD_ID_PATTERN, description="Its id on the card, or none for a new task"
+    )
+    subject: SafeText = Field(min_length=1, max_length=NOTE_SUBJECT_MAX_CHARS)
+    due: date = Field(description="Not before today, Melbourne time")
+    kind: NoteTaskKind = "todo"
+    owner_id: SafeText | None = Field(
+        None, max_length=32, description="The HubSpot owner it is for. None: the rep"
+    )
+
+
+class CallNotePatch(BaseModel):
+    """The rep's edits. Only the parts sent change: `outcome` or `contact_id` sent as null clears
+    it, and `changes` or `tasks` replace the card's whole list."""
+
+    summary: SafeText | None = Field(None, max_length=NOTE_SUMMARY_MAX_CHARS)
+    outcome: OutcomeName | None = None
+    contact_id: SafeText | None = Field(
+        None, max_length=32, description="Who the call was with: one of the company's people"
+    )
+    changes: list[CallNoteChangeIn] | None = Field(None, max_length=10)
+    tasks: list[CallNoteTaskIn] | None = Field(None, max_length=10)
+    left_out: bool | None = Field(None, description="True leaves it out of the next send")
+
+
+class CallNoteIds(BaseModel):
+    ids: list[uuid.UUID] = Field(
+        min_length=1, max_length=NOTE_BATCH_MAX, description="The notes, in the order to send them"
+    )
+
+
+class CallNoteSkipped(Out):
+    id: uuid.UUID
+    why: str = Field(description="Why it was left out, in plain words")
+
+
+class CallNotePreview(Out):
+    notes: list[CallNoteOut] = Field(description="Each note, with what HubSpot has now")
+    skipped: list[CallNoteSkipped]
+    sending: CallNoteSending
+
+
+class CallNoteBatch(Out):
+    batch_id: uuid.UUID
+    notes: list[CallNoteOut] = Field(description="The notes being sent, in order")
+    skipped: list[CallNoteSkipped]
+
+
+class CallNoteResolve(BaseModel):
+    step: str = Field(
+        pattern=STEP_PATTERN, description="The step to settle: call, fields, task:1 ... or note"
+    )
+    landed: bool = Field(
+        description="True: it is in HubSpot. False: it isn't, so sending again adds it"
+    )
+
+
+class CallNoteSummary(Out):
+    to_confirm: int = Field(description="My notes waiting for me to confirm them")
+    needs_look: int = Field(description="My notes that failed, were partly saved, or are unsure")
+    logged_today: int = Field(description="My notes logged in HubSpot today, Melbourne time")
