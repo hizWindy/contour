@@ -684,7 +684,9 @@ def _edited_changes(
                 raise part_sent(f"{old.office} {old.label.lower()}")
             continue
         if old is not None and _same_value(old, item, today):
-            checked = old  # as it was: it keeps its state
+            # As it was: it keeps its state. If HubSpot's value had moved, the rep has now seen
+            # it ("Keep mine"), so the card stops saying it moved.
+            checked = old.model_copy(update={"current_changed": False})
         else:
             found = check_change(
                 item.field,
@@ -710,8 +712,11 @@ def _edited_changes(
                 update={
                     "id": old.id if old is not None else _next_id("c", used),
                     "said": found.said if same else "",
+                    # A held change the rep sends back ("Keep mine", or a new value) keeps
+                    # HubSpot's newer value as `current`, so the next send isn't held again. The
+                    # rep has now seen that value, so the card stops saying it moved.
                     **(
-                        {"current": old.current, "current_changed": True}
+                        {"current": old.current, "current_changed": False}
                         if fresher and old is not None
                         else {}
                     ),

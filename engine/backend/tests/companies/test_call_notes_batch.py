@@ -478,6 +478,34 @@ async def test_writing_switched_off_part_way_gives_back_the_rest(
 # --- A field that changed in HubSpot --------------------------------------------------------------
 
 
+async def test_keep_mine_on_a_moved_value_clears_the_notice_and_keeps_hubspots_value(
+    world: World, fake: FakeWriter, sender: NoteSender
+) -> None:
+    """Track 3's "Keep mine": the change comes back unchanged. The rep has now seen HubSpot's
+    value, so the card stops saying it moved, and the next send carries that value as seen."""
+    await a_company(world)
+    fake.hubspot_has[PERTH_LEASE] = "2027-03-31"  # HubSpot has a newer value than our copy
+    perth = {"field": "lease_end", "office": "Perth", "value": "2028-03-31"}
+    async with signed_in_as(world, "mia", ["companies"]) as client:
+        note = await log_call(client)
+        path = f"{NOTES}/{note['id']}"
+        assert (await client.patch(path, json={"changes": [perth]})).status_code == 200
+        preview = (await client.post(f"{NOTES}/preview", json={"ids": [note["id"]]})).json()
+        kept = await client.patch(path, json={"changes": [{**perth, "id": "c1"}]})
+    [shown] = preview["items"]
+    assert (shown["changes"][0]["current"], shown["changes"][0]["current_changed"]) == (
+        "2027-03-31",
+        True,
+    )
+    assert kept.status_code == 200, kept.text
+    [change] = kept.json()["changes"]
+    assert (change["value"], change["current"], change["current_changed"]) == (
+        "2028-03-31",
+        "2027-03-31",
+        False,
+    )
+
+
 async def test_a_field_changed_in_hubspot_after_the_preview_is_held_and_a_retry_sends_only_it(
     world: World, fake: FakeWriter, sender: NoteSender
 ) -> None:
@@ -530,6 +558,7 @@ async def test_a_field_changed_in_hubspot_after_the_preview_is_held_and_a_retry_
     assert edited.status_code == 200, edited.text
     assert edited.json()["changes"][0]["value"] == "2028-06-30"
     assert edited.json()["changes"][0]["current"] == "2027-06-30"  # HubSpot's, kept
+    assert edited.json()["changes"][0]["current_changed"] is False  # the rep has seen it now
     assert retried.status_code == 202 and retried.json()["status"] == "sending"
     # The retry sends only the field, with the value the rep has now seen.
     resent = fake.requests[subject(note, 2)]
