@@ -6,8 +6,8 @@
  * own text colour) but sits inside the row's link, so the link's name says it for a screen reader:
  * "Activity, 7 calls to confirm". `SidebarMenuBadge` sits beside the link instead, placed by the
  * classes of a main row, which a page under a project's name doesn't have. The number rolls when
- * it changes (`RollingNumber`, by its own file: this is in the first visit). Folded to icons, the
- * menu hides it.
+ * it changes (`RollingNumber`, by its own file, so a count in the first visit pulls in no other
+ * part of the motion kit). Folded to icons, the menu hides it.
  */
 import { RollingNumber } from '@/components/motion/rolling-number'
 

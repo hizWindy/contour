@@ -37,7 +37,8 @@ import type {
 import { apiV17 } from '../v17-client'
 
 // The options and the counts sit in a small file of their own, because the menu, Home and Ctrl+K
-// need them in the first visit (T3-7). They are the same functions here, not copies.
+// need them on every page (T3-7), and the rest of this file only with the Companies pages. They are
+// the same functions here, not copies.
 export {
   callNoteOptionsQueryOptions,
   callNoteSummaryQueryOptions,

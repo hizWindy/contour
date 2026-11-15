@@ -43,8 +43,8 @@ export interface NavItem {
   /**
    * A count at the end of the page's row in the menu, like Activity's calls to confirm (PLAN-V17
    * T3-7). It asks for its own data, gives the link its words for a screen reader ("Activity, 7
-   * calls to confirm"), and draws nothing when there is nothing to count. Folded to icons, the
-   * menu hides it.
+   * calls to confirm"), and draws nothing when there is nothing to count. It may be a `lazy`
+   * component: the menu draws it inside a `Suspense`. Folded to icons, the menu hides it.
    */
   count?: ComponentType
 }
@@ -94,7 +94,7 @@ export interface AppModule {
   /**
    * Its own actions in Ctrl+K, after its pages, like "Log a call" (PLAN-V17 T3-7). The component
    * draws `CommandItem`s, or nothing, and asks for its own data. It is drawn only while Ctrl+K is
-   * open. Optional.
+   * open, inside a `Suspense`, so it may be a `lazy` component. Optional.
    */
   commands?: ComponentType<CommandsProps>
   /** Its addresses, inside the app frame. */

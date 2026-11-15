@@ -1,5 +1,5 @@
 import { Moon, Monitor, PanelLeft, Search, Sun } from 'lucide-react'
-import { useEffect, useState, type ReactNode } from 'react'
+import { Suspense, useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
 import { Button } from '@/components/ui/button'
 import {
@@ -130,7 +130,12 @@ export function CommandMenu(): ReactNode {
                   {app.pages.map((item) => (
                     <PageItem key={item.to} item={item} onSelect={go} />
                   ))}
-                  {Commands ? <Commands go={go} /> : null}
+                  {Commands ? (
+                    // A module's own entries may load late (Companies' do): nothing shows till then.
+                    <Suspense fallback={null}>
+                      <Commands go={go} />
+                    </Suspense>
+                  ) : null}
                 </CommandGroup>
               )
             })}

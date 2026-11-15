@@ -1,5 +1,5 @@
 import { ChevronRight } from 'lucide-react'
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import { Link, useLocation } from 'react-router'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import {
@@ -40,6 +40,19 @@ function useCloseOnPhone(): () => void {
   }
 }
 
+/**
+ * A page's count at the end of its row (`NavItem.count`), if it has one. Its code may load late
+ * (Activity's does), so it draws nothing until it is there.
+ */
+function PageCount({ item }: { item: NavItem }) {
+  const Count = item.count
+  return Count ? (
+    <Suspense fallback={null}>
+      <Count />
+    </Suspense>
+  ) : null
+}
+
 function MenuLink({
   item,
   pathname,
@@ -54,7 +67,6 @@ function MenuLink({
   iconClassName?: string
 }) {
   const Icon = item.icon
-  const Count = item.count
   const here = isHere(pathname, item)
   const closeOnPhone = useCloseOnPhone()
   return (
@@ -69,7 +81,7 @@ function MenuLink({
         <Link to={item.to} aria-current={here ? 'page' : undefined} onClick={closeOnPhone}>
           <Icon aria-hidden="true" className={cn('size-5', iconClassName)} />
           <span className="truncate">{item.label}</span>
-          {Count ? <Count /> : null}
+          <PageCount item={item} />
         </Link>
       </SidebarMenuButton>
     </SidebarMenuItem>
@@ -79,7 +91,6 @@ function MenuLink({
 /** A page inside a project's dropdown, indented under the project's name, with its count. */
 function SubLink({ item, pathname }: { item: NavItem; pathname: string }) {
   const Icon = item.icon
-  const Count = item.count
   const here = isHere(pathname, item)
   const closeOnPhone = useCloseOnPhone()
   return (
@@ -92,7 +103,7 @@ function SubLink({ item, pathname }: { item: NavItem; pathname: string }) {
         <Link to={item.to} aria-current={here ? 'page' : undefined} onClick={closeOnPhone}>
           <Icon aria-hidden="true" />
           <span className="truncate">{item.label}</span>
-          {Count ? <Count /> : null}
+          <PageCount item={item} />
         </Link>
       </SidebarMenuSubButton>
     </SidebarMenuSubItem>

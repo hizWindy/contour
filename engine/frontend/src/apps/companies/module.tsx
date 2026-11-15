@@ -9,16 +9,19 @@
  * after the Lead Finder's, in the order of MODULES, as on Home and in Ctrl+K (T3-7). Activity stays
  * in the group for everyone who sees Companies, even while call notes are off (the page says so),
  * so the menu never changes shape once it has loaded. Its row shows how many calls wait to be
- * confirmed, and Ctrl+K gains "Log a call" and "Calls to confirm" (`call-note-links.tsx`).
+ * confirmed, and Ctrl+K gains "Log a call" and "Calls to confirm" (`call-note-links.tsx`, which
+ * loads late through `call-note-parts.ts`, so the first visit doesn't grow).
  */
 import { Building2, ClipboardCheck } from 'lucide-react'
 import type { PrefetchArgs, RouteHandle } from '@/shell/crumbs'
 import type { AppModule } from '@/shell/nav'
 import { page } from '@/shell/page-route'
-import { ACTIVITY_PATH as ACTIVITY } from './activity/params'
-import { CallNoteCommands, ToConfirmCount } from './call-note-links'
+import { CallNoteCommands, ToConfirmCount } from './call-note-parts'
 import { CompaniesHomeCard } from './home-card'
 import { prefetchCompanies, prefetchCompaniesHome, prefetchCompany } from './prefetch'
+
+/** Activity's address, as in `activity/params.ts`, which loads with the page, not here. */
+const ACTIVITY = '/companies/activity'
 
 /**
  * What Activity asks for first. Its query options load with them, in a small file of their own,

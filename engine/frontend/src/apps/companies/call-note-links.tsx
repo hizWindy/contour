@@ -9,7 +9,8 @@
  * - **Only while call notes are on**, and a count only above 0, so a button never opens an empty
  *   tab. While the switches or the counts load or fail, nothing shows, and each place looks as it
  *   did before call notes. A 409 while they are off shows nothing either.
- * - **In the first visit** (the menu, Home and Ctrl+K are), so it imports by file and stays small.
+ * - **Loaded late**, through `call-note-parts.ts`: the menu, Home and Ctrl+K are in the first visit,
+ *   and this file, with its hooks, words and icons, is not. Import the parts from there, not here.
  */
 import { ClipboardCheck, NotebookPen, TriangleAlert } from 'lucide-react'
 import { Link } from 'react-router'

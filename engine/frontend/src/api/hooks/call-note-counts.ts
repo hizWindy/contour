@@ -1,7 +1,8 @@
 /**
  * Whether call notes are on, and the counts (PLAN-V17 T3-7): the part of the call notes hooks the
- * menu, Home and Ctrl+K need. They are in the first visit, so this file stays small and the rest
- * of the call notes hooks (`call-notes.ts`, which re-exports these) load with the Companies pages.
+ * menu, Home and Ctrl+K need on every page. They load with those parts, late and small
+ * (`apps/companies/call-note-parts.ts`), and the rest of the call notes hooks (`call-notes.ts`,
+ * which re-exports these) load only with the Companies pages.
  *
  * Who asks: only a person who sees Companies. The menu, Home and Ctrl+K draw a project's parts only
  * for the projects this person may use (`useVisibleModules`), so for anyone else nothing here runs
