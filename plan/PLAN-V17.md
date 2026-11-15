@@ -473,7 +473,7 @@ The first two and `meeting_forms_enabled` are on the Settings page. `internal_em
 
 ## Track 1: HubSpot (session 1)
 
-**Progress:** Stage A 6 of 7. Stage B 0 of 4. Every step is `backend-agent` work.
+**Progress:** Stage A 7 of 7 (tag `v17-notes-t1`). Stage B 0 of 4. Every step is `backend-agent` work.
 
 ### Stage A: call notes
 
@@ -517,7 +517,7 @@ The first two and `meeting_forms_enabled` are on the Settings page. `internal_em
   - Tell Track 3 the exact policy line, so `index.html` matches.
   - **Done when:** the guard test passes, and no other origin is in the policy.
 
-- [ ] **T1-7. Stage A check.**
+- [x] **T1-7. Stage A check.** Done 2026-11-15 (the review's fixes a2ce1a1; tag `v17-notes-t1` on this tick).
   - All backend tests, Ruff and mypy. `uv run engine openapi`.
   - The `review-agent` runs `security-check` on the diff: the key, the owner emails, the write-once rule.
   - Tag `v17-notes-t1`. Send the others a message.
@@ -550,6 +550,15 @@ The first two and `meeting_forms_enabled` are on the Settings page. `internal_em
 
 Newest first.
 
+- 2026-11-15: **T1-7 done. Track 1 Stage A ready.** Tag `v17-notes-t1` on this tick's commit.
+  - **Full run on a2ce1a1** (with the review's fixes): 3,742 passed, 25 skipped (the usual 25 in the routes list), none failed. Core 2,001, Companies 108, Lead Finder 1,622, gates and e2e 11, from 23:28 to 23:42, with `RUN_GATES=1` on the test database `_v17a`.
+  - How it ran: in the foreground, in six parts under the heavy lock, on Al-khair's word. Claude Code had stopped two background runs for low memory (0.2 to 0.4 GB free).
+  - The database was up the whole time (no extra skips). Docker Desktop had stopped under memory pressure after 22:05 and was back at 22:41 (Track 3's message). T1-10's test, not committed yet, was left out.
+  - Ruff, mypy and the fast tests pass (the hook on a2ce1a1). The contract gate passes, so `openapi.json` matches the code.
+  - **The other tracks:**
+    - Track 3 shows the 403 on the write log as one plain line, "Only an Admin can see the writes to HubSpot." (its 0842897). It uses the `{user_id}` path (9646b1b).
+    - Track 2 checks the field list when sorting, on the edit and at send.
+    - Track 2 sends a logged meeting's transcript as a `note` on the company and its one open deal. It will fill `ActivityRequest.meeting_id` once T1-9 adds it.
 - 2026-11-15: **T1-7 under way, not done.**
   - **First full run** on 86cf3f0 (`RUN_GATES=1`, one folder at a time to save memory, test database `_v17a`): 3,752 passed, 25 skipped, none failed (core 2,011, companies 108, Lead Finder 1,622, gates 3, e2e 8), in about 16 minutes. Ruff and mypy pass (the hook). The contract gate passes, so `openapi.json` is up to date.
   - **Security check** (a new `review-agent`, on 437a2ee..86cf3f0): Ready with notes, no blocker. Fixed in a2ce1a1 by the `backend-agent` (each new test failed with its fix taken out):
