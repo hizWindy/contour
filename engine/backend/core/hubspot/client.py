@@ -25,6 +25,9 @@ What it does for every caller, so no project needs its own copy:
   and deal in the same request that makes it, with HubSpot's own number for each pair
   (`LINK_TYPES`). A pair that isn't in the table is refused before anything is sent. `linked`
   reads the links of many records at once, 100 at a time.
+- **Owners' emails** (PLAN-V17 T1-4): `owners` keeps an owner's id and name, never the email.
+  `owner_emails` gives the active owners' emails, only so the sync can match accounts to owners
+  in memory (`core.hubspot.owners`). The emails are never saved, logged or shown.
 
 API versions have dates, like 2026-09 (`HUBSPOT_API_VERSION`). "v3" uses HubSpot's older paths,
 which still work until a date HubSpot hasn't published.
@@ -34,7 +37,7 @@ import asyncio
 import logging
 import re
 import time
-from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from types import MappingProxyType
@@ -312,6 +315,12 @@ class HubSpot(Protocol):
 
     async def owners(self, *, archived: bool = False) -> list[Owner]: ...
 
+    async def owner_emails(self) -> dict[str, str]:
+        """The ACTIVE owners' emails, only for matching accounts to owners (PLAN-V17 T1-4):
+        `email_key(email)` -> owner id, built by `owner_email_index`. Never save, log or show
+        them."""
+        ...
+
     async def pipelines(self, object_type: ObjectType = "deals") -> list[Pipeline]: ...
 
     async def properties(self, object_type: ObjectType) -> list[PropertyInfo]: ...
@@ -429,7 +438,14 @@ class _Owner(_Reply):
     id: str
     first_name: str | None = Field(None, alias="firstName")
     last_name: str | None = Field(None, alias="lastName")
+    # Read for `owner_emails` only. `Owner` never gets it.
+    email: str | None = None
     archived: bool = False
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def _text_or_nothing(cls, value: Any) -> Any:
+        return value if isinstance(value, str) else None  # an odd value never stops `owners`
 
 
 class _Owners(_Reply):
@@ -549,6 +565,34 @@ def _parse[M: _Reply](model: type[M], data: Any) -> M:
 def owner_name(first: str | None, last: str | None) -> str | None:
     parts = [part.strip() for part in (first, last) if part and part.strip()]
     return " ".join(parts) or None
+
+
+def email_key(value: str | None) -> str | None:
+    """An email as account matching compares it (PLAN-V17 T1-4): no spaces around it, lower
+    case. None for an empty text, or one with no @ after its first character."""
+    key = (value or "").strip().lower()
+    return key if key.find("@") > 0 else None
+
+
+def owner_email_index(owners: Iterable[tuple[str, str | None]]) -> dict[str, str]:
+    """`email_key(email)` -> owner id, from (owner id, email) pairs. An owner with no email is left
+    out. Two owners with one email: the lowest id wins, so the same owner wins every time."""
+    found: dict[str, str] = {}
+    for owner_id, email in owners:
+        key = email_key(email)
+        if key is None:
+            continue
+        held = found.get(key)
+        if held is None or _id_order(owner_id) < _id_order(held):
+            found[key] = owner_id
+    return found
+
+
+def _id_order(owner_id: str) -> tuple[int, int, str]:
+    """HubSpot's ids are digits: by their number, so 999 comes before 1000. Anything else last."""
+    if owner_id.isascii() and owner_id.isdigit():
+        return (0, int(owner_id), owner_id)
+    return (1, 0, owner_id)
 
 
 def _closed(value: Any) -> bool:
@@ -775,7 +819,19 @@ class HttpHubSpot:
         return found
 
     async def owners(self, *, archived: bool = False) -> list[Owner]:
-        owners: list[Owner] = []
+        return [
+            Owner(o.id, owner_name(o.first_name, o.last_name), o.archived or archived)
+            async for o in self._owner_records(archived=archived)
+        ]
+
+    async def owner_emails(self) -> dict[str, str]:
+        # Active owners only: the list asks for them, and one marked archived is left out too.
+        return owner_email_index(
+            [(o.id, o.email) async for o in self._owner_records(archived=False) if not o.archived]
+        )
+
+    async def _owner_records(self, *, archived: bool) -> AsyncIterator[_Owner]:
+        """Every owner HubSpot lists, a page at a time: the active ones, or the archived ones."""
         after: str | None = None
         while True:
             params = {"limit": str(PAGE_SIZE), "archived": "true" if archived else "false"}
@@ -783,13 +839,11 @@ class HttpHubSpot:
                 params["after"] = after
             data = await self._call("GET", self._path("crm/owners", ""), params=params)
             page = _parse(_Owners, data)
-            owners += [
-                Owner(o.id, owner_name(o.first_name, o.last_name), o.archived or archived)
-                for o in page.results
-            ]
+            for owner in page.results:
+                yield owner
             nxt = page.paging.next.get("after") if page.paging and page.paging.next else None
             if not nxt:
-                return owners
+                return
             after = str(nxt)
 
     async def pipelines(self, object_type: ObjectType = "deals") -> list[Pipeline]:

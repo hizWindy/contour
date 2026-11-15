@@ -717,6 +717,60 @@ def test_0013_keeps_an_old_schedule_that_is_on_or_has_run(
     assert left == [{"job": "lead_finder.discovery"}]
 
 
+def owner_link_columns(scratch: Scratch) -> dict[str, str]:
+    """core.users' HubSpot owner columns, by name, with whether each may be empty."""
+    with scratch.connect() as connection:
+        rows = connection.execute(
+            "SELECT column_name, is_nullable FROM information_schema.columns "
+            "WHERE table_schema = 'core' AND table_name = 'users' "
+            "AND column_name LIKE 'hubspot_owner%'"
+        ).fetchall()
+    return {row["column_name"]: row["is_nullable"] for row in rows}
+
+
+@pytest.mark.integration
+def test_0020_adds_and_removes_who_each_account_is_in_hubspot(scratch: Scratch) -> None:
+    """PLAN-V17 T1-4: an owner id and how it was matched, both empty for the accounts there."""
+    config = alembic_config(scratch.url)
+    command.upgrade(config, "0017_call_prep")
+    assert owner_link_columns(scratch) == {}
+    account = uuid.uuid4()
+    with scratch.connect() as connection:
+        connection.execute(
+            "INSERT INTO core.users (id, email, name, password_hash) VALUES (%s, "
+            "'jo.sample@example.test', 'Jo Sample', '$argon2id$not-a-real-hash')",
+            (account,),
+        )
+
+    command.upgrade(config, "0020_hubspot_owner_link")
+    assert owner_link_columns(scratch) == {
+        "hubspot_owner_id": "YES",
+        "hubspot_owner_matched_by": "YES",
+    }
+    change = (
+        "UPDATE core.users SET hubspot_owner_id = %s, hubspot_owner_matched_by = %s WHERE id = %s"
+    )
+    with scratch.connect() as connection:
+        row = connection.execute(
+            "SELECT hubspot_owner_id, hubspot_owner_matched_by FROM core.users WHERE id = %s",
+            (account,),
+        ).fetchone()
+        assert row == {"hubspot_owner_id": None, "hubspot_owner_matched_by": None}
+        connection.execute(change, ("301", "person", account))
+        for owner_id, matched_by in (("301", "robot"), ("301", None), (None, "email")):
+            with pytest.raises(psycopg.errors.CheckViolation):
+                connection.execute(change, (owner_id, matched_by, account))
+    command.upgrade(config, "head")
+    command.check(config)  # the model declares the same columns
+
+    command.downgrade(config, "0017_call_prep")
+    assert owner_link_columns(scratch) == {}
+    with scratch.connect() as connection:
+        assert connection.execute("SELECT count(*) AS n FROM core.users").fetchone() == {"n": 1}
+    command.upgrade(config, "head")
+    assert set(owner_link_columns(scratch)) == {"hubspot_owner_id", "hubspot_owner_matched_by"}
+
+
 def fact(value: Any) -> dict[str, Any]:
     found = value is not None
     return {

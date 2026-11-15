@@ -3124,6 +3124,115 @@
         "title": "HubSpotOut",
         "type": "object"
       },
+      "HubSpotOwnerChoice": {
+        "description": "An active HubSpot owner, for the pick list. Never an email.",
+        "properties": {
+          "id": {
+            "description": "The HubSpot owner's id",
+            "examples": [
+              "301"
+            ],
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The owner's name. null: HubSpot has none",
+            "examples": [
+              "Jo Sample"
+            ],
+            "title": "Name"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "HubSpotOwnerChoice",
+        "type": "object"
+      },
+      "HubSpotOwnerIn": {
+        "additionalProperties": false,
+        "description": "Who a person is in HubSpot, chosen by hand. null clears it.",
+        "properties": {
+          "owner_id": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "An active owner's id from GET /hubspot/owners, or null to clear the link",
+            "examples": [
+              "301"
+            ],
+            "title": "Owner Id"
+          }
+        },
+        "required": [
+          "owner_id"
+        ],
+        "title": "HubSpotOwnerIn",
+        "type": "object"
+      },
+      "HubSpotOwnerLink": {
+        "description": "Who an account is in HubSpot. Never the owner's email.",
+        "properties": {
+          "id": {
+            "description": "The HubSpot owner's id",
+            "examples": [
+              "301"
+            ],
+            "title": "Id",
+            "type": "string"
+          },
+          "matched_by": {
+            "description": "email: the HubSpot sync found an active owner with the account's email. person: an Admin set it by hand, and the sync never changes it",
+            "enum": [
+              "email",
+              "person"
+            ],
+            "examples": [
+              "email"
+            ],
+            "title": "Matched By",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The owner's name, from our copy of HubSpot. null: not in our copy",
+            "examples": [
+              "Jo Sample"
+            ],
+            "title": "Name"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "matched_by"
+        ],
+        "title": "HubSpotOwnerLink",
+        "type": "object"
+      },
       "HubSpotStatus": {
         "properties": {
           "api_version": {
@@ -5924,6 +6033,17 @@
             "title": "Email",
             "type": "string"
           },
+          "hubspot_owner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HubSpotOwnerLink"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who this person is in HubSpot: the calls they log land under this owner. null: no link, so HubSpot shows their calls as unassigned"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -5975,7 +6095,8 @@
           "apps",
           "active",
           "created_at",
-          "last_signed_in_at"
+          "last_signed_in_at",
+          "hubspot_owner"
         ],
         "title": "PersonOut",
         "type": "object"
@@ -17643,6 +17764,163 @@
         ]
       }
     },
+    "/hubspot/owners": {
+      "get": {
+        "description": "Each active owner's id and name from our copy of HubSpot, which the sync keeps, sorted by name. Never an email. At most 500: Contour has a few dozen. Admins only.",
+        "operationId": "list_hubspot_owners",
+        "parameters": [
+          {
+            "description": "The most owners to send",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 500,
+              "description": "The most owners to send",
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/HubSpotOwnerChoice"
+                  },
+                  "title": "Response List Hubspot Owners",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "The active HubSpot owners, to pick who a person is in HubSpot",
+        "tags": [
+          "hubspot"
+        ]
+      }
+    },
     "/hubspot/profiles/rebuild": {
       "post": {
         "description": "Builds one profile for each loaded company (industry, office cities, estimated staff, deal names and stages) and replaces the old ones. These let the engine spot a possible match and find look-alike companies. No contacts, phones or streets go in.",
@@ -24607,6 +24885,165 @@
           }
         ],
         "summary": "Change a person's projects, role or whether they can sign in",
+        "tags": [
+          "people"
+        ]
+      }
+    },
+    "/people/{user_id}/hubspot-owner": {
+      "put": {
+        "description": "Links the account to a HubSpot owner by hand, so the calls, tasks and notes this person logs land under that owner in HubSpot. `owner_id` is an active owner from GET /hubspot/owners. The HubSpot sync never changes a link set by hand. `{\"owner_id\": null}` clears the link, and the next sync may then match the person by email again. Admins only.",
+        "operationId": "set_hubspot_owner",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HubSpotOwnerIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Set or clear who a person is in HubSpot",
         "tags": [
           "people"
         ]

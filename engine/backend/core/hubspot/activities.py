@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.hubspot.client import HubSpot, HubSpotWritesOff
+from core.hubspot.owners import owner_id_of
 from core.hubspot.people import OUTCOMES
 from core.hubspot.writer import WriteOut
 
@@ -124,5 +125,8 @@ async def resolve_step(
 
 
 async def owner_of(session: AsyncSession, user_id: uuid.UUID | None) -> str | None:
-    """The rep's HubSpot owner id, or None (sign-in off, or no owner matched). S0 stub: None."""
-    return None
+    """The rep's HubSpot owner id (PLAN-V17 T1-4), or None: sign-in is off (no user), or the
+    account has no owner linked. With None, HubSpot shows the call as unassigned."""
+    if user_id is None:
+        return None
+    return await owner_id_of(session, user_id)

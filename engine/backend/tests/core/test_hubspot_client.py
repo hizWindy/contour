@@ -399,6 +399,51 @@ async def test_owners_keep_the_name_and_never_the_email() -> None:
     assert "email" not in repr(owners)
 
 
+async def test_owner_emails_are_the_active_owners_only_and_only_for_matching() -> None:
+    """PLAN-V17 T1-4: every page, active owners only, compared without case or the spaces around
+    them, and the lowest id when two owners share one email. `owners` still keeps none."""
+    seen: list[httpx2.Request] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        seen.append(request)
+        if "after" not in request.url.params:
+            return answer(
+                200,
+                {
+                    "results": [
+                        {"id": "1000", "firstName": "Jo", "email": " Jo.Sample@Example.test "},
+                        {
+                            "id": "7",
+                            "firstName": "Gone",
+                            "email": "gone@example.test",
+                            "archived": True,
+                        },
+                        {"id": "8", "firstName": "No", "lastName": "Email"},
+                    ],
+                    "paging": {"next": {"after": "abc"}},
+                },
+            )
+        return answer(
+            200,
+            {
+                "results": [
+                    {"id": "999", "email": "jo.sample@example.test"},
+                    {"id": "9", "email": "x"},
+                    {"id": "10", "firstName": "Odd", "email": 12345},  # never stops the read
+                ]
+            },
+        )
+
+    client = make(handler)
+    assert await client.owner_emails() == {"jo.sample@example.test": "999"}
+    assert [request.url.path for request in seen] == ["/crm/owners/2026-09"] * 2
+    assert [request.url.params["archived"] for request in seen] == ["false", "false"]
+    assert seen[1].url.params["after"] == "abc"
+    owners = await client.owners()
+    assert [owner.id for owner in owners] == ["1000", "7", "8", "999", "9", "10"]
+    assert "example.test" not in repr(owners)
+
+
 def target(record: int, *labels: str | None) -> dict[str, Any]:
     """One linked record in a batch read answer, with one type for each label."""
     types = [{"category": "HUBSPOT_DEFINED", "typeId": 341, "label": label} for label in labels]

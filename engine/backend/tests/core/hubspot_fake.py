@@ -9,6 +9,8 @@ touches no real data. It follows the `HubSpot` protocol (core/hubspot/client.py)
 - A record made with links keeps them (`companies`, `contacts`, `deals`), and `linked` answers
   from them. A link the client's table (`LINK_TYPES`) has no number for is refused with
   `HubSpotRejected`, the way HubSpot refuses a bad request.
+- An owner may have an email (`owner_email`, or `add_owner(..., email=...)`). Only
+  `owner_emails` returns it, for the active owners, as the client does (PLAN-V17 T1-4).
 """
 
 from collections.abc import Mapping, Sequence
@@ -39,6 +41,7 @@ from core.hubspot.client import (
     PropertyInfo,
     Stage,
     WriteScopeProbe,
+    owner_email_index,
     primary_company,
 )
 
@@ -169,6 +172,8 @@ class FakeHubSpot:
     meetings: dict[str, FakeRecord] = field(default_factory=dict)  # PLAN-V17
     owners_active: list[Owner] = field(default_factory=list)
     owners_archived: list[Owner] = field(default_factory=list)
+    # owner id -> email, as HubSpot has it. Only `owner_emails` reads it (PLAN-V17 T1-4).
+    owner_email: dict[str, str] = field(default_factory=dict)
     pipeline_list: list[Pipeline] = field(default_factory=lambda: [SALES, WHALES])
     company_fields: list[PropertyInfo] | None = None  # None: every field asked for exists
     deal_fields: list[PropertyInfo] | None = None
@@ -217,6 +222,15 @@ class FakeHubSpot:
         )
         self.call_log[call_id] = record
         return record
+
+    def add_owner(
+        self, owner_id: str, name: str | None, *, email: str | None = None, archived: bool = False
+    ) -> Owner:
+        owner = Owner(owner_id, name, archived)
+        (self.owners_archived if archived else self.owners_active).append(owner)
+        if email is not None:
+            self.owner_email[owner_id] = email
+        return owner
 
     def grant_people(self) -> None:
         self.scopes.add(PEOPLE_SCOPE)
@@ -337,6 +351,14 @@ class FakeHubSpot:
     async def owners(self, *, archived: bool = False) -> list[Owner]:
         self._call("owners_archived" if archived else "owners", "crm.objects.owners.read")
         return list(self.owners_archived if archived else self.owners_active)
+
+    async def owner_emails(self) -> dict[str, str]:
+        self._call("owner_emails", "crm.objects.owners.read")
+        return owner_email_index(
+            (owner.id, self.owner_email.get(owner.id))
+            for owner in self.owners_active
+            if not owner.archived
+        )
 
     async def pipelines(self, object_type: ObjectType = "deals") -> list[Pipeline]:
         self._call("pipelines", "crm.objects.deals.read")

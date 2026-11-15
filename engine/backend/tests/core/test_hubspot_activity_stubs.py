@@ -61,7 +61,7 @@ async def test_every_write_waits_for_write_access_until_track_1_builds_it() -> N
         await activities.apply_activity(session, hubspot, uuid.uuid4())
     with pytest.raises(HubSpotWritesOff):
         await activities.resolve_step(session, uuid.uuid4(), "call", landed=True)
-    assert await activities.owner_of(session, uuid.uuid4()) is None
+    # owner_of is built (T1-4): tests/core/test_hubspot_owners.py.
 
 
 async def test_the_meeting_reads_find_nothing_yet() -> None:

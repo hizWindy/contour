@@ -81,6 +81,7 @@ ROUTES = [
     ("GET", f"{API}/people"),
     ("POST", f"{API}/people"),
     ("PATCH", f"{API}/people/{{user_id}}"),
+    ("PUT", f"{API}/people/{{user_id}}/hubspot-owner"),  # who a person is in HubSpot (PLAN-V17)
     ("POST", f"{API}/runs"),
     ("POST", f"{API}/runs/estimate"),
     ("GET", f"{API}/runs"),
@@ -107,6 +108,7 @@ ROUTES = [
     ("POST", f"{API}/hubspot/syncs/{{sync_id}}/cancel"),
     ("GET", f"{API}/hubspot/writes"),
     ("POST", f"{API}/hubspot/writes/{{write_id}}/apply"),
+    ("GET", f"{API}/hubspot/owners"),  # the owners an Admin can pick (PLAN-V17 T1-4)
     ("POST", f"{API}/memory"),
     ("GET", f"{API}/memory/search"),
     ("GET", f"{API}/searches"),
