@@ -9,9 +9,9 @@
  *   stays a weekend: a meeting can be on a Saturday. Only what it truly can't read gets plain
  *   words, once the field is left or the form is sent.
  * - **Teams or in person** may be left unpicked: the pre-read then says nothing about where.
- * - **A double press is one form:** the button is greyed while the server answers. Track 2's
- *   route takes no `Idempotency-Key`, so a retry after a lost answer could start a second form
- *   (a question for Track 2).
+ * - **A double press is one form:** the button is greyed while the server answers, and the server
+ *   gives back the first pre-read when the same person types the same meeting again (the same
+ *   company, title and start), so a retry after a lost answer opens it and makes no second one.
  * - The dialog's one Navy button is "Draft the pre-read". It closes when the form has started.
  */
 import { ChevronsUpDown, FilePlus, MapPin, Video } from 'lucide-react'
