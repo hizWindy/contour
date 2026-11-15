@@ -8,9 +8,30 @@
 label: Draft version 2, 30 Oct 2026, with Levi's 9 Nov changes
 
 cities:
-  pass: [Melbourne, Adelaide, Perth]
-  director_review: [Sydney]
-  other_cities: director_review # "Sydney or another city" goes to a Director
+  # All of Australia (PLAN-V16 T1-2, Al-khair 15 Nov; Criteria_v3.md section 2). Levi's notes name
+  # Melbourne, Adelaide and Perth (priority), and Sydney and Brisbane (secondary). The other places
+  # are our list, TBC with Levi. Every place passes the location filter, and a place that isn't
+  # listed passes too, with the flag "check the city". The group only changes the city points.
+  groups:
+    priority: [Melbourne, Adelaide, Perth]
+    secondary: [Sydney, Brisbane] # Sydney was a Director's decision in version 2
+    capital: [Canberra, Hobart, Darwin]
+    regional:
+      - Gold Coast
+      - Newcastle
+      - Sunshine Coast
+      - Wollongong
+      - Geelong
+      - Townsville
+      - Cairns
+      - Toowoomba
+      - Ballarat
+      - Bendigo
+      - Launceston
+      - Mackay
+  # Not a place: the name of the run choice that searches all of Australia at once, one search for
+  # each sign, and asks Claude which city each company's office is in (PLAN-V16 choice 10).
+  national: Australia
   # A lead with one of these signs and no city at all goes to a Director, not to Watch. An overseas
   # company new to Australia must name an Australian city to pass (30 Oct decision, PLAN-V9 B3).
   no_city_director_signs: [new_to_australia]
@@ -56,30 +77,40 @@ size:
 # before have nothing. The other values stay on the lead card, and a big gap raises a flag for a
 # person to check. A source that isn't listed isn't asked, so taking headcount_tool out of one list
 # turns Signal Hire off for that data, with no code change. Staff numbers have their own list,
-# size.staff_sources. Everything else (triggers, owner, lease end, office size, healthy business,
-# office history) comes from the web research alone.
+# size.staff_sources. The office's size, its lease end and the date it has been at its address
+# have the three lists at the end (PLAN-V16 T1-8): the two property tools first, then HubSpot, then
+# the web research. Everything else (the other triggers, owner, healthy business) comes from the
+# web research alone.
 data_sources:
   company_details: [headcount_tool, web_research] # the checked name, website and industry. Reading them costs 1 Signal Hire company credit, once a month for each company
   office_cities: [headcount_tool, web_research] # the cities with an office, and the head office
   decision_makers: [headcount_tool, web_research] # the names and job titles of senior people
+  # PLAN-V16 T1-8. The first source with a value wins: its value is the one the rules use, and the
+  # others stay on the lead card. A tool that is switched off is skipped, and so is a lease end
+  # that has passed. A source left out of a list is never used for that fact.
+  office_m2: [property_daily, arealytics, hubspot, web_research] # the office's floor area
+  lease_end: [property_daily, arealytics, hubspot, web_research] # when the lease of the office ends
+  office_since: [property_daily, arealytics, hubspot, web_research] # when it moved in at its address
 
 conflicts:
   staff_gap_ratio: 2 # staff numbers from two sources more than this many times apart raise a flag
+  office_m2_gap_ratio: 1.25 # two office sizes more than this many times apart raise a flag (PLAN-V16 T1-8, TBC)
+  date_gap_months: 12 # two lease ends, or two move-in dates, more than this many months apart raise a flag (TBC)
 
 fitout:
   rate_per_m2_aud: 1500 # the minimum rate in the deal criteria
 
 industries:
+  # PLAN-V16 T1-3: Government, Law firms, Premium banks and finance and Standard not-for-profits are
+  # left out now (`exclusions` below), not a Director's decision. Education, real estate agencies
+  # and hospitals aren't in Levi's list of exclusions, and neither are industry consultants, so
+  # they stay a Director review (TBC).
   director_review:
-    - Government
     - Education
     - Industry consultants
-    - Law firms
-    - Premium banks and finance
     - Real estate agencies
-    - Standard not-for-profits
     - Hospitals and healthcare
-  check_office_size: # site-heavy industries. Only a hint: a flag when it isn't clear that the office matters
+  check_office_size: # site-heavy industries. A flag when it isn't clear that the office matters, and an exclusion when it is clear it doesn't
     - Construction
     - Civil engineering
     - Mining and metals
@@ -90,18 +121,93 @@ industries:
     - Automotive
     - Hospitality
     - Transport and logistics
-  # Industry tiers from the Target Customer Profile. A tier adds points to the score. It never
-  # decides whether a company fits.
-  tier_1:
-    - Energy and infrastructure
-    - Mining and resources
-    - Technology and telecommunications
-    - Engineering and technical services
-  tier_2:
-    - Defence and advanced manufacturing
-    - Life sciences and medtech
-    - Selected financial and corporate services
-    - Other corporate professional services
+  # Levi's priority sectors (his section 2, PLAN-V16 T1-6): energy, renewables and critical
+  # infrastructure, defence, engineering, insurance and mid-tier financial services, technology,
+  # professional services (not legal) and resources head offices. They replace version 2's tier 1
+  # and tier 2. A priority sector adds points to the score. It never decides whether a company
+  # fits. Each is the name of an industry group Claude files a company in (the fact `tier_group`).
+  priority_sectors:
+    - Energy and infrastructure # energy, renewables, critical infrastructure
+    - Defence and advanced manufacturing # defence
+    - Engineering and technical services # engineering
+    - Selected financial and corporate services # insurance, mid-tier financial services
+    - Technology and telecommunications # technology
+    - Other corporate professional services # professional services, not legal
+    - Mining and resources # resources head offices
+
+# Left out and not scored (Levi's section 3, PLAN-V16 T1-3, Criteria_v3.md). An excluded lead is a
+# Drop that shows its reason and its evidence. A person with the Lead Finder tick can override it,
+# and the lead is then judged again without the exclusion. They replace the Director review for these
+# industries. Every one is TBC with Levi. The code is scoring._exclusion.
+exclusions:
+  - id: government
+    label: Government department or agency
+    kind: industry
+    industry_groups: [Government]
+    meaning: a government department or agency. A government-owned corporation or a commercialised body is not in it, and its owner says so
+    unless: [government-owned, state-owned, commonwealth-owned, commercialised]
+    flag: A government-owned or commercialised body. Flagged, not left out
+  - id: not_for_profit
+    label: Not-for-profit or charity that relies on grants or donations
+    kind: industry
+    industry_groups: [Standard not-for-profits]
+    meaning: a charity or not-for-profit that relies on grants or donations. A large member-owned organisation, like an industry super fund or a member-owned insurer, is not in it
+    unless: [industry super fund, superannuation fund, member-owned, mutual insurer, mutual bank]
+    flag: A large member-owned organisation, not a not-for-profit. Flagged, not left out
+  - id: law_firm
+    label: Law firm
+    kind: industry
+    industry_groups: [Law firms]
+    meaning: a law firm of any size, tier one and national firms most of all
+  - id: big_bank
+    label: Big four bank or tier-one financial institution
+    kind: industry
+    industry_groups: [Premium banks and finance]
+    meaning: only the big four banks and other tier-one financial institutions that buy design apart from delivery. A mid-tier bank, an insurer or a fund manager is not in it
+    # Insurance and mid-tier financial services are priority sectors in Levi's notes (section 2). The
+    # old group held them too (Budget Direct, an insurer), so these words save a saved lead too.
+    unless: [insurance, insurer, fund manager, funds management, investment management, wealth management, customer-owned, mutual, credit union, building society]
+    flag: An insurer, a fund manager or a customer-owned bank, not a big bank. Flagged, not left out
+  - id: office_incidental
+    label: The office is incidental (most local staff are not office staff)
+    kind: office_incidental # office_matters is false, in a site-heavy industry (check_office_size)
+  - id: tender_only
+    label: Buys its fitouts only through formal public tender portals
+    kind: tender_only # the fact tender_only is true: AusTender, Tenders VIC, Tenders WA, SA Tenders
+
+# Dampeners (Levi's section 5, PLAN-V16 T1-5, Criteria_v3.md): facts that lower a lead's score and
+# never remove it. The first four are searched for on purpose (the research angle `dampeners`), and
+# each comes back found or not_found: the code never writes "none". Financial stress comes from the
+# `healthy` fact. How many points each takes off is in `score.dampeners` (T1-6). The strengths are
+# Levi's. Which procurement flag is strong or moderate is our reading (TBC).
+dampeners:
+  - id: recent_fitout # a fitout or move in that city: strong in the last 3 years, moderate 3 to 5 years ago
+    label: A fitout or move in that city in the last 5 years
+    meaning: A note says the company moved into a new office, or fitted out or refitted its office, in that city in the last 5 years. Give the date. A move or fitout still to come is not one.
+    strong_years: 3
+    moderate_years: 5
+    outgrow_months: 24 # Levi: still list the lead if hiring would outgrow the space within 24 months
+  - id: outsourcing
+    label: A global or national real estate outsourcing deal
+    meaning: A press release or case study from JLL, CBRE, Cushman & Wakefield, Colliers or a similar firm names the company as a client of a global or national real estate outsourcing deal.
+    strength: strong
+  - id: competitor_tie
+    label: A known tie to a competitor
+    meaning: A design and build firm or an architect has delivered 2 or more of the company's projects, or holds a panel or global agreement with it. Name the firm in the evidence.
+    strength: moderate
+  - id: procurement
+    label: Procurement red flags
+    meaning: A note shows a red flag in how the company buys fitouts. Give the red flag as the kind, exactly one of these. tender_portal is a formal tender portal for fitouts. offshore_buying is offshore or central global buying. lowest_price is a history of lowest-price tenders. separate_design_and_build is design and build bought apart.
+    strength: moderate # Levi: moderate to strong. A flag with no kind is moderate
+    kinds:
+      tender_portal: strong
+      offshore_buying: strong
+      lowest_price: moderate
+      separate_design_and_build: moderate
+  - id: financial_stress
+    label: Financial stress
+    strength: strong # layoffs, profit warnings, administration or a hiring freeze
+    waived_by: [office_consolidation, merger_or_takeover] # Levi: unless part of a consolidation that creates a move
 
 fit:
   local_team_runs_project: true
@@ -118,6 +224,9 @@ office_age:
   # office dates, never Claude, and it has no discovery search.
   tenure_years: 8
   tenure_sign: long_tenure
+  # Levi's section 4 (PLAN-V16 T1-4): "no known fitout at that address in the last 5 years". A fitout
+  # longer ago than this doesn't stop the sign, and the move-in's own doesn't count.
+  tenure_fitout_years: 5
   # The lead card's "Why now" (PLAN-V12 B1) guesses when a lease may end from the move-in year: the
   # move-in year plus 5 to 7 years. Always marked "estimated", with its working. It never changes a
   # result or a score.
@@ -126,53 +235,84 @@ office_age:
 triggers:
   window_years: 3
   best_window_years: [1, 3]
-  recent_months: 12 # an event, like a merger, counts if it happened in the last 12 months
+  recent_months: 18 # Levi's section 4 (PLAN-V16 T1-4): ignore a sign older than this, unless it is a lease or tenure date. Was 12
   consultant_window_months: 18 # the Profile: a consultant is usually appointed this long before the project. The lead card says so as text, because the tool can't see it
+  # Each sign has a strength (Levi's section 4, PLAN-V16 T1-4): very_high, high, medium or low. The
+  # strength is how much it counts in the score (T1-6). The group (main, other, weak) is only which
+  # signs a run searches for by default: the main ones. The ids stay, so old leads keep their signs.
   main:
     - id: lease_ending
       label: Lease ending in 1 to 3 years, or a relocation
+      strength: very_high
     - id: merger_or_takeover # PLAN-V11 B1, Levi 9 Nov: even with an old office, a merger can still lead to a move
       label: Merger or acquisition
+      strength: high
     - id: big_new_contract # PLAN-V11 B1, Levi 9 Nov: "about 100 more office staff" was too specific
       label: Big new contract or project award that means a large increase in office staff
+      strength: high
     - id: fast_growth
       label: Fast or planned headcount growth, like many job ads, big funding or growth news
+      strength: high # Levi: a hiring surge, open roles of 25% or more of the local staff
     - id: new_to_australia # PLAN-V9 B3, Levi 5 Nov. Its size comes from the staff or office it announces here
       label: An overseas company opening its first or a much bigger office in an Australian city
+      strength: high
     - id: hot_industry_growth # PLAN-V9 B4, Levi 2 Nov. Its searches name the industries (queries.yaml)
       label: Growing because its industry is booming, like the energy transition, defence or critical minerals
+      strength: medium # Levi calls it a sector tailwind. A good lead with it also starts the competitor sweep (rivals.also_after)
     - id: long_tenure # PLAN-V11 C1, Levi 9 Nov. Added by the code from the office dates (office_age.tenure_years), so it has no search
-      label: At the same address for 8 or more years, with no known office project in that time
+      label: At the same address for 8 or more years, with no known fitout there in the last 5 years
+      strength: very_high # Levi: 10 or more years is the strongest (T1-6 gives it more points)
+    - id: capital_raise # PLAN-V16 T1-4, Levi's section 4. New
+      label: Capital raise or funding, like a Series B or later, private equity, an IPO or a big debt raise, with growth plans
+      strength: high
+    - id: tenant_advisor # PLAN-V16 T1-4, Levi's section 4. New. Property Daily's "requirement" items are this sign too (T1-8)
+      label: Appoints a tenant representation agent, or is in leasing news as looking for space
+      strength: high
   other:
     - id: office_consolidation
       label: Merging several offices into one
+      strength: medium
     - id: return_to_office
       label: Return to office
+      strength: medium
     - id: restructure
       label: Restructure
+      strength: medium
     - id: new_ceo # the id stays, so old leads keep their label. Moved up from weak in version 2
       label: Leadership change that changes direction or strategy
+      strength: medium
     - id: new_business_unit
       label: New business unit
+      strength: medium # Levi's notes don't list it: version 2's other signs stay medium (TBC)
     - id: new_facility
       label: New engineering, project or manufacturing facility with a big office part
+      strength: medium
     - id: underperforming_workplace
       label: Underperforming workplace, or a major business or industry change
+      strength: medium
   weak:
     - id: culture_change
       label: Culture change
+      strength: low
     - id: hiring_push # the id stays. The label is the Profile's wording
       label: Pressure on talent, client experience or productivity, like a hiring push
+      strength: low
     - id: rival_growth # PLAN-V9 B5. It has no search: it comes from the rivals table (below)
       label: A rival of a booming company
+      strength: low
+    - id: growth_list # PLAN-V16 T1-4, Levi's section 4. New: AFR Fast 100, Deloitte Technology Fast 50 and the like
+      label: On a growth list, like the AFR Fast 100 or the Deloitte Technology Fast 50
+      strength: low # low on its own: it supports other signs
 
-# Rivals of a booming company (PLAN-V9 B5, Levi 2 Nov). When a lead in one of these tiers is a Pass or
-# a Director review, one Claude web search names up to per_lead Australian rivals with an office in
-# the same city. The next discovery run for that city adds up to per_run of them to its list, with
-# the weak sign below, so real news still ranks first. Set enabled to false to stop it.
+# Rivals of a booming company (PLAN-V9 B5, Levi 2 Nov). When a lead in a priority sector is a Pass
+# or a Director review, one Claude web search names up to per_lead Australian rivals with an office
+# in the same city. The next discovery run for that city adds up to per_run of them to its list,
+# with the weak sign below, so real news still ranks first. Set enabled to false to stop it.
+# Levi's competitor sweep (section 4): it also runs for a good lead with a sector tailwind sign,
+# whatever its sector (`also_after`, PLAN-V16 T1-4).
 rivals:
   enabled: true
-  tiers: [tier_1, tier_2]
+  also_after: [hot_industry_growth]
   per_lead: 5
   per_run: 5
   max_searches: 2 # web searches in the one request (about US$0.05 to US$0.10, TBC)
@@ -194,16 +334,25 @@ never_suggest:
   dissolved_deal_wait_months: 12
   do_not_contact: true
 
-sources_rank: [property_daily, asx_or_official_news, other_news, job_ads]
+# The two property tools rank first (Levi, PLAN-V16 T1-7). A fact our connector reads from one of
+# them counts as confirmed, and the sign it gives ranks above news (T1-8).
+sources_rank: [property_daily, arealytics, asx_or_official_news, other_news, job_ads]
 
 # Which websites count as which kind of source. A site matches its subdomains too.
 # Anything not listed is other_news. The company's own website counts as official.
 source_domains:
-  property_daily: [] # off in version 1
+  # The tools' own sites. They are on the blocked list too, so Claude's web tool never reads them
+  # (PLAN-V16 choice 8): these two lists only name the kind of a fact our connector reads (T1-8).
+  # A link Claude cites on one of them is still dropped, because the blocked list comes first for
+  # Claude's links. Property Daily's pages are on its publisher's site (PLAN-V16 T2-2).
+  property_daily: [propertydaily.com.au, spatialgroup.com.au]
+  arealytics: [arealytics.com.au]
   asx_or_official_news: [asx.com.au, gov.au, wgea.gov.au, abr.business.gov.au, asic.gov.au]
   job_ads: [seek.com.au, indeed.com, jora.com, linkedin.com, glassdoor.com]
   blocked: # sites we never read: contact-data sellers (personal data), and Property Daily
-    - propertydaily.com.au # off until its terms allow a program to read it (TBC with Levi)
+    - propertydaily.com.au # only our connector reads it, never Claude's web tool (PLAN-V16 T1-7)
+    - spatialgroup.com.au # Property Daily's pages (PLAN-V16 T2-2): the same rule
+    - arealytics.com.au # its data stays out of Claude until Arealytics approves (PLAN-V16 choice 8)
     - zoominfo.com
     - rocketreach.co
     - signalhire.com
@@ -211,50 +360,61 @@ source_domains:
     - lusha.com
     - apollo.io
 
-# The score, 0 to 100: the Target Customer Profile's six parts (Criteria_v2.md section 6). The parts
-# add up to 100, and the checks inside each part add up to the part (the backend checks this).
-# The checks and their points are our proposal, TBC until Levi fills in the Importance column.
-# A check is "not known yet" when the tool can't judge it for a lead, and then it adds nothing to
-# "checked". The tool shows points earned out of points checked, like "48 of 60 checked".
+# The score, 0 to 100 (Levi's section 6, PLAN-V16 T1-6, Criteria_v3.md): Fit 30, Change and timing 50
+# and Access 20. The checks inside each part add up to the part (the backend checks this). Then the
+# dampeners take points off, and the score sets the tier. Every number is Levi's except where a
+# note under "tbc" says it is our reading. A check is "not known yet" when the tool can't judge it
+# for a lead: it earns nothing, and the lead's confidence says so.
 score:
   parts:
-    trigger: { label: Business or property trigger, points: 25 }
-    size: { label: Project size, points: 20 }
-    timing: { label: Timing, points: 15 }
-    access: { label: Decision-maker access, points: 15 }
-    fit: { label: Integrated strategic fit, points: 15 }
-    competition: { label: Competitive opportunity, points: 10 }
+    fit: { label: Fit, points: 30 }
+    change: { label: Change and timing, points: 50 }
+    access: { label: Access, points: 20 }
   check_labels:
-    trigger_group: The best trigger
-    source: How strong its source is
-    size: Office size
-    recency: How recent the trigger is, or how near the lease end
-    years_at_address: Years at the same address
-    no_recent_move: No recent move or fitout
-    contact_role: A contact role found
-    hubspot_contact: A contact already in HubSpot
-    customer_link: A link to a current customer
-    buys_strategy: Talks about culture, hybrid work or green ratings
-    industry_tier: Industry tier
-    no_rival_in_place: Not in a competitor's case studies
-    no_contractor_relationship: No known fitout contractor relationship
-  trigger_group: { main: 15, other: 10, weak: 4 } # the best trigger counts
-  source: { property_daily: 10, asx_or_official_news: 8, other_news: 5, job_ads: 2 }
-  size: { confirmed_in_range: 20, estimated_in_range: 16, growing_into_range: 14, director: 10 }
-  recency: # timing: how long ago the best trigger happened
+    local_staff: Local staff, now or projected
+    priority_sector: A priority sector
+    city: City
+    office_relevance: The office matters to how it works
+    strongest_sign: The strongest sign
+    other_signs: Other independent signs within 12 months
+    office_constrained: The office is constrained or ending
+    no_lock_in: No outsourcing deal or competitor lock-in found
+    procurement: Favourable procurement
+    warm_path: A warm path in
+  # How signs, and companies found by discovery, are ranked against each other. These are not
+  # points of a lead's score: the strength of its strongest sign is (strongest_sign below).
+  trigger_group: { main: 15, other: 10, weak: 4 }
+  source: { property_daily: 10, arealytics: 10, asx_or_official_news: 8, other_news: 5, job_ads: 2 }
+  recency: # how long ago a sign happened
     - { within_days: 30, points: 6 }
     - { within_days: 90, points: 4 }
     - { within_days: 365, points: 2 }
   undated: 1
   lease_in_best_window: 6 # a lease ending 1 to 3 years out
-  years_at_address: 7 # more than office_age.due_years at the same address. Was 5 (Levi, 9 Nov: check how long it has been at its office, PLAN-V11 B5)
-  no_recent_move: 2 # no move or fitout in the last office_age.recent_move_years. Was 4: B3 now makes a very recent move a Watch
-  access: { contact_role: 5, hubspot_contact: 5, customer_link: 5 }
-  fit: { buys_strategy: 8, tier_1: 7, tier_2: 4 }
-  competition: { no_rival_in_place: 6, no_contractor_relationship: 4 }
-  unseen: [hubspot_contact, customer_link, no_contractor_relationship] # the tool can't judge these yet
-  bands: { research_first: 75, investigate: 50 } # under investigate is "nurture" (the Profile)
-  band_basis: scaled # scaled: points earned out of points checked, then x100. raw: points earned
+  # Fit (30). Staff of at least from_staff earn the points of the highest step reached. Levi:
+  # 100 staff = 5, 150+ = 10, 250+ = 12. 50 to 99 staff = 2 is ours (Levi, 9 Nov: 50+ still fits)
+  local_staff:
+    - { from_staff: 250, points: 12 }
+    - { from_staff: 150, points: 10 }
+    - { from_staff: 100, points: 5 }
+    - { from_staff: 50, points: 2 }
+  priority_sector: 8
+  city: { priority: 5, secondary: 2, other: 1 } # other: a capital, a regional centre, or a place that isn't listed (TBC)
+  office_relevance: 5 # the office matters to how it works (office_matters is true)
+  # Change and timing (50)
+  strongest_sign: { very_high: 25, high: 18, medium: 10, low: 4 }
+  other_signs: # 8 each, at most 2. A sign with no date counts too
+    points_each: 8
+    at_most: 2
+    within_months: 12
+  office_constrained: 9 # 8+ years at the address, or a lease ending in 3 years
+  # Access (20)
+  no_lock_in: 10 # no outsourcing deal and no tie to a competitor found
+  procurement: 6 # direct engagement and a values strategy, and no red flag
+  warm_path: 4
+  unseen: [warm_path] # the tool can't judge these yet: it needs HubSpot contacts and board lists
+  dampeners: { strong: 20, moderate: 10 } # taken off the score for each found dampener
+  tiers: { a: 75, b: 55, c: 40 } # A 75+, B 55 to 74, C 40 to 54, Discard under 40
 
 results: [pass, director_review, watch, drop]
 
@@ -283,8 +443,12 @@ tbc:
     note: The order from the 27 Oct meeting. HubSpot first, then a headcount tool (Signal Hire), then LinkedIn doubled, then the AI's web research. The first source with a number wins, and the others stay on the lead card (PLAN-V4 C3); before that, HubSpot and Signal Hire only filled a gap. Signal Hire is on since 2 Nov, before its test (PLAN-V3 A4, B1) shows how far its counts can be trusted. Our export has a LinkedIn staff count for most offices, but no office size, no manual headcount, and almost no lease expiry or last-moved dates.
   - key: data_sources
     note: Our proposal (PLAN-V4). Signal Hire is main for the checked company name, website and industry, for the cities with an office, and for senior people's names. The web research is the backup. When two sources disagree, the main source wins and both values stay on the lead card. Levi confirms.
+  - key: data_sources.office_m2
+    note: Al-khair's order (PLAN-V16 T1-8), the same for the office's size, its lease end and when it moved in at its address. Property Daily, then Arealytics, then HubSpot, then the web research. Before T1-8, HubSpot's lease end and move-in date only filled a gap the web research left, so where both have a value HubSpot's now wins, and the web research's stays on the card. To go back, put web_research before hubspot. HubSpot's office size ("Office Space Size") is used for the first time. Arealytics is dropped from PLAN-V16 (its site refused automated access), so its place in the lists does nothing for now.
   - key: conflicts.staff_gap_ratio
     note: Our guess. Both doublings (LinkedIn x 2, Signal Hire x 2) are guesses, so two numbers 1.5 times apart are normal. Over 2 times apart raises a flag. The test of 5 companies (PLAN-V4 D2) shows what is normal.
+  - key: conflicts.office_m2_gap_ratio
+    note: Our guess (PLAN-V16 T1-8). The plan's example, Arealytics 1,400 m2 against the web's 900 m2, must raise a flag (1.56 times apart). The lease ends and move-in dates use date_gap_months, 12 months. M2's check of 10 cards against the sites shows what is normal.
   - key: size.headcount_tool_multiplier
     note: Signal Hire counts only the people it has on file, which is fewer than the real staff. 2 is our guess, like LinkedIn. The test of 5 companies (PLAN-V3 A4) gives the real ratio, and B1 sets the number. Levi confirms.
   - key: size.headcount_tool_name_check
@@ -296,11 +460,13 @@ tbc:
   - key: size.linkedin_staff_multiplier
     note: LinkedIn shows about half the real staff (median 0.51 across 19 HubSpot companies).
   - key: industries.check_office_size
-    note: Version 2 judges the office, not the industry (a miner's head office counts). A site-heavy industry gets a flag only when the AI can't tell whether the office matters. The AI's "the office doesn't matter" is flagged, not dropped, because it is a judgement.
-  - key: industries.tier_1
-    note: From the Target Customer Profile, which leadership hasn't approved. Question 1 for Levi.
-  - key: industries.tier_2
-    note: Defence is Tier 2 today, but 5 of the 23 Gold customers are defence or secure sites. Question 1 for Levi.
+    note: Version 2 judges the office, not the industry (a miner's head office counts). A site-heavy industry gets a flag when the AI can't tell whether the office matters. Since PLAN-V16 T1-3, when the AI says the office doesn't matter in one of these industries, the company is left out (the exclusion office_incidental, Levi's section 3). In any other industry that answer is still only a flag.
+  - key: industries.director_review
+    note: Version 2's list without Government, Law firms, Premium banks and finance and Standard not-for-profits, which are exclusions now (PLAN-V16 T1-3). Education, real estate agencies, hospitals and industry consultants stay a Director review, because Levi's notes don't list them as exclusions. Industry consultants may not need one, since his notes make professional services (not legal) a priority sector. Levi to say.
+  - key: exclusions
+    note: Levi's section 3 (15 Nov, PLAN-V16 T1-3). Six kinds of company are left out and not scored, each with its reason and evidence, and a person can override one. Our readings, all TBC. All law firms are left out (his notes say "especially tier one and national"). Only the big four banks and other tier-one institutions are, not an insurer, a fund manager or a customer-owned bank, because insurance and mid-tier financial services are priority sectors. A government-owned corporation and an industry super fund are flagged, not left out. Tender portals count only when they are the company's only route.
+  - key: industries.priority_sectors
+    note: Levi's list (section 2, PLAN-V16 T1-6) is energy, renewables, critical infrastructure, defence, engineering, insurance, mid-tier financial services, technology, professional services (not legal) and resources head offices. They replace version 2's tier 1 and tier 2, and each is one of the industry groups Claude files a company in. Our reading, for Levi to confirm. Life sciences and medtech was a tier 2 industry, and his list doesn't name it, so it earns no sector points now. Mining and resources is a priority sector for its head offices.
   - key: fit.local_team_runs_project
     note: Was "decides locally". Some of Contour's clients are owned overseas.
   - key: fit.healthy
@@ -326,16 +492,30 @@ tbc:
   - key: triggers
     note: Version 2 adds three triggers (new facility, new business unit, underperforming workplace) and moves the leadership change up from weak to other, counting only when strategy changes. All from the Profile and Levi's brief, none confirmed.
   - key: triggers.main
-    note: PLAN-V9 adds new_to_australia (Levi, 5 Nov) and hot_industry_growth (Levi, 2 Nov) to the main signs, so the schedules look for them. Whether they are main signs is for Levi.
+    note: PLAN-V9 adds new_to_australia (Levi, 5 Nov) and hot_industry_growth (Levi, 2 Nov) to the main signs, so the schedules look for them. Whether they are main signs is for Levi. PLAN-V16 T1-4 adds capital_raise and tenant_advisor (Levi's section 4, both high), so a default run searches 8 signs, not 6, and each city's schedule too.
   - key: rivals
-    note: Our proposal (PLAN-V9 B5). Whether rivals with no news of their own are wanted is for Levi (PLAN-V9 A3). At most 5 a run, and the weak sign ranks them after real news.
+    note: Our proposal (PLAN-V9 B5). Whether rivals with no news of their own are wanted is for Levi (PLAN-V9 A3). At most 5 a run, and the weak sign ranks them after real news. Levi's competitor sweep (section 4) also runs after a sector tailwind sign (also_after, PLAN-V16 T1-4), whatever the lead's sector.
+  - key: cities.groups
+    note: Al-khair asked for all of Australia (15 Nov, PLAN-V16 T1-2). Levi's notes name Melbourne, Adelaide and Perth as priority and Sydney and Brisbane as secondary. The capitals (Canberra, Hobart, Darwin) and the 12 regional centres are our list, and so is the rule that any place passes. A place not on the list passes too, with the flag "check the city". Sydney is no longer a Director's decision, because his notes call it secondary.
+  - key: cities.national
+    note: Our proposal (PLAN-V16 choice 10). "All of Australia" is one search for each sign, not one for each place (20 places x 6 signs would be 120 searches). The research then finds each company's city.
   - key: cities.no_city_director_signs
     note: Our proposal (PLAN-V9 B3). An overseas company new to Australia with no Australian city named yet goes to a Director, not to Watch.
   - key: triggers.recent_months
-    note: Our proposal. How old an event can be and still count as a trigger.
+    note: Levi's section 4 (PLAN-V16 T1-4) says to ignore a sign older than 18 months, unless it is a lease or tenure date. It was 12 months, our guess. The score's "other signs within 12 months" keeps its own 12 (T1-6).
+  - key: triggers.other
+    note: The strengths are Levi's (section 4, PLAN-V16 T1-4). Where his notes are silent, version 2's other signs (new business unit, new facility, underperforming workplace) are medium, and the weak signs (culture change, hiring push, a rival of a booming company) are low. That is our reading. A strength is how much a sign counts in the score (T1-6). The group (main, other, weak) is only which signs a run searches for by default.
+  - key: office_age.tenure_fitout_years
+    note: Levi's section 4 (PLAN-V16 T1-4), long tenure. 8 or more years at the address, a company that is stable or growing, and no known fitout there in the last 5 years. A year is enough for the move-in ("at this address since at least 2017"). Ten or more years is the strongest, so T1-6 gives it more points in the score.
+  - key: dampeners
+    note: Levi's section 5 (PLAN-V16 T1-5). The five dampeners and which are strong or moderate are his, and so is "found or not found, never none". Our reading, for Levi to confirm. (1) His "moderate to strong" procurement flags are strong for a tender portal or offshore or central global buying, and moderate for lowest-price tenders or design and build bought apart. A flag with no kind is moderate. (2) A fitout or move with no date counts as moderate. (3) His "still list the lead if hiring would outgrow the space within 24 months" means the dampener takes nothing off, when the company plans to hire a lot and says it will need more space than it has now by a date inside 24 months. (4) His "unless it is part of a consolidation that creates a move" is a merger or takeover sign, or an office consolidation sign. (5) In version 2, a company in administration or cutting staff fast was a Drop. It is a strong dampener now (T1-6), no longer a Drop. The check adds up to 3 web searches a company on top of `company_max_searches`, so a researched company may use 3 more than that setting says. The money limits are the same.
   - key: source_domains
-    note: First draft. The test set will show which sites matter.
+    note: First draft. The test set will show which sites matter. Since PLAN-V16 T1-7 the two property tools have their own kind, and both sites are on the blocked list too, so Claude's web tool never reads them. Property Daily's terms need written approval before a program stores or reads it, and Arealytics's data stays out of Claude until Arealytics approves (choice 8). The kind is for facts our connector reads (T1-8). Whether Claude may read Arealytics's public pages is for Al-khair and Levi. Since T1-8, spatialgroup.com.au is on both lists too, because Property Daily's pages are on its publisher's site (T2-2). The whole site is blocked for Claude, its public news too (our choice).
+  - key: sources_rank
+    note: Levi, PLAN-V16 T1-7. Both property tools rank first, Property Daily then Arealytics (our order). They rank signs against each other. They are no longer points of a lead's score. Source quality is in the confidence.
   - key: score
-    note: The six parts are the Profile's, which leadership hasn't approved. The checks inside them and all their points are our proposal, until Levi fills in the Importance column. Three checks can't be judged yet (a contact in HubSpot, a link to a current customer, no known contractor relationship). On 9 Nov Levi asked to weigh the years at the address more, so Timing is now 6 for the trigger's timing, 7 for the years at the address (was 5) and 2 for no recent move (was 4). Those numbers are TBC (PLAN-V11 B5).
-  - key: score.band_basis
-    note: Our proposal. With scaled, 48 of 60 checked counts as 80 for the band. Raw would use 48.
+    note: Levi's three parts and every check's points are his (section 6, PLAN-V16 T1-6), and so are the tiers (A 75+, B 55 to 74, C 40 to 54, Discard under 40) and the deductions (strong 20, moderate 10). The points are the score before the dampeners. They replace the Profile's six parts. Our readings, TBC. (1) 50 to 99 local staff earns 2 (Levi, 9 Nov, 50+ still fits), and 100 to 149 earns 5. Local staff means the larger of the staff now and the staff the office size or a growth plan points to (10 m2 a person). (2) A place other than the five he names earns 1 for the city (our choice 5). (3) The office matters to how it works is the fact office_matters. (4) Favourable procurement is the booster buys_strategy (direct engagement and a values strategy), and a red flag found by the procurement check cancels it. (5) The office is constrained or ending is 8 or more years at the address, or a lease that ends in 3 years. Overflow space and split sites can't be judged yet. (6) A warm path in can't be judged yet. It needs HubSpot contacts and board lists, so nobody earns its 4 points and the best score is 96. (7) For other independent signs, any sign that counts, other than the strongest and the same sign twice, with a date in the last 12 months or still to come, or with no date (an unknown date doesn't fail a lead). (8) No outsourcing deal or lock-in earns its 10 only when both checks ran and found nothing. A card made before the dampener check has not been checked, so it earns 0 there until it is researched again. (9) Version 2's source points (Property Daily 10, official 8, news 5, job ads 2) no longer count in the score. Source quality is in the confidence now. They still rank signs against each other.
+  - key: score.tiers
+    note: Levi's cuts (section 6). The tier sets the result (our choice 1, PLAN-V16). A and B are a Pass, or a Director review when a Director rule applies. C is a Watch. Discard is a Drop, and so is an exclusion. A rule that holds a lead at Watch (it just moved, or its size isn't clear) still wins over the tier. An unknown fact never fails a lead, so a Discard stays a Watch while the city or the size isn't known, or while the dampener checks haven't run (a lead researched before PLAN-V16 T1-5). Its score is missing points that a research would find.
+  - key: score.dampeners
+    note: Levi's deductions (section 6) are 20 for each strong dampener and 10 for each moderate one. A dampener that takes nothing off (waived) doesn't count. Several can add up, and the score doesn't go below 0.

@@ -40,16 +40,31 @@ from core.hubspot.service import save_export
 RESEARCH_DIR = BACKEND_DIR.parents[1] / "projects" / "leads" / "research"
 EXPORT_XLSX = RESEARCH_DIR / "COMPANIES.xlsx"
 EXPORT_MD = RESEARCH_DIR / "EXPORT.md"
-# EXPORT.md sorted the 25 Oct export with the rules of that day: 100+ staff. Levi lowered the
-# minimum to 50 on 9 Nov (PLAN-V11 B2). This file keeps 100, so the golden test still matches the
-# document and the made-up rows keep their limits. The tests at the end check today's 50.
+# EXPORT.md sorted the 25 Oct export with the rules of that day: 100+ staff, counted in Melbourne,
+# Adelaide and Perth. Levi lowered the minimum to 50 on 9 Nov (PLAN-V11 B2), and PLAN-V16 T1-2 added
+# Sydney and Brisbane to the cities. This file keeps 100 and the three cities, so the golden test
+# still matches the document and the made-up rows keep their limits. The tests at the end check
+# today's 50 and today's five cities.
 TODAYS_RULES = load_rules()
-RULES = TODAYS_RULES.model_copy(
-    update={
-        "criteria": TODAYS_RULES.criteria.model_copy(
-            update={"size": TODAYS_RULES.criteria.size.model_copy(update={"staff_min": 100})}
-        )
-    }
+DOCUMENT_CITIES = ["Melbourne", "Adelaide", "Perth"]
+
+
+def in_the_document_cities(rules: LeadFinderRules) -> LeadFinderRules:
+    """The rules with staff counted in the three cities of EXPORT.md only."""
+    watchlist = rules.watchlist.model_copy(update={"count_cities": DOCUMENT_CITIES})
+    return rules.model_copy(update={"watchlist": watchlist})
+
+
+# Today's 50 staff, counted in the document's three cities: the numbers of 9 Nov
+FIFTY_STAFF_RULES = in_the_document_cities(TODAYS_RULES)
+RULES = in_the_document_cities(
+    TODAYS_RULES.model_copy(
+        update={
+            "criteria": TODAYS_RULES.criteria.model_copy(
+                update={"size": TODAYS_RULES.criteria.size.model_copy(update={"staff_min": 100})}
+            )
+        }
+    )
 )
 
 # --- The golden test: the real export against EXPORT.md ---------------------------------
@@ -598,7 +613,7 @@ def test_an_other_office_in_the_act_the_nt_or_with_no_usable_postcode_is_ignored
         ("Lyneham", "2602"),  # ACT
         ("Berrimah", "0828"),  # NT
         ("Berrimah", "828"),  # NT, with the leading zero lost
-        ("Hobart", "7000"),  # TAS
+        ("Huonville", "7109"),  # TAS, and a place the rules don't list (Hobart itself is one)
         ("Nowhere", None),
         ("Nowhere", "abc"),
         (None, "99999"),
@@ -857,9 +872,34 @@ def test_todays_rules_list_companies_from_50_staff() -> None:
     assert result.counts.dropped_small == 1
 
 
+def test_todays_rules_count_staff_in_sydney_and_brisbane_too() -> None:
+    """PLAN-V16 T1-2: the secondary cities are counted. The other places follow when HubSpot has
+    offices there (TBC)."""
+    assert TODAYS_RULES.watchlist.count_cities == [
+        "Melbourne",
+        "Adelaide",
+        "Perth",
+        "Sydney",
+        "Brisbane",
+    ]
+    rows = (
+        company("1", "Harbour Software", offices=(office("Sydney", staff=60),)),
+        company("2", "River Software", offices=(office("Brisbane", staff=60),)),
+        company("3", "Territory Software", offices=(office("Darwin", staff=60),)),
+    )
+    today = build(*rows, rules=TODAYS_RULES)
+    assert [(item.name, item.city) for item in today.items] == [
+        ("River Software", "Brisbane"),
+        ("Harbour Software", "Sydney"),
+    ]
+    assert today.counts.no_office == 1  # Darwin isn't counted yet
+    document = build(*rows, rules=FIFTY_STAFF_RULES)  # EXPORT.md counted three cities only
+    assert document.items == [] and document.counts.no_office == 3
+
+
 def test_todays_rules_add_the_export_companies_of_50_to_99_staff(export: HubSpotExport) -> None:
     """The 25 Oct export at 50+ staff: 5 more on the Watch list and 4 more for a Director."""
-    result = build_watchlist(rows_from_export(export), TODAYS_RULES, include_director=True)
+    result = build_watchlist(rows_from_export(export), FIFTY_STAFF_RULES, include_director=True)
     assert result.counts == GOLDEN_COUNTS.model_copy(
         update={"watch": 52, "likely": 13, "unlikely": 39, "director": 19, "dropped_small": 12}
     )
@@ -928,7 +968,7 @@ def test_industry_counts_go_most_first_and_leave_out_the_unknown() -> None:
 
 
 def test_the_preview_narrows_its_lists_but_counts_the_whole_copy(export: HubSpotExport) -> None:
-    result = build_watchlist(rows_from_export(export), TODAYS_RULES, include_director=True)
+    result = build_watchlist(rows_from_export(export), FIFTY_STAFF_RULES, include_director=True)
     whole = watchlist_out(result)
     adelaide = watchlist_out(result, city="Adelaide")
     assert (whole.total, adelaide.total) == (52, 3)
@@ -963,7 +1003,7 @@ async def test_the_route_takes_a_city_and_industries(
     assert {item["city"] for item in perth["items"]} == {"Perth"}
     assert perth["counts"] == GOLDEN_COUNTS.model_dump()
     assert sum(f["count"] for f in perth["industries"]) <= perth["total"] + len(perth["director"])
-    for bad in ({"city": "Sydney"}, {"industry": ["  "]}):
+    for bad in ({"city": "Darwin"}, {"industry": ["  "]}):  # Darwin: no staff is counted there
         response = await db_client.get(WATCHLIST, params=bad)
         assert response.status_code == 422
         assert response.json()["code"] == "bad_choice"

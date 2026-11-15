@@ -33,7 +33,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from apps.lead_finder.context import OnReply
 from apps.lead_finder.rules import LeadFinderRules
 from apps.lead_finder.sanitize import clean_company_name, clean_domain, json_text, one_line
-from apps.lead_finder.sources import BLOCKED, source_kind, url_key
+from apps.lead_finder.sources import is_blocked, url_key
 from apps.lead_finder.tables import LIMITS, Rival, clip, company_key
 from core.claude.budget import Budget, BudgetSpent
 from core.claude.client import Claude, ClaudeError, ClaudeUnavailable, Reply, WebTools
@@ -101,15 +101,22 @@ class RivalSearch:
 
 
 def wants_rivals(
-    rules: LeadFinderRules, result: str, tier_group: str | None, city: str | None
+    rules: LeadFinderRules,
+    result: str,
+    tier_group: str | None,
+    city: str | None,
+    signs: Sequence[str] = (),
 ) -> bool:
-    """True for a good lead in a tier the rules name (`rivals.tiers`), in a known city."""
+    """True for a good lead in a known city that is in a priority sector, or that has a sign the
+    rules name (`rivals.also_after`): Levi's competitor sweep runs after a sector tailwind sign
+    too (PLAN-V16 T1-4), whatever the lead's sector. `tier_group` is the sector group Claude
+    filed the company in (its old name; PLAN-V16 T1-6 made the tiers priority sectors)."""
     setup = rules.criteria.rivals
-    if not setup.enabled or result not in GOOD_RESULTS or not tier_group or not city:
+    if not setup.enabled or result not in GOOD_RESULTS or not city:
         return False
-    industries = rules.criteria.industries
-    tiers = {"tier_1": industries.tier_1, "tier_2": industries.tier_2}
-    return any(tier_group in tiers[tier] for tier in setup.tiers)
+    if any(sign in setup.also_after for sign in signs):
+        return True
+    return bool(tier_group) and tier_group in rules.criteria.industries.priority_sectors
 
 
 def rivals_request(company: str, industry: str | None, city: str, limit: int) -> str:
@@ -142,7 +149,7 @@ def check_rivals(
             continue
         if url_key(candidate.url) not in seen:
             continue
-        if source_kind(candidate.url, rules.criteria, None) == BLOCKED:
+        if is_blocked(candidate.url, rules.criteria):
             continue
         keys.add(key)
         kept.append(

@@ -12,7 +12,9 @@ The checks here need only the rules files, never the settings or the database:
   sanitiser (a bad name is a 422 that names the field, never a crash);
 - caps are above zero. They can only LOWER the settings. `runs.caps_override` hands them to
   `make_caps` (core/runs/types.py), which ignores a value above the settings' limit. The
-  estimate shows the cap that really applies.
+  estimate shows the cap that really applies;
+- `sources` names the web, Property Daily or Arealytics, each once. Whether a tool is ready needs
+  the settings, so `run_sources.check_sources` checks that when the run starts (PLAN-V16 T1-8).
 """
 
 import re
@@ -33,8 +35,19 @@ AreaId = Literal["cbd", "inner", "all"]  # the part of a city to look in; "all" 
 # How far back a discovery run looks. The Start page offers 7 and 30 (`options.py`). 14 is for a
 # schedule that runs every 2 weeks: its look-back matches the time between runs (PLAN-V6 D2).
 SinceDays = Literal[7, 14, 30]
+# Where discovery looks for companies (PLAN-V16 T1-8, the contract part 2)
+RunSource = Literal["web", "property_daily", "arealytics"]
+RUN_SOURCES: tuple[RunSource, ...] = ("web", "property_daily", "arealytics")
+# How many good leads a person may ask a run for (PLAN-V16 T1-9, the contract part 2)
+GOAL_LEADS_MIN = 1
+GOAL_LEADS_MAX = 100
 COMPANIES_MIN = 1
 COMPANIES_MAX = 25
+# The most places one run may name. The rules list 20, so this only stops a long list of repeats;
+# how many slices fit is checked by `steps/plan.check_discovery_size`.
+CITIES_MAX = 24
+# The most signs one run may name. The rules have 18 that a search can look for (PLAN-V16 T1-4)
+TRIGGERS_MAX = 24
 WATCHLIST_LIMIT_MAX = 200
 WATCHLIST_INDUSTRIES_MAX = 20  # a lease and tenure run's industries (PLAN-V11 C2)
 INDUSTRY_MAX_CHARS = 120
@@ -46,9 +59,14 @@ _PLACE_CHARS = re.compile(r"[^\W\d_](?:[^\W\d_]|[ '\u2019.,-])*")
 
 
 def known_cities() -> list[str]:
-    """Every city the rules know: the pass cities, then the Director review ones."""
-    cities = load_rules().criteria.cities
-    return [*cities.pass_, *cities.director_review]
+    """Every place the rules know, the priority group first (`criteria.cities.groups`). The
+    national choice is not one of them: see `national_name`."""
+    return load_rules().criteria.cities.every
+
+
+def national_name() -> str:
+    """The name of the run choice that searches all of Australia at once ("Australia")."""
+    return load_rules().criteria.cities.national
 
 
 def known_trigger_ids() -> list[str]:
@@ -58,10 +76,11 @@ def known_trigger_ids() -> list[str]:
 
 
 def default_cities() -> list[str]:
-    """The first pass city (Melbourne). Runs go one city at a time since PLAN-V9 C4 (one schedule
-    for each city), and the 6 main signs in all 3 pass cities would make 18 searches, more than the
-    default limits allow (13). Adelaide, Perth and Sydney are a person's choice."""
-    return list(load_rules().criteria.cities.pass_[:1])
+    """The first priority city (Melbourne). Runs go one city at a time since PLAN-V9 C4 (one
+    schedule for each city), and the 8 main signs in all 3 priority cities would make 24 searches,
+    more than the default limits allow (13). Every other place, and all of Australia, are a
+    person's choice."""
+    return load_rules().criteria.cities.groups["priority"][:1]
 
 
 def default_triggers() -> list[str]:
@@ -203,7 +222,7 @@ class WatchlistOptions(Strict):
         max_length=PLACE_MAX_CHARS,
         description=(
             "Only the companies whose biggest office is in this city: one of the watchlist's "
-            "cities (Melbourne, Adelaide, Perth). Missing: every city."
+            "cities (Melbourne, Adelaide, Perth, Sydney, Brisbane). Missing: every city."
         ),
         examples=["Adelaide"],
     )
@@ -264,10 +283,13 @@ class _Discovery(Strict):
     cities: list[str] = Field(
         default_factory=default_cities,
         min_length=1,
-        max_length=8,
+        max_length=CITIES_MAX,
         description=(
-            "Used by mode discovery only. Cities to search, each once. "
-            "The default is the three pass cities."
+            "Used by mode discovery only. Places to search, each once: any place in the rules "
+            "(Melbourne, Adelaide, Perth, Sydney, Brisbane and the other cities and regional "
+            'centres), or `["Australia"]` alone, which searches all of Australia at once: one '
+            "search for each sign, and the research finds each company's city. The default is "
+            "Melbourne."
         ),
         examples=[["Melbourne", "Adelaide"]],
     )
@@ -283,7 +305,7 @@ class _Discovery(Strict):
     triggers: list[str] = Field(
         default_factory=default_triggers,
         min_length=1,
-        max_length=16,
+        max_length=TRIGGERS_MAX,
         description=(
             "Used by mode discovery only. Trigger ids to look for, each once. "
             "The default is the main triggers."
@@ -296,11 +318,39 @@ class _Discovery(Strict):
             "The Start page offers 7 and 30; 14 is for a schedule that runs every 2 weeks."
         ),
     )
+    sources: list[RunSource] | None = Field(
+        None,
+        min_length=1,
+        max_length=len(RUN_SOURCES),
+        description=(
+            "Used by mode discovery only. Where discovery looks for companies: `web`, "
+            "`property_daily` and `arealytics`, each once. Left out, every source that is ready "
+            "(see `sources` in the run options). A tool that isn't ready is a 422 "
+            "`source_not_ready`. Without `web`, the run makes no web searches for companies: they "
+            "come from the tools' new items, free. The research of each company still uses every "
+            "tool that is switched on (PLAN-V16 T1-8)."
+        ),
+        examples=[["web", "property_daily"]],
+    )
+    goal_leads: int | None = Field(
+        None,
+        ge=GOAL_LEADS_MIN,
+        le=GOAL_LEADS_MAX,
+        description=(
+            "Used by mode discovery only. How many good leads (a Pass or a Director review) a run "
+            "a person starts aims for, 1 to 100: it stops starting companies once it has them. "
+            "Left out, `manual_run_goal_leads` from the settings (see `goal_leads` in the run "
+            "options). An automatic run aims for its share of the round's goal instead. The "
+            "run's limits still apply: no limit rises by itself (PLAN-V16 T1-9)."
+        ),
+        examples=[20],
+    )
 
     @field_validator("cities")
     @classmethod
     def _cities(cls, value: list[str]) -> list[str]:
-        known = known_cities()
+        national = national_name()
+        known = [national, *known_cities()]
         cleaned: list[str] = []
         for city in value:
             match = clean_city(city, known)
@@ -315,7 +365,20 @@ class _Discovery(Strict):
                     "city", "List each city once ({city} is there twice)", {"city": match}
                 )
             cleaned.append(match)
+        if national in cleaned and len(cleaned) > 1:
+            raise PydanticCustomError(
+                "city",
+                "{national} is a search of its own. Choose it alone, or choose places",
+                {"national": national},
+            )
         return cleaned
+
+    @field_validator("sources")
+    @classmethod
+    def _sources(cls, value: list[RunSource] | None) -> list[RunSource] | None:
+        if value is not None and len(set(value)) != len(value):
+            raise PydanticCustomError("source", "List each source once")
+        return value
 
     @field_validator("triggers")
     @classmethod
@@ -419,9 +482,9 @@ class LeadFinderRunParams(_Discovery, _Caps):
     """Every part with its default. The Start page shows these as the starting values.
 
     A real run uses the model of its mode (above), which refuses the parts it doesn't use. So
-    send only the parts of your mode: `cities`, `area`, `triggers` and `since_days` for
-    discovery, `watchlist` for watchlist, `companies` and `recheck` for company, and `caps` for
-    every mode (testset has nothing else).
+    send only the parts of your mode: `cities`, `area`, `triggers`, `since_days`, `sources` and
+    `goal_leads` for discovery, `watchlist` for watchlist, `companies` and `recheck` for company,
+    and `caps` for every mode (testset has nothing else).
     """
 
     watchlist: WatchlistOptions = Field(

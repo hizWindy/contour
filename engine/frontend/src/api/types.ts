@@ -15,6 +15,7 @@ export type RunCaps = Schemas['RunCaps']
 export type RunCounts = Schemas['RunCounts']
 export type RunCreate = Schemas['RunCreate']
 export type RunEstimate = Schemas['RunEstimate']
+export type RunSourceId = NonNullable<Schemas['LeadFinderRunParams']['sources']>[number]
 export type RunPage = Schemas['RunPage']
 export type RunSummary = Schemas['RunSummary']
 export type EventLog = Schemas['EventLog']
@@ -45,6 +46,24 @@ export type LeadOrigin = LeadRow['origin']
 // Lead Finder
 export type RunOptions = Schemas['RunOptions']
 export type CityOption = Schemas['CityOption']
+export type CityGroup = CityOption['group']
+export type LeadFinderRules = Schemas['LeadFinderRules']
+export type SignStrength = Schemas['Sign']['strength']
+export type Tier = NonNullable<LeadRow['tier']>
+export type Confidence = NonNullable<LeadRow['confidence']>
+export type Exclusion = Schemas['Excluded']
+// The lead card's new parts (PLAN-V16 contract parts 1 and 3)
+export type PropertySource = Schemas['PropertyRecord']['source']
+export type SourceStatus = Schemas['SourceChecks']['property_daily']
+export type PropertyRecord = Schemas['PropertyRecord']
+export type RecordKind = Schemas['PropertyRecord']['kind']
+export type Office = Schemas['Office']
+export type ChangeKind = Schemas['WhatChanged']['kind']
+export type FilterState = Schemas['FilterResult']['state']
+export type DampenerStrength = NonNullable<Schemas['Dampener']['strength']>
+// Sources for Admin (PLAN-V16 contract part 4)
+export type ToolOut = Schemas['ToolOut']
+export type ToolList = Schemas['ToolList']
 
 // Settings, searches, memory, HubSpot, tests
 export type SettingsOut = Schemas['SettingsOut']

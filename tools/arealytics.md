@@ -44,7 +44,15 @@ Only through their own route. Ask Arealytics for:
 
 Without both, use it by hand only: look up a company's lease when preparing a call.
 
+## Pages
+
+- **None mapped.** On 2026-11-15 (PLAN-V16 T2-2), `pro.arealytics.com.au` showed "Automated access detected" at its sign-in page, before anyone signed in. It said an AI browser agent was using the page and that automated access is not permitted.
+- We stopped there, as the plan says, and tried nothing to get past it.
+
+**What it can't give us:** anything, through a program, until Arealytics agrees. Use it by hand only.
+
 ## Status and next step
 
-- Not connected. Contour's access: **TBC**.
-- Next: confirm with Levi whether Contour subscribes. If so, ask Arealytics about API pricing and AI approval.
+- Levi gave the green light to read it with a program on 2026-11-15 (as Al-khair reports). He says it has building records, some office sizes, and leases in Melbourne, Perth and Sydney. Arealytics hasn't been asked.
+- **Dropped from [PLAN-V16.md](../plan/PLAN-V16.md)** by Al-khair on 2026-11-15, after the site refused automated access. Its switch stays off, and the lead card says "Arealytics: switched off".
+- Next: Levi asks Arealytics for an API (it sells one) and written approval for an internal tool (W1). A later plan builds the connector on that API.

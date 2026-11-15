@@ -18,12 +18,12 @@ function whyNowSection(): HTMLElement {
 }
 
 describe('Why now on the lead card (PLAN-V12 D1)', () => {
-  it('comes first on the Overview, above the Summary', () => {
+  it('comes first on the Overview, above the property record and the Summary', () => {
     renderOverview(makeLead({ why_now: WHY_NOW }))
     const titles = [...document.querySelectorAll('[data-slot="card-title"]')].map(
       (title) => title.textContent,
     )
-    expect(titles.slice(0, 2)).toEqual(['Why now', 'Summary'])
+    expect(titles.slice(0, 3)).toEqual(['Why now', 'Property record', 'Summary'])
   })
 
   it('shows the reason, the next step, the lines, the questions and how sure it is', () => {

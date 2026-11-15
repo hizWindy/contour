@@ -5,17 +5,84 @@ import { renderWithProviders } from '@/test/render'
 import RulesView from './view'
 import { list, partChecks, SECTIONS } from './words'
 
-/** The rules as the API gives them today (11 Nov), cut to what the page reads. */
+/**
+ * The rules as the API gives them (11 Nov), with PLAN-V16's parts as Track 1 built them (T1-2 to
+ * T1-5, 15 Nov), cut to what the page reads.
+ */
 const RULES = {
   version: 'abc123',
   criteria: {
     label: "Draft version 2, 30 Oct 2026, with Levi's 9 Nov changes",
     cities: {
-      pass: ['Melbourne', 'Adelaide', 'Perth'],
-      director_review: ['Sydney'],
-      other_cities: 'director_review',
+      groups: {
+        priority: ['Melbourne', 'Adelaide', 'Perth'],
+        secondary: ['Sydney', 'Brisbane'],
+        capital: ['Canberra', 'Hobart', 'Darwin'],
+        regional: ['Gold Coast', 'Geelong'],
+      },
+      national: 'Australia',
       no_city_director_signs: ['new_to_australia'],
     },
+    exclusions: [
+      {
+        id: 'government',
+        label: 'Government department or agency',
+        kind: 'industry',
+        industry_groups: ['Government'],
+        meaning: 'a government department or agency',
+        unless: ['government-owned'],
+        flag: 'A government-owned or commercialised body. Flagged, not left out',
+      },
+      {
+        id: 'law_firm',
+        label: 'Law firm',
+        kind: 'industry',
+        industry_groups: ['Law firms'],
+        meaning: 'a law firm',
+        unless: [],
+        flag: null,
+      },
+    ],
+    dampeners: [
+      {
+        id: 'recent_fitout',
+        label: 'A fitout or move in that city in the last 5 years',
+        meaning: 'A note says the company moved or fitted out.',
+        strength: null,
+        strong_years: 3,
+        moderate_years: 5,
+        outgrow_months: 24,
+        kinds: {},
+        waived_by: [],
+      },
+      {
+        id: 'procurement',
+        label: 'Procurement red flags',
+        meaning: 'A red flag in how it buys fitouts.',
+        strength: 'moderate',
+        strong_years: null,
+        moderate_years: null,
+        outgrow_months: null,
+        kinds: {
+          tender_portal: 'strong',
+          offshore_buying: 'strong',
+          lowest_price: 'moderate',
+          separate_design_and_build: 'moderate',
+        },
+        waived_by: [],
+      },
+      {
+        id: 'financial_stress',
+        label: 'Financial stress',
+        meaning: '',
+        strength: 'strong',
+        strong_years: null,
+        moderate_years: null,
+        outgrow_months: null,
+        kinds: {},
+        waived_by: ['restructure'],
+      },
+    ],
     size: {
       staff_min: 50,
       staff_hint_min: 50,
@@ -41,8 +108,7 @@ const RULES = {
     conflicts: { staff_gap_ratio: 2 },
     fitout: { rate_per_m2_aud: '1500' },
     industries: {
-      tier_1: ['Energy and infrastructure', 'Mining and resources'],
-      tier_2: ['Defence and advanced manufacturing'],
+      priority_sectors: ['Energy and infrastructure', 'Mining and resources'],
       director_review: ['Government', 'Law firms'],
       check_office_size: ['Construction', 'Retail'],
     },
@@ -57,12 +123,24 @@ const RULES = {
     },
     triggers: {
       main: [
-        { id: 'lease_ending', label: 'Lease ending in 1 to 3 years, or a relocation' },
-        { id: 'new_to_australia', label: 'An overseas company opening its first office here' },
-        { id: 'long_tenure', label: 'At the same address for 8 or more years' },
+        {
+          id: 'lease_ending',
+          label: 'Lease ending in 1 to 3 years, or a relocation',
+          strength: 'very_high',
+        },
+        {
+          id: 'new_to_australia',
+          label: 'An overseas company opening its first office here',
+          strength: 'high',
+        },
+        {
+          id: 'long_tenure',
+          label: 'At the same address for 8 or more years',
+          strength: 'very_high',
+        },
       ],
-      other: [{ id: 'restructure', label: 'Restructure' }],
-      weak: [{ id: 'rival_growth', label: 'A rival of a booming company' }],
+      other: [{ id: 'restructure', label: 'Restructure', strength: 'medium' }],
+      weak: [{ id: 'rival_growth', label: 'A rival of a booming company', strength: 'low' }],
       recent_months: 12,
       window_years: 3,
       best_window_years: [1, 3],
@@ -70,7 +148,7 @@ const RULES = {
     },
     rivals: {
       enabled: true,
-      tiers: ['tier_1', 'tier_2'],
+      also_after: ['restructure'],
       per_lead: 5,
       per_run: 5,
       max_searches: 2,
@@ -92,50 +170,48 @@ const RULES = {
     },
     score: {
       parts: {
-        trigger: { label: 'Business or property trigger', points: 25 },
-        size: { label: 'Project size', points: 20 },
-        timing: { label: 'Timing', points: 15 },
-        access: { label: 'Decision-maker access', points: 15 },
-        fit: { label: 'Integrated strategic fit', points: 15 },
-        competition: { label: 'Competitive opportunity', points: 10 },
+        fit: { label: 'Fit', points: 30 },
+        change: { label: 'Change and timing', points: 50 },
+        access: { label: 'Access', points: 20 },
       },
       check_labels: {
-        trigger_group: 'The best trigger',
-        source: 'How strong its source is',
-        size: 'Office size',
-        recency: 'How recent the trigger is',
-        years_at_address: 'Years at the same address',
-        no_recent_move: 'No recent move or fitout',
-        contact_role: 'A contact role found',
-        hubspot_contact: 'A contact already in HubSpot',
-        customer_link: 'A link to a current customer',
-        buys_strategy: 'Talks about culture',
-        industry_tier: 'Industry tier',
-        no_rival_in_place: "Not in a competitor's case studies",
-        no_contractor_relationship: 'No known fitout contractor relationship',
+        local_staff: 'Local staff, now or projected',
+        priority_sector: 'A priority sector',
+        city: 'City',
+        office_relevance: 'The office matters to how it works',
+        strongest_sign: 'The strongest sign',
+        other_signs: 'Other independent signs within 12 months',
+        office_constrained: 'The office is constrained or ending',
+        no_lock_in: 'No outsourcing deal or competitor lock-in found',
+        procurement: 'Favourable procurement',
+        warm_path: 'A warm path in',
       },
       trigger_group: { main: 15, other: 10, weak: 4 },
       source: { property_daily: 10, asx_or_official_news: 8, other_news: 5, job_ads: 2 },
-      size: {
-        confirmed_in_range: 20,
-        estimated_in_range: 16,
-        growing_into_range: 14,
-        director: 10,
-      },
       recency: [
         { within_days: 30, points: 6 },
         { within_days: 90, points: 4 },
       ],
       undated: 1,
       lease_in_best_window: 6,
-      years_at_address: 7,
-      no_recent_move: 2,
-      access: { contact_role: 5, hubspot_contact: 5, customer_link: 5 },
-      fit: { buys_strategy: 8, tier_1: 7, tier_2: 4 },
-      competition: { no_rival_in_place: 6, no_contractor_relationship: 4 },
-      unseen: ['hubspot_contact', 'customer_link', 'no_contractor_relationship'],
-      bands: { research_first: 75, investigate: 50 },
-      band_basis: 'scaled',
+      local_staff: [
+        { from_staff: 250, points: 12 },
+        { from_staff: 150, points: 10 },
+        { from_staff: 100, points: 5 },
+        { from_staff: 50, points: 2 },
+      ],
+      priority_sector: 8,
+      city: { priority: 5, secondary: 2, other: 1 },
+      office_relevance: 5,
+      strongest_sign: { very_high: 25, high: 18, medium: 10, low: 4 },
+      other_signs: { points_each: 8, at_most: 2, within_months: 12 },
+      office_constrained: 9,
+      no_lock_in: 10,
+      procurement: 6,
+      warm_path: 4,
+      unseen: ['warm_path'],
+      dampeners: { strong: 20, moderate: 10 },
+      tiers: { a: 75, b: 55, c: 40 },
     },
     results: ['pass', 'director_review', 'watch', 'drop'],
     stages: { pass: 'Active prospect', watch: 'Target account' },
@@ -178,8 +254,13 @@ describe('Rules', () => {
       expect(document.getElementById(`rules-${section.value}`)).not.toBeNull()
     }
     expect(screen.getByText(/^Version/)).toHaveTextContent('Version abc123')
-    // Cities
+    // Cities: the four groups and all of Australia (PLAN-V16)
     expect(screen.getByText('Melbourne, Adelaide and Perth')).toBeInTheDocument()
+    expect(screen.getByText('Sydney and Brisbane')).toBeInTheDocument()
+    expect(screen.getByText('Canberra, Hobart and Darwin')).toBeInTheDocument()
+    expect(row('cities.national')).toHaveTextContent(
+      'One search for each sign, in place of the cities',
+    )
     expect(row('cities.no_city_director_signs')).toHaveTextContent(
       'Director review, when the sign is "An overseas company opening its first office here"',
     )
@@ -219,19 +300,19 @@ describe('Rules', () => {
     expect(within(size).getByText('50 to 74')).toBeInTheDocument()
   })
 
-  it('groups the signs as Claude reads them, with their code names', async () => {
+  it('groups the signs by strength, marks the ones searched by default, with their code names', async () => {
     mockApi({ '/api/v1/lead-finder/rules': RULES })
     renderWithProviders(<RulesView />)
     const signs = await screen.findByText('Signs of an office change')
     const card = signs.closest('[data-section]') as HTMLElement
-    expect(within(card).getByText('Main')).toBeInTheDocument()
-    expect(within(card).getByText('Boosters')).toBeInTheDocument()
-    expect(within(card).getByText('Other')).toBeInTheDocument()
-    expect(within(card).getByText('Weak')).toBeInTheDocument()
+    for (const strength of ['Very high', 'High', 'Medium', 'Low', 'Boosters']) {
+      expect(within(card).getByText(strength)).toBeInTheDocument()
+    }
     expect(
       within(card).getByText('Lease ending in 1 to 3 years, or a relocation'),
     ).toBeInTheDocument()
-    expect(within(card).getByText('lease_ending')).toBeInTheDocument()
+    expect(within(card).getByText('searched by default · lease_ending')).toBeInTheDocument()
+    expect(within(card).getByText('restructure')).toBeInTheDocument()
     expect(within(card).getByText('Talks about culture or hybrid work')).toBeInTheDocument()
     expect(within(card).getByText('A rival of a booming company')).toBeInTheDocument()
     // The new sign of 9 Nov carries its mark
@@ -259,7 +340,6 @@ describe('Rules', () => {
     expect(within(row('size.m2_per_staff')).getByText('TBC')).toBeInTheDocument()
     expect(within(row('size.staff_floor')).queryByText('TBC')).not.toBeInTheDocument()
     expect(row('size.staff_floor')).toHaveTextContent('Changed 9 Nov')
-    expect(row('score.years_at_address')).toHaveTextContent('Changed 9 Nov')
     // A note on a whole section marks its title
     const score = screen.getByText('Score', { selector: '[data-slot=card-title]' })
     expect(within(score).getByText('TBC')).toBeInTheDocument()
@@ -293,32 +373,79 @@ describe('Rules', () => {
     const { user } = renderWithProviders(<RulesView />)
     const bar = await screen.findByRole('tablist', { name: "The score's parts" })
     const tabs = within(bar).getAllByRole('tab')
-    expect(tabs.map((t) => t.textContent)).toEqual(['25', '20', '15', '15', '15', '10'])
+    expect(tabs.map((t) => t.textContent)).toEqual(['30', '50', '20'])
     expect(tabs.map((t) => Number(t.textContent)).reduce((a, b) => a + b, 0)).toBe(100)
     expect(tabs[0]).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tabpanel')).toHaveTextContent('Fit: 30 points')
     expect(screen.getByRole('tabpanel')).toHaveTextContent(
-      'Business or property trigger: 25 points',
+      '12 for 250+ staff, 10 for 150+ staff, 5 for 100+ staff, 2 for 50+ staff',
     )
-    expect(screen.getByRole('tabpanel')).toHaveTextContent('15 main, 10 other, 4 weak')
-    await user.hover(within(bar).getByRole('tab', { name: 'Decision-maker access: 15 points' }))
+    await user.hover(within(bar).getByRole('tab', { name: 'Access: 20 points' }))
     const panel = screen.getByRole('tabpanel')
-    expect(panel).toHaveTextContent('Decision-maker access: 15 points')
-    expect(panel).toHaveTextContent("A contact already in HubSpot (can't be judged yet)")
+    expect(panel).toHaveTextContent('Access: 20 points')
+    expect(panel).toHaveTextContent("A warm path in (can't be judged yet)")
     // Keyboard: focus the bar, move with the arrows
-    tabs[3]?.focus()
+    tabs[0]?.focus()
     await user.keyboard('{ArrowRight}')
-    expect(screen.getByRole('tabpanel')).toHaveTextContent('Integrated strategic fit: 15 points')
-    expect(screen.getByRole('tabpanel')).toHaveTextContent('7 tier 1, 4 tier 2')
+    expect(screen.getByRole('tabpanel')).toHaveTextContent('Change and timing: 50 points')
+    expect(screen.getByRole('tabpanel')).toHaveTextContent(
+      '25 very high, 18 high, 10 medium, 4 low',
+    )
+  })
+
+  it('lists the tiers and what a dampener takes off (PLAN-V16 T1-6)', async () => {
+    mockApi({ '/api/v1/lead-finder/rules': RULES })
+    renderWithProviders(<RulesView />)
+    await screen.findByRole('tablist', { name: "The score's parts" })
+    const score = document.getElementById('rules-score') as HTMLElement
+    expect(score).toHaveTextContent('Tier A: pursue now75 to 100')
+    expect(score).toHaveTextContent('Tier B: nurture55 to 74')
+    expect(score).toHaveTextContent('Tier C: watch40 to 54')
+    expect(score).toHaveTextContent('Discard: not listedunder 40')
+    expect(score).toHaveTextContent('A strong dampener takes off20 points')
+    expect(score).toHaveTextContent('A moderate dampener takes off10 points')
+    const industries = document.getElementById('rules-industries') as HTMLElement
+    expect(industries).toHaveTextContent('Energy and infrastructure and Mining and resources')
+    expect(industries).toHaveTextContent('for a good lead in a priority sector or with Restructure')
   })
 
   it('words: partChecks and list', () => {
-    const checks = partChecks(RULES.criteria.score as never, 'timing')
-    expect(checks.map((c) => c.id)).toEqual(['recency', 'years_at_address', 'no_recent_move'])
-    expect(checks[0]?.points).toBe(
-      '6 within 30 days, 4 within 90 days, 1 undated, 6 for a lease end in the best window',
-    )
+    const checks = partChecks(RULES.criteria.score, 'change')
+    expect(checks.map((c) => c.id)).toEqual(['strongest_sign', 'other_signs', 'office_constrained'])
+    expect(checks[1]?.points).toBe('8 each, at most 2, within 12 months')
     expect(list(['a'])).toBe('a')
     expect(list(['a', 'b'])).toBe('a and b')
     expect(list(['a', 'b', 'c'])).toBe('a, b and c')
+  })
+})
+
+describe('Rules for PLAN-V16 (T3-6)', () => {
+  it('lists the five filters and who is left out, with the ones flagged instead', async () => {
+    mockApi({ '/api/v1/lead-finder/rules': RULES })
+    renderWithProviders(<RulesView />)
+    const title = await screen.findByText('Filters and exclusions')
+    const card = title.closest('[data-section]') as HTMLElement
+    for (const filter of ['Location', 'Office size', 'Headcount', 'Office relevance', 'Sector']) {
+      expect(within(card).getByText(filter)).toBeInTheDocument()
+    }
+    expect(card).toHaveTextContent('1,000 m² or more, now or within 24 months')
+    expect(within(card).getByText('Law firm')).toBeInTheDocument()
+    expect(
+      within(card).getByText('Not left out: A government-owned or commercialised body'),
+    ).toBeInTheDocument()
+  })
+
+  it('says how much each dampener takes off', async () => {
+    mockApi({ '/api/v1/lead-finder/rules': RULES })
+    renderWithProviders(<RulesView />)
+    const title = await screen.findByText('Dampeners', { selector: '[data-slot=card-title]' })
+    const card = title.closest('[data-section]') as HTMLElement
+    expect(card).toHaveTextContent(
+      'Strong within 3 years, moderate up to 5. Nothing off when hiring would outgrow the space within 24 months',
+    )
+    expect(card).toHaveTextContent(
+      'Strong for a formal tender portal and offshore or central global buying; moderate for lowest-price tenders and design and build bought apart',
+    )
+    expect(card).toHaveTextContent('Strong, unless it comes with Restructure')
   })
 })

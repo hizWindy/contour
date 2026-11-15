@@ -247,6 +247,7 @@ async def estimate_run(
         daily_left_usd=left,
         unit_costs=costs,
         session_factory=session_factory,
+        scheduled=scheduled,
     )
     try:
         estimate = await kind.estimate(context)

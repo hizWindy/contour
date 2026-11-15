@@ -59,26 +59,30 @@ export function useRunScheduleNow() {
 }
 
 /**
- * The Lead Finder's four city schedules as one plan, the round so far and its budget
+ * The Lead Finder's city schedules as one plan, the round so far and its budget
  * (`GET /schedules/lead-finder`, PLAN-V13 T1-3). Read again every 30 seconds, like the list.
  */
 export function useLeadFinderRound() {
   return useQuery({
     queryKey: queryKeys.schedules.round(),
-    queryFn: async ({ signal }) => unwrap(await api.GET('/schedules/lead-finder', { signal })),
+    queryFn: async ({ signal }) =>
+      // Until PLAN-V16 M1: Brisbane and the rest of Australia are in `v16.ts`.
+      unwrap(await api.GET('/schedules/lead-finder', { signal })),
     refetchInterval: REFRESH_MS,
   })
 }
 
 /**
- * Saves the whole plan (`PUT /schedules/lead-finder`): the four schedules change in one step, and
+ * Saves the whole plan (`PUT /schedules/lead-finder`): the city schedules change in one step, and
  * the budget is a setting, so the settings are read again too. What can't be saved comes back as
  * field errors `body.<name>`.
  */
 export function useSaveLeadFinderRound() {
   const queryClient = useQueryClient()
   return useMutation<LeadFinderRound, ApiProblem, LeadFinderRoundIn>({
-    mutationFn: async (body) => unwrap(await api.PUT('/schedules/lead-finder', { body })),
+    mutationFn: async (body) =>
+      // Until PLAN-V16 M1, like `useLeadFinderRound`: the contract's cities are the four.
+      unwrap(await api.PUT('/schedules/lead-finder', { body })),
     onSuccess: (round) => {
       queryClient.setQueryData(queryKeys.schedules.round(), round)
       // The list only (its city rows changed); the plan itself is the answer above.

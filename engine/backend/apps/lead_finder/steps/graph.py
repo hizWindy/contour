@@ -1,14 +1,18 @@
 """The Lead Finder run as a LangGraph graph, so a run saves its progress after every step and a
 resume continues where it stopped instead of paying twice.
 
-    plan -> (discover, one per slice | choose) -> merge -> choose -> (research, one per company
-    | finish) -> finish
+    plan -> (discover, one per slice | merge | choose) -> merge -> choose -> (research, one per
+    company | finish) -> finish
 
-- `plan`: an automatic run (one a schedule started) works out its goal in good leads first
-  (`goal.py`). Discovery makes its slices (cities x triggers), and adds up to `rivals.per_run`
-  pending rivals of booming companies in its cities, with the weak sign `rival_growth`. The
-  other modes already know their companies (`State.known`): the watchlist, the typed list, the
-  test set.
+- `plan`: a discovery run works out its goal in good leads first (`goal.py`): an automatic run
+  (one a schedule started) its share of the round's, and a run a person started its `goal_leads`,
+  or `manual_run_goal_leads` (PLAN-V16 T1-9). Discovery makes its slices (cities x triggers), and
+  adds up to `rivals.per_run` pending rivals of booming companies in its cities, with the weak
+  sign `rival_growth`, and the
+  new items of each property tool it picked, each with its sign (PLAN-V16 T1-8,
+  `run_sources.py`). A discovery run that leaves out the web has no slices, and goes straight to
+  `merge`. The other modes already know their companies (`State.known`): the watchlist, the
+  typed list, the test set.
 - `discover`: one Claude request per slice, side by side (the run's discover gate). It holds the
   slice reserve in the run budget. Only the search log is written; what it finds travels in the
   state.
@@ -16,9 +20,11 @@ resume continues where it stopped instead of paying twice.
 - `choose`: the rules that skip a company (HubSpot deals, fresh or decided leads), then the best
   first, up to the run's company limit. The watchlist keeps its own order. Typed companies and
   the test set are researched as asked, up to the limit.
-- `research`: one company (steps/company.py), side by side (the run's research gate). An
-  automatic run stops starting companies once it has its goal of good leads.
-- `finish`: nothing. The run's outcome is worked out after the graph, from the database.
+- `research`: one company (steps/company.py), side by side (the run's research gate). A run
+  with a goal stops starting companies once it has that many good leads.
+- `finish`: nothing. The run's outcome is worked out after the graph, from the database: its
+  good leads, where they came from, and for a run a person started that ended short of its goal,
+  why ("Found 12 of 20 leads. It stopped at the run limit (US$20).").
 
 Every router returns its `Send`s or a plain node name, so a fan-out with nothing in it never ends
 the graph early. There is no `max_concurrency` and no retry policy: the run's own gates set the
@@ -45,7 +51,12 @@ from langgraph.types import Send  # noqa: E402
 from sqlalchemy import func, select  # noqa: E402
 
 from apps.lead_finder.context import CreditMeter  # noqa: E402
-from apps.lead_finder.goal import goal_for_run  # noqa: E402
+from apps.lead_finder.goal import (  # noqa: E402
+    goal_for_run,
+    good_of,
+    short_of_goal,
+    stopped_words,
+)
 from apps.lead_finder.prompts import discover_prompt  # noqa: E402
 from apps.lead_finder.rivals import (  # noqa: E402
     mark_rivals,
@@ -53,6 +64,8 @@ from apps.lead_finder.rivals import (  # noqa: E402
     rival_found,
 )
 from apps.lead_finder.rules import LeadFinderRules, load_rules  # noqa: E402
+from apps.lead_finder.run_sources import feed_candidates, picked_tools  # noqa: E402
+from apps.lead_finder.sources import tool_of  # noqa: E402
 from apps.lead_finder.steps.choose import (  # noqa: E402
     OVER_LIMIT_REASON,
     ExistingLead,
@@ -61,7 +74,12 @@ from apps.lead_finder.steps.choose import (  # noqa: E402
 from apps.lead_finder.steps.company import research_one  # noqa: E402
 from apps.lead_finder.steps.discover import Found, discover_slice  # noqa: E402
 from apps.lead_finder.steps.merge import Merged, merge  # noqa: E402
-from apps.lead_finder.steps.plan import Slice, make_slices, slice_job_id  # noqa: E402
+from apps.lead_finder.steps.plan import (  # noqa: E402
+    Slice,
+    make_slices,
+    run_cities,
+    slice_job_id,
+)
 from apps.lead_finder.steps.state import (  # noqa: E402
     CompanyTask,
     RunCtx,
@@ -73,6 +91,7 @@ from apps.lead_finder.tables import Lead, company_key  # noqa: E402
 from core.claude.budget import BudgetSpent  # noqa: E402
 from core.hubspot.matching import HubSpotMatch, match_company  # noqa: E402
 from core.runs.schemas import (  # noqa: E402
+    LEAD_SOURCES,
     CompanySkippedData,
     MergedData,
     PlanReadyData,
@@ -116,14 +135,23 @@ async def plan(state: State, runtime: Runtime[RunCtx]) -> dict[str, Any]:
     rivals = []
     if setup.enabled and setup.per_run > 0:
         async with ctx.session() as session:
-            pending = await pending_for_run(session, ctx.params.cities, setup.per_run)
+            pending = await pending_for_run(
+                session, run_cities(ctx.params, run.rules), setup.per_run
+            )
         rivals = [rival_found(item, setup.sign) for item in pending]
+    # The new items of the property tools the run picked (PLAN-V16 T1-8): free, from our copy
+    tools = picked_tools(ctx.params, ctx.settings)
+    feed: list[Found] = []
+    if tools:
+        async with ctx.session() as session:
+            feed = await feed_candidates(session, ctx.params, run.rules, tools, datetime.now(UTC))
+    extra = [*rivals, *feed]
     await ctx.emit_event(
-        PlanReadyData(slices=len(slices), companies=len(rivals), labels=[s.label for s in slices])
+        PlanReadyData(slices=len(slices), companies=len(extra), labels=[s.label for s in slices])
     )
     found: dict[str, Any] = {"slices": [s.model_dump(mode="json") for s in slices]}
-    if rivals:
-        found["candidates"] = [rival.model_dump(mode="json") for rival in rivals]
+    if extra:
+        found["candidates"] = [company.model_dump(mode="json") for company in extra]
     if ctx.schedule_id is not None:  # an automatic run aims for its share of the round's goal
         async with ctx.session() as session:
             found["goal"] = await goal_for_run(
@@ -133,13 +161,21 @@ async def plan(state: State, runtime: Runtime[RunCtx]) -> dict[str, Any]:
                 ctx.run_id,
                 ctx.schedule_id,
             )
+    else:  # a run a person started aims for how many leads they asked for (PLAN-V16 T1-9)
+        asked = getattr(ctx.params, "goal_leads", None)
+        found["goal"] = asked if asked is not None else ctx.settings.manual_run_goal_leads
+    ctx.totals.counts.goal = found["goal"]
     return found
 
 
 def after_plan(state: State) -> list[Send] | str:
     slices = state.get("slices") or []
     sends = [Send("discover", SliceTask(slice=slice_, today=state["today"])) for slice_ in slices]
-    return sends or "choose"
+    if sends:
+        return sends
+    # A discovery run with no slices (it left out the web, PLAN-V16 T1-8) still merges what the
+    # tools and the rivals found
+    return "merge" if state["mode"] == "discovery" else "choose"
 
 
 # --- discover --------------------------------------------------------------------------------
@@ -181,7 +217,7 @@ async def discover(task: SliceTask, runtime: Runtime[RunCtx]) -> dict[str, Any]:
                     day_of(task["today"]),
                     blocked_domains=run.rules.criteria.source_domains.blocked,
                     on_reply=ctx.totals.add_reply,
-                    cities=params.cities,
+                    cities=run_cities(params, run.rules),
                 )
             except BudgetSpent as stop:  # the daily limit
                 await run.stop("daily", str(stop) or "Claude's daily limit is reached")
@@ -309,7 +345,12 @@ async def _matches_and_leads(
         rows = (
             await session.execute(
                 select(
-                    Lead.company_key, Lead.status, Lead.created_at, Lead.updated_at, Lead.is_test
+                    Lead.company_key,
+                    Lead.status,
+                    Lead.created_at,
+                    Lead.updated_at,
+                    Lead.is_test,
+                    Lead.trigger_ids,
                 ).where(Lead.company_key.in_(keys), Lead.run_id.is_distinct_from(ctx.run_id))
             )
         ).all()
@@ -320,6 +361,7 @@ async def _matches_and_leads(
             created_at=row.created_at,
             updated_at=row.updated_at if row.updated_at != row.created_at else None,
             is_test=row.is_test,
+            trigger_ids=tuple(row.trigger_ids or ()),
         )
         for row in rows
     ]
@@ -365,7 +407,13 @@ async def choose(state: State, runtime: Runtime[RunCtx]) -> dict[str, Any]:
             for company in decision.chosen
         ]
         if mode == "discovery":
-            await _mark_rivals(ctx, run.rules.criteria.rivals.sign, merged, decision)
+            await _mark_rivals(
+                ctx,
+                run.rules.criteria.rivals.sign,
+                merged,
+                decision,
+                run_cities(ctx.params, run.rules),
+            )
     counts = ctx.totals.counts
     counts.chosen = len(chosen)
     for name, reason in skipped:
@@ -376,14 +424,14 @@ async def choose(state: State, runtime: Runtime[RunCtx]) -> dict[str, Any]:
         await ctx.emit_event(
             CompanySkippedData(name=f"{over} more", reason=OVER_LIMIT_REASON, count=over)
         )
-    return {"chosen": chosen}
+    return {"chosen": chosen, "over_limit": over}
 
 
 async def _mark_rivals(
-    ctx: RunContext[Any], sign: str, merged: list[Merged], decision: Any
+    ctx: RunContext[Any], sign: str, merged: list[Merged], decision: Any, cities: list[str]
 ) -> None:
     """The rivals this run chose are used; the ones a rule skipped are skipped. The ones the company
-    limit left out stay pending for the next run (PLAN-V9 B5)."""
+    limit left out stay pending for the next run (PLAN-V9 B5). `cities` are the run's places."""
     rivals = {
         company.key for company in merged if any(s.trigger_id == sign for s in company.signals)
     }
@@ -397,7 +445,7 @@ async def _mark_rivals(
             ctx.run_id,
             used_keys=used,
             skipped_keys=skipped,
-            cities=list(ctx.params.cities),
+            cities=cities,
         )
         await session.commit()
 
@@ -429,7 +477,7 @@ def build_graph() -> Any:
     builder.add_node("research", research, input_schema=CompanyTask)
     builder.add_node("finish", finish)
     builder.add_edge(START, "plan")
-    builder.add_conditional_edges("plan", after_plan, ["discover", "choose"])
+    builder.add_conditional_edges("plan", after_plan, ["discover", "merge", "choose"])
     builder.add_edge("discover", "merge")
     builder.add_edge("merge", "choose")
     builder.add_conditional_edges("choose", after_choose, ["research", "finish"])
@@ -455,6 +503,27 @@ async def _counts_from_leads(ctx: RunContext[Any]) -> None:
     counts: RunCounts = ctx.totals.counts
     counts.by_result = by_result
     counts.researched = sum(by_result.values())
+    counts.good = good_of({"by_result": by_result})
+
+
+async def _leads_by_source(
+    ctx: RunContext[Any], chosen: list[CompanyTask], rules: LeadFinderRules
+) -> dict[str, int]:
+    """How many of the run's leads each source found (PLAN-V16 T1-8): a company discovery found
+    through a property tool's feed counts for that tool, and one it found on the web for the web.
+    A company two sources found counts for each."""
+    async with ctx.session() as session:
+        saved = set(
+            (await session.scalars(select(Lead.company_key).where(Lead.run_id == ctx.run_id))).all()
+        )
+    found = dict.fromkeys(LEAD_SOURCES, 0)
+    for task in chosen:
+        if company_key(task["name"]) not in saved:
+            continue
+        sources = {tool_of(signal["url"], rules.criteria) or "web" for signal in task["signals"]}
+        for source in sources:
+            found[source] = found.get(source, 0) + 1
+    return found
 
 
 async def run_graph(
@@ -483,4 +552,18 @@ async def run_graph(
         initial: State = {"mode": ctx.mode, "today": today, "known": known}
         await graph.ainvoke(initial, config, context=run)
     await _counts_from_leads(ctx)
-    return RunOutcome(stop_reason=run.stop_reason)
+    values = (await graph.aget_state(config)).values or {}
+    counts = ctx.totals.counts
+    goal = values.get("goal")
+    if ctx.mode == "discovery":
+        counts.goal = goal
+        counts.by_source = await _leads_by_source(ctx, values.get("chosen") or [], run.rules)
+    stop_reason = run.stop_reason
+    if goal is not None and ctx.schedule_id is None and counts.good < goal:
+        # A run a person started that ended short of its goal says why (PLAN-V16 T1-9)
+        caps = ctx.caps
+        why = stopped_words(
+            run.stop_kind, caps.run_cap_usd, caps.max_companies, int(values.get("over_limit") or 0)
+        )
+        stop_reason = short_of_goal(counts.good, goal, why)
+    return RunOutcome(stop_reason=stop_reason)

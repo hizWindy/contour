@@ -440,3 +440,37 @@ describe('the other jobs', () => {
     expect(within(jobs).queryByText(/Find new leads:/)).toBeNull()
   })
 })
+
+describe('the round across Australia (PLAN-V16 T3-6)', () => {
+  it('offers Brisbane and the rest of Australia after Sydney, and sends them in order', async () => {
+    const calls = mockApi(round())
+    const { user } = renderTab()
+    await screen.findByText('Find new leads automatically')
+    const cities = screen.getByRole('group', { name: 'Cities' })
+    expect(
+      within(cities)
+        .getAllByRole('button')
+        .map((chip) => chip.textContent),
+    ).toEqual(['Melbourne', 'Adelaide', 'Perth', 'Sydney', 'Brisbane', 'Rest of Australia'])
+    // Both are off until a person picks them (T1-11).
+    expect(within(cities).getByRole('button', { name: 'Brisbane' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
+
+    await user.click(within(cities).getByRole('button', { name: 'Rest of Australia' }))
+    await user.click(within(cities).getByRole('button', { name: 'Brisbane' }))
+    expect(preview()).toMatch(/Sydney Thu, Brisbane Fri, Rest of Australia Sat\./)
+    await user.click(screen.getByRole('radio', { name: 'Custom' }))
+    const every = screen.getByLabelText('Every')
+    await user.clear(every)
+    await user.type(every, '2')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => {
+      expect(sent(calls, 'PUT')).toHaveLength(1)
+    })
+    expect(sent(calls, 'PUT')[0]?.body).toMatchObject({
+      cities: ['Melbourne', 'Adelaide', 'Perth', 'Sydney', 'Brisbane', 'Australia'],
+    })
+  })
+})

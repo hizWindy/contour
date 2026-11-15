@@ -64,6 +64,8 @@ export const SOURCE_WORDS: Record<SourceName, string> = {
   claude: 'Claude',
   hubspot: 'HubSpot',
   signalhire: 'Signal Hire',
+  property_daily: 'Property Daily',
+  arealytics: 'Arealytics',
 }
 
 export const REASON_WORDS: Record<string, string> = {

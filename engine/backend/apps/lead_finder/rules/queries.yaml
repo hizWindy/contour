@@ -16,6 +16,41 @@ areas:
   Sydney:
     cbd: [Sydney CBD]
     inner: [North Sydney, Barangaroo, Pyrmont, Surry Hills]
+  # All of Australia (PLAN-V16 T1-2): the other places in criteria.yaml cities. Each has a CBD area
+  # for the map and the search. Brisbane, a secondary city, has inner suburbs too.
+  Brisbane:
+    cbd: [Brisbane CBD]
+    inner: [Fortitude Valley, South Brisbane, Milton]
+  Canberra:
+    cbd: [Canberra CBD]
+  Hobart:
+    cbd: [Hobart CBD]
+  Darwin:
+    cbd: [Darwin CBD]
+  Gold Coast:
+    cbd: [Southport, Surfers Paradise]
+  Newcastle:
+    cbd: [Newcastle CBD]
+  Sunshine Coast:
+    cbd: [Maroochydore]
+  Wollongong:
+    cbd: [Wollongong CBD]
+  Geelong:
+    cbd: [Geelong CBD]
+  Townsville:
+    cbd: [Townsville CBD]
+  Cairns:
+    cbd: [Cairns CBD]
+  Toowoomba:
+    cbd: [Toowoomba CBD]
+  Ballarat:
+    cbd: [Ballarat CBD]
+  Bendigo:
+    cbd: [Bendigo CBD]
+  Launceston:
+    cbd: [Launceston CBD]
+  Mackay:
+    cbd: [Mackay CBD]
 
 # Discovery: one slice is one trigger in one city.
 # PLAN-V11 B4 (Levi, 9 Nov): search for plans, not openings. News of an office that has already
@@ -46,6 +81,18 @@ discovery:
     - "{city} energy transition company expansion {year}"
     - "{city} defence contractor plans new office {year}"
     - "{city} critical minerals company expansion {year}"
+  # PLAN-V16 T1-4 (Levi's section 4): a capital raise, a tenant advisor and a growth list. Their
+  # sources are in his section 7 (AFR, SmartCompany, Startup Daily, Crunchbase, leasing news).
+  capital_raise:
+    - "{city} company raises Series B funding {year}"
+    - "{city} private equity investment growth capital {month_year}"
+    - "{city} company IPO plans ASX listing {year}"
+  tenant_advisor:
+    - "{city} company appoints tenant representative office search {year}"
+    - "{city} company seeking new office space leasing {month_year}"
+  growth_list:
+    - "AFR Fast 100 {year} {city} company"
+    - "Deloitte Technology Fast 50 {year} {city}"
   office_consolidation:
     - "{city} company consolidating offices into one headquarters"
   return_to_office:
@@ -68,9 +115,10 @@ discovery:
   hiring_push:
     - "{city} company hiring push {year}"
 
-# Watchlist: each company is searched from three angles: property, people and money. A lease and
-# tenure run (Old offices on Start a run, PLAN-V11 C2) asks the tenure angle's office questions in
-# place of the property angle: the address, since when, and any move or fitout since.
+# Watchlist: each company is searched from three angles: property, people and money, and then the
+# dampeners (PLAN-V16 T1-5). A lease and tenure run (Old offices on Start a run, PLAN-V11 C2) asks
+# the tenure angle's office questions in place of the property angle: the address, since when, and
+# any move or fitout since.
 company:
   property:
     - "{company} {city} office lease"
@@ -87,3 +135,113 @@ company:
     - "{company} {city} office address"
     - "{company} moved office {city}"
     - "{company} office fitout"
+  # PLAN-V16 T1-5 (Levi's section 5): the dampeners are searched for on purpose, because a missed
+  # one gives a false lead. At most 3 searches a company (MAX_DAMPENER_SEARCHES in rules.py).
+  dampeners:
+    - "{company} office fitout {city}"
+    - "{company} JLL OR CBRE OR Colliers corporate real estate"
+    - "{company} tender fitout"
+
+# Levi's source groups (his section 7, PLAN-V16 T1-7): "on every run, search each source group, and
+# record which source supports each fact". Each group has searches for one company (`company`,
+# added to the research angles in `angles`) and, when a sign uses it, for a slice of a discovery run
+# (`discovery`, added to the signs in `signs`). The backend won't start if a group is missing or
+# has no search. The sites are the ones Levi names. The wording is a first draft (TBC).
+source_groups:
+  mergers:
+    label: Mergers and acquisitions
+    angles: [money]
+    signs: [merger_or_takeover]
+    company:
+      - "{company} ACCC acquisitions register notified acquisition"
+      - "{company} ASX announcement takeover or merger {year}"
+      - "{company} AFR Street Talk deal"
+      - "{company} FIRB approval foreign investment Australia"
+    discovery:
+      - "ACCC acquisitions register notified acquisition {city} {year}"
+      - "AFR Street Talk {city} company merger or takeover {year}"
+      - "ASX announcement scheme of arrangement {city} {year}"
+  funding:
+    label: Funding and growth
+    angles: [money]
+    signs: [capital_raise, fast_growth]
+    company:
+      - "{company} raises funding Series B or private equity {year}"
+      - "{company} AFR Fast 100 or Deloitte Technology Fast 50"
+      - "{company} Crunchbase funding SmartCompany Startup Daily"
+    discovery:
+      - "{city} company raises Series B funding AFR SmartCompany Startup Daily {year}"
+      - "{city} private equity investment company growth plans Crunchbase {year}"
+      - "AFR Fast 100 Deloitte Technology Fast 50 {city} {year}"
+  hiring:
+    label: Hiring
+    angles: [people]
+    signs: [fast_growth, hiring_push]
+    company:
+      - "{company} jobs SEEK {city}"
+      - "{company} careers page open roles {city}"
+      - "{company} LinkedIn employee count growth {year}"
+    discovery:
+      - "SEEK {city} company hiring many office roles {year}"
+      - "{city} company careers page dozens of open roles growing team {year}"
+  leases_and_tenure:
+    label: Leases, moves and tenure
+    angles: [property, tenure]
+    signs: [lease_ending, tenant_advisor]
+    company:
+      - "{company} {city} lease The Urban Developer"
+      - "{company} AFR Commercial Real Estate {city} lease"
+      - "how long has {company} been at its {city} office address"
+      - "{company} contact page {city} address Wayback Machine"
+    discovery:
+      - "The Urban Developer {city} office lease signed or expiring {year}"
+      - "AFR Commercial Real Estate {city} tenant relocating {year}"
+      - "{city} building redevelopment approval office tenants {year}"
+      - "{city} landlord leasing announcement office tenant {year}"
+  recent_fitouts:
+    label: Recent fitouts
+    angles: [dampeners, property]
+    company:
+      - "{company} office fitout ArchitectureAU"
+      - "{company} Office Snapshots new office"
+      - "{company} new office project fitout design firm {city}"
+  outsourcing:
+    label: Outsourcing and competitor ties
+    angles: [dampeners]
+    company:
+      - "{company} JLL CBRE Cushman and Wakefield Colliers client case study"
+      - "{company} design and build office fitout case study project page"
+  leadership:
+    label: Leadership change
+    angles: [people]
+    signs: [new_ceo]
+    company:
+      - "{company} new CEO appointed ASX announcement {year}"
+      - "{company} leadership change media release"
+    discovery:
+      - "{city} company appoints new CEO transformation ASX announcement {year}"
+      - "{city} new chief executive growth strategy trade press {year}"
+  sector_growth:
+    label: Sector growth
+    angles: [money]
+    signs: [hot_industry_growth]
+    company:
+      - "{company} industry growth energy defence infrastructure insurance {year}"
+    discovery:
+      - "Infrastructure Australia pipeline {city} projects staff {year}"
+      - "{city} defence industry news contract AUKUS hiring {year}"
+      - "{city} government budget program renewable energy zone grid investment {year}"
+  procurement:
+    label: Procurement
+    angles: [dampeners]
+    company:
+      - "{company} AusTender or state tender portal fitout"
+      - "{company} supplier code of conduct procurement policy"
+      - "{company} annual report procurement offshore buying"
+  company_facts:
+    label: Company facts
+    angles: [people, property]
+    company:
+      - "{company} annual report {year}"
+      - "{company} ASIC company record"
+      - "{company} WGEA Workplace Gender Equality Agency headcount"

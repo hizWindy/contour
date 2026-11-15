@@ -5,9 +5,16 @@ import { renderWithProviders } from '@/test/render'
 import { CityMap } from './city-map'
 
 const CITIES: CityOption[] = [
-  { name: 'Melbourne', kind: 'pass', lat: -37.81, lng: 144.96, areas: [] },
-  { name: 'Perth', kind: 'pass', lat: -31.95, lng: 115.86, areas: [] },
-  { name: 'Sydney', kind: 'director_review', lat: -33.87, lng: 151.21, areas: [] },
+  { name: 'Melbourne', kind: 'pass', group: 'priority', lat: -37.81, lng: 144.96, areas: [] },
+  { name: 'Perth', kind: 'pass', group: 'priority', lat: -31.95, lng: 115.86, areas: [] },
+  {
+    name: 'Sydney',
+    kind: 'director_review',
+    group: 'secondary',
+    lat: -33.87,
+    lng: 151.21,
+    areas: [],
+  },
 ]
 
 const HOSTILE = '<img src=x onerror=alert(1)>'

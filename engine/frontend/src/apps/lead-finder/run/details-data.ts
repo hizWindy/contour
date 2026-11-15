@@ -8,7 +8,7 @@
  */
 import type { Run, SearchOut } from '@/api/types'
 import { formatDateTime, formatDuration, pluralise } from '@/lib/format'
-import { RUN_MODE_LABELS } from '@/lib/labels'
+import { RUN_MODE_LABELS, RUN_SOURCE_LABELS, RUN_SOURCE_ORDER } from '@/lib/labels'
 import { addMoney, formatMoney, moneyToString, parseMoney } from '@/lib/money'
 
 export interface DetailLine {
@@ -45,7 +45,10 @@ export function setupLines(run: Run, names: DetailNames): DetailLine[] {
   const lines: DetailLine[] = [{ label: 'Kind', value: RUN_MODE_LABELS[run.mode] ?? run.mode }]
 
   const cities = strings(params.cities)
-  if (cities.length > 0) {
+  if (cities.length === 1 && cities[0] === 'Australia') {
+    // A national search (PLAN-V16): one search for each sign across Australia.
+    lines.push({ label: 'Where', value: 'All of Australia' })
+  } else if (cities.length > 0) {
     const area = record(params.area)
     lines.push({
       label: 'Cities',
@@ -68,6 +71,20 @@ export function setupLines(run: Run, names: DetailNames): DetailLine[] {
 
   if (typeof params.since_days === 'number') {
     lines.push({ label: 'How far back', value: `Last ${String(params.since_days)} days` })
+  }
+
+  // PLAN-V16: how many good leads it aimed for, and where it looked when a person chose.
+  if (typeof params.goal_leads === 'number') {
+    lines.push({ label: 'How many leads', value: pluralise(params.goal_leads, 'good lead') })
+  }
+  const sources = strings(params.sources)
+  if (sources.length > 0) {
+    lines.push({
+      label: 'Where to look',
+      value: RUN_SOURCE_ORDER.filter((id) => sources.includes(id))
+        .map((id) => RUN_SOURCE_LABELS[id])
+        .join(', '),
+    })
   }
 
   const companies = Array.isArray(params.companies)

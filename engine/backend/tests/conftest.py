@@ -65,6 +65,12 @@ os.environ["HUBSPOT_WRITE_ENABLED"] = "false"  # and nothing can write to it
 os.environ["HUBSPOT_SYNC_MAX_AGE_HOURS"] = "0"  # a test backend never syncs when it starts
 os.environ["AUTH_REQUIRED"] = "false"  # nor does engine/.env turn the sign-in on under a test
 os.environ["SESSION_COOKIE_SECURE"] = "false"
+# No test signs in to Property Daily or Arealytics (PLAN-V16), whatever engine/.env holds.
+for _login in ("USERNAME", "PASSWORD"):
+    os.environ[f"PROPERTY_DAILY_{_login}"] = ""
+    os.environ[f"AREALYTICS_{_login}"] = ""
+os.environ["PROPERTY_DAILY_ENABLED"] = "false"
+os.environ["AREALYTICS_ENABLED"] = "false"
 get_settings.cache_clear()
 
 TEST_TABLES = (
@@ -96,6 +102,11 @@ TEST_TABLES = (
     "core.run_events",
     "core.runs",
     "core.settings",
+    # Property Daily and Arealytics (PLAN-V16 T2-4)
+    "core.property_records",
+    "core.property_lookups",
+    "core.source_reads",
+    "core.source_state",
 )
 LANGGRAPH_SCHEMA = "langgraph"
 CHECKPOINT_SETUP_LOCK = 7_244_001  # a Postgres advisory lock key: one saver.setup() at a time

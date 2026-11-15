@@ -23,6 +23,9 @@ const COUNTS = {
   failed: 0,
   by_result: { pass: 1 },
   resumes: 0,
+  goal: null,
+  good: 0,
+  by_source: {},
 }
 
 function run(status: RunStatus): Run {
@@ -47,6 +50,9 @@ function run(status: RunStatus): Run {
     created_at: '2026-10-26T04:00:00Z',
     started_at: '2026-10-26T04:00:01Z',
     finished_at: status === 'running' || status === 'queued' ? null : '2026-10-26T04:05:00Z',
+    goal_leads: null,
+    good_leads: 0,
+    leads_by_source: { web: 0, property_daily: 0, arealytics: 0 },
   }
 }
 

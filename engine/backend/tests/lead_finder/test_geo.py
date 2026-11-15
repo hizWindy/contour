@@ -8,6 +8,7 @@ import pytest
 from apps.lead_finder.geo import (
     CITY_CENTRES,
     CITY_JITTER,
+    NATIONAL_CENTRE,
     SUBURB_CENTRES,
     SUBURB_JITTER,
     approximate_point,
@@ -35,10 +36,14 @@ def metres(a: tuple[float, float], b: tuple[float, float]) -> float:
 
 
 def test_every_city_in_the_rules_has_a_centre() -> None:
-    cities = [*RULES.criteria.cities.pass_, *RULES.criteria.cities.director_review]
-    assert {"Melbourne", "Adelaide", "Perth", "Sydney"} <= set(cities)
+    cities = RULES.criteria.cities.every  # all of Australia (PLAN-V16 T1-2)
+    assert {"Melbourne", "Adelaide", "Perth", "Sydney", "Brisbane", "Darwin", "Mackay"} <= set(
+        cities
+    )
     for city in cities:
         assert city in CITY_CENTRES, city
+    assert RULES.criteria.cities.national not in CITY_CENTRES  # a run choice, not a place
+    assert -45 < NATIONAL_CENTRE[0] < -10 and 112 < NATIONAL_CENTRE[1] < 155
 
 
 def test_every_suburb_in_the_rules_areas_has_a_place() -> None:
@@ -103,7 +108,8 @@ def test_an_unknown_suburb_is_pinned_near_the_city_centre() -> None:
 
 def test_a_city_that_is_not_known_has_no_place() -> None:
     assert approximate_point(None, "Docklands", uuid.uuid4()) is None
-    assert approximate_point("Brisbane", None, uuid.uuid4()) is None
+    assert approximate_point("Albury", None, uuid.uuid4()) is None  # not a place the rules list
+    assert approximate_point("Australia", None, uuid.uuid4()) is None  # no lead is "in" Australia
 
 
 def test_the_same_lead_is_always_in_the_same_place() -> None:

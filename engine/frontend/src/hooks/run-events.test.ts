@@ -32,6 +32,9 @@ const COUNTS = {
   failed: 0,
   by_result: { pass: 1 },
   resumes: 0,
+  goal: null,
+  good: 0,
+  by_source: {},
 }
 
 const CAPS = {

@@ -17,7 +17,7 @@ from decimal import Decimal
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, computed_field
 
 from core.api.errors import FieldError
 from core.api.models import OutModel
@@ -27,6 +27,8 @@ RunStatus = Literal["queued", "running", "done", "failed", "cancelled", "interru
 CapKind = Literal["run_cost", "max_companies", "searches", "daily"]
 
 NAME_PATTERN = r"^[a-z][a-z0-9_]*$"
+# Where a Lead Finder run's discovery looks (PLAN-V16 T1-8): its runs always show all three
+LEAD_SOURCES = ("web", "property_daily", "arealytics")
 
 
 # --- The run itself -----------------------------------------------------------------------
@@ -64,6 +66,18 @@ class RunCounts(OutModel):
         default_factory=dict, description="Leads saved, by result (like pass or watch)"
     )
     resumes: int = Field(0, description="How many times this run was resumed")
+    # PLAN-V16 T1-9: how many leads a run aims for, and how many it found
+    goal: int | None = Field(
+        None,
+        description="The good leads the run aims for: a person's choice for a run they started, "
+        "or the round's share for an automatic run. Empty: no goal.",
+    )
+    good: int = Field(0, description="Good leads saved so far: a Pass or a Director review")
+    by_source: dict[str, int] = Field(
+        default_factory=dict,
+        description="Leads saved, by where discovery found them (web, property_daily, "
+        "arealytics). A company two sources found counts for each.",
+    )
 
 
 class RunOut(OutModel):
@@ -96,6 +110,32 @@ class RunOut(OutModel):
     created_at: datetime
     started_at: datetime | None
     finished_at: datetime | None
+
+    @computed_field(  # type: ignore[prop-decorator]
+        description="The good leads the run aims for (PLAN-V16 T1-9). Empty: no goal."
+    )
+    @property
+    def goal_leads(self) -> int | None:
+        return self.counts.goal
+
+    @computed_field(  # type: ignore[prop-decorator]
+        description="Good leads saved so far: a Pass or a Director review (Tier A or B)"
+    )
+    @property
+    def good_leads(self) -> int:
+        return self.counts.good
+
+    @computed_field(  # type: ignore[prop-decorator]
+        description="Leads saved, by where discovery found them: web, property_daily and "
+        "arealytics, each always there for a Lead Finder run. A company two sources found "
+        "counts for each."
+    )
+    @property
+    def leads_by_source(self) -> dict[str, int]:
+        found = dict(self.counts.by_source)
+        if self.app == "lead_finder":
+            return {source: found.get(source, 0) for source in LEAD_SOURCES} | found
+        return found
 
 
 class RunPage(BaseModel):
@@ -155,6 +195,20 @@ class RunEstimate(OutModel):
     )
     basis: str = Field("", description="Where the numbers come from, like past runs or defaults")
     over_cap: bool = Field(False, description="True when the worst case is above the cap")
+    companies_needed: int | None = Field(
+        None,
+        description="The companies the goal needs at the recent pass rate (PLAN-V16 T1-9). Empty "
+        "when the run has no goal of its own.",
+    )
+    goal_note: str | None = Field(
+        None,
+        description="One sentence when the goal needs more companies than this run's limits allow, "
+        "naming the limit that binds. Empty when the goal fits, or there is none.",
+        examples=[
+            "20 leads needs about 50 companies. This run's company limit allows 20. An "
+            "Admin can raise it in Settings."
+        ],
+    )
 
 
 class RunSummaryDay(BaseModel):

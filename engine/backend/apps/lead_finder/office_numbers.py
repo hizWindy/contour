@@ -2,20 +2,20 @@
 
 Criteria_v2 section 2 gives the order to look for staff numbers: HubSpot first, then a headcount
 tool, then LinkedIn (doubled), then the AI's web research. Our HubSpot export has a LinkedIn staff
-count for most offices, and almost no lease expiry or last-moved dates (EXPORT.md). So HubSpot's
-staff count is one candidate for `sourcing.choose_staff` (`hubspot_staff`), which makes it win
-over a later source and keeps the others on the card. Its move-in year and lease end fill a gap the
-research left, and never overwrite a figure the research found (`fill_gaps`).
+count for most offices, and few office sizes, lease expiries or last-moved dates (EXPORT.md). So
+HubSpot's staff count is one candidate for `sourcing.choose_staff` (`hubspot_staff`), which makes it
+win over a later source and keeps the others on the card. Its office size, lease end and move-in
+date are candidates in `data_sources.office_m2`, `lease_end` and `office_since` (PLAN-V16 T1-8,
+`property.apply_office_sources`): after the two property tools and before the web research.
 """
 
 from dataclasses import dataclass
 from datetime import date
-from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.lead_finder.fields import CompanyFacts, Fact, TriggerFound
+from apps.lead_finder.fields import Fact
 from apps.lead_finder.rules import LeadFinderRules
 from apps.lead_finder.sanitize import safe_http_url
 from apps.lead_finder.sourcing import StaffCandidate
@@ -32,6 +32,7 @@ class OfficeNumbers:
     lease_expiry: date | None  # the nearest one
     last_moved: date | None  # the latest one
     record_url: str | None  # the company's record in HubSpot: the source link
+    office_m2: int | None = None  # the largest "Office Space Size" there (PLAN-V16 T1-8)
 
 
 async def office_numbers(
@@ -48,6 +49,7 @@ async def office_numbers(
     if not here:
         return None
     company = await session.get(HubSpotCompany, hubspot_id)
+    sizes = [round(o.office_m2) for o in here if o.office_m2 is not None and o.office_m2 >= 1]
     return OfficeNumbers(
         city=city,
         linkedin_staff=max(
@@ -57,10 +59,12 @@ async def office_numbers(
         lease_expiry=min((o.lease_expiry for o in here if o.lease_expiry), default=None),
         last_moved=max((o.last_moved for o in here if o.last_moved), default=None),
         record_url=company.hubspot_url if company else None,
+        office_m2=max(sizes, default=None),
     )
 
 
-def _link(numbers: OfficeNumbers) -> str | None:
+def hubspot_link(numbers: OfficeNumbers) -> str | None:
+    """The company's HubSpot record, when it is a plain web link: the source of its numbers."""
     return numbers.record_url if numbers.record_url and safe_http_url(numbers.record_url) else None
 
 
@@ -74,7 +78,9 @@ def hubspot_staff(numbers: OfficeNumbers | None, rules: LeadFinderRules) -> Staf
     count = numbers.linkedin_staff
     multiplier = rules.criteria.size.linkedin_staff_multiplier
     staff = round(count * multiplier)
-    fact = Fact[int](value=count, source_url=_link(numbers), source_date=None, label="estimated")
+    fact = Fact[int](
+        value=count, source_url=hubspot_link(numbers), source_date=None, label="estimated"
+    )
     return StaffCandidate(
         kind="hubspot",
         fact=fact,
@@ -84,43 +90,3 @@ def hubspot_staff(numbers: OfficeNumbers | None, rules: LeadFinderRules) -> Staf
         note=f"Staff in {numbers.city}: {count} on LinkedIn, from HubSpot. "
         "The real number is about double.",
     )
-
-
-def fill_gaps(
-    facts: CompanyFacts, numbers: OfficeNumbers | None, rules: LeadFinderRules, today: date
-) -> tuple[CompanyFacts, list[str]]:
-    """The facts with HubSpot's numbers in the gaps, and a plain note for each number used.
-
-    Pure code. Nothing is overwritten: the move-in year and a lease trigger are added only when
-    the research found none. A fact from HubSpot links to the company's HubSpot record. The staff
-    count is not here: it is chosen with the other sources' (`hubspot_staff`).
-    """
-    if numbers is None or "hubspot" not in rules.criteria.size.staff_sources:
-        return facts, []
-    link = _link(numbers)
-    update: dict[str, Any] = {}
-    notes: list[str] = []
-
-    if facts.office_since.value is None and numbers.last_moved:
-        update["office_since"] = Fact[str](
-            value=numbers.last_moved.isoformat(),
-            source_url=link,
-            source_date=None,
-            label="confirmed",
-        )
-        notes.append(f"Moved in {numbers.last_moved:%B %Y}, from HubSpot.")
-    has_lease = any(trigger.id == "lease_ending" for trigger in facts.triggers)
-    if numbers.lease_expiry and numbers.lease_expiry > today and link and not has_lease:
-        ends = f"{numbers.lease_expiry:%B %Y}"
-        update["triggers"] = [
-            *facts.triggers,
-            TriggerFound(
-                id="lease_ending",
-                what_happened=f"HubSpot has the {numbers.city} lease ending in {ends}.",
-                date=numbers.lease_expiry.isoformat(),
-                source_url=link,
-                label="confirmed",
-            ),
-        ]
-        notes.append(f"Lease in {numbers.city} ends {ends}, from HubSpot.")
-    return (facts.model_copy(update=update) if update else facts), notes

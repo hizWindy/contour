@@ -43,6 +43,12 @@ describe('the results address', () => {
       page: 2,
       lead: LEAD,
       filters: {
+        // PLAN-V16: no tier in the address is the default view, Tier A and B.
+        tier: ['A', 'B'],
+        confidence: [],
+        city_group: [],
+        has_property: false,
+        excluded: false,
         result: ['pass', 'watch'],
         city: ['Melbourne'],
         trigger: ['lease_ending'],
@@ -108,9 +114,17 @@ describe('the results address', () => {
       page: 2,
       filters: { ...NO_FILTERS, city: ['Perth'], min_score: 0 },
     }
-    expect(filterQuery(state.filters)).toEqual({ city: ['Perth'], min_score: 0 })
-    expect(filterQuery({ ...NO_FILTERS, origin: ['web'] })).toEqual({ origin: ['web'] })
+    expect(filterQuery(state.filters)).toEqual({
+      tier: ['A', 'B'],
+      city: ['Perth'],
+      min_score: 0,
+    })
+    expect(filterQuery({ ...NO_FILTERS, origin: ['web'] })).toEqual({
+      tier: ['A', 'B'],
+      origin: ['web'],
+    })
     expect(listQuery(state)).toEqual({
+      tier: ['A', 'B'],
       city: ['Perth'],
       min_score: 0,
       sort: 'score',
@@ -119,6 +133,7 @@ describe('the results address', () => {
       offset: 100,
     })
     expect(exportQuery(state)).toEqual({
+      tier: ['A', 'B'],
       city: ['Perth'],
       min_score: 0,
       sort: 'score',
@@ -153,5 +168,51 @@ describe('the CSV file name', () => {
   it('falls back to leads and the date when the backend gives no name', () => {
     expect(csvName(null)).toMatch(/^leads-\d{4}-\d{2}-\d{2}\.csv$/)
     expect(csvName('attachment; filename="run.exe"')).toMatch(/^leads-\d{4}-\d{2}-\d{2}\.csv$/)
+  })
+})
+
+describe('the tier and the other PLAN-V16 filters (T3-5)', () => {
+  it('opens on Tier A and B, and sends them spelled out', () => {
+    expect(read('').filters.tier).toEqual(['A', 'B'])
+    expect(filterQuery(read('').filters).tier).toEqual(['A', 'B'])
+    // The default isn't a filter a person set.
+    expect(activeFilterCount(read('').filters)).toBe(0)
+  })
+
+  it('shows every tier with tier=all, and sends all four', () => {
+    const state = read('tier=all')
+    expect(state.filters.tier).toEqual([])
+    expect(filterQuery(state.filters).tier).toEqual(['A', 'B', 'C', 'discard'])
+    expect(writeResults(state).toString()).toBe('tier=all')
+    expect(activeFilterCount(state.filters)).toBe(1)
+  })
+
+  it('reads picked tiers in their order, and ignores a tier it does not know', () => {
+    expect(read('tier=C&tier=A').filters.tier).toEqual(['A', 'C'])
+    expect(read('tier=discard').filters.tier).toEqual(['discard'])
+    expect(read('tier=Z').filters.tier).toEqual(['A', 'B'])
+    expect(writeResults(read('tier=discard')).toString()).toBe('tier=discard')
+  })
+
+  it('reads and writes confidence, city group, property records and exclusions', () => {
+    const search =
+      'confidence=low&confidence=nonsense&city_group=regional&has_property=true&excluded=true'
+    const state = read(search)
+    expect(state.filters).toMatchObject({
+      confidence: ['low'],
+      city_group: ['regional'],
+      has_property: true,
+      excluded: true,
+    })
+    expect(filterQuery(state.filters)).toMatchObject({
+      confidence: ['low'],
+      city_group: ['regional'],
+      has_property: true,
+      excluded: true,
+    })
+    expect(writeResults(state).toString()).toBe(
+      'confidence=low&city_group=regional&has_property=true&excluded=true',
+    )
+    expect(activeFilterCount(state.filters)).toBe(4)
   })
 })

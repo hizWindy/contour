@@ -3,8 +3,76 @@
  * a status reads the same in a badge, a table, a filter and a feed line. Sentence case, no
  * abbreviations (DESIGN.md, "Words on screen").
  */
-import type { HubSpotStatus, LeadOrigin, LeadResult, LeadStatus, RunStatus } from '@/api/types'
+import type {
+  CityGroup,
+  Confidence,
+  HubSpotStatus,
+  LeadOrigin,
+  LeadResult,
+  LeadStatus,
+  RunSourceId,
+  RunStatus,
+  Tier,
+} from '@/api/types'
 import { humanise } from './format'
+
+/**
+ * A lead's tier (PLAN-V16 T1-6, Levi's section 6), best first. The tier is the headline; the four
+ * results stay (the plan's choice 1): A or B is a Pass or a Director review, C a Watch, Discard a
+ * Drop. A tier is shown in words, never in colour: colour stays with the results (DESIGN.md).
+ */
+export const TIER_ORDER: readonly Tier[] = ['A', 'B', 'C', 'discard']
+
+export const TIER_LABELS: Record<Tier, string> = { A: 'A', B: 'B', C: 'C', discard: 'Discard' }
+
+/** False for a lead saved before tiers and not yet judged again: it has no tier to show. */
+export function isTier(value: unknown): value is Tier {
+  return typeof value === 'string' && Object.hasOwn(TIER_LABELS, value)
+}
+
+/** What each tier asks for, in Levi's words. */
+export const TIER_ACTIONS: Record<Tier, string> = {
+  A: 'Pursue now',
+  B: 'Nurture',
+  C: 'Watch',
+  discard: 'Do not list',
+}
+
+export const CONFIDENCE_ORDER: readonly Confidence[] = ['high', 'medium', 'low']
+
+export const CONFIDENCE_LABELS: Record<Confidence, string> = {
+  high: 'High',
+  medium: 'Medium',
+  low: 'Low',
+}
+
+/**
+ * The four city groups (PLAN-V16 T1-2), in the order the Start page and the filters show them.
+ * `national` is "All of Australia", which comes before them on its own.
+ */
+export const CITY_GROUP_ORDER: readonly Exclude<CityGroup, 'national'>[] = [
+  'priority',
+  'secondary',
+  'capital',
+  'regional',
+]
+
+export const CITY_GROUP_LABELS: Record<CityGroup, string> = {
+  priority: 'Priority',
+  secondary: 'Secondary',
+  capital: 'Capitals',
+  regional: 'Regional',
+  national: 'All of Australia',
+}
+
+/** Where a run looks for companies (PLAN-V16), in the order every page shows them. */
+export const RUN_SOURCE_ORDER: readonly RunSourceId[] = ['web', 'property_daily', 'arealytics']
+
+export const RUN_SOURCE_LABELS: Record<RunSourceId, string> = {
+  web: 'The web',
+  property_daily: 'Property Daily',
+  arealytics: 'Arealytics',
+}
 
 /** Best first. The order of a legend and of the `result` sort. */
 export const RESULT_ORDER: readonly LeadResult[] = ['pass', 'director_review', 'watch', 'drop']

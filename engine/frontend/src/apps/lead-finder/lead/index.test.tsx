@@ -79,6 +79,13 @@ async function openTab(user: UserEvent, name: string): Promise<HTMLElement> {
   return screen.getByRole('tabpanel', { name })
 }
 
+/** The card's tier headline: "B · 51 · Medium", read as "Tier B, score 51, Medium confidence". */
+function headline(): HTMLElement {
+  const found = document.querySelector<HTMLElement>('[data-slot="tier-headline"]')
+  if (!found) throw new Error('no tier headline')
+  return found
+}
+
 describe('the lead page', () => {
   it('shows the result, the rules, the facts with sources and the notes, a tab each', async () => {
     mockApi(makeLead())
@@ -87,7 +94,7 @@ describe('the lead page', () => {
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Acme Software' }),
     ).toBeInTheDocument()
-    expect(screen.getByText('Score 51 of 77 checked')).toBeInTheDocument()
+    expect(headline()).toHaveTextContent(/Tier B.*score 51.*Medium confidence/)
 
     const score = await openTab(user, 'Score and rules')
     const rules = within(score).getByRole('list', { name: 'Each rule' })
@@ -107,7 +114,7 @@ describe('the lead page', () => {
     expect(within(research).getByText(/A summary of each page/)).toBeInTheDocument()
   })
 
-  it('opens on a quick view: the score bar, the best sign, staff, office, HubSpot and who to call', async () => {
+  it('opens on a quick view: the tier headline, the best sign, staff, office, HubSpot and who to call', async () => {
     const base = makeLead()
     mockApi(
       makeLead({
@@ -132,11 +139,10 @@ describe('the lead page', () => {
     renderLead()
 
     const quick = await screen.findByRole('region', { name: 'Quick view' })
-    const meter = within(quick).getByRole('meter', { name: 'Score' })
-    expect(meter).toHaveAttribute('aria-valuenow', '51')
-    expect(meter).toHaveAttribute('aria-valuemax', '77')
-    expect(meter).toHaveAttribute('aria-valuetext', '51 of 77 points checked')
-    expect(within(quick).getByText('Investigate')).toBeInTheDocument()
+    // PLAN-V16: the tier headline replaced the score bar and its band.
+    expect(headline()).toHaveTextContent(/Tier B.*score 51.*Medium confidence/)
+    expect(within(quick).getByText('Nurture')).toBeInTheDocument()
+    expect(within(quick).queryByRole('meter')).toBeNull()
     expect(within(quick).getByText('Active prospect')).toBeInTheDocument()
     expect(within(quick).getByText('Typed')).toBeInTheDocument()
     expect(within(quick).getByText(/^City: Melbourne\. Size/)).toBeInTheDocument()
@@ -232,13 +238,12 @@ describe('the lead page', () => {
     expect(mark.querySelector('svg')).not.toBeNull()
   })
 
-  it('shows the stage, the band and the score in parts, with what is not known yet', async () => {
+  it('shows the stage, the tier and the score in parts, with what is not known yet', async () => {
     mockApi(makeLead())
     const { user } = renderLead()
 
-    expect(await screen.findByText('Score 51 of 77 checked')).toBeInTheDocument()
-    expect(screen.getByText('Active prospect')).toBeInTheDocument()
-    expect(screen.getByText('Investigate')).toBeInTheDocument()
+    expect(await screen.findByText('Active prospect')).toBeInTheDocument()
+    expect(headline()).toHaveTextContent(/Tier B.*score 51/)
     const score = await openTab(user, 'Score and rules')
     expect(within(score).getByText(/The tool could check 77 of the 100 points/)).toBeInTheDocument()
 
@@ -253,8 +258,8 @@ describe('the lead page', () => {
   it('says when a lead was scored under version 1, and that a drop is not scored', async () => {
     mockApi(makeLead({ score: 78, score_parts: [], score_checked: null, band: null, stage: null }))
     const first = renderLead()
-    expect(await screen.findByText('Score 78')).toBeInTheDocument()
-    expect(screen.queryByRole('meter')).toBeNull() // no bar without the points checked
+    await screen.findByRole('region', { name: 'Quick view' })
+    expect(headline()).toHaveTextContent(/score 78/)
     await openTab(first.user, 'Score and rules')
     expect(screen.getByText(/scored under version 1 of the rules/)).toBeInTheDocument()
     first.unmount()

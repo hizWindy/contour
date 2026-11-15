@@ -13,6 +13,7 @@ from core.api import auth as auth_routes
 from core.api import health, hubspot, memory, people, runs, runs_read, searches
 from core.api import schedules as schedule_routes
 from core.api import settings as settings_routes
+from core.api import sources as source_routes
 from core.api.access import require_app
 from core.api.errors import PROBLEM_RESPONSES, add_error_handlers
 from core.api.guard import SessionGuard, document_sign_in
@@ -29,6 +30,7 @@ from core.logs import setup_logging
 from core.runs import lifecycle
 from core.runtime import disable_tracing
 from core.schedules import runtime as schedules
+from core.sources.service import close_sources
 
 API_PREFIX = "/api/v1"
 log = logging.getLogger(__name__)
@@ -60,6 +62,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             await lifecycle.stop_waiting(app)
             await schedules.shut_down(app)
             await hubspot_connection.shut_down(app)
+            await close_sources()  # the tools' jobs and the browser (PLAN-V16)
             await lifecycle.shutdown(app)
         finally:
             await get_engine().dispose()
@@ -192,6 +195,7 @@ def create_app() -> FastAPI:
                 dependencies=[Depends(require_app(spec.name))],
             )
     api.include_router(schedule_routes.router)
+    api.include_router(source_routes.router)  # Property Daily and Arealytics (PLAN-V16 T2-8)
     for spec in specs:
         # Only the people with the project ticked (and Admins) may use it (PLAN-V9 E1).
         api.include_router(

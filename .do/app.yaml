@@ -14,6 +14,8 @@
 #   FIRST_ADMIN_EMAIL and FIRST_ADMIN_PASSWORD (the first Admin account, made by the migration step)
 #   EMAIL_API_KEY (Resend, PLAN-V9 C1), with EMAIL_PROVIDER=resend, EMAIL_FROM and
 #   LEAD_FINDER_NOTIFY_EMAILS (who gets the run email). Without them no email is sent.
+#   PROPERTY_DAILY_USERNAME, PROPERTY_DAILY_PASSWORD, AREALYTICS_USERNAME and AREALYTICS_PASSWORD
+#   (PLAN-V16: the logins our connectors use). Each tool stays off until an Admin switches it on.
 # Paste the HubSpot key last, after Levi's OK to keep HubSpot data on a server in Sydney: with the
 # key in place the backend copies HubSpot into the database at start and every day.
 # Do not apply this file again over a running app with `doctl apps update` without first exporting

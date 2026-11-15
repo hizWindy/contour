@@ -62,6 +62,7 @@ import {
   WEEKDAY_NAMES,
   bodyOf,
   checkForm,
+  cityWords,
   formOf,
   isSaved,
   monthWords,
@@ -173,14 +174,15 @@ function RoundControl({ round }: { round: LeadFinderRound }) {
           <FieldLabel id={`${id}-cities`}>Cities</FieldLabel>
           <ChipGroup
             aria-labelledby={`${id}-cities`}
-            options={CITIES.map((city) => ({ value: city, label: city }))}
+            options={CITIES.map((city) => ({ value: city, label: cityWords(city) }))}
             value={form.cities}
             onChange={(cities) => {
               edit({ ...form, cities: cities })
             }}
           />
           <FieldDescription>
-            One day apart, in this order. Sydney&apos;s leads go to a Director.
+            One day apart, in this order. The rest of Australia is one search for each sign across
+            the country.
           </FieldDescription>
           {errors.cities ? <FieldError>{errors.cities}</FieldError> : null}
         </Field>
@@ -385,7 +387,7 @@ function RunCityNow({ round, schedules }: { round: LeadFinderRound; schedules: S
                 setCity(schedule)
               }}
             >
-              {item.city}
+              {cityWords(item.city)}
               {schedule.running ? ' (running)' : ''}
             </DropdownMenuItem>
           ))}
@@ -465,7 +467,7 @@ function LastRound({ round, schedules }: { round: LeadFinderRound; schedules: Sc
           <TableBody>
             {rows.map((item) => (
               <TableRow key={item.city}>
-                <TableCell className="font-semibold">{item.city}</TableCell>
+                <TableCell className="font-semibold">{cityWords(item.city)}</TableCell>
                 <TableCell>
                   {item.last_run ? formatDate(item.last_run.created_at) : 'Not yet'}
                 </TableCell>

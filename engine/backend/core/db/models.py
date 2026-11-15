@@ -7,6 +7,7 @@ from core.prefs.models import Setting
 from core.runs.models import Run, RunEvent
 from core.schedules.models import Schedule
 from core.searches.models import SearchLog
+from core.sources.models import PropertyLookup, PropertyRecordRow, SourceRead, SourceState
 
 __all__ = [
     "AuditEntry",
@@ -14,11 +15,15 @@ __all__ = [
     "HubSpotDeal",
     "HubSpotOffice",
     "MemoryItem",
+    "PropertyLookup",
+    "PropertyRecordRow",
     "Run",
     "RunEvent",
     "Schedule",
     "SearchLog",
     "Setting",
+    "SourceRead",
+    "SourceState",
     "User",
     "UserSession",
 ]

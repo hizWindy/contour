@@ -102,8 +102,40 @@ async def test_the_request_is_the_templates_the_city_the_trigger_the_places_and_
         "Searches you could start with:\n"
         "- Melbourne office lease expiry 2026 tenant\n"
         "- Melbourne company relocating head office\n"
-        "- Melbourne office lease renewal refurbishment"
+        "- Melbourne office lease renewal refurbishment\n"
+        # then Levi's source group for this sign (PLAN-V16 T1-7): leases, moves and tenure
+        "- The Urban Developer Melbourne office lease signed or expiring 2026\n"
+        "- AFR Commercial Real Estate Melbourne tenant relocating 2026\n"
+        "- Melbourne building redevelopment approval office tenants 2026\n"
+        "- Melbourne landlord leasing announcement office tenant 2026"
     )
+
+
+SIGNS_WITH_A_SOURCE_GROUP = sorted(
+    {sign for group in RULES.queries.source_groups.values() for sign in group.signs}
+)
+
+
+@pytest.mark.parametrize("sign", SIGNS_WITH_A_SOURCE_GROUP)
+def test_each_sign_also_asks_the_source_groups_levi_names_for_it(sign: str) -> None:
+    """His section 7 (PLAN-V16 T1-7): the sign's own searches, then its groups' searches."""
+    text = discover_request(RULES, a_slice("Perth", sign), 30, TODAY)
+    values = {
+        "city": "Perth",
+        "area": "Perth",
+        "year": 2026,
+        "month_year": "October 2026",
+        "company": "",
+    }
+    groups = RULES.queries.groups_for_sign(sign)
+    assert groups
+    for group in groups:
+        for template in group.discovery:
+            assert f"- {template.format(**values)}" in text
+    for template in RULES.queries.discovery[sign]:  # its own come first
+        assert text.index(template.format(**values)) < text.index(
+            groups[0].discovery[0].format(**values)
+        )
 
 
 async def test_the_area_and_the_days_change_the_focus_and_the_dates() -> None:
@@ -117,8 +149,52 @@ async def test_the_area_and_the_days_change_the_focus_and_the_dates() -> None:
         "\n"
         "Searches you could start with:\n"
         "- Adelaide company merger announced October 2026\n"
-        "- ASX takeover Adelaide headquartered company"
+        "- ASX takeover Adelaide headquartered company\n"
+        # then Levi's source group for this sign: mergers and acquisitions
+        "- ACCC acquisitions register notified acquisition Adelaide 2026\n"
+        "- AFR Street Talk Adelaide company merger or takeover 2026\n"
+        "- ASX announcement scheme of arrangement Adelaide 2026"
     )
+
+
+def test_the_national_request_says_australia_and_asks_for_each_companys_city() -> None:
+    """PLAN-V16 T1-2: the searches say "Australia" in place of a city, and Claude is told to give
+    each company's own city."""
+    national = Slice(
+        id="australia:lease_ending",
+        trigger_id="lease_ending",
+        city="Australia",
+        area="all",
+        label="Australia: lease ending",
+    )
+    text = discover_request(RULES, national, 30, TODAY)
+    assert text.startswith('City: "Australia"\n')
+    assert "Focus on: Australia\n" in text
+    assert "This search covers all of Australia." in text
+    assert "give the Australian city of the office in city" in text
+    assert "- Australia office lease expiry 2026 tenant" in text
+    # A request for one city has no such line
+    assert "all of Australia" not in discover_request(RULES, a_slice(), 30, TODAY)
+
+
+async def test_a_national_slice_keeps_the_city_claude_names_when_it_is_a_listed_place() -> None:
+    claude = finds(
+        candidate("Hobart Hydro", city="Hobart"),
+        candidate("Nowhere Pty", city="Atlantis"),
+        key=("lease_ending", "Australia"),
+    )
+    national = Slice(
+        id="australia:lease_ending",
+        trigger_id="lease_ending",
+        city="Australia",
+        area="all",
+        label="Australia: lease ending",
+    )
+    result = await discover(claude, slice_=national, cities=RULES.criteria.cities.every)
+    assert [(c.name, c.city) for c in result.candidates] == [
+        ("Hobart Hydro", "Hobart"),
+        ("Nowhere Pty", None),  # not a place the rules list: the research finds the city
+    ]
 
 
 def test_a_template_that_asks_for_a_company_gets_an_empty_text_and_does_not_crash() -> None:
@@ -127,7 +203,7 @@ def test_a_template_that_asks_for_a_company_gets_an_empty_text_and_does_not_cras
     )
     rules = RULES.model_copy(update={"queries": queries})
     text = discover_request(rules, a_slice("Perth", "new_ceo"), 30, TODAY)
-    assert text.endswith("- Perth Perth")  # empty company, then the city, then {area} = city
+    assert "\n- Perth Perth\n" in text  # empty company, then the city, then {area} = city
 
 
 async def test_the_request_has_one_ask_with_the_web_tools_the_model_and_one_continue() -> None:

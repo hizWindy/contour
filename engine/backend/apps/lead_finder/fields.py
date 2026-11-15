@@ -17,7 +17,7 @@ from pydantic import (
 )
 
 Label = Literal["confirmed", "estimated", "guessed"]
-Angle = Literal["property", "people", "money", "tenure", "gaps"]
+Angle = Literal["property", "people", "money", "tenure", "dampeners", "gaps"]
 
 
 def _empty_is_unknown(value: Any) -> Any:
@@ -55,14 +55,24 @@ NEWER_FACTS = (
     "office_matters",
     "office_since",
     "last_fitout",
+    "tender_only",  # PLAN-V16 T1-3
+    "staff_projected",  # PLAN-V16 T1-10
 )
-NEWER_LISTS = ("fitout_contractors", "talking_points", "decision_makers")
+NEWER_LISTS = (
+    "fitout_contractors",
+    "talking_points",
+    "decision_makers",
+    "dampeners",
+    "contact_roles",  # PLAN-V16 T1-10
+)
+MAX_CONTACT_ROLES = 5
 MAX_TALKING_POINTS = 3
 MAX_CONTRACTORS = 5
 MAX_LINE_CHARS = 200  # a talking point or a firm name: one line, cut after parsing
+MAX_EVIDENCE_CHARS = 300  # a dampener's evidence: one plain sentence, cut after parsing
 MAX_DECISION_MAKERS = 3
 MAX_NAME_CHARS = 120  # a person's name or job title: one line, cut after parsing
-NEWER_TEXTS: tuple[str, ...] = ("tier_group",)
+NEWER_TEXTS: tuple[str, ...] = ("tier_group", "contour_angle")
 
 
 def _one_line(text: str, limit: int) -> str:
@@ -121,6 +131,48 @@ class BoosterFound(BaseModel):
     source_url: str
 
 
+DampenerCheck = Literal["recent_fitout", "outsourcing", "competitor_tie", "procurement"]
+DampenerState = Literal["found", "not_found"]
+
+
+class DampenerFinding(BaseModel):
+    """The answer to one of the four dampener checks (Levi's section 5, PLAN-V16 T1-5): a fact
+    that makes an office project less likely. Every check comes back `found` or `not_found`. "Not
+    found" is never written as "none": it only says the notes don't show it. The strength is not
+    here: the rules decide it."""
+
+    id: DampenerCheck = Field(description="One of the four check ids in the instructions")
+    state: DampenerState = Field(
+        description="found: a note shows it. not_found: no note shows it. Never anything else."
+    )
+    evidence: MaybeText = Field(
+        description="What the note says, in one plain sentence. Empty when not_found."
+    )
+    date: MaybeText = Field(
+        description="When it happened or was signed: YYYY-MM-DD or YYYY-MM. Empty when it isn't "
+        "known, or when not_found."
+    )
+    source_url: MaybeText = Field(
+        description="The note link that says it. Only a link from the notes. Empty when not_found."
+    )
+    kind: MaybeText = Field(
+        description="Only for procurement: which red flag, exactly as written in the "
+        "instructions. Empty for the other checks."
+    )
+    can_reverse: MaybeText = Field(
+        description="What could reverse it, like a contract's renewal date, or a new CEO who may "
+        "change suppliers. Empty if no note says."
+    )
+
+    @field_validator("evidence", "can_reverse", mode="after")
+    @classmethod
+    def _one_sentence(cls, value: str | None) -> str | None:
+        """One line, cut after parsing: a long answer must not throw away a paid reply."""
+        if not value:
+            return None
+        return _one_line(value, MAX_EVIDENCE_CHARS) or None
+
+
 class DecisionMaker(BaseModel):
     """A person a public page names as one of the company's leaders. Name and job title only."""
 
@@ -142,12 +194,16 @@ class CompanyFacts(BaseModel):
         "instructions, that group's name exactly as written. Else empty."
     )
     tier_group: MaybeText = Field(
-        description="If the industry belongs to one of the tier groups in the instructions, "
-        "that group's name exactly as written. Else empty."
+        description="If the industry belongs to one of the priority sectors in the instructions, "
+        "that sector's name exactly as written. Else empty."
     )
     owner: Fact[str] = Field(description="Like 'ASX-listed, Australian' or 'Private, UK-owned'")
     staff_in_city: Fact[int] = Field(description="Staff at the office in that city")
     staff_from_linkedin: bool = Field(description="true if staff_in_city is a LinkedIn count")
+    staff_projected: Fact[int] = Field(
+        description="Staff the office in that city is expected to have within about 24 months, "
+        "only if a note says (a hiring plan, a merger, a consolidation). Null if no note says."
+    )
     office_m2: Fact[int] = Field(description="The office's floor area in square metres")
     local_team_runs_project: Fact[bool] = Field(
         description="The local team can run an office project, even if owned overseas"
@@ -184,6 +240,15 @@ class CompanyFacts(BaseModel):
         description="When that office last had a move, fitout or refit: YYYY-MM or YYYY. The "
         "move-in counts too. Null if no note says."
     )
+    tender_only: Fact[bool] = Field(
+        description="true only if a note says the company buys its office fitouts solely through "
+        "formal public tender portals (AusTender, Tenders VIC, Tenders WA, SA Tenders). false if a "
+        "note says it buys some other way. Null if no note says."
+    )
+    dampeners: list[DampenerFinding] = Field(
+        description="One entry for each of the four dampener checks in the instructions, "
+        "found or not_found. Four entries, each id once."
+    )
     fitout_contractors: list[str] = Field(
         description="Names of design or fitout firms that did this company's office, only if a "
         "note names them. Firm names only. Can be empty."
@@ -196,6 +261,15 @@ class CompanyFacts(BaseModel):
     contact_role: MaybeText = Field(
         description="The role to contact first, like Head of Property, COO or CFO. No names. "
         "Empty if no note points to one."
+    )
+    contact_roles: list[str] = Field(
+        description="The likely roles to contact, best first, like CEO, COO, CFO, Head of People "
+        "or Head of Property. Job titles only, never a person's name. Up to 5. Can be empty."
+    )
+    contour_angle: MaybeText = Field(
+        description="The strategic hook for an office fitout firm, in a few words, like "
+        "post-merger integration, growth planning, consolidating sites, a long overdue refresh "
+        "or return to office. Empty if the notes point to none."
     )
     decision_makers: list[DecisionMaker] = Field(
         description="Up to 3 people a note names as the company's current leaders, best first: "
@@ -214,6 +288,27 @@ class CompanyFacts(BaseModel):
         limit = MAX_TALKING_POINTS if info.field_name == "talking_points" else MAX_CONTRACTORS
         lines = (_one_line(line, MAX_LINE_CHARS) for line in value)
         return [line for line in lines if line][:limit]
+
+    @field_validator("contact_roles", mode="after")
+    @classmethod
+    def _few_roles(cls, value: list[str]) -> list[str]:
+        """Short job titles, each once, no contact details, at most five. Cut after parsing."""
+        kept: list[str] = []
+        for role in value:
+            line = _one_line(role, MAX_NAME_CHARS)
+            if (
+                not line
+                or _holds_contact_details(line)
+                or line.casefold() in {seen.casefold() for seen in kept}
+            ):
+                continue
+            kept.append(line)
+        return kept[:MAX_CONTACT_ROLES]
+
+    @field_validator("contour_angle", mode="after")
+    @classmethod
+    def _one_short_line(cls, value: str | None) -> str | None:
+        return _one_line(value, MAX_LINE_CHARS) or None if value else None
 
     @field_validator("decision_makers", mode="after")
     @classmethod

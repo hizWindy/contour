@@ -37,6 +37,10 @@ db = pytest.mark.integration
 BASE = "/api/v1/lead-finder/leads"
 ROW_FIELDS = {
     "id",
+    "tier",  # PLAN-V16 T1-10
+    "confidence",
+    "excluded",
+    "has_property",
     "form_failed",
     "company",
     "city",
@@ -381,6 +385,15 @@ async def test_the_export_is_a_utf8_csv_with_the_right_headers(
         "status",
         "source_link",
         "created_at",
+        "tier",
+        "confidence",
+        "dampeners_found",
+        "excluded",
+        "office_address",
+        "lease_end",
+        "contour_angle",
+        "contact_roles",
+        "what_changed",
     ]
     assert [row["company"] for row in rows] == ["Alpha", "Bravo", "Charlie"]
     assert rows[0]["trigger"] == "Lease ending in 1 to 3 years, or a relocation"
@@ -796,3 +809,141 @@ async def test_similar_with_a_profile_lists_deals_and_leads(
             "similarity": 0.75,
         }
     ]
+
+
+# --- Tiers, confidence, property records and exclusions (PLAN-V16 T1-10) ----------------------
+
+
+async def v16_leads(session: AsyncSession) -> dict[str, Any]:
+    """Four leads: Tier A in Melbourne with a property record, B in Sydney, C in Geelong, and an
+    excluded Drop."""
+    record = {
+        "source": "property_daily",
+        "kind": "lease",
+        "company": "Alpha",
+        "summary": "A lease.",
+        "url": "https://www.spatialgroup.com.au/cgi-bin/report.cgi?id=1",
+        "read_at": "2026-10-20T00:00:00Z",
+    }
+    leads = {
+        "alpha": make_lead("Alpha", score=82, city="Melbourne", tier="A", confidence="high"),
+        "bravo": make_lead("Bravo", score=60, city="Sydney", tier="B", confidence="medium"),
+        "charlie": make_lead(
+            "Charlie", score=45, city="Geelong", tier="C", confidence="low", result="watch"
+        ),
+        "delta": make_lead("Delta", score=0, tier="discard", confidence="low", result="drop"),
+    }
+    alpha = leads["alpha"]
+    alpha.card = {
+        **alpha.card,
+        "tier": "A",
+        "confidence": "high",
+        "confidence_why": "High: sourced.",
+        "property": {"records": [record], "checked": {}, "looked_up_at": None},
+        "office": {
+            "address": "120 Collins Street, Melbourne VIC 3000",
+            "building": None,
+            "floor": "Level 12",
+            "area_m2": 1400,
+            "area_basis": "confirmed",
+            "since": "2017",
+            "since_words": "At this address since at least 2017.",
+            "lease_end": "2028-06-30",
+            "lease_end_basis": "confirmed",
+            "fitout_by": None,
+            "source": "property_daily",
+        },
+        "contour_angle": "growth planning",
+        "contact_roles": ["COO", "Head of Property"],
+        "what_changed": {"kind": "new", "text": "New: the first research of this company."},
+        "dampeners": [
+            {"id": "outsourcing", "label": "An outsourcing deal", "state": "found"},
+            {"id": "competitor_tie", "label": "A competitor tie", "state": "not_found"},
+        ],
+    }
+    delta = leads["delta"]
+    delta.card = {
+        **delta.card,
+        "excluded": {
+            "reason_id": "law_firm",
+            "label": "Law firm",
+            "evidence": "It is a law firm.",
+            "url": None,
+            "overridden_by": None,
+            "overridden_at": None,
+        },
+    }
+    await add_all(session, *leads.values())
+    return leads
+
+
+async def names_for(client: httpx.AsyncClient, **params: Any) -> list[str]:
+    response = await client.get(BASE, params={"sort": "tier", **params})
+    assert response.status_code == 200, response.text
+    return [row["company"] for row in response.json()["items"]]
+
+
+@db
+async def test_the_list_filters_by_tier_confidence_city_group_property_and_exclusion(
+    client: httpx.AsyncClient, session: AsyncSession
+) -> None:
+    await v16_leads(session)
+    assert await names_for(client) == ["Alpha", "Bravo", "Charlie", "Delta"]  # tier, then score
+    assert await names_for(client, order="asc") == ["Delta", "Charlie", "Bravo", "Alpha"]
+    assert await names_for(client, tier=["A", "B"]) == ["Alpha", "Bravo"]
+    assert await names_for(client, tier="discard") == ["Delta"]
+    assert await names_for(client, confidence="high") == ["Alpha"]
+    assert await names_for(client, city_group="priority") == ["Alpha", "Delta"]  # Melbourne
+    assert await names_for(client, city_group=["secondary", "regional"]) == ["Bravo", "Charlie"]
+    assert await names_for(client, has_property="true") == ["Alpha"]
+    assert await names_for(client, has_property="false") == ["Bravo", "Charlie", "Delta"]
+    assert await names_for(client, excluded="true") == ["Delta"]
+    assert await names_for(client, excluded="false") == ["Alpha", "Bravo", "Charlie"]
+    assert (await client.get(BASE, params={"tier": "Z"})).status_code == 422
+
+
+@db
+async def test_a_row_and_the_csv_carry_the_tier_and_the_new_columns(
+    client: httpx.AsyncClient, session: AsyncSession
+) -> None:
+    await v16_leads(session)
+    rows = {row["company"]: row for row in (await client.get(BASE)).json()["items"]}
+    assert (rows["Alpha"]["tier"], rows["Alpha"]["confidence"]) == ("A", "high")
+    assert rows["Alpha"]["has_property"] is True and rows["Alpha"]["excluded"] is None
+    assert rows["Delta"]["excluded"]["reason_id"] == "law_firm"
+    assert rows["Bravo"]["has_property"] is False
+
+    response = await client.get(f"{BASE}/export", params={"sort": "tier"})
+    alpha, _, _, delta = csv.DictReader(
+        io.StringIO(response.content.decode("utf-8-sig"), newline="")
+    )
+    assert {key: alpha[key] for key in list(alpha)[-9:]} == {
+        "tier": "A",
+        "confidence": "high",
+        "dampeners_found": "An outsourcing deal",
+        "excluded": "",
+        "office_address": "120 Collins Street, Melbourne VIC 3000",
+        "lease_end": "2028-06-30",
+        "contour_angle": "growth planning",
+        "contact_roles": "COO; Head of Property",
+        "what_changed": "New: the first research of this company.",
+    }
+    assert (delta["tier"], delta["excluded"]) == ("discard", "Law firm")
+
+
+@db
+async def test_the_profile_is_for_a_tier_a_lead(
+    client: httpx.AsyncClient, session: AsyncSession
+) -> None:
+    leads = await v16_leads(session)
+    response = await client.get(f"{BASE}/{leads['alpha'].id}/profile")
+    assert response.status_code == 200, response.text
+    profile = response.json()
+    assert (profile["company"], profile["tier"], profile["score"]) == ("Alpha", "A", 82)
+    assert profile["office"]["address"] == "120 Collins Street, Melbourne VIC 3000"
+    assert profile["contact_roles"] == ["COO", "Head of Property"]
+    assert profile["signs"][0]["label"].startswith("Lease ending")
+    assert profile["what_changed"]["kind"] == "new"
+    refused = await client.get(f"{BASE}/{leads['bravo'].id}/profile")
+    assert (refused.status_code, refused.json()["code"]) == (409, "not_tier_a")
+    assert (await client.get(f"{BASE}/{uuid.uuid4()}/profile")).status_code == 404

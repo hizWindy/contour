@@ -1,0 +1,57 @@
+# Property Daily's pages (PLAN-V16 T2-2, mapped on 15 Nov 2026; tools/propertydaily.md).
+# A change to the site's addresses or its sign-in form is a fix to this file. The backend checks it
+# when it starts (core/sources/property_daily/pages.py), and a test does too.
+
+site:
+  name: Property Daily
+  # The only hosts that may load. The pages are on spatialgroup.com.au.
+  hosts: [www.spatialgroup.com.au, www.propertydaily.com.au]
+  # Never opened: each of these changes something, or isn't ours to read.
+  never_open:
+    - logout
+    - shortlist
+    - reminders
+    - notes
+    - account_details
+    - payments
+    - register
+    - check_login
+    - /main/password
+    - request
+    - pdplus
+  # How the sign-in page shows itself. A wrong password lands there too.
+  signin_url_marks: [login_fail]
+  signin_text_marks:
+    - please re-enter your username and password
+    - problems logging in
+  # Words for a lock or a person-check on this site, on top of the common ones (core/browser/stops.py).
+  # TBC: we haven't seen Property Daily's own wording for "two people at once".
+  lockout_marks: []
+  captcha_marks: []
+
+pages:
+  home: https://www.spatialgroup.com.au/cgi-bin/main.cgi
+  signin: https://www.spatialgroup.com.au/property_daily/login_fail.htm
+  daily: https://www.spatialgroup.com.au/main/mailview/pd/{day}
+  report: https://www.spatialgroup.com.au/cgi-bin/report.cgi?id={id}
+  search: https://www.spatialgroup.com.au/cgi-bin/search.cgi?page=1&search={name}&type=Organisation
+  lease_search: https://www.spatialgroup.com.au/cgi-bin/lease_expiry_news.cgi/marketview?search={name}&search_type=company
+  # Every lease ending in a window, for all of Australia, on one page each.
+  lease_views:
+    - https://www.spatialgroup.com.au/cgi-bin/lease_expiry_news.cgi/marketview?view=timeframe_12__24
+    - https://www.spatialgroup.com.au/cgi-bin/lease_expiry_news.cgi/marketview?view=timeframe_24__9999
+
+# The sign-in form on the sign-in page (fields by CSS selector). "Remember my login" is left unticked.
+signin_form:
+  login: "form[action='/main/login'] input[name=login]"
+  password: "form[action='/main/login'] input[name=password]"
+  submit: "form[action='/main/login'] button, form[action='/main/login'] input[type=submit]"
+
+# How far the feed and the lease endings reach.
+feed:
+  first_read_days: 7 # the first read takes the last 7 days' emails
+  most_days: 10 # never more than 10 days' emails in one read
+lease_endings:
+  from_months: 12
+  to_months: 36
+  smallest_m2: 500 # looser than the 1,000 m² rule, so a growing company isn't missed

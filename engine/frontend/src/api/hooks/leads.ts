@@ -16,6 +16,7 @@ export function leadsQueryOptions(query: QueryOf<'list_leads'> = {}) {
   return queryOptions({
     queryKey: queryKeys.leads.list(query),
     queryFn: async ({ signal }) =>
+      // Until PLAN-V16 M1: the tier, confidence and exclusion of a row are in `v16.ts`.
       unwrap(await api.GET('/lead-finder/leads', { params: { query }, signal })),
   })
 }
@@ -95,6 +96,7 @@ export function leadQueryOptions(leadId: string) {
   return queryOptions({
     queryKey: queryKeys.leads.detail(leadId),
     queryFn: async ({ signal }) =>
+      // Until PLAN-V16 M1: the card's new fields are in `v16.ts`.
       unwrap(
         await api.GET('/lead-finder/leads/{lead_id}', {
           params: { path: { lead_id: leadId } },
@@ -149,10 +151,31 @@ export function usePatchLead() {
   const queryClient = useQueryClient()
   return useMutation<LeadDetail, ApiProblem, PatchLeadVariables>({
     mutationFn: async ({ leadId, patch }) =>
+      // Until PLAN-V16 M1, like `leadQueryOptions`.
       unwrap(
         await api.PATCH('/lead-finder/leads/{lead_id}', {
           params: { path: { lead_id: leadId } },
           body: patch,
+        }),
+      ),
+    onSuccess: (lead) => {
+      queryClient.setQueryData(queryKeys.leads.detail(lead.id), lead)
+      refreshLeads(queryClient)
+    },
+  })
+}
+
+/**
+ * Judges an excluded lead again without its exclusion (PLAN-V16 T3-4). It is free (no Claude) and
+ * the backend records who did it. It returns the lead judged again and puts it in the cache.
+ */
+export function useOverrideExclusion() {
+  const queryClient = useQueryClient()
+  return useMutation<LeadDetail, ApiProblem, string>({
+    mutationFn: async (leadId) =>
+      unwrap(
+        await api.POST('/lead-finder/leads/{lead_id}/override-exclusion', {
+          params: { path: { lead_id: leadId } },
         }),
       ),
     onSuccess: (lead) => {
@@ -167,6 +190,7 @@ export function useRecheckLead() {
   const queryClient = useQueryClient()
   return useMutation<Run, ApiProblem, string>({
     mutationFn: async (leadId) =>
+      // Until PLAN-V16 M1: the run's new fields are in `v16.ts`.
       unwrap(
         await api.POST('/lead-finder/leads/{lead_id}/recheck', {
           params: { path: { lead_id: leadId } },

@@ -15,13 +15,15 @@ Why now never changes the result or the score. It runs after the judging, and th
 (scoring.py) stays pure code with no AI inside.
 
 No HubSpot data goes to Claude: a value HubSpot filled in (a move-in date, a lease end, a staff
-count) is left out of what Claude reads (`claude_view`). The card's own lines still use it, because
-code writes them.
+count, an office size) is left out of what Claude reads (`claude_view`). The card's own lines still
+use it, because code writes them. The same goes for a property tool whose `..._to_claude_ok` switch
+is off (PLAN-V16 T1-8, choice 8: Arealytics by default): its values, and its signs, never reach
+Claude here. The caller says which sources are hidden (`property.hidden_sources`).
 """
 
 import logging
 import re
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import ROUND_HALF_UP, Decimal
@@ -41,7 +43,7 @@ from apps.lead_finder.scoring import (
     office_history,
     parse_date,
 )
-from apps.lead_finder.sources import host_of, url_key
+from apps.lead_finder.sources import host_of, tool_of, url_key
 from apps.lead_finder.sourcing import FactSource
 from core.claude.budget import Budget, BudgetSpent
 from core.claude.client import Claude, ClaudeError, Reply
@@ -592,8 +594,12 @@ class WhyNowAnswer(BaseModel):
 # --- What Claude reads (C1) ----------------------------------------------------------------
 
 
-def _from_hubspot(fact: str, sources: Sequence[FactSource]) -> bool:
-    return any(entry.fact == fact and entry.used == "hubspot" for entry in sources)
+# The sources Claude never reads in the Why now when the caller says nothing more: HubSpot
+HUBSPOT_ONLY: frozenset[str] = frozenset({"hubspot"})
+
+
+def _from_hidden(fact: str, sources: Sequence[FactSource], hidden: Collection[str]) -> bool:
+    return any(entry.fact == fact and entry.used in hidden for entry in sources)
 
 
 def _is_hubspot_link(url: str | None) -> bool:
@@ -601,21 +607,37 @@ def _is_hubspot_link(url: str | None) -> bool:
     return host == "hubspot.com" or host.endswith(".hubspot.com")
 
 
+def _hidden_link(url: str | None, hidden: Collection[str], rules: LeadFinderRules | None) -> bool:
+    """A link to HubSpot, or to the site of a property tool Claude may not read (PLAN-V16 T1-8)."""
+    if "hubspot" in hidden and _is_hubspot_link(url):
+        return True
+    tool = tool_of(url or "", rules.criteria) if rules is not None else None
+    return tool is not None and tool in hidden
+
+
 def _unknown() -> Fact[Any]:
     return Fact(value=None, source_url=None, source_date=None, label=None)
 
 
-def claude_view(facts: CompanyFacts, sources: Sequence[FactSource]) -> CompanyFacts:
-    """The facts with every value HubSpot filled in left out, so no HubSpot data goes to Claude.
-    HubSpot can give the move-in date, the lease end (as a sign that links to its record) and the
-    staff count. The card's own lines still use them: code writes those."""
+def claude_view(
+    facts: CompanyFacts,
+    sources: Sequence[FactSource],
+    rules: LeadFinderRules | None = None,
+    hidden: Collection[str] = HUBSPOT_ONLY,
+) -> CompanyFacts:
+    """The facts with every value a hidden source filled in left out: HubSpot always, and a
+    property tool whose `..._to_claude_ok` switch is off (PLAN-V16 T1-8). They can give the move-in
+    date, the office size, the last fitout, the lease end (as a sign that links to them) and the
+    staff count. The card's own lines still use them: code writes those. `rules` names the tools'
+    sites; without it only HubSpot's links are known."""
     update: dict[str, Any] = {}
-    if _from_hubspot("office_since", sources):
-        update["office_since"] = _unknown()
-    if _from_hubspot("staff_in_city", sources):
+    for name in ("office_since", "office_m2", "last_fitout"):
+        if _from_hidden(name, sources, hidden):
+            update[name] = _unknown()
+    if _from_hidden("staff_in_city", sources, hidden):
         update["staff_in_city"] = _unknown()
         update["staff_from_linkedin"] = False
-    signs = [sign for sign in facts.triggers if not _is_hubspot_link(sign.source_url)]
+    signs = [sign for sign in facts.triggers if not _hidden_link(sign.source_url, hidden, rules)]
     if len(signs) != len(facts.triggers):
         update["triggers"] = signs
     return facts.model_copy(update=update) if update else facts
@@ -655,15 +677,25 @@ def _fact_lines(facts: CompanyFacts) -> list[str]:
     return lines
 
 
-def why_input(card: "LeadCard", sheet: FactsSheet, rules: LeadFinderRules, today: date) -> str:
+def why_input(
+    card: "LeadCard",
+    sheet: FactsSheet,
+    rules: LeadFinderRules,
+    today: date,
+    hidden: Collection[str] = HUBSPOT_ONLY,
+) -> str:
     """Everything Claude reads for one lead, as data. Values from a web page are JSON text, so a
-    note can't pass itself off as an instruction. No web pages, and no HubSpot values."""
-    facts = claude_view(card.facts, card.fact_sources)
-    # A line that changes once HubSpot's values are left out rests on them, so Claude only
+    note can't pass itself off as an instruction. No web pages, no HubSpot values, and nothing
+    from a property tool in `hidden` (PLAN-V16 T1-8)."""
+    facts = claude_view(card.facts, card.fact_sources, rules, hidden)
+    # A line that changes once the hidden values are left out rests on them, so Claude only
     # hears that it is known. The confidence and the missing list are words, with no values.
     when_text = sheet.when.text if when(facts, rules, today) == sheet.when else HIDDEN
-    hubspot_staff = _from_hubspot("staff_in_city", card.fact_sources)
-    size_text = HIDDEN if hubspot_staff and sheet.size.basis == "staff" else sheet.size.text
+    hidden_staff = _from_hidden("staff_in_city", card.fact_sources, hidden)
+    hidden_size = _from_hidden("office_m2", card.fact_sources, hidden)
+    size_text = (
+        HIDDEN if hidden_size or (hidden_staff and sheet.size.basis == "staff") else sheet.size.text
+    )
     labels = {item.id: item.label for item in rules.criteria.triggers.every}
     signs = [
         json_line(
@@ -676,7 +708,7 @@ def why_input(card: "LeadCard", sheet: FactsSheet, rules: LeadFinderRules, today
             }
         )
         for score in card.triggers
-        if not _is_hubspot_link(score.trigger.source_url)
+        if not _hidden_link(score.trigger.source_url, hidden, rules)
     ]
     notes = [
         json_line({"claim": note.claim, "link": note.url, "date": note.published or "unknown"})
@@ -852,6 +884,7 @@ async def write_why_now(
     today: date,
     now: datetime,
     on_reply: "OnReply | None" = None,
+    hidden: Collection[str] = HUBSPOT_ONLY,
 ) -> WhyOutcome:
     """Writes the Why now for one judged lead (C2). One Claude request, no web search, paid from
     the company's own budget (checked first, like every other step). A failed form is retried
@@ -864,7 +897,7 @@ async def write_why_now(
     outcome = WhyOutcome(None, None)
     try:
         sheet = facts_sheet(card.facts, card, rules, today, people=len(card.signalhire_people))
-        prompt = why_input(card, sheet, rules, today)
+        prompt = why_input(card, sheet, rules, today, hidden)
     except Exception:  # nothing is spent yet, and the research it follows must be kept
         log.exception("why_now_input_failed")
         outcome.skipped = "failed"

@@ -7,7 +7,7 @@ Rules for every fact:
 - If no note supports a fact, set its value to null, and its link, date and label to empty text. Unknown is better than wrong.
 
 What each fact means:
-- city: the city of the office this lead is about. Pick the office in Melbourne, Adelaide or Perth if there is one.
+- city: the Australian city of the office this lead is about. If the notes are about one office, that office. If the company has several, pick one in Melbourne, Adelaide or Perth if there is one, then Sydney or Brisbane. An overseas or interstate company that announces an office in an Australian city counts for that city.
 - staff_in_city: staff at that office, not the whole company. Set staff_from_linkedin to true if the number is a LinkedIn count.
 - office_m2: the floor area of that office in square metres.
 - local_team_runs_project: true if an Australian head office or local leader runs property decisions, even when the owner is overseas.
@@ -19,6 +19,8 @@ What each fact means:
 - growth_plan: true only if a note says the company has raised big money or made a big announcement AND plans to hire a lot. Also true when an overseas company announces its first, or a much bigger, office in an Australian city, with the staff or office it plans there. false if a note says it has no such plan. null if no note says.
 - size_needed_m2: the floor area, in square metres, of the office the company says it will need after that growth, or of the Australian office an overseas company announces. If a note gives only the staff it will have, work it out as staff x 10 and label it "estimated". null if no note says.
 - growth_by: when it expects to need that office, or when the Australian office opens, like "2027-06" or "2027". null if no note says.
+- owner: who owns it, like "ASX-listed, Australian" or "Private, UK-owned". Write "Government-owned corporation" for a corporation a government owns, and "Member-owned" for an industry super fund or a member-owned insurer.
+- tender_only: true only if a note says the company buys its office fitouts solely through formal public tender portals (AusTender, Tenders VIC, Tenders WA, SA Tenders). false if a note says it buys some other way. null if no note says.
 
 Triggers are signs of an office change. Use these ids only:
 $triggers
@@ -28,11 +30,20 @@ For a trigger's date, give when it happened. For lease_ending, give when the lea
 Boosters make a lead stronger. Use these ids only:
 $boosters
 
-Industry groups. If the company's industry belongs to one, put that group's name in industry_group, exactly as written. Otherwise empty text.
+Dampeners are facts that make an office project less likely. Return one entry in dampeners for each of these four checks, each id once:
+$dampeners
+
+For each entry:
+- state is "found" only if a note shows it. Then give the evidence in one plain sentence, the note's link exactly as written, and the date it happened or was signed ("2025-03" or "2025-03-14"; empty if no note says).
+- Otherwise state is "not_found", and the evidence, link, date, kind and can_reverse are empty text. "not_found" means no note shows it. Never write "none" or "no".
+- can_reverse is what could reverse a found dampener, like a contract's renewal date, or a new CEO who may change suppliers. Empty if no note says.
+- kind is only for procurement, and empty for the others.
+
+Industry groups. If the company's industry belongs to one, put that group's name in industry_group, exactly as written (the words after a colon say what the group means: they are not part of the name). Otherwise empty text.
 $industry_groups
 
-Tier groups. If the company's industry belongs to one of these, put that group's name in tier_group, exactly as written. Otherwise empty text.
-$tier_groups
+Priority sectors. If the company's industry belongs to one of these, put that group's name in tier_group, exactly as written. Otherwise empty text.
+$priority_sectors
 
 Then write:
 - fitout_contractors: the names of design or fitout firms that did this company's office, only if a note names them. Firm names only. An empty list if none.

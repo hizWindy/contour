@@ -36,6 +36,7 @@ from apps.lead_finder.research import (
 from apps.lead_finder.rivals import RIVALS_PROMPT_VERSION, find_rivals, save_rivals, wants_rivals
 from apps.lead_finder.sanitize import one_line, safe_http_url
 from apps.lead_finder.scoring import city_of, parse_date
+from apps.lead_finder.sources import tool_of
 from apps.lead_finder.steps.choose import OVER_LIMIT_REASON
 from apps.lead_finder.steps.state import CompanyTask, RunCtx, day_of, signals_of
 from apps.lead_finder.tables import company_key
@@ -86,7 +87,10 @@ def _hubspot_names_approved(run: RunCtx) -> bool:
 
 async def save_signals(run: RunCtx, task: CompanyTask) -> int:
     """Discovery's signals become memory notes about the company, under the name being
-    researched, so research reads them first. A link already noted is not saved again."""
+    researched, so research reads them first. A link already noted is not saved again. A signal
+    from a property tool's feed is never a note (PLAN-V16 T1-8): notes go to Claude, and the tools'
+    facts reach Claude only as hints, while their switch allows it. The research adds its sign
+    itself (`property.record_signs`)."""
     signals = signals_of(task)
     if not signals:
         return 0
@@ -95,6 +99,8 @@ async def save_signals(run: RunCtx, task: CompanyTask) -> int:
         notes = []
         for signal in signals:
             if signal.url in known or not safe_http_url(signal.url):
+                continue
+            if tool_of(signal.url, run.rules.criteria) is not None:
                 continue
             known.add(signal.url)
             notes.append(
@@ -126,7 +132,8 @@ async def _rivals(
     rules = run.rules
     place = card.facts.city.value if isinstance(card.facts.city.value, str) else task["city"]
     city = city_of(place, rules) if place else None
-    if not wants_rivals(rules, card.result, card.facts.tier_group, city):
+    signs = [score.trigger.id for score in card.triggers]
+    if not wants_rivals(rules, card.result, card.facts.tier_group, city, signs):
         return 0
     assert city is not None  # wants_rivals says no without a city
     left = ctx.caps.company_cap_usd - spent

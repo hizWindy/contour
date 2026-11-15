@@ -57,7 +57,13 @@ def test_a_new_lead_sends_every_mapped_field_in_hubspots_form() -> None:
 def test_every_field_in_the_map_has_a_value_or_is_left_out() -> None:
     values = lead_values(sample_lead(), RULES)
     assert set(values) == set(RULES.hubspot_map.company)
-    assert set(CITY_STATE) == {"Melbourne", "Adelaide", "Perth", "Sydney", "Brisbane"}
+    # Every place the rules list has a state (PLAN-V16 T1-2: all of Australia)
+    assert set(CITY_STATE) == set(RULES.criteria.cities.every)
+    assert (CITY_STATE["Darwin"], CITY_STATE["Hobart"], CITY_STATE["Canberra"]) == (
+        "NT",
+        "TAS",
+        "ACT",
+    )
 
 
 def test_a_lead_already_in_hubspot_updates_that_company_and_open_deals_warn() -> None:

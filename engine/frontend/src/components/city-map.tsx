@@ -21,6 +21,11 @@ import { labelDirection, labelOffset, labelWidth, placeLabels, type Side } from 
 
 /** The middle of Australia's mainland, close enough to show Perth and Sydney at once. */
 const AUSTRALIA: [number, number] = [-29.5, 134]
+/** The corners of the mainland and Tasmania, to fit the whole country (a national search). */
+const AUSTRALIA_CORNERS: [number, number][] = [
+  [-10.7, 113.2],
+  [-43.6, 153.6],
+]
 const TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
 // Plain text on purpose: Leaflet writes the credit as HTML, so it holds no markup.
 const CREDIT = '© OpenStreetMap contributors'
@@ -50,6 +55,10 @@ export interface CityMapProps {
    * it (or with no pins), the map fits the cities.
    */
   fitToPoints?: boolean
+  /** Fits the whole of Australia, whatever the cities: a national search (PLAN-V16 T3-2). */
+  wholeCountry?: boolean
+  /** A shorter map, for a page where it only shows what is picked (Start). */
+  compact?: boolean
   center?: [number, number]
   zoom?: number
   className?: string
@@ -198,6 +207,8 @@ export function CityMap({
   onSelectPoint,
   approximate = false,
   fitToPoints = false,
+  wholeCountry = false,
+  compact = false,
   center = AUSTRALIA,
   zoom = 4,
   className,
@@ -210,7 +221,10 @@ export function CityMap({
         aria-label={label}
         // `isolate` keeps Leaflet's own layers (z-index up to 1000) inside the map, so a side
         // panel, a dialog or a menu always opens above the map, never under it.
-        className="relative isolate h-80 overflow-hidden rounded-lg border bg-muted sm:h-[28rem]"
+        className={cn(
+          'relative isolate overflow-hidden rounded-lg border bg-muted',
+          compact ? 'h-56 sm:h-72' : 'h-80 sm:h-[28rem]',
+        )}
       >
         <MapContainer
           center={center}
@@ -228,7 +242,9 @@ export function CityMap({
             referrerPolicy={TILE_REFERRER_POLICY}
           />
           <CityLayer cities={cities} picked={picked} onToggleCity={onToggleCity} />
-          {fitToPoints && points.length > 0 ? (
+          {wholeCountry ? (
+            <FitView spots={AUSTRALIA_CORNERS} labels={false} maxZoom={6} />
+          ) : fitToPoints && points.length > 0 ? (
             <FitView
               spots={points.map((point) => [point.lat, point.lng])}
               labels={false}

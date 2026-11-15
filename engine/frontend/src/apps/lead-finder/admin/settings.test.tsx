@@ -241,3 +241,69 @@ describe('Admin, Settings', () => {
     expect(screen.getByText('Pre-meeting forms are on')).toBeInTheDocument()
   })
 })
+
+describe('the Sources settings (PLAN-V16 T3-6)', () => {
+  const field = (key: string, label: string, changes: Record<string, unknown> = {}) => ({
+    ...SETTING,
+    key,
+    label,
+    description: `${label}.`,
+    type: 'int',
+    min: 1,
+    max: 1000,
+    default: 300,
+    value: 300,
+    ...changes,
+  })
+
+  it('puts the property tools in a Sources group, and the default goal under Runs', async () => {
+    const fields = [
+      ...settingsOut().fields,
+      field('property_daily_enabled', 'Property Daily is switched on', {
+        type: 'bool',
+        min: null,
+        max: null,
+        default: false,
+        value: false,
+      }),
+      field('source_pages_per_day', 'Most pages a day, for each tool'),
+      field('source_pages_per_run', 'Most live lookup pages one run may use', { value: 60 }),
+      field('property_lookup_days', 'Days a lookup is reused', { value: 30 }),
+      field('manual_run_goal_leads', 'How many leads a run finds, unless a person says', {
+        value: 20,
+        max: 100,
+      }),
+      field('arealytics_to_claude_ok', 'Arealytics facts may go to Claude', {
+        type: 'bool',
+        min: null,
+        max: null,
+        default: false,
+        value: false,
+        editable: false,
+      }),
+    ]
+    mockApi({ '/api/v1/settings': { ...settingsOut(), fields } })
+    const { user } = renderWithProviders(<AdminSettingsTab />)
+    await screen.findByText(/Applies from the next run\./)
+
+    await user.click(screen.getByRole('radio', { name: 'Sources' }))
+    const sources = screen.getByRole('list', { name: 'Sources' })
+    for (const label of [
+      'Property Daily is switched on',
+      'Most pages a day, for each tool',
+      'Most live lookup pages one run may use',
+      'Days a lookup is reused',
+    ]) {
+      expect(sources).toHaveTextContent(label)
+    }
+    expect(sources).not.toHaveTextContent('How many leads')
+
+    await user.click(screen.getByRole('radio', { name: 'Runs' }))
+    expect(screen.getByRole('list', { name: 'Runs' })).toHaveTextContent(
+      'How many leads a run finds, unless a person says',
+    )
+    // An approval set on the server is read only, with the others.
+    expect(screen.getByText('Arealytics facts may go to Claude')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Arealytics facts may go to Claude')).toBeNull()
+  })
+})

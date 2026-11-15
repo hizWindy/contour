@@ -1,12 +1,12 @@
 /**
  * Which group each setting is in, on Admin's Settings (PLAN-V13 T1-9): Money, Claude, Runs, Why now,
- * Call prep and Call notes. A setting the backend adds later and nobody placed yet goes under Runs,
- * so it is never hidden.
+ * Call prep, Sources (PLAN-V16 T3-6: Property Daily and Arealytics) and Call notes. A setting the
+ * backend adds later and nobody placed yet goes under Runs, so it is never hidden.
  *
  * Call notes (PLAN-V17 T3-7) holds the switches: call notes on, Claude sorts them, and pre-meeting
  * forms on (shown again with Meetings, T3-9).
  */
-export type GroupId = 'money' | 'claude' | 'runs' | 'why' | 'prep' | 'notes'
+export type GroupId = 'money' | 'claude' | 'runs' | 'why' | 'prep' | 'sources' | 'notes'
 
 export const GROUPS: { value: GroupId; label: string }[] = [
   { value: 'money', label: 'Money' },
@@ -14,6 +14,7 @@ export const GROUPS: { value: GroupId; label: string }[] = [
   { value: 'runs', label: 'Runs' },
   { value: 'why', label: 'Why now' },
   { value: 'prep', label: 'Call prep' },
+  { value: 'sources', label: 'Sources' },
   { value: 'notes', label: 'Call notes' },
 ]
 
@@ -33,6 +34,7 @@ const GROUP_OF: Record<string, GroupId> = {
   claude_effort: 'claude',
   claude_concurrency: 'claude',
   run_max_companies: 'runs',
+  manual_run_goal_leads: 'runs', // PLAN-V16: "How many leads" on Start
   lead_finder_goal_good_leads: 'runs',
   company_max_searches: 'runs',
   searches_per_request: 'runs',
@@ -52,6 +54,15 @@ const GROUP_OF: Record<string, GroupId> = {
   prep_reuse_days: 'prep',
   model_prep: 'prep',
   search_ahead_cap_usd: 'prep',
+  // PLAN-V16: the property tools. The switches and the paces; the two "to Claude" approvals and
+  // Arealytics' switch are env-only, so they show here read-only.
+  property_daily_enabled: 'sources',
+  arealytics_enabled: 'sources',
+  source_pages_per_day: 'sources',
+  source_pages_per_run: 'sources',
+  property_lookup_days: 'sources',
+  property_daily_to_claude_ok: 'sources',
+  arealytics_to_claude_ok: 'sources',
   call_notes_enabled: 'notes',
   call_notes_ai_enabled: 'notes',
   meeting_forms_enabled: 'notes',

@@ -58,6 +58,8 @@ SETTINGS_LOCK = 7_244_003
 # Shown as read-only rows. They change only in engine/.env, then a restart.
 ENV_ONLY_KEYS: tuple[str, ...] = (
     "hubspot_names_to_claude_ok",
+    "property_daily_to_claude_ok",
+    "arealytics_to_claude_ok",
     "hard_run_cap_usd",
     "hard_scheduled_run_cap_usd",
     "hard_daily_cap_usd",
@@ -89,6 +91,38 @@ TEXT: dict[str, tuple[str, str]] = {
         "Money held for each request (US$)",
         "Held back while a request runs, because its cost is known only afterwards. "
         "TBC: to be measured from Phase 1 runs.",
+    ),
+    "manual_run_goal_leads": (
+        "Leads to aim for in a run you start",
+        "The number filled in for How many leads when a person starts a run. The run stops "
+        "starting companies once it has this many good leads, or at its limits. TBC.",
+    ),
+    "property_daily_enabled": (
+        "Property Daily is on",
+        "Lets the Lead Finder read Property Daily: the daily feed, and a lookup when a company "
+        "is researched. Off: nothing is read from it.",
+    ),
+    "source_pages_per_day": (
+        "Pages a day, for each tool",
+        "The most pages each tool may read in one day. A slow pace keeps the account safe. TBC.",
+    ),
+    "source_pages_per_run": (
+        "Lookup pages in one run",
+        "The most live lookup pages one run may read from the two tools. 0: our copy only. TBC.",
+    ),
+    "property_lookup_days": (
+        "Days a lookup is reused",
+        "A company's lookup in the two tools is reused this long before the tools are asked again.",
+    ),
+    "property_daily_to_claude_ok": (
+        "Property Daily facts may go to Claude",
+        "Sends a company's address, office size and lease dates from Property Daily to Claude as "
+        "short hints. " + ENV_ONLY_NOTE,
+    ),
+    "arealytics_to_claude_ok": (
+        "Arealytics facts may go to Claude",
+        "Off until Arealytics approves it: its terms ban AI use it hasn't approved. The rules and "
+        "the lead card still use its facts. " + ENV_ONLY_NOTE,
     ),
     "run_cap_usd": (
         "Cap for one run (US$)",

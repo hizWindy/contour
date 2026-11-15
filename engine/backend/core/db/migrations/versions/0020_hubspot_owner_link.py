@@ -10,8 +10,8 @@ Both columns are new and empty, so the rows that exist keep their values. The ta
 accounts, so the checks are added in one step.
 
 Revision ID: 0020_hubspot_owner_link
-Revises: 0017_call_prep (PLAN-V16 adds 0018 and 0019 on its own branch: whichever plan reaches
-    master second points one down_revision at the other's newest)
+Revises: 0019_lead_tier (written after 0017_call_prep; PLAN-V16 reached master first, so at the
+    PLAN-V17 merge, 16 Nov, it follows PLAN-V16's newest)
 Create Date: 2026-11-15
 """
 
@@ -21,7 +21,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "0020_hubspot_owner_link"
-down_revision: str | Sequence[str] | None = "0017_call_prep"
+down_revision: str | Sequence[str] | None = "0019_lead_tier"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

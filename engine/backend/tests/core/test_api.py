@@ -69,7 +69,9 @@ async def test_rules_endpoint_returns_the_rules_and_version(client: httpx.AsyncC
     response = await client.get("/api/v1/lead-finder/rules")
     assert response.status_code == 200
     body = response.json()
-    assert body["criteria"]["cities"]["pass"] == ["Melbourne", "Adelaide", "Perth"]
+    cities = body["criteria"]["cities"]  # all of Australia in four groups (PLAN-V16 T1-2)
+    assert cities["groups"]["priority"] == ["Melbourne", "Adelaide", "Perth"]
+    assert cities["national"] == "Australia"
     assert len(body["version"]) == 12
 
 

@@ -4,10 +4,11 @@ Two kinds of setting:
 - **Env-only:** the HubSpot approval switches, the hard ceilings, the daily cap, the database
   pool, the allowed web origins, the API address, the sign-in settings (on or off, the session
   times), the Signal Hire key and every HubSpot setting (the key, the version, the write switch,
-  the pace and the sync times), and for call notes and the pre-meeting form (PLAN-V17) the
-  models, caps and limits, the switch that writes a pre-read on the meeting itself, and the
-  internal email domains. They change only in engine/.env, then a restart. The website can't
-  change them.
+  the pace and the sync times), for Property Daily and Arealytics (PLAN-V16) their logins,
+  whether their facts may go to Claude, and the pause between pages, and for call notes and the
+  pre-meeting form (PLAN-V17) the models, caps and limits, the switch that writes a pre-read on
+  the meeting itself, and the internal email domains. They change only in engine/.env, then a
+  restart. The website can't change them.
 - **Editable:** caps, concurrency, models and thresholds (the keys in EDITABLE_KEYS). The
   `core.prefs` package stores overrides in the database, checks each against its min and max
   here, and then clamps the result to the ceilings with `clamp_to_ceilings`.
@@ -58,6 +59,7 @@ EDITABLE_KEYS: Final[list[str]] = [
     "request_reserve_usd",
     "run_cap_usd",
     "run_max_companies",
+    "manual_run_goal_leads",  # PLAN-V16 T1-9
     "scheduled_run_cap_usd",
     "lead_finder_round_cap_usd",
     "daily_cap_usd",
@@ -87,6 +89,11 @@ EDITABLE_KEYS: Final[list[str]] = [
     "prep_reuse_days",
     "model_prep",
     "search_ahead_cap_usd",
+    # Property Daily (PLAN-V16)
+    "property_daily_enabled",
+    "source_pages_per_day",
+    "source_pages_per_run",
+    "property_lookup_days",
     # Call notes and the pre-meeting form (PLAN-V17)
     "call_notes_enabled",
     "call_notes_ai_enabled",
@@ -391,6 +398,9 @@ class Settings(BaseSettings):
     # --- Caps for one run --------------------------------------------------------------
     run_cap_usd: Decimal = Field(Decimal("20.00"), ge=Decimal("1"), le=Decimal("50"))
     run_max_companies: int = Field(20, ge=1, le=100)
+    # The default "How many leads" when a person starts a run (PLAN-V16 T1-9, TBC). The run stops
+    # starting companies once it has this many good leads, or at the limits above.
+    manual_run_goal_leads: int = Field(20, ge=1, le=100)
     # --- Automatic runs: the ones a schedule starts (9 Nov, Al-khair) ----------------------
     # They have no company limit of their own: they go on until their share of the goal below, or
     # until no company is left. This is their money limit, a brake against a fault: a normal city
@@ -433,6 +443,34 @@ class Settings(BaseSettings):
     model_prep: ClaudeModel | None = "claude-sonnet-5-5"  # None: claude_model
     search_ahead_cap_usd: Decimal = Field(Decimal("5"), ge=Decimal("1"), le=Decimal("100"))
 
+    # --- Property Daily and Arealytics (PLAN-V16). Each is off until Al-khair switches it on. ---
+    # Our connectors read each tool in a browser of their own (core/browser, core/sources), at a
+    # slow pace, and stop for 24 hours at the first sign of a block.
+    property_daily_enabled: StrictBool = False
+    # Arealytics has no connector: its site refused automated access, and Al-khair dropped it from
+    # PLAN-V16 (15 Nov). So this is env-only and off, and nothing reads Arealytics while it is.
+    arealytics_enabled: StrictBool = False
+    # Each tool's login (env-only secrets: engine/.env and the App Platform dashboard). Never
+    # logged, and no route sends them. Empty means not set. The tests blank them.
+    property_daily_username: SecretStr | None = None
+    property_daily_password: SecretStr | None = None
+    arealytics_username: SecretStr | None = None
+    arealytics_password: SecretStr | None = None
+    # May a tool's facts go to Claude, as short hints? Env-only data approvals, like
+    # hubspot_names_to_claude_ok. Arealytics is off: its terms ban AI use it hasn't approved.
+    property_daily_to_claude_ok: StrictBool = True
+    arealytics_to_claude_ok: StrictBool = False
+    # The pace (TBC). The pause between two pages of one tool is a random number of seconds
+    # between these two. Env-only, like the ceilings: a faster pace puts the account at risk.
+    # In engine/.env: SOURCE_PAGE_WAIT_SECONDS=4,9
+    source_page_wait_seconds: Annotated[tuple[float, float], NoDecode] = (4.0, 9.0)
+    # Which browser drives the tools (env-only). auto: Playwright's own Chromium, except on Windows,
+    # where Application Control blocks it (this laptop, 15 Nov), so the installed Chrome is used.
+    browser_channel: Literal["auto", "chromium", "chrome", "msedge"] = "auto"
+    source_pages_per_day: int = Field(300, ge=1, le=1000)  # the most pages a day, for each tool
+    source_pages_per_run: int = Field(60, ge=0, le=300)  # live lookup pages one run may use
+    property_lookup_days: int = Field(30, ge=1, le=365)  # a company's lookup is reused this long
+
     # --- Call notes and the pre-meeting form (PLAN-V17). Off until Al-khair switches them on. ---
     # call_notes_enabled shows Log call and Activity. call_notes_ai_enabled lets Claude sort a
     # note: a rep's note names clients, so it waits for Levi's OK (choice 1, TBC). It is its own
@@ -464,6 +502,10 @@ class Settings(BaseSettings):
         "auth_required",
         "session_cookie_secure",
         "server_mode",
+        "property_daily_enabled",
+        "arealytics_enabled",
+        "property_daily_to_claude_ok",
+        "arealytics_to_claude_ok",
         "call_notes_enabled",
         "call_notes_ai_enabled",
         "meeting_forms_enabled",
@@ -591,6 +633,38 @@ class Settings(BaseSettings):
     def _blank_password_is_not_set(cls, value: Any) -> Any:
         if isinstance(value, str) and not value.strip():
             return None
+        return value
+
+    @field_validator(
+        "property_daily_username",
+        "property_daily_password",
+        "arealytics_username",
+        "arealytics_password",
+        mode="before",
+    )
+    @classmethod
+    def _blank_login_is_not_set(cls, value: Any) -> Any:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
+    @field_validator("source_page_wait_seconds", mode="before")
+    @classmethod
+    def _split_wait(cls, value: Any) -> Any:
+        """The env gives text: two numbers, like 4,9 (or a JSON list, like [4, 9])."""
+        if isinstance(value, str):
+            return [part for part in re.split(r"[,\s\[\]]+", value.strip()) if part]
+        return value
+
+    @field_validator("source_page_wait_seconds")
+    @classmethod
+    def _wait_is_a_slow_range(cls, value: tuple[float, float]) -> tuple[float, float]:
+        shortest, longest = value
+        if not 1 <= shortest <= longest <= 120:
+            raise ValueError(
+                "source_page_wait_seconds is two numbers of seconds, like 4,9: the shortest "
+                "first, at least 1, and at most 120"
+            )
         return value
 
     @field_validator("cors_origins")

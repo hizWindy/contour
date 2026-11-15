@@ -1,7 +1,8 @@
 """The city schedules as one control (PLAN-V13 T1-3): on or off, the cities, how often, the first
 day and time, and the round's budget.
 
-The four city schedules (`jobs.py`: Melbourne, Adelaide, Perth and Sydney) stay four rows in the
+The city schedules (`jobs.py`: Melbourne, Adelaide, Perth and Sydney, and since PLAN-V16 T1-11
+Brisbane and the rest of Australia, both off until picked) stay one row each in the
 schedules table, so the scheduler, "Run now" and the Runs page work as before. This file reads them
 as one plan and writes one plan to all four, in one transaction.
 
@@ -52,7 +53,7 @@ from apps.lead_finder.goal import (
     spent_reason,
     usd_words,
 )
-from apps.lead_finder.jobs import JOBS, SCHEDULED_CITIES, job_key
+from apps.lead_finder.jobs import JOBS, SCHEDULED_CITIES, city_words, job_key
 from core.api.errors import Problem
 from core.api.models import OutModel
 from core.config import Settings
@@ -65,11 +66,15 @@ from core.schedules.schemas import CLOCK, EVERY_MAX
 
 PLAN_KEY = "lead_finder_round"
 CITIES = SCHEDULED_CITIES  # the fixed order
+# Picked until a person says otherwise. Brisbane and the rest of Australia (PLAN-V16 T1-11) are
+# off until picked.
+DEFAULT_CITIES = CITIES[:4]
 ZONE = ZoneInfo(DEFAULT_ZONE)
 LOOK_BACKS = (7, 14, 30)  # what a discovery run may look back (params.SinceDays)
 DEFAULT_WEEKDAY = 0  # Monday, as the four default schedules
 
-City = Literal["Melbourne", "Adelaide", "Perth", "Sydney"]
+# PLAN-V16 T1-11: Brisbane and Australia ("Rest of Australia", the national search) joined
+City = Literal["Melbourne", "Adelaide", "Perth", "Sydney", "Brisbane", "Australia"]
 
 
 # --- What the endpoints take and send -------------------------------------------------------------
@@ -82,7 +87,10 @@ class RoundIn(BaseModel):
 
     enabled: bool = Field(description="On or off, for the whole round. On spends money")
     cities: list[City] = Field(
-        min_length=1, max_length=4, description="The cities to search, in any order"
+        min_length=1,
+        max_length=len(SCHEDULED_CITIES),
+        description="The places to search, in any order. `Australia` is the rest of Australia: "
+        "one national search",
     )
     every: int = Field(ge=1, le=365, description="Every how many days or weeks")
     unit: Unit
@@ -249,7 +257,9 @@ def summary_words(plan: Plan, starts: dict[str, datetime], budget_usd: Decimal) 
         return "No city is picked."
     first = starts[order[0]].astimezone(ZONE)
     label = "Next round" if plan.enabled else "When it is on, the next round would be"
-    days = ", ".join(f"{city} {starts[city].astimezone(ZONE).strftime('%a')}" for city in order)
+    days = ", ".join(
+        f"{city_words(city)} {starts[city].astimezone(ZONE).strftime('%a')}" for city in order
+    )
     return (
         f"{label}: {first.strftime('%a')} {first.day} {first.strftime('%b')}, "
         f"{clock_words(first.time())}. {days}. Up to {usd_words(budget_usd)}."
@@ -289,7 +299,7 @@ def plan_of(rows: dict[str, Schedule], record: dict[str, Any]) -> Plan:
     all are off, the record says which cities and which first day."""
     on = [city for city in CITIES if (row := rows.get(job_key(city))) is not None and row.enabled]
     picked = in_order(on) or in_order([c for c in record.get("cities", []) if c in CITIES])
-    picked = picked or CITIES
+    picked = picked or DEFAULT_CITIES
     sample = rows.get(job_key(picked[0])) or next(iter(rows.values()), None)
     every: int = 2
     unit: Unit = "weeks"

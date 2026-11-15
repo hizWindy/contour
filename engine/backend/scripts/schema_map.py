@@ -63,6 +63,23 @@ PURPOSE = {
         "Jobs that start on their own: how often and when (in Melbourne time), whether each is "
         "on, when it runs next, and how the last start went. One row for each job."
     ),
+    "core.property_records": (
+        "Our copy of what Property Daily (or Arealytics) told us about a company's office: a "
+        "lease, a move, a need for space or a fitout, with its link and date. Each fact is saved "
+        "once."
+    ),
+    "core.property_lookups": (
+        "When each tool was last asked about each company, what it said and how many records it "
+        "gave. A lookup is reused for 30 days."
+    ),
+    "core.source_reads": (
+        "One row for every page a tool served us: the kind of page, when, how it went and how "
+        "long it took. Never the page itself. It counts the pages of a day and of a run."
+    ),
+    "core.source_state": (
+        "One row for each tool: a 24-hour pause after a block and why, the last problem, and the "
+        "last good sign-in."
+    ),
     "core.hubspot_companies": (
         "Our copy of HubSpot's companies, from the sync (source api) or an export upload "
         "(source export)."

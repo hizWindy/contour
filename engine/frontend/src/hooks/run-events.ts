@@ -138,6 +138,9 @@ export const EMPTY_COUNTS: RunCounts = {
   failed: 0,
   by_result: {},
   resumes: 0,
+  goal: null,
+  good: 0,
+  by_source: {},
 }
 
 export const initialRunEventsState: RunEventsState = {
@@ -199,6 +202,12 @@ function readCounts(value: unknown, base: RunCounts): RunCounts {
     failed: whole(value.failed, base.failed),
     by_result: isRecord(value.by_result) ? byResult : base.by_result,
     resumes: whole(value.resumes, base.resumes),
+    // PLAN-V16: the goal, the good leads and where they came from
+    goal: typeof value.goal === 'number' ? Math.trunc(value.goal) : base.goal,
+    good: whole(value.good, base.good),
+    by_source: isRecord(value.by_source)
+      ? (value.by_source as Record<string, number>)
+      : base.by_source,
   }
 }
 

@@ -8,8 +8,8 @@ value. Each default saves its city, the signs, the look-back and its own company
 
 **The four default schedules:** one for each city, every 2 weeks at 7:00 am Melbourne time, on
 different days of the same fortnight: Melbourne on Monday, Adelaide on Tuesday, Perth on Wednesday
-and Sydney on Thursday (Sydney's leads still go to a Director). All are **off**: each run costs
-money, so Al-khair switches them on. Each searches its city for the 6 main signs (6 searches),
+and Sydney on Thursday (a secondary city, so its leads can pass). All are **off**: each run costs
+money, so Al-khair switches them on. Each searches its city for the 8 main signs (8 searches),
 looks back 14 days, the time between two runs, so no day is missed and none is read twice. **TBC**
 with Levi (the days, the time and the signs).
 
@@ -78,8 +78,20 @@ CITY_DAYS: tuple[tuple[str, int], ...] = (
     ("Melbourne", 0),  # 0 is Monday
     ("Adelaide", 1),
     ("Perth", 2),
-    ("Sydney", 3),  # Sydney's leads still go to a Director
+    ("Sydney", 3),  # a secondary city: its leads can pass (PLAN-V16 T1-2)
+    # PLAN-V16 T1-11: Brisbane, and "Rest of Australia" (the national search: one search for each
+    # sign, `cities: ["Australia"]`). After Sydney, and off until picked, like the others.
+    ("Brisbane", 4),
+    ("Australia", 5),
 )
+# What a person reads for a schedule's place. The national search is "Rest of Australia".
+CITY_WORDS: dict[str, str] = {"Australia": "Rest of Australia"}
+
+
+def city_words(city: str) -> str:
+    return CITY_WORDS.get(city, city)
+
+
 SCHEDULED_CITIES = tuple(city for city, _ in CITY_DAYS)
 SCHEDULED_SIGNS = (
     "lease_ending",
@@ -88,6 +100,10 @@ SCHEDULED_SIGNS = (
     "fast_growth",
     "new_to_australia",
     "hot_industry_growth",
+    # PLAN-V16 T1-4: the two new high signs of Levi's section 4 are main signs now, so each city's
+    # run searches 8 signs, not 6 (about US$0.8 more for the searches, TBC)
+    "capital_raise",
+    "tenant_advisor",
 )
 LOOK_BACK_DAYS = 14
 AT = time(7, 0)
@@ -335,7 +351,7 @@ JOBS = (
     *(
         _discovery_job(
             job_key(city),
-            f"Find new leads: {city}",
+            f"Find new leads: {city_words(city)}",
             DefaultSchedule(cadence=cadence_for(day), enabled=False, settings=settings_for(city)),
         )
         for city, day in CITY_DAYS

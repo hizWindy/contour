@@ -877,6 +877,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/lead-finder/leads/{lead_id}/override-exclusion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Judge an excluded lead again, without its exclusion
+         * @description For a lead a rule left out (Levi's exclusions: a law firm, a government department, a big bank...). Judges its saved facts again as if the rule didn't apply, and saves the new result and score. The card keeps `excluded`, now with who did it and when. Free: no search and no Claude. Answers 404 for an unknown lead, 409 `not_excluded` when no rule left it out, and 409 `already_overridden` when it was done before.
+         */
+        post: operations["override_exclusion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/lead-finder/leads/{lead_id}/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The one-page profile of a Tier A lead
+         * @description Everything Levi's section 9 lists for a lead, in one answer, for the print view: the tier, score and confidence, the headcount and space, the signs, the dampeners, the current office, why now, the Contour angle, who to contact, the opener and what changed. 404 for an unknown lead, and 409 `not_tier_a` for a lead that isn't Tier A.
+         */
+        get: operations["get_profile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/lead-finder/leads/{lead_id}/recheck": {
         parameters: {
             query?: never;
@@ -1486,19 +1526,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The tools and how each is doing
+         * @description Property Daily, and Arealytics (listed, but not connected). Admins only.
+         */
+        get: operations["list_sources"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sources/{source_id}/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check the sign-in now
+         * @description Opens the tool's home page, and signs in if it asks: one or two pages, free. A problem fills `last_problem`; a block pauses the tool for 24 hours. A tool that is off, has no login, is paused or isn't connected answers 409 with the reason.
+         */
+        post: operations["check_source"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sources/{source_id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Lift a pause
+         * @description Reading may go on now, before the 24 hours are up. Admins only.
+         */
+        post: operations["resume_source"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /** AccessPoints */
-        AccessPoints: {
-            /** Contact Role */
-            contact_role: number;
-            /** Customer Link */
-            customer_link: number;
-            /** Hubspot Contact */
-            hubspot_contact: number;
-        };
         /** ApiTrafficOut */
         ApiTrafficOut: {
             /**
@@ -1542,13 +1633,6 @@ export interface components {
              * @description The suburbs searched. Empty for the whole city.
              */
             suburbs: string[];
-        };
-        /** Bands */
-        Bands: {
-            /** Investigate */
-            investigate: number;
-            /** Research First */
-            research_first: number;
         };
         /**
          * Blocked
@@ -1615,27 +1699,39 @@ export interface components {
              */
             type: "cap_reached";
         };
-        /** Cities */
+        /**
+         * Cities
+         * @description Where a lead's office may be, for all of Australia (PLAN-V16 T1-2, Al-khair 15 Nov).
+         *
+         *     Every place in a group passes the location filter. The groups only change the city points of
+         *     the score. A place that isn't listed passes too, with the flag "check the city"
+         *     (`scoring._city`). `national` is not a place: it is the name of the run choice that searches
+         *     all of Australia at once, one search for each sign instead of one for each city.
+         */
         Cities: {
-            /** Director Review */
-            director_review: string[];
+            /** Groups */
+            groups: {
+                [key: string]: string[];
+            };
+            /** National */
+            national: string;
             /** No City Director Signs */
             no_city_director_signs?: string[];
-            /**
-             * Other Cities
-             * @enum {string}
-             */
-            other_cities: "director_review" | "drop";
-            /** Pass */
-            pass: string[];
         };
         /** CityOption */
         CityOption: {
             /** Areas */
             areas: components["schemas"]["AreaOption"][];
             /**
+             * Group
+             * @description priority (Melbourne, Adelaide, Perth), secondary (Sydney, Brisbane), capital, regional, or national: the choice `Australia`, which searches all of Australia at once and must be chosen alone
+             * @example priority
+             * @enum {string}
+             */
+            group: "priority" | "secondary" | "capital" | "regional" | "national";
+            /**
              * Kind
-             * @description pass: a result can pass. director_review: a Director looks.
+             * @description pass for every place since PLAN-V16 (every place in Australia can pass). director_review stays in the type for older clients and is no longer sent.
              * @enum {string}
              */
             kind: "pass" | "director_review";
@@ -1651,6 +1747,15 @@ export interface components {
              * @example Melbourne
              */
             name: string;
+        };
+        /** CityPoints */
+        CityPoints: {
+            /** Other */
+            other: number;
+            /** Priority */
+            priority: number;
+            /** Secondary */
+            secondary: number;
         };
         /** CompaniesLimit */
         CompaniesLimit: {
@@ -1854,6 +1959,21 @@ export interface components {
              */
             contact_role: string | null;
             /**
+             * Contact Roles
+             * @description The likely roles to contact, best first, like CEO, COO, CFO, Head of People or Head of Property. Job titles only, never a person's name. Up to 5. Can be empty.
+             */
+            contact_roles: string[];
+            /**
+             * Contour Angle
+             * @description The strategic hook for an office fitout firm, in a few words, like post-merger integration, growth planning, consolidating sites, a long overdue refresh or return to office. Empty if the notes point to none.
+             */
+            contour_angle: string | null;
+            /**
+             * Dampeners
+             * @description One entry for each of the four dampener checks in the instructions, found or not_found. Four entries, each id once.
+             */
+            dampeners: components["schemas"]["DampenerFinding"][];
+            /**
              * Decision Makers
              * @description Up to 3 people a note names as the company's current leaders, best first: the head of property, facilities or workplace, then the COO, the CFO, the CEO. Name and job title only, never an email or phone number. Can be empty.
              */
@@ -1905,6 +2025,8 @@ export interface components {
             staff_from_linkedin: boolean;
             /** @description Staff at the office in that city */
             staff_in_city: components["schemas"]["Fact_int_"];
+            /** @description Staff the office in that city is expected to have within about 24 months, only if a note says (a hiring plan, a merger, a consolidation). Null if no note says. */
+            staff_projected: components["schemas"]["Fact_int_"];
             /**
              * Summary
              * @description What happened, in one or two plain sentences
@@ -1915,9 +2037,11 @@ export interface components {
              * @description 2 or 3 short points for a first call, each tied to the trigger or the office, like 'Lease ends March 2028'. Plain facts, no hype. No people's names, emails or phone numbers. Can be empty.
              */
             talking_points: string[];
+            /** @description true only if a note says the company buys its office fitouts solely through formal public tender portals (AusTender, Tenders VIC, Tenders WA, SA Tenders). false if a note says it buys some other way. Null if no note says. */
+            tender_only: components["schemas"]["Fact_bool_"];
             /**
              * Tier Group
-             * @description If the industry belongs to one of the tier groups in the instructions, that group's name exactly as written. Else empty.
+             * @description If the industry belongs to one of the priority sectors in the instructions, that sector's name exactly as written. Else empty.
              */
             tier_group: string | null;
             /**
@@ -2093,6 +2217,23 @@ export interface components {
             /** Title */
             title: string | null;
         };
+        /**
+         * CompanyProperty
+         * @description Everything both tools know about one company's office, from our copy.
+         */
+        CompanyProperty: {
+            checked: components["schemas"]["SourceChecks"];
+            /**
+             * Looked Up At
+             * @description The last live lookup of either tool. None: never looked up
+             */
+            looked_up_at: string | null;
+            /**
+             * Records
+             * @description Newest first: by happened_on, else published_on, else lease_start
+             */
+            records: components["schemas"]["PropertyRecord"][];
+        };
         /** CompanyRow */
         CompanyRow: {
             /** City */
@@ -2212,15 +2353,12 @@ export interface components {
              */
             type: "company_started";
         };
-        /** CompetitionPoints */
-        CompetitionPoints: {
-            /** No Contractor Relationship */
-            no_contractor_relationship: number;
-            /** No Rival In Place */
-            no_rival_in_place: number;
-        };
         /** Conflicts */
         Conflicts: {
+            /** Date Gap Months */
+            date_gap_months: number;
+            /** Office M2 Gap Ratio */
+            office_m2_gap_ratio: number;
             /** Staff Gap Ratio */
             staff_gap_ratio: number;
         };
@@ -2260,7 +2398,11 @@ export interface components {
             boosters: components["schemas"]["Item"][];
             cities: components["schemas"]["Cities"];
             conflicts: components["schemas"]["Conflicts"];
+            /** Dampeners */
+            dampeners: components["schemas"]["DampenerRule"][];
             data_sources: components["schemas"]["DataSources"];
+            /** Exclusions */
+            exclusions: components["schemas"]["ExclusionRule"][];
             fit: components["schemas"]["Fit"];
             fitout: components["schemas"]["Fitout"];
             industries: components["schemas"]["Industries"];
@@ -2285,18 +2427,176 @@ export interface components {
             triggers: components["schemas"]["Triggers"];
         };
         /**
+         * Dampener
+         * @description One dampener on a lead (Levi's section 5, PLAN-V16 T1-5): a fact that lowers its score and
+         *     never removes the lead. Every dampener is listed, so a card says what was checked.
+         *
+         *     `state` is `found`, `not_found` (the check ran and showed nothing: never written as "none") or
+         *     `not_checked` (nobody could check, so it says nothing either way). A found dampener has its
+         *     strength, its evidence, its date and link when there are some, and what could reverse it.
+         *     `waived` is a sentence when it is found but takes nothing off, with the reason.
+         */
+        Dampener: {
+            /**
+             * Can Reverse
+             * @description What could reverse it, like a contract's renewal date
+             */
+            can_reverse?: string | null;
+            /**
+             * Date
+             * @description When it happened: YYYY-MM-DD or YYYY-MM
+             */
+            date?: string | null;
+            /**
+             * Evidence
+             * @description What shows it, in one plain sentence
+             */
+            evidence?: string | null;
+            /**
+             * Id
+             * @enum {string}
+             */
+            id: "recent_fitout" | "outsourcing" | "competitor_tie" | "procurement" | "financial_stress";
+            /** Label */
+            label: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "found" | "not_found" | "not_checked";
+            /**
+             * Strength
+             * @description strong takes off 20 points and moderate 10. Empty unless found.
+             */
+            strength?: ("strong" | "moderate") | null;
+            /**
+             * Url
+             * @description The page that says it
+             */
+            url?: string | null;
+            /**
+             * Waived
+             * @description Why a found dampener takes nothing off. Empty when it does.
+             */
+            waived?: string | null;
+        };
+        /**
+         * DampenerFinding
+         * @description The answer to one of the four dampener checks (Levi's section 5, PLAN-V16 T1-5): a fact
+         *     that makes an office project less likely. Every check comes back `found` or `not_found`. "Not
+         *     found" is never written as "none": it only says the notes don't show it. The strength is not
+         *     here: the rules decide it.
+         */
+        DampenerFinding: {
+            /**
+             * Can Reverse
+             * @description What could reverse it, like a contract's renewal date, or a new CEO who may change suppliers. Empty if no note says.
+             */
+            can_reverse: string | null;
+            /**
+             * Date
+             * @description When it happened or was signed: YYYY-MM-DD or YYYY-MM. Empty when it isn't known, or when not_found.
+             */
+            date: string | null;
+            /**
+             * Evidence
+             * @description What the note says, in one plain sentence. Empty when not_found.
+             */
+            evidence: string | null;
+            /**
+             * Id
+             * @description One of the four check ids in the instructions
+             * @enum {string}
+             */
+            id: "recent_fitout" | "outsourcing" | "competitor_tie" | "procurement";
+            /**
+             * Kind
+             * @description Only for procurement: which red flag, exactly as written in the instructions. Empty for the other checks.
+             */
+            kind: string | null;
+            /**
+             * Source Url
+             * @description The note link that says it. Only a link from the notes. Empty when not_found.
+             */
+            source_url: string | null;
+            /**
+             * State
+             * @description found: a note shows it. not_found: no note shows it. Never anything else.
+             * @enum {string}
+             */
+            state: "found" | "not_found";
+        };
+        /** DampenerPoints */
+        DampenerPoints: {
+            /** Moderate */
+            moderate: number;
+            /** Strong */
+            strong: number;
+        };
+        /**
+         * DampenerRule
+         * @description A fact that lowers a lead's score, never removes it (Levi's section 5, PLAN-V16 T1-5).
+         *
+         *     The first four are searched for on purpose; financial stress comes from the `healthy` fact.
+         *     The code is `scoring._dampeners`. How much each takes off is `score.dampeners` (T1-6).
+         *
+         *     - `recent_fitout`: a fitout or move in that city is strong within `strong_years` and moderate
+         *       from there to `moderate_years`. A fitout longer ago than that doesn't count. It takes
+         *       nothing off when the company's hiring would outgrow the space within `outgrow_months`
+         *       (his "still list the lead"). A date that isn't known counts as moderate.
+         *     - `procurement`: `kinds` says which red flag is strong and which is moderate. A flag with no
+         *       kind gets `strength`.
+         *     - `financial_stress`: `waived_by` are the signs that make it part of a consolidation that
+         *       creates a move, when it takes nothing off (his "unless").
+         */
+        DampenerRule: {
+            /**
+             * Id
+             * @enum {string}
+             */
+            id: "recent_fitout" | "outsourcing" | "competitor_tie" | "procurement" | "financial_stress";
+            /** Kinds */
+            kinds?: {
+                [key: string]: "strong" | "moderate";
+            };
+            /** Label */
+            label: string;
+            /**
+             * Meaning
+             * @default
+             */
+            meaning: string;
+            /** Moderate Years */
+            moderate_years?: number | null;
+            /** Outgrow Months */
+            outgrow_months?: number | null;
+            /** Strength */
+            strength?: ("strong" | "moderate") | null;
+            /** Strong Years */
+            strong_years?: number | null;
+            /** Waived By */
+            waived_by?: string[];
+        };
+        /**
          * DataSources
          * @description Which source is main for which data (PLAN-V4 C2). In each list the first source with a value
          *     is the one the rules use, and the ones after it are the backup. Staff numbers have their own
-         *     list, `size.staff_sources`.
+         *     list, `size.staff_sources`. The office's size, lease end and move-in date have theirs since
+         *     PLAN-V16 T1-8.
          */
         DataSources: {
             /** Company Details */
             company_details: ("headcount_tool" | "web_research")[];
             /** Decision Makers */
             decision_makers: ("headcount_tool" | "web_research")[];
+            /** Lease End */
+            lease_end: ("property_daily" | "arealytics" | "hubspot" | "web_research")[];
             /** Office Cities */
             office_cities: ("headcount_tool" | "web_research")[];
+            /** Office M2 */
+            office_m2: ("property_daily" | "arealytics" | "hubspot" | "web_research")[];
+            /** Office Since */
+            office_since: ("property_daily" | "arealytics" | "hubspot" | "web_research")[];
         };
         /**
          * DateRange
@@ -2417,6 +2717,70 @@ export interface components {
              */
             last_seq: number;
         };
+        /**
+         * Excluded
+         * @description Why a lead is left out and not scored (Levi's section 3). An excluded lead is a Drop. A
+         *     person with the Lead Finder tick can override it: `overridden_by` and `overridden_at` then say
+         *     who did it, and the lead is judged without the exclusion.
+         */
+        Excluded: {
+            /**
+             * Evidence
+             * @description What says so, in one plain sentence
+             */
+            evidence: string;
+            /**
+             * Label
+             * @example Law firm
+             */
+            label: string;
+            /** Overridden At */
+            overridden_at?: string | null;
+            /** Overridden By */
+            overridden_by?: string | null;
+            /**
+             * Reason Id
+             * @example law_firm
+             */
+            reason_id: string;
+            /**
+             * Url
+             * @description The page that says it, when there is one
+             */
+            url?: string | null;
+        };
+        /**
+         * ExclusionRule
+         * @description A kind of company that is left out and not scored (Levi's section 3, PLAN-V16 T1-3).
+         *
+         *     The code is `scoring._exclusion`. An excluded lead is a Drop that shows its reason and its
+         *     evidence, and a person with the Lead Finder tick can override it: the lead is then judged
+         *     again without the exclusion.
+         *
+         *     - `industry`: the company's `industry_group` (the answer form) is one of `industry_groups`.
+         *     - `office_incidental`: the office doesn't matter to how the company works, in an industry of
+         *       `industries.check_office_size` (logistics, manufacturing, retail, hospitality...).
+         *     - `tender_only`: a note says it buys its fitouts only through formal public tender portals.
+         */
+        ExclusionRule: {
+            /** Flag */
+            flag?: string | null;
+            /** Id */
+            id: string;
+            /** Industry Groups */
+            industry_groups?: string[];
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "industry" | "office_incidental" | "tender_only";
+            /** Label */
+            label: string;
+            /** Meaning */
+            meaning?: string | null;
+            /** Unless */
+            unless?: string[];
+        };
         /** FacetValue */
         FacetValue: {
             /** Count */
@@ -2439,7 +2803,7 @@ export interface components {
              * Fact
              * @enum {string}
              */
-            fact: "name" | "website" | "industry" | "city" | "staff_in_city" | "office_since" | "decision_makers";
+            fact: "name" | "website" | "industry" | "city" | "staff_in_city" | "office_since" | "decision_makers" | "office_m2" | "lease_end" | "last_fitout";
             /**
              * Others
              * @description What the other sources said, kept so a person can compare
@@ -2450,7 +2814,7 @@ export interface components {
              * @description The source of the value the rules use
              * @enum {string}
              */
-            used: "claude" | "hubspot" | "signalhire";
+            used: "claude" | "hubspot" | "signalhire" | "property_daily" | "arealytics";
         };
         /** Fact[bool] */
         Fact_bool_: {
@@ -2561,21 +2925,38 @@ export interface components {
              */
             message: string;
         };
+        /**
+         * FilterResult
+         * @description One of Levi's five filters (his section 2, PLAN-V16 T1-3). A fact nobody found is
+         *     "estimated" and labelled, never a fail (choice 3): a lead fails a filter only when a fact we
+         *     know says so.
+         */
+        FilterResult: {
+            /**
+             * Basis
+             * @description One plain sentence on what it rests on, like 'about 1,200 m², estimated from staff'
+             */
+            basis: string;
+            /**
+             * Id
+             * @enum {string}
+             */
+            id: "location" | "office_size" | "headcount" | "office_relevance" | "sector";
+            /** Label */
+            label: string;
+            /**
+             * State
+             * @description pass: the facts meet it. estimated: not known, or only estimated, so a person may check. fail: a known fact says no.
+             * @enum {string}
+             */
+            state: "pass" | "fail" | "estimated";
+        };
         /** Fit */
         Fit: {
             /** Healthy */
             healthy: boolean;
             /** Local Team Runs Project */
             local_team_runs_project: boolean;
-        };
-        /** FitPoints */
-        FitPoints: {
-            /** Buys Strategy */
-            buys_strategy: number;
-            /** Tier 1 */
-            tier_1: number;
-            /** Tier 2 */
-            tier_2: number;
         };
         /** Fitout */
         Fitout: {
@@ -2599,6 +2980,22 @@ export interface components {
             if_they_say: string;
         };
         /**
+         * GoalLeadsOption
+         * @description "How many leads" on the Start page (PLAN-V16 T1-9).
+         */
+        GoalLeadsOption: {
+            /**
+             * Default
+             * @description `manual_run_goal_leads` from the settings
+             * @example 20
+             */
+            default: number;
+            /** Max */
+            max: number;
+            /** Min */
+            min: number;
+        };
+        /**
          * GuidedQuestion
          * @description A question to ask on the call, with what to ask next for each likely answer.
          */
@@ -2615,6 +3012,22 @@ export interface components {
             sources: string[];
             /** Text */
             text: string;
+        };
+        /**
+         * Headcount
+         * @description Local staff, now and projected.
+         */
+        Headcount: {
+            /** Now */
+            now: number | null;
+            /** Now Basis */
+            now_basis: ("confirmed" | "estimated") | null;
+            /** Projected */
+            projected: number | null;
+            /** Projected Basis */
+            projected_basis: ("confirmed" | "estimated") | null;
+            /** Source Url */
+            source_url: string | null;
         };
         /** HealthDetails */
         HealthDetails: {
@@ -2773,10 +3186,8 @@ export interface components {
             check_office_size: string[];
             /** Director Review */
             director_review: string[];
-            /** Tier 1 */
-            tier_1: string[];
-            /** Tier 2 */
-            tier_2: string[];
+            /** Priority Sectors */
+            priority_sectors: string[];
         };
         /** IntRange */
         IntRange: {
@@ -2796,7 +3207,7 @@ export interface components {
         LeadCard: {
             /**
              * Band
-             * @description research_first (75 to 100), investigate (50 to 74) or nurture (under 50)
+             * @description Before PLAN-V16 T1-6: research_first, investigate or nurture. Empty for a card made after it: it has a tier.
              */
             band: ("research_first" | "investigate" | "nurture") | null;
             /**
@@ -2806,24 +3217,56 @@ export interface components {
             checks: components["schemas"]["RuleCheck"][];
             /** Company */
             company: string;
+            /**
+             * Confidence
+             * @description high, medium or low: how well the headcount, the signs and the dampener checks are sourced. Empty for a card made before PLAN-V16 T1-6.
+             */
+            confidence: ("high" | "medium" | "low") | null;
+            /**
+             * Confidence Why
+             * @description One sentence that says why the confidence is what it is
+             */
+            confidence_why: string | null;
             /** Contact Role */
             contact_role: string | null;
+            /**
+             * Contact Roles
+             * @description The likely roles to contact, best first. No names.
+             */
+            contact_roles: string[];
+            /**
+             * Contour Angle
+             * @description The strategic hook, like post-merger integration
+             */
+            contour_angle: string | null;
             /**
              * Created At
              * Format: date-time
              */
             created_at: string;
             /**
+             * Dampeners
+             * @description Every dampener (Levi's section 5): a fact that lowers the score and never removes the lead. Each is found, not_found (checked, nothing shown) or not_checked, with its strength, evidence, date, link and what could reverse it when found (PLAN-V16 T1-5). Empty for a card made before it.
+             */
+            dampeners: components["schemas"]["Dampener"][];
+            /**
              * Dropped
              * @description Facts the source check removed, and why
              */
             dropped: string[];
+            /** @description Why the lead is left out and not scored (Levi's section 3): a Drop with its reason, its evidence and its link. `overridden_by` is set when a person overrode it, and the lead was then judged without the exclusion. Empty when no exclusion applies. */
+            excluded: components["schemas"]["Excluded"] | null;
             /**
              * Fact Sources
              * @description Where a fact came from when it isn't plainly the web research's, with what the other sources said and a flag when they are far apart. A fact with no entry came from the web research alone.
              */
             fact_sources: components["schemas"]["FactSource"][];
             facts: components["schemas"]["CompanyFacts"];
+            /**
+             * Filters
+             * @description Levi's five filters (location, office size, headcount, office relevance and sector), each pass, fail or estimated, with what it rests on (PLAN-V16 T1-3). Empty for a card made before it.
+             */
+            filters: components["schemas"]["FilterResult"][];
             /** Fitout Aud */
             fitout_aud: string | null;
             /**
@@ -2842,6 +3285,8 @@ export interface components {
              * @description Numbers taken from Signal Hire, because neither the web research nor HubSpot found a staff number. Empty unless Signal Hire is switched on.
              */
             from_signalhire: string[];
+            /** @description Local staff now and projected, each confirmed or estimated. Empty when neither is known. */
+            headcount: components["schemas"]["Headcount"] | null;
             hubspot: components["schemas"]["HubSpotOut"];
             /**
              * Id
@@ -2853,6 +3298,8 @@ export interface components {
              * @description What each source said. A summary of the page, not a quote.
              */
             notes: components["schemas"]["NoteOut"][];
+            /** @description The current office (Levi's section 9, PLAN-V16 T1-10): the address from a property tool, and the size, move-in date and lease end the rules used. Empty when nothing about it is known, and for a card made before it. */
+            office: components["schemas"]["Office"] | null;
             /** Office M2 */
             office_m2: number | null;
             /** Office M2 Estimated */
@@ -2866,6 +3313,8 @@ export interface components {
             problems: string[];
             /** Prompt Version */
             prompt_version: string;
+            /** @description What Property Daily and Arealytics know about the company's office (PLAN-V16 T1-8): their records, newest first (at most 30), and each tool's status (found, not_found, off, error or not_checked). A tool that is off has no records here. Empty for a card made before it, and for a company too small to research. */
+            property: components["schemas"]["CompanyProperty"] | null;
             research: components["schemas"]["ResearchCost"];
             /**
              * Result
@@ -2876,17 +3325,22 @@ export interface components {
             rules_version: string;
             /**
              * Score
-             * @description 0 to 100: the points earned in the Profile's six parts.
+             * @description 0 to 100, after the dampeners (Levi's section 6, PLAN-V16 T1-6). A card made before it has the Profile's six-part score.
              */
             score: number;
             /**
+             * Score Before Dampeners
+             * @description The score before the dampeners took points off. Empty for a card made before PLAN-V16 T1-6.
+             */
+            score_before_dampeners: number | null;
+            /**
              * Score Checked
-             * @description The most points the tool could judge, like 48 of 60. Empty for a Drop, and for a card made under version 1.
+             * @description Before PLAN-V16 T1-6: the most points the tool could judge, like 48 of 60. Empty for a card made after it.
              */
             score_checked: number | null;
             /**
              * Score Parts
-             * @description The six parts and their checks. Empty for a Drop, and for a card made under version 1.
+             * @description The three parts (Fit, Change and timing, Access) and their checks, before the dampeners. Empty for a Drop. A card made before PLAN-V16 T1-6 has the six parts.
              */
             score_parts: components["schemas"]["ScorePart"][];
             /** @description Signal Hire's details for the company: its checked name, website, industry, offices and staff in all. Empty unless Signal Hire is on and knows the company. */
@@ -2896,6 +3350,8 @@ export interface components {
              * @description Senior people Signal Hire has on file at the company in the city: name and job title only, never contact details. Empty unless Signal Hire is on.
              */
             signalhire_people: components["schemas"]["SignalHirePerson"][];
+            /** @description The space now and projected, at about 10 m² a person */
+            space: components["schemas"]["Space"] | null;
             /**
              * Stage
              * @description The Profile's stage for the result. Empty for a card made under version 1.
@@ -2903,8 +3359,15 @@ export interface components {
             stage: string | null;
             /** Summary */
             summary: string;
+            /**
+             * Tier
+             * @description A (75 and over), B (55 to 74), C (40 to 54) or discard (under 40). Empty for a card made before PLAN-V16 T1-6.
+             */
+            tier: ("A" | "B" | "C" | "discard") | null;
             /** Triggers */
             triggers: components["schemas"]["TriggerScore"][];
+            /** @description This research against the last research of the same company: new, upgraded, downgraded or unchanged, with one sentence. Empty for a card made before PLAN-V16 T1-10. */
+            what_changed: components["schemas"]["WhatChanged"] | null;
             /** Why It Fits */
             why_it_fits: string;
             /** @description Why call now (PLAN-V12): Claude's reason, likely next step and questions, checked by code, and the When, Size, confidence and Missing lines code wrote. Empty when it wasn't written: why_now_skipped says why, and a card made before it has neither. */
@@ -2922,7 +3385,7 @@ export interface components {
         LeadDetail: {
             /**
              * Band
-             * @description research_first (75 to 100), investigate (50 to 74) or nurture (under 50)
+             * @description Before PLAN-V16 T1-6: research_first, investigate or nurture. Empty for a card made after it: it has a tier.
              */
             band: ("research_first" | "investigate" | "nurture") | null;
             /**
@@ -2932,24 +3395,56 @@ export interface components {
             checks: components["schemas"]["RuleCheck"][];
             /** Company */
             company: string;
+            /**
+             * Confidence
+             * @description high, medium or low: how well the headcount, the signs and the dampener checks are sourced. Empty for a card made before PLAN-V16 T1-6.
+             */
+            confidence: ("high" | "medium" | "low") | null;
+            /**
+             * Confidence Why
+             * @description One sentence that says why the confidence is what it is
+             */
+            confidence_why: string | null;
             /** Contact Role */
             contact_role: string | null;
+            /**
+             * Contact Roles
+             * @description The likely roles to contact, best first. No names.
+             */
+            contact_roles: string[];
+            /**
+             * Contour Angle
+             * @description The strategic hook, like post-merger integration
+             */
+            contour_angle: string | null;
             /**
              * Created At
              * Format: date-time
              */
             created_at: string;
             /**
+             * Dampeners
+             * @description Every dampener (Levi's section 5): a fact that lowers the score and never removes the lead. Each is found, not_found (checked, nothing shown) or not_checked, with its strength, evidence, date, link and what could reverse it when found (PLAN-V16 T1-5). Empty for a card made before it.
+             */
+            dampeners: components["schemas"]["Dampener"][];
+            /**
              * Dropped
              * @description Facts the source check removed, and why
              */
             dropped: string[];
+            /** @description Why the lead is left out and not scored (Levi's section 3): a Drop with its reason, its evidence and its link. `overridden_by` is set when a person overrode it, and the lead was then judged without the exclusion. Empty when no exclusion applies. */
+            excluded: components["schemas"]["Excluded"] | null;
             /**
              * Fact Sources
              * @description Where a fact came from when it isn't plainly the web research's, with what the other sources said and a flag when they are far apart. A fact with no entry came from the web research alone.
              */
             fact_sources: components["schemas"]["FactSource"][];
             facts: components["schemas"]["CompanyFacts"];
+            /**
+             * Filters
+             * @description Levi's five filters (location, office size, headcount, office relevance and sector), each pass, fail or estimated, with what it rests on (PLAN-V16 T1-3). Empty for a card made before it.
+             */
+            filters: components["schemas"]["FilterResult"][];
             /** Fitout Aud */
             fitout_aud: string | null;
             /**
@@ -2968,6 +3463,8 @@ export interface components {
              * @description Numbers taken from Signal Hire, because neither the web research nor HubSpot found a staff number. Empty unless Signal Hire is switched on.
              */
             from_signalhire: string[];
+            /** @description Local staff now and projected, each confirmed or estimated. Empty when neither is known. */
+            headcount: components["schemas"]["Headcount"] | null;
             hubspot: components["schemas"]["HubSpotOut"];
             /**
              * Id
@@ -2983,6 +3480,8 @@ export interface components {
              * @description What each source said. A summary of the page, not a quote.
              */
             notes: components["schemas"]["NoteOut"][];
+            /** @description The current office (Levi's section 9, PLAN-V16 T1-10): the address from a property tool, and the size, move-in date and lease end the rules used. Empty when nothing about it is known, and for a card made before it. */
+            office: components["schemas"]["Office"] | null;
             /** Office M2 */
             office_m2: number | null;
             /** Office M2 Estimated */
@@ -3006,6 +3505,8 @@ export interface components {
             problems: string[];
             /** Prompt Version */
             prompt_version: string;
+            /** @description What Property Daily and Arealytics know about the company's office (PLAN-V16 T1-8): their records, newest first (at most 30), and each tool's status (found, not_found, off, error or not_checked). A tool that is off has no records here. Empty for a card made before it, and for a company too small to research. */
+            property: components["schemas"]["CompanyProperty"] | null;
             /**
              * Reject Note
              * @description What 'other' means, or more detail
@@ -3030,17 +3531,22 @@ export interface components {
             run_id: string | null;
             /**
              * Score
-             * @description 0 to 100: the points earned in the Profile's six parts.
+             * @description 0 to 100, after the dampeners (Levi's section 6, PLAN-V16 T1-6). A card made before it has the Profile's six-part score.
              */
             score: number;
             /**
+             * Score Before Dampeners
+             * @description The score before the dampeners took points off. Empty for a card made before PLAN-V16 T1-6.
+             */
+            score_before_dampeners: number | null;
+            /**
              * Score Checked
-             * @description The most points the tool could judge, like 48 of 60. Empty for a Drop, and for a card made under version 1.
+             * @description Before PLAN-V16 T1-6: the most points the tool could judge, like 48 of 60. Empty for a card made after it.
              */
             score_checked: number | null;
             /**
              * Score Parts
-             * @description The six parts and their checks. Empty for a Drop, and for a card made under version 1.
+             * @description The three parts (Fit, Change and timing, Access) and their checks, before the dampeners. Empty for a Drop. A card made before PLAN-V16 T1-6 has the six parts.
              */
             score_parts: components["schemas"]["ScorePart"][];
             /** @description Signal Hire's details for the company: its checked name, website, industry, offices and staff in all. Empty unless Signal Hire is on and knows the company. */
@@ -3050,6 +3556,8 @@ export interface components {
              * @description Senior people Signal Hire has on file at the company in the city: name and job title only, never contact details. Empty unless Signal Hire is on.
              */
             signalhire_people: components["schemas"]["SignalHirePerson"][];
+            /** @description The space now and projected, at about 10 m² a person */
+            space: components["schemas"]["Space"] | null;
             /**
              * Stage
              * @description The Profile's stage for the result. Empty for a card made under version 1.
@@ -3062,6 +3570,11 @@ export interface components {
             status: "new" | "watching" | "rejected" | "sent";
             /** Summary */
             summary: string;
+            /**
+             * Tier
+             * @description A (75 and over), B (55 to 74), C (40 to 54) or discard (under 40). Empty for a card made before PLAN-V16 T1-6.
+             */
+            tier: ("A" | "B" | "C" | "discard") | null;
             /** Triggers */
             triggers: components["schemas"]["TriggerScore"][];
             /**
@@ -3071,6 +3584,8 @@ export interface components {
             updated_at: string;
             /** Useful */
             useful: boolean | null;
+            /** @description This research against the last research of the same company: new, upgraded, downgraded or unchanged, with one sentence. Empty for a card made before PLAN-V16 T1-10. */
+            what_changed: components["schemas"]["WhatChanged"] | null;
             /** Why It Fits */
             why_it_fits: string;
             /** @description Why call now (PLAN-V12): Claude's reason, likely next step and questions, checked by code, and the When, Size, confidence and Missing lines code wrote. Empty when it wasn't written: why_now_skipped says why, and a card made before it has neither. */
@@ -3128,9 +3643,9 @@ export interface components {
          * @description Every part with its default. The Start page shows these as the starting values.
          *
          *     A real run uses the model of its mode (above), which refuses the parts it doesn't use. So
-         *     send only the parts of your mode: `cities`, `area`, `triggers` and `since_days` for
-         *     discovery, `watchlist` for watchlist, `companies` and `recheck` for company, and `caps` for
-         *     every mode (testset has nothing else).
+         *     send only the parts of your mode: `cities`, `area`, `triggers`, `since_days`, `sources` and
+         *     `goal_leads` for discovery, `watchlist` for watchlist, `companies` and `recheck` for company,
+         *     and `caps` for every mode (testset has nothing else).
          */
         LeadFinderRunParams: {
             /**
@@ -3147,7 +3662,7 @@ export interface components {
             caps: components["schemas"]["RunCapsIn"];
             /**
              * Cities
-             * @description Used by mode discovery only. Cities to search, each once. The default is the three pass cities.
+             * @description Used by mode discovery only. Places to search, each once: any place in the rules (Melbourne, Adelaide, Perth, Sydney, Brisbane and the other cities and regional centres), or `["Australia"]` alone, which searches all of Australia at once: one search for each sign, and the research finds each company's city. The default is Melbourne.
              * @example [
              *       "Melbourne",
              *       "Adelaide"
@@ -3159,6 +3674,12 @@ export interface components {
              * @description Used by mode company only: 1 to 25 companies
              */
             companies: components["schemas"]["CompanyIn"][];
+            /**
+             * Goal Leads
+             * @description Used by mode discovery only. How many good leads (a Pass or a Director review) a run a person starts aims for, 1 to 100: it stops starting companies once it has them. Left out, `manual_run_goal_leads` from the settings (see `goal_leads` in the run options). An automatic run aims for its share of the round's goal instead. The run's limits still apply: no limit rises by itself (PLAN-V16 T1-9).
+             * @example 20
+             */
+            goal_leads: number | null;
             /**
              * Recheck
              * @description Used by mode company only. Search again even when memory is fresh. Re-check sets it.
@@ -3172,6 +3693,15 @@ export interface components {
              * @enum {integer}
              */
             since_days: 7 | 14 | 30;
+            /**
+             * Sources
+             * @description Used by mode discovery only. Where discovery looks for companies: `web`, `property_daily` and `arealytics`, each once. Left out, every source that is ready (see `sources` in the run options). A tool that isn't ready is a 422 `source_not_ready`. Without `web`, the run makes no web searches for companies: they come from the tools' new items, free. The research of each company still uses every tool that is switched on (PLAN-V16 T1-8).
+             * @example [
+             *       "web",
+             *       "property_daily"
+             *     ]
+             */
+            sources: ("web" | "property_daily" | "arealytics")[] | null;
             /**
              * Triggers
              * @description Used by mode discovery only. Trigger ids to look for, each once. The default is the main triggers.
@@ -3243,6 +3773,54 @@ export interface components {
             useful?: boolean | null;
         };
         /**
+         * LeadProfile
+         * @description The one-page profile of a Tier A lead (Levi's section 9, PLAN-V16 T1-10): what each lead
+         *     shows, in one answer. Every value is the saved card's.
+         */
+        LeadProfile: {
+            /** City */
+            city: string | null;
+            /** Company */
+            company: string;
+            /** Confidence */
+            confidence: ("high" | "medium" | "low") | null;
+            /** Confidence Why */
+            confidence_why: string | null;
+            /** Contact Roles */
+            contact_roles: string[];
+            /** Contour Angle */
+            contour_angle: string | null;
+            /** Dampeners */
+            dampeners: components["schemas"]["Dampener"][];
+            headcount: components["schemas"]["Headcount"] | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            office: components["schemas"]["Office"] | null;
+            /** Opener */
+            opener: string | null;
+            /** Score */
+            score: number;
+            /** Sector */
+            sector: string | null;
+            /** Signs */
+            signs: components["schemas"]["ProfileSign"][];
+            space: components["schemas"]["Space"] | null;
+            /**
+             * Tier
+             * @enum {string}
+             */
+            tier: "A" | "B" | "C" | "discard";
+            what_changed: components["schemas"]["WhatChanged"] | null;
+            /**
+             * Why Now
+             * @description Why a property decision is likely soon, if written
+             */
+            why_now: string | null;
+        };
+        /**
          * LeadRow
          * @description One row of the results table.
          */
@@ -3256,6 +3834,11 @@ export interface components {
             city: string | null;
             /** Company */
             company: string;
+            /**
+             * Confidence
+             * @description high, medium or low
+             */
+            confidence?: ("high" | "medium" | "low") | null;
             /** Contact Role */
             contact_role: string | null;
             /** Cost Usd */
@@ -3265,12 +3848,20 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** @description Why the lead is left out (the same object as the card's), or empty */
+            excluded?: components["schemas"]["Excluded"] | null;
             /**
              * Form Failed
              * @description True when Claude couldn't fill in the answer form, so the facts are missing
              * @default false
              */
             form_failed: boolean;
+            /**
+             * Has Property
+             * @description True when a property tool has a record of the company
+             * @default false
+             */
+            has_property: boolean;
             /**
              * Hubspot Owner
              * @description The HubSpot owner's name, when HubSpot has the company
@@ -3340,6 +3931,11 @@ export interface components {
             status: "new" | "watching" | "rejected" | "sent";
             /** Suburb */
             suburb: string | null;
+            /**
+             * Tier
+             * @description A, B, C or discard (PLAN-V16 T1-6). Empty for a lead judged before it.
+             */
+            tier?: ("A" | "B" | "C" | "discard") | null;
             /** Trigger Date */
             trigger_date: string | null;
             /**
@@ -3699,6 +4295,52 @@ export interface components {
             /** They Say */
             they_say: string;
         };
+        /**
+         * Office
+         * @description The current office, from the first source with a value (PLAN-V16 T1-8's order).
+         */
+        Office: {
+            /**
+             * Address
+             * @description From a property tool. The facts hold no address.
+             */
+            address: string | null;
+            /**
+             * Area Basis
+             * @description estimated: worked out from staff or growth
+             */
+            area_basis: ("confirmed" | "estimated") | null;
+            /** Area M2 */
+            area_m2: number | null;
+            /** Building */
+            building: string | null;
+            /**
+             * Fitout By
+             * @description The firm that did the last fitout, if a note names it
+             */
+            fitout_by: string | null;
+            /** Floor */
+            floor: string | null;
+            /** Lease End */
+            lease_end: string | null;
+            /** Lease End Basis */
+            lease_end_basis: ("confirmed" | "estimated") | null;
+            /**
+             * Since
+             * @description A date or a year, like 2017
+             */
+            since: string | null;
+            /**
+             * Since Words
+             * @example At this address since at least 2017.
+             */
+            since_words: string | null;
+            /**
+             * Source
+             * @description Where it came from: property_daily, arealytics, hubspot or web_research
+             */
+            source: string | null;
+        };
         /** OfficeAge */
         OfficeAge: {
             /** Due Years */
@@ -3712,6 +4354,8 @@ export interface components {
             ];
             /** Recent Move Years */
             recent_move_years: number;
+            /** Tenure Fitout Years */
+            tenure_fitout_years: number;
             /** Tenure Sign */
             tenure_sign: string;
             /** Tenure Years */
@@ -3728,13 +4372,28 @@ export interface components {
             /** Run Cap Usd */
             run_cap_usd: string;
         };
+        /**
+         * OtherSigns
+         * @description Levi: "other independent signs within 12 months: 8 each, at most 2". The strongest sign is
+         *     counted apart, and so is the same sign twice. A sign with a date counts while it is
+         *     `within_months` old (or still to come, like a lease end). A sign with no date counts too: an
+         *     unknown date doesn't fail a lead (a long tenure has none by design).
+         */
+        OtherSigns: {
+            /** At Most */
+            at_most: number;
+            /** Points Each */
+            points_each: number;
+            /** Within Months */
+            within_months: number;
+        };
         /** OtherValue */
         OtherValue: {
             /**
              * Source
              * @enum {string}
              */
-            source: "claude" | "hubspot" | "signalhire";
+            source: "claude" | "hubspot" | "signalhire" | "property_daily" | "arealytics";
             /**
              * Url
              * @description The page it comes from, when it has one
@@ -4236,6 +4895,17 @@ export interface components {
              */
             type: string;
         };
+        /** ProfileSign */
+        ProfileSign: {
+            /** Date */
+            date: string | null;
+            /** Label */
+            label: string;
+            /** Url */
+            url: string | null;
+            /** What Happened */
+            what_happened: string;
+        };
         /** ProgressData */
         ProgressData: {
             /** Claude Requests */
@@ -4303,6 +4973,74 @@ export interface components {
              */
             waiting_for: string[];
         };
+        /**
+         * PropertyRecord
+         * @description One fact a tool gave us about a company's office, with its link and date.
+         */
+        PropertyRecord: {
+            /** Address */
+            address: string | null;
+            /**
+             * Area M2
+             * @description Whole square metres
+             */
+            area_m2: number | null;
+            /** Building */
+            building: string | null;
+            /** City */
+            city: string | null;
+            /**
+             * Company
+             * @description As the tool wrote it
+             */
+            company: string;
+            /**
+             * Floor
+             * @description As written, like "Level 12" or "12-14"
+             */
+            floor: string | null;
+            /**
+             * Happened On
+             * @description When the move, lease or fitout happened
+             */
+            happened_on: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "lease" | "move" | "requirement" | "fitout" | "building" | "occupier" | "news";
+            /** Lease End */
+            lease_end: string | null;
+            /** Lease Start */
+            lease_start: string | null;
+            /**
+             * Published On
+             * @description When the tool published the item
+             */
+            published_on: string | null;
+            /**
+             * Read At
+             * Format: date-time
+             * @description When we read it
+             */
+            read_at: string;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "property_daily" | "arealytics";
+            /**
+             * Summary
+             * @description One plain sentence, written by our code
+             * @example Leased 1,400 m² on level 12 of 120 Collins Street, ending in June 2028.
+             */
+            summary: string;
+            /**
+             * Url
+             * @description The page the fact came from
+             */
+            url: string;
+        };
         /** Queries */
         Queries: {
             /** Areas */
@@ -4318,6 +5056,10 @@ export interface components {
             /** Discovery */
             discovery: {
                 [key: string]: string[];
+            };
+            /** Source Groups */
+            source_groups: {
+                [key: string]: components["schemas"]["SourceGroup"];
             };
         };
         /** RebuildResult */
@@ -4566,6 +5308,8 @@ export interface components {
          * @description Rivals of a booming company (PLAN-V9 B5). The code is apps/lead_finder/rivals.py.
          */
         Rivals: {
+            /** Also After */
+            also_after?: string[];
             /** Enabled */
             enabled: boolean;
             /** Max Searches */
@@ -4576,8 +5320,6 @@ export interface components {
             per_run: number;
             /** Sign */
             sign: string;
-            /** Tiers */
-            tiers: ("tier_1" | "tier_2")[];
         };
         /** RoundCityOut */
         RoundCityOut: {
@@ -4585,7 +5327,7 @@ export interface components {
              * City
              * @enum {string}
              */
-            city: "Melbourne" | "Adelaide" | "Perth" | "Sydney";
+            city: "Melbourne" | "Adelaide" | "Perth" | "Sydney" | "Brisbane" | "Australia";
             /**
              * Day
              * @description Its day of the week, for a round in weeks
@@ -4631,9 +5373,9 @@ export interface components {
             budget_usd: number | string;
             /**
              * Cities
-             * @description The cities to search, in any order
+             * @description The places to search, in any order. `Australia` is the rest of Australia: one national search
              */
-            cities: ("Melbourne" | "Adelaide" | "Perth" | "Sydney")[];
+            cities: ("Melbourne" | "Adelaide" | "Perth" | "Sydney" | "Brisbane" | "Australia")[];
             /**
              * Enabled
              * @description On or off, for the whole round. On spends money
@@ -4676,7 +5418,7 @@ export interface components {
              * Cities
              * @description The picked cities, in the fixed order
              */
-            cities: ("Melbourne" | "Adelaide" | "Perth" | "Sydney")[];
+            cities: ("Melbourne" | "Adelaide" | "Perth" | "Sydney" | "Brisbane" | "Australia")[];
             /**
              * City Plan
              * @description The four cities, in the fixed order
@@ -4849,6 +5591,13 @@ export interface components {
                 [key: string]: number;
             };
             /**
+             * By Source
+             * @description Leads saved, by where discovery found them (web, property_daily, arealytics). A company two sources found counts for each.
+             */
+            by_source: {
+                [key: string]: number;
+            };
+            /**
              * Candidates
              * @description Companies found, before duplicates are merged
              * @default 0
@@ -4866,6 +5615,17 @@ export interface components {
              * @default 0
              */
             failed: number;
+            /**
+             * Goal
+             * @description The good leads the run aims for: a person's choice for a run they started, or the round's share for an automatic run. Empty: no goal.
+             */
+            goal: number | null;
+            /**
+             * Good
+             * @description Good leads saved so far: a Pass or a Director review
+             * @default 0
+             */
+            good: number;
             /**
              * Researched
              * @description Companies researched and saved as leads
@@ -4965,6 +5725,11 @@ export interface components {
              */
             companies_expected: number;
             /**
+             * Companies Needed
+             * @description The companies the goal needs at the recent pass rate (PLAN-V16 T1-9). Empty when the run has no goal of its own.
+             */
+            companies_needed: number | null;
+            /**
              * Cost Usd High
              * @description The worst case: every request in flight costs its full reserve
              * @default 0
@@ -4983,6 +5748,12 @@ export interface components {
             daily_left_usd: string;
             /** Errors */
             errors: components["schemas"]["FieldError"][];
+            /**
+             * Goal Note
+             * @description One sentence when the goal needs more companies than this run's limits allow, naming the limit that binds. Empty when the goal fits, or there is none.
+             * @example 20 leads needs about 50 companies. This run's company limit allows 20. An Admin can raise it in Settings.
+             */
+            goal_note: string | null;
             /**
              * Over Cap
              * @description True when the worst case is above the cap
@@ -5082,9 +5853,18 @@ export interface components {
             companies_limit: components["schemas"]["CompaniesLimit"];
             /** @description The starting values for every part of a run's `params`. The Start page must send only the parts of its mode in `POST /runs`: a part another mode owns is refused (422). Each part's description says which mode uses it. `caps` is used by every mode. */
             defaults: components["schemas"]["LeadFinderRunParams"];
+            /** @description How many good leads a run a person starts may aim for, and the default (PLAN-V16 T1-9) */
+            goal_leads: components["schemas"]["GoalLeadsOption"];
             /** Modes */
             modes: components["schemas"]["ModeOption"][];
             since_days: components["schemas"]["SinceDaysOption"];
+            /**
+             * Sources
+             * @description Where discovery can look, by id: `web`, `property_daily` and `arealytics` (PLAN-V16 T1-8). A run's `sources` left out uses every one that is ready.
+             */
+            sources: {
+                [key: string]: components["schemas"]["SourceOption"];
+            };
             /** Triggers */
             triggers: components["schemas"]["TriggerOption"][];
             /**
@@ -5132,10 +5912,27 @@ export interface components {
             /** Finished At */
             finished_at: string | null;
             /**
+             * Goal Leads
+             * @description The good leads the run aims for (PLAN-V16 T1-9). Empty: no goal.
+             */
+            readonly goal_leads: number | null;
+            /**
+             * Good Leads
+             * @description Good leads saved so far: a Pass or a Director review (Tier A or B)
+             */
+            readonly good_leads: number;
+            /**
              * Id
              * Format: uuid
              */
             id: string;
+            /**
+             * Leads By Source
+             * @description Leads saved, by where discovery found them: web, property_daily and arealytics, each always there for a Lead Finder run. A company two sources found counts for each.
+             */
+            readonly leads_by_source: {
+                [key: string]: number;
+            };
             /**
              * Mode
              * @example discovery
@@ -5537,37 +6334,47 @@ export interface components {
         };
         /**
          * Score
-         * @description The Target Customer Profile's 100 points in six parts (Criteria_v2.md section 6).
+         * @description Levi's 100 points in three parts (his section 6, PLAN-V16 T1-6, Criteria_v3.md): Fit 30,
+         *     Change and timing 50, Access 20. The dampeners then take points off, and the score sets the
+         *     tier.
          */
         Score: {
-            access: components["schemas"]["AccessPoints"];
-            /**
-             * Band Basis
-             * @enum {string}
-             */
-            band_basis: "scaled" | "raw";
-            bands: components["schemas"]["Bands"];
             /** Check Labels */
             check_labels: {
                 [key: string]: string;
             };
-            competition: components["schemas"]["CompetitionPoints"];
-            fit: components["schemas"]["FitPoints"];
+            city: components["schemas"]["CityPoints"];
+            dampeners: components["schemas"]["DampenerPoints"];
             /** Lease In Best Window */
             lease_in_best_window: number;
-            /** No Recent Move */
-            no_recent_move: number;
+            /** Local Staff */
+            local_staff: components["schemas"]["StaffStep"][];
+            /** No Lock In */
+            no_lock_in: number;
+            /** Office Constrained */
+            office_constrained: number;
+            /** Office Relevance */
+            office_relevance: number;
+            other_signs: components["schemas"]["OtherSigns"];
             /** Parts */
             parts: {
                 [key: string]: components["schemas"]["PartRule"];
             };
+            /** Priority Sector */
+            priority_sector: number;
+            /** Procurement */
+            procurement: number;
             /** Recency */
             recency: components["schemas"]["Recency"][];
-            size: components["schemas"]["SizePoints"];
             /** Source */
             source: {
                 [key: string]: number;
             };
+            /** Strongest Sign */
+            strongest_sign: {
+                [key: string]: number;
+            };
+            tiers: components["schemas"]["Tiers"];
             /** Trigger Group */
             trigger_group: {
                 [key: string]: number;
@@ -5576,8 +6383,8 @@ export interface components {
             undated: number;
             /** Unseen */
             unseen: string[];
-            /** Years At Address */
-            years_at_address: number;
+            /** Warm Path */
+            warm_path: number;
         };
         /** ScoreCheck */
         ScoreCheck: {
@@ -5918,6 +6725,23 @@ export interface components {
                 [key: string]: components["schemas"]["SettingValue"];
             };
         };
+        /**
+         * Sign
+         * @description A sign of an office change, and how strong it is (Levi's section 4, PLAN-V16 T1-4). The
+         *     group it sits in (main, other, weak) says whether a run searches for it by default. The
+         *     strength says how much it counts in the score.
+         */
+        Sign: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /**
+             * Strength
+             * @enum {string}
+             */
+            strength: "very_high" | "high" | "medium" | "low";
+        };
         /** SignalHireCompany */
         SignalHireCompany: {
             /**
@@ -6086,17 +6910,6 @@ export interface components {
              */
             text: string;
         };
-        /** SizePoints */
-        SizePoints: {
-            /** Confirmed In Range */
-            confirmed_in_range: number;
-            /** Director */
-            director: number;
-            /** Estimated In Range */
-            estimated_in_range: number;
-            /** Growing Into Range */
-            growing_into_range: number;
-        };
         /** SliceDoneData */
         SliceDoneData: {
             /** Cost Usd */
@@ -6183,6 +6996,24 @@ export interface components {
              */
             type: "slice_started";
         };
+        /**
+         * SourceChecks
+         * @description Where each tool stands for this company.
+         */
+        SourceChecks: {
+            /**
+             * Arealytics
+             * @default not_checked
+             * @enum {string}
+             */
+            arealytics: "found" | "not_found" | "off" | "error" | "not_checked";
+            /**
+             * Property Daily
+             * @default not_checked
+             * @enum {string}
+             */
+            property_daily: "found" | "not_found" | "off" | "error" | "not_checked";
+        };
         /** SourceCounts */
         SourceCounts: {
             /**
@@ -6198,6 +7029,8 @@ export interface components {
         };
         /** SourceDomains */
         SourceDomains: {
+            /** Arealytics */
+            arealytics: string[];
             /** Asx Or Official News */
             asx_or_official_news: string[];
             /** Blocked */
@@ -6206,6 +7039,50 @@ export interface components {
             job_ads: string[];
             /** Property Daily */
             property_daily: string[];
+        };
+        /**
+         * SourceGroup
+         * @description One of the source groups Levi names (his section 7, PLAN-V16 T1-7), and the searches that
+         *     reach it. On every run the research looks in each group.
+         *
+         *     - `company`: searches for one company. They are added to the research angles in `angles`
+         *       ("Searches you could start with"), and need `{company}`.
+         *     - `discovery`: searches for a slice of the discovery run. They are added to the signs in
+         *       `signs`, and can't name a company. A group no sign uses (a dampener's source) has none.
+         */
+        SourceGroup: {
+            /** Angles */
+            angles: ("property" | "people" | "money" | "tenure" | "dampeners")[];
+            /** Company */
+            company: string[];
+            /** Discovery */
+            discovery?: string[];
+            /** Label */
+            label: string;
+            /** Signs */
+            signs?: string[];
+        };
+        /**
+         * SourceOption
+         * @description Where a discovery run can look for companies (PLAN-V16 T1-8, the contract part 2).
+         */
+        SourceOption: {
+            /**
+             * Message
+             * @description Why it isn't ready, in one plain sentence for the Start page. Empty when it is ready.
+             * @example Property Daily is switched off. An Admin can switch it on.
+             */
+            message: string | null;
+            /**
+             * On
+             * @description The tool's switch. The web is always on.
+             */
+            on: boolean;
+            /**
+             * Ready
+             * @description It can be used now: on, and with a login. A run may name only a ready one.
+             */
+            ready: boolean;
         };
         /**
          * SourceOut
@@ -6221,6 +7098,26 @@ export interface components {
             title: string | null;
             /** Url */
             url: string;
+        };
+        /**
+         * Space
+         * @description The space at about 10 m² a person (`size.m2_per_staff`).
+         */
+        Space: {
+            /** Now M2 */
+            now_m2: number | null;
+            /** Projected M2 */
+            projected_m2: number | null;
+        };
+        /**
+         * StaffStep
+         * @description Local staff of at least `from_staff` earn `points`. The highest step that fits counts.
+         */
+        StaffStep: {
+            /** From Staff */
+            from_staff: number;
+            /** Points */
+            points: number;
         };
         /** StepResult */
         StepResult: {
@@ -6413,7 +7310,7 @@ export interface components {
              * Id
              * @enum {string}
              */
-            id: "database" | "claude" | "hubspot" | "signalhire" | "email" | "runs" | "schedules" | "api";
+            id: "database" | "claude" | "hubspot" | "signalhire" | "email" | "runs" | "schedules" | "api" | "property_daily" | "arealytics";
             /**
              * Name
              * @example HubSpot
@@ -6549,6 +7446,18 @@ export interface components {
             /** Total Cost Usd */
             total_cost_usd: string;
         };
+        /**
+         * Tiers
+         * @description The lowest score of each tier. Under `c` is Discard.
+         */
+        Tiers: {
+            /** A */
+            a: number;
+            /** B */
+            b: number;
+            /** C */
+            c: number;
+        };
         /** ToneChoice */
         ToneChoice: {
             /**
@@ -6593,6 +7502,70 @@ export interface components {
              * @enum {string}
              */
             team: "friendly" | "direct" | "consultative" | "formal";
+        };
+        /** ToolList */
+        ToolList: {
+            /** Items */
+            items: components["schemas"]["ToolOut"][];
+        };
+        /** ToolOut */
+        ToolOut: {
+            /**
+             * Connected
+             * @description False: there is no connector (Arealytics)
+             */
+            connected: boolean;
+            /**
+             * Id
+             * @enum {string}
+             */
+            id: "property_daily" | "arealytics";
+            /**
+             * Last Problem
+             * @description The last problem, in one plain sentence. None when there was none
+             * @example The site asked us to slow down, so reading stopped for 24 hours.
+             */
+            last_problem: string | null;
+            /**
+             * Last Read At
+             * @description The last page read without a problem
+             */
+            last_read_at: string | null;
+            /**
+             * Name
+             * @example Property Daily
+             */
+            name: string;
+            /**
+             * On
+             * @description Its switch, on the Settings page
+             */
+            on: boolean;
+            /**
+             * Pages Limit
+             * @description The most pages a day
+             */
+            pages_limit: number;
+            /**
+             * Pages Today
+             * @description Pages read today (a Melbourne day)
+             */
+            pages_today: number;
+            /**
+             * Paused Until
+             * @description Paused after a block until then
+             */
+            paused_until: string | null;
+            /**
+             * Records
+             * @description Facts in our copy
+             */
+            records: number;
+            /**
+             * Signed In
+             * @description Signed in now. None: not checked since the backend started
+             */
+            signed_in: boolean | null;
         };
         /** TriggerFacet */
         TriggerFacet: {
@@ -6672,6 +7645,11 @@ export interface components {
              */
             source_points: number;
             /**
+             * Strength
+             * @description very_high, high, medium or low (Levi's section 4). Empty for a card made before PLAN-V16.
+             */
+            strength?: ("very_high" | "high" | "medium" | "low") | null;
+            /**
              * Timing Points
              * @description How recent, or how near the lease end
              * @default 0
@@ -6689,13 +7667,13 @@ export interface components {
             /** Consultant Window Months */
             consultant_window_months: number;
             /** Main */
-            main: components["schemas"]["Item"][];
+            main: components["schemas"]["Sign"][];
             /** Other */
-            other: components["schemas"]["Item"][];
+            other: components["schemas"]["Sign"][];
             /** Recent Months */
             recent_months: number;
             /** Weak */
-            weak: components["schemas"]["Item"][];
+            weak: components["schemas"]["Sign"][];
             /** Window Years */
             window_years: number;
         };
@@ -6885,7 +7863,7 @@ export interface components {
         WatchlistOptions: {
             /**
              * City
-             * @description Only the companies whose biggest office is in this city: one of the watchlist's cities (Melbourne, Adelaide, Perth). Missing: every city.
+             * @description Only the companies whose biggest office is in this city: one of the watchlist's cities (Melbourne, Adelaide, Perth, Sydney, Brisbane). Missing: every city.
              * @example Adelaide
              */
             city: string | null;
@@ -6970,6 +7948,19 @@ export interface components {
             staff: components["schemas"]["WatchStaff"];
             /** Tbc */
             tbc: components["schemas"]["TbcNote"][];
+        };
+        /** WhatChanged */
+        WhatChanged: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "new" | "upgraded" | "downgraded" | "unchanged";
+            /**
+             * Text
+             * @example Up from B to A: a new sign, a lease ending in 1 to 3 years.
+             */
+            text: string;
         };
         /**
          * WhenLine
@@ -11517,7 +12508,7 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description The column to sort by */
-                sort?: "score" | "created_at" | "updated_at" | "company" | "city" | "result" | "status" | "hubspot_status" | "trigger_date" | "office_m2" | "cost_usd";
+                sort?: "tier" | "score" | "created_at" | "updated_at" | "company" | "city" | "result" | "status" | "hubspot_status" | "trigger_date" | "office_m2" | "cost_usd";
                 order?: "asc" | "desc";
                 limit?: number;
                 offset?: number;
@@ -11556,6 +12547,16 @@ export interface operations {
                 latest?: boolean | null;
                 /** @description Only leads whose facts are missing, because Claude couldn't fill in the answer form. Re-check them. */
                 facts_missing?: boolean;
+                /** @description A, B, C or discard (PLAN-V16). Left out: every lead. Repeat the key to match several values */
+                tier?: ("A" | "B" | "C" | "discard")[] | null;
+                /** @description Repeat the key to match several values */
+                confidence?: ("high" | "medium" | "low")[] | null;
+                /** @description priority, secondary, capital or regional: the city's group. Repeat the key to match several values */
+                city_group?: ("priority" | "secondary" | "capital" | "regional")[] | null;
+                /** @description true: only leads a property tool has a record of. false: the others. */
+                has_property?: boolean | null;
+                /** @description true: only leads left out by an exclusion that nobody overrode. false: the others. */
+                excluded?: boolean | null;
             };
             header?: never;
             path?: never;
@@ -11677,7 +12678,7 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description The column to sort by */
-                sort?: "score" | "created_at" | "updated_at" | "company" | "city" | "result" | "status" | "hubspot_status" | "trigger_date" | "office_m2" | "cost_usd";
+                sort?: "tier" | "score" | "created_at" | "updated_at" | "company" | "city" | "result" | "status" | "hubspot_status" | "trigger_date" | "office_m2" | "cost_usd";
                 order?: "asc" | "desc";
                 /** @description Repeat the key to match several values */
                 result?: ("pass" | "director_review" | "watch" | "drop")[] | null;
@@ -11714,6 +12715,16 @@ export interface operations {
                 latest?: boolean | null;
                 /** @description Only leads whose facts are missing, because Claude couldn't fill in the answer form. Re-check them. */
                 facts_missing?: boolean;
+                /** @description A, B, C or discard (PLAN-V16). Left out: every lead. Repeat the key to match several values */
+                tier?: ("A" | "B" | "C" | "discard")[] | null;
+                /** @description Repeat the key to match several values */
+                confidence?: ("high" | "medium" | "low")[] | null;
+                /** @description priority, secondary, capital or regional: the city's group. Repeat the key to match several values */
+                city_group?: ("priority" | "secondary" | "capital" | "regional")[] | null;
+                /** @description true: only leads a property tool has a record of. false: the others. */
+                has_property?: boolean | null;
+                /** @description true: only leads left out by an exclusion that nobody overrode. false: the others. */
+                excluded?: boolean | null;
             };
             header?: never;
             path?: never;
@@ -11871,6 +12882,16 @@ export interface operations {
                 latest?: boolean | null;
                 /** @description Only leads whose facts are missing, because Claude couldn't fill in the answer form. Re-check them. */
                 facts_missing?: boolean;
+                /** @description A, B, C or discard (PLAN-V16). Left out: every lead. Repeat the key to match several values */
+                tier?: ("A" | "B" | "C" | "discard")[] | null;
+                /** @description Repeat the key to match several values */
+                confidence?: ("high" | "medium" | "low")[] | null;
+                /** @description priority, secondary, capital or regional: the city's group. Repeat the key to match several values */
+                city_group?: ("priority" | "secondary" | "capital" | "regional")[] | null;
+                /** @description true: only leads a property tool has a record of. false: the others. */
+                has_property?: boolean | null;
+                /** @description true: only leads left out by an exclusion that nobody overrode. false: the others. */
+                excluded?: boolean | null;
             };
             header?: never;
             path?: never;
@@ -12026,6 +13047,16 @@ export interface operations {
                 latest?: boolean | null;
                 /** @description Only leads whose facts are missing, because Claude couldn't fill in the answer form. Re-check them. */
                 facts_missing?: boolean;
+                /** @description A, B, C or discard (PLAN-V16). Left out: every lead. Repeat the key to match several values */
+                tier?: ("A" | "B" | "C" | "discard")[] | null;
+                /** @description Repeat the key to match several values */
+                confidence?: ("high" | "medium" | "low")[] | null;
+                /** @description priority, secondary, capital or regional: the city's group. Repeat the key to match several values */
+                city_group?: ("priority" | "secondary" | "capital" | "regional")[] | null;
+                /** @description true: only leads a property tool has a record of. false: the others. */
+                has_property?: boolean | null;
+                /** @description true: only leads left out by an exclusion that nobody overrode. false: the others. */
+                excluded?: boolean | null;
             };
             header?: never;
             path?: never;
@@ -12814,6 +13845,248 @@ export interface operations {
                 };
             };
             /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    override_exclusion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                lead_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeadDetail"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_profile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                lead_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeadProfile"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description No such lead */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Tier A */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -17113,6 +18386,369 @@ export interface operations {
                 };
             };
             /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_sources: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolList"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    check_source: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description property_daily or arealytics */
+                source_id: "property_daily" | "arealytics";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolOut"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The tool isn't ready to check */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    resume_source: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description property_daily or arealytics */
+                source_id: "property_daily" | "arealytics";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolOut"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Arealytics isn't connected */
             409: {
                 headers: {
                     [name: string]: unknown;

@@ -21,6 +21,7 @@ from core.schedules.jobs import (
     JobSkipped,
     JobSpec,
 )
+from core.sources.jobs import SOURCE_JOBS
 
 HUBSPOT_SYNC = "core.hubspot_sync"
 MODES = ("auto", "full", "changes")
@@ -99,4 +100,5 @@ CORE_JOBS = (
             settings={"mode": "auto"},
         ),
     ),
+    *SOURCE_JOBS,  # Property Daily's feed and lease endings (PLAN-V16 T2-7), both off
 )
