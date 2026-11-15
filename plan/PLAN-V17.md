@@ -660,7 +660,7 @@ Newest first.
 
 ## Track 3: the website (session 3)
 
-**Progress:** Stage A 2 of 8. Stage B 0 of 4. Every step is `frontend-agent` work, follows `engine/DESIGN.md` and "The screens, and how they move", uses the `ui-build` skill, and builds against the contract with `mockApi`.
+**Progress:** Stage A 3 of 8. Stage B 0 of 4. Every step is `frontend-agent` work, follows `engine/DESIGN.md` and "The screens, and how they move", uses the `ui-build` skill, and builds against the contract with `mockApi`.
 
 ### Stage A: call notes
 
@@ -714,12 +714,12 @@ Newest first.
   - **Done when:** tests cover an edit, leaving one out, a batch with one failure, an uncertain note resolved both ways, the waiting state and the keys. Al-khair has seen it.
   - 2026-11-15: **built, waiting for a look** (`05fb38d` to `e13cf4d`). The tests cover all six: 96 files and 1,352 pass, up from 1,308. Lint, types and the build pass. The first visit is 230 kB gzip (715 kB raw), the same as T3-1 (230 kB, 717 kB raw) and about 1 kB over T3-5, for Activity's menu entry and its prefetch. No call notes code is in it. Opening Activity adds 41 kB (14 kB of its own). It hasn't been seen in a browser yet.
 
-- [ ] **T3-7. Around the app** ("The screens", part 4).
+- [x] **T3-7. Around the app** ("The screens", part 4).
   - The menu group with the count, Home's quick button, the Ctrl+K entries.
   - "Last talk" in the panel shows the rep's own note that isn't in HubSpot yet, marked "Your note, not in HubSpot yet".
   - Admin: the three switches on Settings, the Companies line on the HubSpot page, and the owner on the People tab.
   - **Done when:** each has tests, and a person without the Companies tick sees none of it.
-  - 2026-11-15: **built** (`049e973` to `0a9b240`), checks in the Log. Not seen in a browser yet: T3-8 does that.
+  - Done 2026-11-15 (`049e973` to `0a9b240`). Each part has tests, and one proves that a person without the Companies tick sees none of it and asks for nothing. The session's own run: lint and types pass, tests 99 files and 1,380 passed, and the build passes. The first visit is 230 kB gzip (715 kB raw), the same as T3-1. Not seen in a browser yet: T3-8 does that.
 
 - [ ] **T3-8. Stage A check.**
   - Lint, types, the tests, the build and `node scripts/bundle-report.js`.
