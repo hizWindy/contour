@@ -552,7 +552,7 @@ Newest first.
 
 ## Track 2: Companies backend (session 2)
 
-**Progress:** Stage A 5 of 9. Stage B 0 of 7. Every step is `backend-agent` work.
+**Progress:** Stage A 6 of 9. Stage B 0 of 7. Every step is `backend-agent` work.
 
 ### Stage A: call notes
 
@@ -586,7 +586,7 @@ Newest first.
   - Every list is paged. Call notes off answers 409 `call_notes_off` with one plain sentence.
   - **Done when:** tests cover each route, a double press, another person's note (refused), and the off state.
 
-- [ ] **T2-6. The batch.**
+- [x] **T2-6. The batch.** Done 2026-11-15, `d1f5289`: `note_batch.py` (`NoteSender`, the `ActivityWriter` seam), 10 batch tests with a fake writer.
   - `preview`: builds each note's `ActivityRequest` and calls `preview_activity`, so every change shows HubSpot's value now. The owner is `owner_of` the rep. The deal follows choice 5.
   - `confirm`: one background runner sends the notes one after another, and saves each result as it lands. A second press while it runs answers "already sending". It stops cleanly on shutdown: what was sent stays sent, the rest stay `to_confirm`.
   - Writing off, or a missing scope: nothing is sent, and the answer says what it waits for.
@@ -658,6 +658,12 @@ Newest first.
 
 Newest first.
 
+- 2026-11-15, T2-6 done (`d1f5289`). The batch sends through an injected writer, so its tests use a fake one until Track 1's real writer meets it at M1.
+  - **Each part keeps a state:** new, landed, failed, held or uncertain, with its step and the reason. A later send carries only what hasn't landed, as a new write (`call_note:<id>:<n>`). A field whose HubSpot value moved since the rep looked is held and shown again. If HubSpot already has the rep's value, the part counts as landed.
+  - **A hard stop** (no clean shutdown) could leave a note `sending` for ever. Reading it settles it from its write once it has sat 5 minutes with no batch behind it.
+  - **A second press** answers 202 with `already_sending: true` (Track 3's choice), not 409.
+  - **For Track 3 at M1:** `retry` answers 202 (in the background), not 200. The path parameter is `{note_id}`, as `{prep_id}` is for preps. The URL is the same. The call, each change and each task carry `in_hubspot`, so a partly saved note shows which parts are frozen. New 409 codes: `already_sending` (retry while a batch runs), `part_sent` (an edit to a part already in HubSpot), `step_not_unsure` (resolve on a step HubSpot answered). A held field's step shows `skipped` with words like "Perth lease end changed in HubSpot since you checked it. It is now 30 Jun 2027. Check it, then send again."
+  - **For Track 1 (T1-5), what the batch expects of the writer:** step names `call`, `fields`, `task:1` ... `note`; a held field back in `plan.fields` with `write: false` and HubSpot's value in `current`; `hubspot_url` as the call's link; one write row per subject, reused by preview and apply as `preview_write` does. A send cut off mid-write leaves the row `writing`: `resolve_step` must accept a step the row never recorded, or the writer settles stale `writing` rows itself. Track 2 reads saved rows as plain data until `StepResult.step` is widened.
 - 2026-11-15, T2-5 done (`99fe715`).
   - **Stored text has no contact details:** a note, a summary and a follow-up are saved through `scrub`. `scrub` now keeps a date written with dashes or dots (31-03-2028, 2028-03-31); every phone shape is still blanked.
   - **Who sees what:** a rep reads and changes their own notes. An Admin may read anyone's (`mine=false`) but changing someone else's answers 403 `not_your_note`. Anyone else gets 404. With sign-in off every note is open.
