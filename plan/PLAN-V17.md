@@ -473,7 +473,7 @@ The first two and `meeting_forms_enabled` are on the Settings page. `internal_em
 
 ## Track 1: HubSpot (session 1)
 
-**Progress:** Stage A 4 of 7. Stage B 0 of 4. Every step is `backend-agent` work.
+**Progress:** Stage A 6 of 7. Stage B 0 of 4. Every step is `backend-agent` work.
 
 ### Stage A: call notes
 
@@ -494,7 +494,7 @@ The first two and `meeting_forms_enabled` are on the Settings page. `internal_em
   - `FakeHubSpot` (`tests/core/hubspot_fake.py`) follows, and refuses a link number that isn't in the table.
   - **Done when:** tests prove the request body for a call with a company, a person and a deal (182, 194, 206), a task (192, 204, 216), and that a write is still refused while writing is off.
 
-- [ ] **T1-4. Who the rep is in HubSpot.**
+- [x] **T1-4. Who the rep is in HubSpot.** Done 2026-11-15 (2f9eccf; names as Track 3 reads them in feee0f5).
   - Migration `0020_hubspot_owner_link`: `core.users.hubspot_owner_id`, and how it was matched.
   - The sync matches each account to an owner by email, in memory. The owner's email is never saved or logged: only the id is.
   - An Admin can set or clear it (the contract, part 4). A hand-set link is never changed by the sync.
@@ -502,7 +502,7 @@ The first two and `meeting_forms_enabled` are on the Settings page. `internal_em
   - Run `scripts/schema_map.py`.
   - **Done when:** tests prove a match by email, no match, a hand-set link that survives a sync, and that no owner email is in the database or a log line.
 
-- [ ] **T1-5. The activity writer** (`activities.py`, the contract, part 1).
+- [x] **T1-5. The activity writer** (`activities.py`, the contract, part 1). Done 2026-11-15 (b699b0f). Companies' write scopes are in Track 2's file, so they are asked for in the Log.
   - It reuses `writer.py`'s parts: the claim (so two clicks can't both write), the step log, `note_html`, and the `core.hubspot_writes` table. Move what both need into shared functions. Don't copy them.
   - **The call first,** then the fields, then the tasks, then the note. A failed step stops the ones after it that depend on it, and the rest carry on.
   - **A field change:** the company is read again right before writing. If HubSpot's value is no longer what the rep saw (`seen`), that field is not written and comes back as "changed in HubSpot since". Pick-list values go as HubSpot's code (`_choice_code`).
@@ -550,6 +550,26 @@ The first two and `meeting_forms_enabled` are on the Settings page. `internal_em
 
 Newest first.
 
+- 2026-11-15: **Fixes asked by the other tracks** (feee0f5, 94fdce2, and f7499d3 from the first session).
+  - **For Track 3:** `GET /hubspot/owners` answers `{owners: [{id, name}]}`. Every owner has a name: theirs, or "HubSpot owner 301" when HubSpot has none or our copy doesn't hold them yet (`shown_name` in `owners.py`, also used in a task's words). Never an email. The path stays `PUT /people/{user_id}/hubspot-owner`, like `PATCH /people/{user_id}` (the M1 rename Track 3 planned).
+  - **For Track 3:** with no key, the connection check says "The HubSpot key isn't set on the server.", and a project's sending-off line says "sending is switched off on the server". The screen-words guard reads `ConnectionCheck` too, and a test checks every readiness line.
+  - **For Track 2** (its T2-9 Log): the screen-words guard reads `apps/**` (f7499d3).
+  - **0017's test** in `tests/companies/test_races.py` (Track 2's file) failed here once 0020 existed. Track 2's own two lines (fde75c2) are applied byte for byte (94fdce2), so the join is clean. A trial join (`git merge-tree`) of this branch with Track 2's and Track 3's tips has no conflict today.
+- 2026-11-15: **T1-5 done** (b699b0f).
+  - `activities.py`: `preview_activity` reads the company now and says what each field would do (choice 4: a confirmed change may replace a value). `apply_activity` writes `call`, `fields` (one change), `task:1` and on, then `note`, each saved as it lands. A failed step never stops the others. `resolve_step` lets a person settle an uncertain step. `owner_of` uses T1-4's link.
+  - **Never twice:** a create that timed out is looked for 3 times over about 30 seconds (the exact `hs_timestamp`, the owner, and the title or subject), and never sent again blind. One found: done. None, or more than one: uncertain until a person says. Two clicks write once. A write left "writing" for 5 minutes (**TBC**) is taken over, and its step in flight is uncertain. A field changed in HubSpot since the preview, or since the rep saw it, is held: not written, and `plan.fields` shows HubSpot's value now.
+  - `writer.py`: the claim, the step log and the copy refresh are shared, not copied. `StepResult.step` is text (`call`, `fields`, `task:n`, `note`), as Track 2 asked. Old Lead Finder rows still read, and each writer refuses the other's rows.
+  - Our copy gets the new call at once, and the company is read again after a field change.
+  - Tests: `test_hubspot_activities.py` (each step and the order, a field changed since, a timeout found and one not found, two clicks at once, an old Lead Finder write) and the stub tests.
+  - **Track 2's asks are met:** one write row per subject, used by preview and apply; a subject already done, writing or part-written gets its write back; `apply_activity` refuses while writing is off (`HubSpotWritesOff`) before it claims anything; a write cut off part way is settled by the writer itself.
+  - **Asked of Track 2** (its file, `apps/companies/app.py`): `HUBSPOT_NEEDS` gains `write=("crm.objects.companies.write", ACTIVITY_WRITE_SCOPE)`, with `ACTIVITY_WRITE_SCOPE` imported from `core.hubspot.check` (`crm.objects.contacts.write`, name **TBC**). Then the HubSpot page shows Companies as "sending ready" or waiting for a named scope (the contract, part 4). Its comment that calls need the contacts scope is out of date: T1-2 found the key reads calls without it.
+- 2026-11-15: **T1-4 done** (2f9eccf).
+  - Migration `0020_hubspot_owner_link`: `core.users` gains `hubspot_owner_id` and `hubspot_owner_matched_by` (`email` or `person`), set or empty together. `SCHEMA-0020.md`.
+  - The sync's people phase links each account to the active owner with the same email (case and spaces ignored; two owners with one email: the lowest id wins). The owners' emails stay in memory: nothing saves, logs or returns one. A link an Admin set by hand is never changed. An old email link is cleared when the owner goes. A failed match never fails the sync.
+  - `owner_of`: the account's owner id, or None (no link, or sign-in off: HubSpot shows the call as unassigned).
+  - Admin routes: `GET /people` rows gain `hubspot_owner` (`id`, `name`, `matched_by`). `PUT /people/{user_id}/hubspot-owner` takes `{owner_id}` (null clears it). `GET /hubspot/owners` is the pick list.
+  - Tests: `test_hubspot_owners.py` (a match by email, no match, a hand-set link that survives a sync, no owner email in the database or a log line, an archived owner) and `test_migrations.py` (0020 up and down).
+- 2026-11-15: **A new Track 1 session** (`contour-7e`, from about 19:20) carries on. The first one stopped after f7499d3 (18:58), before ticking T1-4 and T1-5. `ListAgents` here shows `contour-bd` (Track 2) and `contour-a8`, so messages can reach them now.
 - 2026-11-15: **T1-6 done** (26cc66d). `Permissions-Policy` has `microphone=(self)`; the camera, location, payments and USB stay off. The content policy adds `'wasm-unsafe-eval'` to `script-src`, and `worker-src 'self'`. No other origin. Two guard tests in `test_deploy_files.py`.
   - **For Track 3 (T3-4), the line for `index.html`'s meta tag** (Caddy's line without `frame-ancestors` and `form-action`): `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; connect-src 'self'; worker-src 'self'; base-uri 'none'; object-src 'none'`. Not sent as a message: no other session is reachable from this one.
   - On App Platform the website gets no Caddy headers (AGENTS.md, **TBC**), so there the meta tag is the policy. With no `Permissions-Policy` header, a browser allows the mic on our own pages only, which is what we want.
