@@ -179,12 +179,25 @@ export interface CallNoteIds {
   ids: string[]
 }
 
+/**
+ * A note the preview or the confirm won't send, with why in plain words (T3-11), like "A change on
+ * this note isn't one a call may change. Remove it, then send the note again." It is in neither
+ * `items` nor the totals.
+ */
+export interface CallNoteSkipped {
+  id: string
+  why: string
+}
+
 /** POST /call-notes/preview: each note with HubSpot's values now. */
 export interface CallNotePreview {
   items: CallNoteOut[]
   sending_ready: boolean
   waiting_for: string | null
+  /** A logged meeting's notes count as one call. */
   totals: { calls: number; tasks: number; changes: number }
+  /** The notes it won't send, with why. Optional in the contract. */
+  skipped?: CallNoteSkipped[]
 }
 
 /** POST /call-notes/confirm: answers at once; the notes go one after another. */
@@ -193,6 +206,12 @@ export interface CallNoteConfirm {
   sending: number
   /** True when a batch was already sending: nothing new started. */
   already_sending: boolean
+  /** The batch being sent. Optional in the contract. */
+  batch_id?: string | null
+  /** The notes that started sending, in order. Optional in the contract. */
+  notes?: CallNoteOut[]
+  /** The notes left out, with why: they stay to confirm. Optional in the contract. */
+  skipped?: CallNoteSkipped[]
 }
 
 /** POST /call-notes/{note_id}/resolve: whether an uncertain step is in HubSpot. */
@@ -284,6 +303,12 @@ export interface MeetingItem {
   notes_logged: boolean
   /** A meeting typed in for New pre-read: not in HubSpot, `meeting.id` empty, `form` its pre-read. */
   typed: boolean
+  /**
+   * Whose meeting it is: its owner, as our copy of HubSpot's owners names them. Null for a typed
+   * one (always the rep's own) or an owner we don't know. Optional in the contract; the server
+   * always sends it (Track 2, `3431528`).
+   */
+  owner_name?: string | null
 }
 
 /**
@@ -450,7 +475,10 @@ export interface MeetingFormPatch {
   going?: string | null
 }
 
-/** POST .../preview (T3-11): the addresses the rep added. Empty: only the people on the meeting. */
+/**
+ * POST .../preview (T3-11): the addresses the rep added, each checked against Contour's own
+ * domains. Empty: only the people on the meeting. At most 20, each at most 254 characters.
+ */
 export interface FormPreviewIn {
   to?: string[]
 }
@@ -458,23 +486,38 @@ export interface FormPreviewIn {
 /** Someone the pre-read would go to (T3-11). */
 export interface FormPerson {
   email: string
+  /** Their name, when they have an account here. */
   name: string | null
-  /** Like "on the meeting", or "added by you". */
+  /** Like "on the meeting", "typed this meeting in" or "added by you". */
   why: string
+  /** Ticked to get it. The server ticks an address it refuses too: only `allowed` ones can be. */
   ticked: boolean
   /** False for an address that isn't Contour's: it can't get it. */
   allowed: boolean
 }
 
-/** The email as it would arrive (T3-11): HTML with every value escaped, and the people. */
+/**
+ * The email as it would arrive (T3-11): a subject, the plain text, HTML with every value escaped,
+ * and the people. The page shows the plain text only, never the HTML.
+ */
 export interface FormEmailPreview {
   subject: string
   text: string
   html: string
   people: FormPerson[]
+  /**
+   * One sentence saying Send also adds this pre-read to the meeting's internal notes in HubSpot,
+   * or null when Send won't touch the meeting. Until M5: Track 2 adds it then (Track 1's security
+   * review), so it is optional here.
+   */
+  meeting_note?: string | null
 }
 
-/** POST .../send (T3-11): Contour addresses only, 1 to 20. One that isn't refuses the whole send. */
+/**
+ * POST .../send (T3-11): Contour addresses only, 1 to 20, each at most 254 characters. One that
+ * isn't refuses the whole send (422 `outside_address`, naming it). Sent already and unchanged:
+ * nobody is emailed again, and a copy in HubSpot that waits or failed is tried again.
+ */
 export interface FormSendIn {
   to: string[]
 }
@@ -490,6 +533,19 @@ export interface MeetingSummary {
  * newest first. A past one has no group. Empty while meetings are off or not read yet.
  */
 export type CompanyDetailV17 = Schemas['CompanyDetail'] & { meetings?: MeetingItem[] }
+
+/**
+ * POST /companies/meetings/{meeting_id}/transcript (T3-11, "Log meeting"): a past HubSpot
+ * meeting's transcript, pasted, or the text of a .txt or .vtt file the website read (never the
+ * file itself). The server cleans a .vtt (`file_name`, or text that starts "WEBVTT") of its times,
+ * then takes up to 60,000 characters (`transcript_max_chars`, TBC; the contract doesn't say it).
+ * `text` itself may hold up to 200,000, for a .vtt before its times are taken out.
+ */
+export interface MeetingTranscriptIn {
+  text: string
+  /** The file it came from, if any, at most 255 characters. */
+  file_name?: string | null
+}
 
 // --- Part 4: Admin (Track 1 builds, Track 3 reads) ------------------------------------------
 
@@ -648,6 +704,17 @@ export interface V17Paths {
   '/companies/meetings/{meeting_id}': {
     parameters: NoParameters
     get: Operation<MeetingDetail, never, MeetingId>
+  }
+  '/companies/meetings/{meeting_id}/transcript': {
+    parameters: NoParameters
+    post: Operation<
+      CallNoteOut,
+      MeetingTranscriptIn,
+      MeetingId,
+      never,
+      IdempotencyHeader,
+      200 | 201
+    >
   }
   '/hubspot/owners': { parameters: NoParameters; get: Operation<HubSpotOwnerList> }
   '/people/{user_id}/hubspot-owner': {

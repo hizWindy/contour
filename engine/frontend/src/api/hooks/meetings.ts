@@ -12,8 +12,12 @@
  * - The pre-read (T3-10): the form, asked again every 2 seconds while it is drafted; the rep's
  *   edits, shown at once and put back if the server says no; a redraft; and the HubSpot meeting
  *   it is for, which has its link.
+ * - Sending it (T3-11): the email as it would arrive and who would get it (the preview), then the
+ *   send, whose answer puts the sent pre-read on its page and its row at once.
+ * - Log meeting (T3-11): a past HubSpot meeting's transcript becomes a call note in the batch.
  *
- * Only the Meetings pages import this file, so none of it is in the first visit (T3-5's rule).
+ * Only the Meetings pages and the company's record import this file, so none of it is in the first
+ * visit (T3-5's rule). Home and Ctrl+K need only the summary, in `meeting-summary.ts`.
  */
 import {
   mutationOptions,
@@ -26,6 +30,8 @@ import {
 import { isApiProblem, unwrap, type ApiProblem } from '../client'
 import { queryKeys } from '../query'
 import type {
+  CallNoteOut,
+  FormEmailPreview,
   MeetingDetail,
   MeetingFormOut,
   MeetingFormPatch,
@@ -34,16 +40,22 @@ import type {
   MeetingItem,
   MeetingPage,
   MeetingQuery,
+  MeetingTranscriptIn,
 } from '../v17'
 import { apiV17 } from '../v17-client'
+import { markMeetingSummaryOld } from './meeting-summary'
+
+// The switch and the counts sit in a small file of their own, because Home and Ctrl+K need them on
+// every page (T3-11). They are the same functions here, not copies.
+export {
+  isMeetingFormsOff,
+  markMeetingSummaryOld,
+  meetingSummaryQueryOptions,
+  useMeetingSummary,
+} from './meeting-summary'
 
 /** How often a page with a form still being drafted asks again. */
 export const DRAFTING_POLL_MS = 3000
-
-/** The server said pre-meeting forms are switched off (a 409 `meeting_forms_off`). */
-export function isMeetingFormsOff(error: unknown): boolean {
-  return isApiProblem(error) && error.status === 409 && error.code === 'meeting_forms_off'
-}
 
 /** Every 3 seconds while a form on the page is being drafted, and not at all once none is. */
 export function meetingsPollMs(items: readonly MeetingItem[] | undefined): number | false {
@@ -92,7 +104,7 @@ function isRowOf(item: MeetingItem, form: MeetingFormState, meetingId: string | 
  * Puts a form, in short, on its meeting's row, in every page of meetings in the cache that holds
  * it: the row of the same pre-read, or of the HubSpot meeting it was just started for. Every page
  * of meetings then counts as old, so the next look reads the rest from the server (a typed meeting
- * joins its list then).
+ * joins its list then), and so do Home's counts.
  */
 export function putFormOnRows(
   client: QueryClient,
@@ -115,6 +127,8 @@ export function putFormOnRows(
     queryKey: queryKeys.companies.meetingLists(),
     refetchType: 'none',
   })
+  // Marking asks nothing now, so the pre-read's page may do this on each answer.
+  markMeetingSummaryOld(client)
 }
 
 /**
@@ -214,6 +228,14 @@ interface EditFormContext {
 }
 
 /**
+ * The key every edit of one pre-read runs under. The send dialog waits while one is on its way, so
+ * the email it shows has the blank the rep just left (T3-11).
+ */
+export function editFormKey(formId: string) {
+  return [...queryKeys.companies.meetings(), 'edit', formId] as const
+}
+
+/**
  * PATCH /companies/meetings/forms/{form_id}: the rep's edit. With `apply`, the page shows it at
  * once, and goes back to what it was if the server says no. The server's answer takes its place
  * once no other edit to the form is on its way; when the last has answered, the form counts as
@@ -223,7 +245,7 @@ interface EditFormContext {
 export function useEditMeetingForm(formId: string) {
   const client = useQueryClient()
   const key = queryKeys.companies.meetingForm(formId)
-  const mutationKey = [...queryKeys.companies.meetings(), 'edit', formId] as const
+  const mutationKey = editFormKey(formId)
   return useMutation<MeetingFormOut, ApiProblem, EditFormVariables, EditFormContext>({
     mutationKey,
     mutationFn: async ({ patch }) =>
@@ -295,4 +317,134 @@ export function useRedraftMeetingForm(formId: string) {
       client.setQueryData(key, form)
     },
   })
+}
+
+// --- Sending the pre-read (T3-11) ----------------------------------------------------------------
+
+/**
+ * POST /companies/meetings/forms/{form_id}/preview: the email as it would arrive, and the people it
+ * would go to, each with why and whether it may get it. `to` is the addresses the rep added.
+ * Nothing is sent. A mutation, not a read: the dialog asks again each time the rep adds or removes
+ * someone, and only the newest answer counts.
+ */
+export function useMeetingFormPreview(formId: string) {
+  return useMutation<FormEmailPreview, ApiProblem, readonly string[]>({
+    mutationKey: [...queryKeys.companies.meetings(), 'preview', formId],
+    mutationFn: async (to) =>
+      unwrap(
+        await apiV17.POST('/companies/meetings/forms/{form_id}/preview', {
+          params: { path: { form_id: formId } },
+          body: { to: [...to] },
+        }),
+      ),
+  })
+}
+
+/** A send refused because an address isn't Contour's (422 `outside_address`). Its words name it. */
+export function isOutsideAddress(error: unknown): boolean {
+  return isApiProblem(error) && error.status === 422 && error.code === 'outside_address'
+}
+
+/** The server is sending this pre-read already (409 `form_sending`, a second press). */
+export function isFormSending(error: unknown): boolean {
+  return isApiProblem(error) && error.status === 409 && error.code === 'form_sending'
+}
+
+/**
+ * POST /companies/meetings/forms/{form_id}/send: emails the pre-read to `to` (Contour addresses
+ * only, 1 to 20), then saves its copy in HubSpot. Its answer, the sent pre-read, goes on its page
+ * and its row at once. On a pre-read that was sent and hasn't changed since, it emails nobody, and
+ * tries a copy that waits or failed again ("Try the HubSpot copy again"). A second press while it
+ * sends answers 409 `form_sending`: the page then reads the pre-read again.
+ */
+export function useSendMeetingForm(formId: string) {
+  const client = useQueryClient()
+  const key = queryKeys.companies.meetingForm(formId)
+  return useMutation<MeetingFormOut, ApiProblem, readonly string[]>({
+    mutationKey: [...queryKeys.companies.meetings(), 'send', formId],
+    mutationFn: async (to) =>
+      unwrap(
+        await apiV17.POST('/companies/meetings/forms/{form_id}/send', {
+          params: { path: { form_id: formId } },
+          body: { to: [...to] },
+        }),
+      ),
+    onMutate: async () => {
+      // An older read on its way must not land on top of the sent pre-read.
+      await client.cancelQueries({ queryKey: key })
+    },
+    onSuccess: (form) => {
+      client.setQueryData(key, form)
+      putFormOnRows(client, form, form.meeting.meeting_id)
+    },
+    onError: (error) => {
+      if (isFormSending(error)) void client.invalidateQueries({ queryKey: key })
+    },
+  })
+}
+
+// --- Log meeting (T3-11) -------------------------------------------------------------------------
+
+export interface LogMeetingVariables {
+  /** HubSpot's meeting id. A meeting typed in has none, and takes no transcript. */
+  meetingId: string
+  body: MeetingTranscriptIn
+  /** Made when the transcript starts and kept with it, so a double press or Try again is one note. */
+  idempotencyKey: string
+}
+
+/**
+ * POST /companies/meetings/{meeting_id}/transcript: a past meeting's transcript becomes a call
+ * note, linked to the meeting, in the same batch as the calls (201, or 200 with the first note for
+ * a repeated key). Nothing goes to HubSpot until the rep sends the batch.
+ */
+export function logMeetingOptions() {
+  return mutationOptions<CallNoteOut, ApiProblem, LogMeetingVariables>({
+    mutationKey: [...queryKeys.companies.meetings(), 'transcript'],
+    mutationFn: async ({ meetingId, body, idempotencyKey }) =>
+      unwrap(
+        await apiV17.POST('/companies/meetings/{meeting_id}/transcript', {
+          params: {
+            path: { meeting_id: meetingId },
+            header: { 'idempotency-key': idempotencyKey },
+          },
+          body,
+        }),
+      ),
+  })
+}
+
+/** The company records in the cache, which list their meetings, count as old. */
+function markCompaniesOld(client: QueryClient): void {
+  void client.invalidateQueries({ queryKey: ['companies', 'detail'], refetchType: 'none' })
+}
+
+/**
+ * A past meeting's notes are logged: its row says so at once, in every page of meetings in the
+ * cache that holds it. Every page of meetings, and every company's record, then counts as old.
+ */
+export function putNotesOnRow(client: QueryClient, meetingId: string): void {
+  const its = (item: MeetingItem): boolean => !item.typed && item.meeting.id === meetingId
+  client.setQueriesData<MeetingPage>({ queryKey: queryKeys.companies.meetingLists() }, (page) =>
+    page?.items.some(its)
+      ? {
+          ...page,
+          items: page.items.map((item) => (its(item) ? { ...item, notes_logged: true } : item)),
+        }
+      : page,
+  )
+  void client.invalidateQueries({
+    queryKey: queryKeys.companies.meetingLists(),
+    refetchType: 'none',
+  })
+  markCompaniesOld(client)
+}
+
+/**
+ * The pages of meetings on screen ask again (after an Undo: whether a meeting still has notes is
+ * the server's to say, since it may have others), and the rest when shown.
+ */
+export function refreshMeetingLists(client: QueryClient): void {
+  void client.invalidateQueries({ queryKey: queryKeys.companies.meetingLists() })
+  markCompaniesOld(client)
 }
