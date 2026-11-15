@@ -1293,9 +1293,50 @@ describe("a logged meeting's notes (T3-11)", () => {
     const card = screen.getByRole('article', { name: 'Sample Logistics Pty Ltd' })
     expect(within(card).getByText('Meeting notes · 13 Nov 2026, 10:00 am')).toBeInTheDocument()
     expect(within(card).queryByText(/No outcome/)).toBeNull()
+    // A short summary has nothing more to show.
+    expect(within(card).queryByRole('button', { name: 'Show all' })).toBeNull()
     await user.click(within(card).getByRole('button', { name: /^Edit/ }))
     expect(within(card).queryByRole('heading', { name: 'Outcome' })).toBeNull()
     expect(within(card).queryByRole('checkbox', { name: 'Connected' })).toBeNull()
+  })
+
+  it('folds a long transcript on its card, with Show all and Show less, and leaves the note as it is', async () => {
+    // The AI is off: no summary, so the card's text is the whole transcript.
+    const words = Array.from(
+      { length: 60 },
+      (_, index) => `Jo Sample: Line ${String(index + 1)} of what was said.`,
+    ).join('\n')
+    const server = mockServer({
+      notes: [
+        meetingNotes('m1', {
+          text: words,
+          sorted_by: 'person',
+          call: { summary: '', outcome: null },
+        }),
+      ],
+    })
+    const { user } = renderActivity()
+    await toConfirmList()
+    const card = screen.getByRole('article', { name: 'Sample Logistics Pty Ltd' })
+    const showAll = within(card).getByRole('button', { name: 'Show all' })
+    expect(showAll).toHaveAttribute('aria-expanded', 'false')
+    // Folded to two lines, the card holds only the start of it.
+    const text = document.getElementById(showAll.getAttribute('aria-controls') ?? '')
+    expect(text).toHaveClass('line-clamp-2')
+    expect(text?.textContent).toMatch(/^Jo Sample: Line 1 of what was said\./)
+    expect(text?.textContent?.length).toBeLessThanOrEqual(401)
+
+    await user.click(showAll)
+    const showLess = within(card).getByRole('button', { name: 'Show less' })
+    expect(showLess).toHaveAttribute('aria-expanded', 'true')
+    expect(text?.textContent).toBe(words)
+    expect(text).not.toHaveClass('line-clamp-2')
+
+    await user.click(showLess)
+    expect(within(card).getByRole('button', { name: 'Show all' })).toBeInTheDocument()
+    expect(text).toHaveClass('line-clamp-2')
+    // Only the card changed: the note wasn't touched.
+    expect(server.sent.filter((one) => one.method === 'PATCH')).toEqual([])
   })
 
   it('names the meeting notes in Logged and in Needs a look', async () => {

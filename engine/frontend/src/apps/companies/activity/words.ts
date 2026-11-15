@@ -71,6 +71,9 @@ export const KIND = 'Kind'
 export const WHEN = 'When'
 export const NOT_CHANGED = "Your change wasn't saved"
 export const VALUE_UNREADABLE = "That value couldn't be read. Try 30/6/2028 or 1200."
+/** A card's text folded to two lines, and open in full. */
+export const SHOW_ALL = 'Show all'
+export const SHOW_LESS = 'Show less'
 
 export const KIND_LABELS: Readonly<Record<TaskKind, string>> = {
   call: 'Call',

@@ -1,6 +1,7 @@
 /**
  * One call in "To confirm" (PLAN-V17 T3-6, "The screens" part 3): who, when and the outcome, a
- * two-line summary, then "Changes" and "Follow-ups". The rep checks it, and fixes what is wrong.
+ * two-line summary (with "Show all" when there is more, `CardText`), then "Changes" and
+ * "Follow-ups". The rep checks it, and fixes what is wrong.
  *
  * - **Edit** (or E) turns its parts into fields: the summary, the outcome, each change's value,
  *   each follow-up's words, kind and day, and "Add a follow-up". Each field saves when it is left
@@ -53,7 +54,7 @@ import { Button } from '@/components/ui/button'
 import { Kbd } from '@/components/ui/kbd'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
-import { NEW_PART, ChangeList, SummaryField, TaskList } from './note-parts'
+import { NEW_PART, CardText, ChangeList, SummaryField, TaskList } from './note-parts'
 import type { Landing } from './use-batch'
 import {
   changeLabel,
@@ -352,7 +353,7 @@ export function NoteCard({
             onCancel={stop}
           />
         ) : (
-          <p className="line-clamp-2 max-w-prose text-body text-pretty break-words">{summary}</p>
+          <CardText text={summary} className="text-body" />
         )}
         {editing && outcomes.length > 0 ? (
           <section aria-labelledby={outcomeId} className="flex flex-col gap-2">
