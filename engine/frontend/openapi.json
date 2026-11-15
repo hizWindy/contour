@@ -3154,19 +3154,12 @@
             "type": "string"
           },
           "name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "The owner's name. null: HubSpot has none",
+            "description": "The owner's name from our copy of HubSpot. 'HubSpot owner 301' when HubSpot has no name for them, or our copy doesn't hold them yet. Never an email",
             "examples": [
               "Jo Sample"
             ],
-            "title": "Name"
+            "title": "Name",
+            "type": "string"
           }
         },
         "required": [
@@ -3228,19 +3221,12 @@
             "type": "string"
           },
           "name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "The owner's name, from our copy of HubSpot. null: not in our copy",
+            "description": "The owner's name from our copy of HubSpot. 'HubSpot owner 301' when HubSpot has no name for them, or our copy doesn't hold them yet. Never an email",
             "examples": [
               "Jo Sample"
             ],
-            "title": "Name"
+            "title": "Name",
+            "type": "string"
           }
         },
         "required": [
@@ -3249,6 +3235,24 @@
           "matched_by"
         ],
         "title": "HubSpotOwnerLink",
+        "type": "object"
+      },
+      "HubSpotOwnerList": {
+        "description": "The pick list: the active owners, by name.",
+        "properties": {
+          "owners": {
+            "description": "Each active owner's id and name, by name (one with no name last)",
+            "items": {
+              "$ref": "#/components/schemas/HubSpotOwnerChoice"
+            },
+            "title": "Owners",
+            "type": "array"
+          }
+        },
+        "required": [
+          "owners"
+        ],
+        "title": "HubSpotOwnerList",
         "type": "object"
       },
       "HubSpotStatus": {
@@ -17858,7 +17862,7 @@
     },
     "/hubspot/owners": {
       "get": {
-        "description": "Each active owner's id and name from our copy of HubSpot, which the sync keeps, sorted by name. Never an email. At most 500: Contour has a few dozen. Admins only.",
+        "description": "Each active owner's id and name from our copy of HubSpot, which the sync keeps, sorted by name. An owner with no name in HubSpot shows as 'HubSpot owner 301'. Never an email. At most 500: Contour has a few dozen. Admins only.",
         "operationId": "list_hubspot_owners",
         "parameters": [
           {
@@ -17881,11 +17885,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/HubSpotOwnerChoice"
-                  },
-                  "title": "Response List Hubspot Owners",
-                  "type": "array"
+                  "$ref": "#/components/schemas/HubSpotOwnerList"
                 }
               }
             },

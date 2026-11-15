@@ -198,7 +198,7 @@ async def check_connection(hubspot: HubSpot | None) -> ConnectionCheck:
         return ConnectionCheck(
             key_set=False,
             connected=False,
-            problem="HUBSPOT_SERVICE_KEY is not set in engine/.env.",
+            problem="The HubSpot key isn't set on the server.",
             scopes=_unknown("No key is set."),
             checked_at=now,
         )

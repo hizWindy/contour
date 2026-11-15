@@ -18,7 +18,7 @@ from core.auth.models import AuditEntry, User
 from core.hubspot import activities
 from core.hubspot.client import HubSpotUnavailable, email_key, owner_email_index
 from core.hubspot.models import HubSpotOwner
-from core.hubspot.owners import OWNER_MATCH_FAILED, Account, plan_links
+from core.hubspot.owners import OWNER_MATCH_FAILED, Account, plan_links, shown_name
 from tests.core.auth_world import FAST, GOOD, World, make_account, sign_in
 from tests.core.test_hubspot_sync import contour, sync
 
@@ -59,6 +59,13 @@ def test_two_owners_with_one_email_the_lowest_id_wins_whatever_the_order() -> No
     pairs = [("1000", JO), ("999", JO_IN_HUBSPOT), ("5", None), ("6", ""), ("hs-1", JO)]
     assert owner_email_index(pairs) == {JO: "999"}  # 999 is lower than 1000 as a number
     assert owner_email_index(list(reversed(pairs))) == {JO: "999"}
+
+
+def test_an_owner_with_no_name_shows_a_stand_in_never_an_email() -> None:
+    """Asked by Track 3: the People tab and the pick list always have a name to show."""
+    assert shown_name("301", " Jo Sample ") == "Jo Sample"
+    for nothing in (None, "", "   "):
+        assert shown_name("304", nothing) == "HubSpot owner 304"
 
 
 def account(email: str, owner_id: str | None = None, matched_by: str | None = None) -> Account:
@@ -343,21 +350,24 @@ async def test_an_admin_sees_sets_and_clears_who_a_person_is_in_hubspot(
 
     owners = await browser.get(OWNERS)
     assert owners.status_code == 200, owners.text
-    assert owners.json() == [
-        {"id": "302", "name": "alex Example"},  # by name, in any case
-        {"id": "301", "name": "Jo Sample"},
-        {"id": "304", "name": None},  # an owner with no name comes last; archived ones never
-    ]
+    assert owners.json() == {
+        "owners": [
+            {"id": "302", "name": "alex Example"},  # by name, in any case
+            {"id": "301", "name": "Jo Sample"},
+            # An owner with no name comes last, with a stand-in (never an email). Archived: never.
+            {"id": "304", "name": "HubSpot owner 304"},
+        ]
+    }
     assert "@" not in owners.text
-    assert len((await browser.get(OWNERS, params={"limit": 1})).json()) == 1
+    assert len((await browser.get(OWNERS, params={"limit": 1})).json()["owners"]) == 1
     assert (await browser.get(OWNERS, params={"limit": 501})).status_code == 422
 
     people = (await browser.get(PEOPLE)).json()
     assert row_for(people, jo.id)["hubspot_owner"] is None
-    # A sync's match shows too, with no name when the owner isn't in our copy.
+    # A sync's match shows too, with the stand-in name when the owner isn't in our copy.
     assert row_for(people, matched)["hubspot_owner"] == {
         "id": "305",
-        "name": None,
+        "name": "HubSpot owner 305",
         "matched_by": "email",
     }
 
@@ -433,7 +443,8 @@ async def test_with_sign_in_off_the_owner_routes_need_no_account(
     world.settings(auth_required=False)
     await our_copy(world.factory)
     jo = await add_account(world.factory, JO)
-    assert [owner["id"] for owner in (await browser.get(OWNERS)).json()] == ["302", "301", "304"]
+    listed = (await browser.get(OWNERS)).json()["owners"]
+    assert [owner["id"] for owner in listed] == ["302", "301", "304"]
     chosen = await browser.put(f"{PEOPLE}/{jo}/hubspot-owner", json={"owner_id": "302"})
     assert chosen.status_code == 200, chosen.text
     assert chosen.json()["hubspot_owner"]["matched_by"] == "person"

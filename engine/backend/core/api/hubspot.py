@@ -22,7 +22,7 @@ from core.hubspot.connection import (
     written_hook,
 )
 from core.hubspot.importer import ExportError, read_export
-from core.hubspot.owners import OWNERS_CAP, HubSpotOwnerChoice, active_owners
+from core.hubspot.owners import OWNERS_CAP, HubSpotOwnerList, active_owners
 from core.hubspot.profiles import RebuildRunning
 from core.hubspot.profiles import rebuild_profiles as build_profiles
 from core.hubspot.service import HubSpotSummary, ImportResult, save_export, summary
@@ -251,11 +251,12 @@ async def get_summary(session: SessionDep) -> HubSpotSummary:
 
 @router.get(
     "/owners",
-    response_model=list[HubSpotOwnerChoice],
+    response_model=HubSpotOwnerList,
     summary="The active HubSpot owners, to pick who a person is in HubSpot",
     description=(
         "Each active owner's id and name from our copy of HubSpot, which the sync keeps, sorted "
-        "by name. Never an email. At most 500: Contour has a few dozen. Admins only."
+        "by name. An owner with no name in HubSpot shows as 'HubSpot owner 301'. Never an "
+        "email. At most 500: Contour has a few dozen. Admins only."
     ),
 )
 async def list_hubspot_owners(
@@ -264,8 +265,8 @@ async def list_hubspot_owners(
     limit: Annotated[
         int, Query(ge=1, le=OWNERS_CAP, description="The most owners to send")
     ] = OWNERS_CAP,
-) -> list[HubSpotOwnerChoice]:
-    return await active_owners(session, limit=limit)
+) -> HubSpotOwnerList:
+    return HubSpotOwnerList(owners=await active_owners(session, limit=limit))
 
 
 @router.post(

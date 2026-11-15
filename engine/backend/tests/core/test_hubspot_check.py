@@ -2,6 +2,8 @@
 PLAN-V17 T1-3: a probe for calls, notes, tasks and meetings each, one for logging them, and the
 scopes HubSpot asks for when one is missing."""
 
+import re
+
 import pytest
 
 from core.hubspot.check import (
@@ -39,7 +41,7 @@ async def test_with_no_key_nothing_is_called_and_every_scope_is_unknown() -> Non
     check = await check_connection(None)
     assert not check.key_set and not check.connected
     assert set(states(check).values()) == {"unknown"}
-    assert check.problem and "HUBSPOT_SERVICE_KEY" in check.problem
+    assert check.problem == "The HubSpot key isn't set on the server."
 
 
 async def test_a_read_key_reads_yes_and_writes_no_and_nothing_is_written() -> None:
@@ -223,3 +225,16 @@ def test_a_project_that_only_reads_never_waits_on_write_scopes() -> None:
     check = _check(crm_objects_companies_write="no")
     ready = readiness("x", "X", needs, check, write_enabled=False)
     assert (ready.reading, ready.sending, ready.waiting_for) == ("ready", "not_needed", [])
+
+
+async def test_no_line_a_person_sees_names_a_setting_or_a_file() -> None:
+    """The HubSpot page shows these lines as they come (PLAN-V17, asked by Track 3)."""
+    no_key = await check_connection(None)
+    assert no_key.problem == "The HubSpot key isn't set on the server."
+    lines = [no_key.problem or ""] + [
+        readiness("x", "X", LEAD_FINDER, _check(**given), write_enabled=on).summary
+        for given in ({}, {"crm_lists_read": "no"}, {"crm_lists_write": "unknown"})
+        for on in (False, True)
+    ]
+    setting_or_file = re.compile(r"\b[A-Z]+_[A-Z_]+\b|\.env\b|\.py\b")
+    assert [line for line in lines if setting_or_file.search(line)] == []

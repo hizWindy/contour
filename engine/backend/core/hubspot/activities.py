@@ -76,7 +76,7 @@ from core.hubspot.client import (
 )
 from core.hubspot.mapping import DEFAULT_TIME_ZONE
 from core.hubspot.models import HubSpotCall, HubSpotOwner, HubSpotWrite
-from core.hubspot.owners import owner_id_of
+from core.hubspot.owners import owner_id_of, shown_name
 from core.hubspot.people import OUTCOMES, plain
 from core.hubspot.writer import (
     OPEN,
@@ -527,7 +527,7 @@ def _task_words(task: TaskIn, owners: Mapping[str, str | None], rep: str | None)
     owner = task.owner_id or rep
     whom = "no one yet (unassigned)"
     if owner is not None:
-        whom = owners.get(owner) or f"HubSpot owner {owner}"
+        whom = shown_name(owner, owners.get(owner))
     return (
         f"{task.subject.strip().rstrip('.')}: {KIND_WORDS[task.kind]}, {task.priority} priority, "
         f"due {_day_words(task.due)}, for {whom}."

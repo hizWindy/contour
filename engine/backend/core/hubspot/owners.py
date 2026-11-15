@@ -45,6 +45,16 @@ OWNERS_CAP = 500  # the most owners the pick list sends. Contour has a few dozen
 OWNER_MATCH_FAILED = (
     "Accounts weren't matched to their HubSpot owners this time. The links made before stay."
 )
+NAME_HELP = (
+    "The owner's name from our copy of HubSpot. 'HubSpot owner 301' when HubSpot has no name "
+    "for them, or our copy doesn't hold them yet. Never an email"
+)
+
+
+def shown_name(owner_id: str, name: str | None) -> str:
+    """An owner's name as a person sees it: their name, or "HubSpot owner 301" when there is
+    none. Never their email, which is never kept."""
+    return (name or "").strip() or f"HubSpot owner {owner_id}"
 
 
 class HubSpotOwnerLink(BaseModel):
@@ -53,10 +63,7 @@ class HubSpotOwnerLink(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     id: str = Field(description="The HubSpot owner's id", examples=["301"])
-    name: str | None = Field(
-        description="The owner's name, from our copy of HubSpot. null: not in our copy",
-        examples=["Jo Sample"],
-    )
+    name: str = Field(description=NAME_HELP, examples=["Jo Sample"])
     matched_by: MatchedBy = Field(
         description=(
             "email: the HubSpot sync found an active owner with the account's email. person: an "
@@ -72,8 +79,14 @@ class HubSpotOwnerChoice(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     id: str = Field(description="The HubSpot owner's id", examples=["301"])
-    name: str | None = Field(
-        description="The owner's name. null: HubSpot has none", examples=["Jo Sample"]
+    name: str = Field(description=NAME_HELP, examples=["Jo Sample"])
+
+
+class HubSpotOwnerList(BaseModel):
+    """The pick list: the active owners, by name."""
+
+    owners: list[HubSpotOwnerChoice] = Field(
+        description="Each active owner's id and name, by name (one with no name last)"
     )
 
 
@@ -217,8 +230,9 @@ async def set_by_hand(
 async def links_of(
     session: AsyncSession, users: Iterable[User]
 ) -> dict[uuid.UUID, HubSpotOwnerLink]:
-    """Each linked account's link, with the owner's name from our copy (None when the owner isn't
-    in it). An account with no link is left out. One query, however many accounts."""
+    """Each linked account's link, with the owner's name from our copy ("HubSpot owner 301" when
+    the owner has no name or isn't in it). An account with no link is left out. One query,
+    however many accounts."""
     linked: list[tuple[uuid.UUID, str, str]] = []
     for user in users:
         owner_id, matched_by = user.hubspot_owner_id, user.hubspot_owner_matched_by
@@ -234,7 +248,11 @@ async def links_of(
     names = dict(rows.all())
     return {
         account_id: HubSpotOwnerLink.model_validate(
-            {"id": owner_id, "name": names.get(owner_id), "matched_by": matched_by}
+            {
+                "id": owner_id,
+                "name": shown_name(owner_id, names.get(owner_id)),
+                "matched_by": matched_by,
+            }
         )
         for account_id, owner_id, matched_by in linked
     }
@@ -250,7 +268,9 @@ async def active_owners(
         .order_by(func.lower(HubSpotOwner.name).asc().nulls_last(), HubSpotOwner.owner_id)
         .limit(max(1, min(limit, OWNERS_CAP)))
     )
-    return [HubSpotOwnerChoice(id=owner_id, name=name) for owner_id, name in rows]
+    return [
+        HubSpotOwnerChoice(id=owner_id, name=shown_name(owner_id, name)) for owner_id, name in rows
+    ]
 
 
 async def owner_id_of(session: AsyncSession, user_id: uuid.UUID) -> str | None:

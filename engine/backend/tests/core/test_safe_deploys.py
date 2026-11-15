@@ -102,6 +102,7 @@ ERROR_MAKERS = {
     "problem",
     "ClaudeError",
     "ClaudeUnavailable",
+    "ConnectionCheck",  # its problem shows on the HubSpot page (PLAN-V17, asked by Track 3)
     "EmailNotSetUp",
     "HubSpotError",
     "HubSpotUnavailable",
