@@ -520,6 +520,42 @@ describe('To confirm', () => {
     })
   })
 
+  it('a follow-up shows the day stored until the rep types, and says so when that day has gone', async () => {
+    // The words were read on the day of the call. Read again today, "tomorrow" is another day.
+    const later: CallNoteTask = { ...TASK, due: '2030-01-07', due_words: 'tomorrow' }
+    const gone: CallNoteTask = {
+      ...TASK,
+      id: 't2',
+      subject: 'Send the floor plan',
+      due: '2020-01-06',
+      due_words: 'next Monday',
+    }
+    mockServer({ notes: [note('n1', { tasks: [later, gone] })] })
+    const { user } = renderActivity()
+    await toConfirmList()
+    const logistics = card('Sample Logistics Pty Ltd')
+    expect(
+      within(logistics).getByText('Call · Due Mon 7 Jan 2030 · from "tomorrow" · For you'),
+    ).toBeInTheDocument()
+    await user.click(within(logistics).getByRole('button', { name: /^Edit/ }))
+
+    const first = within(logistics).getByRole('textbox', { name: 'Follow-up 1: when' })
+    expect(first).toHaveValue('tomorrow')
+    expect(first).toHaveAccessibleDescription('Due Mon 7 Jan 2030.')
+    const second = within(logistics).getByRole('textbox', { name: 'Follow-up 2: when' })
+    expect(second).toHaveAccessibleDescription('That day has gone. Pick today or a later day.')
+    expect(
+      within(logistics).getByText('That day has gone. Pick today or a later day.'),
+    ).toHaveClass('text-destructive-ink')
+
+    // Once the rep types, the line follows the words, read today.
+    await user.clear(first)
+    await user.type(first, 'next tue')
+    const due = readDueDate('next tue', melbourneDate())
+    if (due.kind !== 'date') throw new Error('next tue is a day')
+    expect(first).toHaveAccessibleDescription(dueWords(due.date, due.moved))
+  })
+
   it('a follow-up removed while editing goes at once, and Undo puts it back as a new one', async () => {
     const server = mockServer({ notes: threeNotes() })
     const { user } = renderActivity()

@@ -6,8 +6,9 @@
  *   at once and the server is told after (`use-edit.ts`). Esc puts the field back as it was and
  *   ends the editing.
  * - **Fields forgive** (DESIGN.md): a follow-up's date takes "next tue", "24 nov" or "24/11"
- *   (`readDueDate`), and shows the day it read as you type. A change's value takes "30/6/2028" or
- *   "1,200 staff" (`values.ts`). Only what truly can't be read gets plain words, under the field.
+ *   (`readDueDate`), and shows the day it read as you type. Before you type, it shows the day
+ *   stored (`dueHint`). A change's value takes "30/6/2028" or "1,200 staff" (`values.ts`). Only
+ *   what truly can't be read gets plain words, under the field.
  * - **A change shows its old value, an arrow, then the new one,** with its office. One whose
  *   HubSpot value moved since the rep saw it says so, and is held until they keep theirs or
  *   change it.
@@ -426,6 +427,29 @@ function taskLine(task: CallNoteTask): string {
     .join(' · ')
 }
 
+/**
+ * The line under a follow-up's date: the day that will be stored. Until the rep changes the
+ * words, that is the day already stored, because the words were read on the day of the call and
+ * today they may mean another day ("tomorrow" said on Monday is Tuesday, not Thursday). A stored
+ * day that has gone says so. Once the rep types, the line follows what they type.
+ */
+function dueHint(
+  text: string,
+  start: string,
+  task: CallNoteTask,
+  today: string,
+): { words: string; gone: boolean } {
+  const read = readDueDate(text, today)
+  const changed = text.trim() !== start.trim()
+  // The words still read as the stored day: say how, with the weekend move if there was one.
+  if (read.kind === 'date' && (changed || read.date === task.due)) {
+    return { words: dueWords(read.date, read.moved), gone: false }
+  }
+  return task.due < today
+    ? { words: WHEN_PAST, gone: true }
+    : { words: dueWords(task.due, false), gone: false }
+}
+
 function DueField({
   task,
   today,
@@ -452,7 +476,7 @@ function DueField({
     },
     onCancel,
   )
-  const read = readDueDate(field.text, today)
+  const hint = dueHint(field.text, start, task, today)
   return (
     <div className="flex min-w-0 flex-col gap-1">
       <Input
@@ -480,11 +504,10 @@ function DueField({
         role={field.problem ? 'alert' : undefined}
         className={cn(
           'min-h-5 text-caption',
-          field.problem ? 'text-destructive-ink' : 'text-muted-foreground',
+          field.problem || hint.gone ? 'text-destructive-ink' : 'text-muted-foreground',
         )}
       >
-        {field.problem ??
-          (read.kind === 'date' ? dueWords(read.date, read.moved) : dueWords(task.due, false))}
+        {field.problem ?? hint.words}
       </p>
     </div>
   )
