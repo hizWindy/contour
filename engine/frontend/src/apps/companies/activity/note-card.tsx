@@ -9,8 +9,9 @@
  * - **Leave out** (or X) keeps it here, dimmed, out of this batch. "Put back" brings it back.
  * - **Remove** takes it away at once, with Undo in a toast (`remove.ts`).
  * - **A note the sorter was unsure of** says so at the top, in words, and sits first in the list.
- * - **A note still being sorted** shows a still grey line where its parts will be. When they come,
- *   they fade and rise into place one after another (`Reveal`, 40ms apart).
+ * - **A note still being sorted** says so in words, with the hourglass, above a still grey line
+ *   where its parts will be. When they come, they fade and rise into place one after another
+ *   (`Reveal`, 40ms apart).
  * - **While it is sent:** "Sending to HubSpot.", then the tick beside "Logged" (`TickIn`), or
  *   "Needs a look" with what happened. Nothing can be changed meanwhile.
  * - **The active card** (J and K move it) has the Navy edge of a selected row.
@@ -18,6 +19,7 @@
 import {
   CircleAlert,
   CircleMinus,
+  Hourglass,
   Pencil,
   Send,
   Trash2,
@@ -37,7 +39,6 @@ import type {
   CallNoteTask,
 } from '@/api/v17'
 import { ChipGroup, Reveal, TickIn } from '@/components/motion'
-import { Pending } from '@/components/skeletons'
 import { Button } from '@/components/ui/button'
 import { Kbd } from '@/components/ui/kbd'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -94,14 +95,23 @@ function problemWords(note: CallNoteOut): string {
   )
 }
 
+/**
+ * A note the server is still sorting. Sorting takes seconds, not a blink, so the word shows at
+ * once, with the hourglass the app uses for waiting (DESIGN.md: every status has an icon and a
+ * word). The still grey lines under it only show where the parts will be.
+ */
 function SortingLine() {
   return (
-    <Pending label={SORTING}>
-      <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-3">
+      <p role="status" className="flex items-center gap-2 text-muted-foreground">
+        <Hourglass aria-hidden="true" className="size-4 shrink-0" />
+        {SORTING}
+      </p>
+      <div aria-hidden="true" className="flex flex-col gap-2">
         <Skeleton className="h-4 w-11/12" />
         <Skeleton className="h-4 w-2/3" />
       </div>
-    </Pending>
+    </div>
   )
 }
 
