@@ -44,9 +44,7 @@ function late(load: () => Promise<Prefetch>): Prefetch {
 }
 
 const prefetchMeetings = late(async () => (await import('./meetings/prefetch')).prefetchMeetings)
-const prefetchPreRead = late(
-  async () => (await import('./meetings/pre-read/prefetch')).prefetchPreRead,
-)
+const prefetchPreRead = late(async () => (await import('./meetings/prefetch')).prefetchPreRead)
 const prefetchActivity = late(async () => (await import('./activity/prefetch')).prefetchActivity)
 
 export const COMPANIES: AppModule = {

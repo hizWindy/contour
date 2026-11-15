@@ -12,14 +12,16 @@
  *   fades from one word to the next, and the summaries take the place of their grey blocks.
  * - **Every state is drawn:** loading (a still shape of the page after 200ms), not found (a 404,
  *   or an address that can't be a pre-read: plain words and the way back to Meetings), pre-meeting
- *   forms switched off (the words Meetings uses), and any other failure in the error box.
+ *   forms switched off (the words Meetings uses), and any other failure in the error box. Not
+ *   found sits in the page's own frame, as switched off does, not on the full error page: importing
+ *   that here split a part of the first visit's main file into a file of its own (one more file to
+ *   load, about 1 kB more).
  * - Meetings' rows follow the form, so Back shows where it stands at once.
  */
 import { useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, FileText, SearchX } from 'lucide-react'
 import { useEffect } from 'react'
 import { Link, useParams } from 'react-router'
-import type { ApiProblem } from '@/api/client'
 import {
   isFormMissing,
   isMeetingFormsOff,
@@ -28,6 +30,7 @@ import {
 } from '@/api/hooks/meetings'
 import type { MeetingFormOut } from '@/api/v17'
 import { BackButton } from '@/components/back-button'
+import { EmptyState } from '@/components/empty-state'
 import { ErrorState } from '@/components/error-state'
 import { PageHeader } from '@/components/page-header'
 import { Pending } from '@/components/skeletons'
@@ -36,7 +39,6 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { melbourneDate } from '@/lib/format'
 import { PHONE, useMediaQuery } from '@/lib/use-media-query'
 import { cn } from '@/lib/utils'
-import { ErrorPage } from '@/shell/error-pages/error-page'
 import { MEETINGS_PATH } from '../params'
 import { MeetingFormsOff } from '../states'
 import { FactsSection } from './facts'
@@ -99,29 +101,35 @@ function PreReadPending() {
   )
 }
 
-/** Not there for this person (404), or an address whose id can't be a pre-read's. */
-function PreReadMissing({ problem }: { problem: ApiProblem }) {
-  return (
-    <ErrorPage
-      icon={SearchX}
-      title={MISSING_TITLE}
-      description={MISSING_DESCRIPTION}
-      problem={problem}
-      actions={
-        <Button asChild variant="outline">
-          <Link to={MEETINGS_PATH}>
-            <ArrowLeft aria-hidden="true" />
-            {BACK_TO_MEETINGS}
-          </Link>
-        </Button>
-      }
-    />
-  )
-}
-
 /** The page's own title, for the states with no meeting to name. */
 function PlainHeader() {
   return <PageHeader icon={FileText} tone="companies" title={PRE_READ} />
+}
+
+/**
+ * Not there for this person (404), or an address whose id can't be a pre-read's: plain words and
+ * the way back to Meetings, in the page's own frame, as the switched-off state is.
+ */
+function PreReadMissing() {
+  return (
+    <>
+      <PlainHeader />
+      <EmptyState
+        icon={SearchX}
+        title={MISSING_TITLE}
+        description={MISSING_DESCRIPTION}
+        headingLevel={2}
+        action={
+          <Button asChild variant="outline">
+            <Link to={MEETINGS_PATH}>
+              <ArrowLeft aria-hidden="true" />
+              {BACK_TO_MEETINGS}
+            </Link>
+          </Button>
+        }
+      />
+    </>
+  )
 }
 
 function PreReadView({ form }: { form: MeetingFormOut }) {
@@ -162,7 +170,7 @@ export default function PreReadPage() {
   // Keyed by the form, so another pre-read starts with its own boxes closed and its own blanks.
   if (form.data) return <PreReadView key={form.data.id} form={form.data} />
   if (form.error) {
-    if (isFormMissing(form.error)) return <PreReadMissing problem={form.error} />
+    if (isFormMissing(form.error)) return <PreReadMissing />
     if (isMeetingFormsOff(form.error)) {
       return (
         <>

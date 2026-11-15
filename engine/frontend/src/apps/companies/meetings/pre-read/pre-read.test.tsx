@@ -765,9 +765,11 @@ describe('the states', () => {
     async (get) => {
       mockServer({ get })
       renderPreRead()
+      // In the page's own frame, as the switched-off state is, in the serif voice.
       expect(
-        await screen.findByRole('heading', { level: 1, name: "We can't find that pre-read" }),
-      ).toBeInTheDocument()
+        await screen.findByRole('heading', { level: 2, name: "We can't find that pre-read." }),
+      ).toHaveClass('font-serif')
+      expect(screen.getByRole('heading', { level: 1, name: 'Pre-read' })).toBeInTheDocument()
       expect(
         screen.getByText(/It may have been removed, or the link is wrong\./),
       ).toBeInTheDocument()

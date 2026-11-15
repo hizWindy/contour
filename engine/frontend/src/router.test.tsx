@@ -59,10 +59,10 @@ describe('the router', () => {
     ['/companies/activity', 'Your call notes', ['Companies', 'Activity']],
     ['/companies/meetings', 'Client meetings', ['Companies', 'Meetings']],
     // A pre-read's own page sits under Meetings (T3-10). Every call answers 404 here, so it
-    // shows its own Not found.
+    // says, under its own title, that it can't find the pre-read.
     [
       '/companies/meetings/0f3c9a2e-1111-2222-3333-444444444444',
-      "We can't find that pre-read",
+      'Pre-read',
       ['Companies', 'Meetings', 'Pre-read'],
     ],
   ])('shows the page at %s with its title and breadcrumbs', async (path, title, trail) => {
@@ -233,7 +233,7 @@ describe('the router', () => {
   it.each([
     ['/companies/meetings', 'Client meetings'],
     // A pre-read's own page sits under Meetings (T3-10): here every call answers 404.
-    ['/companies/meetings/0f3c9a2e-1111-2222-3333-444444444444', "We can't find that pre-read"],
+    ['/companies/meetings/0f3c9a2e-1111-2222-3333-444444444444', 'Pre-read'],
   ])('marks Meetings in the menu at %s, and not Companies', async (path, title) => {
     renderAt(path)
     await screen.findByRole('heading', { level: 1, name: title }, { timeout: LAZY })

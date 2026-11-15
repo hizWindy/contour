@@ -25,7 +25,7 @@ function sentence(text: string): string {
 
 // --- Not there ---------------------------------------------------------------------------------
 
-export const MISSING_TITLE = "We can't find that pre-read"
+export const MISSING_TITLE = "We can't find that pre-read."
 export const MISSING_DESCRIPTION =
   'It may have been removed, or the link is wrong. Every pre-read is on Meetings, beside its meeting.'
 export const BACK_TO_MEETINGS = 'Back to Meetings'
