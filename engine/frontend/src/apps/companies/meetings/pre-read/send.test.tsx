@@ -115,6 +115,8 @@ interface Server {
   copyAfterRetry: HubSpotCopy
   /** PATCH waits for `release()`. */
   patchWaits: boolean
+  /** The send waits for `release()`. */
+  sendWaits: boolean
   /** The preview that answers 500, by its count (1 is the first), or none. */
   previewFails: number | null
   release: () => void
@@ -128,6 +130,7 @@ function mockServer(changes: Partial<Omit<Server, 'calls' | 'release'>> = {}): S
     send: 'ok',
     copyAfterRetry: { state: 'saved', sentence: null },
     patchWaits: false,
+    sendWaits: false,
     previewFails: null,
     release: () => undefined,
     calls: [],
@@ -185,6 +188,11 @@ function mockServer(changes: Partial<Omit<Server, 'calls' | 'release'>> = {}): S
       return json(preview)
     }
     if (url.pathname === SEND && method === 'POST') {
+      if (server.sendWaits) {
+        await new Promise<void>((resolve) => {
+          server.release = resolve
+        })
+      }
       const to = (body as { to: string[] }).to
       if (server.form.status === 'sent') {
         server.form = { ...server.form, hubspot_copy: server.copyAfterRetry }
@@ -301,6 +309,17 @@ describe('Check and send', () => {
     // Never the server's HTML.
     expect(email.innerHTML).not.toContain('<h2>')
     expect(document.querySelector('script')).toBeNull()
+    // Only the middle scrolls: the title and the buttons stay in view. The email box hands the
+    // wheel on at its end, so it never traps the scroll.
+    const middle = dialog.querySelector('[data-slot=send-dialog-body]')
+    expect(middle).toHaveClass('overflow-y-auto', 'min-h-0')
+    expect(middle).toContainElement(email)
+    expect(middle).not.toContainElement(within(dialog).getByRole('heading', { level: 2 }))
+    expect(middle).not.toContainElement(
+      within(dialog).getByRole('button', { name: 'Send to 1 person' }),
+    )
+    expect(middle).not.toContainElement(within(dialog).getByRole('button', { name: 'Cancel' }))
+    expect(email).not.toHaveClass('overscroll-contain')
 
     // Jo is on the meeting, ticked, with why.
     const jo = within(person(dialog, 'Jo Sample'))
@@ -458,14 +477,47 @@ describe('Check and send', () => {
     expect(within(status()).getByText('Draft ready')).toBeInTheDocument()
   })
 
+  it('can not be stopped or changed while it sends: Cancel, Esc, the ticks and Add wait', async () => {
+    const server = mockServer({ sendWaits: true })
+    const { user } = renderPreRead()
+    const dialog = await openDialog(user)
+    await user.click(within(dialog).getByRole('button', { name: 'Send to 1 person' }))
+    await waitFor(() => {
+      expect(posts(server, SEND)).toHaveLength(1)
+    })
+
+    // On its way: nothing stops it, and who gets it can't change.
+    expect(within(dialog).getByRole('button', { name: 'Sending.' })).toBeDisabled()
+    expect(within(dialog).getByRole('button', { name: 'Cancel' })).toBeDisabled()
+    expect(within(person(dialog, 'Jo Sample')).getByRole('checkbox')).toBeDisabled()
+    expect(within(dialog).getByRole('textbox', { name: 'Add someone' })).toBeDisabled()
+    expect(within(dialog).getByRole('button', { name: 'Add' })).toBeDisabled()
+    await user.keyboard('{Escape}')
+    expect(screen.getByRole('alertdialog', { name: 'Send the pre-read?' })).toBeInTheDocument()
+
+    // The server answers: it went, and only then the dialog closes.
+    server.release()
+    await waitFor(() => {
+      expect(screen.queryByRole('alertdialog')).toBeNull()
+    })
+    expect(
+      await screen.findByText('Sent to Jo Sample on 26 Nov 2026 at 9:12 am, by Al Sample.'),
+    ).toBeInTheDocument()
+    expect(posts(server, SEND)).toEqual([{ to: [JO] }])
+  })
+
   it('an email that did not go says so in plain words, and Send can be pressed again', async () => {
     const server = mockServer({ send: 'email_failed' })
     const { user } = renderPreRead()
     const dialog = await openDialog(user)
+    const scrolled = vi.spyOn(Element.prototype, 'scrollIntoView')
     await user.click(within(dialog).getByRole('button', { name: 'Send to 1 person' }))
-    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
-      "The email didn't go. Nothing was sent. Try again in a minute.",
-    )
+    const alert = await within(dialog).findByRole('alert')
+    expect(alert).toHaveTextContent("The email didn't go. Nothing was sent. Try again in a minute.")
+    // Under the people, which may be scrolled away from Send: it is brought into view.
+    await waitFor(() => {
+      expect(scrolled.mock.contexts.some((one) => (one as Element).contains(alert))).toBe(true)
+    })
     await user.click(within(dialog).getByRole('button', { name: 'Send to 1 person' }))
     await waitFor(() => {
       expect(posts(server, SEND)).toHaveLength(2)
