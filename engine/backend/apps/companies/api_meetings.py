@@ -270,9 +270,9 @@ async def redraft_form(
     description=(
         "The email as it would arrive (a subject, plain text, and HTML with every value "
         "escaped), and the people it would go to, each with why: the Contour people on the "
-        "meeting who have an account here, ticked, then the addresses I add (`to`). Each says "
-        "whether it may get it: only Contour addresses can. Nothing is sent. 404 "
-        "`form_not_found`. 409 `meeting_forms_off`."
+        "meeting who have an account here, then the addresses I add (`to`). Each says whether "
+        "it may get it: only Contour addresses can, and only they are ticked. Nothing is sent. "
+        "404 `form_not_found`. 409 `meeting_forms_off`."
     ),
 )
 async def preview_form(

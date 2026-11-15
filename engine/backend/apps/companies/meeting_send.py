@@ -4,15 +4,17 @@
   goes through `only_internal`, and one that isn't Contour's refuses the whole send, naming it.
   Ticked by default: the Contour people on the meeting who have an account here. Until Track 1
   adds the other attendees (T1-8), that is the meeting's owner, through the `rep_of_owner` seam.
+  An address the rep adds is ticked too, unless it isn't Contour's.
 - **Before it goes:** the ideal next step and who is going are filled in (TBC with Levi).
 - **The email:** in the body, never an attachment. The meeting, the facts, the three summaries
   ("Written by AI" on each, unless the rep wrote it), the ideal next step, who is going, and a
   link to the company. Every value is HTML escaped. Its key is the form's id and version, so a
-  retry can't send it twice; and once sent, Send again emails nobody.
+  retry can't send it twice; and once sent, sending again emails nobody.
 - **The copy in HubSpot** (choice 9): a note on the company, and on its deal when it has exactly
   one open deal, through the activity writer, after the email. Writing off: the email still goes,
-  and the copy says "waiting". A company not in HubSpot: "off". Send again tries a copy that is
-  waiting or failed, without a second email.
+  and the copy says "waiting". A company not in HubSpot: "off". Sending a sent pre-read again
+  (the website's "Try the HubSpot copy again") tries a copy that is waiting or failed, without a
+  second email.
 """
 
 import html
@@ -69,15 +71,15 @@ ADDED = "added by you"
 # --- The words (PLAN-V15 "Words for errors") ---------------------------------------------------
 
 LEAD_ONLY = "This company isn't in HubSpot yet, so no copy was saved there."
-COPY_FAILED = (
-    "HubSpot didn't save the copy. Press Send again to try once more: the email won't go twice."
-)
+# The website's button for a failed copy is "Try the HubSpot copy again" (Track 3), so the words
+# don't name Send.
+COPY_FAILED = "HubSpot didn't save the copy. Try it again: nobody is emailed twice."
 COPY_UNSURE = (
     "HubSpot didn't answer, so the copy may or may not be there. Check the company in HubSpot."
 )
 COPY_FAULT = (
-    "Something went wrong on our side while saving the copy in HubSpot. Press Send again to try "
-    "once more: the email won't go twice."
+    "Something went wrong on our side while saving the copy in HubSpot. Try it again: nobody is "
+    "emailed twice."
 )
 
 
@@ -270,8 +272,8 @@ async def preview(
     settings: Settings,
     added: Sequence[str],
 ) -> FormEmailPreview:
-    """The email as it would arrive, and the people: those on the meeting, ticked, then the
-    addresses the rep added. Each says whether it may get it."""
+    """The email as it would arrive, and the people: those on the meeting, then the addresses
+    the rep added. Each says whether it may get it, and only those that may are ticked."""
     email = form_email(form, settings)
     domains = settings.internal_email_domains
     people: list[FormPerson] = []
@@ -284,7 +286,7 @@ async def preview(
         seen.add(key)
         allowed = bool(only_internal([address], domains)[0])
         shown = key if allowed else address.strip()
-        people.append(FormPerson(name=name, email=shown, why=why, ticked=True, allowed=allowed))
+        people.append(FormPerson(name=name, email=shown, why=why, ticked=allowed, allowed=allowed))
 
     for name, address, why in await meeting_people(session, form, source):
         add(name, address, why)

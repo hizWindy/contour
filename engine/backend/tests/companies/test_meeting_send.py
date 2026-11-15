@@ -231,7 +231,7 @@ async def test_the_preview_shows_the_email_and_who_would_get_it(
             "name": None,
             "email": "jo@sample.example",
             "why": "added by you",
-            "ticked": True,
+            "ticked": False,  # it can't get it, so it isn't ticked
             "allowed": False,
         },
     ]

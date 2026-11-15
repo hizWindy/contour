@@ -1010,7 +1010,7 @@ class FormPerson(Out):
     name: str | None = Field(description="Their name, when they have an account here")
     email: str
     why: str = Field(description="Like 'on the meeting', or 'added by you'")
-    ticked: bool = Field(description="Ticked to get it")
+    ticked: bool = Field(description="Ticked to get it. Never ticked when it isn't allowed")
     allowed: bool = Field(description="False for an address that isn't Contour's: it can't")
 
 
