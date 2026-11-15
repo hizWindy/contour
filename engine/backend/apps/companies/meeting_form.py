@@ -722,6 +722,15 @@ def _rep_text(text: str | None) -> str:
     return "\n".join(line for line in lines if line)
 
 
+def lead_hooks(company_key: str, leads: Sequence[CompanyLeads]) -> Sequence[CompanyLeads]:
+    """The other projects' rows a draft may use: only for a lead-only company, whose pre-read
+    only people who may see the lead can read. A HubSpot company's pre-read is for anyone with
+    the Companies tick, so the Lead Finder's rating never goes in, whoever drafts it (engine
+    AGENTS.md: only people with that project's tick get its fields). The morning job leaves
+    them out the same way."""
+    return leads if company_key.startswith("lead:") else []
+
+
 async def start_form(
     session: AsyncSession,
     body: MeetingFormStart,
@@ -793,7 +802,7 @@ async def start_form(
         if first is None:
             raise
         return first, False
-    runner.start(form.id, leads)
+    runner.start(form.id, lead_hooks(form.company_key, leads))
     return form, True
 
 
@@ -869,4 +878,4 @@ async def redraft_form(
     locked.error = None
     locked.version += 1
     await session.commit()
-    runner.start(locked.id, leads)
+    runner.start(locked.id, lead_hooks(locked.company_key, leads))

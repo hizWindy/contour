@@ -49,6 +49,7 @@ from core.hubspot.models import HubSpotCall, HubSpotCompany
 from tests.companies.helpers import API, add, deal, signed_in_as
 from tests.companies.test_call_notes_api import a_company, log_call, notes_settings, set_note
 from tests.core.auth_world import START, World
+from tests.lead_finder.factories import make_lead
 
 pytestmark = pytest.mark.integration
 FORMS = f"{API}/meetings/forms"
@@ -436,6 +437,31 @@ async def test_no_contact_detail_or_hidden_name_reaches_claude(
     assert "Jo wants to move by mid 2028." in named
     assert "Jo wants to move" not in hidden
     assert typed_form["status"] == "draft"
+
+
+async def test_the_lead_finders_rating_never_goes_in_a_hubspot_companys_pre_read(
+    world: World, settings: dict[str, Any], drafts: Drafts
+) -> None:
+    """Anyone with the Companies tick may read a HubSpot company's pre-read, so the Lead
+    Finder's rating and best sign never go in, even when the person drafting or redrafting it
+    has the Lead Finder's tick too (engine AGENTS.md: only people with that tick get its
+    fields)."""
+    await a_client(world)
+    await add(world, make_lead("Sample Logistics Pty Ltd", hubspot_id="201", score=82))
+    async with signed_in_as(world, "mia", ["companies", "lead_finder"]) as client:
+        typed = await started(
+            client,
+            company_key="201",
+            title="Lunch",
+            starts_at=(START + timedelta(days=2)).isoformat(),
+        )
+        await drafts.runner.wait()
+        redraft = await client.post(f"{FORMS}/{typed['id']}/redraft")
+        assert redraft.status_code == 202, redraft.text
+        await drafts.runner.wait()
+    assert len(drafts.claude.asked) == 2
+    for asked in drafts.claude.asked:
+        assert "Lead Finder" not in asked["prompt"] and "score 82" not in asked["prompt"]
 
 
 async def test_the_cap_stops_a_second_try_and_the_facts_still_show(
