@@ -87,6 +87,29 @@ describe('readDueDate', () => {
     })
   })
 
+  it("keeps a weekend for a meeting's day, and every other rule the same", () => {
+    const keep = { weekends: 'keep' } as const
+    expect(readDueDate('sat', WEDNESDAY, keep)).toEqual({
+      kind: 'date',
+      date: '2026-11-21',
+      moved: false,
+    })
+    expect(readDueDate('today', SUNDAY, keep)).toEqual({
+      kind: 'date',
+      date: SUNDAY,
+      moved: false,
+    })
+    expect(readDueDate('28/11', WEDNESDAY, keep)).toEqual({
+      kind: 'date',
+      date: '2026-11-28',
+      moved: false,
+    })
+    // The rest reads as a due date does.
+    expect(readDueDate('next tue', WEDNESDAY, keep)).toEqual(readDueDate('next tue', WEDNESDAY))
+    expect(readDueDate('1/1/2026', WEDNESDAY, keep)).toEqual({ kind: 'past', date: '2026-01-01' })
+    expect(readDueDate('soonish', WEDNESDAY, keep)).toEqual({ kind: 'unreadable' })
+  })
+
   it('reads a day and a month in any order, with or without a year', () => {
     expect(day('24 november')).toBe('2026-11-24')
     expect(day('nov 24')).toBe('2026-11-24')

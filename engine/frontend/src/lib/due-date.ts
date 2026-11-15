@@ -1,11 +1,12 @@
 /**
  * A due date, read the way people type one (DESIGN.md "Fields forgive", principles 02 #18):
  * "tomorrow", "next tue", "in 2 weeks", "24 nov", "24/11" and "2026-11-24" all work. It is its own
- * module because two screens read due dates: Log call's follow-up (PLAN-V17 T3-5) and the cards on
- * Activity (T3-6).
+ * module because three screens read such days: Log call's follow-up (PLAN-V17 T3-5), the cards on
+ * Activity (T3-6), and New pre-read's meeting day (T3-9, with `weekends: 'keep'`).
  *
  * The rules, in Melbourne calendar days (YYYY-MM-DD, the form the API takes):
- * - A day on a weekend moves to the Monday after, and `moved` says so.
+ * - A day on a weekend moves to the Monday after, and `moved` says so. A meeting's day keeps its
+ *   weekend (`weekends: 'keep'`): a meeting can be on a Saturday, a follow-up isn't due on one.
  * - A due date is never in the past. A day and a month with no year is the next one: "24/10" on
  *   15 Nov 2026 is 24 Oct 2027. A full date that has gone is `past`, so the field can say so.
  * - The day comes before the month, as in Australia: "3/4" is 3 April.
@@ -160,7 +161,8 @@ function daysInMonth(year: number, month: number): number {
   return new Date(Date.UTC(year, month, 0)).getUTCDate()
 }
 
-function addDays(iso: string, days: number): string {
+/** A calendar day (YYYY-MM-DD) `days` later, or earlier when negative. */
+export function addDays(iso: string, days: number): string {
   const date = utc(parseDay(iso))
   date.setUTCDate(date.getUTCDate() + days)
   return fromUtc(date)
@@ -180,7 +182,7 @@ function addMonths(iso: string, months: number): string {
 }
 
 /** Monday 1 to Sunday 7. */
-function weekdayOf(iso: string): number {
+export function weekdayOf(iso: string): number {
   const sunday0 = utc(parseDay(iso)).getUTCDay()
   return sunday0 === 0 ? 7 : sunday0
 }
@@ -223,14 +225,14 @@ function dayAndMonth(
     const found = validDay(fullYear(yearText), month, day)
     if (!found) return { kind: 'unreadable' }
     const date = isoOf(found)
-    return date < today ? { kind: 'past', date } : settle(date, today)
+    return date < today ? { kind: 'past', date } : onDay(date)
   }
   let found = validDay(thisYear, month, day)
   if (found && isoOf(found) < today) {
     found = validDay(thisYear + 1, month, day)
   }
   // 29 Feb with no leap year this year or next is not a day.
-  return found ? settle(isoOf(found), today) : { kind: 'unreadable' }
+  return found ? onDay(isoOf(found)) : { kind: 'unreadable' }
 }
 
 /** A month on its own: its 1st, this year or next. */
@@ -245,11 +247,11 @@ function monthStart(month: number, yearText: string | undefined, today: string):
     })
     if (ended < today) return { kind: 'past', date }
     // The month we are in: today, not a day already gone.
-    return settle(date < today ? today : date, today)
+    return onDay(date < today ? today : date)
   }
-  if (month === thisMonth) return settle(today, today)
+  if (month === thisMonth) return onDay(today)
   const year = month < thisMonth ? thisYear + 1 : thisYear
-  return settle(isoOf({ year, month, day: 1 }), today)
+  return onDay(isoOf({ year, month, day: 1 }))
 }
 
 /** A weekday. See the rules at the top for "this" and "next". */
@@ -257,14 +259,14 @@ function weekday(target: number, word: string | undefined, today: string): DueDa
   const now = weekdayOf(today)
   if (word === 'this') {
     const thisWeek = addDays(today, target - now)
-    return settle(thisWeek < today ? addDays(thisWeek, 7) : thisWeek, today)
+    return onDay(thisWeek < today ? addDays(thisWeek, 7) : thisWeek)
   }
   if (word === 'next') {
     const nextMonday = addDays(today, 8 - now)
-    return settle(addDays(nextMonday, target - 1), today)
+    return onDay(addDays(nextMonday, target - 1))
   }
   const ahead = (target - now + 7) % 7 || 7
-  return settle(addDays(today, ahead), today)
+  return onDay(addDays(today, ahead))
 }
 
 function later(count: number, unit: Unit, today: string): string {
@@ -280,12 +282,21 @@ function later(count: number, unit: Unit, today: string): string {
   }
 }
 
-/** The last rules for every day read: a weekend moves to Monday, and never before today. */
-function settle(date: string, today: string): DueDate {
-  const day = weekdayOf(date)
-  const moved = day >= 6
-  const onWeekday = moved ? addDays(date, 8 - day) : date
-  return { kind: 'date', date: onWeekday < today ? today : onWeekday, moved }
+/** A day read, before the last rules (`settle`). */
+function onDay(date: string): DueDate {
+  return { kind: 'date', date, moved: false }
+}
+
+/**
+ * The last rules for every day read: never before today, and (unless `keepWeekends`) a weekend
+ * moves to the Monday after.
+ */
+function settle(read: DueDate, today: string, keepWeekends: boolean): DueDate {
+  if (read.kind !== 'date') return read
+  const day = weekdayOf(read.date)
+  const moved = !keepWeekends && day >= 6
+  const date = moved ? addDays(read.date, 8 - day) : read.date
+  return { kind: 'date', date: date < today ? today : date, moved }
 }
 
 const COUNT_WORDS = Object.keys(COUNTS)
@@ -304,20 +315,38 @@ const MONTH_ONLY = /^(?:in\s+|early\s+|start of\s+)?([a-z]+)(?:\s+(\d{4}))?$/
 const NUMERIC = /^(\d{1,2})[/.-](\d{1,2})(?:[/.-](\d{4}|\d{2}))?$/
 const ISO = /^(\d{4})-(\d{1,2})-(\d{1,2})$/
 
+export interface DueDateOptions {
+  /**
+   * `move` (the default, for a due date): a Saturday or a Sunday moves to the Monday after.
+   * `keep` (for a meeting's day, PLAN-V17 T3-9): the day stays as typed.
+   */
+  weekends?: 'move' | 'keep'
+}
+
 /**
  * Reads a due date. `today` is Melbourne's (`melbourneDate()`), passed in so a test can fix it.
  *
  *     readDueDate('next tue', '2026-11-15')  // { kind: 'date', date: '2026-11-17', moved: false }
+ *     readDueDate('sat', '2026-11-18', { weekends: 'keep' })  // 2026-11-21, a Saturday
  */
-export function readDueDate(text: string, today: string = melbourneDate()): DueDate {
+export function readDueDate(
+  text: string,
+  today: string = melbourneDate(),
+  { weekends = 'move' }: DueDateOptions = {},
+): DueDate {
+  return settle(readDay(text, today), today, weekends === 'keep')
+}
+
+/** The day the words name, before the last rules. */
+function readDay(text: string, today: string): DueDate {
   const words = tidy(text)
   if (words === '') return { kind: 'empty' }
-  if (words === 'today' || words === 'tod') return settle(today, today)
-  if (TOMORROW.has(words)) return settle(addDays(today, 1), today)
-  if (words === 'day after tomorrow') return settle(addDays(today, 2), today)
-  if (words === 'next week') return settle(addDays(today, 8 - weekdayOf(today)), today)
-  if (words === 'next month') return settle(addMonths(today, 1), today)
-  if (words === 'next year') return settle(addMonths(today, 12), today)
+  if (words === 'today' || words === 'tod') return onDay(today)
+  if (TOMORROW.has(words)) return onDay(addDays(today, 1))
+  if (words === 'day after tomorrow') return onDay(addDays(today, 2))
+  if (words === 'next week') return onDay(addDays(today, 8 - weekdayOf(today)))
+  if (words === 'next month') return onDay(addMonths(today, 1))
+  if (words === 'next year') return onDay(addMonths(today, 12))
 
   const relative = RELATIVE.exec(words)
   if (relative) {
@@ -326,7 +355,7 @@ export function readDueDate(text: string, today: string = melbourneDate()): DueD
     const count = /^\d+$/.test(amount) ? Number(amount) : (COUNTS[amount] ?? 0)
     if (unit && count > 0) {
       const fortnights = unitWord.startsWith('fortnight') ? 2 : 1
-      return settle(later(count * fortnights, unit, today), today)
+      return onDay(later(count * fortnights, unit, today))
     }
   }
 
