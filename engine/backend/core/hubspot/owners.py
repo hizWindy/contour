@@ -18,8 +18,9 @@ owner's id, and how it was matched. Never the owner's email.
   (`core.hubspot_owners`) can be picked. A cleared link may be matched by email again at the next
   sync.
 - **Reads:** each account's link with the owner's name from our copy (`links_of`), the active
-  owners for the pick list (`active_owners`), and one account's owner id (`owner_id_of`, which
-  `activities.owner_of` uses).
+  owners for the pick list (`active_owners`), one account's owner id (`owner_id_of`, which
+  `activities.owner_of` uses), and the other way, an owner's account (`rep_of_owner`: its name
+  and its own address, for Track 2's Meetings).
 """
 
 import logging
@@ -279,3 +280,30 @@ async def owner_id_of(session: AsyncSession, user_id: uuid.UUID) -> str | None:
         select(User.hubspot_owner_id).where(User.id == user_id)
     )
     return found
+
+
+async def rep_of_owner(
+    session: AsyncSession, owner_id: str, *, app: str = "companies"
+) -> tuple[str, str] | None:
+    """The account linked to a HubSpot owner, as (its name, its address), or None: the other way
+    from `owner_id_of`. Track 2's Meetings use it (its `rep_of_owner` seam, PLAN-V17 Stage B):
+    who gets "your pre-read is ready" for the owner's meeting, and who is ticked when a pre-read
+    is sent.
+
+    Only an account that can sign in and may use `app` (an Admin, or one with its tick), so the
+    link in the email opens. Two accounts on one owner: a link set by hand wins, then the oldest
+    account. The address is the account's own, saved at sign-up, never the owner's from HubSpot
+    (that is never kept)."""
+    rows = await session.scalars(
+        select(User)
+        .where(User.hubspot_owner_id == owner_id.strip(), User.active.is_(True))
+        .order_by(
+            (User.hubspot_owner_matched_by == BY_PERSON).desc().nulls_last(),
+            User.created_at,
+            User.id,
+        )
+    )
+    for user in rows:
+        if user.role == "admin" or app in (user.apps or []):
+            return user.name, user.email
+    return None

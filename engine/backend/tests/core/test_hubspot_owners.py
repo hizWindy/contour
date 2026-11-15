@@ -7,6 +7,7 @@ Every person and address here is made up.
 
 import logging
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
@@ -18,7 +19,13 @@ from core.auth.models import AuditEntry, User
 from core.hubspot import activities
 from core.hubspot.client import HubSpotUnavailable, email_key, owner_email_index
 from core.hubspot.models import HubSpotOwner
-from core.hubspot.owners import OWNER_MATCH_FAILED, Account, plan_links, shown_name
+from core.hubspot.owners import (
+    OWNER_MATCH_FAILED,
+    Account,
+    plan_links,
+    rep_of_owner,
+    shown_name,
+)
 from tests.core.auth_world import FAST, GOOD, World, make_account, sign_in
 from tests.core.test_hubspot_sync import contour, sync
 
@@ -300,6 +307,79 @@ async def test_owner_of_gives_the_accounts_owner_or_none(session_factory: Factor
         assert await activities.owner_of(session, alone) is None
         assert await activities.owner_of(session, uuid.uuid4()) is None  # no such account
         assert await activities.owner_of(session, None) is None  # sign-in off: unassigned
+
+
+@pytest.mark.integration
+async def test_rep_of_owner_gives_the_account_that_can_open_the_pre_read(
+    session_factory: Factory,
+) -> None:
+    """Track 2's seam (PLAN-V17 Stage B): who gets "your pre-read is ready" for an owner's
+    meeting. The account's own name and address, never the owner's from HubSpot."""
+    start = datetime(2026, 11, 2, 9, tzinfo=UTC)
+
+    async def person(
+        email: str,
+        name: str,
+        owner_id: str,
+        matched_by: str,
+        *,
+        role: str = "staff",
+        apps: tuple[str, ...] = ("companies",),
+        active: bool = True,
+        day: int = 0,
+    ) -> None:
+        async with session_factory() as session:
+            session.add(
+                User(
+                    email=email,
+                    name=name,
+                    role=role,
+                    apps=list(apps),
+                    active=active,
+                    password_hash=HASH,
+                    hubspot_owner_id=owner_id,
+                    hubspot_owner_matched_by=matched_by,
+                    created_at=start + timedelta(days=day),
+                )
+            )
+            await session.commit()
+
+    # 301: an older match by email, and a newer link set by hand. The hand-set one wins.
+    await person("jo.sample@contourinteriors.com.au", "Jo Sample", "301", "email", day=0)
+    await person("sam.example@contourinteriors.com.au", "Sam Example", "301", "person", day=5)
+    # 302: one can't sign in now, the other has the Lead Finder's tick only. Nobody for Companies.
+    await person("lee.gone@contourinteriors.com.au", "Lee Gone", "302", "person", active=False)
+    await person(
+        "kim.leads@contourinteriors.com.au", "Kim Leads", "302", "email", apps=("lead_finder",)
+    )
+    # 303: an Admin opens every project, ticks or not.
+    await person(
+        "ash.admin@contourinteriors.com.au", "Ash Admin", "303", "person", role="admin", apps=()
+    )
+    # 304: two set by hand: the oldest.
+    await person("first.sample@contourinteriors.com.au", "First Sample", "304", "person", day=1)
+    await person("second.sample@contourinteriors.com.au", "Second Sample", "304", "person", day=2)
+
+    async with session_factory() as session:
+        assert await rep_of_owner(session, "301") == (
+            "Sam Example",
+            "sam.example@contourinteriors.com.au",
+        )
+        assert await rep_of_owner(session, "302") is None
+        assert await rep_of_owner(session, " 303 ") == (
+            "Ash Admin",
+            "ash.admin@contourinteriors.com.au",
+        )
+        assert await rep_of_owner(session, "304") == (
+            "First Sample",
+            "first.sample@contourinteriors.com.au",
+        )
+        assert await rep_of_owner(session, "999") is None  # nobody has this owner
+        # Another project's tick is another question.
+        assert await rep_of_owner(session, "302", app="lead_finder") == (
+            "Kim Leads",
+            "kim.leads@contourinteriors.com.au",
+        )
 
 
 # --- The routes -------------------------------------------------------------------------------
