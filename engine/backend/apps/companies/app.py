@@ -13,8 +13,15 @@ from apps.companies.prep import PrepRunner
 from core.apps import AppSpec
 from core.hubspot.needs import HubSpotNeeds
 
-# What the Companies page uses HubSpot for. People and calls need the contacts scope: HubSpot
-# reads logged calls with it too (TBC, PLAN-V10 A2).
+# The scope that lets the key write calls, notes and tasks (PLAN-V17 T1-2 found the key has it;
+# its name is TBC). Until M1: at the join this becomes
+# `from core.hubspot.check import ACTIVITY_WRITE_SCOPE` (Track 1's constant, the same text).
+ACTIVITY_WRITE_SCOPE = "crm.objects.contacts.write"
+
+# What the Companies page uses HubSpot for. People need the contacts scope. HubSpot reads logged
+# calls without it (PLAN-V17 T1-2, 15 Nov). Call notes and the pre-read's copy write a call, its
+# tasks and a note with ACTIVITY_WRITE_SCOPE, and a call's field changes with the companies
+# scope (PLAN-V17).
 HUBSPOT_NEEDS = HubSpotNeeds(
     read=(
         "crm.objects.companies.read",
@@ -22,9 +29,12 @@ HUBSPOT_NEEDS = HubSpotNeeds(
         "crm.objects.owners.read",
         "crm.objects.contacts.read",
     ),
+    write=("crm.objects.companies.write", ACTIVITY_WRITE_SCOPE),
     uses=(
         "Reads companies, offices, deals and owners for the list and the company panel, and "
-        "people and their logged calls for the People list, Call history and call prep."
+        "people and their logged calls for the People list, Call history and call prep. Writes "
+        "the calls, tasks and field changes a rep confirms from call notes, and a pre-read's "
+        "copy as a note."
     ),
 )
 

@@ -170,6 +170,7 @@ async def test_the_status_route_reports_the_connection_and_each_project(
     assert sorted(projects) == ["companies", "lead_finder"]  # PLAN-V10: each project's needs
     project = projects["lead_finder"]
     assert project["app"] == "lead_finder" and project["sending"] == "waiting"
-    assert projects["companies"]["sending"] == "not_needed"  # Companies only reads
+    # Companies writes call notes and a pre-read's copy (PLAN-V17), and this key can't yet.
+    assert projects["companies"]["sending"] == "waiting"
     assert "SERVICE_KEY" not in str(status) or status["check"]["problem"] is None
     assert status["copy_counts"]["companies"] == 0 and status["recent_syncs"] == []
