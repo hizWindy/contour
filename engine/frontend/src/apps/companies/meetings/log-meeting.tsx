@@ -20,7 +20,8 @@
  */
 import { useQueryClient } from '@tanstack/react-query'
 import { FileText, FileUp, X } from 'lucide-react'
-import { useId, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
+import { toast } from 'sonner'
 import { useMe } from '@/api/hooks'
 import { useCallNoteSummary } from '@/api/hooks/call-notes'
 import type { MeetingItem } from '@/api/v17'
@@ -61,6 +62,7 @@ import {
   SAVE_NOTES,
   SAVING_NOTES,
   TRANSCRIPT,
+  TRANSCRIPT_KEPT,
   TRANSCRIPT_PLACEHOLDER,
   transcriptNotSavedWords,
   transcriptTooLongWords,
@@ -94,6 +96,14 @@ function TranscriptView({ item, onPhone, onSaved }: TranscriptViewProps) {
   )
   // The newest transcript, for a change that comes after a wait (a file being read).
   const latest = useRef(draft)
+  // Still on screen: a save that fails after the panel has closed says so in a toast instead.
+  const shownNow = useRef(true)
+  useEffect(() => {
+    shownNow.current = true
+    return () => {
+      shownNow.current = false
+    }
+  }, [])
   const [problem, setProblem] = useState<string | null>(null)
   const [tried, setTried] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -128,8 +138,13 @@ function TranscriptView({ item, onPhone, onSaved }: TranscriptViewProps) {
     setSaving(true)
     setProblem(null)
     logMeeting(client, latest.current).then(onSaved, (error: unknown) => {
+      const words = transcriptNotSavedWords(error)
+      if (!shownNow.current) {
+        toast.error(words, { description: TRANSCRIPT_KEPT })
+        return
+      }
       setSaving(false)
-      setProblem(transcriptNotSavedWords(error))
+      setProblem(words)
     })
   }
 

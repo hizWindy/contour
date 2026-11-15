@@ -221,6 +221,8 @@ export const FILE_TOO_BIG = 'That file is too big to be a transcript. Paste the 
 export const FILE_UNREADABLE = "That file couldn't be read as text. Paste the words instead."
 export const TRANSCRIPT_UNDONE = 'Undone. The transcript is back as a draft.'
 export const TRANSCRIPT_NOT_UNDONE = 'Not undone. The meeting notes still wait for you to confirm.'
+/** A save that failed after the panel was closed: the words aren't lost. */
+export const TRANSCRIPT_KEPT = 'Your transcript is kept. Open Log meeting again to save it.'
 
 /** "From Sample meeting.vtt" */
 export function fromFileWords(name: string): string {

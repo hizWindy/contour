@@ -103,6 +103,9 @@ interface Server {
   notesOn: boolean
   /** How the transcript route answers: a note, or one of its refusals. */
   transcript: 'ok' | 'not_past' | 'too_long'
+  /** The transcript route waits for `release()` before it answers. */
+  transcriptWaits: boolean
+  release: () => void
   sent: Sent[]
 }
 
@@ -127,11 +130,13 @@ function options(enabled: boolean): CallNoteOptions {
   }
 }
 
-function mockServer(changes: Partial<Omit<Server, 'sent'>> = {}): Server {
+function mockServer(changes: Partial<Omit<Server, 'sent' | 'release'>> = {}): Server {
   const server: Server = {
     items: pastMeetings(),
     notesOn: true,
     transcript: 'ok',
+    transcriptWaits: false,
+    release: () => undefined,
     sent: [],
     ...changes,
   }
@@ -161,6 +166,11 @@ function mockServer(changes: Partial<Omit<Server, 'sent'>> = {}): Server {
     }
     const transcript = /^\/api\/v1\/companies\/meetings\/(\d+)\/transcript$/.exec(path)
     if (transcript && method === 'POST') {
+      if (server.transcriptWaits) {
+        await new Promise<void>((resolve) => {
+          server.release = resolve
+        })
+      }
       if (server.transcript === 'not_past') {
         return problem(
           409,
@@ -441,5 +451,36 @@ describe('the transcript box', () => {
     expect(box).toHaveValue('Jo Sample: Thanks for coming in.')
     expect(within(panel).getByRole('button', { name: 'Save notes' })).toBeEnabled()
     expect(screen.queryByText(/^Saved\./)).toBeNull()
+  })
+
+  it('a save that fails after the panel was closed says so in a toast, and keeps the words', async () => {
+    const server = mockServer({ transcript: 'not_past', transcriptWaits: true })
+    const { user } = renderPast()
+    const { panel, box } = await openLog(user)
+    await waitFor(() => {
+      expect(box).toHaveFocus()
+    })
+    await user.paste('Jo Sample: Thanks for coming in.')
+    await user.click(within(panel).getByRole('button', { name: 'Save notes' }))
+    expect(within(panel).getByRole('button', { name: 'Saving.' })).toBeDisabled()
+    await waitFor(() => {
+      expect(transcripts(server)).toHaveLength(1)
+    })
+    // Closed while it saves.
+    await user.keyboard('{Escape}')
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Log meeting' })).toBeNull()
+    })
+    server.release()
+    expect(
+      await screen.findByText(
+        "Not saved yet. This meeting hasn't happened yet. Log the meeting once it has been.",
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('Your transcript is kept. Open Log meeting again to save it.'),
+    ).toBeInTheDocument()
+    const again = await openLog(user)
+    expect(again.box).toHaveValue('Jo Sample: Thanks for coming in.')
   })
 })
