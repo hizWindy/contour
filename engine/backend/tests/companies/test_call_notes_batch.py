@@ -4,7 +4,9 @@
   note; a break on our side fails only its note too;
 - a shutdown half way: the notes sent stay logged, the one in flight follows its write, and the
   rest go back to the rep;
-- a second press while a batch runs starts nothing, and says so;
+- a second press while a batch runs starts nothing, and says so, in words that fit anyone;
+- another rep, or an Admin, can't preview, send or settle my note (T2-9);
+- an edit from a second tab waits for a send that started, then finds the note sent (T2-9);
 - writing off: nothing is sent, and the answer says what it waits for; switched off part way, the
   rest go back to the rep;
 - the preview shows HubSpot's value now; a field that changed in HubSpot after it is held and
@@ -29,7 +31,7 @@ from typing import Any, cast
 
 import httpx
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.companies.app import stop_background
@@ -44,6 +46,7 @@ from core.hubspot.models import HubSpotWrite
 from core.hubspot.writer import FieldChange, StepResult, WriteOut, WritePlan, WriteStatus
 from tests.companies.helpers import add, deal, signed_in_as
 from tests.companies.test_call_notes_api import NOTES, a_company, log_call, notes_settings, set_note
+from tests.companies.test_script_notes import as_admin
 from tests.core.auth_world import START, World
 
 pytestmark = pytest.mark.integration
@@ -249,6 +252,19 @@ async def a_hubspot() -> AsyncIterator[HubSpot | None]:
     yield FAKE_HUBSPOT
 
 
+async def waiting_on_a_lock(world: World) -> None:
+    """Returns once another connection to this database waits for a lock."""
+    query = text(
+        "SELECT count(*) FROM pg_stat_activity "
+        "WHERE wait_event_type = 'Lock' AND datname = current_database()"
+    )
+    while True:
+        async with world.factory() as db:
+            if await db.scalar(query):
+                return
+        await asyncio.sleep(0.05)
+
+
 # --- Fixtures and helpers -------------------------------------------------------------------------
 
 
@@ -428,9 +444,77 @@ async def test_a_second_press_while_a_batch_runs_starts_nothing(
     assert (again["sending"], again["already_sending"], again["notes"]) == (0, True, [])
     assert again["batch_id"] == started["batch_id"]
     assert (retry.status_code, retry.json()["code"]) == (409, "already_sending")
-    assert retry.json()["detail"] == "Your notes are being sent. Wait for this batch to finish."
+    assert retry.json()["detail"] == "Notes are being sent right now. Try again in a few seconds."
     assert [note["status"] for note in after] == ["logged", "to_confirm"]
     assert fake.written == [subject(first)]
+
+
+async def test_another_rep_or_an_admin_cant_send_or_settle_my_note(
+    world: World, fake: FakeWriter, sender: NoteSender
+) -> None:
+    await a_company(world)
+    answer = {"step": "call", "landed": True}
+    async with (
+        signed_in_as(world, "mia", ["companies"]) as mia,
+        signed_in_as(world, "sam", ["companies"]) as sam_client,
+        as_admin(world) as admin_client,
+    ):
+        mine = await log_call(mia)
+        ids = {"ids": [mine["id"]]}
+        sam = [
+            await sam_client.post(f"{NOTES}/preview", json=ids),
+            await sam_client.post(f"{NOTES}/confirm", json=ids),
+        ]
+        admin = [
+            await admin_client.post(f"{NOTES}/preview", json=ids),
+            await admin_client.post(f"{NOTES}/confirm", json=ids),
+        ]
+        nothing_yet = (list(fake.previews), list(fake.written))
+        # Mia sends it, and HubSpot doesn't answer: now there is a step to settle.
+        fake.unsure_call.add(uuid.UUID(mine["id"]))
+        await confirm(mia, mine)
+        await sender.wait()
+        sam_resolve = await sam_client.post(f"{NOTES}/{mine['id']}/resolve", json=answer)
+        admin_resolve = await admin_client.post(f"{NOTES}/{mine['id']}/resolve", json=answer)
+        after = await one(mia, mine)
+    # Sam can't see it at all. The Admin sees it, and only Mia can send it.
+    for preview, sent in (sam, admin):
+        assert preview.status_code == 200 and sent.status_code == 202
+        assert preview.json()["items"] == [] and sent.json()["sending"] == 0
+    assert [item["why"] for item in sam[0].json()["skipped"]] == ["We can't find this note."]
+    assert [item["why"] for item in admin[1].json()["skipped"]] == [
+        "Only the person who logged this call can send it."
+    ]
+    assert nothing_yet == ([], [])
+    assert (sam_resolve.status_code, sam_resolve.json()["code"]) == (404, "note_not_found")
+    assert (admin_resolve.status_code, admin_resolve.json()["code"]) == (403, "not_your_note")
+    assert fake.answers == []
+    assert after["status"] == "uncertain"
+
+
+async def test_an_edit_waits_for_a_send_that_started_and_then_finds_it_sent(
+    world: World, fake: FakeWriter, sender: NoteSender
+) -> None:
+    """Send locks the note while it marks it, and an edit from a second tab waits for that lock.
+    Here the test holds the lock, as Send would, while the edit comes in."""
+    await a_company(world)
+    async with signed_in_as(world, "mia", ["companies"]) as client:
+        note = await log_call(client)
+        async with world.factory() as db:
+            held = await db.get(CallNote, uuid.UUID(note["id"]), with_for_update=True)
+            assert held is not None
+            held.status = "sending"
+            await db.flush()  # the row is now locked, and marked, but not committed
+            edit = asyncio.create_task(
+                client.patch(f"{NOTES}/{note['id']}", json={"summary": "A second tab's edit."})
+            )
+            await asyncio.wait_for(waiting_on_a_lock(world), timeout=10)
+            await db.commit()
+        refused = await edit
+    assert (refused.status_code, refused.json()["code"]) == (409, "note_sent")
+    assert refused.json()["detail"] == "This note is being sent to HubSpot. Wait for it to finish."
+    row = await the_row(world, note)
+    assert row.status == "sending" and NoteCard.model_validate(row.card).call.summary == ""
 
 
 # --- Writing off ----------------------------------------------------------------------------------
@@ -730,8 +814,9 @@ async def test_the_request_for_a_note(world: World, fake: FakeWriter, sender: No
     assert first.call.at == START - timedelta(minutes=10)
     assert first.call.body == (
         f"Jo is looking at Melbourne.\n\n{note['text']}\n"
-        "Not changed in HubSpot: Sydney lease end (said: '2029'): only a year was said."
+        "Not changed in HubSpot: Sydney lease end: only a year was said."
     )
+    assert "said: " not in first.call.body  # the sorter's own words never go unseen
     assert "[number left out]" in first.call.body and "@" not in first.call.body
     assert (second.deal_id, second.contact_id) == (None, "c301")
     assert second.call is not None

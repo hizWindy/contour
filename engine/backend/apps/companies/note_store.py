@@ -798,7 +798,15 @@ async def edit_note(
 ) -> None:
     """The rep's edits to a note waiting for them, or to the parts not yet in HubSpot of a note
     that failed or was partly saved. Each change and follow-up is checked as the sorter checks
-    them. The card is marked edited; `sorted` keeps what the sorter made."""
+    them. The card is marked edited; `sorted` keeps what the sorter made.
+
+    The note is read again under a lock first, as Send and Retry lock it, so an edit from a
+    second tab waits for a send that started, and then finds it sent. Only database reads happen
+    while the lock is held."""
+    locked = await session.get(CallNote, note.id, with_for_update=True, populate_existing=True)
+    if locked is None:
+        raise note_not_found()
+    note = locked  # the same object, as the database has it now
     if note.status == "sorting":
         raise still_sorting()
     if note.status not in CHANGEABLE:
@@ -978,7 +986,7 @@ async def preview(
 
 
 def already_sending() -> Problem:
-    return Problem(409, "Already sending", ALREADY_SENDING, code="already_sending")
+    return Problem(409, "Sending in progress", ALREADY_SENDING, code="already_sending")
 
 
 async def confirm(

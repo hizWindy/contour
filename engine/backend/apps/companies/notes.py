@@ -572,12 +572,11 @@ def match_person(note: CallNote, people: Sequence[CompanyPerson]) -> None:
 
 
 def call_text(text: str, card: NoteCard) -> str:
-    """The call's text for HubSpot: the note, then each thing that didn't change a field."""
+    """The call's text for HubSpot: the note, then each thing that didn't change a field. What
+    and why only, as the card's unsure sentence names them: `said` is the sorter's own text,
+    which the rep never sees, and the note's own words are already above."""
     lines = [text.strip()]
-    lines += [
-        f"Not changed in HubSpot: {item.what} (said: '{item.said}'): {item.why}."
-        for item in card.dropped
-    ]
+    lines += [f"Not changed in HubSpot: {item.what}: {item.why}." for item in card.dropped]
     return "\n".join(line for line in lines if line)
 
 

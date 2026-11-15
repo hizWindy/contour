@@ -370,9 +370,14 @@ def test_what_code_cant_use_is_dropped_into_the_text_with_why() -> None:
         "Not changed in HubSpot, so it stays in the call's text: Hobart lease end, Sydney lease "
         "end, Perth staff, Perth last move, Perth lease end."
     )
-    assert "Not changed in HubSpot: Hobart lease end (said: 'June 2029'): this company has no " in (
-        call_text("Spoke to Jo Sample.", card)
-    )
+    # What goes to HubSpot is what the card shows: what and why, never the sorter's own words.
+    text = call_text("Spoke to Jo Sample.", card)
+    assert text.splitlines()[:3] == [
+        "Spoke to Jo Sample.",
+        "Not changed in HubSpot: Hobart lease end: this company has no Hobart office in HubSpot.",
+        "Not changed in HubSpot: Sydney lease end: this company has no Sydney office in HubSpot.",
+    ]
+    assert "said" not in text and "June 2029" not in text and "a fair few" not in text
 
 
 def test_a_year_alone_never_changes_a_field() -> None:

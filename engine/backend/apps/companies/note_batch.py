@@ -75,7 +75,8 @@ LEAD_ONLY = (
     "again."
 )
 NOTHING_LEFT = "Everything in it is in HubSpot already."
-ALREADY_SENDING = "Your notes are being sent. Wait for this batch to finish."
+# One batch at a time in this backend, whoever pressed Send, so the words don't say whose it is.
+ALREADY_SENDING = "Notes are being sent right now. Try again in a few seconds."
 CHECK = "Check HubSpot, then tell us: it's there, or it's not."
 STOPPED_MID_SEND = f"Contour stopped while sending this note. {CHECK}"
 FAULT = "Something went wrong on our side while sending this note."
