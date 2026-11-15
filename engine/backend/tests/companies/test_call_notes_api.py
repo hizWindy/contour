@@ -631,7 +631,7 @@ async def test_preview_shows_what_our_copy_has_now_and_that_sending_waits(
     assert body["skipped"] == [{"id": ANOTHER, "why": "We can't find this note."}]
     assert body["sending_ready"] is False
     assert body["waiting_for"] == "Waiting for HubSpot to be connected."
-    assert body["totals"] == {"calls": 1, "tasks": 0, "changes": 1}
+    assert body["totals"] == {"calls": 1, "meeting_notes": 0, "tasks": 0, "changes": 1}
 
 
 async def test_confirm_retry_and_resolve_wait_for_write_access(

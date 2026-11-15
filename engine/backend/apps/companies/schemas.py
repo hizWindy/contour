@@ -746,8 +746,11 @@ class CallNoteSkipped(Out):
 
 
 class CallNoteTotals(Out):
-    calls: int = Field(
-        description="The calls not yet in HubSpot. A logged meeting's notes count as one"
+    model_config = ConfigDict(json_schema_extra=optional_in_types("meeting_notes"))
+
+    calls: int = Field(description="The calls not yet in HubSpot")
+    meeting_notes: int = Field(
+        description="The logged meetings' notes not yet in HubSpot. Each goes as a note, not a call"
     )
     tasks: int = Field(description="The follow-ups not yet in HubSpot")
     changes: int = Field(description="The field changes not yet in HubSpot, and not held")

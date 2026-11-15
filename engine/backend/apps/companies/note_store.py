@@ -1032,7 +1032,9 @@ async def preview(
         sending_ready=sending.ready,
         waiting_for=sending.waiting_for,
         totals=totals_of(
-            NoteCard.model_validate(note.card or {}) for note in items if not note.left_out
+            (NoteCard.model_validate(note.card or {}), is_meeting(note))
+            for note in items
+            if not note.left_out
         ),
         skipped=skipped,
     )
