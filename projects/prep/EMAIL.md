@@ -1,6 +1,6 @@
 # Email to Levi: call prep (draft, not sent)
 
-Last updated: 2026-11-09. Written for [PLAN-V10](../../plan/PLAN-V10.md) step A2. **Send only on Al-khair's word.** His answers go in the plan's "Waiting on".
+Last updated: 2026-11-15 (call notes' HubSpot needs added at the end). Written for [PLAN-V10](../../plan/PLAN-V10.md) step A2. **Send only on Al-khair's word.** His answers go in the plan's "Waiting on".
 
 ---
 
@@ -23,3 +23,16 @@ The Companies page and call prep are built and tested. To switch them on, I need
 
 Thanks,
 Al-khair
+
+---
+
+## Added 15 Nov: what call notes need from HubSpot (PLAN-V17 W1)
+
+**One permission:** "read contacts" (`crm.objects.contacts.read`), the same as item 1 above. It lets a rep pick the person on a logged call, and links the call to them. Without it, calls are logged on the company only.
+
+Nothing else is needed from HubSpot for call notes. On 15 Nov our key was checked against HubSpot itself, for free, with nothing changed (PLAN-V17 T1-2):
+- **It can already write** calls, notes, tasks and company fields (like a lease end). So sending waits only for us to switch writing on, after one real test call on a company Levi names (**TBC**: which company).
+- **It can already read** calls, notes, tasks and meetings.
+- Deals can't be written. Call notes never change a deal: a call is only linked to one, when the company has exactly one open deal. Whether that link needs deal write access is **TBC**: the real test call (M2) shows it.
+
+When this email goes, item 1 can say: "read contacts also lets call notes link each call to the person."

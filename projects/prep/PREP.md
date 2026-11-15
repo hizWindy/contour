@@ -1,6 +1,6 @@
 # Call prep
 
-Last updated: 2026-11-15. **TBC** means to be confirmed.
+Last updated: 2026-11-15 (call notes added). **TBC** means to be confirmed.
 
 **Status (11 Nov):** PLAN-V10 built call prep, and [PLAN-V14](../../plan/PLAN-V14.md) refined it: "Research again", the three answers in the card's header, news with no age limit, the call technique in both scripts, and editable scripts with Your style and a team style. Both are merged into `master`, not deployed, and call prep is not switched on yet. The new prompt hasn't been tried on real companies (PLAN-V14 T1-5, paid, on Al-khair's word). What works now, from our HubSpot copy: the Companies page, the company's record, the prep box, "Sync with HubSpot", and the prep card with a sales script and guided questions (free, written from the copy). Call prep's web check (news, "still there?") stays off until Al-khair switches it on. People and call history wait for HubSpot access to contacts. The questions for Levi are in [EMAIL.md](EMAIL.md).
 
@@ -115,6 +115,26 @@ Rules for the screen:
 - **Company only:** if they type just a company, or press Prep on a row, the panel asks "Who are you calling?" and lists its people. "Prep a cold call" gives a script for the switchboard.
 - **Recent chips** reopen today's preps without a new search.
 - **Phone:** the list is one card per company, and the filters sit behind one "Filters" button. The prep box sticks to the top. Each company card has its own Prep button. The company's record and the prep card fill the screen, with the main action as a big button at the bottom: "Prep a call" on the company, "Call" on the card.
+
+## Call notes (PLAN-V17, built 15 Nov, not switched on)
+
+After a call, a rep presses **Log call** in the call prep panel (or L), says or types what happened, and moves on. After a block of about 10 calls, they check every note on the **Activity** page and send them to HubSpot in one go. Levi asked for both: log fast and move on (12 Nov), and confirm in one go after about 10 calls (9 Nov). See [PLAN-V17](../../plan/PLAN-V17.md).
+
+**How a note is handled:**
+- It is saved at once. A phone number or email in it is saved as "[number left out]" or "[email left out]": we never store contact details.
+- **With Claude sorting on,** Claude (Haiku 5.5) turns the note into three things: the call (a two-line summary and the outcome), field changes, and follow-up tasks. It costs well under US$0.001 a note (estimate, not measured yet). Claude gets the note with contact details removed, today's date, the company's office names and the fields a call may change. It gets no company name and no people.
+- **With it off,** the note is the call's text. The rep picks the outcome and adds follow-ups by hand. Free.
+- **Code works out every date, not Claude.** Example: on Thursday 19 Nov, "next Tuesday" is 24 Nov. A follow-up that falls on a weekend moves to Monday, and a follow-up is never in the past. The card shows the date with the rep's words beside it.
+- **A call may change only three things for each office:** the lease end, the last move and the staff count (**TBC** with Levi). Anything else the rep says stays in the call's text. A vague value, like "some time in 2028", is not written to a field: it goes into the call's text with the reason.
+- **Nothing reaches HubSpot until the rep sends it.** Each change shows HubSpot's value now and the new one. A confirmed change may replace a value (**TBC** with Levi). If HubSpot's value changed since the rep looked, that change is held and shown again.
+- **Where it lands:** the call goes on the company and the person, under the rep. It goes on a deal only when the company has exactly one open deal (**TBC** with Levi).
+- **Call prep's "Last talk"** shows the rep's own note that isn't in HubSpot yet.
+
+**Two switches, both off:** "Call notes are on" shows Log call and Activity. "Claude sorts call notes" waits for Levi's OK, because a rep's note names clients.
+
+**What it waits for:**
+- **Sending** needs writing to HubSpot switched on, after one real test call (PLAN-V17 M2). The key can already write calls, tasks, notes and company fields (checked 15 Nov, PLAN-V17 T1-2).
+- **Picking the person** on a call needs HubSpot's "read contacts" permission. Until then a call is logged on the company only.
 
 ## Proposed, not decided
 
