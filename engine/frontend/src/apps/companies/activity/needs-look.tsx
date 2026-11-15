@@ -248,9 +248,9 @@ function LookCard({
     >
       <div className="flex flex-col gap-3 p-4 sm:p-5">
         <header className="flex flex-col gap-0.5">
-          <h3 id={titleId} className="text-section font-semibold text-balance text-foreground">
+          <h2 id={titleId} className="text-section font-semibold text-balance text-foreground">
             {note.company_name}
-          </h3>
+          </h2>
           <p className="text-caption text-muted-foreground">
             {[
               personLine(note.person),

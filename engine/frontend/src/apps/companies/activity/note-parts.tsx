@@ -374,9 +374,9 @@ export function ChangeList({ changes, fields, editing, onSave, onCancel }: Chang
   if (changes.length === 0) return null
   return (
     <section aria-labelledby={titleId} className="flex flex-col gap-2">
-      <h4 id={titleId} className="text-ui font-semibold text-foreground">
+      <h3 id={titleId} className="text-ui font-semibold text-foreground">
         {CHANGES}
-      </h4>
+      </h3>
       <ul className="flex flex-col gap-3">
         {changes.map((change) => (
           <ChangeRow
@@ -713,9 +713,9 @@ export function TaskList({ tasks, editing, today, onSave, onCancel }: TaskListPr
   if (tasks.length === 0 && !editing) return null
   return (
     <section aria-labelledby={titleId} className="flex flex-col gap-2">
-      <h4 id={titleId} className="text-ui font-semibold text-foreground">
+      <h3 id={titleId} className="text-ui font-semibold text-foreground">
         {FOLLOW_UPS}
-      </h4>
+      </h3>
       {tasks.length > 0 ? (
         <ul className="flex flex-col gap-3">
           {tasks.map((task, index) => (

@@ -395,7 +395,7 @@ function card(name: string): HTMLElement {
 function cardNames(list: HTMLElement): string[] {
   return within(list)
     .getAllByRole('article')
-    .map((item) => within(item).getByRole('heading', { level: 3 }).textContent ?? '')
+    .map((item) => within(item).getByRole('heading', { level: 2 }).textContent ?? '')
 }
 
 afterEach(() => {

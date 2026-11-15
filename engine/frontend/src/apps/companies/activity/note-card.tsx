@@ -343,9 +343,9 @@ export function NoteCard({
         )}
         {editing && outcomes.length > 0 ? (
           <section aria-labelledby={outcomeId} className="flex flex-col gap-2">
-            <h4 id={outcomeId} className="text-ui font-semibold text-foreground">
+            <h3 id={outcomeId} className="text-ui font-semibold text-foreground">
               {OUTCOME}
-            </h4>
+            </h3>
             <ChipGroup
               mode="one-or-none"
               aria-labelledby={outcomeId}
@@ -440,9 +440,9 @@ export function NoteCard({
         )}
       >
         <header className="flex flex-col gap-0.5">
-          <h3 id={titleId} className="text-section font-semibold text-balance text-foreground">
+          <h2 id={titleId} className="text-section font-semibold text-balance text-foreground">
             {note.company_name}
-          </h3>
+          </h2>
           <p className="text-caption text-muted-foreground">
             {[personLine(note.person), callWhen(note.called_at, today), outcome ?? NO_OUTCOME].join(
               ' · ',
