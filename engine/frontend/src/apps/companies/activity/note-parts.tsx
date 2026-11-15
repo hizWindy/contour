@@ -56,6 +56,7 @@ import {
   KEEP_MINE,
   KIND,
   KIND_LABELS,
+  SUMMARY_MAX_CHARS,
   SHOW_ALL,
   SHOW_LESS,
   VALUE,
@@ -243,7 +244,8 @@ export function SummaryField({
       // Opened by E or Edit: the first field takes the focus as it shows.
       autoFocus={autoFocus}
       rows={2}
-      maxLength={2000}
+      // The server's limit for a summary (`CallNotePatch.summary`).
+      maxLength={SUMMARY_MAX_CHARS}
       className="text-body touch:text-body"
       // The cursor goes to the end, so what the rep types adds to the summary.
       onFocus={(event) => {

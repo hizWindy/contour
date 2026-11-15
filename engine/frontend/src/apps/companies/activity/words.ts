@@ -47,6 +47,9 @@ export const NO_ONE = 'No one in particular'
 export const NO_OUTCOME = 'No outcome'
 export const OUTCOME = 'Outcome'
 export const SUMMARY = 'Summary'
+
+/** The longest summary the server takes (`CallNotePatch.summary`). */
+export const SUMMARY_MAX_CHARS = 600
 export const CHANGES = 'Changes'
 export const FOLLOW_UPS = 'Follow-ups'
 export const EMPTY_VALUE = 'Empty'
