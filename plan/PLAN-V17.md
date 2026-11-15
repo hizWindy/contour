@@ -712,6 +712,7 @@ Newest first.
   - "Needs a look": each state's words and buttons. Waiting for write access: one quiet line at the top, and the button greyed with the reason.
   - The keys J, K, E, X and Ctrl+Enter.
   - **Done when:** tests cover an edit, leaving one out, a batch with one failure, an uncertain note resolved both ways, the waiting state and the keys. Al-khair has seen it.
+  - 2026-11-15: **built, waiting for a look** (`05fb38d` to `e13cf4d`). The tests cover all six: 96 files and 1,352 pass, up from 1,308. Lint, types and the build pass. The first visit is 230 kB gzip (715 kB raw), the same as T3-1 (230 kB, 717 kB raw) and about 1 kB over T3-5, for Activity's menu entry and its prefetch. No call notes code is in it. Opening Activity adds 41 kB (14 kB of its own). It hasn't been seen in a browser yet.
 
 - [ ] **T3-7. Around the app** ("The screens", part 4).
   - The menu group with the count, Home's quick button, the Ctrl+K entries.
@@ -746,6 +747,22 @@ Newest first.
 ### Track 3 Log
 
 Newest first.
+
+- 2026-11-15: **T3-6 built, waiting for a look.**
+  - Activity reads only the rep's own notes (`mine=true`). A team view for Admins is **TBC** and not built.
+  - With two pages, Companies became a menu group, so for now it sits after the Lead Finder's group, not right under Home. T3-7 settles where it goes.
+  - Built against the hand-typed contract and a fake server. M1's type check confirms it against Track 2's routes.
+- 2026-11-15: **For Track 2: four questions from building Activity** (none blocks Track 3):
+  1. **Lists:** does `state=to_confirm` return `sorting`, `to_confirm` and `sending` notes, and `needs_look` return `partial`, `failed` and `uncertain`? Track 3 assumes so. It also expects a 409 `call_notes_off` on the lists, and a 404 for someone else's note (the website stops asking for it).
+  2. **Confirm:** does it mark every note it takes `sending` before it answers? Track 3 reads a note that still shows `to_confirm` after that as "not sent, still waiting".
+  3. **A change that moved in HubSpot:** "Keep mine" sends a PATCH with the change unchanged. Track 3 expects that to clear `current_changed`, because the rep has now seen HubSpot's value.
+  4. **Undo:** a removed change or follow-up that Undo puts back is sent with `id: null`, as a new one. Will the server take that?
+- 2026-11-15: **Waiting for Al-khair's look (T3-6's choices, TBC):**
+  1. One Edit (or E) per card turns its parts into fields. Each field saves when you leave it, and Esc puts it back. The other way: fields always open.
+  2. X keeps the card in the list, dimmed to 60%, with "Put back", so a slip is easy to undo. The motion table above says a card leaves on X.
+  3. The counts show on the To confirm and Needs a look tabs. The active card gets the Navy edge and tint of a selected row. The send bar sticks to the top on a laptop and sits at the bottom on a phone.
+  4. A change that moved in HubSpot says so, with a "Keep mine" button. The page's title is "Your call notes", with the ClipboardCheck icon.
+  5. Proposed for DESIGN.md: "A card list the rep works through keeps each card in place; new cards join at the end." "A card edits in place: Edit or E opens its fields, each saves when left, Esc puts it back." "A batch send: an Alert Dialog with totals from a fresh preview, then a bar fills, and each card holds its tick about a second before it leaves."
 
 - 2026-11-15: **T3-5 built, waiting for a look.**
   - The first visit had grown to 232 kB: the hooks index carried the call-notes hooks, and the motion kit's index carried `PushView`. Now the Companies pages import call-notes hooks from their own file. `main.tsx` and the two Home cards import kit parts by file. That brings it to 229 kB (`2d06369`).
