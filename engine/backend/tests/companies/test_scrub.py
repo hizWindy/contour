@@ -4,6 +4,8 @@ kept (PLAN-V17 T2-5), so a lease date typed in a call note isn't lost. An email 
 typed half way, is blanked too (T2-9). No database, no network.
 """
 
+import time
+
 import pytest
 
 from apps.companies.facts import EMAIL_GONE, PHONE_GONE, scrub
@@ -94,3 +96,13 @@ def test_ordinary_words_with_at_dots_or_money_stay(words: str) -> None:
 def test_a_number_beside_a_said_email_is_blanked_whole() -> None:
     # Numbers go before said emails, so no part of the number is left behind.
     assert scrub("Ring 0412 345 678 at sample.com") == f"Ring {PHONE_GONE} at sample.com"
+
+
+def test_a_long_run_of_letters_is_quick() -> None:
+    """Every repeat has an upper limit, so a note of 60,000 letters with no "@" or "at" takes a
+    moment, not minutes, and can't hold up the backend. It took about 100 s before (T2-16)."""
+    letters = "a" * 60_000
+    started = time.perf_counter()
+    assert scrub(letters) == letters
+    assert scrub("jo." * 20_000) == "jo." * 20_000
+    assert time.perf_counter() - started < 5

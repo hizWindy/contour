@@ -58,7 +58,10 @@ STAGE_WORDS: Final = {
 COMPANY_MARK = "{company}"
 PERSON_MARK = "{person}"
 
-EMAIL = re.compile(r"[\w.+'-]+@[\w-]+(?:\.[\w-]+)+")
+# Every repeat in these patterns has an upper limit (an email's name part is at most 64
+# characters, a domain part 63), so the time grows in step with the text: a long run of letters
+# with no "@" or "at" can't hold up the backend (engine AGENTS.md, heavy work off the loop).
+EMAIL = re.compile(r"[\w.+'-]{1,64}@[\w-]{1,63}(?:\.[\w-]{1,63}){1,10}")
 # A run of 8 or more digits with phone-like separators: "0412 345 678", "+61 8 9000 0000",
 # "(08) 9000-0000", "0412/345/678". Dates in the pack are written in words, so they never look
 # like this. A comma is not a separator: the pack writes money with commas, and A$12,500,000 has
@@ -79,13 +82,13 @@ DATE_SHAPED = re.compile(
 # then a domain with at least one " dot ", or dots and a last part of letters only. So "meeting
 # at 10.30" and "at level 3" stay. A typed "at St.Kilda" is blanked too: too much is the safe
 # side. Known limits: spelled-out letters, "underscore" and "dash" aren't caught.
-_NAME_PART = r"[\w+'-]+"
-_DOMAIN_PART = r"[\w-]+"
-_SAID_DOT = r"(?:\s+dot\s+|\.)"
-_SAID_AT = r"(?:\s*@\s*|\s+at\s+|\s*[\[(]at[\])]\s*)"
+_NAME_PART = r"[\w+'-]{1,64}"
+_DOMAIN_PART = r"[\w-]{1,63}"
+_SAID_DOT = r"(?:\s{1,5}dot\s{1,5}|\.)"
+_SAID_AT = r"(?:\s{0,5}@\s{0,5}|\s{1,5}at\s{1,5}|\s{0,5}[\[(]at[\])]\s{0,5})"
 SAID_EMAIL = re.compile(
-    rf"{_NAME_PART}(?:{_SAID_DOT}{_NAME_PART})*{_SAID_AT}"
-    rf"(?P<domain>{_DOMAIN_PART}(?:{_SAID_DOT}{_DOMAIN_PART})+)",
+    rf"{_NAME_PART}(?:{_SAID_DOT}{_NAME_PART}){{0,10}}{_SAID_AT}"
+    rf"(?P<domain>{_DOMAIN_PART}(?:{_SAID_DOT}{_DOMAIN_PART}){{1,10}})",
     re.IGNORECASE,
 )
 SPOKEN_DOT = re.compile(r"\s+dot\s+", re.IGNORECASE)

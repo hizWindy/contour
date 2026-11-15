@@ -11,6 +11,7 @@
 Made-up companies and people only (Sample Logistics Pty Ltd, Jo Sample).
 """
 
+import time
 from collections.abc import Iterator
 from typing import Any
 
@@ -136,6 +137,16 @@ def test_a_vtt_keeps_who_said_what_and_drops_the_rest() -> None:
         "Hello."
     )
     assert clean_vtt("WEBVTT\n\n00:01.000 --> 00:02.000\n\n") == ""
+
+
+def test_a_line_full_of_tags_with_no_end_is_cleaned_quickly() -> None:
+    """The cleaning runs before the length check, on up to 200,000 characters, so a line of
+    "<v " or "<b" with no ">" must take a moment, not minutes (T2-16)."""
+    started = time.perf_counter()
+    voices = "WEBVTT\n\n00:01.000 --> 00:02.000\n" + "<v " * 66_000
+    assert clean_vtt(voices) == "<v" + " <v" * 65_999
+    assert clean_vtt("<b" * 100_000) == "<b" * 100_000
+    assert time.perf_counter() - started < 5
 
 
 async def test_a_vtt_file_is_cleaned_before_it_is_saved(

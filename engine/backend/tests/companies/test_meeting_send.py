@@ -267,6 +267,18 @@ async def test_an_outside_address_refuses_the_whole_send(world: World, sending: 
     assert sending.emails.sent == [] and after["status"] == "draft"
 
 
+async def test_an_address_longer_than_any_email_is_refused(world: World, sending: Sending) -> None:
+    """Each address is at most 254 characters, so a long one is refused before any check reads
+    it (T2-16): a check on a very long one could hold up the backend."""
+    form = await a_saved_draft(world)
+    long = "a" * 250 + "@contour.example"
+    async with signed_in_as(world, "mia", ["companies"]) as client:
+        previewed = await client.post(f"{FORMS}/{form.id}/preview", json={"to": [long]})
+        refused = await send(client, form, LEE, long)
+    assert (previewed.status_code, refused.status_code) == (422, 422)
+    assert sending.emails.sent == []
+
+
 async def test_the_two_blanks_must_be_filled_before_it_goes(world: World, sending: Sending) -> None:
     form = await a_saved_draft(world, going=None)
     async with signed_in_as(world, "mia", ["companies"]) as client:

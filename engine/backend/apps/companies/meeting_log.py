@@ -36,8 +36,10 @@ from core.config import Settings
 TEXT_FILES: Final = (".txt", ".vtt")
 _TIME = r"(?:\d{1,3}:)?\d{1,2}:\d{2}[.,]\d{1,3}"
 VTT_TIMING: Final = re.compile(rf"^\s*{_TIME}\s+-->\s+{_TIME}")
-VOICE: Final = re.compile(r"<v(?:\.[^\s>]*)?\s+([^>]*)>", re.IGNORECASE)
-TAGS: Final = re.compile(rf"</?[a-z][^>]*>|<{_TIME}>", re.IGNORECASE)
+# A tag's repeats have upper limits, so a line full of "<v " with no ">" takes time in step
+# with its length: the cleaning runs before the length check, on up to 200,000 characters.
+VOICE: Final = re.compile(r"<v(?:\.[^\s>]{0,100})?\s{1,20}([^>]{0,200})>", re.IGNORECASE)
+TAGS: Final = re.compile(rf"</?[a-z][^>]{{0,200}}>|<{_TIME}>", re.IGNORECASE)
 BLANK_LINE: Final = re.compile(r"\n[ \t]*\n")
 METADATA: Final = ("NOTE", "STYLE", "REGION")
 

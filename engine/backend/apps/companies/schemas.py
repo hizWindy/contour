@@ -4,7 +4,7 @@ import uuid
 from collections.abc import Callable
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 from pydantic.config import JsonDict
@@ -973,13 +973,16 @@ class MeetingFormPatch(BaseModel):
 
 ADDRESS_MAX_CHARS = 254
 MAX_RECIPIENTS = 20  # the email service's limit for one email
+# One address, at most 254 characters (an email address's limit), so a long one is refused
+# before any check reads it.
+Address = Annotated[SafeText, Field(max_length=ADDRESS_MAX_CHARS)]
 
 
 class FormPreviewIn(BaseModel):
     """The addresses the rep added, to see the email with them. Empty: only the people on the
     meeting."""
 
-    to: list[SafeText] = Field(
+    to: list[Address] = Field(
         default_factory=list,
         max_length=MAX_RECIPIENTS,
         description="Addresses the rep added, each checked against Contour's own domains",
@@ -987,7 +990,7 @@ class FormPreviewIn(BaseModel):
 
 
 class FormSendIn(BaseModel):
-    to: list[SafeText] = Field(
+    to: list[Address] = Field(
         min_length=1,
         max_length=MAX_RECIPIENTS,
         description="Who gets it: Contour addresses only. One that isn't refuses the whole send",
