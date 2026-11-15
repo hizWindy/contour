@@ -37,6 +37,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from apps.companies.facts import scrub
+from apps.companies.internal import only_internal
 from apps.companies.meeting_form import MeetingFormRunner, when_words
 from apps.companies.meeting_store import MeetingSource, cancelled, client_meetings, forms_of
 from apps.companies.tables import MeetingForm
@@ -220,7 +221,8 @@ async def tell_rep(
     form_id: uuid.UUID,
 ) -> bool:
     """One email to the meeting's owner. False when there is nobody to tell, or email can't go:
-    the pre-read still shows. Its key is the form's, so it is never sent twice."""
+    the pre-read still shows. Its key is the form's, so it is never sent twice. Like a pre-read,
+    it goes to a Contour address only: it names the client and the meeting."""
     if not meeting.owner_id:
         return False
     async with _sessions(app)() as session:
@@ -228,6 +230,12 @@ async def tell_rep(
     if rep is None:
         return False
     name, address = rep
+    if not only_internal([address], settings.internal_email_domains)[0]:
+        log.warning(
+            "meeting_form_email_not_sent",
+            extra={"form_id": str(form_id), "why": "Not a Contour address"},
+        )
+        return False
     email = ready_email(name, company_name, meeting, form_link(settings, form_id))
     try:
         await send(

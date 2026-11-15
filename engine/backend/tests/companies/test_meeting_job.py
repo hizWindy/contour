@@ -139,6 +139,7 @@ def morning_settings(**changes: Any) -> Settings:
         "meeting_forms_enabled": True,
         "meeting_form_days_ahead": 2,
         "app_url": SITE,
+        "internal_email_domains": ["contour.example"],
     }
     values.update(changes)
     return Settings(_env_file=None, **values)
@@ -275,6 +276,19 @@ async def test_no_rep_or_no_email_means_no_email_and_the_pre_read_still_shows(
     not_set_up = morning_settings(email_provider="resend")  # with no key: not set up
     unsent = await draft_morning(world.app, not_set_up, FRIDAY)
     assert (unsent.drafted, unsent.emailed) == (4, 0)
+    assert {form.status for form in await forms(world) if form.trigger == "job"} == {"draft"}
+
+
+async def test_the_ready_email_goes_to_a_contour_address_only(world: World) -> None:
+    """It names the client and the meeting, so like a pre-read it goes to a Contour address
+    only: a rep whose account has another address gets no email, and the pre-read still
+    shows."""
+    await a_company(world)
+    await a_pre_read_for_9205(world)
+    setup = set_up(world)
+    setup.meetings.reps["o1"] = ("Lee Sample", "lee@mail.example")
+    morning = await draft_morning(world.app, morning_settings(), FRIDAY)
+    assert (morning.drafted, morning.emailed, setup.emails.sent) == (4, 0, [])
     assert {form.status for form in await forms(world) if form.trigger == "job"} == {"draft"}
 
 
