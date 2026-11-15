@@ -12,9 +12,10 @@ list. The core then:
    any field that has a value now is dropped. Each step's result is saved as it lands.
 3. **Once only** (rule 4): the write's id is its key. Applying a finished write again returns its
    result. A project gets one open write per subject (like one lead): a second preview of a lead
-   that was sent returns the first write. A write that timed out is never sent again blind: a
-   company is looked for by domain or name first, and a note that may have landed is not sent
-   again (the log says to check HubSpot).
+   that was sent returns the first write. Two previews at the same moment take turns to save
+   (`lock_subject`), so the second finds the first's row and never makes another. A write that
+   timed out is never sent again blind: a company is looked for by domain or name first, and a
+   note that may have landed is not sent again (the log says to check HubSpot).
 4. Our copy of the company is updated at once after it is written, so pages show it.
 5. **Shared with the activity writer** (PLAN-V17 T1-5, `activities.py`: a call, field changes,
    tasks and a note): the one open write per subject (`latest_write`, `save_preview`), the claim
@@ -36,7 +37,7 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import ColumnElement, and_, func, select, update
+from sqlalchemy import ColumnElement, and_, func, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -71,6 +72,10 @@ OPEN = ("previewed", "failed")  # a new preview may plan these again
 CONTINUE = ("partial", "uncertain")  # applying again finishes these
 NOTE_MAX_CHARS = 60_000  # HubSpot's note body limit is 65,536
 WRITE_OFF = "Waiting for write access"
+# Two previews of one subject take turns to save (`lock_subject`): a Postgres advisory lock in
+# the two-key form, this number and hashtext("<app>:<subject>"). 7_244_411 rebuilds the
+# profiles; core/prefs/service.py lists the other keys.
+PREVIEW_LOCK = 7_244_412
 
 OnWritten = Callable[[AsyncSession, "WriteOut"], Awaitable[None]]
 
@@ -410,7 +415,10 @@ async def save_preview(
     url: str | None,
 ) -> HubSpotWrite:
     """Saves a subject's open write as "previewed": the write `write_id` planned again, or a new
-    one. If a click claimed or finished that write meanwhile, it comes back as it is."""
+    one. Two previews of one subject take turns here (`lock_subject`), and one that found no
+    write looks again first: if the other preview made the subject's write meanwhile, that write
+    is planned again, so a subject never gets a second row. If a click claimed or finished the
+    write meanwhile, it comes back as it is."""
     values: dict[str, Any] = {
         "plan": plan,
         "status": "previewed",
@@ -420,6 +428,10 @@ async def save_preview(
         "hubspot_url": url,
         "created_at": datetime.now(UTC),
     }
+    await lock_subject(session, app, subject)  # held until the commit below
+    if write_id is None:
+        made = await latest_write(session, app, subject)
+        write_id = made.id if made is not None else None
     if write_id is None:
         row = HubSpotWrite(app=app, subject=subject, **values)
         session.add(row)
@@ -437,6 +449,16 @@ async def save_preview(
     if saved is None:  # removed meanwhile: nothing removes writes today
         raise WriteNotFound(str(write_id))
     return saved
+
+
+async def lock_subject(session: AsyncSession, app: str, subject: str) -> None:
+    """Waits while another preview of this subject saves, then holds the turn until this
+    transaction ends (a Postgres advisory lock). Only the short save holds it: no database
+    connection waits on HubSpot with it."""
+    await session.execute(
+        text("SELECT pg_advisory_xact_lock(CAST(:space AS integer), hashtext(:key))"),
+        {"space": PREVIEW_LOCK, "key": f"{app}:{subject}"},
+    )
 
 
 # --- Write -----------------------------------------------------------------------------------

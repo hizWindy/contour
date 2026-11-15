@@ -12,8 +12,9 @@ What it does for every caller, so no project needs its own copy:
   searches (HubSpot allows about 19 and 5 on Contour's plan, TBC; we stay well under).
 - **Busy or broken answers:** a 429 or a server error is tried again, at most `MAX_TRIES` times
   in all, after the wait HubSpot asks for (or 1, 2, 4 seconds). A read that times out is tried
-  again too. A WRITE that timed out or got a server error is never sent again: it may have
-  landed, so it raises `HubSpotWriteUncertain` and the writer checks HubSpot first.
+  again too. A WRITE that timed out, got a server error, or got a yes we couldn't read is never
+  sent again: it may have landed, so it raises `HubSpotWriteUncertain` and the writer checks
+  HubSpot first.
 - **Clear errors:** `HubSpotUnavailable`, `HubSpotMissingScope` (it names the scopes HubSpot
   asked for), `HubSpotNotFound`, `HubSpotRejected` and `HubSpotWriteUncertain`. Each has a
   `title` and `detail` that are safe to show a person. HubSpot's own answer body is never
@@ -158,6 +159,15 @@ class HubSpotWritesOff(HubSpotError):
             "Writing to HubSpot is switched off. An admin needs to give the key write "
             "access and switch writing on.",
         )
+
+
+# A write HubSpot said yes to, in an answer we couldn't read (not JSON, or not a record): it may
+# have landed, so it is `HubSpotWriteUncertain`, never a plain failure a retry would send again.
+UNREAD_WRITE_TITLE = "HubSpot may or may not have saved it"
+UNREAD_WRITE_DETAIL = (
+    "HubSpot answered, but we couldn't read its answer, so the change may or may not be saved. "
+    "It was not sent again. Check HubSpot before trying again."
+)
 
 
 # --- What the calls give back ----------------------------------------------------------------
@@ -562,6 +572,16 @@ def _parse[M: _Reply](model: type[M], data: Any) -> M:
         ) from error
 
 
+def _written(data: Any) -> HubSpotObject:
+    """The record a create or a change answered with. HubSpot said yes, so an answer that isn't
+    a record may still mean the write landed: `HubSpotWriteUncertain`, and the writers look for
+    it (or read it back) before anything is sent again."""
+    try:
+        return _Object.model_validate(data).as_object()
+    except ValidationError as error:
+        raise HubSpotWriteUncertain(UNREAD_WRITE_TITLE, UNREAD_WRITE_DETAIL) from error
+
+
 def owner_name(first: str | None, last: str | None) -> str | None:
     parts = [part.strip() for part in (first, last) if part and part.strip()]
     return " ".join(parts) or None
@@ -901,7 +921,7 @@ class HttpHubSpot:
             body["associations"] = _associations(object_type, links)
         self._check_writes()
         data = await self._call("POST", self._path("crm/objects", f"/{object_type}"), body=body)
-        return _parse(_Object, data).as_object()
+        return _written(data)
 
     async def update_object(
         self, object_type: ObjectType, object_id: str, properties: Mapping[str, str]
@@ -909,7 +929,7 @@ class HttpHubSpot:
         self._check_writes()
         path = self._path("crm/objects", f"/{object_type}/{_id(object_id)}")
         data = await self._call("PATCH", path, body={"properties": dict(properties)})
-        return _parse(_Object, data).as_object()
+        return _written(data)
 
     async def add_to_list(self, list_id: str, record_ids: Sequence[str]) -> None:
         self._check_writes()
@@ -1000,6 +1020,10 @@ class HttpHubSpot:
                 try:
                     return response.json()
                 except ValueError as error:
+                    if write:  # HubSpot said yes: the write may have landed
+                        raise HubSpotWriteUncertain(
+                            UNREAD_WRITE_TITLE, UNREAD_WRITE_DETAIL
+                        ) from error
                     raise HubSpotError(
                         "HubSpot sent an answer we couldn't read", "It wasn't JSON."
                     ) from error

@@ -22,6 +22,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from core.api.app import create_app
+from core.auth import admin
 from core.db.engine import get_session
 from core.hubspot.activities import (
     FOUND_DETAIL,
@@ -35,6 +36,7 @@ from core.hubspot.activities import (
     NOT_IN_HUBSPOT_DETAIL,
     NOT_LANDED_DETAIL,
     PATCH_UNSURE_DETAIL,
+    SENDING,
     STOPPED_DETAIL,
     ActivityRequest,
     CallIn,
@@ -54,6 +56,7 @@ from core.hubspot.client import (
     HubSpotNotFound,
     HubSpotObject,
     HubSpotRejected,
+    HubSpotUnavailable,
     HubSpotWritesOff,
     HubSpotWriteUncertain,
     Link,
@@ -75,6 +78,7 @@ from core.hubspot.writer import (
     apply_write,
     write_out,
 )
+from tests.core.auth_world import FAST, GOOD, World, make_account, sign_in
 from tests.core.hubspot_fake import FakeHubSpot, _plain
 
 Factory = async_sessionmaker[AsyncSession]
@@ -82,6 +86,8 @@ db = pytest.mark.integration
 
 MELBOURNE = ZoneInfo("Australia/Melbourne")
 COMPANY, PERSON, DEAL, REP, OTHER_REP = "101", "201", "401", "301", "302"
+OTHER_COMPANY = "102"
+WRITES = "/api/v1/hubspot/writes"
 LEASE = "lease_expiry_melbourne_"
 MOVED = "last_moved_melbourne_"
 STAFF = "number_of_staff_melbourne_office_"
@@ -91,6 +97,9 @@ AT = datetime(2026, 11, 16, 9, 30, tzinfo=MELBOURNE)  # a Monday
 CONNECTED = "f240bbac-87c9-4f6e-bf70-924b57d47db7"  # HubSpot's id for "Connected"
 TIMED_OUT = HubSpotWriteUncertain("HubSpot didn't answer", "It timed out.")
 REFUSED = HubSpotRejected("HubSpot didn't accept the request", "It answered 400 VALIDATION_ERROR.")
+# Three 429 answers in a row: the client gives up with this.
+BUSY = HubSpotUnavailable("HubSpot is busy", "Too many requests (429), even after waiting.")
+NO_ANSWER = HubSpotUnavailable("HubSpot didn't answer", "It timed out or the connection broke.")
 
 
 def ms(moment: datetime) -> str:
@@ -212,9 +221,21 @@ async def row_of(session: AsyncSession, write_id: uuid.UUID) -> HubSpotWrite:
 
 
 async def left_writing(
-    session: AsyncSession, write_id: uuid.UUID, *, ago: timedelta, steps: list[StepResult]
+    session: AsyncSession,
+    write_id: uuid.UUID,
+    *,
+    ago: timedelta,
+    steps: list[StepResult],
+    sending: str | None = None,
+    old_row: bool = False,
 ) -> None:
-    """The write as a backend that stopped part way leaves it."""
+    """The write as a backend that stopped part way leaves it. `sending`: the step it had saved
+    as on its way to HubSpot, or None. `old_row`: a row saved before the plan kept that step."""
+    plan = dict((await row_of(session, write_id)).plan)
+    if old_row:
+        plan.pop(SENDING, None)
+    else:
+        plan[SENDING] = sending
     await session.execute(
         update(HubSpotWrite)
         .where(HubSpotWrite.id == write_id)
@@ -222,9 +243,24 @@ async def left_writing(
             status="writing",
             applied_at=datetime.now(UTC) - ago,
             result={"steps": [step.model_dump() for step in steps]},
+            plan=plan,
         )
     )
     await session.commit()
+
+
+async def five_minutes_on(session: AsyncSession, write_id: uuid.UUID) -> None:
+    """The write's claim was last kept 6 minutes ago: its apply has stopped."""
+    await session.execute(
+        update(HubSpotWrite)
+        .where(HubSpotWrite.id == write_id)
+        .values(applied_at=datetime.now(UTC) - timedelta(minutes=6))
+    )
+    await session.commit()
+
+
+class Killed(BaseException):
+    """The backend dies: nothing runs after it, not even the writer's own settling."""
 
 
 CALL_DONE = StepResult(
@@ -661,6 +697,71 @@ async def test_another_call_at_the_same_moment_is_never_taken_for_ours(
 
 
 @db
+async def test_another_companys_task_due_the_same_day_is_never_taken_for_ours(
+    session: AsyncSession,
+) -> None:
+    fake = contour()
+    fake.add_company(OTHER_COMPANY, name="Example Freight Pty Ltd")
+    task = a_request().tasks[0]
+    # The rep's task for another company: the same subject, owner and day, so the same time.
+    theirs = await fake.create_object(
+        "tasks",
+        {
+            "hs_timestamp": due_ms(task.due),
+            "hs_task_subject": task.subject,
+            "hubspot_owner_id": REP,
+        },
+        links=[Link("companies", OTHER_COMPANY)],
+    )
+    fake.fail["create_tasks"] = [TIMED_OUT]  # ours never reached HubSpot
+    out = await preview_activity(session, fake, only(tasks=[task]))
+
+    unsure = await apply_activity(session, fake, out.id, pause=Waits())
+
+    assert (unsure.status, unsure.steps[0].hubspot_id) == ("uncertain", None)
+    assert unsure.steps[0].detail == LOOKED_UNSURE_DETAIL
+
+    # Ours lands this time, then times out: both match the search, and only ours is linked to
+    # our company.
+    fake.fail_after["create_tasks"] = [TIMED_OUT]
+    out = await preview_activity(session, fake, only(tasks=[task], subject="call_note:2"))
+
+    found = await apply_activity(session, fake, out.id, pause=Waits())
+
+    (ours,) = [record for record in fake.tasks.values() if record.id != theirs.id]
+    assert (found.status, found.steps[0].hubspot_id) == ("done", ours.id)
+    assert found.steps[0].detail == FOUND_DETAIL
+
+
+@db
+async def test_a_look_whose_links_hubspot_does_not_answer_is_no_answer(
+    session: AsyncSession,
+) -> None:
+    fake = contour()
+    fake.fail_after["create_tasks"] = [TIMED_OUT]  # ours landed, then no answer
+    fake.fail["linked_tasks_companies"] = [NO_ANSWER]  # the first look's links: no answer
+    waits = Waits()
+    out = await preview_activity(session, fake, only(tasks=a_request().tasks[:1]))
+
+    found = await apply_activity(session, fake, out.id, pause=waits)
+
+    assert (found.status, found.steps[0].detail) == ("done", FOUND_DETAIL)
+    assert fake.calls.count("linked_tasks_companies") == 2  # looked again, and confirmed it
+    assert waits.seconds == [LOOK_GAP_SECONDS]
+
+    # The links never answer: it is never confirmed, so it stays uncertain and isn't sent again.
+    fake.fail_after["create_tasks"] = [TIMED_OUT]
+    fake.fail["linked_tasks_companies"] = [NO_ANSWER] * LOOKS
+    later = only(tasks=a_request().tasks[1:], subject="call_note:2")
+    out = await preview_activity(session, fake, later)
+
+    unsure = await apply_activity(session, fake, out.id, pause=Waits())
+
+    assert (unsure.status, unsure.steps[0].detail) == ("uncertain", LOOKED_UNSURE_DETAIL)
+    assert fake.calls.count("create_tasks") == 2  # one each: neither was sent again
+
+
+@db
 async def test_a_create_that_timed_out_and_is_not_found_stays_uncertain_until_a_person_says(
     session: AsyncSession,
 ) -> None:
@@ -750,6 +851,34 @@ async def test_two_clicks_at_once_write_once(
 
 
 @db
+async def test_two_previews_at_once_make_one_write(
+    session_factory: Factory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake = contour()
+    both = asyncio.Barrier(2)
+    read = fake.get_object
+
+    async def together(
+        object_type: ObjectType, object_id: str, *, properties: Sequence[str]
+    ) -> HubSpotObject | None:
+        await both.wait()  # each preview has looked for the subject's write, and found none
+        return await read(object_type, object_id, properties=properties)
+
+    monkeypatch.setattr(fake, "get_object", together)
+
+    async def preview() -> WriteOut:
+        async with session_factory() as own:
+            return await preview_activity(own, fake, a_request())
+
+    first, second = await asyncio.wait_for(asyncio.gather(preview(), preview()), timeout=30)
+
+    assert first.id == second.id
+    async with session_factory() as check:
+        rows = (await check.scalars(select(HubSpotWrite))).all()
+    assert [(row.subject, row.status) for row in rows] == [("call_note:1", "previewed")]
+
+
+@db
 async def test_a_failed_task_never_stops_the_note_and_applying_again_redoes_only_it(
     session: AsyncSession,
 ) -> None:
@@ -782,14 +911,16 @@ async def test_a_write_left_writing_is_taken_over_after_five_minutes(session: As
     fake = contour()
     waits = Waits()
     out = await preview_activity(session, fake, a_request(fields=[]))
+    assert (await row_of(session, out.id)).plan[SENDING] is None  # nothing on its way yet
     # The backend stopped while sending task:1: the call is in HubSpot; task:1 never landed.
-    await left_writing(session, out.id, ago=timedelta(minutes=1), steps=[CALL_DONE])
+    minute = timedelta(minutes=1)
+    await left_writing(session, out.id, ago=minute, steps=[CALL_DONE], sending="task:1")
     with pytest.raises(WriteInProgress):  # a younger one is still being written
         await apply_activity(session, fake, out.id, pause=waits)
     with pytest.raises(WriteInProgress):
         await resolve_step(session, out.id, "task:1", landed=False)
 
-    await left_writing(session, out.id, ago=timedelta(minutes=6), steps=[CALL_DONE])
+    await left_writing(session, out.id, ago=6 * minute, steps=[CALL_DONE], sending="task:1")
     taken = await apply_activity(session, fake, out.id, pause=waits)
 
     steps = {step.step: step for step in taken.steps}
@@ -822,7 +953,9 @@ async def test_a_task_that_landed_before_the_backend_stopped_is_found_not_sent_a
         links=[Link("companies", COMPANY)],
     )
     fake.calls.clear()
-    await left_writing(session, out.id, ago=timedelta(minutes=6), steps=[CALL_DONE])
+    await left_writing(
+        session, out.id, ago=timedelta(minutes=6), steps=[CALL_DONE], sending="task:1"
+    )
 
     taken = await apply_activity(session, fake, out.id, pause=Waits())
 
@@ -835,7 +968,8 @@ async def test_a_task_that_landed_before_the_backend_stopped_is_found_not_sent_a
 async def test_a_person_can_answer_for_a_write_left_writing(session: AsyncSession) -> None:
     fake = contour()
     out = await preview_activity(session, fake, a_request(fields=[]))
-    await left_writing(session, out.id, ago=timedelta(minutes=6), steps=[CALL_DONE])
+    six = timedelta(minutes=6)
+    await left_writing(session, out.id, ago=six, steps=[CALL_DONE], sending="task:1")
 
     told = await resolve_step(session, out.id, "task:1", landed=True)
 
@@ -848,7 +982,7 @@ async def test_a_person_can_answer_for_a_write_left_writing(session: AsyncSessio
 
     # A step that isn't the one left unsure: the write is settled all the same.
     out = await preview_activity(session, fake, a_request(fields=[], subject="call_note:2"))
-    await left_writing(session, out.id, ago=timedelta(minutes=6), steps=[CALL_DONE])
+    await left_writing(session, out.id, ago=six, steps=[CALL_DONE], sending="task:1")
     with pytest.raises(StepNotUncertain):
         await resolve_step(session, out.id, "note", landed=True)
     row = await row_of(session, out.id)
@@ -887,6 +1021,99 @@ async def test_a_send_stopped_by_a_shutdown_is_settled_at_once(
         states = [(step["step"], step["status"]) for step in row.result["steps"]]
     assert row.status == "uncertain"  # not left "writing" for 5 minutes
     assert states == [("call", "done"), ("fields", "done"), ("task:1", "uncertain")]
+
+
+@db
+async def test_a_retry_cut_off_while_sending_is_looked_for_and_never_sent_twice(
+    session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake = contour()
+    fake.fail["create_tasks"] = [BUSY]
+    out = await preview_activity(session, fake, a_request())
+    first = await apply_activity(session, fake, out.id, pause=Waits())
+    assert first.status == "partial"
+    assert {step.step: step.status for step in first.steps}["task:1"] == "failed"
+
+    # The rep presses Retry: task:1 lands in HubSpot, then the backend dies before its answer is
+    # saved.
+    create = fake.create_object
+
+    async def lands_then_dies(
+        kind: ObjectType, properties: Mapping[str, str], *, links: Sequence[Link] = ()
+    ) -> HubSpotObject:
+        await create(kind, properties, links=links)
+        raise Killed
+
+    monkeypatch.setattr(fake, "create_object", lands_then_dies)
+    with pytest.raises(Killed):
+        await apply_activity(session, fake, out.id, pause=Waits())
+    monkeypatch.setattr(fake, "create_object", create)
+    row = await row_of(session, out.id)
+    assert (row.status, row.plan[SENDING]) == ("writing", "task:1")  # saved before the send
+    assert {step["step"]: step["status"] for step in row.result["steps"]}["task:1"] == "failed"
+
+    # Five minutes on, the next apply takes it over: task:1 was on its way, so it looks first.
+    await five_minutes_on(session, out.id)
+    taken = await apply_activity(session, fake, out.id, pause=Waits())
+
+    steps = {step.step: step for step in taken.steps}
+    assert taken.status == "done"
+    assert (steps["task:1"].status, steps["task:1"].detail) == ("done", FOUND_DETAIL)
+    subjects = sorted(task.properties["hs_task_subject"] or "" for task in fake.tasks.values())
+    assert subjects == ["Call back about the lease", "Send the floor plan"]  # one of each
+    assert fake.calls.count("create_tasks") == 3  # refused, task:2, the retry: never a fourth
+    assert (await row_of(session, out.id)).plan[SENDING] is None
+
+
+@db
+async def test_a_takeover_with_nothing_on_its_way_marks_nothing(session: AsyncSession) -> None:
+    fake = contour()
+    out = await preview_activity(session, fake, a_request(fields=[]))
+    # The backend stopped after the call's answer was saved, before task:1 was on its way.
+    await left_writing(session, out.id, ago=timedelta(minutes=6), steps=[CALL_DONE])
+
+    taken = await apply_activity(session, fake, out.id, pause=Waits())
+
+    assert taken.status == "done"
+    assert [(step.step, step.status) for step in taken.steps] == [
+        ("call", "done"),
+        ("task:1", "done"),
+        ("task:2", "done"),
+        ("note", "done"),
+    ]
+    assert not [name for name in fake.calls if name.startswith("search_")]  # nothing to look for
+    assert writes_of(fake) == ["create_tasks", "create_tasks", "create_notes"]
+
+    # The fields' change on its way is safe to send twice: it is sent again, not looked for.
+    out = await preview_activity(
+        session, fake, only(fields=a_request().fields, subject="call_note:2")
+    )
+    await left_writing(session, out.id, ago=timedelta(minutes=6), steps=[], sending="fields")
+    fake.calls.clear()
+
+    taken = await apply_activity(session, fake, out.id, pause=Waits())
+
+    assert (taken.status, taken.steps[0].step, taken.steps[0].status) == ("done", "fields", "done")
+    assert fake.calls.count("update_companies") == 1
+    assert fake.companies[COMPANY].properties[LEASE] == "2028-03-31"
+
+
+@db
+async def test_a_row_saved_before_the_plan_kept_the_step_on_its_way_keeps_the_old_rule(
+    session: AsyncSession,
+) -> None:
+    fake = contour()
+    out = await preview_activity(session, fake, a_request(fields=[]))
+    six = timedelta(minutes=6)
+    await left_writing(session, out.id, ago=six, steps=[CALL_DONE], old_row=True)
+
+    taken = await apply_activity(session, fake, out.id, pause=Waits())
+
+    # The first step it didn't record may have been sent: it is looked for, never sent blind.
+    steps = {step.step: step for step in taken.steps}
+    assert (steps["task:1"].status, steps["task:1"].detail) == ("uncertain", LOOKED_UNSURE_DETAIL)
+    assert fake.calls.count("search_tasks") == LOOKS
+    assert fake.calls.count("create_tasks") == 1  # task:2 only
 
 
 @db
@@ -1053,3 +1280,47 @@ async def test_the_admins_apply_sends_an_activity_through_its_own_writer(
     assert len(fake.call_log) == 1 and fake.calls.count("create_companies") == 0
     log = (await client.get("/api/v1/hubspot/writes")).json()
     assert [entry["steps"][0]["step"] for entry in log] == ["call"]
+
+
+@db
+async def test_only_an_admin_may_read_the_write_log_or_apply_a_write(
+    world: World, browser: httpx.AsyncClient
+) -> None:
+    fake = contour()
+    world.app.state.hubspot_provider = lambda: fake
+    async with world.factory() as session:
+        out = await preview_activity(session, fake, only(call=a_request().call))
+    apply = f"{WRITES}/{out.id}/apply"
+    async with world.browser() as stranger:  # no session: the guard answers
+        assert (await stranger.get(WRITES)).status_code == 401
+        assert (await stranger.post(apply)).status_code == 401
+
+    await make_account(world)  # the Admin
+    async with world.factory() as session:
+        await admin.create_person(
+            session,
+            email="jo.sample@example.test",
+            username="josample",
+            name="Jo Sample",
+            role="staff",
+            apps=["companies"],
+            password=GOOD,
+            now=world.clock.now,
+            hasher=FAST,
+        )
+    assert (await sign_in(browser, login="josample")).status_code == 200
+    for answer in (await browser.get(WRITES), await browser.post(apply)):
+        assert answer.status_code == 403, answer.text
+        assert answer.json()["code"] == "admin_only"
+    assert writes_of(fake) == []
+    async with world.factory() as session:
+        assert (await row_of(session, out.id)).status == "previewed"
+
+    async with world.browser() as desk:
+        assert (await sign_in(desk)).status_code == 200
+        applied = await desk.post(apply)
+        assert applied.status_code == 200, applied.text
+        assert applied.json()["status"] == "done"
+        log = await desk.get(WRITES)
+    assert log.status_code == 200
+    assert [entry["id"] for entry in log.json()] == [str(out.id)]

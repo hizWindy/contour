@@ -26,14 +26,21 @@ link to a HubSpot owner, or None, and HubSpot then shows the call as unassigned)
      sent twice can't double anything.
 3. **Never twice.** A create that timed out may have landed, so it is never sent again blind.
    The writer looks for it 3 times over about 30 seconds (search lags): by the exact
-   `hs_timestamp` it sent, the owner, and a call's title or a task's subject. One found: done.
-   None, or more than one: "uncertain", until a person says whether it is in HubSpot
-   (`resolve_step`). Only "it isn't" makes it sendable again.
+   `hs_timestamp` it sent, the owner, and a call's title or a task's subject. Only a record
+   linked to this write's company counts: every task due on one day has the same time, so the
+   rep's task for another company could match. One found: done. None, or more than one:
+   "uncertain", until a person says whether it is in HubSpot (`resolve_step`). Only "it isn't"
+   makes it sendable again. A look HubSpot doesn't answer (the search or the links) isn't an
+   answer: it looks again.
 4. **A write cut off part way** stays "writing". Every save keeps its claim fresh, so one not
-   kept for 5 minutes (TBC) has stopped (the backend stopped). The next `apply_activity` or
-   `resolve_step` takes it over: the first step it didn't record may have been sent, so it is
-   "uncertain" and the look-first rule applies to it. An apply stopped by a cancel (the backend
-   shutting down) or an error settles its write at once, the same way.
+   kept for 5 minutes (TBC) has stopped (the backend stopped). The save right before a send
+   names the step on its way (`sending` in the plan), and the save of its answer clears it. The
+   next `apply_activity` or `resolve_step` takes the write over: the create that was on its way
+   may be in HubSpot, so it is "uncertain" and the look-first rule applies to it, even when it
+   had failed before (a retry). A change to the fields is safe to send twice, so it is just sent
+   again. A row saved before the plan kept `sending`: the first step it didn't record is
+   "uncertain". An apply stopped by a cancel (the backend shutting down) or an error settles its
+   write at once, the same way.
 5. **Our copy at once:** a call that lands goes into `core.hubspot_calls`, and changed fields
    refresh the company and its offices, so "Last talk" and the company are right before the next
    sync. A failure there is logged and never fails the write.
@@ -120,6 +127,10 @@ OUTCOME_IDS: Mapping[str, str] = MappingProxyType({name: key for key, name in OU
 BODY_MAX_CHARS = 60_000  # HubSpot's limit for a call or note body is 65,536
 
 STALLED_AFTER = timedelta(minutes=5)  # TBC: a "writing" write not kept this long has stopped
+# The plan's key for the step that may be on its way to HubSpot: its name from the save right
+# before the send until the save of its answer, else None. Every activity row has it from its
+# preview on, so a row without it was saved before the writer kept it.
+SENDING = "sending"
 LOOKS = 3  # a create that timed out is looked for this many times,
 LOOK_GAP_SECONDS = 15.0  # this far apart: about 30 seconds in all, as HubSpot's search lags
 SETTLE_SECONDS = 5.0  # the most a cut-off apply waits to settle its write
@@ -340,10 +351,11 @@ async def preview_activity(
         tasks=[_task_words(task, owners, request.owner_id) for task in request.tasks],
     )
     # The request rides along in the plan (WritePlan doesn't read it), so the write sends exactly
-    # what was previewed, with each field's kind for comparing values.
+    # what was previewed, with each field's kind for comparing values. Nothing is on its way yet.
     saved = plan.model_dump(mode="json") | {
         "request": request.model_dump(mode="json"),
         "kinds": kinds,
+        SENDING: None,
     }
     row = await save_preview(
         session,
@@ -548,7 +560,9 @@ class _Run:
     steps: dict[str, StepResult]
     url: str | None
     claim: Claim | None = None
-    sending: str | None = None  # the step whose create or change may be on its way to HubSpot
+    # The step whose create or change may be on its way to HubSpot. Each save keeps it in the
+    # plan (`SENDING`), so a takeover knows it too.
+    sending: str | None = None
 
     @classmethod
     def of(cls, row: HubSpotWrite) -> "_Run":
@@ -577,28 +591,46 @@ class _Run:
 
     async def prepare(self, session: AsyncSession, *, taken_over: bool) -> None:
         """Before any step: the note's time is fixed, so a note that timed out can be looked for
-        by it; and a write taken over marks the first step it didn't record as uncertain."""
+        by it; and a write taken over marks the create its stopped apply may have sent as
+        uncertain (`stopped_step`)."""
         if self.request.note is not None and not self.plan.get("note_at"):
             self.plan["note_at"] = _ms(datetime.now(UTC))
         if taken_over:
-            first = next((name for name in self.planned if name not in self.steps), None)
-            if first is not None:
-                self.steps[first] = StepResult(
-                    step=first, status="uncertain", detail=STOPPED_DETAIL
+            stopped = self.stopped_step()
+            if stopped is not None:
+                self.steps[stopped] = StepResult(
+                    step=stopped, status="uncertain", detail=STOPPED_DETAIL
                 )
             log.warning(
-                "hubspot_activity_taken_over", extra={"write_id": str(self.write_id), "step": first}
+                "hubspot_activity_taken_over",
+                extra={"write_id": str(self.write_id), "step": stopped},
             )
         await self.save(session)
 
+    def stopped_step(self) -> str | None:
+        """A write taken over: the step its stopped apply may have sent, or None. That is the
+        create the plan names as on its way (`SENDING`), unless it is done: even one that failed
+        before may have landed this time. The fields' change is safe to send again, and None
+        means nothing was on its way. A row saved before the plan kept `SENDING`: the first
+        planned step with no result, as before."""
+        if SENDING not in self.plan:
+            return next((name for name in self.planned if name not in self.steps), None)
+        name = self.plan[SENDING]
+        if not isinstance(name, str) or name == "fields" or name not in self.planned:
+            return None
+        before = self.steps.get(name)
+        if before is not None and before.status in ("done", "skipped"):
+            return None
+        return name
+
     async def save(self, session: AsyncSession, **final: Any) -> None:
-        """Saves the step log, the plan and the link, and keeps the claim. Raises
-        `WriteInProgress` when another apply took the write over."""
+        """Saves the step log, the plan (with the step on its way, if any) and the link, and
+        keeps the claim. Raises `WriteInProgress` when another apply took the write over."""
         if self.claim is None:
             raise WriteInProgress(str(self.write_id))
         values = {
             "result": steps_json(self.ordered()),
-            "plan": self.plan,
+            "plan": {**self.plan, SENDING: self.sending},
             "hubspot_url": self.url,
             **final,
         }
@@ -871,7 +903,8 @@ async def _look(
     pause: Pause,
 ) -> tuple[StepResult, HubSpotObject | None]:
     """A create that may have landed is looked for, LOOKS times, LOOK_GAP_SECONDS apart, and
-    never sent. Exactly one found: done, with its id. None, or more than one: uncertain."""
+    never sent. Exactly one found: done, with its id. None, or more than one: uncertain. A look
+    HubSpot doesn't answer (the search or the links) counts as no answer: it looks again."""
     taken = {step.hubspot_id for other, step in run.steps.items() if other != name}
     found: list[HubSpotObject] = []
     for attempt in range(LOOKS):
@@ -879,12 +912,9 @@ async def _look(
             await pause(LOOK_GAP_SECONDS)
             await run.save(session)  # keeps the claim while it waits
         try:
-            page = await hubspot.search_objects(
-                create.kind, filters=create.filters, properties=["hs_timestamp"], limit=10
-            )
+            found = await _ours(hubspot, create, run.company_id, taken)
         except HubSpotError:
             continue  # HubSpot didn't answer this time: look again
-        found = [record for record in page.results if record.id not in taken]
         if found:
             break
     if len(found) == 1:
@@ -896,6 +926,27 @@ async def _look(
     if found:
         detail = f"HubSpot has {len(found)} that match it. Check HubSpot, then tell us."
     return StepResult(step=name, status="uncertain", detail=detail), None
+
+
+async def _ours(
+    hubspot: HubSpot, create: _Create, company_id: str, taken: set[str | None]
+) -> list[HubSpotObject]:
+    """The records that match what a create sent, aren't another step's, and are linked to this
+    write's company: every task due on one day has the same time, so the rep's task for another
+    company can match the rest. Raises `HubSpotError` when HubSpot doesn't answer the search or
+    the read of the links."""
+    page = await hubspot.search_objects(
+        create.kind, filters=create.filters, properties=["hs_timestamp"], limit=10
+    )
+    found = [record for record in page.results if record.id not in taken]
+    if not found:
+        return []
+    links = await hubspot.linked(create.kind, "companies", [record.id for record in found])
+    return [
+        record
+        for record in found
+        if any(link.id == company_id for link in links.get(record.id, ()))
+    ]
 
 
 async def _fields_step(session: AsyncSession, hubspot: HubSpot, run: _Run) -> StepResult:

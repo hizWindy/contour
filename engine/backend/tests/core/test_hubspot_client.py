@@ -17,6 +17,7 @@ from core.hubspot.client import (
     MAX_TRIES,
     Association,
     HttpHubSpot,
+    HubSpotError,
     HubSpotMissingScope,
     HubSpotRejected,
     HubSpotUnavailable,
@@ -227,6 +228,42 @@ async def test_a_busy_write_is_sent_again_because_hubspot_refused_it_first() -> 
         "companies", {"name": "Acme"}
     )
     assert made.id == "55"
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        pytest.param(lambda: answer(201, {"results": []}), id="not a record"),
+        pytest.param(lambda: answer(201, ["made"]), id="a list"),
+        pytest.param(lambda: httpx2.Response(200, text="<p>Saved</p>"), id="not JSON"),
+    ],
+)
+async def test_a_yes_to_a_write_we_cannot_read_is_uncertain_and_not_sent_again(
+    reply: Callable[[], httpx2.Response],
+) -> None:
+    """HubSpot said yes, so the write may have landed: never a plain failure that a retry would
+    send again."""
+    calls: list[str] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        calls.append(request.method)
+        return reply()
+
+    client = make(handler, writes=True)
+    with pytest.raises(HubSpotWriteUncertain) as made:
+        await client.create_object(
+            "tasks", {"hs_task_subject": "Send the plan"}, links=[Link("companies", "101")]
+        )
+    with pytest.raises(HubSpotWriteUncertain) as changed:
+        await client.update_object("companies", "101", {"city": "Perth"})
+    assert calls == ["POST", "PATCH"]  # each sent once
+    for caught in (made, changed):
+        assert caught.value.title == "HubSpot may or may not have saved it"
+        assert "It was not sent again" in caught.value.detail
+    # A read we can't read changed nothing: a plain error, never "uncertain".
+    with pytest.raises(HubSpotError) as read:
+        await client.get_object("companies", "101", properties=["name"])
+    assert not isinstance(read.value, HubSpotWriteUncertain)
 
 
 def recorder(seen: list[httpx2.Request], status: int = 201) -> Handler:

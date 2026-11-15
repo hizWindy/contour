@@ -18897,7 +18897,7 @@
     },
     "/hubspot/writes": {
       "get": {
-        "description": "Every write a person confirmed, with what it changed. Previews are left out.",
+        "description": "Every write a person confirmed, with what it changed. Previews are left out. Admins only: it names companies, calls, tasks and field values.",
         "operationId": "list_hubspot_writes",
         "parameters": [
           {
@@ -19052,7 +19052,7 @@
     },
     "/hubspot/writes/{write_id}/apply": {
       "post": {
-        "description": "Writes once only: applying a finished write returns its result. A Lead Finder send and a call note's activity (a call, field changes, tasks, a note) each go through their own writer. Needs the write scopes and HUBSPOT_WRITE_ENABLED=true; until then it answers 409 hubspot_write_off.",
+        "description": "Writes once only: applying a finished write returns its result. A Lead Finder send and a call note's activity (a call, field changes, tasks, a note) each go through their own writer. Admins only: each project sends its own writes through its own routes. Needs the write scopes and HUBSPOT_WRITE_ENABLED=true; until then it answers 409 hubspot_write_off.",
         "operationId": "apply_hubspot_write",
         "parameters": [
           {

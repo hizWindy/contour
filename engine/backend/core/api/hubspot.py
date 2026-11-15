@@ -1,5 +1,8 @@
 """HubSpot endpoints: the connection (status, syncs), the export upload (the backup), what's
-loaded, and the owners an Admin can pick for a person (PLAN-V17 T1-4)."""
+loaded, the owners an Admin can pick for a person (PLAN-V17 T1-4), and the Admin's write log.
+
+The write log and its apply are for Admins only (PLAN-V17 T1-7): the log names companies, calls,
+tasks and field values, and a project sends its own writes through its own routes."""
 
 import asyncio
 import logging
@@ -165,10 +168,13 @@ async def cancel_hubspot_sync(request: Request, sync_id: int) -> SyncOut:
     "/writes",
     response_model=list[WriteOut],
     summary="The log of writes to HubSpot, newest first",
-    description="Every write a person confirmed, with what it changed. Previews are left out.",
+    description=(
+        "Every write a person confirmed, with what it changed. Previews are left out. Admins "
+        "only: it names companies, calls, tasks and field values."
+    ),
 )
 async def list_hubspot_writes(
-    session: SessionDep, limit: Annotated[int, Query(ge=1, le=200)] = 50
+    session: SessionDep, admin: AdminDep, limit: Annotated[int, Query(ge=1, le=200)] = 50
 ) -> list[WriteOut]:
     return await recent_writes(session, limit=limit)
 
@@ -180,12 +186,13 @@ async def list_hubspot_writes(
     description=(
         "Writes once only: applying a finished write returns its result. A Lead Finder send "
         "and a call note's activity (a call, field changes, tasks, a note) each go through "
-        "their own writer. Needs the write scopes and HUBSPOT_WRITE_ENABLED=true; until then "
-        "it answers 409 hubspot_write_off."
+        "their own writer. Admins only: each project sends its own writes through its own "
+        "routes. Needs the write scopes and HUBSPOT_WRITE_ENABLED=true; until then it answers "
+        "409 hubspot_write_off."
     ),
 )
 async def apply_hubspot_write(
-    request: Request, session: SessionDep, write_id: uuid.UUID
+    request: Request, session: SessionDep, admin: AdminDep, write_id: uuid.UUID
 ) -> WriteOut:
     try:
         row = await get_write(session, write_id)
