@@ -187,6 +187,994 @@
         "title": "BoosterFound",
         "type": "object"
       },
+      "CallNoteCall": {
+        "properties": {
+          "in_hubspot": {
+            "default": false,
+            "description": "True once it is in HubSpot: it can't change here any more",
+            "title": "In Hubspot",
+            "type": "boolean"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "enum": [
+                  "Connected",
+                  "No answer",
+                  "Left voicemail",
+                  "Left live message",
+                  "Busy",
+                  "Wrong number"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "summary": {
+            "description": "Two short lines, or empty until sorted or written",
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "summary",
+          "outcome"
+        ],
+        "title": "CallNoteCall",
+        "type": "object"
+      },
+      "CallNoteChange": {
+        "properties": {
+          "current": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What HubSpot has now: a date, or the text",
+            "title": "Current"
+          },
+          "current_changed": {
+            "description": "True when HubSpot's value changed since you saw it",
+            "title": "Current Changed",
+            "type": "boolean"
+          },
+          "field": {
+            "description": "Like lease_end",
+            "title": "Field",
+            "type": "string"
+          },
+          "id": {
+            "description": "Like c1",
+            "title": "Id",
+            "type": "string"
+          },
+          "in_hubspot": {
+            "default": false,
+            "description": "True once it is in HubSpot: it can't change here any more",
+            "title": "In Hubspot",
+            "type": "boolean"
+          },
+          "label": {
+            "description": "Like Lease end",
+            "title": "Label",
+            "type": "string"
+          },
+          "office": {
+            "description": "Like Perth, or the city of a group like Other Office 2",
+            "title": "Office",
+            "type": "string"
+          },
+          "value": {
+            "description": "The new value: a date as YYYY-MM-DD, or a whole number",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "field",
+          "label",
+          "office",
+          "current",
+          "value",
+          "current_changed"
+        ],
+        "title": "CallNoteChange",
+        "type": "object"
+      },
+      "CallNoteChangeIn": {
+        "properties": {
+          "field": {
+            "description": "Like lease_end",
+            "maxLength": 32,
+            "minLength": 1,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "title": "Field",
+            "type": "string"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "pattern": "^[ct][0-9]{1,3}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Its id on the card, or none for a new change",
+            "title": "Id"
+          },
+          "office": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "One of the company's offices, as the card names it",
+            "title": "Office"
+          },
+          "value": {
+            "description": "A date as YYYY-MM-DD, or a whole number of staff",
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[^\\x00]*$",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "office",
+          "value"
+        ],
+        "title": "CallNoteChangeIn",
+        "type": "object"
+      },
+      "CallNoteConfirm": {
+        "properties": {
+          "already_sending": {
+            "description": "True when a batch was being sent already: nothing new started",
+            "title": "Already Sending",
+            "type": "boolean"
+          },
+          "batch_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The batch being sent",
+            "title": "Batch Id"
+          },
+          "notes": {
+            "description": "The notes that started sending, in order",
+            "items": {
+              "$ref": "#/components/schemas/CallNoteOut"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "sending": {
+            "description": "How many notes started sending. 0 when one was already",
+            "title": "Sending",
+            "type": "integer"
+          },
+          "skipped": {
+            "description": "The notes left out, with why",
+            "items": {
+              "$ref": "#/components/schemas/CallNoteSkipped"
+            },
+            "title": "Skipped",
+            "type": "array"
+          }
+        },
+        "required": [
+          "sending",
+          "already_sending"
+        ],
+        "title": "CallNoteConfirm",
+        "type": "object"
+      },
+      "CallNoteIds": {
+        "properties": {
+          "ids": {
+            "description": "The notes, in the order to send them",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "ids"
+        ],
+        "title": "CallNoteIds",
+        "type": "object"
+      },
+      "CallNoteIn": {
+        "properties": {
+          "called_at": {
+            "description": "When the call was, with its time zone",
+            "format": "date-time",
+            "title": "Called At",
+            "type": "string"
+          },
+          "company_key": {
+            "description": "A HubSpot company id, or lead:<id>",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Company Key",
+            "type": "string"
+          },
+          "contact_id": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "HubSpot's contact id: who the call was with, if known",
+            "title": "Contact Id"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "enum": [
+                  "Connected",
+                  "No answer",
+                  "Left voicemail",
+                  "Left live message",
+                  "Busy",
+                  "Wrong number"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How the call went, if the rep picked it",
+            "title": "Outcome"
+          },
+          "prep_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The call prep it came from, if any",
+            "title": "Prep Id"
+          },
+          "source": {
+            "enum": [
+              "mic",
+              "typed",
+              "transcript"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "text": {
+            "description": "The note as typed or said. It may be empty when an outcome is picked (No answer needs no words). An email address or a phone number in it is saved as [email left out] or [number left out]",
+            "maxLength": 60000,
+            "pattern": "^[^\\x00]*$",
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "company_key",
+          "text",
+          "source",
+          "called_at"
+        ],
+        "title": "CallNoteIn",
+        "type": "object"
+      },
+      "CallNoteOptions": {
+        "properties": {
+          "ai_enabled": {
+            "description": "True when Claude sorts a note: its switch is on and Claude is set up. False: the rep picks the outcome and adds follow-ups by hand",
+            "title": "Ai Enabled",
+            "type": "boolean"
+          },
+          "enabled": {
+            "description": "True when Log call and Activity show",
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "fields": {
+            "description": "The fields a call may change",
+            "items": {
+              "$ref": "#/components/schemas/NoteFieldOption"
+            },
+            "title": "Fields",
+            "type": "array"
+          },
+          "max_chars": {
+            "description": "The longest note, in characters",
+            "title": "Max Chars",
+            "type": "integer"
+          },
+          "outcomes": {
+            "description": "HubSpot's call outcomes, for the chips",
+            "items": {
+              "enum": [
+                "Connected",
+                "No answer",
+                "Left voicemail",
+                "Left live message",
+                "Busy",
+                "Wrong number"
+              ],
+              "type": "string"
+            },
+            "title": "Outcomes",
+            "type": "array"
+          },
+          "sending_ready": {
+            "description": "True when confirmed notes can be sent to HubSpot now",
+            "title": "Sending Ready",
+            "type": "boolean"
+          },
+          "soft_seconds": {
+            "description": "When the timer turns Ochre (it never cuts the rep off)",
+            "title": "Soft Seconds",
+            "type": "integer"
+          },
+          "waiting_for": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What sending waits for, in plain words, like 'Waiting for HubSpot write access.' None when ready",
+            "title": "Waiting For"
+          }
+        },
+        "required": [
+          "enabled",
+          "ai_enabled",
+          "sending_ready",
+          "waiting_for",
+          "outcomes",
+          "fields",
+          "soft_seconds",
+          "max_chars"
+        ],
+        "title": "CallNoteOptions",
+        "type": "object"
+      },
+      "CallNoteOut": {
+        "properties": {
+          "call": {
+            "$ref": "#/components/schemas/CallNoteCall"
+          },
+          "called_at": {
+            "format": "date-time",
+            "title": "Called At",
+            "type": "string"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/CallNoteChange"
+            },
+            "title": "Changes",
+            "type": "array"
+          },
+          "company_key": {
+            "title": "Company Key",
+            "type": "string"
+          },
+          "company_name": {
+            "title": "Company Name",
+            "type": "string"
+          },
+          "confirmed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed At"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "hubspot_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The call in HubSpot, once it is logged",
+            "title": "Hubspot Url"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "left_out": {
+            "description": "True when it is left out of the next send",
+            "title": "Left Out",
+            "type": "boolean"
+          },
+          "made_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who logged it. None with sign-in off",
+            "title": "Made By"
+          },
+          "person": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PrepPerson"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sorted_by": {
+            "enum": [
+              "ai",
+              "person"
+            ],
+            "title": "Sorted By",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "mic",
+              "typed",
+              "transcript"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "sorting",
+              "to_confirm",
+              "sending",
+              "logged",
+              "partial",
+              "failed",
+              "uncertain"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "steps": {
+            "description": "Each step of the send, empty until it is sent",
+            "items": {
+              "$ref": "#/components/schemas/CallNoteStep"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "tasks": {
+            "items": {
+              "$ref": "#/components/schemas/CallNoteTask"
+            },
+            "title": "Tasks",
+            "type": "array"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "unsure": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When something needs a look before sending, in plain words. These notes sort first",
+            "title": "Unsure"
+          }
+        },
+        "required": [
+          "id",
+          "company_key",
+          "company_name",
+          "person",
+          "text",
+          "source",
+          "called_at",
+          "status",
+          "sorted_by",
+          "unsure",
+          "call",
+          "changes",
+          "tasks",
+          "left_out",
+          "steps",
+          "hubspot_url",
+          "made_by",
+          "created_at",
+          "confirmed_at"
+        ],
+        "title": "CallNoteOut",
+        "type": "object"
+      },
+      "CallNotePage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CallNoteOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "items"
+        ],
+        "title": "CallNotePage",
+        "type": "object"
+      },
+      "CallNotePatch": {
+        "description": "The rep's edits. Only the parts sent change: `outcome` or `contact_id` sent as null clears\nit, and `changes` or `tasks` replace the card's whole list.",
+        "properties": {
+          "changes": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CallNoteChangeIn"
+                },
+                "maxItems": 10,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changes"
+          },
+          "contact_id": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who the call was with: one of the company's people",
+            "title": "Contact Id"
+          },
+          "left_out": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "True leaves it out of the next send",
+            "title": "Left Out"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "enum": [
+                  "Connected",
+                  "No answer",
+                  "Left voicemail",
+                  "Left live message",
+                  "Busy",
+                  "Wrong number"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "maxLength": 600,
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "tasks": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CallNoteTaskIn"
+                },
+                "maxItems": 10,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tasks"
+          }
+        },
+        "title": "CallNotePatch",
+        "type": "object"
+      },
+      "CallNotePreview": {
+        "properties": {
+          "items": {
+            "description": "Each note, with what HubSpot has now",
+            "items": {
+              "$ref": "#/components/schemas/CallNoteOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "sending_ready": {
+            "description": "True when confirmed notes can be sent to HubSpot now",
+            "title": "Sending Ready",
+            "type": "boolean"
+          },
+          "skipped": {
+            "description": "The notes that can't be sent, with why",
+            "items": {
+              "$ref": "#/components/schemas/CallNoteSkipped"
+            },
+            "title": "Skipped",
+            "type": "array"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/CallNoteTotals",
+            "description": "What sending these notes would add, in all"
+          },
+          "waiting_for": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What sending waits for, in plain words, like 'Waiting for HubSpot write access.' None when ready",
+            "title": "Waiting For"
+          }
+        },
+        "required": [
+          "items",
+          "sending_ready",
+          "waiting_for",
+          "totals"
+        ],
+        "title": "CallNotePreview",
+        "type": "object"
+      },
+      "CallNoteResolve": {
+        "properties": {
+          "landed": {
+            "description": "True: it is in HubSpot. False: it isn't, so sending again adds it",
+            "title": "Landed",
+            "type": "boolean"
+          },
+          "step": {
+            "description": "The step to settle: call, fields, task:1 ... or note",
+            "pattern": "^(?:call|fields|note|task:[0-9]{1,2})$",
+            "title": "Step",
+            "type": "string"
+          }
+        },
+        "required": [
+          "step",
+          "landed"
+        ],
+        "title": "CallNoteResolve",
+        "type": "object"
+      },
+      "CallNoteSkipped": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "why": {
+            "description": "Why it was left out, in plain words",
+            "title": "Why",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "why"
+        ],
+        "title": "CallNoteSkipped",
+        "type": "object"
+      },
+      "CallNoteStep": {
+        "properties": {
+          "status": {
+            "description": "pending (waiting to be sent), done, failed, uncertain (HubSpot didn't answer), or skipped (not written: a field HubSpot changed since you saw it is held)",
+            "enum": [
+              "pending",
+              "done",
+              "failed",
+              "uncertain",
+              "skipped"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "step": {
+            "description": "call, fields or task:1 ..., as the newest send to HubSpot names it. The name to send back when saying whether HubSpot has an unsure step",
+            "title": "Step",
+            "type": "string"
+          },
+          "words": {
+            "description": "What happened, in plain words, like 'Call logged.'",
+            "title": "Words",
+            "type": "string"
+          }
+        },
+        "required": [
+          "step",
+          "status",
+          "words"
+        ],
+        "title": "CallNoteStep",
+        "type": "object"
+      },
+      "CallNoteSummary": {
+        "properties": {
+          "logged_today": {
+            "description": "My notes logged in HubSpot today, Melbourne time",
+            "title": "Logged Today",
+            "type": "integer"
+          },
+          "needs_look": {
+            "description": "My notes that failed, were partly saved, or are unsure",
+            "title": "Needs Look",
+            "type": "integer"
+          },
+          "to_confirm": {
+            "description": "My notes waiting for me to confirm them",
+            "title": "To Confirm",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "to_confirm",
+          "needs_look",
+          "logged_today"
+        ],
+        "title": "CallNoteSummary",
+        "type": "object"
+      },
+      "CallNoteTask": {
+        "properties": {
+          "due": {
+            "format": "date",
+            "title": "Due",
+            "type": "string"
+          },
+          "due_words": {
+            "description": "When, in the rep's own words. Empty when a date was typed",
+            "title": "Due Words",
+            "type": "string"
+          },
+          "id": {
+            "description": "Like t1",
+            "title": "Id",
+            "type": "string"
+          },
+          "in_hubspot": {
+            "default": false,
+            "description": "True once it is in HubSpot: it can't change here any more",
+            "title": "In Hubspot",
+            "type": "boolean"
+          },
+          "kind": {
+            "enum": [
+              "call",
+              "email",
+              "todo"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who it is for. None: the rep who logged the call",
+            "title": "Owner"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "subject",
+          "due",
+          "due_words",
+          "kind",
+          "owner"
+        ],
+        "title": "CallNoteTask",
+        "type": "object"
+      },
+      "CallNoteTaskIn": {
+        "properties": {
+          "due": {
+            "description": "Not before today, Melbourne time",
+            "format": "date",
+            "title": "Due",
+            "type": "string"
+          },
+          "due_words": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The words the date came from, like 'next Tuesday'. Empty when a date was picked. Left out: kept as they were while the day is the same",
+            "title": "Due Words"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "pattern": "^[ct][0-9]{1,3}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Its id on the card, or none for a new task",
+            "title": "Id"
+          },
+          "kind": {
+            "default": "todo",
+            "enum": [
+              "call",
+              "email",
+              "todo"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The HubSpot owner it is for. None: the rep",
+            "title": "Owner Id"
+          },
+          "subject": {
+            "maxLength": 200,
+            "minLength": 1,
+            "pattern": "^[^\\x00]*$",
+            "title": "Subject",
+            "type": "string"
+          }
+        },
+        "required": [
+          "subject",
+          "due"
+        ],
+        "title": "CallNoteTaskIn",
+        "type": "object"
+      },
+      "CallNoteTotals": {
+        "properties": {
+          "calls": {
+            "description": "The calls not yet in HubSpot",
+            "title": "Calls",
+            "type": "integer"
+          },
+          "changes": {
+            "description": "The field changes not yet in HubSpot, and not held",
+            "title": "Changes",
+            "type": "integer"
+          },
+          "tasks": {
+            "description": "The follow-ups not yet in HubSpot",
+            "title": "Tasks",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "calls",
+          "tasks",
+          "changes"
+        ],
+        "title": "CallNoteTotals",
+        "type": "object"
+      },
       "CapReachedData": {
         "properties": {
           "detail": {
@@ -5504,6 +6492,67 @@
         "title": "ModeOption",
         "type": "object"
       },
+      "MyLastNote": {
+        "description": "The asking person's newest note on a company that isn't in HubSpot yet (PLAN-V17 T2-7).",
+        "properties": {
+          "called_at": {
+            "format": "date-time",
+            "title": "Called At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "enum": [
+                  "Connected",
+                  "No answer",
+                  "Left voicemail",
+                  "Left live message",
+                  "Busy",
+                  "Wrong number"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "status": {
+            "description": "Where it is: any status but logged",
+            "enum": [
+              "sorting",
+              "to_confirm",
+              "sending",
+              "logged",
+              "partial",
+              "failed",
+              "uncertain"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "summary": {
+            "description": "The card's summary, or the note's first 200 characters",
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "summary",
+          "called_at",
+          "outcome"
+        ],
+        "title": "MyLastNote",
+        "type": "object"
+      },
       "NeverSuggest": {
         "additionalProperties": false,
         "properties": {
@@ -5568,6 +6617,35 @@
           "sources"
         ],
         "title": "NewsLine",
+        "type": "object"
+      },
+      "NoteFieldOption": {
+        "properties": {
+          "id": {
+            "description": "Like lease_end",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "date",
+              "number"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "description": "Like Lease end",
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "kind"
+        ],
+        "title": "NoteFieldOption",
         "type": "object"
       },
       "NoteOut": {
@@ -6307,6 +7385,17 @@
               }
             ],
             "title": "Last Talk"
+          },
+          "my_last_note": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MyLastNote"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "My newest call note on this company that isn't in HubSpot yet, for Last talk (PLAN-V17). None when there is none, or while call notes are off"
           },
           "names_ok": {
             "description": "False: no names go to Claude (Levi's OK pending), so there is no web check",
@@ -14521,6 +15610,1728 @@
         ]
       }
     },
+    "/companies/call-notes": {
+      "get": {
+        "description": "A page of notes. `state`: `to_confirm` (being sorted, waiting for me, or being sent), `logged`, or `needs_look` (failed, partly saved, or unsure in HubSpot). `mine` is true by default: `mine=false` shows everyone's notes to an Admin, and anyone else still gets only their own. To confirm: the notes the sorter was unsure of first, then the oldest call first. Otherwise the newest call first. 409 `call_notes_off`.",
+        "operationId": "list_call_notes",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "to_confirm",
+                    "logged",
+                    "needs_look"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          },
+          {
+            "in": "query",
+            "name": "company_key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "pattern": "^[^\\x00]*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Company Key"
+            }
+          },
+          {
+            "in": "query",
+            "name": "mine",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Mine",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 1000000,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallNotePage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "My call notes",
+        "tags": [
+          "Companies"
+        ]
+      },
+      "post": {
+        "description": "Saves a note after a call. The text may be empty when an outcome is picked (No answer needs no words). An email address or a phone number in it is saved as [email left out] or [number left out]. With Claude sorting, a note with words comes back `sorting` and is sorted in the background; otherwise it is ready to confirm at once, and the rep adds the outcome and any follow-ups. Send an `Idempotency-Key`: the same key from the same person gives back the first note (200), so a double press is one note. 404 `company_not_found`. 422 `note_too_long`, `note_empty`, `person_not_at_company`, `prep_not_found` or `called_later`. 409 `call_notes_off`.",
+        "operationId": "save_call_note",
+        "parameters": [
+          {
+            "description": "Any unique text (a UUID is fine). The same key gives back the same note",
+            "in": "header",
+            "name": "idempotency-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "minLength": 1,
+                  "pattern": "^[A-Za-z0-9._:-]+$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Any unique text (a UUID is fine). The same key gives back the same note",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CallNoteIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallNoteOut"
+                }
+              }
+            },
+            "description": "The note saved first with this key"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallNoteOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Log a call",
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/call-notes/confirm": {
+      "post": {
+        "description": "Sends my notes to HubSpot, one after another, in the background, in the order given, each as one record (one failure never fails the rest). It answers at once: `sending` is how many started. While a batch is being sent, a second press starts nothing and says so (`already_sending`, still 202). A note left out, not mine, not waiting to be sent, or for a company not in HubSpot yet is in `skipped`, with why. 409 `hubspot_writes_off` while sending waits for HubSpot write access: nothing is sent. 409 `call_notes_off`.",
+        "operationId": "confirm_call_notes",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CallNoteIds"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallNoteConfirm"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Send notes to HubSpot",
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/call-notes/options": {
+      "get": {
+        "description": "Whether call notes are on, whether Claude sorts a note, whether sending to HubSpot is ready (and what it waits for, in plain words), the call outcomes, the fields a call may change, when the timer turns Ochre, and the longest note. It answers while call notes are off too.",
+        "operationId": "call_note_options",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallNoteOptions"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "What Log call offers",
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/call-notes/preview": {
+      "post": {
+        "description": "For a list of my notes (waiting to be sent, or the parts not yet sent of a note that failed or was partly saved): each one with what HubSpot has now for every change, read through the writer's preview (while HubSpot can't be written, our copy's value), whether sending is ready, and `totals`: the calls, follow-ups and field changes sending would add. A change whose value moved since I saw it says so (`current_changed`). Notes that can't be sent are in `skipped`, with why. Nothing is written. 409 `call_notes_off`.",
+        "operationId": "preview_call_notes",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CallNoteIds"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallNotePreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Check notes before sending",
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/call-notes/summary": {
+      "get": {
+        "description": "For Home and the menu: my notes to confirm (being sorted, or waiting for me), those that need a look (failed, partly saved, or unsure in HubSpot), and those logged today, Melbourne time. 409 `call_notes_off`.",
+        "operationId": "call_note_summary",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallNoteSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "My call note counts",
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/call-notes/{note_id}": {
+      "delete": {
+        "description": "Removes my note before it is sent (the toast's Undo), or a note that failed with nothing in HubSpot. A sort still running stops first. 409 `note_sent` while it is being sent, or once any part of it is in HubSpot or may be. 403 `not_your_note`, 404 `note_not_found`, 409 `call_notes_off`.",
+        "operationId": "delete_call_note",
+        "parameters": [
+          {
+            "description": "The note's id",
+            "in": "path",
+            "name": "note_id",
+            "required": true,
+            "schema": {
+              "description": "The note's id",
+              "format": "uuid",
+              "title": "Note Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Remove a call note",
+        "tags": [
+          "Companies"
+        ]
+      },
+      "get": {
+        "description": "Mine, or anyone's for an Admin. A note left `sorting` by a restart goes to the batch to be sorted by hand. A note left `sending` by a restart takes what its write says, and what was never sent goes back to me. 404 `note_not_found`. 409 `call_notes_off`.",
+        "operationId": "get_call_note",
+        "parameters": [
+          {
+            "description": "The note's id",
+            "in": "path",
+            "name": "note_id",
+            "required": true,
+            "schema": {
+              "description": "The note's id",
+              "format": "uuid",
+              "title": "Note Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallNoteOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "One call note",
+        "tags": [
+          "Companies"
+        ]
+      },
+      "patch": {
+        "description": "My edits while the note waits for me, or to the parts not yet in HubSpot of a note that failed or was partly saved: the summary, the outcome, the person, the changes, the follow-ups (with `due_words`, the words the day came from), and `left_out`. Only the parts sent change. Each change is checked as the sorter checks one (a listed field, an office the company has, a value that can be read), and no follow-up is due before today. 409 `note_sorting` while it is being sorted, `note_sent` while it is being sent or once it is logged, `part_sent` for a part already in HubSpot. 422 `change_not_possible`, `change_twice`, `task_in_past`, `task_empty`, `owner_not_found` or `person_not_at_company`. 403 `not_your_note` for an Admin's look at someone else's. 404 `note_not_found`. 409 `call_notes_off`.",
+        "operationId": "edit_call_note",
+        "parameters": [
+          {
+            "description": "The note's id",
+            "in": "path",
+            "name": "note_id",
+            "required": true,
+            "schema": {
+              "description": "The note's id",
+              "format": "uuid",
+              "title": "Note Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CallNotePatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallNoteOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Change a call note",
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/call-notes/{note_id}/resolve": {
+      "post": {
+        "description": "For a step HubSpot may or may not have saved (HubSpot didn't answer): `step` as the note's steps name it, and `landed` true when it is there, false when it isn't, so sending again adds it. The note's status follows. 409 `nothing_to_resolve` for a note with nothing unsure, `step_not_unsure` for a step HubSpot answered, and `hubspot_writes_off` while HubSpot can't be written. 403 `not_your_note`, 404 `note_not_found`, 409 `call_notes_off`.",
+        "operationId": "resolve_call_note",
+        "parameters": [
+          {
+            "description": "The note's id",
+            "in": "path",
+            "name": "note_id",
+            "required": true,
+            "schema": {
+              "description": "The note's id",
+              "format": "uuid",
+              "title": "Note Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CallNoteResolve"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallNoteOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Say whether HubSpot has it",
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/call-notes/{note_id}/retry": {
+      "post": {
+        "description": "Sends what didn't land, for my note that failed or was partly saved: a field held because HubSpot's value changed goes with the value now shown. It answers at once with the note being sent. 409 `note_uncertain` until I say whether HubSpot has an unsure step, `nothing_to_retry` for a note that didn't fail, `already_sending` while a batch is being sent, and `hubspot_writes_off` while sending waits for HubSpot write access. 403 `not_your_note`, 404 `note_not_found`, 409 `call_notes_off`.",
+        "operationId": "retry_call_note",
+        "parameters": [
+          {
+            "description": "The note's id",
+            "in": "path",
+            "name": "note_id",
+            "required": true,
+            "schema": {
+              "description": "The note's id",
+              "format": "uuid",
+              "title": "Note Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallNoteOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Send a note again",
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
     "/companies/facets": {
       "get": {
         "description": "The cities, with how many companies have an office there, and the owners.",
@@ -17059,7 +19870,7 @@
     },
     "/companies/{key}/facts": {
       "get": {
-        "description": "The facts pack for a company and, with `contact_id`, a person at it: each fact with its source. Free and quick, so the modal shows it at once. No Claude request is made.",
+        "description": "The facts pack for a company and, with `contact_id`, a person at it: each fact with its source. Free and quick, so the modal shows it at once. No Claude request is made. `my_last_note` is my newest call note on the company that isn't in HubSpot yet (only my own; with sign-in off, the notes nobody signed in made), for Last talk. A call logged in HubSpot is in the facts at once, as the newest talk.",
         "operationId": "get_facts",
         "parameters": [
           {
