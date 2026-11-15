@@ -44,6 +44,9 @@ function late(load: () => Promise<Prefetch>): Prefetch {
 }
 
 const prefetchMeetings = late(async () => (await import('./meetings/prefetch')).prefetchMeetings)
+const prefetchPreRead = late(
+  async () => (await import('./meetings/pre-read/prefetch')).prefetchPreRead,
+)
 const prefetchActivity = late(async () => (await import('./activity/prefetch')).prefetchActivity)
 
 export const COMPANIES: AppModule = {
@@ -95,8 +98,20 @@ export const COMPANIES: AppModule = {
         {
           // Before `:key`, so these addresses are never read as a company.
           path: 'meetings',
-          handle: { crumb: 'Meetings', prefetch: prefetchMeetings } satisfies RouteHandle,
-          ...page(() => import('./meetings')),
+          handle: { crumb: 'Meetings' } satisfies RouteHandle,
+          children: [
+            {
+              index: true,
+              handle: { prefetch: prefetchMeetings } satisfies RouteHandle,
+              ...page(() => import('./meetings')),
+            },
+            {
+              // A pre-read's own page (T3-10), where Track 2's morning email links.
+              path: ':formId',
+              handle: { crumb: 'Pre-read', prefetch: prefetchPreRead } satisfies RouteHandle,
+              ...page(() => import('./meetings/pre-read')),
+            },
+          ],
         },
         {
           path: 'activity',
