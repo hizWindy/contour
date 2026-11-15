@@ -27,6 +27,7 @@ import {
   deleteCallNoteOptions,
   markCountsOld,
   patchCallNoteOptions,
+  refreshCallNoteLists,
   saveCallNoteOptions,
 } from '@/api/hooks/call-notes'
 import { queryKeys } from '@/api/query'
@@ -124,6 +125,8 @@ export function logCallNote(input: LogCallInput): void {
         return
       }
       markCountsOld(client)
+      // Activity's "To confirm" (T3-6), if it is open, shows the new note while it sorts.
+      void refreshCallNoteLists(client)
       const followUp = input.aiEnabled ? null : checkFollowUp(input.draft.followUp)
       if (followUp?.ok && followUp.task) {
         run(client, patchCallNoteOptions(client), {
@@ -192,6 +195,7 @@ function removeNote(save: Save): void {
   run(client, deleteCallNoteOptions(), id).then(
     () => {
       markCountsOld(client)
+      void refreshCallNoteLists(client)
     },
     (error: unknown) => {
       // The note is still there: it counts again, and the draft Undo put back would make a

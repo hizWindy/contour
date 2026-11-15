@@ -63,8 +63,11 @@ export interface NoteViewProps {
   prepId: string | null
   options: CallNoteOptions
   onPhone: boolean
-  /** Back to the script. */
-  onBack: () => void
+  /**
+   * Back to the script. A host with no script (Activity's Log call, T3-6) leaves it out: there is
+   * no back arrow, and Esc or the panel's own Close shuts it.
+   */
+  onBack?: () => void
   /** Saved: the panel closes. */
   onSaved: () => void
 }
@@ -225,24 +228,26 @@ export function NoteView({
     <div data-slot="note-view" className="flex h-full flex-col" onKeyDown={onKeyDown}>
       {/* A plain block, not a header element: inside the panel that would read as a second banner. */}
       <div className="flex items-start gap-2 border-b p-5 pr-14 max-sm:p-4 max-sm:pt-[max(1rem,env(safe-area-inset-top))] max-sm:pr-14">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="-mt-1.5 -ml-2"
-              aria-label={BACK_TO_SCRIPT}
-              aria-keyshortcuts="Escape"
-              onClick={onBack}
-            >
-              <ArrowLeft aria-hidden="true" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            {BACK_TO_SCRIPT} <Kbd>Esc</Kbd>
-          </TooltipContent>
-        </Tooltip>
+        {onBack ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="-mt-1.5 -ml-2"
+                aria-label={BACK_TO_SCRIPT}
+                aria-keyshortcuts="Escape"
+                onClick={onBack}
+              >
+                <ArrowLeft aria-hidden="true" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {BACK_TO_SCRIPT} <Kbd>Esc</Kbd>
+            </TooltipContent>
+          </Tooltip>
+        ) : null}
         <div className="flex min-w-0 flex-col gap-0.5">
           <PanelTitle className="text-section">{LOG_CALL}</PanelTitle>
           <PanelDescription className="text-ui text-foreground">
