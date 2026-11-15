@@ -136,7 +136,9 @@ def _caller(call: ast.Call) -> str:
 
 def shown_texts() -> list[tuple[str, str]]:
     found: list[tuple[str, str]] = []
-    for path in [*BACKEND.glob("core/**/*.py"), *BACKEND.glob("apps/lead_finder/**/*.py")]:
+    # Every project, not only the Lead Finder: the Companies page's errors are shown too
+    # (PLAN-V17, asked by Track 2), and a project added later is covered with no change here.
+    for path in [*BACKEND.glob("core/**/*.py"), *BACKEND.glob("apps/**/*.py")]:
         name = path.relative_to(BACKEND).as_posix()
         if name in NOT_SHOWN:
             continue
