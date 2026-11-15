@@ -660,7 +660,7 @@ Newest first.
 
 ## Track 3: the website (session 3)
 
-**Progress:** Stage A 4 of 8. Stage B 0 of 4. Every step is `frontend-agent` work, follows `engine/DESIGN.md` and "The screens, and how they move", uses the `ui-build` skill, and builds against the contract with `mockApi`.
+**Progress:** Stage A 4 of 8. Stage B 1 of 4. Every step is `frontend-agent` work, follows `engine/DESIGN.md` and "The screens, and how they move", uses the `ui-build` skill, and builds against the contract with `mockApi`.
 
 ### Stage A: call notes
 
@@ -739,8 +739,12 @@ Newest first.
 
 ### Stage B: the pre-meeting form
 
-- [ ] **T3-9. Meetings** ("The screens", part 5). The route, the `Segmented` control, the groups, the statuses with one button each, the team switch, the search box, "New pre-read", and the waiting state.
+- [x] **T3-9. Meetings** ("The screens", part 5). The route, the `Segmented` control, the groups, the statuses with one button each, the team switch, the search box, "New pre-read", and the waiting state.
   - **Done when:** tests cover each status, the search, the empty state ("No meetings this week.") and the waiting state.
+  - Done 2026-11-16 (`de23bea` to `9d3b637`).
+    - Checks: lint shows 0 warnings and types pass; tests 102 files and 1,448 passed; the build passes. The first visit is 230 kB gzip (718 kB raw, +2 kB for the menu entry).
+    - Built on Track 3's own contract guesses. T3-10's first commits move it to Track 2's real routes.
+    - Not seen in a browser yet.
 
 - [ ] **T3-10. The pre-read page** ("The screens", part 6). The facts, the three summaries with the pencil, the two blanks, "Redraft" with its cost, and the skeleton while it drafts.
   - **Done when:** tests cover a draft, an edit kept through a redraft, the two blanks, and a failed draft with its plain words.
@@ -754,6 +758,24 @@ Newest first.
 ### Track 3 Log
 
 Newest first.
+
+- 2026-11-16: **Stage B follows Track 2's real routes.**
+  - Track 2 has built T2-10 to T2-14 (`aaba2ca`), so Track 3 generated their contract from the preview (Track 2 joined with Track 3). T3-10's first commits move `v17.ts` Part 3, and T3-9's code, to those real names. The Log's earlier Stage B guesses (`GET /meetings/options`, a flat `MeetingItem`, `addresses`, `hubspot_copy.words`) are dropped.
+  - **The pre-read's address is `/companies/meetings/{form_id}`.** It is Track 2's choice, and its morning email already links there, so Track 2 has nothing to change.
+  - A meeting's company key is `meeting.company_id`: a HubSpot company's key is its id, and a typed meeting carries its key there. So `MeetingItem` needs no `company_key`.
+  - **Track 1's T1-8** (`355bf2b`, its message):
+    - the meetings state can be `off` with "HubSpot isn't connected, so meetings can't be read from it.", which Meetings shows like `waiting`, apart from the pre-meeting forms switch;
+    - `outcome` is spelled `CANCELED`;
+    - `where` is `unknown` for a phone call;
+    - `Meeting` gains two optional fields, `attendee_owner_ids` and `more_companies`.
+- 2026-11-16: **T3-9 built** (6 commits).
+  - The route, the menu (Companies, Meetings, Activity), Upcoming and Past, one status and one button per row, the team switch, the search, New pre-read, every state, and the Settings switch shown again.
+  - **TBC, Al-khair's look:**
+    - the title "Client meetings";
+    - no Navy button on the list (the rows' buttons are quiet);
+    - "Teams" for any video meeting, as the plan says, though a Zoom link reads "Teams" too;
+    - Past as one list, 25 a page;
+    - in New pre-read, the title is required and Teams or in person is optional.
 
 - 2026-11-15: **Track 3 Stage A ready.** Tag `v17-notes-t3`, on the commit that ticks T3-8. Built against the hand-typed contract; M1's type check joins it to Tracks 1 and 2.
   - **The final browser pass** ran on the preview: Track 2's real routes, no keys, and the built site served by `vite preview`.
