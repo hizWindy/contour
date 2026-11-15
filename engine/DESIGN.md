@@ -2,7 +2,7 @@
 
 How the Lead Finder website looks and behaves. This file is the one to update. It started as a copy of the design system section in [PLAN-V1.md](../plan/PLAN-V1.md) (25 Oct 2026).
 
-Last updated: 15 Nov 2026 (the call notes rules Al-khair agreed for Log call and Activity, PLAN-V17 T3-8; earlier that day, call prep moved to a side panel on Companies; 14 Nov: rules added from the design principles).
+Last updated: 15 Nov 2026 (the call notes rules Al-khair agreed for Log call and Activity, PLAN-V17 T3-8, and a left-out card dimmed with the quieter text colour; earlier that day, call prep moved to a side panel on Companies; 14 Nov: rules added from the design principles).
 
 The general principles behind these rules, with their sources, are in [design/principles/](../design/principles/README.md). A rule taken from there names it, like "(principles 03 #14)": library item 03, point 14. Where a principle and this file disagree, this file wins until it is changed. The `frontend-agent` (`.claude/agents/frontend-agent.md`) works from both.
 
@@ -191,7 +191,7 @@ Smooth and quick, like a well-made phone app (PLAN-V13, 11 Nov 2026). Motion sho
 - **Long forms group:** about 5 to 7 fields to a group, each group with a title. (principles 02 #16)
 - **A note being written is kept in the browser** until the server has it, through a refresh or a closed panel. A failed save keeps the text and says so: "Not saved yet. Try again." (Al-khair, 15 Nov 2026; PLAN-V17 T3-5)
 - **A card edits in place:** Edit (or E) opens its fields. Each field saves when it is left, and Esc puts it back. (Al-khair, 15 Nov 2026; PLAN-V17 T3-6)
-- **Leaving a card out of a batch** (X, or "Leave out") keeps it in place, dimmed to 60%, with "Put back" instead of an Undo toast. Its status line and buttons stay at full strength. The dimmed text is under 4.5:1 (quieter text about 2.7:1 in light mode). WCAG excuses only an inactive control, so whether this passes is **TBC**. (Al-khair, 15 Nov 2026; PLAN-V17 T3-6)
+- **Leaving a card out of a batch** (X, or "Leave out") keeps it in place, dimmed, with "Put back" instead of an Undo toast. Dimmed means its title, summary and parts take the quieter text colour (`--muted-foreground`), not lower opacity, so every line still passes 4.5:1: about 6.8:1 on a card and 5.8:1 on the selected tint in light mode, 7.0:1 and 6.1:1 in dark. Its status line and buttons stay at full strength. (Al-khair, 15 Nov 2026; PLAN-V17 T3-6, T3-8)
 
 ## Speed
 

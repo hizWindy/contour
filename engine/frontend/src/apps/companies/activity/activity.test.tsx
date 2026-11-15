@@ -603,10 +603,26 @@ describe('To confirm', () => {
       expect(sent(server, 'PATCH', `${NOTES}/n2`)[0]?.body).toEqual({ left_out: true })
     })
 
-    await user.click(
-      within(card('Sample Mining Pty Ltd')).getByRole('button', { name: /^Put back/ }),
+    // Dimmed with the quieter text colour, which reads at 4.5:1 or more, not with lower opacity.
+    const mining = card('Sample Mining Pty Ltd')
+    const title = within(mining).getByRole('heading', { name: 'Sample Mining Pty Ltd' })
+    const dimmed = title.closest<HTMLElement>('.text-muted-foreground')
+    expect(dimmed).not.toBeNull()
+    expect(mining.contains(dimmed)).toBe(true)
+    expect(dimmed?.contains(within(mining).getByText('Left a message with reception.'))).toBe(true)
+    // No plain opacity class anywhere in it (a button's `disabled:opacity-50` is fine).
+    const faded = [mining, ...mining.querySelectorAll('*')].some((node) =>
+      [...node.classList].some((name) => name.startsWith('opacity-')),
     )
+    expect(faded).toBe(false)
+    // The status line and the buttons stay at full strength.
+    const putBack = within(mining).getByRole('button', { name: /^Put back/ })
+    expect(dimmed?.contains(putBack)).toBe(false)
+    expect(dimmed?.contains(within(mining).getByText('Left out of this batch.'))).toBe(false)
+
+    await user.click(putBack)
     expect(screen.getByRole('button', { name: 'Send 3 to HubSpot' })).toBeInTheDocument()
+    expect(title.closest('.text-muted-foreground')).toBeNull()
     await waitFor(() => {
       expect(sent(server, 'PATCH', `${NOTES}/n2`)[1]?.body).toEqual({ left_out: false })
     })

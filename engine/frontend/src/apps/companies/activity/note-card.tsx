@@ -7,6 +7,9 @@
  *   (`note-parts.tsx`). Done, or Esc, ends it. A change or a follow-up removed meanwhile goes at
  *   once, with Undo in a toast.
  * - **Leave out** (or X) keeps it here, dimmed, out of this batch. "Put back" brings it back.
+ *   Dimmed means the quieter text colour on the title, the summary and the parts (they take the
+ *   colour from the card, so `note-parts.tsx` sets none of its own on them), not lower opacity:
+ *   every line still reads at 4.5:1 or more. The status line and the buttons stay at full strength.
  * - **Remove** takes it away at once, with Undo in a toast (`remove.ts`).
  * - **A note the sorter was unsure of** says so at the top, in words, and sits first in the list.
  * - **A note still being sorted** says so in words, with the hourglass, above a still grey line
@@ -337,9 +340,7 @@ export function NoteCard({
             onCancel={stop}
           />
         ) : (
-          <p className="line-clamp-2 max-w-prose text-body text-pretty break-words text-foreground">
-            {summary}
-          </p>
+          <p className="line-clamp-2 max-w-prose text-body text-pretty break-words">{summary}</p>
         )}
         {editing && outcomes.length > 0 ? (
           <section aria-labelledby={outcomeId} className="flex flex-col gap-2">
@@ -435,12 +436,14 @@ export function NoteCard({
       ) : null}
       <div
         className={cn(
-          'flex flex-col gap-4 p-4 transition-opacity sm:p-5',
-          note.left_out && !editing && 'opacity-60',
+          'flex flex-col gap-4 p-4 transition-colors sm:p-5',
+          // Left out: the title, the summary and the parts take the quieter text colour, which
+          // still reads at 4.5:1 or more. Lower opacity took the quieter text under 4.5:1 (T3-8).
+          note.left_out && !editing ? 'text-muted-foreground' : 'text-foreground',
         )}
       >
         <header className="flex flex-col gap-0.5">
-          <h2 id={titleId} className="text-section font-semibold text-balance text-foreground">
+          <h2 id={titleId} className="text-section font-semibold text-balance">
             {note.company_name}
           </h2>
           <p className="text-caption text-muted-foreground">
