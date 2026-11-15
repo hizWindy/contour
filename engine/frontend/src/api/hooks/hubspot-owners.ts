@@ -46,7 +46,7 @@ export interface SetOwnerVariables {
 }
 
 /**
- * PUT /people/{id}/hubspot-owner (Admin): sets a person's owner, or clears it. The person comes
+ * PUT /people/{user_id}/hubspot-owner (Admin): sets a person's owner, or clears it. The person comes
  * back with the new link, so the row changes at once, before the list is read again.
  */
 export function useSetHubSpotOwner() {
@@ -54,8 +54,8 @@ export function useSetHubSpotOwner() {
   return useMutation<PersonWithOwner, ApiProblem, SetOwnerVariables>({
     mutationFn: async ({ userId, owner }) =>
       unwrap(
-        await apiV17.PUT('/people/{id}/hubspot-owner', {
-          params: { path: { id: userId } },
+        await apiV17.PUT('/people/{user_id}/hubspot-owner', {
+          params: { path: { user_id: userId } },
           body: { owner_id: owner?.id ?? null },
         }),
       ),

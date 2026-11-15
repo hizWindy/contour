@@ -149,12 +149,17 @@ export function useCallNotes(
   })
 }
 
-/** GET /call-notes/{id}: one note. Whoever follows it says how often to ask again. */
+/** GET /call-notes/{note_id}: one note. Whoever follows it says how often to ask again. */
 export function callNoteQueryOptions(id: string) {
   return queryOptions({
     queryKey: queryKeys.companies.callNote(id),
     queryFn: async ({ signal }): Promise<CallNoteOut> =>
-      unwrap(await apiV17.GET('/companies/call-notes/{id}', { params: { path: { id } }, signal })),
+      unwrap(
+        await apiV17.GET('/companies/call-notes/{note_id}', {
+          params: { path: { note_id: id } },
+          signal,
+        }),
+      ),
   })
 }
 
@@ -256,12 +261,16 @@ export function confirmCallNotesOptions() {
   })
 }
 
-/** POST /call-notes/{id}/retry: a note that failed (or partly failed) goes again. */
+/** POST /call-notes/{note_id}/retry: a note that failed (or partly failed) goes again. */
 export function retryCallNoteOptions() {
   return mutationOptions<CallNoteOut, ApiProblem, string>({
     mutationKey: [...queryKeys.companies.callNotes(), 'retry'],
     mutationFn: async (id) =>
-      unwrap(await apiV17.POST('/companies/call-notes/{id}/retry', { params: { path: { id } } })),
+      unwrap(
+        await apiV17.POST('/companies/call-notes/{note_id}/retry', {
+          params: { path: { note_id: id } },
+        }),
+      ),
   })
 }
 
@@ -269,14 +278,14 @@ export interface ResolveCallNoteVariables extends CallNoteResolve {
   id: string
 }
 
-/** POST /call-notes/{id}/resolve: the rep says whether an uncertain step is in HubSpot. */
+/** POST /call-notes/{note_id}/resolve: the rep says whether an uncertain step is in HubSpot. */
 export function resolveCallNoteOptions() {
   return mutationOptions<CallNoteOut, ApiProblem, ResolveCallNoteVariables>({
     mutationKey: [...queryKeys.companies.callNotes(), 'resolve'],
     mutationFn: async ({ id, step, landed }) =>
       unwrap(
-        await apiV17.POST('/companies/call-notes/{id}/resolve', {
-          params: { path: { id } },
+        await apiV17.POST('/companies/call-notes/{note_id}/resolve', {
+          params: { path: { note_id: id } },
           body: { step, landed },
         }),
       ),
@@ -303,12 +312,16 @@ export function saveCallNoteOptions() {
   })
 }
 
-/** DELETE /call-notes/{id}: a note not yet sent goes (the toast's Undo). */
+/** DELETE /call-notes/{note_id}: a note not yet sent goes (the toast's Undo). */
 export function deleteCallNoteOptions() {
   return mutationOptions<void, ApiProblem, string>({
     mutationKey: [...queryKeys.companies.callNotes(), 'delete'],
     mutationFn: async (id) => {
-      unwrap(await apiV17.DELETE('/companies/call-notes/{id}', { params: { path: { id } } }))
+      unwrap(
+        await apiV17.DELETE('/companies/call-notes/{note_id}', {
+          params: { path: { note_id: id } },
+        }),
+      )
     },
   })
 }
@@ -318,14 +331,14 @@ export interface PatchCallNoteVariables {
   patch: CallNotePatch
 }
 
-/** PATCH /call-notes/{id}: the rep's edits. Lists of notes are asked for again. */
+/** PATCH /call-notes/{note_id}: the rep's edits. Lists of notes are asked for again. */
 export function patchCallNoteOptions(client: QueryClient) {
   return mutationOptions<CallNoteOut, ApiProblem, PatchCallNoteVariables>({
     mutationKey: [...queryKeys.companies.callNotes(), 'patch'],
     mutationFn: async ({ id, patch }) =>
       unwrap(
-        await apiV17.PATCH('/companies/call-notes/{id}', {
-          params: { path: { id } },
+        await apiV17.PATCH('/companies/call-notes/{note_id}', {
+          params: { path: { note_id: id } },
           body: patch,
         }),
       ),

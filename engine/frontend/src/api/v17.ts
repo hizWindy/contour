@@ -163,7 +163,7 @@ export interface CallNoteTaskIn {
   kind: TaskKind
 }
 
-/** PATCH /call-notes/{id}: only what is sent changes. Changes and tasks replace the lists. */
+/** PATCH /call-notes/{note_id}: only what is sent changes. Changes and tasks replace the lists. */
 export interface CallNotePatch {
   summary?: string
   outcome?: string | null
@@ -194,7 +194,7 @@ export interface CallNoteConfirm {
   already_sending: boolean
 }
 
-/** POST /call-notes/{id}/resolve: whether an uncertain step is in HubSpot. */
+/** POST /call-notes/{note_id}/resolve: whether an uncertain step is in HubSpot. */
 export interface CallNoteResolve {
   step: string
   landed: boolean
@@ -236,7 +236,7 @@ export interface HubSpotOwnerList {
   owners: HubSpotOwnerOption[]
 }
 
-/** PUT /people/{id}/hubspot-owner (Admin): sets it, or clears it with null. */
+/** PUT /people/{user_id}/hubspot-owner (Admin): sets it, or clears it with null. */
 export interface HubSpotOwnerIn {
   owner_id: string | null
 }
@@ -287,7 +287,9 @@ interface NoContent<Path> {
   responses: { 204: { headers: Record<string, unknown>; content?: never } } & Errors
 }
 
-type Id = { id: string }
+/** The path keys, as the backend names them (Track 2: `note_id`, Track 1: `user_id`). */
+type NoteId = { note_id: string }
+type UserId = { user_id: string }
 
 export interface CallNoteQuery {
   state?: CallNoteState
@@ -314,27 +316,27 @@ export interface V17Paths {
     parameters: NoParameters
     post: Operation<CallNoteConfirm, CallNoteIds>
   }
-  '/companies/call-notes/{id}': {
+  '/companies/call-notes/{note_id}': {
     parameters: NoParameters
-    get: Operation<CallNoteOut, never, Id>
-    patch: Operation<CallNoteOut, CallNotePatch, Id>
-    delete: NoContent<Id>
+    get: Operation<CallNoteOut, never, NoteId>
+    patch: Operation<CallNoteOut, CallNotePatch, NoteId>
+    delete: NoContent<NoteId>
   }
-  '/companies/call-notes/{id}/retry': {
+  '/companies/call-notes/{note_id}/retry': {
     parameters: NoParameters
-    post: Operation<CallNoteOut, never, Id>
+    post: Operation<CallNoteOut, never, NoteId>
   }
-  '/companies/call-notes/{id}/resolve': {
+  '/companies/call-notes/{note_id}/resolve': {
     parameters: NoParameters
-    post: Operation<CallNoteOut, CallNoteResolve, Id>
+    post: Operation<CallNoteOut, CallNoteResolve, NoteId>
   }
   '/hubspot/owners': { parameters: NoParameters; get: Operation<HubSpotOwnerList> }
-  '/people/{id}/hubspot-owner': {
+  '/people/{user_id}/hubspot-owner': {
     parameters: NoParameters
     put: Operation<
       Schemas['PersonOut'] & { hubspot_owner?: HubSpotOwnerLink | null },
       HubSpotOwnerIn,
-      Id
+      UserId
     >
   }
 }

@@ -1,6 +1,6 @@
 /**
  * An edit on Activity answers at once (DESIGN.md "Act at once, undo after"; PLAN-V17 "It answers
- * at once"): the card shows the change, then PATCH /call-notes/{id} tells the server. If the
+ * at once"): the card shows the change, then PATCH /call-notes/{note_id} tells the server. If the
  * server says no, every page of notes goes back to what it was, and a toast says why in the
  * server's own words. When the last edit in flight has answered, the pages are asked for again,
  * so what shows is what the server holds.
@@ -38,8 +38,8 @@ export function useEditCallNote() {
     mutationKey: EDIT_KEY,
     mutationFn: async ({ id, patch }) =>
       unwrap(
-        await apiV17.PATCH('/companies/call-notes/{id}', {
-          params: { path: { id } },
+        await apiV17.PATCH('/companies/call-notes/{note_id}', {
+          params: { path: { note_id: id } },
           body: patch,
         }),
       ),

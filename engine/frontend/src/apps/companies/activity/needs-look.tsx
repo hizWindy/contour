@@ -3,11 +3,11 @@
  * HubSpot may or may not have (uncertain). Each card says what happened, step by step in the
  * server's words, and what to do:
  *
- * - failed or partial: "Try again" (POST /call-notes/{id}/retry). What landed stays. The card says
+ * - failed or partial: "Try again" (POST /call-notes/{note_id}/retry). What landed stays. The card says
  *   "Sending to HubSpot." until it lands, then gets its tick and leaves for Logged. While HubSpot
  *   isn't ready for writing, Try again is greyed with the reason beside it.
  * - uncertain: "Check HubSpot, then tell us:" with "It's there" and "It's not there" (POST
- *   /call-notes/{id}/resolve). "It's there" logs it; "It's not there" turns it into a failed save,
+ *   /call-notes/{note_id}/resolve). "It's there" logs it; "It's not there" turns it into a failed save,
  *   with Try again.
  * - "Open in HubSpot" wherever the server gave a link.
  */
