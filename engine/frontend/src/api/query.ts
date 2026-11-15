@@ -10,6 +10,7 @@ import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query'
 import { isAbort, isApiProblem } from './client'
 import { connectionOf, problemKind } from './connection'
 import type { QueryOf } from './types'
+import type { CallNoteQuery } from './v17'
 
 const MAX_RETRIES = 2
 
@@ -184,6 +185,15 @@ export const queryKeys = {
     callNotes: () => ['companies', 'call-notes'] as const,
     callNoteOptions: () => ['companies', 'call-notes', 'options'] as const,
     callNoteSummary: () => ['companies', 'call-notes', 'summary'] as const,
+    /** Every page of notes (Activity's tabs, T3-6), and one page by its filters. */
+    callNoteLists: () => ['companies', 'call-notes', 'list'] as const,
+    callNoteList: (query: CallNoteQuery) => ['companies', 'call-notes', 'list', query] as const,
+    callNote: (id: string) => ['companies', 'call-notes', 'note', id] as const,
+    /**
+     * HubSpot's values now, for a list of notes. Outside `callNotes()` on purpose: an edit asks
+     * for the lists again, and must not read every company in HubSpot again with them.
+     */
+    callNotePreview: (ids: readonly string[]) => ['companies', 'call-note-preview', ids] as const,
   },
   hubspot: {
     all: ['hubspot'] as const,

@@ -274,6 +274,10 @@ const LONG_CALLS: readonly [string, RegExp, number][] = [
   ['GET', /\/lead-finder\/leads\/export$/, TIME_LIMITS.long],
   ['POST', /\/lead-finder\/review\/send$/, TIME_LIMITS.long],
   ['POST', /\/lead-finder\/leads\/[^/]+\/hubspot\/send$/, TIME_LIMITS.long],
+  // Call notes (PLAN-V17 T3-6): the preview reads each company in HubSpot again, and a retry
+  // writes to HubSpot. The batch's confirm answers at once, so it keeps the normal limit.
+  ['POST', /\/companies\/call-notes\/preview$/, TIME_LIMITS.long],
+  ['POST', /\/companies\/call-notes\/[^/]+\/retry$/, TIME_LIMITS.long],
 ]
 
 /** The time limit for one call, or `null` for none (a live stream of updates). */
