@@ -114,6 +114,8 @@ interface Server {
   copyAfterRetry: HubSpotCopy
   /** PATCH waits for `release()`. */
   patchWaits: boolean
+  /** The preview that answers 500, by its count (1 is the first), or none. */
+  previewFails: number | null
   release: () => void
   calls: Call[]
 }
@@ -125,11 +127,13 @@ function mockServer(changes: Partial<Omit<Server, 'calls' | 'release'>> = {}): S
     send: 'ok',
     copyAfterRetry: { state: 'saved', sentence: null },
     patchWaits: false,
+    previewFails: null,
     release: () => undefined,
     calls: [],
     ...changes,
   }
   let refused = false
+  let previews = 0
   const allowed = (address: string): boolean =>
     address.trim().toLowerCase().endsWith(`@${server.domain}`)
   const respond = async (request: Request): Promise<Response> => {
@@ -155,6 +159,10 @@ function mockServer(changes: Partial<Omit<Server, 'calls' | 'release'>> = {}): S
       return json(server.form)
     }
     if (url.pathname === PREVIEW && method === 'POST') {
+      previews += 1
+      if (previews === server.previewFails) {
+        return json({ title: 'Something went wrong on our side', status: 500 }, 500)
+      }
       const added = (body as { to?: string[] }).to ?? []
       const people: FormPerson[] = [
         { name: 'Jo Sample', email: JO, why: 'on the meeting', ticked: true, allowed: allowed(JO) },
@@ -385,6 +393,28 @@ describe('Check and send', () => {
     await waitFor(() => {
       expect(within(dialog).getByRole('button', { name: 'Send to 1 person' })).toBeEnabled()
     })
+  })
+
+  it('an added address whose check failed stays, says so, and is checked again with Try again', async () => {
+    const server = mockServer({ previewFails: 2 })
+    const { user } = renderPreRead()
+    const dialog = await openDialog(user)
+    await user.type(within(dialog).getByRole('textbox', { name: 'Add someone' }), AL)
+    await user.click(within(dialog).getByRole('button', { name: 'Add' }))
+
+    expect(
+      await within(dialog).findByText('Not checked yet. It gets nothing until it is.'),
+    ).toBeInTheDocument()
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('Something went wrong on our side.')
+    // It isn't counted until the server has said it is Contour's.
+    expect(within(dialog).getByRole('button', { name: 'Send to 1 person' })).toBeEnabled()
+
+    await user.click(within(dialog).getByRole('button', { name: 'Try again' }))
+    expect(
+      await within(dialog).findByRole('button', { name: 'Send to 2 people' }),
+    ).toBeInTheDocument()
+    expect(posts(server, PREVIEW)).toEqual([{ to: [] }, { to: [AL] }, { to: [AL] }])
+    expect(within(dialog).queryByRole('alert')).toBeNull()
   })
 
   it('an address refused when it is sent: plain words beside the people, naming it, and nothing sent', async () => {

@@ -145,6 +145,7 @@ export const WHO_GETS_IT = 'Who gets it'
 export const ONLY_CONTOUR = 'Only Contour addresses can get it.'
 export const NOBODY_LISTED = 'Nobody yet. Add a Contour address below.'
 export const NOT_CONTOUR = "Not a Contour address, so it can't get the pre-read."
+export const NOT_CHECKED = 'Not checked yet. It gets nothing until it is.'
 export const CHECKING = 'Checking it is a Contour address.'
 export const ADD_SOMEONE = 'Add someone'
 export const ADDRESS_PLACEHOLDER = 'Their email address'

@@ -62,6 +62,7 @@ import {
   GETTING_READY,
   NOBODY_LISTED,
   NOBODY_TICKED,
+  NOT_CHECKED,
   NOT_CONTOUR,
   ONLY_CONTOUR,
   OVER_THE_MOST,
@@ -207,15 +208,36 @@ function PersonRow({
   )
 }
 
-/** An address the rep has just added, while the server checks it. */
-function CheckingRow({ address }: { address: string }) {
+/**
+ * An address the rep has added that the server hasn't answered for: being checked, or not checked
+ * because the check failed (Try again is under the list). It can be taken out either way.
+ */
+function CheckingRow({
+  address,
+  checking,
+  onRemove,
+}: {
+  address: string
+  checking: boolean
+  onRemove: () => void
+}) {
   return (
     <li data-slot="send-person" className="flex items-start gap-3 px-3 py-2.5">
       <Hourglass aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-      <div className="flex min-w-0 flex-col gap-0.5">
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <p className="font-semibold break-words text-foreground">{address}</p>
-        <p className="text-caption text-muted-foreground">{CHECKING}</p>
+        <p className="text-caption text-muted-foreground">{checking ? CHECKING : NOT_CHECKED}</p>
       </div>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="-my-1.5"
+        aria-label={removeWords(address)}
+        onClick={onRemove}
+      >
+        <X aria-hidden="true" />
+      </Button>
     </li>
   )
 }
@@ -277,7 +299,6 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
     }
     if (saving || asked.current) return
     asked.current = true
-    sent.current = false
     askNow()
   }, [open, saving])
 
@@ -293,7 +314,8 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
 
   const people = shown?.people ?? []
   const listed = new Set(people.map((person) => addressKey(person.email)))
-  const checking = preview.isPending ? added.filter((address) => !listed.has(address)) : []
+  // Added, and not answered for yet: being checked, or the check failed.
+  const unlisted = added.filter((address) => !listed.has(address))
   const to = sendTo(people, picks)
   const block = to.length === 0 ? NOBODY_TICKED : to.length > MOST_PEOPLE ? OVER_THE_MOST : null
   const busy = preview.isPending || send.isPending || saving
@@ -378,7 +400,7 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
             </h3>
             <p className="text-caption text-muted-foreground">{ONLY_CONTOUR}</p>
           </div>
-          {people.length === 0 && checking.length === 0 ? (
+          {people.length === 0 && unlisted.length === 0 ? (
             <p className="text-ui text-muted-foreground">{NOBODY_LISTED}</p>
           ) : (
             <ul
@@ -403,8 +425,15 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
                   />
                 )
               })}
-              {checking.map((address) => (
-                <CheckingRow key={address} address={address} />
+              {unlisted.map((address) => (
+                <CheckingRow
+                  key={address}
+                  address={address}
+                  checking={preview.isPending}
+                  onRemove={() => {
+                    remove(address)
+                  }}
+                />
               ))}
             </ul>
           )}
@@ -476,7 +505,11 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
     <AlertDialog
       open={open}
       onOpenChange={(next) => {
-        if (!next) close()
+        // Cancel or Esc: nothing was sent, so the focus goes back to Check and send.
+        if (!next) {
+          sent.current = false
+          close()
+        }
       }}
     >
       <AlertDialogContent
