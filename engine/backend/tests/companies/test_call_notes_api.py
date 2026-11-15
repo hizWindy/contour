@@ -172,7 +172,8 @@ async def test_options_say_what_log_call_offers(world: World, settings: dict[str
         {"id": "last_move", "label": "Last move", "kind": "date"},
         {"id": "staff", "label": "Staff", "kind": "number"},
     ]
-    assert (options["soft_seconds"], options["max_chars"]) == (180, 6000)
+    limits = (options["soft_seconds"], options["max_chars"], options["transcript_max_chars"])
+    assert limits == (180, 6000, 60_000)
 
 
 @pytest.mark.parametrize(

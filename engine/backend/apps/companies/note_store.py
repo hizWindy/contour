@@ -356,6 +356,7 @@ def options(app: FastAPI, settings: Settings) -> CallNoteOptions:
         ],
         soft_seconds=settings.notes_soft_seconds,
         max_chars=settings.notes_max_chars,
+        transcript_max_chars=settings.transcript_max_chars,
     )
 
 

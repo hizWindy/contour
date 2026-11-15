@@ -565,6 +565,8 @@ WAITING_FOR = (
 
 
 class CallNoteOptions(Out):
+    model_config = ConfigDict(json_schema_extra=optional_in_types("transcript_max_chars"))
+
     enabled: bool = Field(description="True when Log call and Activity show")
     ai_enabled: bool = Field(
         description="True when Claude sorts a note: its switch is on and Claude is set up. "
@@ -576,6 +578,10 @@ class CallNoteOptions(Out):
     fields: list[NoteFieldOption] = Field(description="The fields a call may change")
     soft_seconds: int = Field(description="When the timer turns Ochre (it never cuts the rep off)")
     max_chars: int = Field(description="The longest note, in characters")
+    transcript_max_chars: int = Field(
+        description="The longest meeting transcript, in characters, once a .vtt file's times are "
+        "taken out. A longer one answers 422 `transcript_too_long`"
+    )
 
 
 class CallNoteIn(BaseModel):
