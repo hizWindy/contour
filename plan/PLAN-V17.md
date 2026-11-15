@@ -552,7 +552,7 @@ Newest first.
 
 ## Track 2: Companies backend (session 2)
 
-**Progress:** Stage A 8 of 9 (T2-8 waits for Al-khair's run). Stage B 3 of 7. Every step is `backend-agent` work.
+**Progress:** Stage A 8 of 9 (T2-8 waits for Al-khair's run). Stage B 5 of 7. Every step is `backend-agent` work.
 
 ### Stage A: call notes
 
@@ -630,13 +630,13 @@ Newest first.
   - A summary the rep edits is marked `by: person`, and a redraft leaves it alone.
   - **Done when:** tests with a fake Claude prove the citing rule, the cap, an edited summary kept through a redraft, and that no contact detail reaches Claude.
 
-- [ ] **T2-13. The morning job.**
+- [x] **T2-13. The morning job.** Done 2026-11-15, `4eba2f3`.
   - `JobSpec` `companies.meeting_forms`: weekdays at 6:40 am Melbourne time, after the sync (6:00) and search ahead (6:30). **Off** until a person switches it on.
   - It drafts each client meeting that starts within `meeting_form_days_ahead` working days and has no form. It stops at the daily limit, and says what one morning costs (`estimate`).
   - When a draft is ready, the rep (the meeting's owner, through `owner_of`) gets one email: "Your pre-read for Sample Logistics is ready", with a link to check and send it. No email set up: no email, and the form still shows.
   - **Done when:** tests prove which meetings it picks, that it never drafts twice, the weekend skip, and one email for each draft.
 
-- [ ] **T2-14. Send.**
+- [x] **T2-14. Send.** Done 2026-11-15, `f2dfa82`.
   - `preview`: the email as it would arrive (a subject, HTML and plain text), and the people. Ticked by default: the Contour people on the meeting who have an account here. The rep can add accounts or type an address.
   - `send`: every address goes through `only_internal`. One that isn't Contour's refuses the whole send, and names it. The email is in the body, never an attachment. Its key is the form's id and version, so a retry can't send twice.
   - The email has: the meeting, the facts, the three summaries with "Written by AI" on each, the ideal next step, who is going, and a link to the company.
@@ -658,6 +658,12 @@ Newest first.
 
 Newest first.
 
+- 2026-11-15, T2-13 and T2-14 done (`4eba2f3`, `f2dfa82`).
+  - **The job** (`companies.meeting_forms`, "Meetings: morning pre-reads"): weekdays 6:40 am, off by default; meetings to the end of the day 2 working days ahead (from a Friday, through Tuesday), no pre-read yet, not cancelled, at most 40 a morning; about US$0.03 a pre-read (**TBC**). The "ready" email goes to the meeting owner's rep through the `rep_of_owner` seam, which finds nobody until Track 1's owner link joins at M5. Its link is `<website>/companies/meetings/<form id>`: Track 3 picks the real page, and the link follows.
+  - **Send:** `POST /meetings/forms/{form_id}/preview` (`{to?}`) answers `FormEmailPreview {subject, text, html, people}`, each person `FormPerson {name, email, why, ticked, allowed}`. `POST /meetings/forms/{form_id}/send` (`{to}`, 1 to 20) answers `MeetingFormOut`. Errors: 422 `outside_address` (names every refused address), `blanks_empty`, `no_one`; 409 `form_not_ready`, `email_not_set_up`, `form_sending` (a second press while one sends); 502 `email_failed` (nothing went); 404 `form_not_found`.
+  - **Choices:** an edit to a sent pre-read makes it a draft again, so "sent" always means these words went; the next send is a new email (a new version). Both blanks must be filled before it goes (**TBC** with Levi). Send again on a sent pre-read emails nobody and retries a waiting or failed HubSpot copy.
+  - **Joins at M5:** `apps/companies/internal.py` is a stand-in with T1-10's exact signature and rules; at M5 one import line in `meeting_send.py` changes to `core.email.internal.only_internal`, and `internal.py` and `test_internal.py` go. `rep_of_owner` joins Track 1's owner link (until then no "ready" email, and nobody is ticked by default on a HubSpot meeting).
+  - **Fixed in review:** two presses at once could both email on the laptop's log sender (Resend's key would stop the second). Send now claims the pre-read while it sends; a test proves one email, and fails with the claim taken out.
 - 2026-11-15, T2-12 done (`3fc64d0`). Choices made while building (each can be changed):
   - The rep's own call notes go to Claude for "talks so far" only while "Claude sorts call notes" is on (choice 1 is Levi's; this is stricter than the step's words).
   - With names off, every known person is hidden too (`{person 1}`, `{person 2}`), not only the company, and put back in the summaries afterwards.
