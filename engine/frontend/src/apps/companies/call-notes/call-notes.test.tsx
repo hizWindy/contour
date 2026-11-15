@@ -1,12 +1,14 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { toast } from 'sonner'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { SignedInUser, SignIn } from '@/api/hooks'
 import { queryKeys } from '@/api/query'
 import type { CompanyDetail, CompanyRow, PrepFacts, PrepOut } from '@/api/types'
 import type { CallNoteIn, CallNoteOptions, CallNoteOut, CallNoteSummary } from '@/api/v17'
 import { readDueDate } from '@/lib/due-date'
 import { melbourneDate } from '@/lib/format'
-import { renderWithProviders, startManualClock } from '@/test/render'
+import { SAMPLE_USER } from '@/test/fake-auth'
+import { createTestQueryClient, renderWithProviders, startManualClock } from '@/test/render'
 import { asPhone } from '@/test/screen'
 import CompaniesPage from '../index'
 import { NoteTimer } from './note-timer'
@@ -675,6 +677,39 @@ describe('Save and next', () => {
       expect(storedDrafts()).toEqual({})
     })
   })
+
+  it("a toast's Try again never sends the note for the next rep who signs in", async () => {
+    const backend = mockBackend({ save: 'fail' })
+    const mia: SignedInUser = {
+      ...SAMPLE_USER,
+      id: 'aaaaaaaa-0000-0000-0000-00000000000a',
+      role: 'staff',
+      apps: ['companies'],
+    }
+    const queryClient = createTestQueryClient()
+    queryClient.setQueryData<SignIn>(queryKeys.auth.me(), { state: 'signed_in', user: mia })
+    const view = renderWithProviders(<CompaniesPage />, { route: '/companies', queryClient })
+    const panel = await logFirstRow(view)
+    await view.user.type(within(panel).getByRole('textbox', { name: 'Call note' }), 'Halfway')
+    await view.user.keyboard('{Control>}{Enter}{/Control}')
+    expect(await screen.findByText('Not saved yet. Try again.')).toBeInTheDocument()
+
+    // Another rep signs in on the same browser while the toast is still up.
+    backend.save = 'ok'
+    act(() => {
+      queryClient.setQueryData<SignIn>(queryKeys.auth.me(), {
+        state: 'signed_in',
+        user: { ...mia, id: 'bbbbbbbb-0000-0000-0000-00000000000b' },
+      })
+    })
+    await view.user.click(screen.getByRole('button', { name: 'Try again' }))
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    })
+    expect(posts(backend)).toHaveLength(1)
+    // The note still waits for Mia, in her own entry.
+    expect(window.localStorage.getItem(`${DRAFTS}.${mia.id}`)).toContain('Halfway')
+  })
 })
 
 describe('the draft', () => {
@@ -687,6 +722,40 @@ describe('the draft', () => {
 
     const second = renderCompanies()
     const again = await logFirstRow(second)
+    expect(within(again).getByRole('textbox', { name: 'Call note' })).toHaveValue('Halfway')
+  })
+
+  it("is the signed-in rep's own: the next rep on the same browser starts with an empty note", async () => {
+    mockBackend()
+    const mia: SignedInUser = {
+      ...SAMPLE_USER,
+      id: 'aaaaaaaa-0000-0000-0000-00000000000a',
+      name: 'Mia Sample',
+      role: 'staff',
+      apps: ['companies'],
+    }
+    const sam: SignedInUser = { ...mia, id: 'bbbbbbbb-0000-0000-0000-00000000000b' }
+    const signedInAs = (user: SignedInUser) => {
+      const queryClient = createTestQueryClient()
+      queryClient.setQueryData<SignIn>(queryKeys.auth.me(), { state: 'signed_in', user })
+      return renderWithProviders(<CompaniesPage />, { route: '/companies', queryClient })
+    }
+
+    const first = signedInAs(mia)
+    const panel = await logFirstRow(first)
+    await first.user.type(within(panel).getByRole('textbox', { name: 'Call note' }), 'Halfway')
+    first.unmount()
+    // Kept in Mia's own entry, not the shared one sign-in off uses.
+    expect(storedDrafts()).toEqual({})
+    expect(window.localStorage.getItem(`${DRAFTS}.${mia.id}`)).toContain('Halfway')
+
+    const next = signedInAs(sam)
+    const empty = await logFirstRow(next)
+    expect(within(empty).getByRole('textbox', { name: 'Call note' })).toHaveValue('')
+    next.unmount()
+
+    const back = signedInAs(mia)
+    const again = await logFirstRow(back)
     expect(within(again).getByRole('textbox', { name: 'Call note' })).toHaveValue('Halfway')
   })
 

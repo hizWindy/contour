@@ -12,7 +12,8 @@
  *   answers. With the AI on, the sorter finds tasks on the server, and nothing here waits for it.
  *
  * It runs outside React because it outlives the panel: the toast's buttons work after the panel
- * has closed, even on another page. The requests still go through the query client (a
+ * has closed, even on another page, but only for the rep who saved, never for the next one to
+ * sign in on that browser (T3-8). The requests still go through the query client (a
  * MutationObserver), so a lost connection reaches the connection bar like any other change.
  */
 import {
@@ -22,6 +23,7 @@ import {
 } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { newIdempotencyKey, toApiProblem, type ApiProblem } from '@/api/client'
+import type { SignIn } from '@/api/hooks/auth'
 import {
   bumpToConfirm,
   deleteCallNoteOptions,
@@ -33,7 +35,7 @@ import {
 import { queryKeys } from '@/api/query'
 import type { CallNoteIn, CallNoteSummary } from '@/api/v17'
 import { changeDetail } from '@/lib/problems'
-import { draftWithKey, dropDraft, keepDraft, readDraft, type NoteDraft } from './draft'
+import { draftOwner, draftWithKey, dropDraft, keepDraft, readDraft, type NoteDraft } from './draft'
 import { checkFollowUp } from './follow-up'
 import {
   FOLLOW_UP_NOT_ADDED,
@@ -118,8 +120,9 @@ export function logCallNote(input: LogCallInput): void {
   }).then(
     (note) => {
       save.noteId = note.id
-      // The server has it: the draft goes, unless a newer one has taken its place.
-      dropDraft(input.draft.companyKey, input.draft.contactId, input.draft.key)
+      // The server has it: the draft goes, unless a newer one has taken its place. It goes from
+      // its own person's entry, even if they have signed out meanwhile.
+      dropDraft(input.draft.owner, input.draft.companyKey, input.draft.contactId, input.draft.key)
       if (save.undone) {
         removeNote(save)
         return
@@ -158,14 +161,23 @@ export function logCallNote(input: LogCallInput): void {
   )
 }
 
+/**
+ * A toast outlives a sign-out, so its Try again and Undo act only while the person who saved is
+ * still the one signed in: never for the next rep on the same browser.
+ */
+function stillSignedIn({ client, draft }: LogCallInput): boolean {
+  return draftOwner(client.getQueryData<SignIn>(queryKeys.auth.me())) === draft.owner
+}
+
 /** Try again: the draft as it is now, with the same key. Gone (saved since): nothing to do. */
 function tryAgain(input: LogCallInput): void {
-  const draft = draftWithKey(input.draft.key)
+  if (!stillSignedIn(input)) return
+  const draft = draftWithKey(input.draft.owner, input.draft.key)
   if (draft) logCallNote({ ...input, draft })
 }
 
 function undo(save: Save): void {
-  if (save.undone) return
+  if (save.undone || !stillSignedIn(save.input)) return
   save.undone = true
   const { client, draft } = save.input
   if (save.counted) {
@@ -173,7 +185,7 @@ function undo(save: Save): void {
     void bumpToConfirm(client, -1)
   }
   // The text goes back as this call's draft, unless the rep has started a newer one since.
-  const stored = readDraft(draft.companyKey, draft.contactId)
+  const stored = readDraft(draft.owner, draft.companyKey, draft.contactId)
   if (!stored || stored.key === draft.key) {
     const restored: NoteDraft = {
       ...draft,
@@ -204,9 +216,9 @@ function removeNote(save: Save): void {
         save.counted = true
         void bumpToConfirm(client, 1)
       }
-      const stored = readDraft(draft.companyKey, draft.contactId)
+      const stored = readDraft(draft.owner, draft.companyKey, draft.contactId)
       if (save.restoredKey !== null && stored?.text === draft.text) {
-        dropDraft(draft.companyKey, draft.contactId, save.restoredKey)
+        dropDraft(draft.owner, draft.companyKey, draft.contactId, save.restoredKey)
       }
       const detail = changeDetail(toApiProblem(error))
       toast.error(NOT_UNDONE, detail ? { description: detail } : undefined)

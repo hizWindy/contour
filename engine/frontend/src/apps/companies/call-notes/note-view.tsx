@@ -8,7 +8,8 @@
  * "Save and next", the one Navy button, beside the timer. Ctrl+Enter (Cmd+Enter on a Mac) saves.
  *
  * - **The draft is safe.** Every change is kept in the browser for this call (`draft.ts`),
- *   through a refresh and a closed panel, until the server has the note.
+ *   through a refresh and a closed panel, until the server has the note. It is the signed-in
+ *   rep's own: another rep on the same browser never sees it.
  * - **Saving answers at once** (`save.ts`): the panel closes, focus goes back to the list's row,
  *   and the toast has Undo. Nothing waits for the sort, which runs on the server.
  * - **Focus** moves into the text box as the view opens, so the rep types straight after L.
@@ -18,6 +19,7 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft } from 'lucide-react'
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
+import { useMe } from '@/api/hooks'
 import { useCallNoteSummary } from '@/api/hooks/call-notes'
 import type { CompanyDetail } from '@/api/types'
 import type { CallNoteOptions } from '@/api/v17'
@@ -31,7 +33,16 @@ import { isMac } from '@/lib/platform'
 import { cn } from '@/lib/utils'
 import { PanelDescription, PanelTitle } from '../panel-title'
 import type { PrepPerson } from '../prep-box'
-import { dropDraft, keepDraft, newestDraft, readDraft, startDraft, type NoteDraft } from './draft'
+import {
+  draftOwner,
+  dropDraft,
+  keepDraft,
+  newestDraft,
+  readDraft,
+  startDraft,
+  type DraftOwner,
+  type NoteDraft,
+} from './draft'
 import { FollowUpFields } from './follow-up-fields'
 import { checkFollowUp } from './follow-up'
 import { NoteMic } from './note-mic'
@@ -72,10 +83,13 @@ export interface NoteViewProps {
   onSaved: () => void
 }
 
-/** The call's draft, if one is kept: the person's, or the company's newest. Else a new one. */
-function firstDraft(companyKey: string, person: PrepPerson | null): NoteDraft {
-  const kept = person ? readDraft(companyKey, person.id) : newestDraft(companyKey)
-  return kept ?? startDraft(companyKey, person)
+/**
+ * The call's draft, if the rep has one kept: for the person called, or the company's newest.
+ * Else a new one.
+ */
+function firstDraft(owner: DraftOwner, companyKey: string, person: PrepPerson | null): NoteDraft {
+  const kept = person ? readDraft(owner, companyKey, person.id) : newestDraft(owner, companyKey)
+  return kept ?? startDraft(owner, companyKey, person)
 }
 
 export function NoteView({
@@ -91,6 +105,8 @@ export function NoteView({
   onSaved,
 }: NoteViewProps) {
   const client = useQueryClient()
+  // The signed-in rep's own drafts only (the app always knows who that is by now).
+  const owner = draftOwner(useMe().data)
   // Asked for now, so the toast can say the count the moment the note is saved.
   useCallNoteSummary()
   const today = melbourneDate()
@@ -102,7 +118,7 @@ export function NoteView({
   const nothingId = useId()
   const outcomeId = useId()
 
-  const [draft, setDraft] = useState(() => firstDraft(companyKey, person))
+  const [draft, setDraft] = useState(() => firstDraft(owner, companyKey, person))
   // The newest draft, for changes that come between two draws (the mic's words, T3-4).
   const latest = useRef(draft)
   const [tried, setTried] = useState(false)
@@ -111,7 +127,9 @@ export function NoteView({
     const now = latest.current
     const next: NoteDraft = { ...now, ...change, updatedAt: new Date().toISOString() }
     // Another person: the draft moves to that call.
-    if (next.contactId !== now.contactId) dropDraft(now.companyKey, now.contactId, now.key)
+    if (next.contactId !== now.contactId) {
+      dropDraft(now.owner, now.companyKey, now.contactId, now.key)
+    }
     keepDraft(next)
     latest.current = next
     setDraft(next)
