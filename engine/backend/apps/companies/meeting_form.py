@@ -741,7 +741,8 @@ async def start_form(
     leads: Sequence[CompanyLeads],
 ) -> tuple[MeetingForm, bool]:
     """Starts a pre-read, and says whether it is new. A HubSpot meeting has one form: a second
-    start gives back the first. A typed meeting needs a company this person can see."""
+    start gives back the first. A typed meeting needs a company this person can see, and the
+    same one typed again by the same person gives back its first form too."""
     maker = auth.user.id if auth is not None else None
     if body.meeting_id is not None:
         first = await session.scalar(
@@ -779,10 +780,28 @@ async def start_form(
                 "Give the meeting's day and time.",
                 code="meeting_time_missing",
             )
+        title = _cut(scrub(body.title or ""), TITLE_CHARS) or "Meeting"
+        # The same person, company, title and start is the same typed meeting, which has one
+        # pre-read: a retry after a lost answer, or a second press, gives back the first.
+        mine = MeetingForm.made_by == maker if maker is not None else MeetingForm.made_by.is_(None)
+        same = await session.scalar(
+            select(MeetingForm)
+            .where(
+                MeetingForm.meeting_id.is_(None),
+                mine,
+                MeetingForm.company_key == key,
+                MeetingForm.title == title,
+                MeetingForm.starts_at == starts_at.astimezone(UTC),
+            )
+            .order_by(MeetingForm.created_at)
+            .limit(1)
+        )
+        if same is not None:
+            return same, False
         form = MeetingForm(
             company_key=key,
             company_name=name,
-            title=_cut(scrub(body.title or ""), TITLE_CHARS) or "Meeting",
+            title=title,
             starts_at=starts_at.astimezone(UTC),
             ends_at=body.ends_at.astimezone(UTC) if body.ends_at is not None else None,
             where=body.where,

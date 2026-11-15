@@ -164,8 +164,10 @@ async def meeting_summary(
         "`starts_at`, and `ends_at` and `where` when known). It answers at once with the form "
         "`drafting`: the facts come first, with no AI, then the three summaries from one Claude "
         "request (this costs money: about US$0.03, at most the pre-read cap). A HubSpot meeting "
-        "has one pre-read: a second start gives back the first (200). 404 `meeting_not_found` "
-        "or `company_not_found`. 422 for a body that is neither kind. 409 `meeting_forms_off`."
+        "has one pre-read: a second start gives back the first (200). So does a typed meeting I "
+        "start again with the same company, title and start, so a retry makes no second one. "
+        "404 `meeting_not_found` or `company_not_found`. 422 for a body that is neither kind. "
+        "409 `meeting_forms_off`."
     ),
     responses={200: {"model": MeetingFormOut, "description": "This meeting's pre-read, as it is"}},
 )

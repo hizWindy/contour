@@ -464,6 +464,25 @@ async def test_the_lead_finders_rating_never_goes_in_a_hubspot_companys_pre_read
         assert "Lead Finder" not in asked["prompt"] and "score 82" not in asked["prompt"]
 
 
+async def test_a_typed_meeting_started_again_gives_back_its_first_pre_read(
+    world: World, settings: dict[str, Any], drafts: Drafts
+) -> None:
+    """A retry after a lost answer, or a second press, makes no second pre-read: the same
+    person, company, title and start is the same typed meeting. Another start is another
+    meeting."""
+    await a_client(world)
+    when = (START + timedelta(days=2)).isoformat()
+    later = (START + timedelta(days=3)).isoformat()
+    async with signed_in_as(world, "mia", ["companies"]) as client:
+        first = await started(client, company_key="201", title="Lunch", starts_at=when)
+        await drafts.runner.wait()
+        again = await started(client, 200, company_key="201", title="Lunch", starts_at=when)
+        other = await started(client, company_key="201", title="Lunch", starts_at=later)
+        await drafts.runner.wait()
+    assert again["id"] == first["id"] and other["id"] != first["id"]
+    assert len(drafts.claude.asked) == 2  # the first and the other: the retry drafts nothing
+
+
 async def test_the_cap_stops_a_second_try_and_the_facts_still_show(
     world: World, settings: dict[str, Any], drafts: Drafts
 ) -> None:
