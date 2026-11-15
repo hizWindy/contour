@@ -473,7 +473,7 @@ The first two and `meeting_forms_enabled` are on the Settings page. `internal_em
 
 ## Track 1: HubSpot (session 1)
 
-**Progress:** Stage A 7 of 7 (tag `v17-notes-t1`). Stage B 1 of 4. Every step is `backend-agent` work.
+**Progress:** Stage A 7 of 7 (tag `v17-notes-t1`). Stage B 2 of 4. Every step is `backend-agent` work.
 
 ### Stage A: call notes
 
@@ -525,7 +525,7 @@ The first two and `meeting_forms_enabled` are on the Settings page. `internal_em
 
 ### Stage B: the pre-meeting form
 
-- [ ] **T1-8. Our copy of meetings.**
+- [x] **T1-8. Our copy of meetings.** Done 2026-11-16 (355bf2b).
   - Migration `0022_hubspot_meetings`: `core.hubspot_meetings` (the `Meeting` fields). People are kept as contact ids, never as addresses.
   - The daily sync reads meetings in its "people" phase: from 90 days back to 60 days ahead (**TBC**), found with a search on `hs_meeting_start_time`, then their companies and people with `linked`.
   - `refresh`: the meetings changed since the last read (`hs_lastmodifieddate`), at most once every 15 minutes, started when someone opens Meetings or Home. A search never shows a deleted meeting, so the daily read is what removes one.
@@ -550,6 +550,32 @@ The first two and `meeting_forms_enabled` are on the Settings page. `internal_em
 
 Newest first.
 
+- 2026-11-16: **T1-8 done** (355bf2b), built by the `backend-agent`.
+  - **What it adds:**
+    - Migration `0022_hubspot_meetings` (after `0020_hubspot_owner_link`): `core.hubspot_meetings` (the `Meeting` fields, people as contact ids) and `core.hubspot_meeting_reads` (each read: full or changes, done, waiting or failed, a sentence, how many). Both tables are in the four table lists. `SCHEMA-0022.md`.
+    - The sync's people phase runs `copy_meetings` after the owner match, even while people wait for the contacts scope. It reads 90 days back to 60 days ahead (**TBC**) on `hs_meeting_start_time`, then each meeting's companies and contacts with `linked`, and replaces our copy, so a meeting deleted in HubSpot goes. A problem is a warning, and the copy from before stays.
+    - `refresh`: the meetings changed since the last good read, less 10 minutes because search lags (**TBC**). It asks HubSpot at most once every 15 minutes (the rule is kept in the database), and two refreshes at once read once.
+    - `refresh_meetings_soon(app)` (in `core/hubspot/connection.py`) is how a page asks for a refresh. It answers at once, does nothing with no key, and stops at shutdown.
+  - **The reads,** all from our copy:
+    - `upcoming` and `past` keep to their windows. With an owner they give the meetings that owner owns or attends. They take an optional `now=`.
+    - `for_company` gives the meetings where that company is the first linked, newest first, at most 200.
+    - `get` gives one meeting.
+    - `status` is ready once a read worked, waiting (naming the missing scope, or "not read yet"), or off with no key.
+  - **Choices made while building:**
+    - `outcome` is HubSpot's own value (`CANCELED`). A cancelled meeting is kept.
+    - `where` is `online` for a video call (`hs_meeting_location_type` VCE, or Teams, Google Meet or Zoom named in the location or the link). It is `in_person` for an address, and `unknown` otherwise, including a phone call.
+    - Emails and phone numbers are blanked in the title, the location and the notes. `hs_all_attendee_emails` and `hs_meeting_body` are never read.
+    - `notes` is the plain text of `hs_internal_meeting_notes`, cut at 4,000 characters.
+    - `Meeting` gains `attendee_owner_ids` (the Contour people, from `hs_attendee_owner_ids`, without the owner) and `more_companies` (linked to more than one company: the first wins).
+    - If HubSpot refuses the contacts links, meetings are kept without their people, with a warning.
+    - Read rows are kept 30 days (the newest good one stays). More than 10,000 meetings in the window are read in turns.
+  - **Tests:** `test_hubspot_meetings.py` has 50 tests: the read, two companies (the first wins, with the flag), a cancelled one, the 15-minute rule and two at once, the waiting state, people waiting don't stop meetings, a deleted meeting, the windows and the owner filter, and no email or phone saved or logged. The touched suites passed with the database up and nothing skipped: client, fake, guard and stubs 77; migrations 56; the table lists 50; sync 30; owners and people 22.
+  - **TBC:** the window (90 and 60 days), the 15 minutes, the 10-minute overlap, HubSpot's order for a meeting's companies, and whether the real key reads meeting-to-contact links (T1-2 suggests yes).
+  - **For Track 2 at M5:**
+    - Call `refresh_meetings_soon(request.app)` from Meetings and Home.
+    - `contour_people` can use `attendee_owner_ids`.
+    - 0023's `down_revision` becomes `0022_hubspot_meetings`.
+  - Track 1's own database `leadfinder_v17a` is now at 0022 (for the schema map).
 - 2026-11-15: **T1-10 done** (1a7a6c4), and **`rep_of_owner`** for Track 2 (e4b5823).
   - `core/email/internal.py`: `only_internal(addresses, domains)` gives the addresses whose domain is exactly one of `domains`, in lower case and each once, and the rest as typed. A look-alike, a sub-domain, a letter from another alphabet, two @, a display name or a broken address is refused. A blank is skipped. With no domains, nobody is allowed. It has the signature and the answer of Track 2's stand-in (`apps/companies/internal.py`), and Track 2's own ten cases pass against it, so M5 is one import line in `meeting_send.py`. 22 tests of its own.
   - `owners.rep_of_owner(session, owner_id)`: the account linked to an owner, as (its name, its own address), or None. It is for Track 2's `RepOf` seam (`no_rep` until M5): who gets "your pre-read is ready", and who is ticked when a pre-read is sent. Only an account that can sign in and may open Companies (an Admin, or its tick). Two accounts on one owner: a link set by hand wins, then the oldest. Not in the contract: added because Track 2's seam needs it.
