@@ -558,8 +558,8 @@ Newest first.
     1. Our copy of meetings kept some phone numbers. A number in twos ("04 12 34 56 78", "+33 6 12 34 56 78") was kept, and so was any digit in a link ("https://wa.me/61400000000"). Now only a date or a time keeps its digits, and only a Teams, Google Meet or Zoom link (by its own host) keeps its meeting number.
     2. The screen-words guard now reads the status sentences (like meetings' "not read yet"). It catches a setting by its own lower-case name ("meeting_note_on_meeting"), and skips an error's `code=`.
   - **For Track 2 at M5** (told by message):
-    - The "your pre-read is ready" email (`meeting_job.tell_rep`) goes to the rep's account address with no `only_internal` check. An account can have any address, so it could leave Contour (choice 10). Check it as `meeting_send` does.
-    - With `meeting_id` passed and the switch on, Send also changes the meeting's internal notes, but no person sees that step (preview and apply run back to back). The email preview or the Send screen should say so (Track 3 too).
+    - The "your pre-read is ready" email (`meeting_job.tell_rep`) went to the rep's account address with no `only_internal` check. An account can have any address, so it could leave Contour (choice 10). **Fixed by Track 2** (3d91e43, with a test): an outside address gets no email.
+    - With `meeting_id` passed and the switch on, Send also changes the meeting's internal notes, but no person sees that step (preview and apply run back to back). **On Track 2's M5 list:** `FormEmailPreview` says so once the switch is in the joined branch, and Track 3's "Check and send" shows it as one plain line.
   - **For M2 (a made-up meeting):** the meeting step reads the notes, then writes them. A line someone types into the meeting's internal notes in between is lost, and HubSpot has no "only if unchanged". The gap is short.
 - 2026-11-16: **T1-9 done** (ff2dbf3), built by the `backend-agent`.
   - **The note:** it goes on the company (190) and the deal (214), as before, and now carries the rep's owner id. A note that timed out is looked for by that owner too.
