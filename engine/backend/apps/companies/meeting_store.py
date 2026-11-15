@@ -107,10 +107,21 @@ class OwnerOf(Protocol):
     async def __call__(self, session: AsyncSession, user_id: uuid.UUID | None) -> str | None: ...
 
 
+class RepOf(Protocol):
+    async def __call__(self, session: AsyncSession, owner_id: str) -> tuple[str, str] | None: ...
+
+
+async def no_rep(session: AsyncSession, owner_id: str) -> tuple[str, str] | None:
+    """Until M5: the link from a person's account to their HubSpot owner is Track 1's (the
+    owner id on `core.users`), and it isn't in this branch yet. So no owner has a rep here."""
+    return None
+
+
 @dataclass(frozen=True)
 class MeetingSource:
-    """Core's meeting reads, and the rep's HubSpot owner, as Meetings uses them. A test gives
-    made-up meetings. It lives on `app.state.meeting_source`."""
+    """Core's meeting reads, the rep's HubSpot owner, and the rep for an owner (their name and
+    address: who gets "your pre-read is ready", and who is ticked when it is sent), as Meetings
+    uses them. A test gives made-up ones. It lives on `app.state.meeting_source`."""
 
     upcoming: Window = hubspot_meetings.upcoming
     past: Window = hubspot_meetings.past
@@ -118,6 +129,7 @@ class MeetingSource:
     get: GetOne = hubspot_meetings.get
     status: Status = hubspot_meetings.status
     owner_of: OwnerOf = activities.owner_of
+    rep_of_owner: RepOf = no_rep
 
 
 # --- Groups and the search ------------------------------------------------------------------------

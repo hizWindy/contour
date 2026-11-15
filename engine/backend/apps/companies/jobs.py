@@ -27,6 +27,15 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from apps.companies.deals import CLOSED_STAGES
+from apps.companies.meeting_job import DEFAULT as MEETING_FORMS_DEFAULT
+from apps.companies.meeting_job import (
+    MEETING_FORMS,
+    check_meeting_forms_settings,
+    describe_meeting_forms,
+    estimate_meeting_forms,
+    meeting_forms_running,
+    start_meeting_forms,
+)
 from apps.companies.prep import APP, PrepContext, PrepRunner
 from apps.companies.tables import Prep
 from core.claude.client import get_claude
@@ -337,5 +346,17 @@ JOBS = (
         estimate=estimate_search_ahead,
         describe=describe_search_ahead,
         check_settings=check_search_ahead_settings,
+    ),
+    # The morning pre-reads (PLAN-V17 T2-13), after the sync and search ahead: meeting_job.py.
+    JobSpec(
+        key=MEETING_FORMS,
+        project="companies",
+        title="Meetings: morning pre-reads",
+        start=start_meeting_forms,
+        running=meeting_forms_running,
+        default=MEETING_FORMS_DEFAULT,
+        estimate=estimate_meeting_forms,
+        describe=describe_meeting_forms,
+        check_settings=check_meeting_forms_settings,
     ),
 )
