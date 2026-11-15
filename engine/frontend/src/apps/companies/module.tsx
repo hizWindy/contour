@@ -3,16 +3,19 @@
  * HubSpot, a panel for each, and call prep. The router, the sidebar, the command menu and Home
  * read it from src/modules.ts.
  *
- * Activity (PLAN-V17 T3-6, `/companies/activity`) is its second page: the calls a rep logged, to
- * confirm and send to HubSpot in one go. Its address sits before a company's (`:key`), so
- * "/companies/activity" never reads as a company. With two pages, Companies is a group in the menu,
- * after the Lead Finder's, in the order of MODULES, as on Home and in Ctrl+K (T3-7). Activity stays
- * in the group for everyone who sees Companies, even while call notes are off (the page says so),
- * so the menu never changes shape once it has loaded. Its row shows how many calls wait to be
- * confirmed, and Ctrl+K gains "Log a call" and "Calls to confirm" (`call-note-links.tsx`, which
- * loads late through `call-note-parts.ts`, so the first visit doesn't grow).
+ * Its other pages are Meetings (PLAN-V17 T3-9, `/companies/meetings`): the client meetings and
+ * their pre-reads, and Activity (T3-6, `/companies/activity`): the calls a rep logged, to confirm
+ * and send to HubSpot in one go. Their addresses sit before a company's (`:key`), so neither is
+ * ever read as a company. Companies is a group in the menu (Companies, Meetings, Activity), after
+ * the Lead Finder's, in the order of MODULES, as on Home and in Ctrl+K (T3-7). Meetings and
+ * Activity stay in the group for everyone who sees Companies, even while their switches are off
+ * (each page says so), so the menu never changes shape once it has loaded. A pre-read's own page
+ * (`/companies/pre-reads/...`, T3-10) counts as Meetings in the menu. Activity's row shows how
+ * many calls wait to be confirmed, and Ctrl+K gains "Log a call" and "Calls to confirm"
+ * (`call-note-links.tsx`, which loads late through `call-note-parts.ts`, so the first visit
+ * doesn't grow).
  */
-import { Building2, ClipboardCheck } from 'lucide-react'
+import { Building2, CalendarCheck, ClipboardCheck } from 'lucide-react'
 import type { PrefetchArgs, RouteHandle } from '@/shell/crumbs'
 import type { AppModule } from '@/shell/nav'
 import { page } from '@/shell/page-route'
@@ -20,20 +23,29 @@ import { CallNoteCommands, ToConfirmCount } from './call-note-parts'
 import { CompaniesHomeCard } from './home-card'
 import { prefetchCompanies, prefetchCompaniesHome, prefetchCompany } from './prefetch'
 
-/** Activity's address, as in `activity/params.ts`, which loads with the page, not here. */
+/** The pages' addresses, as in each page's `params.ts`, which loads with the page, not here. */
+const MEETINGS = '/companies/meetings'
+const PRE_READS = '/companies/pre-reads'
 const ACTIVITY = '/companies/activity'
 
+type Prefetch = (args: PrefetchArgs) => void
+
 /**
- * What Activity asks for first. Its query options load with them, in a small file of their own,
- * because this module is in the first visit and the call notes hooks are not (T3-5's rule).
+ * A page's prefetch whose query options load with it, in a small file of its own: this module is
+ * in the first visit, and the call notes and meetings hooks are not (T3-5's rule).
  */
-function prefetchActivity(args: PrefetchArgs): void {
-  void import('./activity/prefetch')
-    .then(({ prefetchActivity: start }) => {
-      start(args)
-    })
-    .catch(() => undefined)
+function late(load: () => Promise<Prefetch>): Prefetch {
+  return (args) => {
+    void load()
+      .then((start) => {
+        start(args)
+      })
+      .catch(() => undefined)
+  }
 }
+
+const prefetchMeetings = late(async () => (await import('./meetings/prefetch')).prefetchMeetings)
+const prefetchActivity = late(async () => (await import('./activity/prefetch')).prefetchActivity)
 
 export const COMPANIES: AppModule = {
   id: 'companies',
@@ -52,7 +64,15 @@ export const COMPANIES: AppModule = {
       icon: Building2,
       keywords: ['clients', 'prospects', 'call', 'prep', 'script', 'hubspot'],
       purpose: 'Find a company, see what we know, and prep a call in seconds.',
-      notActiveOn: [ACTIVITY],
+      notActiveOn: [MEETINGS, PRE_READS, ACTIVITY],
+    },
+    {
+      to: MEETINGS,
+      label: 'Meetings',
+      icon: CalendarCheck,
+      keywords: ['pre-read', 'pre-meeting form', 'client meeting', 'teams', 'in person'],
+      purpose: 'Draft the pre-read for each client meeting, then send it to the team.',
+      alsoActiveOn: [PRE_READS],
     },
     {
       to: ACTIVITY,
@@ -75,7 +95,12 @@ export const COMPANIES: AppModule = {
           ...page(() => import('./index')),
         },
         {
-          // Before `:key`, so this address is never read as a company.
+          // Before `:key`, so these addresses are never read as a company.
+          path: 'meetings',
+          handle: { crumb: 'Meetings', prefetch: prefetchMeetings } satisfies RouteHandle,
+          ...page(() => import('./meetings')),
+        },
+        {
           path: 'activity',
           handle: { crumb: 'Activity', prefetch: prefetchActivity } satisfies RouteHandle,
           ...page(() => import('./activity')),

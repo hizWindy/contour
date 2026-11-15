@@ -55,8 +55,9 @@ describe('the router', () => {
     ['/leads/99999999-2222-3333-4444-555555555555', 'Lead', ['Lead']],
     ['/rules', 'Rules', ['Rules']],
     ['/test-set', 'Test set', ['Test set']],
-    // Before a company's own address, so it is never read as one (PLAN-V17 T3-6).
+    // Before a company's own address, so neither is ever read as one (PLAN-V17 T3-6, T3-9).
     ['/companies/activity', 'Your call notes', ['Companies', 'Activity']],
+    ['/companies/meetings', 'Client meetings', ['Companies', 'Meetings']],
   ])('shows the page at %s with its title and breadcrumbs', async (path, title, trail) => {
     renderAt(path)
 
@@ -195,12 +196,12 @@ describe('the router', () => {
         expect(group.getByRole('link', { name: item.label })).toHaveAttribute('href', item.to)
       }
     }
-    // Companies has two pages since Activity (PLAN-V17 T3-6), so it is a group of its own, its
-    // list first. Where the group sits in the menu is T3-7's to settle (TBC); for now it follows
-    // the order of the projects.
+    // Companies is a group of its own since Activity (PLAN-V17 T3-6): its list first, then
+    // Meetings (T3-9), then Activity. The group follows the order of the projects (T3-7).
     const companies = within(menu.getByRole('group', { name: COMPANIES.name }))
     expect(companies.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual([
       '/companies',
+      '/companies/meetings',
       '/companies/activity',
     ])
     expect(menu.getByRole('link', { name: ADMIN.label })).toHaveAttribute('href', '/admin')
@@ -219,6 +220,18 @@ describe('the router', () => {
     await screen.findByRole('heading', { level: 1, name: 'Your call notes' }, { timeout: LAZY })
     const menu = within(screen.getByRole('navigation', { name: 'Main menu' }))
     expect(menu.getByRole('link', { name: 'Activity' })).toHaveAttribute('aria-current', 'page')
+    expect(menu.getByRole('link', { name: 'Companies' })).not.toHaveAttribute('aria-current')
+  })
+
+  it.each([
+    ['/companies/meetings', 'Client meetings'],
+    // A pre-read's own page (T3-10) is part of Meetings. Until it is built, it is Not found.
+    ['/companies/pre-reads/f-1', "We can't find that"],
+  ])('marks Meetings in the menu at %s, and not Companies', async (path, title) => {
+    renderAt(path)
+    await screen.findByRole('heading', { level: 1, name: title }, { timeout: LAZY })
+    const menu = within(screen.getByRole('navigation', { name: 'Main menu' }))
+    expect(menu.getByRole('link', { name: 'Meetings' })).toHaveAttribute('aria-current', 'page')
     expect(menu.getByRole('link', { name: 'Companies' })).not.toHaveAttribute('aria-current')
   })
 

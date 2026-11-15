@@ -327,8 +327,9 @@ describe('who sees it', () => {
     await home()
     expect(await mainMenu().findByRole('group', { name: 'Lead Finder' })).toBeInTheDocument()
 
-    // The menu: no Companies group, so no Activity and no count.
+    // The menu: no Companies group, so no Meetings, no Activity and no count.
     expect(mainMenu().queryByRole('group', { name: 'Companies' })).toBeNull()
+    expect(mainMenu().queryByRole('link', { name: /Meetings/ })).toBeNull()
     expect(mainMenu().queryByRole('link', { name: /Activity/ })).toBeNull()
     // Home: no Companies card, so no quick buttons.
     expect(screen.queryByRole('region', { name: 'Companies' })).toBeNull()
@@ -338,8 +339,9 @@ describe('who sees it', () => {
     const menu = await screen.findByRole('dialog', { name: 'Go to a page' })
     expect(within(menu).queryByRole('option', { name: 'Log a call' })).toBeNull()
     expect(within(menu).queryByRole('option', { name: 'Calls to confirm' })).toBeNull()
-    // And not one call notes request.
+    // And not one call notes or meetings request.
     expect(callNoteRequests(requests)).toEqual([])
+    expect(requests.filter((request) => request.includes('/companies/meetings'))).toEqual([])
   })
 
   it('the same person with the tick sees all three', async () => {
@@ -350,6 +352,11 @@ describe('who sees it', () => {
     expect(
       await mainMenu().findByRole('link', { name: 'Activity, 7 calls to confirm' }),
     ).toBeInTheDocument()
+    // Meetings is in the group too (T3-9), with no count of its own.
+    expect(mainMenu().getByRole('link', { name: 'Meetings' })).toHaveAttribute(
+      'href',
+      '/companies/meetings',
+    )
     expect(
       await companiesCard().findByRole('link', { name: '7 calls to confirm' }),
     ).toBeInTheDocument()
