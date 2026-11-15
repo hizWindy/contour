@@ -25,7 +25,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
-import type { CallNoteChange, CallNoteTask, NoteField, TaskKind } from '@/api/v17'
+import type { CallNoteChange, CallNoteTask, NoteField, TaskKind } from '@/api/types'
 import { Segmented } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -713,9 +713,10 @@ function AddFollowUp({ today, onAdd }: { today: string; onAdd: (task: CallNoteTa
         id: `${NEW_PART}${crypto.randomUUID()}`,
         subject: check.task.subject,
         due: check.task.due,
-        due_words: check.task.due_words ?? null,
+        due_words: check.task.due_words ?? '',
         kind: check.task.kind,
         owner: null,
+        in_hubspot: false,
       })
     }
     setDraft(null)

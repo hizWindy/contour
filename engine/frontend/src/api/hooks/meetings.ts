@@ -1,6 +1,5 @@
 /**
- * Meetings and the pre-meeting form (PLAN-V17 Stage B). Typed by hand until M5 (`v17.ts`,
- * `apiV17`), with Track 2's real names.
+ * Meetings and the pre-meeting form (PLAN-V17 Stage B).
  *
  * - **No options route.** While pre-meeting forms are switched off, every meetings route answers
  *   409 `meeting_forms_off` (`isMeetingFormsOff`), so a page learns the switch from its own read.
@@ -42,8 +41,8 @@ import type {
   MeetingPage,
   MeetingQuery,
   MeetingTranscriptIn,
-} from '../v17'
-import { apiV17 } from '../v17-client'
+} from '@/api/types'
+import { api } from '@/api/client'
 import { markMeetingSummaryOld } from './meeting-summary'
 
 // The switch and the counts sit in a small file of their own, because Home and Ctrl+K need them on
@@ -68,7 +67,7 @@ export function meetingsQueryOptions(query: MeetingQuery) {
   return queryOptions({
     queryKey: queryKeys.companies.meetingList(query),
     queryFn: async ({ signal }): Promise<MeetingPage> =>
-      unwrap(await apiV17.GET('/companies/meetings', { params: { query }, signal })),
+      unwrap(await api.GET('/companies/meetings', { params: { query }, signal })),
     refetchInterval: (current) => meetingsPollMs(current.state.data?.items),
   })
 }
@@ -140,7 +139,7 @@ export function putFormOnRows(
 export function startMeetingFormOptions(client: QueryClient) {
   return mutationOptions<MeetingFormOut, ApiProblem, MeetingFormStart>({
     mutationKey: [...queryKeys.companies.meetings(), 'start'],
-    mutationFn: async (body) => unwrap(await apiV17.POST('/companies/meetings/forms', { body })),
+    mutationFn: async (body) => unwrap(await api.POST('/companies/meetings/forms', { body })),
     onSuccess: (form) => {
       client.setQueryData(queryKeys.companies.meetingForm(form.id), form)
       putFormOnRows(client, form, form.meeting.meeting_id)
@@ -181,7 +180,7 @@ export function meetingFormQueryOptions(formId: string) {
     queryKey: queryKeys.companies.meetingForm(formId),
     queryFn: async ({ signal }): Promise<MeetingFormOut> =>
       unwrap(
-        await apiV17.GET('/companies/meetings/forms/{form_id}', {
+        await api.GET('/companies/meetings/forms/{form_id}', {
           params: { path: { form_id: formId } },
           signal,
         }),
@@ -207,7 +206,7 @@ export function useMeeting(meetingId: string | null) {
     queryKey: queryKeys.companies.meeting(meetingId ?? ''),
     queryFn: async ({ signal }): Promise<MeetingDetail> =>
       unwrap(
-        await apiV17.GET('/companies/meetings/{meeting_id}', {
+        await api.GET('/companies/meetings/{meeting_id}', {
           params: { path: { meeting_id: meetingId ?? '' } },
           signal,
         }),
@@ -269,7 +268,7 @@ export function useEditMeetingForm(formId: string) {
     mutationKey,
     mutationFn: async ({ patch }) =>
       unwrap(
-        await apiV17.PATCH('/companies/meetings/forms/{form_id}', {
+        await api.PATCH('/companies/meetings/forms/{form_id}', {
           params: { path: { form_id: formId } },
           body: patch,
         }),
@@ -315,7 +314,7 @@ export function useRedraftMeetingForm(formId: string) {
     mutationKey: [...queryKeys.companies.meetings(), 'redraft', formId],
     mutationFn: async () =>
       unwrap(
-        await apiV17.POST('/companies/meetings/forms/{form_id}/redraft', {
+        await api.POST('/companies/meetings/forms/{form_id}/redraft', {
           params: { path: { form_id: formId } },
         }),
       ),
@@ -351,7 +350,7 @@ export function useMeetingFormPreview(formId: string) {
     mutationKey: [...queryKeys.companies.meetings(), 'preview', formId],
     mutationFn: async (to) =>
       unwrap(
-        await apiV17.POST('/companies/meetings/forms/{form_id}/preview', {
+        await api.POST('/companies/meetings/forms/{form_id}/preview', {
           params: { path: { form_id: formId } },
           body: { to: [...to] },
         }),
@@ -383,7 +382,7 @@ export function useSendMeetingForm(formId: string) {
     mutationKey: [...queryKeys.companies.meetings(), 'send', formId],
     mutationFn: async (to) =>
       unwrap(
-        await apiV17.POST('/companies/meetings/forms/{form_id}/send', {
+        await api.POST('/companies/meetings/forms/{form_id}/send', {
           params: { path: { form_id: formId } },
           body: { to: [...to] },
         }),
@@ -422,7 +421,7 @@ export function logMeetingOptions() {
     mutationKey: [...queryKeys.companies.meetings(), 'transcript'],
     mutationFn: async ({ meetingId, body, idempotencyKey }) =>
       unwrap(
-        await apiV17.POST('/companies/meetings/{meeting_id}/transcript', {
+        await api.POST('/companies/meetings/{meeting_id}/transcript', {
           params: {
             path: { meeting_id: meetingId },
             header: { 'idempotency-key': idempotencyKey },

@@ -2,7 +2,7 @@
 import type { QueryClient } from '@tanstack/react-query'
 import { isApiProblem } from '@/api/client'
 import { updateNoteInLists } from '@/api/hooks/call-notes'
-import type { CallNoteOut, CallNotePreview } from '@/api/v17'
+import type { CallNoteOut, CallNotePreview } from '@/api/types'
 import { isMeetingNotes } from './words'
 
 /** A note the sorter was unsure of first, then the calls in the order they were made. */

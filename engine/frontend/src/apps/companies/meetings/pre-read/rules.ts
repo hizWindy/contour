@@ -3,7 +3,7 @@
  * each can be tested on its own: the three summaries, a rep's edit to one, when "Check and send"
  * may be pressed, and who the send dialog sends it to (T3-11).
  */
-import type { FormPerson, FormSummaries, MeetingFormOut, MeetingFormStatus } from '@/api/v17'
+import type { FormPerson, FormSummaries, MeetingFormOut, MeetingFormStatus } from '@/api/types'
 
 export type SummaryName = keyof FormSummaries
 

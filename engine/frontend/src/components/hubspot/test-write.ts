@@ -8,6 +8,7 @@ export function makeWrite(changes: Partial<HubSpotWrite> = {}): HubSpotWrite {
     subject: 'lead:1',
     status: 'previewed',
     plan: {
+      kind: 'company',
       action: 'create',
       company_id: null,
       company_name: 'Acme Logistics',
@@ -20,6 +21,7 @@ export function makeWrite(changes: Partial<HubSpotWrite> = {}): HubSpotWrite {
           value: 'Perth',
           current: null,
           write: true,
+          changed_since: false,
           reason: null,
         },
         {
@@ -28,6 +30,7 @@ export function makeWrite(changes: Partial<HubSpotWrite> = {}): HubSpotWrite {
           value: 'LOGISTICS',
           current: 'Law Practice',
           write: false,
+          changed_since: false,
           reason: 'HubSpot already has a value. It is kept.',
         },
         {
@@ -36,6 +39,7 @@ export function makeWrite(changes: Partial<HubSpotWrite> = {}): HubSpotWrite {
           value: '<b>Lease expiry</b>',
           current: null,
           write: false,
+          changed_since: false,
           reason: 'HubSpot has no such field yet, so it goes in the note.',
         },
       ],

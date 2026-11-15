@@ -27,7 +27,7 @@
 import { ArrowRight, CalendarCheck } from 'lucide-react'
 import { Link } from 'react-router'
 import { isMeetingFormsOff, useMeetings, useMeetingSummary } from '@/api/hooks/meetings'
-import type { MeetingItem } from '@/api/v17'
+import type { MeetingItem } from '@/api/types'
 import { Reveal } from '@/components/motion'
 import { melbourneDate } from '@/lib/format'
 import { cn } from '@/lib/utils'

@@ -14,8 +14,8 @@
 import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
 import { isApiProblem, unwrap } from '../client'
 import { queryKeys } from '../query'
-import type { MeetingSummary } from '../v17'
-import { apiV17 } from '../v17-client'
+import type { MeetingSummary } from '@/api/types'
+import { api } from '@/api/client'
 
 /** The server said pre-meeting forms are switched off (a 409 `meeting_forms_off`). */
 export function isMeetingFormsOff(error: unknown): boolean {
@@ -36,7 +36,7 @@ export function meetingSummaryQueryOptions() {
   return queryOptions({
     queryKey: meetingSummaryKey(),
     queryFn: async ({ signal }): Promise<MeetingSummary> =>
-      unwrap(await apiV17.GET('/companies/meetings/summary', { signal })),
+      unwrap(await api.GET('/companies/meetings/summary', { signal })),
   })
 }
 

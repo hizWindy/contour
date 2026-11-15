@@ -22,7 +22,7 @@
  * screen reader, which hears many such buttons in a list.
  */
 import { MapPin, UserRound, Video } from 'lucide-react'
-import type { MeetingItem } from '@/api/v17'
+import type { MeetingItem } from '@/api/types'
 import { cn } from '@/lib/utils'
 import { RowAction, StatusLine } from './row-parts'
 import { rowStatus, type RowStatus } from './rows'

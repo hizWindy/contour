@@ -29,7 +29,7 @@ import {
   putFormOnRows,
   useMeetingForm,
 } from '@/api/hooks/meetings'
-import type { MeetingFormOut } from '@/api/v17'
+import type { MeetingFormOut } from '@/api/types'
 import { BackButton } from '@/components/back-button'
 import { EmptyState } from '@/components/empty-state'
 import { ErrorState } from '@/components/error-state'

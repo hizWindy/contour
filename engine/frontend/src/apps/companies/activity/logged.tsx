@@ -7,7 +7,7 @@
 import { CircleCheck } from 'lucide-react'
 import { useState } from 'react'
 import { useCallNotes } from '@/api/hooks/call-notes'
-import type { CallNoteOut } from '@/api/v17'
+import type { CallNoteOut } from '@/api/types'
 import { ErrorState } from '@/components/error-state'
 import { Pager } from '@/components/pager'
 import { cn } from '@/lib/utils'

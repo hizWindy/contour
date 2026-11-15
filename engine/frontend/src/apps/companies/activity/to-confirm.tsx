@@ -34,7 +34,7 @@ import {
   useCallNotes,
 } from '@/api/hooks/call-notes'
 import { queryKeys } from '@/api/query'
-import type { CallNoteOptions, CallNoteOut } from '@/api/v17'
+import type { CallNoteOptions, CallNoteOut } from '@/api/types'
 import { ErrorState } from '@/components/error-state'
 import { ListExit, ListExitItem, RollingNumber } from '@/components/motion'
 import { Button } from '@/components/ui/button'

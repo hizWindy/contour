@@ -6,7 +6,7 @@
  */
 import { useNavigate } from 'react-router'
 import { useStartMeetingForm } from '@/api/hooks/meetings'
-import type { MeetingItem } from '@/api/v17'
+import type { MeetingItem } from '@/api/types'
 import { toastProblem } from '@/lib/problems'
 import { preReadHref } from './params'
 

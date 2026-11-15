@@ -9,7 +9,7 @@
 import { NotebookPen } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { useCompany } from '@/api/hooks'
-import type { CallNoteOptions } from '@/api/v17'
+import type { CallNoteOptions } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Sheet, SheetContent } from '@/components/ui/sheet'

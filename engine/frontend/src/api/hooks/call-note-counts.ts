@@ -12,8 +12,8 @@
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { unwrap } from '../client'
 import { queryKeys } from '../query'
-import type { CallNoteOptions, CallNoteSummary } from '../v17'
-import { apiV17 } from '../v17-client'
+import type { CallNoteOptions, CallNoteSummary } from '@/api/types'
+import { api } from '@/api/client'
 
 /** The switches change rarely (an Admin, on the Settings page), so a minute of fresh is fine. */
 const OPTIONS_FRESH_MS = 60_000
@@ -23,7 +23,7 @@ export function callNoteOptionsQueryOptions() {
   return queryOptions({
     queryKey: queryKeys.companies.callNoteOptions(),
     queryFn: async ({ signal }): Promise<CallNoteOptions> =>
-      unwrap(await apiV17.GET('/companies/call-notes/options', { signal })),
+      unwrap(await api.GET('/companies/call-notes/options', { signal })),
     staleTime: OPTIONS_FRESH_MS,
   })
 }
@@ -38,7 +38,7 @@ export function callNoteSummaryQueryOptions() {
   return queryOptions({
     queryKey: queryKeys.companies.callNoteSummary(),
     queryFn: async ({ signal }): Promise<CallNoteSummary> =>
-      unwrap(await apiV17.GET('/companies/call-notes/summary', { signal })),
+      unwrap(await api.GET('/companies/call-notes/summary', { signal })),
   })
 }
 

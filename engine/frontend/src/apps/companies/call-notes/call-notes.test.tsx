@@ -3,8 +3,16 @@ import { toast } from 'sonner'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SignedInUser, SignIn } from '@/api/hooks'
 import { queryKeys } from '@/api/query'
-import type { CompanyDetail, CompanyRow, PrepFacts, PrepOut } from '@/api/types'
-import type { CallNoteIn, CallNoteOptions, CallNoteOut, CallNoteSummary } from '@/api/v17'
+import type {
+  CompanyDetail,
+  CompanyRow,
+  PrepFacts,
+  PrepOut,
+  CallNoteIn,
+  CallNoteOptions,
+  CallNoteOut,
+  CallNoteSummary,
+} from '@/api/types'
 import { readDueDate } from '@/lib/due-date'
 import { melbourneDate } from '@/lib/format'
 import { SAMPLE_USER } from '@/test/fake-auth'
@@ -15,8 +23,8 @@ import { NoteTimer } from './note-timer'
 import { dueWords } from './words'
 
 /*
-  Log call in the call prep panel (PLAN-V17 T3-5), on the Companies page, against the contract in
-  v17.ts. Made-up names only: Sample Logistics Pty Ltd, Jo Sample.
+  Log call in the call prep panel (PLAN-V17 T3-5), on the Companies page, against the generated
+  contract. Made-up names only: Sample Logistics Pty Ltd, Jo Sample.
 */
 
 const API = '/api/v1/companies'
@@ -179,7 +187,7 @@ function noteOut(body: CallNoteIn, id: string): CallNoteOut {
     status: 'to_confirm',
     sorted_by: 'person',
     unsure: null,
-    call: { summary: body.text, outcome: body.outcome },
+    call: { summary: body.text, outcome: body.outcome ?? null, in_hubspot: false },
     changes: [],
     tasks: [],
     left_out: false,

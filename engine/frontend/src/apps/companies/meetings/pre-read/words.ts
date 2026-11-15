@@ -4,7 +4,7 @@
  * to change.
  */
 import { toApiProblem } from '@/api/client'
-import type { FormRecipient, HubSpotCopy, MeetingFormOut } from '@/api/v17'
+import type { FormRecipient, HubSpotCopy, MeetingFormOut } from '@/api/types'
 import { formatDate, formatNumber, formatTime, pluralise } from '@/lib/format'
 import { formatMoney, parseMoney } from '@/lib/money'
 import { changeDetail } from '@/lib/problems'

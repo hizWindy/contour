@@ -48,7 +48,7 @@ import type {
   CallNoteOut,
   CallNotePatch,
   CallNoteTask,
-} from '@/api/v17'
+} from '@/api/types'
 import { ChipGroup, Reveal, TickIn } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { Kbd } from '@/components/ui/kbd'

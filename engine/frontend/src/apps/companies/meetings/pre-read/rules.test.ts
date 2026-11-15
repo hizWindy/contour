@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest'
 import { FORM_POLL_MS, formPollMs, isFormMissing } from '@/api/hooks/meetings'
 import { ApiProblem } from '@/api/client'
-import type { FormPerson, FormSummary, MeetingFormOut } from '@/api/v17'
+import type { FormPerson, FormSummary, MeetingFormOut } from '@/api/types'
 import {
   addressKey,
   hasSummaries,

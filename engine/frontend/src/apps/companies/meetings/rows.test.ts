@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { DRAFTING_POLL_MS, meetingsPollMs } from '@/api/hooks/meetings'
-import type { Meeting, MeetingItem } from '@/api/v17'
+import type { Meeting, MeetingItem } from '@/api/types'
 import { meetingsHref, meetingsQuery, preReadHref, readMeetings, writeMeetings } from './params'
 import { groupUpcoming, isCancelled, rowKey, rowStatus } from './rows'
 import { dayText, pastWhen, upcomingWhen, waitingLine, whereWords } from './words'
@@ -17,6 +17,7 @@ type ItemChanges = Partial<Omit<MeetingItem, 'meeting'>> & { meeting?: Partial<M
 function item({ meeting, ...changes }: ItemChanges = {}): MeetingItem {
   return {
     meeting: {
+      more_companies: false,
       id: 'm1',
       company_id: '101',
       contact_ids: [],

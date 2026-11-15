@@ -1,5 +1,5 @@
 /**
- * Meetings (PLAN-V17 T3-9), against Track 2's real contract (v17.ts Part 3) and a fake server that
+ * Meetings (PLAN-V17 T3-9), against Track 2's real contract (generated) and a fake server that
  * keeps its meetings between requests and answers as Track 2's does: the soonest first, the rep's
  * own first on the team's list, each with its day group. The clock is fixed at 9:00 am on
  * Wednesday 18 Nov 2026, Melbourne time. Made-up names only: Sample Logistics Pty Ltd, Jo Sample.
@@ -16,7 +16,7 @@ import type {
   MeetingFormState,
   MeetingItem,
   MeetingsState,
-} from '@/api/v17'
+} from '@/api/types'
 import { routes } from '@/router'
 import { prefetchPage } from '@/shell/prefetch'
 import { createTestQueryClient, renderWithProviders, startManualClock } from '@/test/render'
@@ -41,6 +41,7 @@ type ItemChanges = Partial<Omit<MeetingItem, 'meeting'>> & { meeting?: Partial<M
 function meeting(id: string, { meeting: changes, ...rest }: ItemChanges = {}): MeetingItem {
   return {
     meeting: {
+      more_companies: false,
       id,
       company_id: '101',
       contact_ids: [],

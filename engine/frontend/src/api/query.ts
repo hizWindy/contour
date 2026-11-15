@@ -10,7 +10,7 @@ import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query'
 import { isAbort, isApiProblem } from './client'
 import { connectionOf, problemKind } from './connection'
 import type { QueryOf } from './types'
-import type { CallNoteQuery, MeetingQuery } from './v17'
+import type { CallNoteQuery, MeetingQuery } from '@/api/types'
 
 const MAX_RETRIES = 2
 

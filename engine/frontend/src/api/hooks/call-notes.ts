@@ -1,6 +1,6 @@
 /**
  * Call notes (PLAN-V17 Stage A): what a rep logs after a call. A note waits "to confirm" until
- * the rep sends a few at once to HubSpot (T3-6). Typed by hand until M1 (`v17.ts`, `apiV17`).
+ * the rep sends a few at once to HubSpot (T3-6).
  *
  * - The options say whether call notes are on, whether the AI sorts a note, the outcomes and the
  *   limits. With call notes off there is no Log call button and no L key.
@@ -33,8 +33,8 @@ import type {
   CallNoteQuery,
   CallNoteResolve,
   CallNoteSummary,
-} from '../v17'
-import { apiV17 } from '../v17-client'
+} from '@/api/types'
+import { api } from '@/api/client'
 
 // The options and the counts sit in a small file of their own, because the menu, Home and Ctrl+K
 // need them on every page (T3-7), and the rest of this file only with the Companies pages. They are
@@ -120,7 +120,7 @@ export function callNotesQueryOptions(query: CallNoteQuery) {
   return queryOptions({
     queryKey: queryKeys.companies.callNoteList(query),
     queryFn: async ({ signal }): Promise<CallNotePage> =>
-      unwrap(await apiV17.GET('/companies/call-notes', { params: { query }, signal })),
+      unwrap(await api.GET('/companies/call-notes', { params: { query }, signal })),
     refetchInterval: (current) => callNotesPollMs(current.state.data?.items),
   })
 }
@@ -155,7 +155,7 @@ export function callNoteQueryOptions(id: string) {
     queryKey: queryKeys.companies.callNote(id),
     queryFn: async ({ signal }): Promise<CallNoteOut> =>
       unwrap(
-        await apiV17.GET('/companies/call-notes/{note_id}', {
+        await api.GET('/companies/call-notes/{note_id}', {
           params: { path: { note_id: id } },
           signal,
         }),
@@ -223,7 +223,7 @@ export function refreshCallNoteLists(client: QueryClient): Promise<void> {
 
 async function previewOf(ids: readonly string[], signal?: AbortSignal): Promise<CallNotePreview> {
   return unwrap(
-    await apiV17.POST('/companies/call-notes/preview', { body: { ids: [...ids] }, signal }),
+    await api.POST('/companies/call-notes/preview', { body: { ids: [...ids] }, signal }),
   )
 }
 
@@ -257,7 +257,7 @@ export function confirmCallNotesOptions() {
   return mutationOptions<CallNoteConfirm, ApiProblem, readonly string[]>({
     mutationKey: [...queryKeys.companies.callNotes(), 'confirm'],
     mutationFn: async (ids) =>
-      unwrap(await apiV17.POST('/companies/call-notes/confirm', { body: { ids: [...ids] } })),
+      unwrap(await api.POST('/companies/call-notes/confirm', { body: { ids: [...ids] } })),
   })
 }
 
@@ -267,7 +267,7 @@ export function retryCallNoteOptions() {
     mutationKey: [...queryKeys.companies.callNotes(), 'retry'],
     mutationFn: async (id) =>
       unwrap(
-        await apiV17.POST('/companies/call-notes/{note_id}/retry', {
+        await api.POST('/companies/call-notes/{note_id}/retry', {
           params: { path: { note_id: id } },
         }),
       ),
@@ -284,7 +284,7 @@ export function resolveCallNoteOptions() {
     mutationKey: [...queryKeys.companies.callNotes(), 'resolve'],
     mutationFn: async ({ id, step, landed }) =>
       unwrap(
-        await apiV17.POST('/companies/call-notes/{note_id}/resolve', {
+        await api.POST('/companies/call-notes/{note_id}/resolve', {
           params: { path: { note_id: id } },
           body: { step, landed },
         }),
@@ -304,7 +304,7 @@ export function saveCallNoteOptions() {
     mutationKey: [...queryKeys.companies.callNotes(), 'save'],
     mutationFn: async ({ body, idempotencyKey }) =>
       unwrap(
-        await apiV17.POST('/companies/call-notes', {
+        await api.POST('/companies/call-notes', {
           body,
           params: { header: { 'idempotency-key': idempotencyKey } },
         }),
@@ -318,7 +318,7 @@ export function deleteCallNoteOptions() {
     mutationKey: [...queryKeys.companies.callNotes(), 'delete'],
     mutationFn: async (id) => {
       unwrap(
-        await apiV17.DELETE('/companies/call-notes/{note_id}', {
+        await api.DELETE('/companies/call-notes/{note_id}', {
           params: { path: { note_id: id } },
         }),
       )
@@ -337,7 +337,7 @@ export function patchCallNoteOptions(client: QueryClient) {
     mutationKey: [...queryKeys.companies.callNotes(), 'patch'],
     mutationFn: async ({ id, patch }) =>
       unwrap(
-        await apiV17.PATCH('/companies/call-notes/{note_id}', {
+        await api.PATCH('/companies/call-notes/{note_id}', {
           params: { path: { note_id: id } },
           body: patch,
         }),

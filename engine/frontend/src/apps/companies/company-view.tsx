@@ -30,7 +30,6 @@ import type {
   CompanyOffice,
   CompanyPerson,
 } from '@/api/types'
-import type { CompanyDetailV17 } from '@/api/v17'
 import { ResultBadge } from '@/components/result-badge'
 import { SourceLink } from '@/components/source-link'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -323,8 +322,7 @@ export function CompanyView({
   boxes = true,
 }: CompanyViewProps) {
   const waiting = company.people_status === 'waiting'
-  // Until M5 joins the contract, `meetings` is typed by hand (v17.ts).
-  const meetings = (company as CompanyDetailV17).meetings ?? []
+  const meetings = company.meetings ?? []
   return (
     <div className="flex flex-col gap-5">
       {boxes && company.source === 'lead' ? <NotInHubSpot /> : null}

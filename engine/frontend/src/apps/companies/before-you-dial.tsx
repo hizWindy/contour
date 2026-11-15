@@ -33,8 +33,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { useContext, type ReactNode } from 'react'
-import type { CompanyDetail, CompanyNote, PrepFacts, PrepScript } from '@/api/types'
-import type { MyLastNote, PrepFactsV17 } from '@/api/v17'
+import type { CompanyDetail, CompanyNote, PrepFacts, PrepScript, MyLastNote } from '@/api/types'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatDate, melbourneDate } from '@/lib/format'
@@ -286,9 +285,7 @@ const MY_NOTE_WORDS = 'Your note, not in HubSpot yet'
  * as older on the same day: the note is the rep's own, and most likely the newest.
  */
 function newerNote({ company, facts }: BeforeYouDialProps): MyLastNote | null {
-  // Until M1: `my_last_note` isn't in schema.d.ts yet, so it is read through v17.ts's type.
-  const v17: PrepFactsV17 | undefined = facts
-  const note = v17?.my_last_note ?? null
+  const note = facts?.my_last_note ?? null
   if (!note) return null
   const call = facts?.last_call?.called_at ?? null
   if (call) return Date.parse(note.called_at) > Date.parse(call) ? note : null

@@ -1,6 +1,6 @@
 /**
- * Sending a pre-read (PLAN-V17 T3-11, "The screens" part 6), against Track 2's contract (v17.ts
- * Part 3) and a fake server that answers as Track 2's does: the preview lists the Contour people
+ * Sending a pre-read (PLAN-V17 T3-11, "The screens" part 6), against Track 2's contract (generated)
+ * and a fake server that answers as Track 2's does: the preview lists the Contour people
  * on the meeting, ticked, then the addresses the rep added, each saying whether it may get it; the
  * send refuses an address that isn't Contour's (422 `outside_address`, naming it); and a send on a
  * pre-read already sent and unchanged emails nobody and tries its copy in HubSpot again.
@@ -20,7 +20,7 @@ import type {
   HubSpotCopy,
   MeetingFormOut,
   MeetingFormPatch,
-} from '@/api/v17'
+} from '@/api/types'
 import { renderWithProviders } from '@/test/render'
 import { asPhone } from '@/test/screen'
 import PreReadPage from './index'
@@ -105,7 +105,7 @@ interface Call {
 
 interface Server {
   form: MeetingFormOut
-  /** What the preview's `meeting_note` says, or nothing until M5. */
+  /** What the preview's `meeting_note` says, or nothing when Send won't touch the meeting. */
   meetingNote?: string | null
   /** The domain the server takes as Contour's. */
   domain: string
@@ -183,7 +183,7 @@ function mockServer(changes: Partial<Omit<Server, 'calls' | 'release'>> = {}): S
         text: EMAIL_TEXT,
         html: '<h2>Pre-read for the meeting with Sample Logistics Pty Ltd</h2><script>alert(1)</script>',
         people,
-        ...(server.meetingNote === undefined ? {} : { meeting_note: server.meetingNote }),
+        meeting_note: server.meetingNote ?? null,
       }
       return json(preview)
     }

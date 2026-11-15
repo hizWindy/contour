@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { CallNoteOut, CallNotePreview } from '@/api/v17'
+import type { CallNoteOut, CallNotePreview } from '@/api/types'
 import { formatDate } from '@/lib/format'
 import { cardCounts, sendCounts, sortForConfirm } from './notes'
 import { activityQuery, readTab, writeTab } from './params'

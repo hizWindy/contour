@@ -33,7 +33,7 @@ import {
 } from '@/api/hooks/call-notes'
 import { logMeetingOptions, putNotesOnRow, refreshMeetingLists } from '@/api/hooks/meetings'
 import { queryKeys } from '@/api/query'
-import type { CallNoteSummary } from '@/api/v17'
+import type { CallNoteSummary } from '@/api/types'
 import { changeDetail } from '@/lib/problems'
 import { draftOwner, type DraftOwner } from '../call-notes/draft'
 import { savedWords, UNDO } from '../call-notes/words'

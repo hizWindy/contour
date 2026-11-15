@@ -13,8 +13,8 @@ import { toast } from 'sonner'
 import { unwrap, type ApiProblem } from '@/api/client'
 import { putNoteInLists, refreshCallNoteLists, updateNoteInLists } from '@/api/hooks/call-notes'
 import { queryKeys } from '@/api/query'
-import type { CallNoteOut, CallNotePage, CallNotePatch } from '@/api/v17'
-import { apiV17 } from '@/api/v17-client'
+import type { CallNoteOut, CallNotePage, CallNotePatch } from '@/api/types'
+import { api } from '@/api/client'
 import { changeDetail } from '@/lib/problems'
 import { NOT_CHANGED } from './words'
 
@@ -38,7 +38,7 @@ export function useEditCallNote() {
     mutationKey: EDIT_KEY,
     mutationFn: async ({ id, patch }) =>
       unwrap(
-        await apiV17.PATCH('/companies/call-notes/{note_id}', {
+        await api.PATCH('/companies/call-notes/{note_id}', {
           params: { path: { note_id: id } },
           body: patch,
         }),

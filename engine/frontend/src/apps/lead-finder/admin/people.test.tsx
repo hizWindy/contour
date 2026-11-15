@@ -1,12 +1,12 @@
 /**
  * Admin, People: each person's HubSpot owner (PLAN-V17 T3-7, the contract part 4), against the
- * hand-typed contract in v17.ts and a fake server. Made-up names only. The project ticks and the
+ * generated contract and a fake server. Made-up names only. The project ticks and the
  * roles are tried in plan-v9.test.tsx and roles.test.tsx.
  */
 import { screen, waitFor, within } from '@testing-library/react'
 import { toast } from 'sonner'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { HubSpotOwnerLink } from '@/api/v17'
+import type { HubSpotOwnerLink } from '@/api/types'
 import { renderWithProviders } from '@/test/render'
 import AdminPeopleTab from './people'
 

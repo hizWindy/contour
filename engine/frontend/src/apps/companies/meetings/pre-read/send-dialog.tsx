@@ -37,7 +37,7 @@ import {
   useMeetingFormPreview,
   useSendMeetingForm,
 } from '@/api/hooks/meetings'
-import type { FormEmailPreview, FormPerson, MeetingFormOut } from '@/api/v17'
+import type { FormEmailPreview, FormPerson, MeetingFormOut } from '@/api/types'
 import { ErrorState } from '@/components/error-state'
 import { Pending } from '@/components/skeletons'
 import {

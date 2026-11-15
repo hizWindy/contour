@@ -18,7 +18,7 @@
 import { ExternalLink, FileText } from 'lucide-react'
 import { Link } from 'react-router'
 import { useMeeting } from '@/api/hooks/meetings'
-import type { MeetingFormOut } from '@/api/v17'
+import type { MeetingFormOut } from '@/api/types'
 import { TickIn } from '@/components/motion'
 import { PageHeader } from '@/components/page-header'
 import { Badge } from '@/components/ui/badge'

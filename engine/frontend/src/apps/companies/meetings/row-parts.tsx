@@ -13,7 +13,7 @@
  * buttons in a list).
  */
 import { Link } from 'react-router'
-import type { MeetingItem } from '@/api/v17'
+import type { MeetingItem } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { preReadHref } from './params'

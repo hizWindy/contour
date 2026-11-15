@@ -16,7 +16,7 @@
 import { Send, TriangleAlert } from 'lucide-react'
 import { useId } from 'react'
 import type { ApiProblem } from '@/api/client'
-import type { CallNotePreview } from '@/api/v17'
+import type { CallNotePreview } from '@/api/types'
 import { sendCounts, type SendCounts } from './notes'
 import { ErrorState } from '@/components/error-state'
 import {

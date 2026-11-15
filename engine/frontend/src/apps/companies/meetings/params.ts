@@ -7,7 +7,7 @@
  * A pre-read has its own address under Meetings, `/companies/meetings/{form_id}` (T3-10), where
  * Track 2's morning email links. The rows, New pre-read and the email open it.
  */
-import type { MeetingQuery, MeetingWhen } from '@/api/v17'
+import type { MeetingQuery, MeetingWhen } from '@/api/types'
 
 /** Meetings' address. */
 export const MEETINGS_PATH = '/companies/meetings'

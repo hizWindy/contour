@@ -4,8 +4,8 @@ import type { ReactNode } from 'react'
 import { toast } from 'sonner'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { queryKeys } from '@/api/query'
-import type { CompanyDetail } from '@/api/types'
 import type {
+  CompanyDetail,
   CallNoteChange,
   CallNoteOptions,
   CallNoteOut,
@@ -14,7 +14,7 @@ import type {
   CallNoteStatus,
   CallNoteSummary,
   CallNoteTask,
-} from '@/api/v17'
+} from '@/api/types'
 import { readDueDate } from '@/lib/due-date'
 import { formatDate, melbourneDate } from '@/lib/format'
 import { routes } from '@/router'
@@ -28,7 +28,7 @@ import { useBatch } from './use-batch'
 import { batchSentence } from './words'
 
 /*
-  Activity (PLAN-V17 T3-6), against the contract in v17.ts and a fake server that keeps its notes
+  Activity (PLAN-V17 T3-6), against the generated contract and a fake server that keeps its notes
   between requests. Made-up names only: Sample Logistics Pty Ltd, Jo Sample.
 */
 
@@ -61,6 +61,7 @@ const LEASE: CallNoteChange = {
   current: '2026-06-30',
   value: '2028-06-30',
   current_changed: false,
+  in_hubspot: false,
 }
 
 const TASK: CallNoteTask = {
@@ -70,6 +71,7 @@ const TASK: CallNoteTask = {
   due_words: 'next Tuesday',
   kind: 'call',
   owner: null,
+  in_hubspot: false,
 }
 
 function note(id: string, changes: Partial<CallNoteOut> = {}): CallNoteOut {
@@ -84,7 +86,7 @@ function note(id: string, changes: Partial<CallNoteOut> = {}): CallNoteOut {
     status: 'to_confirm',
     sorted_by: 'ai',
     unsure: null,
-    call: { summary: 'Jo says the Perth lease now ends in June 2028.', outcome: 'Connected' },
+    call: { summary: 'Jo says the Perth lease now ends in June 2028.', outcome: 'Connected', in_hubspot: false },
     changes: [],
     tasks: [],
     left_out: false,
@@ -106,14 +108,14 @@ function threeNotes(): CallNoteOut[] {
       company_name: 'Sample Mining Pty Ltd',
       person: null,
       called_at: '2026-11-10T02:00:00Z',
-      call: { summary: 'Left a message with reception.', outcome: 'Left voicemail' },
+      call: { summary: 'Left a message with reception.', outcome: 'Left voicemail', in_hubspot: false },
     }),
     note('n3', {
       company_key: '105',
       company_name: 'Sample Freight Pty Ltd',
       person: { id: '301', name: 'Sam Sample', title: null },
       called_at: '2026-11-10T03:00:00Z',
-      call: { summary: 'Sam wants a floor plan by Friday.', outcome: 'Connected' },
+      call: { summary: 'Sam wants a floor plan by Friday.', outcome: 'Connected', in_hubspot: false },
     }),
   ]
 }
@@ -200,9 +202,9 @@ function problem(status: number, title: string, detail: string, code = 'test_pro
 
 function applyPatch(before: CallNoteOut, patch: CallNotePatch): CallNoteOut {
   const next: CallNoteOut = { ...before, call: { ...before.call } }
-  if (patch.summary !== undefined) next.call.summary = patch.summary
+  if (patch.summary != null) next.call.summary = patch.summary
   if (patch.outcome !== undefined) next.call.outcome = patch.outcome
-  if (patch.left_out !== undefined) next.left_out = patch.left_out
+  if (patch.left_out != null) next.left_out = patch.left_out
   if (patch.changes) {
     next.changes = patch.changes.map((change, index) => {
       const was = before.changes.find((item) => item.id === change.id)
@@ -210,10 +212,11 @@ function applyPatch(before: CallNoteOut, patch: CallNotePatch): CallNoteOut {
         id: change.id ?? `c-new-${String(index)}`,
         field: change.field,
         label: was?.label ?? 'Lease end',
-        office: change.office,
+        office: change.office ?? '',
         current: was?.current ?? null,
         value: change.value,
         current_changed: false,
+        in_hubspot: false,
       }
     })
   }
@@ -222,9 +225,10 @@ function applyPatch(before: CallNoteOut, patch: CallNotePatch): CallNoteOut {
       id: task.id ?? `t-new-${String(index)}`,
       subject: task.subject,
       due: task.due,
-      due_words: task.due_words ?? null,
+      due_words: task.due_words ?? '',
       kind: task.kind,
       owner: null,
+      in_hubspot: false,
     }))
   }
   return next
@@ -893,7 +897,7 @@ describe('To confirm', () => {
   // frame loop waiting for a frame that never comes, and every later test's cards stop leaving.
   it('a note still being sorted shows a still line, then its parts when they come', async () => {
     const server = mockServer({
-      notes: [note('n1', { status: 'sorting', call: { summary: '', outcome: null } })],
+      notes: [note('n1', { status: 'sorting', call: { summary: '', outcome: null, in_hubspot: false } })],
     })
     renderActivity()
     const list = await toConfirmList()
@@ -1281,7 +1285,7 @@ describe("a logged meeting's notes (T3-11)", () => {
       source: 'transcript',
       text: 'Jo Sample: Thanks for coming in.\nSam Sample: Our Perth lease ends in June.',
       called_at: '2026-11-12T23:00:00Z',
-      call: { summary: 'They walked us through the Perth office.', outcome: null },
+      call: { summary: 'They walked us through the Perth office.', outcome: null, in_hubspot: false },
       ...changes,
     })
   }
@@ -1311,7 +1315,7 @@ describe("a logged meeting's notes (T3-11)", () => {
         meetingNotes('m1', {
           text: words,
           sorted_by: 'person',
-          call: { summary: '', outcome: null },
+          call: { summary: '', outcome: null, in_hubspot: false },
         }),
       ],
     })

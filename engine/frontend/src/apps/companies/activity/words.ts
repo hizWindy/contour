@@ -2,7 +2,7 @@
  * The words of Activity (PLAN-V17 "The screens", part 3): plain, sentence case, no em dash, and
  * no setting or file name (the screen-words test reads them). The wording is Al-khair's to change.
  */
-import type { CallNoteOut, TaskKind } from '@/api/v17'
+import type { CallNoteOut, TaskKind } from '@/api/types'
 import {
   formatDate,
   formatDateTime,

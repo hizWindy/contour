@@ -3,7 +3,7 @@
  * and when. The "when" forgives ("next tue", "24 nov", "24/11", "in 2 weeks", "tomorrow"), through
  * `readDueDate`. With the AI on there is no follow-up line, because the sorter finds tasks.
  */
-import type { CallNoteTaskIn, TaskKind } from '@/api/v17'
+import type { CallNoteTaskIn, TaskKind } from '@/api/types'
 import { readDueDate } from '@/lib/due-date'
 import { melbourneDate } from '@/lib/format'
 import type { FollowUpDraft } from './draft'

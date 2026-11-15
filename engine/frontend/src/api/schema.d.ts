@@ -157,6 +157,178 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/call-notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * My call notes
+         * @description A page of notes. `state`: `to_confirm` (being sorted, waiting for me, or being sent), `logged`, or `needs_look` (failed, partly saved, or unsure in HubSpot). `mine` is true by default: `mine=false` shows everyone's notes to an Admin, and anyone else still gets only their own. To confirm: the notes the sorter was unsure of first, then the oldest call first. Otherwise the newest call first. 409 `call_notes_off`.
+         */
+        get: operations["list_call_notes"];
+        put?: never;
+        /**
+         * Log a call
+         * @description Saves a note after a call. The text may be empty when an outcome is picked (No answer needs no words). An email address or a phone number in it is saved as [email left out] or [number left out]. With Claude sorting, a note with words comes back `sorting` and is sorted in the background; otherwise it is ready to confirm at once, and the rep adds the outcome and any follow-ups. Send an `Idempotency-Key`: the same key from the same person gives back the first note (200), so a double press is one note. 404 `company_not_found`. 422 `note_too_long`, `note_empty`, `person_not_at_company`, `prep_not_found` or `called_later`. 409 `call_notes_off`.
+         */
+        post: operations["save_call_note"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/call-notes/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send notes to HubSpot
+         * @description Sends my notes to HubSpot, one after another, in the background, in the order given, each as one record (one failure never fails the rest). It answers at once: `sending` is how many started. While a batch is being sent, a second press starts nothing and says so (`already_sending`, still 202). A note left out, not mine, not waiting to be sent, or for a company not in HubSpot yet is in `skipped`, with why. 409 `hubspot_writes_off` while sending waits for HubSpot write access: nothing is sent. 409 `call_notes_off`.
+         */
+        post: operations["confirm_call_notes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/call-notes/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What Log call offers
+         * @description Whether call notes are on, whether Claude sorts a note, whether sending to HubSpot is ready (and what it waits for, in plain words), the call outcomes, the fields a call may change, when the timer turns Ochre, the longest note, and the longest meeting transcript. It answers while call notes are off too.
+         */
+        get: operations["call_note_options"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/call-notes/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check notes before sending
+         * @description For a list of my notes (waiting to be sent, or the parts not yet sent of a note that failed or was partly saved): each one with what HubSpot has now for every change, read through the writer's preview (while HubSpot can't be written, our copy's value), whether sending is ready, and `totals`: the calls, follow-ups and field changes sending would add. A change whose value moved since I saw it says so (`current_changed`). Notes that can't be sent are in `skipped`, with why. Nothing is written. 409 `call_notes_off`.
+         */
+        post: operations["preview_call_notes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/call-notes/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * My call note counts
+         * @description For Home and the menu: my notes to confirm (being sorted, or waiting for me), those that need a look (failed, partly saved, or unsure in HubSpot), and those logged today, Melbourne time. 409 `call_notes_off`.
+         */
+        get: operations["call_note_summary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/call-notes/{note_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One call note
+         * @description Mine, or anyone's for an Admin. A note left `sorting` by a restart goes to the batch to be sorted by hand. A note left `sending` by a restart takes what its write says, and what was never sent goes back to me. 404 `note_not_found`. 409 `call_notes_off`.
+         */
+        get: operations["get_call_note"];
+        put?: never;
+        post?: never;
+        /**
+         * Remove a call note
+         * @description Removes my note before it is sent (the toast's Undo), or a note that failed with nothing in HubSpot. A sort still running stops first. 409 `note_sent` while it is being sent, or once any part of it is in HubSpot or may be. 403 `not_your_note`, 404 `note_not_found`, 409 `call_notes_off`.
+         */
+        delete: operations["delete_call_note"];
+        options?: never;
+        head?: never;
+        /**
+         * Change a call note
+         * @description My edits while the note waits for me, or to the parts not yet in HubSpot of a note that failed or was partly saved: the summary, the outcome, the person, the changes, the follow-ups (with `due_words`, the words the day came from), and `left_out`. Only the parts sent change. Each change is checked as the sorter checks one (a listed field, an office the company has, a value that can be read), and no follow-up is due before today. 409 `note_sorting` while it is being sorted, `note_sent` while it is being sent or once it is logged, `part_sent` for a part already in HubSpot. 422 `change_not_possible`, `change_twice`, `task_in_past`, `task_empty`, `owner_not_found` or `person_not_at_company`. 403 `not_your_note` for an Admin's look at someone else's. 404 `note_not_found`. 409 `call_notes_off`.
+         */
+        patch: operations["edit_call_note"];
+        trace?: never;
+    };
+    "/companies/call-notes/{note_id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Say whether HubSpot has it
+         * @description For a step HubSpot may or may not have saved (HubSpot didn't answer): `step` as the note's steps name it, and `landed` true when it is there, false when it isn't, so sending again adds it. The note's status follows. 409 `nothing_to_resolve` for a note with nothing unsure, `step_not_unsure` for a step HubSpot answered, and `hubspot_writes_off` while HubSpot can't be written. 403 `not_your_note`, 404 `note_not_found`, 409 `call_notes_off`.
+         */
+        post: operations["resolve_call_note"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/call-notes/{note_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a note again
+         * @description Sends what didn't land, for my note that failed or was partly saved: a field held because HubSpot's value changed goes with the value now shown. It answers at once with the note being sent. 409 `note_uncertain` until I say whether HubSpot has an unsure step, `nothing_to_retry` for a note that didn't fail, `already_sending` while a batch is being sent, and `hubspot_writes_off` while sending waits for HubSpot write access. 422 `change_off_the_list` for a change that isn't one a call may change. 403 `not_your_note`, 404 `note_not_found`, 409 `call_notes_off`.
+         */
+        post: operations["retry_call_note"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/facets": {
         parameters: {
             query?: never;
@@ -171,6 +343,190 @@ export interface paths {
         get: operations["company_facets"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/meetings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * My meetings
+         * @description A page of client meetings from HubSpot (one with no company is left out; a cancelled one stays, with its outcome). `when`: `upcoming` (the next 7 days, soonest first, each with its `group` by the Melbourne date: today, tomorrow, this_week or later) or `past` (the last 30 days, newest first). `mine` (true by default): my own, as my HubSpot owner; false: the team's, mine first. My own pre-reads for meetings typed in (New pre-read) join the list in the same window, marked `typed`, even while HubSpot's meetings aren't read. `q`: each word must start a word of the company's name, the title or the date in words, like 'sample 26 nov', 'thu' or '26/11'. Each meeting comes with its pre-read's state (`form`) and, once past, whether notes were logged. While HubSpot's meetings aren't read, `meetings_state` and `sentence` say why. Opening it asks HubSpot for changed meetings in the background (at most every 15 minutes). 409 `meeting_forms_off`.
+         */
+        get: operations["list_meetings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/meetings/forms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a pre-read
+         * @description For a HubSpot meeting (`meeting_id`), or for one typed in (`company_key`, `title`, `starts_at`, and `ends_at` and `where` when known). It answers at once with the form `drafting`: the facts come first, with no AI, then the three summaries from one Claude request (this costs money: about US$0.03, at most the pre-read cap). A HubSpot meeting has one pre-read: a second start gives back the first (200). So does a typed meeting I start again with the same company, title and start, so a retry makes no second one. 404 `meeting_not_found` or `company_not_found`. 422 for a body that is neither kind. 409 `meeting_forms_off`.
+         */
+        post: operations["start_form"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/meetings/forms/{form_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One pre-read
+         * @description The pre-read: the meeting, the facts, the three summaries, the rep's two blanks, and who it went to. One a restart left drafting comes back failed, so it can be drafted again. 404 `form_not_found`. 409 `meeting_forms_off`.
+         */
+        get: operations["get_form"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change a pre-read
+         * @description The rep's edits: a summary's new text (`summaries`), the ideal next step (`next_step`) and who is going (`going`). Only the parts sent change. A summary changed here is the rep's own from then on (`by: person`): a redraft leaves it, and it keeps its sources. A sent pre-read that changes is a draft again, so sending it again emails the new words. 404 `form_not_found`. 409 `meeting_forms_off`.
+         */
+        patch: operations["edit_form"];
+        trace?: never;
+    };
+    "/companies/meetings/forms/{form_id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * See the pre-read's email
+         * @description The email as it would arrive (a subject, plain text, and HTML with every value escaped), and the people it would go to, each with why: the Contour people on the meeting who have an account here, then the addresses I add (`to`). Each says whether it may get it: only Contour addresses can, and only they are ticked. Nothing is sent. 404 `form_not_found`. 409 `meeting_forms_off`.
+         */
+        post: operations["preview_form"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/meetings/forms/{form_id}/redraft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Write the summaries again
+         * @description Writes the three summaries again with one more Claude request. This costs money: about US$0.03, at most the pre-read cap. The facts are read again. A summary the rep changed, the ideal next step and who is going stay as they are. It answers at once with the form `drafting`. 409 `form_drafting` while it is being written. 404 `form_not_found`. 409 `meeting_forms_off`.
+         */
+        post: operations["redraft_form"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/meetings/forms/{form_id}/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send the pre-read
+         * @description Emails the pre-read to these addresses (in the body, never an attachment), then saves its copy in HubSpot: a note on the company, and on its deal when it has exactly one open deal. Every address must be Contour's: one that isn't refuses the whole send (422 `outside_address`, naming it). The ideal next step and who is going must be filled in (422 `blanks_empty`). Sent already: nobody is emailed again, and a copy that is waiting or failed is tried again. `hubspot_copy` says how the copy went: saved, waiting (writing to HubSpot isn't on: the email still went), off (the company isn't in HubSpot), or failed. 409 `form_not_ready` while it is drafting or failed, `email_not_set_up`. 502 `email_failed`: nothing was sent. 404 `form_not_found`. 409 `meeting_forms_off`.
+         */
+        post: operations["send_form"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/meetings/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * My meeting counts
+         * @description For Home: my upcoming client meetings (the next 7 days, my typed ones too) that need a pre-read (none yet, or one that failed; a cancelled meeting needs none), and those whose draft waits for me. Opening it asks HubSpot for changed meetings in the background (at most every 15 minutes). 409 `meeting_forms_off`.
+         */
+        get: operations["meeting_summary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/meetings/{meeting_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One meeting
+         * @description A client meeting from HubSpot, its company's name, and its pre-read if it has one. 404 `meeting_not_found` when it isn't in our copy or has no company. 409 `meeting_forms_off`.
+         */
+        get: operations["get_meeting"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/meetings/{meeting_id}/transcript": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Log a meeting
+         * @description A past client meeting's transcript, pasted or read from a .txt or .vtt file (`file_name`): a .vtt file is cleaned of its header, cue numbers, times and tags, and keeps who said what. It becomes a call note like any other, linked to the meeting, with the source `transcript`: sorted the same way, in the same batch, and nothing goes to HubSpot until I confirm it. The transcript is data, never instructions. Send an `Idempotency-Key`: the same key from the same person gives back the first note (200). 404 `meeting_not_found`, `company_not_found`. 409 `meeting_not_past` for a meeting still to come, `call_notes_off`, `meeting_forms_off`. 422 `transcript_file` (not a .txt or .vtt file), `transcript_empty`, `transcript_too_long`.
+         */
+        post: operations["log_meeting"];
         delete?: never;
         options?: never;
         head?: never;
@@ -454,7 +810,7 @@ export interface paths {
         };
         /**
          * One company
-         * @description What it does, its offices, deals and owner, the last talk, saved notes under 30 days old from any project, and (with HubSpot's contacts and calls) its people and calls. The Lead Finder section comes only with the Lead Finder tick. 404 `company_not_found` when there is no such company, or it isn't open to this account.
+         * @description What it does, its offices, deals and owner, the last talk, saved notes under 30 days old from any project, and (with HubSpot's contacts and calls) its people and calls. The Lead Finder section comes only with the Lead Finder tick. `meetings`: its next three client meetings and its last three, while Meetings are on and HubSpot's meetings are read. 404 `company_not_found` when there is no such company, or it isn't open to this account.
          */
         get: operations["get_company"];
         put?: never;
@@ -474,7 +830,7 @@ export interface paths {
         };
         /**
          * What we know, before any Claude request
-         * @description The facts pack for a company and, with `contact_id`, a person at it: each fact with its source. Free and quick, so the modal shows it at once. No Claude request is made.
+         * @description The facts pack for a company and, with `contact_id`, a person at it: each fact with its source. Free and quick, so the modal shows it at once. No Claude request is made. `my_last_note` is my newest call note on the company that isn't in HubSpot yet (only my own; with sign-in off, the notes nobody signed in made), for Last talk. A call logged in HubSpot is in the facts at once, as the newest talk.
          */
         get: operations["get_facts"];
         put?: never;
@@ -536,6 +892,26 @@ export interface paths {
          * @description Updates companies that are already loaded, and never duplicates them. Skips any Contacts sheet, because it holds personal data.
          */
         post: operations["import_export"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/hubspot/owners": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The active HubSpot owners, to pick who a person is in HubSpot
+         * @description Each active owner's id and name from our copy of HubSpot, which the sync keeps, sorted by name. An owner with no name in HubSpot shows as 'HubSpot owner 301'. Never an email. At most 500: Contour has a few dozen. Admins only.
+         */
+        get: operations["list_hubspot_owners"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -665,7 +1041,7 @@ export interface paths {
         };
         /**
          * The log of writes to HubSpot, newest first
-         * @description Every write a person confirmed, with what it changed. Previews are left out.
+         * @description Every write a person confirmed, with what it changed. Previews are left out. Admins only: it names companies, calls, tasks and field values.
          */
         get: operations["list_hubspot_writes"];
         put?: never;
@@ -687,7 +1063,7 @@ export interface paths {
         put?: never;
         /**
          * Write a previewed change to HubSpot
-         * @description Writes once only: applying a finished write returns its result. Needs the write scopes and HUBSPOT_WRITE_ENABLED=true; until then it answers 409 hubspot_write_off.
+         * @description Writes once only: applying a finished write returns its result. A Lead Finder send and a call note's activity (a call, field changes, tasks, a note) each go through their own writer. Admins only: each project sends its own writes through its own routes. Needs the write scopes and HUBSPOT_WRITE_ENABLED=true; until then it answers 409 hubspot_write_off.
          */
         post: operations["apply_hubspot_write"];
         delete?: never;
@@ -1232,6 +1608,26 @@ export interface paths {
         patch: operations["change_person"];
         trace?: never;
     };
+    "/people/{user_id}/hubspot-owner": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set or clear who a person is in HubSpot
+         * @description Links the account to a HubSpot owner by hand, so the calls, tasks and notes this person logs land under that owner in HubSpot. `owner_id` is an active owner from GET /hubspot/owners. The HubSpot sync never changes a link set by hand. `{"owner_id": null}` clears the link, and the next sync may then match the person by email again. Admins only.
+         */
+        put: operations["set_hubspot_owner"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/runs": {
         parameters: {
             query?: never;
@@ -1670,6 +2066,495 @@ export interface components {
             /** Source Url */
             source_url: string;
         };
+        /** CallNoteCall */
+        CallNoteCall: {
+            /**
+             * In Hubspot
+             * @description True once it is in HubSpot: it can't change here any more
+             * @default false
+             */
+            in_hubspot: boolean;
+            /** Outcome */
+            outcome: ("Connected" | "No answer" | "Left voicemail" | "Left live message" | "Busy" | "Wrong number") | null;
+            /**
+             * Summary
+             * @description Two short lines, or empty until sorted or written
+             */
+            summary: string;
+        };
+        /** CallNoteChange */
+        CallNoteChange: {
+            /**
+             * Current
+             * @description What HubSpot has now: a date, or the text
+             */
+            current: string | null;
+            /**
+             * Current Changed
+             * @description True when HubSpot's value changed since you saw it
+             */
+            current_changed: boolean;
+            /**
+             * Field
+             * @description Like lease_end
+             */
+            field: string;
+            /**
+             * Id
+             * @description Like c1
+             */
+            id: string;
+            /**
+             * In Hubspot
+             * @description True once it is in HubSpot: it can't change here any more
+             * @default false
+             */
+            in_hubspot: boolean;
+            /**
+             * Label
+             * @description Like Lease end
+             */
+            label: string;
+            /**
+             * Office
+             * @description Like Perth, or the city of a group like Other Office 2
+             */
+            office: string;
+            /**
+             * Value
+             * @description The new value: a date as YYYY-MM-DD, or a whole number
+             */
+            value: string;
+        };
+        /** CallNoteChangeIn */
+        CallNoteChangeIn: {
+            /**
+             * Field
+             * @description Like lease_end
+             */
+            field: string;
+            /**
+             * Id
+             * @description Its id on the card, or none for a new change
+             */
+            id?: string | null;
+            /**
+             * Office
+             * @description One of the company's offices, as the card names it
+             */
+            office: string | null;
+            /**
+             * Value
+             * @description A date as YYYY-MM-DD, or a whole number of staff
+             */
+            value: string;
+        };
+        /** CallNoteConfirm */
+        CallNoteConfirm: {
+            /**
+             * Already Sending
+             * @description True when a batch was being sent already: nothing new started
+             */
+            already_sending: boolean;
+            /**
+             * Batch Id
+             * @description The batch being sent
+             */
+            batch_id?: string | null;
+            /**
+             * Notes
+             * @description The notes that started sending, in order
+             */
+            notes?: components["schemas"]["CallNoteOut"][];
+            /**
+             * Sending
+             * @description How many notes started sending. 0 when one was already
+             */
+            sending: number;
+            /**
+             * Skipped
+             * @description The notes left out, with why
+             */
+            skipped?: components["schemas"]["CallNoteSkipped"][];
+        };
+        /** CallNoteIds */
+        CallNoteIds: {
+            /**
+             * Ids
+             * @description The notes, in the order to send them
+             */
+            ids: string[];
+        };
+        /** CallNoteIn */
+        CallNoteIn: {
+            /**
+             * Called At
+             * Format: date-time
+             * @description When the call was, with its time zone
+             */
+            called_at: string;
+            /**
+             * Company Key
+             * @description A HubSpot company id, or lead:<id>
+             */
+            company_key: string;
+            /**
+             * Contact Id
+             * @description HubSpot's contact id: who the call was with, if known
+             */
+            contact_id?: string | null;
+            /**
+             * Outcome
+             * @description How the call went, if the rep picked it
+             */
+            outcome?: ("Connected" | "No answer" | "Left voicemail" | "Left live message" | "Busy" | "Wrong number") | null;
+            /**
+             * Prep Id
+             * @description The call prep it came from, if any
+             */
+            prep_id?: string | null;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "mic" | "typed" | "transcript";
+            /**
+             * Text
+             * @description The note as typed or said. It may be empty when an outcome is picked (No answer needs no words). An email address or a phone number in it is saved as [email left out] or [number left out]
+             */
+            text: string;
+        };
+        /** CallNoteOptions */
+        CallNoteOptions: {
+            /**
+             * Ai Enabled
+             * @description True when Claude sorts a note: its switch is on and Claude is set up. False: the rep picks the outcome and adds follow-ups by hand
+             */
+            ai_enabled: boolean;
+            /**
+             * Enabled
+             * @description True when Log call and Activity show
+             */
+            enabled: boolean;
+            /**
+             * Fields
+             * @description The fields a call may change
+             */
+            fields: components["schemas"]["NoteFieldOption"][];
+            /**
+             * Max Chars
+             * @description The longest note, in characters
+             */
+            max_chars: number;
+            /**
+             * Outcomes
+             * @description HubSpot's call outcomes, for the chips
+             */
+            outcomes: ("Connected" | "No answer" | "Left voicemail" | "Left live message" | "Busy" | "Wrong number")[];
+            /**
+             * Sending Ready
+             * @description True when confirmed notes can be sent to HubSpot now
+             */
+            sending_ready: boolean;
+            /**
+             * Soft Seconds
+             * @description When the timer turns Ochre (it never cuts the rep off)
+             */
+            soft_seconds: number;
+            /**
+             * Transcript Max Chars
+             * @description The longest meeting transcript, in characters, once a .vtt file's times are taken out. A longer one answers 422 `transcript_too_long`
+             */
+            transcript_max_chars?: number;
+            /**
+             * Waiting For
+             * @description What sending waits for, in plain words, like 'Waiting for HubSpot write access.' None when ready
+             */
+            waiting_for: string | null;
+        };
+        /** CallNoteOut */
+        CallNoteOut: {
+            call: components["schemas"]["CallNoteCall"];
+            /**
+             * Called At
+             * Format: date-time
+             */
+            called_at: string;
+            /** Changes */
+            changes: components["schemas"]["CallNoteChange"][];
+            /** Company Key */
+            company_key: string;
+            /** Company Name */
+            company_name: string;
+            /** Confirmed At */
+            confirmed_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Hubspot Url
+             * @description The call in HubSpot, once it is logged
+             */
+            hubspot_url: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Left Out
+             * @description True when it is left out of the next send
+             */
+            left_out: boolean;
+            /**
+             * Made By
+             * @description Who logged it. None with sign-in off
+             */
+            made_by: string | null;
+            person: components["schemas"]["PrepPerson"] | null;
+            /**
+             * Sorted By
+             * @enum {string}
+             */
+            sorted_by: "ai" | "person";
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "mic" | "typed" | "transcript";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "sorting" | "to_confirm" | "sending" | "logged" | "partial" | "failed" | "uncertain";
+            /**
+             * Steps
+             * @description Each step of the send, empty until it is sent
+             */
+            steps: components["schemas"]["CallNoteStep"][];
+            /** Tasks */
+            tasks: components["schemas"]["CallNoteTask"][];
+            /** Text */
+            text: string;
+            /**
+             * Unsure
+             * @description When something needs a look before sending, in plain words. These notes sort first
+             */
+            unsure: string | null;
+        };
+        /** CallNotePage */
+        CallNotePage: {
+            /** Items */
+            items: components["schemas"]["CallNoteOut"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * CallNotePatch
+         * @description The rep's edits. Only the parts sent change: `outcome` or `contact_id` sent as null clears
+         *     it, and `changes` or `tasks` replace the card's whole list.
+         */
+        CallNotePatch: {
+            /** Changes */
+            changes?: components["schemas"]["CallNoteChangeIn"][] | null;
+            /**
+             * Contact Id
+             * @description Who the call was with: one of the company's people
+             */
+            contact_id?: string | null;
+            /**
+             * Left Out
+             * @description True leaves it out of the next send
+             */
+            left_out?: boolean | null;
+            /** Outcome */
+            outcome?: ("Connected" | "No answer" | "Left voicemail" | "Left live message" | "Busy" | "Wrong number") | null;
+            /** Summary */
+            summary?: string | null;
+            /** Tasks */
+            tasks?: components["schemas"]["CallNoteTaskIn"][] | null;
+        };
+        /** CallNotePreview */
+        CallNotePreview: {
+            /**
+             * Items
+             * @description Each note, with what HubSpot has now
+             */
+            items: components["schemas"]["CallNoteOut"][];
+            /**
+             * Sending Ready
+             * @description True when confirmed notes can be sent to HubSpot now
+             */
+            sending_ready: boolean;
+            /**
+             * Skipped
+             * @description The notes that can't be sent, with why
+             */
+            skipped?: components["schemas"]["CallNoteSkipped"][];
+            /** @description What sending these notes would add, in all */
+            totals: components["schemas"]["CallNoteTotals"];
+            /**
+             * Waiting For
+             * @description What sending waits for, in plain words, like 'Waiting for HubSpot write access.' None when ready
+             */
+            waiting_for: string | null;
+        };
+        /** CallNoteResolve */
+        CallNoteResolve: {
+            /**
+             * Landed
+             * @description True: it is in HubSpot. False: it isn't, so sending again adds it
+             */
+            landed: boolean;
+            /**
+             * Step
+             * @description The step to settle: call, fields, task:1 ... or note
+             */
+            step: string;
+        };
+        /** CallNoteSkipped */
+        CallNoteSkipped: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Why
+             * @description Why it was left out, in plain words
+             */
+            why: string;
+        };
+        /** CallNoteStep */
+        CallNoteStep: {
+            /**
+             * Status
+             * @description pending (waiting to be sent), done, failed, uncertain (HubSpot didn't answer), or skipped (not written: a field HubSpot changed since you saw it is held)
+             * @enum {string}
+             */
+            status: "pending" | "done" | "failed" | "uncertain" | "skipped";
+            /**
+             * Step
+             * @description call (note for a logged meeting's notes), fields or task:1 ..., as the newest send to HubSpot names it. The name to send back when saying whether HubSpot has an unsure step
+             */
+            step: string;
+            /**
+             * Words
+             * @description What happened, in plain words, like 'Call logged.'
+             */
+            words: string;
+        };
+        /** CallNoteSummary */
+        CallNoteSummary: {
+            /**
+             * Logged Today
+             * @description My notes logged in HubSpot today, Melbourne time
+             */
+            logged_today: number;
+            /**
+             * Needs Look
+             * @description My notes that failed, were partly saved, or are unsure
+             */
+            needs_look: number;
+            /**
+             * To Confirm
+             * @description My notes waiting for me to confirm them
+             */
+            to_confirm: number;
+        };
+        /** CallNoteTask */
+        CallNoteTask: {
+            /**
+             * Due
+             * Format: date
+             */
+            due: string;
+            /**
+             * Due Words
+             * @description When, in the rep's own words. Empty when a date was typed
+             */
+            due_words: string;
+            /**
+             * Id
+             * @description Like t1
+             */
+            id: string;
+            /**
+             * In Hubspot
+             * @description True once it is in HubSpot: it can't change here any more
+             * @default false
+             */
+            in_hubspot: boolean;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "call" | "email" | "todo";
+            /**
+             * Owner
+             * @description Who it is for. None: the rep who logged the call
+             */
+            owner: string | null;
+            /** Subject */
+            subject: string;
+        };
+        /** CallNoteTaskIn */
+        CallNoteTaskIn: {
+            /**
+             * Due
+             * Format: date
+             * @description Not before today, Melbourne time
+             */
+            due: string;
+            /**
+             * Due Words
+             * @description The words the date came from, like 'next Tuesday'. Empty when a date was picked. Left out: kept as they were while the day is the same
+             */
+            due_words?: string | null;
+            /**
+             * Id
+             * @description Its id on the card, or none for a new task
+             */
+            id?: string | null;
+            /**
+             * Kind
+             * @default todo
+             * @enum {string}
+             */
+            kind: "call" | "email" | "todo";
+            /**
+             * Owner Id
+             * @description The HubSpot owner it is for. None: the rep
+             */
+            owner_id?: string | null;
+            /** Subject */
+            subject: string;
+        };
+        /** CallNoteTotals */
+        CallNoteTotals: {
+            /**
+             * Calls
+             * @description The calls not yet in HubSpot
+             */
+            calls: number;
+            /**
+             * Changes
+             * @description The field changes not yet in HubSpot, and not held
+             */
+            changes: number;
+            /**
+             * Meeting Notes
+             * @description The logged meetings' notes not yet in HubSpot. Each goes as a note, not a call
+             */
+            meeting_notes?: number;
+            /**
+             * Tasks
+             * @description The follow-ups not yet in HubSpot
+             */
+            tasks: number;
+        };
         /** CapReachedData */
         CapReachedData: {
             /** Detail */
@@ -1846,6 +2731,11 @@ export interface components {
             lifecycle_stage: string | null;
             /** Linkedin Staff */
             linkedin_staff: number | null;
+            /**
+             * Meetings
+             * @description Its next three meetings, soonest first, then its last three, newest first (PLAN-V17). A past one has no group. Empty while meetings are off or not read yet
+             */
+            meetings?: components["schemas"]["MeetingItem"][];
             /** Name */
             name: string;
             /** Next Lease End */
@@ -2888,6 +3778,12 @@ export interface components {
         /** FieldChange */
         FieldChange: {
             /**
+             * Changed Since
+             * @description An activity's field: HubSpot's value is not what the rep saw. A field held at the write (HubSpot changed it since the preview) has this, with write false
+             * @default false
+             */
+            changed_since: boolean;
+            /**
              * Current
              * @description What HubSpot has now
              */
@@ -2901,6 +3797,11 @@ export interface components {
              * @description Why it is not written, in plain words
              */
             reason?: string | null;
+            /**
+             * Seen
+             * @description An activity's field: the value the rep saw, in HubSpot's own form. null: the rep saw it empty, or a Lead Finder write
+             */
+            seen?: string | null;
             /**
              * Value
              * @description What would be written, in HubSpot's own form
@@ -2978,6 +3879,179 @@ export interface components {
              * @description A likely answer, in a few words, like 'We'll move'
              */
             if_they_say: string;
+        };
+        /**
+         * FormEmailPreview
+         * @description The email as it would arrive, and the people it would go to.
+         */
+        FormEmailPreview: {
+            /**
+             * Html
+             * @description The HTML version, with every value escaped
+             */
+            html: string;
+            /**
+             * Meeting Note
+             * @description One sentence when Send also adds the copy to the HubSpot meeting's internal notes (a HubSpot meeting, and that switch on); none when Send won't touch the meeting
+             */
+            meeting_note: string | null;
+            /** People */
+            people: components["schemas"]["FormPerson"][];
+            /** Subject */
+            subject: string;
+            /**
+             * Text
+             * @description The plain text version
+             */
+            text: string;
+        };
+        /**
+         * FormFact
+         * @description A fact on the pre-read, with no AI.
+         */
+        FormFact: {
+            /**
+             * Label
+             * @description Like When, Where, Who we meet, Staff, Lease end
+             */
+            label: string;
+            /**
+             * Source
+             * @description Where it comes from, like HubSpot meeting
+             */
+            source: string;
+            /** Value */
+            value: string;
+        };
+        /**
+         * FormMeeting
+         * @description The meeting a pre-read is for, as it was when the form was made: from HubSpot, or typed
+         *     in for "New pre-read".
+         */
+        FormMeeting: {
+            /** Company Key */
+            company_key: string;
+            /** Company Name */
+            company_name: string;
+            /** Ends At */
+            ends_at: string | null;
+            /**
+             * Meeting Id
+             * @description HubSpot's meeting, or none for a typed one
+             */
+            meeting_id: string | null;
+            /**
+             * Starts At
+             * Format: date-time
+             */
+            starts_at: string;
+            /** Title */
+            title: string;
+            /**
+             * Where
+             * @description online (Teams), in_person, or unknown
+             * @enum {string}
+             */
+            where: "online" | "in_person" | "unknown";
+        };
+        /**
+         * FormPerson
+         * @description Someone the pre-read would go to.
+         */
+        FormPerson: {
+            /**
+             * Allowed
+             * @description False for an address that isn't Contour's: it can't
+             */
+            allowed: boolean;
+            /** Email */
+            email: string;
+            /**
+             * Name
+             * @description Their name, when they have an account here
+             */
+            name: string | null;
+            /**
+             * Ticked
+             * @description Ticked to get it. Never ticked when it isn't allowed
+             */
+            ticked: boolean;
+            /**
+             * Why
+             * @description Like 'on the meeting', or 'added by you'
+             */
+            why: string;
+        };
+        /**
+         * FormPreviewIn
+         * @description The addresses the rep added, to see the email with them. Empty: only the people on the
+         *     meeting.
+         */
+        FormPreviewIn: {
+            /**
+             * To
+             * @description Addresses the rep added, each checked against Contour's own domains
+             */
+            to?: string[];
+        };
+        /** FormRecipient */
+        FormRecipient: {
+            /**
+             * Email
+             * @description A Contour address
+             */
+            email: string;
+            /**
+             * Name
+             * @description Their name, when they have an account here
+             */
+            name: string | null;
+        };
+        /** FormSendIn */
+        FormSendIn: {
+            /**
+             * To
+             * @description Who gets it: Contour addresses only. One that isn't refuses the whole send
+             */
+            to: string[];
+        };
+        /** FormSummaries */
+        FormSummaries: {
+            talks_so_far: components["schemas"]["FormSummary"];
+            what_they_do: components["schemas"]["FormSummary"];
+            /** @description What we know about the project */
+            what_we_know: components["schemas"]["FormSummary"];
+        };
+        /**
+         * FormSummariesPatch
+         * @description The new text of each summary the rep changed. Null or empty clears it.
+         */
+        FormSummariesPatch: {
+            /** Talks So Far */
+            talks_so_far?: string | null;
+            /** What They Do */
+            what_they_do?: string | null;
+            /** What We Know */
+            what_we_know?: string | null;
+        };
+        /** FormSummary */
+        FormSummary: {
+            /**
+             * By
+             * @description ai: written by AI. person: the rep wrote or changed it
+             * @enum {string}
+             */
+            by: "ai" | "person";
+            /**
+             * Sources
+             * @description The facts it rests on
+             */
+            sources: components["schemas"]["PrepSource"][];
+            /**
+             * Text
+             * @description Empty until it is written
+             */
+            text: string;
         };
         /**
          * GoalLeadsOption
@@ -3066,6 +4140,23 @@ export interface components {
              */
             status: "ok";
         };
+        /**
+         * HubSpotCopy
+         * @description The pre-read's copy in HubSpot, once it is sent: a note on the company (choice 9).
+         */
+        HubSpotCopy: {
+            /**
+             * Sentence
+             * @description One plain sentence, unless it is saved
+             */
+            sentence: string | null;
+            /**
+             * State
+             * @description saved; waiting (writing to HubSpot isn't ready); off; or failed
+             * @enum {string}
+             */
+            state: "saved" | "waiting" | "off" | "failed";
+        };
         /** HubSpotField */
         HubSpotField: {
             /** Property */
@@ -3106,6 +4197,72 @@ export interface components {
              * @enum {string}
              */
             status: "new" | "in_hubspot" | "open_deal" | "dissolved_deal" | "possible_match";
+        };
+        /**
+         * HubSpotOwnerChoice
+         * @description An active HubSpot owner, for the pick list. Never an email.
+         */
+        HubSpotOwnerChoice: {
+            /**
+             * Id
+             * @description The HubSpot owner's id
+             * @example 301
+             */
+            id: string;
+            /**
+             * Name
+             * @description The owner's name from our copy of HubSpot. 'HubSpot owner 301' when HubSpot has no name for them, or our copy doesn't hold them yet. Never an email
+             * @example Jo Sample
+             */
+            name: string;
+        };
+        /**
+         * HubSpotOwnerIn
+         * @description Who a person is in HubSpot, chosen by hand. null clears it.
+         */
+        HubSpotOwnerIn: {
+            /**
+             * Owner Id
+             * @description An active owner's id from GET /hubspot/owners, or null to clear the link
+             * @example 301
+             */
+            owner_id: string | null;
+        };
+        /**
+         * HubSpotOwnerLink
+         * @description Who an account is in HubSpot. Never the owner's email.
+         */
+        HubSpotOwnerLink: {
+            /**
+             * Id
+             * @description The HubSpot owner's id
+             * @example 301
+             */
+            id: string;
+            /**
+             * Matched By
+             * @description email: the HubSpot sync found an active owner with the account's email. person: an Admin set it by hand, and the sync never changes it
+             * @example email
+             * @enum {string}
+             */
+            matched_by: "email" | "person";
+            /**
+             * Name
+             * @description The owner's name from our copy of HubSpot. 'HubSpot owner 301' when HubSpot has no name for them, or our copy doesn't hold them yet. Never an email
+             * @example Jo Sample
+             */
+            name: string;
+        };
+        /**
+         * HubSpotOwnerList
+         * @description The pick list: the active owners, by name.
+         */
+        HubSpotOwnerList: {
+            /**
+             * Owners
+             * @description Each active owner's id and name, by name (one with no name last)
+             */
+            owners: components["schemas"]["HubSpotOwnerChoice"][];
         };
         /** HubSpotStatus */
         HubSpotStatus: {
@@ -4098,6 +5255,282 @@ export interface components {
             session: components["schemas"]["SessionOut"] | null;
             user: components["schemas"]["UserOut"] | null;
         };
+        /** Meeting */
+        Meeting: {
+            /**
+             * Attendee Owner Ids
+             * @description The other Contour people on it, by HubSpot owner id (the owner left out)
+             */
+            attendee_owner_ids?: string[];
+            /**
+             * Company Id
+             * @description The first company it is linked to, as HubSpot lists them
+             */
+            company_id?: string | null;
+            /**
+             * Contact Ids
+             * @description HubSpot's contacts on it, by id. Never an address
+             */
+            contact_ids?: string[];
+            /** Ends At */
+            ends_at?: string | null;
+            /** Hubspot Url */
+            hubspot_url?: string | null;
+            /**
+             * Id
+             * @description The meeting in HubSpot
+             */
+            id: string;
+            /**
+             * Location
+             * @description Where, as HubSpot has it, with emails and phone numbers left out
+             */
+            location?: string | null;
+            /**
+             * More Companies
+             * @description It is linked to more than one company: company_id is the first
+             * @default false
+             */
+            more_companies: boolean;
+            /**
+             * Notes
+             * @description HubSpot's internal notes as plain text, with emails and phone numbers left out, or none
+             */
+            notes?: string | null;
+            /**
+             * Outcome
+             * @description HubSpot's value as it comes: SCHEDULED, COMPLETED, RESCHEDULED, NO_SHOW or CANCELED
+             */
+            outcome?: string | null;
+            /**
+             * Owner Id
+             * @description Its HubSpot owner's id
+             */
+            owner_id?: string | null;
+            /**
+             * Starts At
+             * Format: date-time
+             */
+            starts_at: string;
+            /**
+             * Title
+             * @description HubSpot's title, or 'Untitled meeting'
+             */
+            title: string;
+            /**
+             * Where
+             * @description online: a video call (Teams, Meet or Zoom). in_person: an address. unknown: anything else, a phone call included
+             * @default unknown
+             * @enum {string}
+             */
+            where: "online" | "in_person" | "unknown";
+        };
+        /** MeetingDetail */
+        MeetingDetail: {
+            /**
+             * Company Name
+             * @description The company it is linked to, from our copy
+             */
+            company_name: string;
+            /** @description Its pre-read, or none yet */
+            form: components["schemas"]["MeetingFormOut"] | null;
+            meeting: components["schemas"]["Meeting"];
+        };
+        /**
+         * MeetingFormOut
+         * @description A pre-read: the meeting, the facts, the three summaries, the rep's two blanks, and who it
+         *     went to.
+         */
+        MeetingFormOut: {
+            /** Cost Usd */
+            cost_usd: string;
+            /**
+             * Error
+             * @description Why the draft failed, in plain words
+             */
+            error: string | null;
+            /** Facts */
+            facts: components["schemas"]["FormFact"][];
+            /**
+             * Going
+             * @description Who is going: the rep's, never the AI's
+             */
+            going: string | null;
+            /** @description None until it is sent */
+            hubspot_copy: components["schemas"]["HubSpotCopy"] | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            meeting: components["schemas"]["FormMeeting"];
+            /**
+             * Next Step
+             * @description The ideal next step: the rep's, never the AI's
+             */
+            next_step: string | null;
+            /** Sent At */
+            sent_at: string | null;
+            /**
+             * Sent By
+             * @description Who sent it
+             */
+            sent_by: string | null;
+            /** Sent To */
+            sent_to: components["schemas"]["FormRecipient"][];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "drafting" | "draft" | "sent" | "failed";
+            summaries: components["schemas"]["FormSummaries"];
+        };
+        /**
+         * MeetingFormPatch
+         * @description The rep's edits. Only the parts sent change. A summary sent here is the rep's own from
+         *     then on (`by: person`): a redraft leaves it alone, and it keeps its sources.
+         */
+        MeetingFormPatch: {
+            /** Going */
+            going?: string | null;
+            /** Next Step */
+            next_step?: string | null;
+            summaries?: components["schemas"]["FormSummariesPatch"] | null;
+        };
+        /**
+         * MeetingFormStart
+         * @description Starts a pre-read: for a HubSpot meeting (`meeting_id`), or for one typed in
+         *     (`company_key`, `title`, `starts_at`, and `ends_at` and `where` when known).
+         */
+        MeetingFormStart: {
+            /**
+             * Company Key
+             * @description A typed meeting's company: a HubSpot id, or lead:<id>
+             */
+            company_key?: string | null;
+            /** Ends At */
+            ends_at?: string | null;
+            /**
+             * Meeting Id
+             * @description HubSpot's meeting
+             */
+            meeting_id?: string | null;
+            /**
+             * Starts At
+             * @description With its time zone
+             */
+            starts_at?: string | null;
+            /** Title */
+            title?: string | null;
+            /**
+             * Where
+             * @default unknown
+             * @enum {string}
+             */
+            where: "online" | "in_person" | "unknown";
+        };
+        /**
+         * MeetingFormState
+         * @description A meeting's pre-read, in short, for a list.
+         */
+        MeetingFormState: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Status
+             * @description drafting (being written), draft (ready to check), sent, or failed
+             * @enum {string}
+             */
+            status: "drafting" | "draft" | "sent" | "failed";
+        };
+        /**
+         * MeetingItem
+         * @description One client meeting in a list: the meeting as HubSpot has it, and where its pre-read is.
+         */
+        MeetingItem: {
+            /**
+             * Company Name
+             * @description The company it is linked to, from our copy
+             */
+            company_name: string;
+            /** @description Its pre-read, or none yet */
+            form: components["schemas"]["MeetingFormState"] | null;
+            /**
+             * Group
+             * @description An upcoming meeting's day, by the Melbourne date: today, tomorrow, this_week (to Sunday) or later. None for a past one
+             */
+            group: ("today" | "tomorrow" | "this_week" | "later") | null;
+            meeting: components["schemas"]["Meeting"];
+            /**
+             * Notes Logged
+             * @description A call note is linked to it (Log meeting)
+             */
+            notes_logged: boolean;
+            /**
+             * Owner Name
+             * @description Whose meeting it is: its owner in HubSpot, from our copy of owners. None for a typed one (always mine) or an owner we don't know
+             */
+            owner_name?: string | null;
+            /**
+             * Typed
+             * @description True for a meeting typed in for New pre-read: it isn't in HubSpot, its `meeting.id` is empty, and `form` is its pre-read
+             * @default false
+             */
+            typed: boolean;
+        };
+        /** MeetingPage */
+        MeetingPage: {
+            /** Items */
+            items: components["schemas"]["MeetingItem"][];
+            /**
+             * Meetings State
+             * @description ready, waiting (HubSpot's meetings aren't read yet) or off
+             * @enum {string}
+             */
+            meetings_state: "ready" | "waiting" | "off";
+            /**
+             * Sentence
+             * @description One plain sentence when the list can't show what was asked: meetings aren't ready, or your own can't be picked out yet
+             */
+            sentence: string | null;
+            /**
+             * Total
+             * @description How many match, on every page
+             */
+            total: number;
+        };
+        /** MeetingSummary */
+        MeetingSummary: {
+            /**
+             * Draft Ready
+             * @description My upcoming meetings whose pre-read waits for me
+             */
+            draft_ready: number;
+            /**
+             * Need Pre Read
+             * @description My upcoming meetings (the next 7 days) with no pre-read, or one that failed
+             */
+            need_pre_read: number;
+        };
+        /**
+         * MeetingTranscriptIn
+         * @description A past meeting's transcript: pasted, or the text of a .txt or .vtt file the website read.
+         */
+        MeetingTranscriptIn: {
+            /**
+             * File Name
+             * @description The file it came from, if any: a .txt or .vtt file
+             */
+            file_name?: string | null;
+            /**
+             * Text
+             * @description The transcript. A .vtt file's text is cleaned of its times here
+             */
+            text: string;
+        };
         /** MemoryHitOut */
         MemoryHitOut: {
             /** App */
@@ -4244,6 +5677,35 @@ export interface components {
             /** Title */
             title: string;
         };
+        /**
+         * MyLastNote
+         * @description The asking person's newest note on a company that isn't in HubSpot yet (PLAN-V17 T2-7).
+         */
+        MyLastNote: {
+            /**
+             * Called At
+             * Format: date-time
+             */
+            called_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Outcome */
+            outcome: ("Connected" | "No answer" | "Left voicemail" | "Left live message" | "Busy" | "Wrong number") | null;
+            /**
+             * Status
+             * @description Where it is: any status but logged
+             * @enum {string}
+             */
+            status?: "sorting" | "to_confirm" | "sending" | "logged" | "partial" | "failed" | "uncertain";
+            /**
+             * Summary
+             * @description The card's summary, or the note's first 200 characters
+             */
+            summary: string;
+        };
         /** NeverSuggest */
         NeverSuggest: {
             /** Already Sent */
@@ -4272,6 +5734,24 @@ export interface components {
             sources: string[];
             /** Text */
             text: string;
+        };
+        /** NoteFieldOption */
+        NoteFieldOption: {
+            /**
+             * Id
+             * @description Like lease_end
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "date" | "number";
+            /**
+             * Label
+             * @description Like Lease end
+             */
+            label: string;
         };
         /**
          * NoteOut
@@ -4477,6 +5957,8 @@ export interface components {
             created_at: string;
             /** Email */
             email: string;
+            /** @description Who this person is in HubSpot: the calls they log land under this owner. null: no link, so HubSpot shows their calls as unassigned */
+            hubspot_owner: components["schemas"]["HubSpotOwnerLink"] | null;
             /**
              * Id
              * Format: uuid
@@ -4632,6 +6114,8 @@ export interface components {
             last_call: components["schemas"]["CompanyCall"] | null;
             /** Last Talk */
             last_talk: string | null;
+            /** @description My newest call note on this company that isn't in HubSpot yet, for Last talk (PLAN-V17). None when there is none, or while call notes are off */
+            my_last_note?: components["schemas"]["MyLastNote"] | null;
             /**
              * Names Ok
              * @description False: no names go to Claude (Levi's OK pending), so there is no web check
@@ -7123,6 +8607,11 @@ export interface components {
         StepResult: {
             /** Detail */
             detail?: string | null;
+            /**
+             * Held
+             * @description The fields step: HubSpot's names of the fields not written because HubSpot changed them since the preview
+             */
+            held?: string[];
             /** Hubspot Id */
             hubspot_id?: string | null;
             /**
@@ -7132,9 +8621,10 @@ export interface components {
             status: "done" | "failed" | "uncertain" | "skipped";
             /**
              * Step
-             * @enum {string}
+             * @description company, note or list (the Lead Finder); call, fields, task:1, task:2 ..., note or meeting (an activity)
+             * @example task:1
              */
-            step: "company" | "note" | "list";
+            step: string;
         };
         /** StyleMineIn */
         StyleMineIn: {
@@ -8112,25 +9602,67 @@ export interface components {
              * @enum {string}
              */
             action: "create" | "update";
+            /**
+             * Call
+             * @description The call in words: its title, outcome and time
+             */
+            call?: string | null;
             /** Company Id */
             company_id: string | null;
             /** Company Name */
             company_name: string;
             /** Company Url */
             company_url: string | null;
+            /**
+             * Contact Id
+             * @description An activity's person in HubSpot
+             */
+            contact_id?: string | null;
+            /**
+             * Deal Id
+             * @description An activity's deal in HubSpot
+             */
+            deal_id?: string | null;
             /** Domain */
             domain: string | null;
             /** Fields */
             fields: components["schemas"]["FieldChange"][];
+            /**
+             * Kind
+             * @description company: the Lead Finder's send (a company, a note, a list). activity: a call, field changes, follow-up tasks and a note on one company (PLAN-V17)
+             * @default company
+             * @enum {string}
+             */
+            kind: "company" | "activity";
             /** List Id */
             list_id: string | null;
             /** List Name */
             list_name: string | null;
             /**
+             * Meeting
+             * @description What the note adds to the meeting, in words. null: the meeting isn't changed (no meeting, or adding notes to meetings is switched off)
+             */
+            meeting?: string | null;
+            /**
+             * Meeting Id
+             * @description An activity's meeting in HubSpot: the one its note is about
+             */
+            meeting_id?: string | null;
+            /**
              * Note
              * @description The note's text, as it would be added
              */
             note?: string | null;
+            /**
+             * Owner Id
+             * @description The rep's HubSpot owner id. null: HubSpot shows it as unassigned
+             */
+            owner_id?: string | null;
+            /**
+             * Tasks
+             * @description Each follow-up task in words: what, when it is due, and for whom
+             */
+            tasks?: string[];
             /** Warnings */
             warnings?: string[];
         };
@@ -8993,6 +10525,1366 @@ export interface operations {
             };
         };
     };
+    list_call_notes: {
+        parameters: {
+            query?: {
+                state?: ("to_confirm" | "logged" | "needs_look") | null;
+                company_key?: string | null;
+                mine?: boolean;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CallNotePage"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    save_call_note: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Any unique text (a UUID is fine). The same key gives back the same note */
+                "idempotency-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CallNoteIn"];
+            };
+        };
+        responses: {
+            /** @description The note saved first with this key */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CallNoteOut"];
+                };
+            };
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CallNoteOut"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    confirm_call_notes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CallNoteIds"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CallNoteConfirm"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    call_note_options: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CallNoteOptions"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    preview_call_notes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CallNoteIds"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CallNotePreview"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    call_note_summary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CallNoteSummary"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_call_note: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The note's id */
+                note_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CallNoteOut"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_call_note: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The note's id */
+                note_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    edit_call_note: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The note's id */
+                note_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CallNotePatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CallNoteOut"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    resolve_call_note: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The note's id */
+                note_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CallNoteResolve"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CallNoteOut"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    retry_call_note: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The note's id */
+                note_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CallNoteOut"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     company_facets: {
         parameters: {
             query?: never;
@@ -9009,6 +11901,1264 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CompanyFacets"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_meetings: {
+        parameters: {
+            query?: {
+                when?: "upcoming" | "past";
+                mine?: boolean;
+                q?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeetingPage"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    start_form: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MeetingFormStart"];
+            };
+        };
+        responses: {
+            /** @description This meeting's pre-read, as it is */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeetingFormOut"];
+                };
+            };
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeetingFormOut"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_form: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The pre-read's id */
+                form_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeetingFormOut"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    edit_form: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The pre-read's id */
+                form_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MeetingFormPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeetingFormOut"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    preview_form: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The pre-read's id */
+                form_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FormPreviewIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FormEmailPreview"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    redraft_form: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The pre-read's id */
+                form_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeetingFormOut"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    send_form: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The pre-read's id */
+                form_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FormSendIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeetingFormOut"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    meeting_summary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeetingSummary"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_meeting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description HubSpot's meeting id */
+                meeting_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeetingDetail"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    log_meeting: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Any unique text (a UUID is fine). The same key gives back the same note */
+                "idempotency-key"?: string | null;
+            };
+            path: {
+                /** @description HubSpot's meeting id */
+                meeting_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MeetingTranscriptIn"];
+            };
+        };
+        responses: {
+            /** @description The note saved first with this key */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CallNoteOut"];
+                };
+            };
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CallNoteOut"];
                 };
             };
             /** @description The request can't be understood */
@@ -11435,6 +15585,128 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ImportResult"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_hubspot_owners: {
+        parameters: {
+            query?: {
+                /** @description The most owners to send */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HubSpotOwnerList"];
                 };
             };
             /** @description The request can't be understood */
@@ -16113,6 +20385,131 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["PersonPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonOut"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    set_hubspot_owner: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HubSpotOwnerIn"];
             };
         };
         responses: {

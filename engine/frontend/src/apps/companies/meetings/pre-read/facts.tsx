@@ -9,7 +9,7 @@
  * they will be. A draft that failed before it read them says so.
  */
 import { Fragment, useId } from 'react'
-import type { MeetingFormOut } from '@/api/v17'
+import type { MeetingFormOut } from '@/api/types'
 import { Skeleton } from '@/components/ui/skeleton'
 import { FACTS, FACTS_COMING, FACTS_NOTE, NO_FACTS } from './words'
 

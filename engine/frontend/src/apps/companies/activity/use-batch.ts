@@ -32,7 +32,7 @@ import {
   SENDING_POLL_MS,
 } from '@/api/hooks/call-notes'
 import { queryKeys } from '@/api/query'
-import type { CallNoteOut } from '@/api/v17'
+import type { CallNoteOut } from '@/api/types'
 import { batchDoneWords } from './words'
 
 /** Where a sent note stands. */

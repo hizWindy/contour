@@ -33,7 +33,7 @@ import {
   saveCallNoteOptions,
 } from '@/api/hooks/call-notes'
 import { queryKeys } from '@/api/query'
-import type { CallNoteIn, CallNoteSummary } from '@/api/v17'
+import type { CallNoteIn, CallNoteSummary } from '@/api/types'
 import { changeDetail } from '@/lib/problems'
 import { draftOwner, draftWithKey, dropDraft, keepDraft, readDraft, type NoteDraft } from './draft'
 import { checkFollowUp } from './follow-up'
@@ -86,7 +86,8 @@ function bodyOf({ draft, prepId }: LogCallInput): CallNoteIn {
     text: draft.text.trim(),
     source: draft.source,
     called_at: draft.calledAt,
-    outcome: draft.outcome,
+    // The chip's words: they come from the options' outcomes, and the server checks them again.
+    outcome: draft.outcome as CallNoteIn['outcome'],
   }
 }
 

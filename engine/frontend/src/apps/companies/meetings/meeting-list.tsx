@@ -10,7 +10,7 @@
  * tables do. The rows themselves never fade in, slide or glide (principles 02 #20).
  */
 import { useId } from 'react'
-import type { MeetingItem, MeetingPage } from '@/api/v17'
+import type { MeetingItem, MeetingPage } from '@/api/types'
 import { Pager } from '@/components/pager'
 import { cn } from '@/lib/utils'
 import { MeetingRow } from './meeting-row'

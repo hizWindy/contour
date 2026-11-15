@@ -1,5 +1,5 @@
 /**
- * "Log meeting" on a past meeting (PLAN-V17 T3-11), against Track 2's contract (v17.ts Part 3) and
+ * "Log meeting" on a past meeting (PLAN-V17 T3-11), against Track 2's contract (generated) and
  * a fake server that answers as Track 2's does: a transcript becomes a call note linked to the
  * meeting (201), the meeting's row then says its notes are logged, and Undo deletes the note. The
  * clock is fixed at 9:00 am on Wednesday 18 Nov 2026, Melbourne time. Made-up names and words only.
@@ -9,7 +9,7 @@ import { createMemoryRouter, RouterProvider } from 'react-router'
 import { toast } from 'sonner'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { queryKeys } from '@/api/query'
-import type { CallNoteOptions, CallNoteOut, Meeting, MeetingItem } from '@/api/v17'
+import type { CallNoteOptions, CallNoteOut, Meeting, MeetingItem } from '@/api/types'
 import { createTestQueryClient, renderWithProviders } from '@/test/render'
 import MeetingsPage from './index'
 import { forgetTranscripts } from './log-meeting-save'
@@ -26,6 +26,7 @@ type ItemChanges = Partial<Omit<MeetingItem, 'meeting'>> & { meeting?: Partial<M
 function past(id: string, { meeting: changes, ...rest }: ItemChanges = {}): MeetingItem {
   return {
     meeting: {
+      more_companies: false,
       id,
       company_id: '101',
       title: 'Lease review',
@@ -79,7 +80,7 @@ function note(id: string, text: string): CallNoteOut {
     status: 'sorting',
     sorted_by: 'person',
     unsure: null,
-    call: { summary: '', outcome: null },
+    call: { summary: '', outcome: null, in_hubspot: false },
     changes: [],
     tasks: [],
     left_out: false,

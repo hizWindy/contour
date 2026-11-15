@@ -1,5 +1,5 @@
 /**
- * The pre-read's page (PLAN-V17 T3-10), against Track 2's real contract (v17.ts Part 3) and a fake
+ * The pre-read's page (PLAN-V17 T3-10), against Track 2's real contract (generated) and a fake
  * server that keeps its pre-read between requests and answers as Track 2's does: a summary the rep
  * changes is theirs (`by: person`) and a redraft keeps it, a blank is tidied, and a change to a
  * sent pre-read makes it a draft again.
@@ -22,7 +22,7 @@ import type {
   MeetingDetail,
   MeetingFormOut,
   MeetingFormPatch,
-} from '@/api/v17'
+} from '@/api/types'
 import { MotionRoot } from '@/components/motion'
 import { REDUCED_MOTION } from '@/lib/use-media-query'
 import { routes } from '@/router'
@@ -253,6 +253,7 @@ function mockServer(changes: Partial<Omit<Server, 'calls' | 'release'>> = {}): S
     if (url.pathname === MEETING && method === 'GET') {
       const detail: MeetingDetail = {
         meeting: {
+          more_companies: false,
           id: '9001',
           company_id: '101',
           title: 'Office walk-through',

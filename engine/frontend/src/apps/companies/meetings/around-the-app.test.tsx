@@ -8,8 +8,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { CompanyDetail } from '@/api/types'
-import type { CompanyDetailV17, Meeting, MeetingItem, MeetingSummary } from '@/api/v17'
+import type { CompanyDetail, Meeting, MeetingItem, MeetingSummary } from '@/api/types'
 import { routes } from '@/router'
 import { createTestQueryClient, renderWithProviders } from '@/test/render'
 import { asLaptop } from '@/test/screen'
@@ -28,6 +27,7 @@ type ItemChanges = Partial<Omit<MeetingItem, 'meeting'>> & { meeting?: Partial<M
 function item(id: string, { meeting: changes, ...rest }: ItemChanges = {}): MeetingItem {
   return {
     meeting: {
+      more_companies: false,
       id,
       company_id: '101',
       title: 'Office walk-through',
@@ -346,7 +346,7 @@ describe('who sees it', () => {
 })
 
 describe("a company's record", () => {
-  function company(meetings: MeetingItem[]): CompanyDetailV17 {
+  function company(meetings: MeetingItem[]): CompanyDetail {
     const detail: CompanyDetail = {
       key: '101',
       source: 'hubspot',

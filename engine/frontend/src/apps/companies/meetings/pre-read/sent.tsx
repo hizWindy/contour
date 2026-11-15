@@ -27,7 +27,7 @@ import {
 } from 'lucide-react'
 import { useId, useState } from 'react'
 import { useSendMeetingForm } from '@/api/hooks/meetings'
-import type { HubSpotCopy, MeetingFormOut } from '@/api/v17'
+import type { HubSpotCopy, MeetingFormOut } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import {

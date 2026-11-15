@@ -21,7 +21,7 @@
  */
 import { newIdempotencyKey } from '@/api/client'
 import { onSignOut, type SignIn } from '@/api/hooks/auth'
-import type { CallNoteSource } from '@/api/v17'
+import type { CallNoteSource } from '@/api/types'
 
 /** The entry with sign-in off. A signed-in person's entry adds their id to it. */
 const STORAGE_KEY = 'companies.call-note-drafts'

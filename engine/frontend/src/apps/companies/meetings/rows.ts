@@ -9,7 +9,7 @@
  *   are logged, and an upcoming one where its pre-read stands. A meeting typed in isn't in HubSpot,
  *   so it has no notes to log: past or not, it says where its pre-read stands.
  */
-import type { MeetingGroup, MeetingItem } from '@/api/v17'
+import type { MeetingGroup, MeetingItem } from '@/api/types'
 
 export type DayGroup = MeetingGroup
 

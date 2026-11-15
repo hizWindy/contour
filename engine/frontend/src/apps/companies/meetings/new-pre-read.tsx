@@ -19,7 +19,7 @@ import { useId, useRef, useState, type FormEvent, type ReactNode, type RefObject
 import { useNavigate } from 'react-router'
 import { fieldErrorMap, toApiProblem } from '@/api/client'
 import { useStartMeetingForm } from '@/api/hooks/meetings'
-import type { MeetingWhere } from '@/api/v17'
+import type { MeetingWhere } from '@/api/types'
 import { ChipGroup, type ChipOption } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import {

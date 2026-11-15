@@ -5,8 +5,14 @@
  */
 import { screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import type { CompanyDetail, PrepFacts, PrepOut, PrepScript, PrepSource } from '@/api/types'
-import type { MyLastNote, PrepFactsV17 } from '@/api/v17'
+import type {
+  CompanyDetail,
+  PrepFacts,
+  PrepOut,
+  PrepScript,
+  PrepSource,
+  MyLastNote,
+} from '@/api/types'
 import { renderWithProviders } from '@/test/render'
 import { BeforeYouDial, type BeforeYouDialProps } from './before-you-dial'
 import { SourcesContext } from './guide-sources'
@@ -210,7 +216,7 @@ describe("Last talk with the rep's own note (PLAN-V17 T3-7)", () => {
     person: 'Jason Reeds',
   }
 
-  function withNote(changes: Partial<PrepFactsV17> = {}): PrepFactsV17 {
+  function withNote(changes: Partial<PrepFacts> = {}): PrepFacts {
     return { ...facts({ last_call: HUBSPOT_CALL }), my_last_note: NOTE, ...changes }
   }
 

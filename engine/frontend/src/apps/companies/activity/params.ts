@@ -6,7 +6,7 @@
  * `?log=1` (Ctrl+K's "Log a call", T3-7) opens the company picker once. The page then takes it
  * out of the address with `replace`, so Back, Forward or a reload never opens the picker again.
  */
-import type { CallNoteQuery, CallNoteState } from '@/api/v17'
+import type { CallNoteQuery, CallNoteState } from '@/api/types'
 
 export type ActivityTab = CallNoteState
 

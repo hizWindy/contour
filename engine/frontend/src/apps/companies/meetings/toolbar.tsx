@@ -9,7 +9,7 @@
  */
 import { Search } from 'lucide-react'
 import { useEffect, useEffectEvent, useId, useState } from 'react'
-import type { MeetingWhen } from '@/api/v17'
+import type { MeetingWhen } from '@/api/types'
 import { Segmented, type SegmentedOption } from '@/components/motion'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
