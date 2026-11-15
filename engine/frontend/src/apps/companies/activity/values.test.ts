@@ -4,7 +4,15 @@ import { formatDate } from '@/lib/format'
 import { sortForConfirm } from './notes'
 import { activityQuery, readTab, writeTab } from './params'
 import { readCalendarDate, readFieldValue } from './values'
-import { batchDoneWords, fieldValue, stepName, totalsWords, waitingLine } from './words'
+import {
+  batchDoneWords,
+  callWhen,
+  fieldValue,
+  loggedWhen,
+  stepName,
+  totalsWords,
+  waitingLine,
+} from './words'
 
 describe('a change value forgives (DESIGN.md "Fields forgive")', () => {
   it.each([
@@ -108,5 +116,15 @@ describe('the words', () => {
     expect(waitingLine('Waiting for HubSpot write access')).toBe(
       'Waiting for HubSpot write access. You can still check and change your calls.',
     )
+  })
+
+  it('writes the day of a logged call as the call line beside it does', () => {
+    // 04:00 UTC is 3:00 pm in Melbourne in November.
+    const today = '2026-11-15'
+    expect(callWhen('2026-11-15T04:00:00Z', today)).toBe('Today, 3:00 pm')
+    expect(loggedWhen('2026-11-15T04:00:00Z', today)).toBe('Logged today, 3:00 pm')
+    expect(callWhen('2026-11-12T04:05:00Z', today)).toBe('12 Nov 2026, 3:05 pm')
+    expect(loggedWhen('2026-11-12T04:05:00Z', today)).toBe('Logged 12 Nov 2026, 3:05 pm')
+    expect(loggedWhen(null, today)).toBe('Logged')
   })
 })

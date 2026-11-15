@@ -254,9 +254,15 @@ export const NOT_DONE = "That didn't go through"
 
 // --- Logged ---------------------------------------------------------------------------------
 
-/** "Logged 15 Nov 2026, 3:05 pm" */
-export function loggedWhen(at: string | null): string {
-  return at ? `Logged ${formatDateTime(at)}` : 'Logged'
+/**
+ * "Logged today, 3:05 pm", or "Logged 12 Nov 2026, 3:05 pm": the day written as `callWhen`
+ * writes it on the same row.
+ */
+export function loggedWhen(at: string | null, today: string = melbourneDate()): string {
+  if (!at) return LOGGED
+  return melbourneDate(at) === today
+    ? `Logged today, ${formatTime(at)}`
+    : `Logged ${formatDateTime(at)}`
 }
 
 // --- Log call -------------------------------------------------------------------------------

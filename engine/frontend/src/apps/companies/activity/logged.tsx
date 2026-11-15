@@ -37,7 +37,7 @@ function LoggedRow({ note, today }: { note: CallNoteOut; today: string }) {
       <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1">
         <span className="flex items-center gap-1.5 text-caption text-pass-ink">
           <CircleCheck aria-hidden="true" className="size-3.5 shrink-0" />
-          {loggedWhen(note.confirmed_at)}
+          {loggedWhen(note.confirmed_at, today)}
         </span>
         <OpenInHubSpot href={note.hubspot_url} company={note.company_name} />
       </div>
