@@ -266,7 +266,7 @@ class PrepFacts(Out):
 
     model_config = ConfigDict(
         json_schema_serialization_defaults_required=True,
-        json_schema_extra=optional_in_types("copy_at"),
+        json_schema_extra=optional_in_types("copy_at", "my_last_note"),
     )
 
     company_key: str
@@ -297,6 +297,11 @@ class PrepFacts(Out):
         None,
         description="When the last HubSpot sync finished, so the card can say an old copy is old "
         "(PLAN-V15). None before the first sync",
+    )
+    my_last_note: "MyLastNote | None" = Field(
+        None,
+        description="My newest call note on this company that isn't in HubSpot yet, for Last talk "
+        "(PLAN-V17). None when there is none, or while call notes are off",
     )
 
 
@@ -587,6 +592,8 @@ class CallNoteIn(BaseModel):
 
 
 class CallNoteCall(Out):
+    model_config = ConfigDict(json_schema_extra=optional_in_types("in_hubspot"))
+
     summary: str = Field(description="Two short lines, or empty until sorted or written")
     outcome: OutcomeName | None
     in_hubspot: bool = Field(
@@ -595,6 +602,8 @@ class CallNoteCall(Out):
 
 
 class CallNoteChange(Out):
+    model_config = ConfigDict(json_schema_extra=optional_in_types("in_hubspot"))
+
     id: str = Field(description="Like c1")
     field: str = Field(description="Like lease_end")
     label: str = Field(description="Like Lease end")
@@ -608,6 +617,8 @@ class CallNoteChange(Out):
 
 
 class CallNoteTask(Out):
+    model_config = ConfigDict(json_schema_extra=optional_in_types("in_hubspot"))
+
     id: str = Field(description="Like t1")
     subject: str
     due: date
@@ -728,6 +739,8 @@ class CallNoteTotals(Out):
 
 
 class CallNotePreview(Out):
+    model_config = ConfigDict(json_schema_extra=optional_in_types("skipped"))
+
     items: list[CallNoteOut] = Field(description="Each note, with what HubSpot has now")
     sending_ready: bool = Field(description=SENDING_READY)
     waiting_for: str | None = Field(description=WAITING_FOR)
@@ -736,6 +749,8 @@ class CallNotePreview(Out):
 
 
 class CallNoteConfirm(Out):
+    model_config = ConfigDict(json_schema_extra=optional_in_types("batch_id", "notes", "skipped"))
+
     sending: int = Field(description="How many notes started sending. 0 when one was already")
     already_sending: bool = Field(
         description="True when a batch was being sent already: nothing new started"
@@ -758,3 +773,18 @@ class CallNoteSummary(Out):
     to_confirm: int = Field(description="My notes waiting for me to confirm them")
     needs_look: int = Field(description="My notes that failed, were partly saved, or are unsure")
     logged_today: int = Field(description="My notes logged in HubSpot today, Melbourne time")
+
+
+class MyLastNote(Out):
+    """The asking person's newest note on a company that isn't in HubSpot yet (PLAN-V17 T2-7)."""
+
+    model_config = ConfigDict(json_schema_extra=optional_in_types("status"))
+
+    id: uuid.UUID
+    summary: str = Field(description="The card's summary, or the note's first 200 characters")
+    called_at: datetime
+    outcome: OutcomeName | None
+    status: NoteStatus = Field(description="Where it is: any status but logged")
+
+
+PrepFacts.model_rebuild()  # it names MyLastNote, which comes after it

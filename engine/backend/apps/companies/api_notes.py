@@ -318,8 +318,9 @@ async def edit_call_note(
     status_code=204,
     summary="Remove a call note",
     description=(
-        "Removes my note before it is sent (the toast's Undo). A sort still running stops "
-        "first. 409 `note_sent` once it has gone to HubSpot. 403 `not_your_note`, 404 "
+        "Removes my note before it is sent (the toast's Undo), or a note that failed with "
+        "nothing in HubSpot. A sort still running stops first. 409 `note_sent` while it is "
+        "being sent, or once any part of it is in HubSpot or may be. 403 `not_your_note`, 404 "
         "`note_not_found`, 409 `call_notes_off`."
     ),
 )

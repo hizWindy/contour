@@ -27,6 +27,7 @@ from apps.companies import store
 from apps.companies.schemas import (
     CompanyCall,
     CompanyDetail,
+    MyLastNote,
     PrepFact,
     PrepFacts,
     PrepPerson,
@@ -331,6 +332,7 @@ def facts_out(
     people_ready: bool,
     prep_cap_usd: Decimal,
     copy_at: datetime | None = None,
+    my_last_note: MyLastNote | None = None,
 ) -> PrepFacts:
     company = pack.company
     return PrepFacts(
@@ -354,6 +356,7 @@ def facts_out(
         names_ok=names_ok,
         prep_cap_usd=prep_cap_usd,
         copy_at=copy_at,
+        my_last_note=my_last_note,
     )
 
 

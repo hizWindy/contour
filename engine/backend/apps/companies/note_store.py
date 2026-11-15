@@ -37,6 +37,7 @@ from apps.companies.note_batch import (
     STOPPED_MID_SEND,
     NoteSender,
     mark_sending,
+    parts_of,
     sending_stuck,
     settle_cut_off,
     steps_of,
@@ -75,6 +76,7 @@ from apps.companies.schemas import (
     CallNoteSummary,
     CallNoteTask,
     CallNoteTaskIn,
+    MyLastNote,
     NoteFieldOption,
     NoteState,
     OutcomeName,
@@ -100,7 +102,8 @@ STATES: Final[dict[NoteState, tuple[str, ...]]] = {
     "needs_look": ("partial", "failed", "uncertain"),
 }
 CHANGEABLE: Final = ("to_confirm", "partial", "failed")  # the parts not in HubSpot yet
-REMOVABLE: Final = ("sorting", "to_confirm")
+REMOVABLE: Final = ("sorting", "to_confirm", "failed")  # failed: only with nothing in HubSpot
+NOTE_START_CHARS: Final = 200  # a note with no summary shows its first 200 characters
 CARD_PARTS: Final = frozenset({"summary", "outcome", "changes", "tasks"})
 SENT_FIELDS: Final[set[str]] = {"state", "step", "detail"}  # where a part is with HubSpot
 WAITING_FOR_HUBSPOT = "Waiting for HubSpot to be connected."
@@ -158,7 +161,6 @@ SENT_WORDS: Final = {
     "sending": "This note is being sent to HubSpot. Wait for it to finish.",
     "uncertain": "Check HubSpot first, then tell us whether it's there.",
     "partial": "Part of this note is in HubSpot already, so it can't be removed here.",
-    "failed": "This note was sent to HubSpot once, so it can't be removed here. Send it again.",
 }
 
 
@@ -583,6 +585,36 @@ async def summary(
     )
 
 
+async def my_last_note(
+    session: AsyncSession, company_key: str, auth: AuthContext | None, settings: Settings
+) -> MyLastNote | None:
+    """My newest note on this company that isn't in HubSpot yet (any status but logged), for
+    call prep's Last talk (PLAN-V17 T2-7). Only my own: with sign-in off, the notes nobody signed
+    in made. None while call notes are off."""
+    if not settings.call_notes_enabled:
+        return None
+    maker = maker_of(auth)
+    mine = CallNote.made_by.is_(None) if maker is None else CallNote.made_by == maker
+    note = await session.scalar(
+        select(CallNote)
+        .where(mine, CallNote.company_key == company_key, CallNote.status != "logged")
+        .order_by(CallNote.called_at.desc(), CallNote.created_at.desc(), CallNote.id)
+        .limit(1)
+    )
+    if note is None:
+        return None
+    card = NoteCard.model_validate(note.card or {})
+    start = " ".join(note.text.split())[:NOTE_START_CHARS].rstrip()
+    outcome = card.call.outcome
+    return MyLastNote(
+        id=note.id,
+        summary=card.call.summary.strip() or start,
+        called_at=note.called_at,
+        outcome=outcome if outcome in OUTCOME_NAMES else None,
+        status=note.status,  # the table's check keeps it to the list
+    )
+
+
 # --- The rep's edits ----------------------------------------------------------------------------
 
 
@@ -805,10 +837,20 @@ async def edit_note(
     await session.commit()
 
 
+def removable(note: CallNote) -> bool:
+    """A note not sent yet, or one that failed with nothing in HubSpot: no part landed, and none
+    that HubSpot may have."""
+    if note.status != "failed":
+        return note.status in REMOVABLE
+    card = NoteCard.model_validate(note.card or {})
+    return not any(part.state in ("landed", "uncertain") for part in parts_of(card))
+
+
 async def remove_note(session: AsyncSession, note: CallNote, sorter: NoteSorter) -> None:
-    """Removes a note not yet sent (the toast's Undo). A sort still running is stopped first;
-    what it spent stays in the search log."""
-    if note.status not in REMOVABLE:
+    """Removes a note not yet sent (the toast's Undo), or one that failed with nothing in
+    HubSpot. A sort still running is stopped first; what it spent stays in the search log. The
+    sends of a failed note stay in the log of writes to HubSpot."""
+    if not removable(note):
         raise already_sent(note.status)
     note_id, sorting = note.id, note.status == "sorting"
     await session.commit()  # no connection waits while the sort stops

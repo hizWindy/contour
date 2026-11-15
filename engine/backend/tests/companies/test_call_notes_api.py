@@ -543,6 +543,50 @@ async def test_undo_removes_a_note_and_stops_its_sort(
     assert await stored(world) == []
 
 
+async def test_a_failed_note_with_nothing_in_hubspot_can_be_removed(
+    world: World, settings: dict[str, Any]
+) -> None:
+    await a_company(world)
+    failed_call = {"outcome": "Connected", "state": "failed", "step": "call", "detail": "Busy."}
+    landed_call = {"outcome": "Connected", "state": "landed", "step": "call"}
+    unsure_call = {"outcome": "Connected", "state": "uncertain", "step": "call"}
+    failed_task = {
+        "id": "t1",
+        "subject": "Send the floor plan",
+        "due": "2026-11-24",
+        "due_words": "",
+        "kind": "email",
+        "state": "failed",
+        "step": "task:1",
+    }
+    cases = {
+        "failed": ("failed", {"call": failed_call}),
+        "partial": ("partial", {"call": landed_call, "tasks": [failed_task]}),
+        "uncertain": ("uncertain", {"call": unsure_call}),
+        "sending": ("sending", {"call": {"outcome": "Connected"}}),
+        "failed, yet its call landed": ("failed", {"call": landed_call}),  # never kept: checked
+    }
+    async with signed_in_as(world, "mia", ["companies"]) as client:
+        answers: dict[str, httpx.Response] = {}
+        for name, (status, card) in cases.items():
+            note = await log_call(client)
+            await set_note(world, note["id"], status=status, card=card)
+            answers[name] = await client.delete(f"{NOTES}/{note['id']}")
+    assert answers["failed"].status_code == 204
+    for name in ("partial", "uncertain", "sending", "failed, yet its call landed"):
+        assert (answers[name].status_code, answers[name].json()["code"]) == (409, "note_sent")
+    assert answers["partial"].json()["detail"] == (
+        "Part of this note is in HubSpot already, so it can't be removed here."
+    )
+    assert answers["uncertain"].json()["detail"] == (
+        "Check HubSpot first, then tell us whether it's there."
+    )
+    assert answers["sending"].json()["detail"] == (
+        "This note is being sent to HubSpot. Wait for it to finish."
+    )
+    assert len(await stored(world)) == 4  # only the failed one with nothing in HubSpot went
+
+
 async def test_a_note_left_sorting_by_a_restart_goes_to_the_rep(
     world: World, settings: dict[str, Any], sorter: NoteSorter
 ) -> None:

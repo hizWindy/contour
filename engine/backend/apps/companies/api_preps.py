@@ -19,7 +19,7 @@ from fastapi import APIRouter, Depends, Path, Query, Request, Response
 from sqlalchemy import Select, or_, select
 from sqlalchemy.exc import IntegrityError
 
-from apps.companies import store
+from apps.companies import note_store, store
 from apps.companies.deps import LeadsDep
 from apps.companies.facts import build_facts, copy_finished_at, facts_out
 from apps.companies.prep import (
@@ -298,7 +298,10 @@ async def start_prep(
     summary="What we know, before any Claude request",
     description=(
         "The facts pack for a company and, with `contact_id`, a person at it: each fact with its "
-        "source. Free and quick, so the modal shows it at once. No Claude request is made."
+        "source. Free and quick, so the modal shows it at once. No Claude request is made. "
+        "`my_last_note` is my newest call note on the company that isn't in HubSpot yet (only "
+        "my own; with sign-in off, the notes nobody signed in made), for Last talk. A call "
+        "logged in HubSpot is in the facts at once, as the newest talk."
     ),
 )
 async def get_facts(
@@ -306,6 +309,7 @@ async def get_facts(
     session: SessionDep,
     settings: SettingsDep,
     leads: LeadsDep,
+    auth: SignedInDep,
     contact_id: Annotated[str | None, Query(max_length=32)] = None,
 ) -> PrepFacts:
     if not store.valid_key(key):
@@ -320,4 +324,5 @@ async def get_facts(
         people_ready=pack.company.people_status == "ready",
         prep_cap_usd=settings.prep_cap_usd,
         copy_at=await copy_finished_at(session),
+        my_last_note=await note_store.my_last_note(session, key, auth, settings),
     )
