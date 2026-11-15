@@ -10,7 +10,8 @@
  *   pre-read's page.
  * - **A past meeting** says whether what was said is logged, with "Log meeting" (T3-11), which
  *   opens the transcript box (`log-meeting.tsx`). It stays after the notes are logged, for a second
- *   part of the meeting.
+ *   part of the meeting. One typed in with New pre-read isn't in HubSpot, so it has no notes to
+ *   log: it says where its pre-read stands, with "Open".
  * - **A cancelled meeting** says "Cancelled", dimmed with the quieter text colour, never lower
  *   opacity, so every line stays readable (as a card left out of a batch is). It keeps "Open"
  *   while it has a pre-read.
@@ -26,7 +27,7 @@ import { cn } from '@/lib/utils'
 import { RowAction, StatusLine } from './row-parts'
 import { rowStatus, type RowStatus } from './rows'
 import { useDraftIt } from './use-draft-it'
-import { WHERE_WORDS, WHOSE } from './words'
+import { whereWords, WHOSE } from './words'
 
 export interface MeetingRowProps {
   item: MeetingItem
@@ -45,8 +46,9 @@ export function MeetingRow({ item, when, past, team = false, onLogMeeting }: Mee
   // "Draft it" shows its result at once: the row says Drafting while the server answers.
   const status: RowStatus = draftIt.pending ? 'drafting' : rowStatus(item, past)
   const cancelled = status === 'cancelled'
-  const where = meeting.where === 'unknown' ? null : meeting.where
-  const WhereIcon = where === 'online' ? Video : MapPin
+  // Teams, Zoom, Google Meet or In person; nothing when it isn't known.
+  const where = whereWords(meeting)
+  const WhereIcon = meeting.where === 'online' ? Video : MapPin
   const owner = team ? item.owner_name?.trim() || null : null
 
   return (
@@ -87,7 +89,7 @@ export function MeetingRow({ item, when, past, team = false, onLogMeeting }: Mee
             {where ? (
               <span className="flex items-center gap-1.5">
                 <WhereIcon aria-hidden="true" className="size-3.5 shrink-0" />
-                {WHERE_WORDS[where]}
+                {where}
               </span>
             ) : null}
             {owner ? (

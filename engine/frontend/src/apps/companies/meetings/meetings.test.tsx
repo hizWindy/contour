@@ -79,7 +79,13 @@ function upcoming(): MeetingItem[] {
       form: { id: 'f2', status: 'drafting' },
     }),
     meeting('m3', {
-      meeting: { company_id: '103', title: 'Fit-out budget', starts_at: '2026-11-19T00:00:00Z' },
+      meeting: {
+        company_id: '103',
+        title: 'Fit-out budget',
+        starts_at: '2026-11-19T00:00:00Z',
+        // The client's own Zoom link: the row names Zoom, not Teams.
+        location: 'https://us02web.zoom.us/j/81234567890',
+      },
       company_name: 'Sample Freight Pty Ltd',
       group: 'tomorrow',
       form: { id: 'f3', status: 'draft' },
@@ -440,6 +446,9 @@ describe('Upcoming', () => {
     // Where it is: a word and an icon, never colour alone. Not known: nothing.
     expect(within(row('Sample Mining Pty Ltd')).getByText('In person')).toBeInTheDocument()
     expect(within(row('Sample Health Pty Ltd')).queryByText(/Teams|In person/)).toBeNull()
+    // A video call is Teams, unless HubSpot's location names Zoom or Google Meet.
+    expect(within(row('Sample Freight Pty Ltd')).getByText('Zoom')).toBeInTheDocument()
+    expect(within(row('Sample Freight Pty Ltd')).queryByText('Teams')).toBeNull()
   })
 
   it('greys a cancelled meeting with the quieter text colour, says so, and offers no draft', async () => {

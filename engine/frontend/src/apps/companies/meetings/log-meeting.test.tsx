@@ -273,7 +273,16 @@ describe('Log meeting on a past meeting', () => {
       within(row('Sample Mining Pty Ltd')).getByRole('button', { name: /^Log meeting/ }),
     ).toBeInTheDocument()
     expect(within(row('Sample Retail Pty Ltd')).queryByRole('button')).toBeNull()
-    expect(within(row('Sample Health Pty Ltd')).queryByRole('button')).toBeNull()
+    // Typed in: no notes to log, so no notes line either. It says where its pre-read stands, and
+    // opens it.
+    const typed = within(row('Sample Health Pty Ltd'))
+    expect(typed.queryByRole('button')).toBeNull()
+    expect(typed.queryByText('No notes yet')).toBeNull()
+    expect(typed.getByText('Sent')).toBeInTheDocument()
+    expect(typed.getByRole('link', { name: /^Open/ })).toHaveAttribute(
+      'href',
+      '/companies/meetings/f-typed',
+    )
   })
 
   it('is not there while call notes are off', async () => {
