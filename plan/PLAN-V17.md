@@ -658,6 +658,9 @@ Newest first.
 
 Newest first.
 
+- 2026-11-16, after T2-16: Track 3's asks from building the pre-read page.
+  - **Done:** a typed meeting started again by the same person, with the same company, title and start, gives back its first pre-read (200), so a retry after a lost answer makes no second one (`aba4cb1`). Each `MeetingItem` has `owner_name`: the owner as our copy of HubSpot's owners names them, or none (`1c5ff1c`; optional in the website's types). `openapi.json` written again (`3431528`). Checked: the companies tests, the gates and the contract tests, 693 passed. The rest of the suite doesn't touch these files, so its run on `8c97d73` stands.
+  - **Not done (TBC):** the last draft's own cost needs a new column, so the page says "so far", and a redraft costs about US$0.03. `FormMeeting.hubspot_url`: the page reads `GET /meetings/{meeting_id}` for the link. `where` shows as required only in Track 3's generated types (`openapi.json` doesn't require it), and it is ignored beside a `meeting_id`. A form id that isn't a UUID answers 422, as a note id does.
 - 2026-11-16, T2-16: **Track 2 ready to merge**, once Al-khair has run the two paid checks, or waived them: T2-8 (the sorter on 10 made-up notes, under US$0.01) and T2-16's 3 real drafts (about US$0.10). Both scripts pass a free dry run at `8c97d73`.
   - **Full backend run** on `8c97d73` (`RUN_GATES=1`): 3,920 passed, 25 skipped (the usual 25), none failed. It ran in four parts under the heavy lock, in the foreground, because memory was short: companies 384, core 1,903, lead_finder 1,622, gates and e2e 11. Stage A's was 3,824. Ruff and mypy strict pass.
   - **Fixed by the run:** `test_people_sync.py` expected Companies to need no write scope (`0ec9c4b`).
