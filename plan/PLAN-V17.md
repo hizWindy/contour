@@ -473,11 +473,11 @@ The first two and `meeting_forms_enabled` are on the Settings page. `internal_em
 
 ## Track 1: HubSpot (session 1)
 
-**Progress:** Stage A 1 of 7 (T1-2). Stage B 0 of 4. Every step is `backend-agent` work.
+**Progress:** Stage A 4 of 7. Stage B 0 of 4. Every step is `backend-agent` work.
 
 ### Stage A: call notes
 
-- [ ] **T1-1. Own copy and a baseline.** Make the worktree and the database. Run the backend tests once and note the counts.
+- [x] **T1-1. Own copy and a baseline.** Done 2026-11-15, without the baseline run, on Al-khair's word: the laptop was out of memory (see the Log). Make the worktree and the database. Run the backend tests once and note the counts.
 
 - [x] **T1-2. Ask HubSpot what the key may do.** Done 2026-11-15 (no code; the answers are in the Log). Free, and it changes nothing. It loads the real key into the process only.
   - For calls, notes, tasks and meetings: read one record, and try to change record 0, which can't exist. "Missing scopes" names the scope. "Not found" means the key has it.
@@ -486,7 +486,7 @@ The first two and `meeting_forms_enabled` are on the Settings page. `internal_em
   - Send Track 2 a message with the list, for the email to Levi (W1).
   - **Done when:** the Log has the scope for each of the eight (four reads, four writes), or "HubSpot's answer didn't say" with what was tried.
 
-- [ ] **T1-3. The client learns tasks, meetings and links.**
+- [x] **T1-3. The client learns tasks, meetings and links.** Done 2026-11-15 (5509d4f).
   - `ObjectType` gains `tasks` and `meetings`.
   - `create_object` takes a list of links (the other record's kind and id). The link numbers are a table in `client.py`, from "HubSpot's API, checked". The Lead Finder's note to a company keeps working.
   - `linked(from_kind, to_kind, ids)`: the batch read, 100 ids at a time. `primary_companies` uses it.
@@ -511,7 +511,7 @@ The first two and `meeting_forms_enabled` are on the Settings page. `internal_em
   - `HubSpotNeeds` for Companies gains its `write` scopes, from T1-2.
   - **Done when:** tests with `FakeHubSpot` prove each step, the order, a field that changed since, a timeout that is found, a timeout that isn't, two clicks at once, and that an old Lead Finder write still reads.
 
-- [ ] **T1-6. The mic's headers.**
+- [x] **T1-6. The mic's headers.** Done 2026-11-15 (26cc66d).
   - `engine/deploy/Caddyfile`: `Permissions-Policy` allows the mic for our own pages (`microphone=(self)`). The content policy allows a worker from our own origin and WebAssembly. Nothing else opens.
   - `test_deploy_files.py` gains a check for both.
   - Tell Track 3 the exact policy line, so `index.html` matches.
@@ -550,6 +550,16 @@ The first two and `meeting_forms_enabled` are on the Settings page. `internal_em
 
 Newest first.
 
+- 2026-11-15: **T1-6 done** (26cc66d). `Permissions-Policy` has `microphone=(self)`; the camera, location, payments and USB stay off. The content policy adds `'wasm-unsafe-eval'` to `script-src`, and `worker-src 'self'`. No other origin. Two guard tests in `test_deploy_files.py`.
+  - **For Track 3 (T3-4), the line for `index.html`'s meta tag** (Caddy's line without `frame-ancestors` and `form-action`): `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; connect-src 'self'; worker-src 'self'; base-uri 'none'; object-src 'none'`. Not sent as a message: no other session is reachable from this one.
+  - On App Platform the website gets no Caddy headers (AGENTS.md, **TBC**), so there the meta tag is the policy. With no `Permissions-Policy` header, a browser allows the mic on our own pages only, which is what we want.
+- 2026-11-15: **T1-3 done** (5509d4f), built by the `backend-agent`.
+  - `client.py`: `tasks` and `meetings`, `Link`, and one read-only table `LINK_TYPES` with the 12 numbers. `create_object(..., links=)` replaces `associate_with_company`; the Lead Finder's note still sends 190. A pair with no number, or an id that isn't digits, is refused before anything is sent, with writing on or off. `linked()` reads 100 ids a request, and `primary_companies` is built on it. Only the first page of one record's links is read (how HubSpot pages very many is **TBC**). `probe_write_scope` knows calls, notes, tasks and meetings.
+  - `check.py`: four new read probes (`crm.objects.calls.read`, `.notes.read`, `.tasks.read`, `.meetings.read`), and the contacts probe reads people only. One write probe, named `crm.objects.contacts.write` (name **TBC**), "Log calls, tasks and notes": yes only when all three may be written. A "no" on a read now names what HubSpot asked for; a write probe can't yet (it answers only yes or no). The check is 17 requests, about 2 to 3 seconds (an estimate, not measured live).
+  - `FakeHubSpot`: tasks, meetings, links kept and read back both ways, and an unknown pair refused. A call, task or meeting needs the activity write scope; a note keeps the companies write scope.
+  - Checks: 192 tests in the files it touched passed, then the commit hook passed (ruff, mypy on 323 files, the fast tests).
+  - Left for later: `people.py` still says calls are read with the contacts scope (out of date after T1-2). The Companies needs (Track 2's file) don't list the new scopes yet: the request comes with T1-5.
+- 2026-11-15: **T1-1 done, without the baseline run.** Claude Code stopped the baseline run three times, from 06:00, because the laptop had 0.2 to 0.5 GB of memory free of 15.6 GB, with 18 to 19 Claude processes open. On Al-khair's word (about 16:55), the track goes on without it: each step runs the test files it touches, the commit hook runs the fast tests, and T1-7 runs the full suite. So there is no "before" count to compare with.
 - 2026-11-15: **T1-2 done.** Free, and nothing in HubSpot changed. The real key was loaded into the probe's own process only, and never printed. For calls, notes, tasks and meetings, the probe read one record (one field, nothing printed), ran a search that matches nothing, read the links to companies and contacts, and tried to change record 0 (which can't exist): first with an empty body, then with one real field.
   - **Reads:** calls, notes, tasks and meetings: yes, all four. Calls read **without** `crm.objects.contacts.read`. HubSpot names a scope only when one is missing, so the name that grants each is **TBC** (its docs list `crm.objects.calls.read` and the like).
   - **Writes:** calls, notes, tasks and meetings: yes, all four. One real field on record 0 answers 404, past the permission check. The scope's name is **TBC**: likely `crm.objects.contacts.write`, which the key also has.
