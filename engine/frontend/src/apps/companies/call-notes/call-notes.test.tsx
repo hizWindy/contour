@@ -19,6 +19,7 @@ import { SAMPLE_USER } from '@/test/fake-auth'
 import { createTestQueryClient, renderWithProviders, startManualClock } from '@/test/render'
 import { asPhone } from '@/test/screen'
 import CompaniesPage from '../index'
+import { FakeMic } from './mic/fake-mic'
 import { NoteTimer } from './note-timer'
 import { dueWords } from './words'
 
@@ -866,24 +867,59 @@ describe('with the AI off', () => {
   })
 })
 
-describe('the mic, typing only for now', () => {
-  it('on a Windows laptop says to type or press Win+H', async () => {
+describe('the mic button (PLAN-V18 T3-4)', () => {
+  it('sits in the corner of the note box on a laptop, named Speak, and the Win+H line is gone', async () => {
     vi.spyOn(navigator, 'platform', 'get').mockReturnValue('Win32')
     mockBackend()
     const view = renderCompanies()
     const panel = await logFirstRow(view)
-    expect(within(panel).getByText(/Type the note, or press/)).toHaveTextContent(
-      'Type the note, or press Win+H to dictate.',
-    )
-    expect(within(panel).getByText('Win+H').tagName).toBe('KBD')
+    const speak = within(panel).getByRole('button', { name: 'Speak' })
+    // Never round (DESIGN.md "No pills"), and 44px.
+    expect(speak).toHaveClass('size-11', 'rounded-lg')
+    expect(speak).not.toHaveClass('rounded-full')
+    const box = within(panel).getByRole('textbox', { name: 'Call note' })
+    expect(box.parentElement).toContainElement(speak)
+    // Room at the foot of the box, so the last line never hides under the button.
+    expect(box).toHaveClass('pb-14')
+    expect(within(panel).queryByText(/Win\+H/)).toBeNull()
   })
 
-  it('on another laptop shows nothing', async () => {
-    vi.spyOn(navigator, 'platform', 'get').mockReturnValue('MacIntel')
-    mockBackend()
+  it('opens the mic card from the button, and Done puts the words in the box', async () => {
+    vi.spyOn(navigator, 'platform', 'get').mockReturnValue('Win32')
+    const mic = new FakeMic()
+    mic.install()
+    mockBackend({ options: { ...options(), voice_tool: 'browser_service' } as CallNoteOptions })
     const view = renderCompanies()
     const panel = await logFirstRow(view)
-    expect(within(panel).queryByText(/Win\+H/)).toBeNull()
+    const box = within(panel).getByRole('textbox', { name: 'Call note' })
+    await view.user.click(within(panel).getByRole('button', { name: 'Speak' }))
+    await screen.findByRole('dialog', { name: 'Speak now' }, { timeout: 5000 })
+    // The browser's own speech service, in Australian English.
+    const [service] = mic.recognitions
+    expect(service?.lang).toBe('en-AU')
+    act(() => {
+      service?.result('Spoke to Jo about the lease')
+    })
+    await view.user.keyboard('{Enter}')
+    await waitFor(() => {
+      expect(box).toHaveValue('Spoke to Jo about the lease')
+    })
+    await waitFor(() => {
+      expect(box).toHaveFocus()
+    })
+    // The mic is let go, and the card is gone.
+    expect(mic.live()).toBe(0)
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: /Speak now|Writing it out|Done/ })).toBeNull()
+    })
+  })
+
+  it('is not there when the voice tool is typing', async () => {
+    mockBackend({ options: { ...options(), voice_tool: 'typing' } as CallNoteOptions })
+    const view = renderCompanies()
+    const panel = await logFirstRow(view)
+    expect(within(panel).getByRole('textbox', { name: 'Call note' })).toBeInTheDocument()
+    expect(within(panel).queryByRole('button', { name: 'Speak' })).toBeNull()
   })
 })
 
@@ -912,8 +948,8 @@ describe('on a phone', () => {
     const who = await within(panel).findByRole('radiogroup', { name: 'Who was the call with?' })
     // The text box comes first.
     expect(box.compareDocumentPosition(who) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    // The keyboard's own mic does the talking: no Win+H line, even on Windows.
-    expect(within(panel).queryByText(/Win\+H/)).toBeNull()
+    // The keyboard's own mic does the talking: no mic button, even on Windows.
+    expect(within(panel).queryByRole('button', { name: 'Speak' })).toBeNull()
 
     const save = within(panel).getByRole('button', { name: 'Save and next' })
     expect(save).toHaveClass('w-full')

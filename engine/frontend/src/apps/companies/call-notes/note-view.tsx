@@ -3,8 +3,8 @@
  * the call prep panel. It comes in from the right like a phone app's next screen (`PushView`, in
  * `prep-sheet.tsx`), and Back (Esc, or the arrow) returns to the script.
  *
- * Top to bottom: who the call was with (from the panel, or "Who was the call with?"), the mic,
- * the text box, the outcome as chips (one or none), the follow-up (only with the AI off), then
+ * Top to bottom: who the call was with (from the panel, or "Who was the call with?"), the text
+ * box with the mic in its corner (PLAN-V18 T3-4, laptops only), the outcome as chips (one or none), the follow-up (only with the AI off), then
  * "Save and next", the one Navy button, beside the timer. Ctrl+Enter (Cmd+Enter on a Mac) saves.
  *
  * - **The draft is safe.** Every change is kept in the browser for this call (`draft.ts`),
@@ -20,6 +20,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft } from 'lucide-react'
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
 import { useMe } from '@/api/hooks'
+import { voiceToolOf } from '@/api/hooks/call-note-counts'
 import { useCallNoteSummary } from '@/api/hooks/call-notes'
 import type { CompanyDetail, CallNoteOptions } from '@/api/types'
 import { ChipGroup } from '@/components/motion'
@@ -44,6 +45,7 @@ import {
 } from './draft'
 import { FollowUpFields } from './follow-up-fields'
 import { checkFollowUp } from './follow-up'
+import { fixedWords } from './mic/words'
 import { NoteMic } from './note-mic'
 import { NoteTimer } from './note-timer'
 import { logCallNote } from './save'
@@ -121,6 +123,10 @@ export function NoteView({
   // The newest draft, for changes that come between two draws (the mic's words, T3-4).
   const latest = useRef(draft)
   const [tried, setTried] = useState(false)
+  // A name the mic heard nearly right and fixed, said once under the box until the next change.
+  const [fixLine, setFixLine] = useState<string | null>(null)
+  const tool = voiceToolOf(options)
+  const mic = !onPhone && tool !== 'typing'
 
   const update = (change: Partial<NoteDraft>): void => {
     const now = latest.current
@@ -181,19 +187,41 @@ export function NoteView({
   const described = [near ? countId : null, showNothing ? nothingId : null].filter(Boolean)
   const noteBox = (
     <div className="flex flex-col gap-1.5">
-      <Textarea
-        ref={textRef}
-        aria-label={NOTE_LABEL}
-        placeholder={NOTE_PLACEHOLDER}
-        value={draft.text}
-        maxLength={options.max_chars > 0 ? options.max_chars : undefined}
-        aria-invalid={showNothing ? true : undefined}
-        aria-describedby={described.length > 0 ? described.join(' ') : undefined}
-        className={cn('min-h-40 touch:text-body', onPhone && 'min-h-48')}
-        onChange={(event) => {
-          update({ text: event.target.value })
-        }}
-      />
+      <div className="relative">
+        <Textarea
+          ref={textRef}
+          aria-label={NOTE_LABEL}
+          placeholder={NOTE_PLACEHOLDER}
+          value={draft.text}
+          maxLength={options.max_chars > 0 ? options.max_chars : undefined}
+          aria-invalid={showNothing ? true : undefined}
+          aria-describedby={described.length > 0 ? described.join(' ') : undefined}
+          // Room at the foot for the mic in the corner, so the last line never hides under it.
+          className={cn('min-h-40 touch:text-body', onPhone && 'min-h-48', mic && 'pb-14')}
+          onChange={(event) => {
+            setFixLine(null)
+            update({ text: event.target.value })
+          }}
+        />
+        {mic ? (
+          <NoteMic
+            className="absolute right-2 bottom-2"
+            tool={tool}
+            box={textRef}
+            names={[companyName, ...(person ? [person.name] : [])]}
+            onText={(text, fixes) => {
+              const now = latest.current.text
+              update({ text: now ? `${now.trimEnd()} ${text}` : text, source: 'mic' })
+              setFixLine(fixes.length > 0 ? fixedWords(fixes) : null)
+            }}
+          />
+        ) : null}
+      </div>
+      {fixLine ? (
+        <p data-slot="name-fixed" className="text-caption text-muted-foreground">
+          {fixLine}
+        </p>
+      ) : null}
       {near ? (
         <p id={countId} className="text-right text-caption text-muted-foreground tabular-nums">
           {countWords(draft.text.length, options.max_chars)}
@@ -282,16 +310,7 @@ export function NoteView({
           ) : (
             <>
               {who}
-              <div className="flex flex-col gap-2">
-                <NoteMic
-                  names={[companyName, ...(person ? [person.name] : [])]}
-                  onWords={(chunk) => {
-                    const text = latest.current.text
-                    update({ text: text ? `${text.trimEnd()} ${chunk}` : chunk, source: 'mic' })
-                  }}
-                />
-                {noteBox}
-              </div>
+              {noteBox}
             </>
           )}
           {outcome}
