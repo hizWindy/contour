@@ -232,10 +232,14 @@ describe('Admin, Settings', () => {
   }
 
   it('puts the voice tool under Call notes, its choices in plain words (PLAN-V18 T3-5)', async () => {
+    // The server leaves out the browser's speech service until `BROWSER_SPEECH_OK` (Levi's OK).
     mockApi({
       '/api/v1/settings': {
         ...settingsOut(),
-        fields: [...settingsOut().fields, voiceTool('browser_model')],
+        fields: [
+          ...settingsOut().fields,
+          { ...voiceTool('browser_model'), choices: ['browser_model', 'typing'] },
+        ],
       },
     })
     const { user } = renderWithProviders(<AdminSettingsTab />)
@@ -245,15 +249,14 @@ describe('Admin, Settings', () => {
     const select = within(notes).getByRole('combobox')
     expect(select).toHaveTextContent('Whisper in the browser: the voice stays on this computer')
     await user.click(select)
-    // The browser's speech service sends the voice to Google or Microsoft: not offered until
-    // Levi's OK.
+    // The browser's speech service sends the voice to Google or Microsoft: not offered.
     expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual([
       'Whisper in the browser: the voice stays on this computer',
       'Typing only: no mic button',
     ])
   })
 
-  it("still shows the browser's speech service as the current choice when it is saved", async () => {
+  it("offers the browser's speech service once the server lists it (after Levi's OK)", async () => {
     const calls = mockApi({
       '/api/v1/settings': {
         ...settingsOut(),

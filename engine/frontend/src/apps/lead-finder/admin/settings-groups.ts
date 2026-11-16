@@ -85,30 +85,6 @@ export function choiceWords(key: string, choice: string): string {
   return CHOICE_WORDS[key]?.[choice] ?? choice
 }
 
-/**
- * Choices the page doesn't offer yet. The browser's speech service (`browser_service`) sends the
- * voice to Google or Microsoft, which needs Levi's OK first (PLAN-V18 T3-3 and "Waiting on"), and
- * any signed-in account can change Settings today. It comes back here after Levi's OK. The backend
- * and the mic keep it as it is.
- */
-const CHOICES_WAITING: Readonly<Record<string, ReadonlySet<string>>> = {
-  voice_tool: new Set(['browser_service']),
-}
-
-/**
- * The choices a setting offers: all of them but those waiting for an OK. One already in use (the
- * saved value, or the one just picked) still shows, as the current choice, so nothing breaks.
- */
-export function offeredChoices(
-  key: string,
-  choices: readonly string[],
-  inUse: readonly unknown[],
-): string[] {
-  const waiting = CHOICES_WAITING[key]
-  if (!waiting) return [...choices]
-  return choices.filter((choice) => !waiting.has(choice) || inUse.includes(choice))
-}
-
 export function groupOf(key: string): GroupId {
   return GROUP_OF[key] ?? 'runs'
 }
