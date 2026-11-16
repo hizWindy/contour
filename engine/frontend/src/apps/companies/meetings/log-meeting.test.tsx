@@ -42,6 +42,7 @@ function past(id: string, { meeting: changes, ...rest }: ItemChanges = {}): Meet
     notes_logged: false,
     typed: false,
     owner_name: null,
+    mine: false,
     ...rest,
   }
 }
@@ -130,6 +131,7 @@ function options(enabled: boolean, transcriptMax: number | null = 60_000): CallN
     fields: [],
     soft_seconds: 180,
     max_chars: 6000,
+    voice_tool: 'typing',
     ...(transcriptMax === null ? {} : { transcript_max_chars: transcriptMax }),
   }
 }

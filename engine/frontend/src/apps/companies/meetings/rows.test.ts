@@ -37,6 +37,7 @@ function item({ meeting, ...changes }: ItemChanges = {}): MeetingItem {
     form: null,
     notes_logged: false,
     typed: false,
+    mine: false,
     ...changes,
   }
 }

@@ -72,6 +72,8 @@ function meeting(id: string, { meeting: changes, ...rest }: ItemChanges = {}): M
     form: null,
     notes_logged: false,
     typed: false,
+    // The rep's own. The fake server sets it again from the owner on each list.
+    mine: true,
     ...rest,
   }
 }

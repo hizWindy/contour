@@ -43,6 +43,7 @@ function item(id: string, { meeting: changes, ...rest }: ItemChanges = {}): Meet
     notes_logged: false,
     typed: false,
     owner_name: null,
+    mine: false,
     ...rest,
   }
 }
