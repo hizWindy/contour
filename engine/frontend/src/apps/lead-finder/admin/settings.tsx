@@ -47,6 +47,7 @@ import {
   groupOf,
   GROUPS,
   isShown,
+  offeredChoices,
   type GroupId,
 } from './settings-groups'
 
@@ -106,7 +107,7 @@ function Control({
           {field.type === 'choice_or_null' ? (
             <SelectItem value={DEFAULT_CHOICE}>The main model</SelectItem>
           ) : null}
-          {(field.choices ?? []).map((choice) => (
+          {offeredChoices(field.key, field.choices ?? [], [field.value, draft]).map((choice) => (
             <SelectItem key={choice} value={choice}>
               {choiceWords(field.key, choice)}
             </SelectItem>

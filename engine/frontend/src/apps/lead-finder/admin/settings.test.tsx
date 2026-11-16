@@ -214,8 +214,9 @@ describe('Admin, Settings', () => {
     })
   })
 
-  it('puts the voice tool under Call notes, its choices in plain words (PLAN-V18 T3-5)', async () => {
-    const voice = {
+  /** The voice tool setting, as the server lists it, saved as `value`. */
+  function voiceTool(value: string) {
+    return {
       ...SETTING,
       key: 'voice_tool',
       label: 'Voice to text',
@@ -225,10 +226,17 @@ describe('Admin, Settings', () => {
       min: null,
       max: null,
       default: 'browser_model',
-      value: 'browser_model',
+      value,
+      overridden: value !== 'browser_model',
     }
+  }
+
+  it('puts the voice tool under Call notes, its choices in plain words (PLAN-V18 T3-5)', async () => {
     mockApi({
-      '/api/v1/settings': { ...settingsOut(), fields: [...settingsOut().fields, voice] },
+      '/api/v1/settings': {
+        ...settingsOut(),
+        fields: [...settingsOut().fields, voiceTool('browser_model')],
+      },
     })
     const { user } = renderWithProviders(<AdminSettingsTab />)
     await screen.findByRole('list', { name: 'Money' })
@@ -237,11 +245,42 @@ describe('Admin, Settings', () => {
     const select = within(notes).getByRole('combobox')
     expect(select).toHaveTextContent('Whisper in the browser: the voice stays on this computer')
     await user.click(select)
+    // The browser's speech service sends the voice to Google or Microsoft: not offered until
+    // Levi's OK.
+    expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual([
+      'Whisper in the browser: the voice stays on this computer',
+      'Typing only: no mic button',
+    ])
+  })
+
+  it("still shows the browser's speech service as the current choice when it is saved", async () => {
+    const calls = mockApi({
+      '/api/v1/settings': {
+        ...settingsOut(),
+        fields: [...settingsOut().fields, voiceTool('browser_service')],
+      },
+    })
+    const { user } = renderWithProviders(<AdminSettingsTab />)
+    await screen.findByRole('list', { name: 'Money' })
+    await user.click(screen.getByRole('radio', { name: 'Call notes' }))
+    const select = within(screen.getByRole('list', { name: 'Call notes' })).getByRole('combobox')
+    expect(select).toHaveTextContent(
+      "The browser's speech service: the voice goes to Google or Microsoft",
+    )
+    await user.click(select)
     expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual([
       'Whisper in the browser: the voice stays on this computer',
       "The browser's speech service: the voice goes to Google or Microsoft",
       'Typing only: no mic button',
     ])
+    // A move away saves as any change does.
+    await user.click(screen.getByRole('option', { name: 'Typing only: no mic button' }))
+    await user.click(screen.getByRole('button', { name: 'Save changes' }))
+    await waitFor(() => {
+      expect(calls.find((call) => call.method === 'PATCH')?.body).toEqual({
+        values: { voice_tool: 'typing' },
+      })
+    })
   })
 
   it('lists the forms switch under "Set on the server" when the server sets it', async () => {
