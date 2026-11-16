@@ -38,12 +38,12 @@ export interface NavItem {
   alsoActiveOn?: readonly string[]
   /**
    * Addresses inside this one that are another page of the menu, so this page isn't marked there:
-   * Activity ("/companies/activity") is not Companies.
+   * Call logs ("/companies/call-logs") is not Companies.
    */
   notActiveOn?: readonly string[]
   /**
-   * A count at the end of the page's row in the menu, like Activity's calls to confirm (PLAN-V17
-   * T3-7). It asks for its own data, gives the link its words for a screen reader ("Activity, 7
+   * A count at the end of the page's row in the menu, like Call logs' calls to confirm (PLAN-V17
+   * T3-7). It asks for its own data, gives the link its words for a screen reader ("Call logs, 7
    * calls to confirm"), and draws nothing when there is nothing to count. It may be a `lazy`
    * component: the menu draws it inside a `Suspense`. Folded to icons, the menu hides it.
    */

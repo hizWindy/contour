@@ -1,6 +1,7 @@
 /**
- * "Logged" (PLAN-V17 T3-6, "The screens" part 3): the rep's calls that are in HubSpot, newest
- * first, each with "Open in HubSpot". A list used all day barely moves (principles 02 #20), so
+ * Activity's "Logged" list (PLAN-V17 T3-6, "The screens" part 3), on Call logs' History tab until
+ * T3-6 builds History: the rep's calls that are in HubSpot, newest first, each with "Open in
+ * HubSpot". A list used all day barely moves (principles 02 #20), so
  * these rows never fade in or glide: no Reveal and no ListExit. It is paged, 25 at a time, and a
  * page keeps showing while the next one loads.
  */
@@ -13,7 +14,7 @@ import { Pager } from '@/components/pager'
 import { cn } from '@/lib/utils'
 import { isCallNotesOff } from './notes'
 import { OpenInHubSpot } from './open-in-hubspot'
-import { activityQuery, LOGGED_PAGE_SIZE } from './params'
+import { callLogsQuery, LOGGED_PAGE_SIZE } from './params'
 import { CallNotesOff, RowsPending, TabEmpty } from './states'
 import { isMeetingNotes, LOAD_FAILED, loggedWhen, noteLine } from './words'
 
@@ -45,7 +46,7 @@ function LoggedRow({ note, today }: { note: CallNoteOut; today: string }) {
 
 export function Logged({ today }: { today: string }) {
   const [pageIndex, setPageIndex] = useState(0)
-  const list = useCallNotes(activityQuery('logged', pageIndex), { keepPrevious: true })
+  const list = useCallNotes(callLogsQuery('history', pageIndex), { keepPrevious: true })
 
   if (isCallNotesOff(list.error)) return <CallNotesOff />
   if (list.error && !list.data) {
@@ -54,7 +55,7 @@ export function Logged({ today }: { today: string }) {
     )
   }
   if (!list.data) return <RowsPending />
-  if (list.data.items.length === 0 && pageIndex === 0) return <TabEmpty tab="logged" />
+  if (list.data.items.length === 0 && pageIndex === 0) return <TabEmpty tab="history" />
 
   return (
     <div className="flex flex-col gap-3">

@@ -74,7 +74,7 @@ export interface NoteViewProps {
   options: CallNoteOptions
   onPhone: boolean
   /**
-   * Back to the script. A host with no script (Activity's Log call, T3-6) leaves it out: there is
+   * Back to the script. A host with no script (Call logs' Log call, T3-6) leaves it out: there is
    * no back arrow, and Esc or the panel's own Close shuts it.
    */
   onBack?: () => void

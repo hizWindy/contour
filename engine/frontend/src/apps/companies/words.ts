@@ -30,7 +30,7 @@ export function needsLookWords(count: number): string {
   return `${formatNumber(count)} ${needsLookTail(count)}`
 }
 
-// The company picker (`company-search.tsx`): Log call on Activity, New pre-read on Meetings.
+// The company picker (`company-search.tsx`): Log call on Call logs, New pre-read on Meetings.
 
 export const FIND_COMPANY = 'Find a company'
 export const TYPE_TWO = 'Type 2 letters or more.'

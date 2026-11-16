@@ -1,6 +1,6 @@
 /**
  * Companies' parts around the app load late, in files of their own: call notes' (PLAN-V17 T3-7:
- * Activity's count in the menu, Home's quick buttons, Ctrl+K's entries, in `call-note-links.tsx`),
+ * Call logs' count in the menu, Home's quick buttons, Ctrl+K's entries, in `call-note-links.tsx`),
  * and the pre-read's (T3-11: Ctrl+K's "Pre-read for a meeting", there too, and Home's "Upcoming
  * meetings" card, in `meetings/upcoming-card.tsx`), with the hooks, words and icons they bring.
  * The menu, Home and Ctrl+K are in the first visit, and these parts show only after a request or

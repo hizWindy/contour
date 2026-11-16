@@ -156,7 +156,7 @@ describe('Admin, Settings', () => {
                   toggle(
                     'call_notes_enabled',
                     'Call notes are on',
-                    'Shows Log call in call prep and the Activity page.',
+                    'Shows Log call in call prep and the Call logs page.',
                   ),
                   toggle(
                     'call_notes_ai_enabled',

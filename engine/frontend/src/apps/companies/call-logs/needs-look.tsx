@@ -47,7 +47,7 @@ import { cn } from '@/lib/utils'
 import { CardText } from './note-parts'
 import { isCallNotesOff } from './notes'
 import { OpenInHubSpot } from './open-in-hubspot'
-import { activityQuery } from './params'
+import { callLogsQuery } from './params'
 import { CallNotesOff, CardsPending, TabEmpty } from './states'
 import { HOLD_LOGGED_MS } from './use-batch'
 import {
@@ -284,7 +284,7 @@ function LookCard({
 
 export function NeedsLook({ ready, today }: { ready: boolean; today: string }) {
   const client = useQueryClient()
-  const list = useCallNotes(activityQuery('needs_look'))
+  const list = useCallNotes(callLogsQuery('needs_look'))
   const [gone, setGone] = useState<ReadonlySet<string>>(() => new Set())
 
   if (isCallNotesOff(list.error)) return <CallNotesOff />

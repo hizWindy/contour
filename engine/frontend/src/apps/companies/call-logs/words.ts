@@ -1,6 +1,7 @@
 /**
- * The words of Activity (PLAN-V17 "The screens", part 3): plain, sentence case, no em dash, and
- * no setting or file name (the screen-words test reads them). The wording is Al-khair's to change.
+ * The words of Call logs (PLAN-V17 "The screens", part 3; called Activity until PLAN-V18 T3-2):
+ * plain, sentence case, no em dash, and no setting or file name (the screen-words test reads them).
+ * The wording is Al-khair's to change.
  */
 import type { CallNoteOut, TaskKind } from '@/api/types'
 import {
@@ -13,20 +14,20 @@ import {
   pluralise,
 } from '@/lib/format'
 
-export const ACTIVITY_TITLE = 'Your call notes'
-export const ACTIVITY_DESCRIPTION =
-  'The calls you logged. Check them, then send them to HubSpot in one go.'
+export const CALL_LOGS_TITLE = 'Call logs'
+export const CALL_LOGS_DESCRIPTION =
+  'Every call you logged. Check new ones, send them to HubSpot, and look back at old ones.'
 
 export const TAB_TO_CONFIRM = 'To confirm'
-export const TAB_LOGGED = 'Logged'
+export const TAB_HISTORY = 'History'
 export const TAB_NEEDS_LOOK = 'Needs a look'
 
 /** The serif voice of each empty tab: what it is, and what puts something there. */
 export const EMPTY = {
   to_confirm: { title: 'Nothing to confirm.', description: 'Log a call and it waits here.' },
-  logged: {
-    title: 'Nothing logged yet.',
-    description: 'The calls you send to HubSpot show here, each with a link to it.',
+  history: {
+    title: 'No calls logged yet.',
+    description: 'Press Log call after your next call, and it shows here.',
   },
   needs_look: {
     title: 'Nothing needs a look.',

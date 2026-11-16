@@ -1,5 +1,5 @@
 /**
- * Call notes around the app (PLAN-V17 T3-7, "The screens" part 4): the count on Activity's row in
+ * Call notes around the app (PLAN-V17 T3-7, "The screens" part 4): the count on Call logs' row in
  * the menu, the quick buttons on Home's Companies card, and "Log a call" and "Calls to confirm" in
  * Ctrl+K. Ctrl+K also gains the pre-read's entry here (T3-11, "The screens" part 7): Companies has
  * one place for its own Ctrl+K entries.
@@ -24,7 +24,7 @@ import { Button } from '@/components/ui/button'
 import { CommandItem } from '@/components/ui/command'
 import { MenuCount } from '@/shell/menu-count'
 import type { CommandsProps } from '@/shell/nav'
-import { activityHref } from './activity/params'
+import { callLogsHref } from './call-logs/params'
 import { MEETINGS_PATH } from './meetings/params'
 import {
   CALLS_TO_CONFIRM,
@@ -35,7 +35,7 @@ import {
   toConfirmWords,
 } from './words'
 
-/** Activity's row in the menu: how many calls wait to be confirmed. */
+/** Call logs' row in the menu: how many calls wait to be confirmed. */
 export function ToConfirmCount() {
   const { counts } = useCallNoteCounts()
   const count = counts?.to_confirm ?? 0
@@ -44,7 +44,7 @@ export function ToConfirmCount() {
 
 /**
  * Home's Companies card: a button for each kind of work waiting, with its count. Each opens its
- * tab on Activity: "7 calls to confirm" To confirm, "2 need a look" Needs a look.
+ * tab on Call logs: "7 calls to confirm" To confirm, "2 need a look" Needs a look.
  */
 export function CallNoteButtons() {
   const { counts } = useCallNoteCounts()
@@ -53,10 +53,10 @@ export function CallNoteButtons() {
   if (toConfirm <= 0 && needsLook <= 0) return null
   return (
     <div data-slot="call-note-buttons" className="flex flex-wrap gap-2">
-      {/* 44px on a touch screen (DESIGN.md "Touch"), as Activity's buttons are. */}
+      {/* 44px on a touch screen (DESIGN.md "Touch"), as Call logs' buttons are. */}
       {toConfirm > 0 ? (
         <Button asChild variant="outline" size="sm" className="touch:h-11">
-          <Link to={activityHref('to_confirm')}>
+          <Link to={callLogsHref('to_confirm')}>
             <ClipboardCheck aria-hidden="true" />
             <span>
               <RollingNumber value={toConfirm} /> {toConfirmTail(toConfirm)}
@@ -66,7 +66,7 @@ export function CallNoteButtons() {
       ) : null}
       {needsLook > 0 ? (
         <Button asChild variant="outline" size="sm" className="touch:h-11">
-          <Link to={activityHref('needs_look')}>
+          <Link to={callLogsHref('needs_look')}>
             <TriangleAlert aria-hidden="true" />
             <span>
               <RollingNumber value={needsLook} /> {needsLookTail(needsLook)}
@@ -79,7 +79,7 @@ export function CallNoteButtons() {
 }
 
 /**
- * Ctrl+K, under Companies, while call notes are on: "Log a call" opens Activity with its company
+ * Ctrl+K, under Companies, while call notes are on: "Log a call" opens Call logs with its company
  * picker open (the page takes the focus), and "Calls to confirm" opens To confirm. It needs only
  * the switches, not the counts.
  */
@@ -90,9 +90,9 @@ function CallNoteCommands({ go }: CommandsProps) {
     <>
       <CommandItem
         value={LOG_A_CALL}
-        keywords={['call notes', 'note', 'activity', 'dictate']}
+        keywords={['call notes', 'note', 'call logs', 'activity', 'dictate']}
         onSelect={() => {
-          go(activityHref('to_confirm', { log: true }))
+          go(callLogsHref('to_confirm', { log: true }))
         }}
       >
         <NotebookPen aria-hidden="true" />
@@ -100,9 +100,9 @@ function CallNoteCommands({ go }: CommandsProps) {
       </CommandItem>
       <CommandItem
         value={CALLS_TO_CONFIRM}
-        keywords={['call notes', 'activity', 'send', 'hubspot']}
+        keywords={['call notes', 'call logs', 'activity', 'send', 'hubspot']}
         onSelect={() => {
-          go(activityHref('to_confirm'))
+          go(callLogsHref('to_confirm'))
         }}
       >
         <ClipboardCheck aria-hidden="true" />

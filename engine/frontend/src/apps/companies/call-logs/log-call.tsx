@@ -1,6 +1,6 @@
 /**
- * "Log call" on Activity, for a call that wasn't prepped (PLAN-V17 "The screens", part 1). It asks
- * for the company first, in the company picker (`company-search.tsx`, which New pre-read on
+ * "Log call" on Call logs, for a call that wasn't prepped (PLAN-V17 "The screens", part 1). It
+ * asks for the company first, in the company picker (`company-search.tsx`, which New pre-read on
  * Meetings shares). Then it opens Log call's own note view (`call-notes/note-view.tsx`) in a panel
  * from the right, which asks who the call was with. The panel has no script, so the note view
  * shows no back arrow: Esc or Close shuts it. "Save and next" saves at once and closes it; the

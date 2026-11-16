@@ -42,7 +42,7 @@ function useCloseOnPhone(): () => void {
 
 /**
  * A page's count at the end of its row (`NavItem.count`), if it has one. Its code may load late
- * (Activity's does), so it draws nothing until it is there.
+ * (Call logs' does), so it draws nothing until it is there.
  */
 function PageCount({ item }: { item: NavItem }) {
   const Count = item.count
@@ -239,7 +239,7 @@ function PlannedGroup({ pathname }: { pathname: string }) {
  * projects still to be developed (one row that starts closed), and the shared Admin at the bottom, with the signed-in person's
  * name and role under it (PLAN-V13 T1-6). It folds to icons, and each icon keeps a tooltip with
  * the page name. A page shows as selected while you are on it or inside
- * it. A page may show a count at the end of its row, like Activity's calls to confirm (PLAN-V17
+ * it. A page may show a count at the end of its row, like Call logs' calls to confirm (PLAN-V17
  * T3-7, `NavItem.count`). Only the projects this person may use are drawn, so a count is asked
  * for only by someone who sees its project.
  */

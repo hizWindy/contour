@@ -129,7 +129,7 @@ export function logCallNote(input: LogCallInput): void {
         return
       }
       markCountsOld(client)
-      // Activity's "To confirm" (T3-6), if it is open, shows the new note while it sorts.
+      // Call logs' "To confirm" (T3-6), if it is open, shows the new note while it sorts.
       void refreshCallNoteLists(client)
       const followUp = input.aiEnabled ? null : checkFollowUp(input.draft.followUp)
       if (followUp?.ok && followUp.task) {

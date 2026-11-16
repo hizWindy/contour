@@ -47,7 +47,7 @@ import { changeDetail } from '@/lib/problems'
 import { cn } from '@/lib/utils'
 import { NoteCard, type EditNote } from './note-card'
 import { applyPreview, cardCounts, isCallNotesOff, sortForConfirm } from './notes'
-import { activityQuery } from './params'
+import { callLogsQuery } from './params'
 import { removeCallNote, useRemoving } from './remove'
 import { SendDialog, type SkippedCall } from './send-dialog'
 import { CallNotesOff, CardsPending, TabEmpty } from './states'
@@ -125,7 +125,7 @@ export const ToConfirm = memo(function ToConfirm({
 }: ToConfirmProps) {
   const client = useQueryClient()
   const removing = useRemoving()
-  const list = useCallNotes(activityQuery('to_confirm'), { pollSending: !batch.running })
+  const list = useCallNotes(callLogsQuery('to_confirm'), { pollSending: !batch.running })
   const editMutation = useEditCallNote()
   const [activeId, setActiveId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
