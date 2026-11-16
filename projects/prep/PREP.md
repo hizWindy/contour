@@ -1,10 +1,12 @@
 # Call prep
 
-Last updated: 2026-11-15 (call notes and the pre-meeting form added). **TBC** means to be confirmed.
+Last updated: 2026-11-16 (PLAN-V18: Call logs, the mic card, History, the quick look, and Meetings' filters and Sync). **TBC** means to be confirmed.
 
 **Status (11 Nov):** PLAN-V10 built call prep, and [PLAN-V14](../../plan/PLAN-V14.md) refined it: "Research again", the three answers in the card's header, news with no age limit, the call technique in both scripts, and editable scripts with Your style and a team style. Both are merged into `master`, not deployed, and call prep is not switched on yet. The new prompt hasn't been tried on real companies (PLAN-V14 T1-5, paid, on Al-khair's word). What works now, from our HubSpot copy: the Companies page, the company's record, the prep box, "Sync with HubSpot", and the prep card with a sales script and guided questions (free, written from the copy). Call prep's web check (news, "still there?") stays off until Al-khair switches it on. People and call history wait for HubSpot access to contacts. The questions for Levi are in [EMAIL.md](EMAIL.md).
 
 **12 Nov:** [PLAN-V15](../../plan/PLAN-V15.md) is merged into `master`, not deployed. The script now knows the relationship (open deal, customer, past customer, lost deal, contacted before, or cold): only a cold call introduces Contour. Each person picks a tone (Friendly by default, Direct, Consultative or Formal), and an Admin sets the team's default. Call prep's errors are in plain words, and two clicks can't start two paid preps. The opener wording for each stage and tone is **TBC** with Levi.
+
+**16 Nov:** [PLAN-V18](../../plan/PLAN-V18.md) is joined into `master`, not deployed. Prep opens straight on the quick look, with a "Calling" row instead of the "Who are you calling?" screen. "Activity" is now **Call logs**, with a History of every call you logged. A mic button opens a mic card that checks the mic in under 2 seconds. Meetings shows everyone's meetings by default, with My meetings, My team and a Sync button, and the pre-read is one centered form that says AI drafts it. The Companies list shows the newest activity first.
 
 Call prep tells a salesperson what they need to know before they ring someone. They type a person or a company, and get a short call script. It is the second project after the Lead Finder (Levi, 2 Nov meeting).
 
@@ -55,9 +57,11 @@ Companies
 └──────────────────────────────────────────────────────┘
 
 [🔍 Filter companies...]  City ▾  Owner ▾  Has deal ▾
-Company        City       Owner    Last talk
+Company        City       Owner    Last activity
 Vitera         Adelaide   Marcus   12 Sep
 ```
+
+The list shows the newest activity first (PLAN-V18): the newest of HubSpot's "Last activity date" and "Last contacted". Companies with neither go last, A to Z.
 
 **Clicking a row** opens the company's record in a dialog in the middle (768 px). It answers "what do we know about this client?". Its "Prep a call" closes it and opens the prep panel. (Example data below is made up.)
 
@@ -80,6 +84,9 @@ Vitera         Adelaide   Marcus   12 Sep
 │       Head of Property · Vitera (opens it)       │
 │ [Still there?] [Last talk 12 Sep] [News]         │
 ├──────────────────────────────────────────────────┤
+│ Quick look                        [Company info] │
+│ Owner · Deal · Staff · Lease end · Next meeting  │
+│ Calling: Jason Reeds v                           │
 │ Last time we talked · 12 Sep · by Tom            │
 │   "the call note"                                │
 │ Sales script  Made 2 days ago [Research again]   │
@@ -95,7 +102,6 @@ Vitera         Adelaide   Marcus   12 Sep
 │   ["Not ready yet" v]  ["Send an email" v]       │
 │ 5 Goal: book a site visit                        │
 │ Style: Team (2 notes) and yours                  │
-│ More about Vitera (folded)                 v     │
 ├──────────────────────────────────────────────────┤
 │ +61 412 555 018 [Copy number]   [Copy script]    │
 └──────────────────────────────────────────────────┘
@@ -103,7 +109,7 @@ Vitera         Adelaide   Marcus   12 Sep
 
 Rules for the screen:
 
-- **Little scrolling, top to bottom** (15 Nov). One column in the order of the call. Quick facts fold under "More about". "If they say" shows only the pushbacks, and a tap opens one answer at a time. A question shows its source only while it is being asked. The Style row sits under the script, because it is a setting, not part of the call.
+- **Little scrolling, top to bottom** (15 Nov). One column in the order of the call. The quick look comes first: the free facts from our HubSpot copy, then the Calling row (PLAN-V18 T3-7). "If they say" shows only the pushbacks, and a tap opens one answer at a time. A question shows its source only while it is being asked. The Style row sits under the script, because it is a setting, not part of the call.
 - **The answers first, in the header.** Still there?, Last talk and News sit in one row under the name, and stay put while the script scrolls. These are Levi's questions; Connections waits for his customer list. On a rushed call, that is all they read.
 - **"Research again"** (it was Refresh) sits at the top of the script, with what it costs (up to the cap, US$0.25 **TBC**). It makes a new web check and a new script. While call prep is off it is greyed out and says why.
 - **News has no age limit.** The newest item shows with its date and age ("14 June 2026, 4 months ago"), so old news never looks fresh. With no web news, the newest saved note shows instead.
@@ -112,13 +118,13 @@ Rules for the screen:
 - **Fast, then complete.** The sales script and guided questions are written at once from our HubSpot copy (`playbook.ts`): free, and there even while call prep is off. With call prep on, its web check adds news and "still there?", and its own script fades in when ready (a few seconds; at once for a company searched ahead). The free script's wording is ours, from the prototype and Levi's questions (**TBC** with Levi).
 - **Guided questions.** Each says why it is asked, and what to ask next for each likely answer ("If they say 'Move', ask: who is helping you look?"). Tick one as you ask it, and the next one opens. The ticks aren't saved.
 - **Sync with HubSpot.** A button on the Companies page copies everything from HubSpot now (about 10 minutes, free), instead of waiting for the 6:00 sync. Its bar fills as it reads, and the list refreshes when it is done.
-- **Company only:** if they type just a company, or press Prep on a row, the panel asks "Who are you calling?" and lists its people. "Prep a cold call" gives a script for the switchboard.
+- **Company only:** if they type just a company, or press Prep on a row, the panel opens straight on the quick look (PLAN-V18 T3-7). Its "Calling" row picks the last person we talked to, else the first person on record, else a cold call (the switchboard), and can be changed there. The facts start loading when the pointer rests on Prep, so the panel opens full.
 - **Recent chips** reopen today's preps without a new search.
 - **Phone:** the list is one card per company, and the filters sit behind one "Filters" button. The prep box sticks to the top. Each company card has its own Prep button. The company's record and the prep card fill the screen, with the main action as a big button at the bottom: "Prep a call" on the company, "Call" on the card.
 
 ## Call notes (PLAN-V17, built 15 Nov, not switched on)
 
-After a call, a rep presses **Log call** in the call prep panel (or L), says or types what happened, and moves on. After a block of about 10 calls, they check every note on the **Activity** page and send them to HubSpot in one go. Levi asked for both: log fast and move on (12 Nov), and confirm in one go after about 10 calls (9 Nov). See [PLAN-V17](../../plan/PLAN-V17.md).
+After a call, a rep presses **Log call** in the call prep panel (or L), says or types what happened, and moves on. After a block of about 10 calls, they check every note on the **Call logs** page (called Activity until PLAN-V18) and send them to HubSpot in one go. Levi asked for both: log fast and move on (12 Nov), and confirm in one go after about 10 calls (9 Nov). See [PLAN-V17](../../plan/PLAN-V17.md).
 
 **How a note is handled:**
 - It is saved at once. A phone number or email in it is saved as "[number left out]" or "[email left out]": we never store contact details.
@@ -129,8 +135,10 @@ After a call, a rep presses **Log call** in the call prep panel (or L), says or 
 - **Nothing reaches HubSpot until the rep sends it.** Each change shows HubSpot's value now and the new one. A confirmed change may replace a value (**TBC** with Levi). If HubSpot's value changed since the rep looked, that change is held and shown again.
 - **Where it lands:** the call goes on the company and the person, under the rep. It goes on a deal only when the company has exactly one open deal (**TBC** with Levi).
 - **Call prep's "Last talk"** shows the rep's own note that isn't in HubSpot yet.
+- **Call logs** has three tabs: To confirm, History and Needs a look. History lists every call you logged, grouped by day, with a search, the outcome and This week or This month (PLAN-V18 T3-6). A row opens in place.
+- **The mic** (PLAN-V18 T3-4): a mic button in the note box, on laptops, opens a card that checks the mic in under 2 seconds and says plainly what is wrong (blocked, no mic, silent) and what to do. "Check my mic" is also in Ctrl+K and the account menu. Turning speech into words waits for the voice tool test at the keyboard (T3-3). The browser's speech service would send the voice to Google or Microsoft, so it stays off until Levi says yes.
 
-**Two switches, both off:** "Call notes are on" shows Log call and Activity. "Claude sorts call notes" waits for Levi's OK, because a rep's note names clients.
+**Two switches, both off:** "Call notes are on" shows Log call and Call logs. "Claude sorts call notes" waits for Levi's OK, because a rep's note names clients.
 
 **What it waits for:**
 - **Sending** needs writing to HubSpot switched on, after one real test call (PLAN-V17 M2). The key can already write calls, tasks, notes and company fields (checked 15 Nov, PLAN-V17 T1-2).
@@ -141,9 +149,9 @@ After a call, a rep presses **Log call** in the call prep panel (or L), says or 
 Before a client meeting, a pre-read is drafted from HubSpot, the rep fills two blanks, and it goes to the Contour team by email. It replaces the Word pre-read (Levi, 12 Nov). See [PLAN-V17](../../plan/PLAN-V17.md).
 
 **How it works:**
-- **Where:** Companies, then Meetings. Upcoming is grouped Today, Tomorrow, This week and Later. Each meeting has one status: Needs pre-read, Draft ready or Sent. Past meetings say whether notes are logged. "New pre-read" starts one for a meeting that isn't in HubSpot.
+- **Where:** Companies, then Meetings. Upcoming is grouped Today, Tomorrow, This week and Later. Each meeting has one status: Needs pre-read, Draft ready or Sent. Past meetings say whether notes are logged. "New pre-read" starts one for a meeting that isn't in HubSpot. Meetings shows everyone's meetings by default, with My meetings and My team, and a Sync button that reads HubSpot's meetings now (PLAN-V18). The pre-read is one centered form, and it says AI drafts it.
 - **The facts come from HubSpot, with no AI:** when, Teams or in person, who we meet, the Contour people, staff, offices, the lease end and the deal stage.
-- **Claude (Sonnet 5.5) writes three short summaries:** what they do, what we know about the project, and the talks so far. Each is marked "Written by AI". Every sentence must point at a fact, or it is dropped. There is no web search. Contact details are removed first. With names off, the company and its people are hidden from Claude. About US$0.03 a pre-read (estimate, not measured yet).
+- **Claude (Sonnet 5.5) writes three short summaries:** what they do, what we know about the project, and the talks so far. Each is marked "Written by AI". Every sentence must point at a fact, or it is dropped. There is no web search. Contact details are removed first. With names off, the company and its people are hidden from Claude. About US$0.007 a pre-read (3 real pre-reads, PLAN-V17 T2-16), in a few seconds.
 - **The rep fills two blanks:** the ideal next step and who is going. AI never fills them, because Levi asked for blanks. Both must be filled before it is sent (**TBC** with Levi).
 - **It goes in the email body, to Contour addresses only** (`contourinteriors.com.au`, **TBC**). Any other address stops the whole send.
 - **A copy is saved in HubSpot** as a note on the company, and on its open deal. It is not saved on the meeting itself, so it can't reach the client (until a test shows the meeting is safe).
@@ -169,7 +177,7 @@ Before a client meeting, a pre-read is drafted from HubSpot, the rep fills two b
 - **Fetch the last call notes from HubSpot live.** The HubSpot copy is up to a day old (daily sync at 6:00 am).
 - **"Prep for a call" button** on each Lead Finder lead, which opens call prep with the company filled in.
 - **Call blocks, later.** Tick 10 companies, press "Prep all", then go card by card. Levi said the BD team calls in blocks (2 Nov).
-- **Call notes on the same card, later.** A mic button after the call. This is Levi's "cockpit": prep before the call, notes after it (2 Nov).
+- **Call notes on the same card:** built. Log call came in PLAN-V17 and the mic button in PLAN-V18. This is Levi's "cockpit": prep before the call, notes after it (2 Nov).
 
 ## What it needs
 
