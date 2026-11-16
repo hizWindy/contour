@@ -350,6 +350,27 @@ export const WHEN_LABEL = 'When'
 export const WHERE_IT_STANDS = 'Where it stands'
 export const SHOW_OLDER = 'Show older'
 export const CLEAR_FILTERS = 'Clear the filters'
+
+// On a phone the filters sit behind one button (`history-filters.tsx`).
+export const FILTERS = 'Filters'
+export const FILTERS_HINT = 'The list changes as you choose.'
+export const FILTERS_IN_USE = 'Filters in use'
+export const CLEAR_ALL = 'Clear all'
+
+/** The Filters button's name: "Filters", or "Filters, 2 in use" (a bare number reads as "Filters 2"). */
+export function filtersWords(inUse: number): string {
+  return inUse > 0 ? `Filters, ${formatNumber(inUse)} in use` : FILTERS
+}
+
+/** The sheet's main button: "Show 12 calls", or "Show the calls" while the count isn't known. */
+export function showCallsWords(total: number | undefined): string {
+  return total === undefined ? 'Show the calls' : `Show ${pluralise(total, 'call')}`
+}
+
+/** A filter chip's own button: "Remove This week". */
+export function removeFilterWords(label: string): string {
+  return `Remove ${label}`
+}
 export const NO_MATCH = {
   title: 'No call matches that.',
   description: 'Clear the filters to see all your calls.',
@@ -375,7 +396,10 @@ export const STANDING_WORDS = {
   needs_look: 'Needs a look',
 } as const
 
-/** How a call was logged, for a screen reader and the pointer. */
+/** The line under an opened call that says how it was logged (PLAN-V18 T3-6, 17 Nov 2026). */
+export const HOW_LOGGED = 'How it was logged'
+
+/** How a call was logged, for a screen reader, the pointer, and the opened call. */
 export const SOURCE_WORDS = {
   mic: 'Logged by speaking',
   typed: 'Typed',

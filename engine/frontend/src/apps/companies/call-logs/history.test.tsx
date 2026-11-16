@@ -5,6 +5,7 @@ import { formatDate, melbourneDate } from '@/lib/format'
 import { routes } from '@/router'
 import { prefetchPage } from '@/shell/prefetch'
 import { createTestQueryClient, renderWithProviders } from '@/test/render'
+import { asPhone } from '@/test/screen'
 import CallLogsPage from './index'
 
 /*
@@ -435,5 +436,91 @@ describe('History', () => {
     })
     expect(await screen.findByRole('searchbox', { name: 'Search your calls' })).toBeInTheDocument()
     expect(asked).toHaveLength(1)
+  })
+})
+
+describe('how it fits a phone (17 Nov 2026)', () => {
+  it('says how a call was logged, in words, under the opened call', async () => {
+    server(threeDays())
+    const { user } = renderHistory()
+    const list = await historyList()
+    await user.click(within(list).getByRole('button', { name: /Sample Logistics Pty Ltd/ }))
+    const opened = document.querySelector<HTMLElement>('[data-slot=history-opened]')
+    expect(opened).toHaveTextContent('How it was logged: Typed')
+    await user.click(within(list).getByRole('button', { name: /Sample Mining Pty Ltd/ }))
+    expect(document.querySelector('[data-slot=history-opened]')).toHaveTextContent(
+      'How it was logged: Logged by speaking',
+    )
+  })
+
+  it("writes a row's follow-ups and changes in words, with no bare icon", async () => {
+    server(threeDays())
+    renderHistory()
+    const list = await historyList()
+    const first = within(list).getByRole('button', { name: /Sample Logistics Pty Ltd/ })
+    // The words a narrow row shows, hidden from a screen reader (it hears the one `sr-only` line).
+    const words = Array.from(first.querySelectorAll<HTMLElement>('[aria-hidden=true]')).find(
+      (part) => part.textContent === '1 follow-up · 1 field change',
+    )
+    expect(words).toBeDefined()
+    // The chevron sits beside the company, so it can never drop to a line of its own.
+    expect(first.querySelectorAll('svg.lucide-chevron-down')).toHaveLength(2)
+  })
+
+  it('keeps the search and one Filters button on a phone, and the rest in a sheet', async () => {
+    asPhone()
+    server(threeDays())
+    const { user } = renderHistory()
+    await historyList()
+    expect(screen.getByRole('searchbox', { name: 'Search your calls' })).toBeInTheDocument()
+    // Nothing of the filters is in the open: no select, no chips, until the sheet opens.
+    expect(screen.queryByRole('combobox', { name: 'Where it stands' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Connected' })).toBeNull()
+    expect(screen.queryByRole('list', { name: 'Filters in use' })).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: 'Filters' }))
+    const sheet = await screen.findByRole('dialog', { name: 'Filters' })
+    expect(within(sheet).getByRole('radiogroup', { name: 'Where it stands' })).toBeInTheDocument()
+    expect(within(sheet).getByRole('radiogroup', { name: 'When' })).toBeInTheDocument()
+    const outcomes = within(sheet).getByRole('group', { name: 'How it went' })
+    expect(within(outcomes).getAllByRole('button')).toHaveLength(5)
+    // The button says how many calls the filters leave, and the list changes as one is picked.
+    expect(within(sheet).getByRole('button', { name: 'Show 3 calls' })).toBeInTheDocument()
+    await user.click(within(outcomes).getByRole('button', { name: 'Left voicemail' }))
+    await waitFor(() => {
+      expect(within(sheet).getByRole('button', { name: 'Show 1 call' })).toBeInTheDocument()
+    })
+    await user.click(within(sheet).getByRole('button', { name: 'Show 1 call' }))
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Filters' })).toBeNull()
+    })
+
+    // A closed sheet never hides why the list is short: the filter shows as a chip.
+    expect(screen.getByRole('button', { name: 'Filters, 1 in use' })).toBeInTheDocument()
+    const inUse = screen.getByRole('list', { name: 'Filters in use' })
+    expect(within(inUse).getByText('Left voicemail')).toBeInTheDocument()
+    await user.click(within(inUse).getByRole('button', { name: 'Remove Left voicemail' }))
+    await waitFor(() => {
+      expect(screen.queryByRole('list', { name: 'Filters in use' })).toBeNull()
+    })
+    expect(screen.getByRole('button', { name: 'Filters' })).toBeInTheDocument()
+  })
+
+  it('clears every filter but the search from the chips', async () => {
+    asPhone()
+    server(threeDays())
+    const { user } = renderHistory('&outcome=Connected&when=week&where=hubspot')
+    await historyList()
+    const inUse = await screen.findByRole('list', { name: 'Filters in use' })
+    expect(within(inUse).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+      'In HubSpot',
+      'This week',
+      'Connected',
+    ])
+    expect(screen.getByRole('button', { name: 'Filters, 3 in use' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Clear all' }))
+    await waitFor(() => {
+      expect(screen.queryByRole('list', { name: 'Filters in use' })).toBeNull()
+    })
   })
 })

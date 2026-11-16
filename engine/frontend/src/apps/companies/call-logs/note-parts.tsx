@@ -266,7 +266,11 @@ export function SummaryField({
   )
 }
 
-/** One line of text that saves when it is left or on Enter. Empty goes back. */
+/**
+ * One line of text that saves when it is left or on Enter. Empty goes back. It starts one line
+ * high and wraps as the words grow, so a long follow-up reads in full on a phone instead of being
+ * cut off at the edge (17 Nov 2026). Enter saves and never adds a new line.
+ */
 function LineField({
   value,
   label,
@@ -290,12 +294,13 @@ function LineField({
     onCancel,
   )
   return (
-    <Input
+    <Textarea
       aria-label={label}
       value={field.text}
       placeholder={placeholder}
       maxLength={200}
-      className="touch:text-body"
+      rows={1}
+      className="min-h-9 resize-none py-1.5 touch:min-h-11 touch:text-body"
       onChange={(event) => {
         field.change(event.target.value)
       }}

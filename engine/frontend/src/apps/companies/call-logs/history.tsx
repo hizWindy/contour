@@ -4,16 +4,19 @@
  *
  * - **By day:** "Today", "Yesterday", "Mon 14 Nov". Each day's heading stays at the top while its
  *   calls scroll under it.
- * - **One row a call:** the time, the company, the person, how it went (a dot and a word, never
- *   colour alone), the summary's first line, and where it stands, with small marks for its
- *   follow-ups and field changes and how it was logged.
+ * - **One row a call.** Wide (the list is 42rem or more across, a container query, so a narrow
+ *   window with the menu open counts too): the time in a column of its own, the company, the
+ *   person, the summary's first line, and at the right how it went (a dot and a word, never colour
+ *   alone), where it stands, and small marks for its follow-ups and field changes and how it was
+ *   logged. Narrow (a phone, 17 Nov 2026): four short lines, with nothing cut off at the right and
+ *   no icon without its words: the company and the chevron; the time and the person; the summary,
+ *   up to two lines; then how it went, where it stands, and "1 follow-up".
  * - **A row opens in place,** one at a time: the whole note, the changes (old to new), the
- *   follow-ups, each step's result, "Open in HubSpot", and "Log another call with" the company.
- *   The rows under it glide down (Motion's `layout`, as a transform), but not in a list of more
- *   than 50 rows, which never moves (DESIGN.md "Speed budget").
- * - **The search** (company, person, or words in the note) waits 250ms after the last key. The
- *   filters: how it went (chips), when (This week, This month, All) and where it stands. All of
- *   them live in the address, so Back and a link keep them.
+ *   follow-ups, each step's result, how it was logged, "Open in HubSpot", and "Log another call
+ *   with" the company. The rows under it glide down (Motion's `layout`, as a transform), but not
+ *   in a list of more than 50 rows, which never moves (DESIGN.md "Speed budget").
+ * - **The search and the filters** are in `history-filters.tsx`: all in the open, or behind one
+ *   Filters button on a phone. All of them live in the address, so Back and a link keep them.
  * - **"Show older"** brings 50 more; the older days rise 4px and fade in.
  * - **Keys:** J and K move, Enter opens, and / goes to the search.
  *
@@ -28,7 +31,6 @@ import {
   Mic,
   NotebookPen,
   PencilLine,
-  Search,
   SendHorizontal,
   TriangleAlert,
   Type,
@@ -36,28 +38,19 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { m } from 'motion/react'
-import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router'
 import { useCallNoteHistory } from '@/api/hooks/call-notes'
-import type { CallNoteOptions, CallNoteOut, CallNoteOutcomeFilter } from '@/api/types'
+import type { CallNoteOptions, CallNoteOut } from '@/api/types'
 import { EmptyState } from '@/components/empty-state'
 import { ErrorState } from '@/components/error-state'
-import { ChipGroup, Segmented } from '@/components/motion'
 import { EASE, INSTANT, springs } from '@/components/motion/springs'
 import { useStill } from '@/components/motion/use-still'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { useDebounced } from '@/hooks/useDebounced'
 import { dueDateText } from '@/lib/due-date'
 import { formatTime, melbourneDate } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { HistoryToolbar } from './history-filters'
 import type { LogTarget } from './log-call'
 import { isCallNotesOff } from './notes'
 import { OpenInHubSpot } from './open-in-hubspot'
@@ -66,11 +59,8 @@ import {
   historyQuery,
   NO_FILTERS,
   readHistory,
-  SEARCH_MAX,
   writeHistory,
   type HistoryFilters,
-  type HistoryWhen,
-  type HistoryWhere,
 } from './params'
 import { CallNotesOff, RowsPending } from './states'
 import {
@@ -86,7 +76,7 @@ import {
   HISTORY_FAILED,
   HISTORY_KEYS,
   HISTORY_LIST,
-  HOW_IT_WENT,
+  HOW_LOGGED,
   isMeetingNotes,
   KIND_LABELS,
   logAnotherWords,
@@ -95,8 +85,6 @@ import {
   NO_MATCH,
   NO_OUTCOME,
   personLine,
-  SEARCH_CALLS,
-  SEARCH_PLACEHOLDER,
   SHOW_OLDER,
   SOURCE_WORDS,
   STANDING_WORDS,
@@ -104,19 +92,12 @@ import {
   SUMMARY,
   THE_NOTE,
   WHAT_HAPPENED_TO_IT,
-  WHEN_LABEL,
-  WHEN_WORDS,
-  WHERE_IT_STANDS,
-  WHERE_WORDS,
 } from './words'
 
 const HISTORY_LIST_ID = 'history-list'
 
 /** A list longer than this never moves (DESIGN.md "Speed budget"). */
 const STILL_ABOVE = 50
-
-/** How long the search waits after the last key. */
-const SEARCH_WAIT_MS = 250
 
 /** The opened part fades in (150ms, the one curve). */
 const OPEN_IN = { duration: 0.15, ease: EASE } as const
@@ -218,38 +199,54 @@ function StandingMark({ note }: { note: CallNoteOut }) {
   )
 }
 
+/**
+ * The follow-ups and field changes of a call, and how it was logged. A screen reader hears them
+ * once, in words (the `sr-only` span). To the eye: a wide row has small icons with counts (a
+ * tooltip names each), and a narrow one has the counts in words, because a touch screen has no
+ * tooltip and an icon alone says nothing (17 Nov 2026). How it was logged shows in words under
+ * the opened call, so no row has a bare microphone.
+ */
 function Marks({ note }: { note: CallNoteOut }) {
   const SourceIcon = SOURCE_ICON[note.source]
   const tasks = note.tasks.length
   const changes = note.changes.length
-  const words = [...marksWords(tasks, changes), SOURCE_WORDS[note.source]]
+  const counts = marksWords(tasks, changes)
+  const words = [...counts, SOURCE_WORDS[note.source]]
   return (
-    <span className="flex items-center gap-2 text-caption text-muted-foreground">
+    <>
       <span className="sr-only">{words.join(', ')}</span>
-      {tasks > 0 ? (
-        <span
-          aria-hidden="true"
-          title={marksWords(tasks, 0).join('')}
-          className="flex items-center gap-0.5 tabular-nums"
-        >
-          <ListTodo className="size-3.5" />
-          {tasks}
+      {counts.length > 0 ? (
+        <span aria-hidden="true" className="text-caption text-muted-foreground @2xl:hidden">
+          {counts.join(' · ')}
         </span>
       ) : null}
-      {changes > 0 ? (
-        <span
-          aria-hidden="true"
-          title={marksWords(0, changes).join('')}
-          className="flex items-center gap-0.5 tabular-nums"
-        >
-          <PencilLine className="size-3.5" />
-          {changes}
+      <span
+        aria-hidden="true"
+        className="hidden items-center gap-2 text-caption text-muted-foreground @2xl:flex"
+      >
+        {tasks > 0 ? (
+          <span
+            title={marksWords(tasks, 0).join('')}
+            className="flex items-center gap-0.5 tabular-nums"
+          >
+            <ListTodo className="size-3.5" />
+            {tasks}
+          </span>
+        ) : null}
+        {changes > 0 ? (
+          <span
+            title={marksWords(0, changes).join('')}
+            className="flex items-center gap-0.5 tabular-nums"
+          >
+            <PencilLine className="size-3.5" />
+            {changes}
+          </span>
+        ) : null}
+        <span title={SOURCE_WORDS[note.source]}>
+          <SourceIcon className="size-3.5" />
         </span>
-      ) : null}
-      <span aria-hidden="true" title={SOURCE_WORDS[note.source]}>
-        <SourceIcon className="size-3.5" />
       </span>
-    </span>
+    </>
   )
 }
 
@@ -281,7 +278,7 @@ function Opened({
   return (
     <m.div
       data-slot="history-opened"
-      className="flex flex-col gap-4 border-t bg-card px-4 pt-3 pb-4 sm:pl-24"
+      className="flex flex-col gap-4 border-t bg-card px-4 pt-3 pb-4 @2xl:pl-24"
       initial={still ? false : { opacity: 0 }}
       animate={{ opacity: 1, transition: still ? INSTANT : OPEN_IN }}
     >
@@ -339,6 +336,9 @@ function Opened({
           </ul>
         </Section>
       ) : null}
+      <p className="text-caption text-muted-foreground">
+        <span className="font-semibold">{HOW_LOGGED}:</span> {SOURCE_WORDS[note.source]}
+      </p>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <OpenInHubSpot
           href={note.hubspot_url}
@@ -349,7 +349,7 @@ function Opened({
           type="button"
           variant="outline"
           size="sm"
-          className="touch:h-11"
+          className="touch:h-11 max-sm:w-full"
           onClick={() => {
             onLogCall({ companyKey: note.company_key, companyName: note.company_name })
           }}
@@ -385,6 +385,16 @@ function Row({
   const openedId = useId()
   const summary = (note.call.summary.trim() || note.text.trim()).split('\n')[0] ?? ''
   const person = note.person ? personLine(note.person) : null
+  const time = formatTime(note.called_at)
+  const chevron = (
+    <ChevronDown
+      aria-hidden="true"
+      className={cn(
+        'size-4 shrink-0 text-muted-foreground transition-transform duration-150',
+        open && 'rotate-180',
+      )}
+    />
+  )
   return (
     <m.li
       layout={moves ? 'position' : false}
@@ -401,31 +411,37 @@ function Row({
         aria-expanded={open}
         aria-controls={open ? openedId : undefined}
         onClick={onToggle}
-        className="grid w-full grid-cols-[4.5rem_minmax(0,1fr)] gap-x-3 gap-y-1 px-4 py-3 text-left transition-colors outline-none hover:bg-muted focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sm:grid-cols-[5rem_minmax(0,1fr)_auto] touch:py-3.5"
+        className="grid w-full grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 px-4 py-3 text-left transition-colors outline-none hover:bg-muted focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset @2xl:grid-cols-[5rem_minmax(0,1fr)_auto] touch:py-3.5"
       >
-        <span className="pt-px text-caption text-muted-foreground tabular-nums">
-          {formatTime(note.called_at)}
+        {/* Wide: the time has a column of its own. */}
+        <span className="hidden pt-px text-caption text-muted-foreground tabular-nums @2xl:col-start-1 @2xl:row-start-1 @2xl:block">
+          {time}
         </span>
-        <span className="flex min-w-0 flex-col gap-0.5">
-          <span className="flex min-w-0 items-baseline gap-1.5">
-            <span className="truncate font-semibold text-foreground">{note.company_name}</span>
-            {person ? (
-              <span className="truncate text-caption text-muted-foreground">{person}</span>
-            ) : null}
+        <span className="col-start-1 row-start-1 flex min-w-0 items-baseline gap-1.5 @2xl:col-start-2">
+          <span className="truncate font-semibold text-foreground">{note.company_name}</span>
+          {person ? (
+            <span className="hidden truncate text-caption text-muted-foreground @2xl:inline">
+              {person}
+            </span>
+          ) : null}
+        </span>
+        {/* Narrow: the chevron beside the company, so it never drops to a line of its own. */}
+        <span className="col-start-2 row-start-1 flex items-center @2xl:hidden">{chevron}</span>
+        {/* Narrow: the time and the person on one line. */}
+        <span className="col-span-2 row-start-2 min-w-0 truncate text-caption text-muted-foreground @2xl:hidden">
+          <span className="tabular-nums">{time}</span>
+          {person ? ` · ${person}` : null}
+        </span>
+        {summary ? (
+          <span className="col-span-2 row-start-3 min-w-0 line-clamp-2 text-foreground @2xl:col-span-1 @2xl:col-start-2 @2xl:row-start-2 @2xl:line-clamp-1">
+            {summary}
           </span>
-          {summary ? <span className="truncate text-foreground">{summary}</span> : null}
-        </span>
-        <span className="col-start-2 flex flex-wrap items-center gap-x-3 gap-y-1 sm:col-start-3 sm:row-start-1 sm:justify-end">
+        ) : null}
+        <span className="col-span-2 row-start-4 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 @2xl:col-span-1 @2xl:col-start-3 @2xl:row-start-1 @2xl:justify-end">
           <Outcome note={note} />
           <StandingMark note={note} />
           <Marks note={note} />
-          <ChevronDown
-            aria-hidden="true"
-            className={cn(
-              'size-4 text-muted-foreground transition-transform duration-150',
-              open && 'rotate-180',
-            )}
-          />
+          <span className="hidden items-center @2xl:flex">{chevron}</span>
         </span>
       </button>
       {open ? (
@@ -434,112 +450,6 @@ function Row({
         </div>
       ) : null}
     </m.li>
-  )
-}
-
-function Toolbar({
-  filters,
-  options,
-  onChange,
-  searchRef,
-}: {
-  filters: HistoryFilters
-  options: CallNoteOptions
-  onChange: (filters: HistoryFilters) => void
-  searchRef: RefObject<HTMLInputElement | null>
-}) {
-  const outcomeId = useId()
-  const whereId = useId()
-  // The box answers each key at once; the address (and the server) hear it 250ms after the last.
-  const [text, setText] = useState(filters.q)
-  const waited = useDebounced(text, SEARCH_WAIT_MS)
-  const [shownQ, setShownQ] = useState(filters.q)
-  if (filters.q !== shownQ) {
-    setShownQ(filters.q)
-    // The filters were cleared, or Back changed them: the box follows. A change that came from the
-    // box itself leaves it alone, so a key typed meanwhile is never lost.
-    if (filters.q.trim() !== waited.trim()) setText(filters.q)
-  }
-  useEffect(() => {
-    if (waited.trim() !== filters.q.trim()) onChange({ ...filters, q: waited })
-    // `onChange` changes with the address; the search only follows the waited text.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [waited])
-
-  const outcomes = [
-    ...options.outcomes.map((value) => ({ value, label: value })),
-    { value: 'none' as const, label: NO_OUTCOME },
-  ]
-  return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-56 flex-1">
-          <Search
-            aria-hidden="true"
-            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-          />
-          <Input
-            ref={searchRef}
-            type="search"
-            aria-label={SEARCH_CALLS}
-            aria-keyshortcuts="/"
-            placeholder={SEARCH_PLACEHOLDER}
-            maxLength={SEARCH_MAX}
-            value={text}
-            className="pl-9 touch:text-body"
-            onChange={(event) => {
-              setText(event.target.value)
-            }}
-          />
-        </div>
-        <span id={whereId} className="sr-only">
-          {WHERE_IT_STANDS}
-        </span>
-        <Select
-          value={filters.where}
-          onValueChange={(value) => {
-            onChange({ ...filters, where: value as HistoryWhere })
-          }}
-        >
-          <SelectTrigger aria-labelledby={whereId} className="w-44">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {(Object.keys(WHERE_WORDS) as HistoryWhere[]).map((value) => (
-              <SelectItem key={value} value={value}>
-                {value === 'all' ? `${WHERE_IT_STANDS}: ${WHERE_WORDS.all}` : WHERE_WORDS[value]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Segmented<HistoryWhen>
-          aria-label={WHEN_LABEL}
-          size="sm"
-          value={filters.when}
-          onChange={(when) => {
-            onChange({ ...filters, when })
-          }}
-          options={(['week', 'month', 'all'] as const).map((value) => ({
-            value,
-            label: WHEN_WORDS[value],
-          }))}
-        />
-      </div>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <span id={outcomeId} className="text-caption text-muted-foreground">
-          {HOW_IT_WENT}
-        </span>
-        <ChipGroup<CallNoteOutcomeFilter>
-          mode="one-or-none"
-          aria-labelledby={outcomeId}
-          options={outcomes}
-          value={filters.outcome ? [filters.outcome] : []}
-          onChange={([picked]) => {
-            onChange({ ...filters, outcome: picked ?? null })
-          }}
-        />
-      </div>
-    </div>
   )
 }
 
@@ -602,7 +512,13 @@ export function History({ options, today, onLogCall }: HistoryProps) {
   }, [])
 
   const toolbar = (
-    <Toolbar filters={filters} options={options} onChange={change} searchRef={searchRef} />
+    <HistoryToolbar
+      filters={filters}
+      options={options}
+      onChange={change}
+      searchRef={searchRef}
+      total={list.data?.pages[0]?.total}
+    />
   )
 
   if (isCallNotesOff(list.error)) return <CallNotesOff />
@@ -678,7 +594,8 @@ export function History({ options, today, onLogCall }: HistoryProps) {
                 >
                   {day.heading}
                 </h3>
-                <ul className="flex flex-col divide-y overflow-hidden rounded-lg border bg-card text-ui">
+                {/* The rows read this list's width, not the screen's (a container query). */}
+                <ul className="@container flex flex-col divide-y overflow-hidden rounded-lg border bg-card text-ui">
                   {day.notes.map((note) => {
                     const place = places.get(note.id) ?? 0
                     return (
