@@ -23,7 +23,13 @@ import { Building2, CalendarCheck, PhoneLog } from 'lucide-react'
 import type { PrefetchArgs, RouteHandle } from '@/shell/crumbs'
 import type { AppModule } from '@/shell/nav'
 import { page } from '@/shell/page-route'
-import { CompaniesCommands, ToConfirmCount, UpcomingMeetings } from './call-note-parts'
+import {
+  CompaniesCommands,
+  MicCheckHost,
+  MicCheckMenuItem,
+  ToConfirmCount,
+  UpcomingMeetings,
+} from './call-note-parts'
 import { OLD_PATH } from './call-logs/old-address'
 import { OldActivityAddress } from './call-logs/old-route'
 import { CompaniesHomeCard } from './home-card'
@@ -93,6 +99,9 @@ export const COMPANIES: AppModule = {
     },
   ],
   commands: CompaniesCommands,
+  // "Check my mic" (PLAN-V18 T3-4): a row in the account menu, and the card it opens.
+  accountItems: MicCheckMenuItem,
+  frame: MicCheckHost,
   routes: [
     {
       path: 'companies',

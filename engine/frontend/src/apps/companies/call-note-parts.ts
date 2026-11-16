@@ -44,3 +44,6 @@ export const CompaniesCommands = late<Links, CommandsProps>(
   (links) => links.CompaniesCommands,
 )
 export const UpcomingMeetings = late(loadUpcomingCard, (card) => card.UpcomingMeetings)
+// "Check my mic" (PLAN-V18 T3-4): the account menu's row, and the card the frame draws.
+export const MicCheckMenuItem = late(loadCallNoteLinks, (links) => links.MicCheckMenuItem)
+export const MicCheckHost = late(loadCallNoteLinks, (links) => links.MicCheckHost)

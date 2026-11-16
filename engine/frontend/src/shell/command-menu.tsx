@@ -133,7 +133,7 @@ export function CommandMenu(): ReactNode {
                   {Commands ? (
                     // A module's own entries may load late (Companies' do): nothing shows till then.
                     <Suspense fallback={null}>
-                      <Commands go={go} />
+                      <Commands go={go} run={run} />
                     </Suspense>
                   ) : null}
                 </CommandGroup>

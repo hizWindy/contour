@@ -1,6 +1,7 @@
 /**
  * Who is signed in, and "Sign out" (PLAN-V6 C3, PLAN-V13 T1-6). Two buttons open the same small
- * menu with who you are (name, email, role) and "Sign out":
+ * menu with who you are (name, email, role), the projects' own rows (Companies' "Check my mic",
+ * PLAN-V18 T3-4), and "Sign out":
  *
  * - `SidebarAccount`, at the foot of the left menu, like the dashboards people know: your
  *   initials, your name and your role ("Al-khair M. Pama, System admin"). Folded to icons, it
@@ -13,6 +14,7 @@
  * out."
  */
 import { ChevronDown, ChevronsUpDown, LogOut } from 'lucide-react'
+import { Suspense } from 'react'
 import { useLogout, useMe, type SignedInUser } from '@/api/hooks'
 import { Button } from '@/components/ui/button'
 import {
@@ -26,6 +28,7 @@ import {
 import { SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar'
 import { cn } from '@/lib/utils'
 import { ROLE_NAMES } from './roles'
+import { useVisibleModules } from './visible-modules'
 
 /** The first letter of the first two words: "Sample Admin" gives "SA", "Al-khair" gives "A". */
 function initialsOf(name: string): string {
@@ -55,7 +58,23 @@ function Initials({ name, className }: { name: string; className?: string }) {
   )
 }
 
-/** What the menu holds: who you are, then "Sign out". */
+/**
+ * The rows the projects bring (`AppModule.accountItems`), like "Check my mic" (PLAN-V18 T3-4),
+ * each in its own `Suspense`: they may load late, and show nothing till then.
+ */
+function ProjectItems() {
+  const modules = useVisibleModules()
+  return modules.map((app) => {
+    const Items = app.accountItems
+    return Items ? (
+      <Suspense key={app.id} fallback={null}>
+        <Items />
+      </Suspense>
+    ) : null
+  })
+}
+
+/** What the menu holds: who you are, the projects' own rows, then "Sign out". */
 function AccountMenuContent({
   user,
   side,
@@ -75,6 +94,7 @@ function AccountMenuContent({
         </span>
       </DropdownMenuLabel>
       <DropdownMenuSeparator />
+      <ProjectItems />
       <DropdownMenuItem
         className="touch:min-h-11"
         disabled={logout.isPending}
