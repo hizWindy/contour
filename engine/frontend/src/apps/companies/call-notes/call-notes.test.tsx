@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { toast } from 'sonner'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SignedInUser, SignIn } from '@/api/hooks'
@@ -16,11 +16,10 @@ import type {
 import { readDueDate } from '@/lib/due-date'
 import { melbourneDate } from '@/lib/format'
 import { SAMPLE_USER } from '@/test/fake-auth'
-import { createTestQueryClient, renderWithProviders, startManualClock } from '@/test/render'
+import { createTestQueryClient, renderWithProviders } from '@/test/render'
 import { asPhone } from '@/test/screen'
 import CompaniesPage from '../index'
 import { FakeMic } from './mic/fake-mic'
-import { NoteTimer } from './note-timer'
 import { dueWords } from './words'
 
 /*
@@ -956,28 +955,35 @@ describe('on a phone', () => {
   })
 })
 
-describe('the timer', () => {
-  it('counts up, and at the soft limit turns Ochre and says so once, without stopping', async () => {
-    startManualClock()
-    render(<NoteTimer softSeconds={180} />)
-    const timer = document.querySelector<HTMLElement>('[data-slot=note-timer]')
-    expect(screen.getByRole('timer')).toHaveTextContent('0:00')
-    expect(screen.getByRole('status')).toHaveTextContent('')
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(179_000)
+describe('no timer (Al-khair, 17 Nov 2026)', () => {
+  it('has no stopwatch on a laptop, and the keys and Save and next sit at the right', async () => {
+    vi.spyOn(navigator, 'platform', 'get').mockReturnValue('Win32')
+    mockBackend()
+    const view = renderCompanies()
+    const panel = await logFirstRow(view)
+    // Nothing counts the minutes: no timer, no clock face, no "wrap up" line.
+    expect(within(panel).queryByRole('timer')).toBeNull()
+    expect(panel.querySelector('[data-slot=note-timer]')).toBeNull()
+    expect(within(panel).queryByText(/Wrap up|Time on this note/)).toBeNull()
+    const save = within(panel).getByRole('button', { name: 'Save and next' })
+    expect(save.parentElement).toHaveClass('justify-end')
+  })
+
+  it('has none on a phone either: the bottom bar holds Save and next alone', async () => {
+    vi.spyOn(navigator, 'platform', 'get').mockReturnValue('Win32')
+    asPhone()
+    mockBackend()
+    const view = renderCompanies()
+    await screen.findByRole('list', { name: 'Companies' })
+    await waitFor(() => {
+      expect(view.queryClient.getQueryData(queryKeys.companies.callNoteOptions())).toBeDefined()
     })
-    expect(screen.getByRole('timer')).toHaveTextContent('2:59')
-    expect(timer).not.toHaveAttribute('data-late')
-    expect(timer).toHaveClass('text-muted-foreground')
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1_000)
-    })
-    expect(screen.getByRole('status')).toHaveTextContent("That's 3 minutes. Wrap up when you can.")
-    expect(timer).toHaveAttribute('data-late', 'true')
-    expect(timer).toHaveClass('text-review-ink')
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(65_000)
-    })
-    expect(screen.getByRole('timer')).toHaveTextContent('4:05')
+    await view.user.click(screen.getByRole('button', { name: 'Sample Logistics Pty Ltd' }))
+    const company = await screen.findByRole('dialog', { name: 'Sample Logistics Pty Ltd' })
+    await view.user.click(await within(company).findByRole('button', { name: 'Log call' }))
+    const panel = await screen.findByRole('dialog', { name: 'Log call' })
+    expect(within(panel).queryByRole('timer')).toBeNull()
+    const save = within(panel).getByRole('button', { name: 'Save and next' })
+    expect(save.parentElement?.children).toHaveLength(1)
   })
 })

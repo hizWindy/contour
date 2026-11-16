@@ -3,7 +3,7 @@
  * no setting or file name (the screen-words test reads them).
  */
 import { dueDateText } from '@/lib/due-date'
-import { formatNumber, pluralise } from '@/lib/format'
+import { formatNumber } from '@/lib/format'
 
 export const LOG_CALL = 'Log call'
 export const SAVE_AND_NEXT = 'Save and next'
@@ -45,23 +45,7 @@ export function savedWords(toConfirm: number | null): string {
     : `Saved. ${formatNumber(toConfirm)} to confirm.`
 }
 
-/** "3 minutes", "1 minute", "90 seconds", "2 minutes 30 seconds". */
-export function durationWords(totalSeconds: number): string {
-  const seconds = Math.max(0, Math.round(totalSeconds))
-  const minutes = Math.floor(seconds / 60)
-  const rest = seconds % 60
-  if (minutes === 0 || (minutes < 2 && rest > 0)) return pluralise(seconds, 'second')
-  return rest === 0
-    ? pluralise(minutes, 'minute')
-    : `${pluralise(minutes, 'minute')} ${pluralise(rest, 'second')}`
-}
-
-/** "That's 3 minutes. Wrap up when you can." The minutes come from the setting. */
-export function wrapUpWords(softSeconds: number): string {
-  return `That's ${durationWords(softSeconds)}. Wrap up when you can.`
-}
-
-/** The timer's face: "0:42", "3:05", "1:02:05". */
+/** The mic card's clock while the rep speaks: "0:42", "3:05", "1:02:05". */
 export function clockText(totalSeconds: number): string {
   const seconds = Math.max(0, Math.floor(totalSeconds))
   const hours = Math.floor(seconds / 3600)

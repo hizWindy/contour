@@ -4,8 +4,10 @@
  * `prep-sheet.tsx`), and Back (Esc, or the arrow) returns to the script.
  *
  * Top to bottom: who the call was with (from the panel, or "Who was the call with?"), the text
- * box with the mic in its corner (PLAN-V18 T3-4, laptops only), the outcome as chips (one or none), the follow-up (only with the AI off), then
- * "Save and next", the one Navy button, beside the timer. Ctrl+Enter (Cmd+Enter on a Mac) saves.
+ * box with the mic in its corner (PLAN-V18 T3-4, laptops only), the outcome as chips (one or none),
+ * the follow-up (only with the AI off), then "Save and next", the one Navy button. Ctrl+Enter
+ * (Cmd+Enter on a Mac) saves. There is no timer: a stopwatch with no label told the rep nothing
+ * they could act on (Al-khair, 17 Nov 2026).
  *
  * - **The draft is safe.** Every change is kept in the browser for this call (`draft.ts`),
  *   through a refresh and a closed panel, until the server has the note. It is the signed-in
@@ -47,7 +49,6 @@ import { FollowUpFields } from './follow-up-fields'
 import { checkFollowUp } from './follow-up'
 import { fixedWords } from './mic/words'
 import { NoteMic } from './note-mic'
-import { NoteTimer } from './note-timer'
 import { logCallNote } from './save'
 import { WhoWith } from './who-with'
 import {
@@ -332,15 +333,13 @@ export function NoteView({
         </div>
       </div>
       {onPhone ? (
-        <div className="flex flex-col gap-2 border-t bg-popover p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-          <NoteTimer softSeconds={options.soft_seconds} />
+        <div className="border-t bg-popover p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <Button type="button" size="lg" className="w-full" onClick={save}>
             {SAVE_AND_NEXT}
           </Button>
         </div>
       ) : (
-        <div className="flex items-center gap-3 border-t bg-popover px-5 py-3">
-          <NoteTimer softSeconds={options.soft_seconds} className="flex-1" />
+        <div className="flex items-center justify-end gap-3 border-t bg-popover px-5 py-3">
           <KbdGroup aria-hidden="true" className="touch:hidden">
             <Kbd>{mac ? 'Cmd' : 'Ctrl'}</Kbd>
             <Kbd>Enter</Kbd>
