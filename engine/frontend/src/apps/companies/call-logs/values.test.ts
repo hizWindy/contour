@@ -2,12 +2,24 @@ import { describe, expect, it } from 'vitest'
 import type { CallNoteOut, CallNotePreview } from '@/api/types'
 import { formatDate } from '@/lib/format'
 import { cardCounts, sendCounts, sortForConfirm } from './notes'
-import { callLogsHref, callLogsQuery, readTab, writeTab } from './params'
 import { movedTo } from './old-address'
+import {
+  callLogsHref,
+  callLogsQuery,
+  filtered,
+  historyQuery,
+  NO_FILTERS,
+  readHistory,
+  readTab,
+  sinceOf,
+  writeHistory,
+  writeTab,
+} from './params'
 import { readCalendarDate, readFieldValue } from './values'
 import {
   batchDoneWords,
   callWhen,
+  dayHeading,
   fieldValue,
   loggedWhen,
   notSentHead,
@@ -113,19 +125,65 @@ describe('the tab in the address', () => {
     expect(movedTo('?log=1', '#top')).toBe('/companies/call-logs?log=1#top')
   })
 
-  it('asks for the rep own notes, and pages History', () => {
+  it('asks for the rep own notes', () => {
     expect(callLogsQuery('to_confirm')).toEqual({
       state: 'to_confirm',
       mine: true,
       limit: 100,
       offset: 0,
     })
-    expect(callLogsQuery('history', 2)).toEqual({
-      state: 'logged',
+    expect(callLogsQuery('needs_look')).toEqual({
+      state: 'needs_look',
       mine: true,
-      limit: 25,
-      offset: 50,
+      limit: 50,
+      offset: 0,
     })
+  })
+})
+
+describe("History's search and filters, in the address (PLAN-V18 T3-6)", () => {
+  // Monday 16 Nov 2026, in Melbourne.
+  const TODAY = '2026-11-16'
+
+  it('reads and writes them, leaving the defaults out', () => {
+    const filters = readHistory(
+      new URLSearchParams('tab=history&q=lease&outcome=Connected&when=week&where=needs-look'),
+    )
+    expect(filters).toEqual({ q: 'lease', outcome: 'Connected', when: 'week', where: 'needs_look' })
+    expect(writeHistory(new URLSearchParams('tab=history'), filters).toString()).toBe(
+      'tab=history&q=lease&outcome=Connected&when=week&where=needs-look',
+    )
+    expect(
+      writeHistory(new URLSearchParams('tab=history&q=x&when=week'), NO_FILTERS).toString(),
+    ).toBe('tab=history')
+    expect(readHistory(new URLSearchParams('outcome=Nonsense&when=year&where=x'))).toEqual(
+      NO_FILTERS,
+    )
+    expect(filtered(NO_FILTERS)).toBe(false)
+    expect(filtered({ ...NO_FILTERS, q: '  ' })).toBe(false)
+    expect(filtered({ ...NO_FILTERS, outcome: 'none' })).toBe(true)
+  })
+
+  it('asks for every note of mine, newest first, with the filters as the contract has them', () => {
+    expect(historyQuery(NO_FILTERS, TODAY)).toEqual({ state: 'history', mine: true })
+    expect(
+      historyQuery({ q: ' lease ', outcome: 'none', when: 'month', where: 'logged' }, TODAY),
+    ).toEqual({ state: 'logged', mine: true, q: 'lease', outcome: 'none', since: '2026-11-01' })
+  })
+
+  it('starts this week on Monday and this month on the 1st', () => {
+    expect(sinceOf('week', '2026-11-16')).toBe('2026-11-16')
+    expect(sinceOf('week', '2026-11-22')).toBe('2026-11-16')
+    expect(sinceOf('week', '2026-11-18')).toBe('2026-11-16')
+    expect(sinceOf('month', '2026-11-18')).toBe('2026-11-01')
+    expect(sinceOf('all', '2026-11-18')).toBeUndefined()
+  })
+
+  it('heads each day as people say it', () => {
+    expect(dayHeading('2026-11-16', TODAY)).toBe('Today')
+    expect(dayHeading('2026-11-15', TODAY)).toBe('Yesterday')
+    expect(dayHeading('2026-11-09', TODAY)).toBe('Mon 9 Nov')
+    expect(dayHeading('2025-12-31', TODAY)).toBe('Wed 31 Dec 2025')
   })
 })
 

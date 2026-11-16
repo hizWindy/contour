@@ -334,6 +334,99 @@ export const OPEN_IN_HUBSPOT = 'Open in HubSpot'
 export const NEW_TAB = '(opens in a new tab)'
 export const NOT_DONE = "That didn't go through"
 
+// --- History (PLAN-V18 T3-6) ---------------------------------------------------------------
+
+export const HISTORY_LIST = 'Your calls, newest first'
+export const HISTORY_LOADING = 'Loading your call history.'
+export const HISTORY_FAILED =
+  "Your call history couldn't be loaded. Check your connection, then try again."
+export const SEARCH_CALLS = 'Search your calls'
+export const SEARCH_PLACEHOLDER = 'Company, person, or words in the note'
+export const HOW_IT_WENT = 'How it went'
+export const WHEN_LABEL = 'When'
+export const WHERE_IT_STANDS = 'Where it stands'
+export const SHOW_OLDER = 'Show older'
+export const CLEAR_FILTERS = 'Clear the filters'
+export const NO_MATCH = {
+  title: 'No call matches that.',
+  description: 'Clear the filters to see all your calls.',
+} as const
+export const THE_NOTE = 'The note'
+export const WHAT_HAPPENED_TO_IT = 'In HubSpot'
+export const HISTORY_KEYS = 'J and K move, Enter opens a call, and / goes to the search.'
+
+export const WHEN_WORDS = { week: 'This week', month: 'This month', all: 'All' } as const
+
+export const WHERE_WORDS = {
+  all: 'All',
+  logged: 'In HubSpot',
+  to_confirm: 'To confirm',
+  needs_look: 'Needs a look',
+} as const
+
+/** Where one call stands, in a word. */
+export const STANDING_WORDS = {
+  logged: 'In HubSpot',
+  to_confirm: 'To confirm',
+  sending: 'Sending',
+  needs_look: 'Needs a look',
+} as const
+
+/** How a call was logged, for a screen reader and the pointer. */
+export const SOURCE_WORDS = {
+  mic: 'Logged by speaking',
+  typed: 'Typed',
+  transcript: 'From a meeting transcript',
+} as const
+
+/** "2 follow-ups", "1 field change": the small marks on a row. */
+export function marksWords(tasks: number, changes: number): string[] {
+  const words: string[] = []
+  if (tasks > 0) words.push(pluralise(tasks, 'follow-up'))
+  if (changes > 0) words.push(pluralise(changes, 'field change'))
+  return words
+}
+
+/** "Log another call with Sample Logistics Pty Ltd". */
+export function logAnotherWords(companyName: string): string {
+  return `Log another call with ${companyName}`
+}
+
+/** "30 Jun 2026 to 30 Jun 2028", a change from HubSpot's old value to the new one. */
+export function changeWords(before: string, after: string): string {
+  return `${before} to ${after}`
+}
+
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const
+const MONTHS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+] as const
+
+/**
+ * A day's heading: "Today", "Yesterday", "Mon 14 Nov", or "Mon 14 Nov 2025" in another year. Both
+ * days are YYYY-MM-DD, in Melbourne time.
+ */
+export function dayHeading(day: string, today: string): string {
+  if (day === today) return 'Today'
+  const before = new Date(`${today}T00:00:00Z`)
+  before.setUTCDate(before.getUTCDate() - 1)
+  if (day === before.toISOString().slice(0, 10)) return 'Yesterday'
+  const date = new Date(`${day}T00:00:00Z`)
+  const words = `${WEEKDAYS[date.getUTCDay()] ?? ''} ${String(date.getUTCDate())} ${MONTHS[date.getUTCMonth()] ?? ''}`
+  return day.slice(0, 4) === today.slice(0, 4) ? words : `${words} ${day.slice(0, 4)}`
+}
+
 // --- Logged ---------------------------------------------------------------------------------
 
 /**

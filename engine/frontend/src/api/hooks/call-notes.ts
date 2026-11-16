@@ -8,14 +8,18 @@
  *   at once in the cache (`bumpToConfirm`), so a count on screen rolls before the server answers.
  * - Saving, removing and changing a note each have their own mutation options, so code that runs
  *   after the panel has closed (a toast's Undo or Try again) sends the same requests as the hooks.
- * - Activity (T3-6) reads pages of notes by state, one note while it is sent, and the preview
- *   (HubSpot's values now). A page asks again by itself every 2 seconds while a note on it is
- *   being sorted, and every second while one is being sent. Then it stops.
+ * - Call logs (T3-6; called Activity until PLAN-V18) reads pages of notes by state, one note while
+ *   it is sent, and the preview (HubSpot's values now). A page asks again by itself every 2 seconds
+ *   while a note on it is being sorted, and every second while one is being sent. Then it stops.
+ * - History (PLAN-V18 T3-6) reads every call the rep logged, newest first, 50 at a time, with its
+ *   search and filters.
  */
 import {
+  infiniteQueryOptions,
   keepPreviousData,
   mutationOptions,
   queryOptions,
+  useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
@@ -55,7 +59,7 @@ export const SORTING_POLL_MS = 2000
 export const SENDING_POLL_MS = 1000
 
 /**
- * HubSpot's values in a preview count as "now" for this long, so flicking between Activity's tabs
+ * HubSpot's values in a preview count as "now" for this long, so flicking between Call logs' tabs
  * doesn't read every company in HubSpot again. Sending always asks afresh.
  */
 const PREVIEW_FRESH_MS = 30_000
@@ -99,7 +103,7 @@ export function markCountsOld(client: QueryClient): void {
   })
 }
 
-// --- Pages of notes, and one note (Activity, T3-6) -------------------------------------------
+// --- Pages of notes, and one note (Call logs, T3-6) ------------------------------------------
 
 /**
  * How soon a page asks again: every second while a note on it is being sent, every 2 seconds
@@ -128,7 +132,7 @@ export function callNotesQueryOptions(query: CallNoteQuery) {
 export interface UseCallNotesOptions {
   enabled?: boolean
   /**
-   * False: a note being sent doesn't make the page ask every second. Activity follows each note
+   * False: a note being sent doesn't make the page ask every second. Call logs follows each note
    * of its own batch by itself (`callNoteQueryOptions`), so the page needn't as well.
    */
   pollSending?: boolean
@@ -219,7 +223,74 @@ export function refreshCallNoteLists(client: QueryClient): Promise<void> {
   return client.invalidateQueries({ queryKey: queryKeys.companies.callNoteLists() })
 }
 
-// --- The preview, the batch and its repairs (Activity, T3-6) ---------------------------------
+// --- History (PLAN-V18 T3-6) -------------------------------------------------------------------
+// Hand written until M1 (the contract, part 3): `state` gains `history` (every one of my notes, in
+// any status, newest call first), and the filters `q`, `outcome`, `since` and `until` work for any
+// state. M1 makes the generated types again and replaces these with `CallNoteQuery`.
+
+/** `GET /call-notes`'s `state`, with History. */
+export type CallNoteStateV18 = NonNullable<CallNoteQuery['state']> | 'history'
+
+/** One of the call outcomes, or `none`: a call with no outcome. */
+export type CallNoteOutcomeFilter = NonNullable<CallNoteOut['call']['outcome']> | 'none'
+
+/** What History asks for, without the paging (the hook pages). */
+export interface CallNoteHistoryQuery {
+  state: CallNoteStateV18
+  mine: boolean
+  /** Up to 200 characters. Each word must start a word of the company, person, note or summary. */
+  q?: string
+  outcome?: CallNoteOutcomeFilter
+  /** Dates, as YYYY-MM-DD, in Melbourne time. */
+  since?: string
+  until?: string
+}
+
+/** "Show older" brings this many more. */
+export const HISTORY_PAGE_SIZE = 50
+
+/** GET /call-notes, History's way: a page of 50 at a time, newest call first. */
+export function callNoteHistoryQueryOptions(query: CallNoteHistoryQuery) {
+  return infiniteQueryOptions({
+    // Under `callNotes()`, so an edit asks again; not under `callNoteLists()`, whose helpers change
+    // single pages, not these pages of pages.
+    queryKey: [...queryKeys.companies.callNotes(), 'history', query] as const,
+    queryFn: async ({ pageParam, signal }): Promise<CallNotePage> =>
+      unwrap(
+        await api.GET('/companies/call-notes', {
+          params: {
+            query: {
+              ...query,
+              limit: HISTORY_PAGE_SIZE,
+              offset: pageParam,
+            } as unknown as CallNoteQuery,
+          },
+          signal,
+        }),
+      ),
+    initialPageParam: 0,
+    getNextPageParam: (last, pages) => {
+      const loaded = pages.reduce((count, page) => count + page.items.length, 0)
+      return loaded < last.total && last.items.length > 0 ? loaded : undefined
+    },
+  })
+}
+
+/**
+ * History, with its filters. A change of filter keeps the old list on screen (dimmed) until the
+ * new one comes, and a call being sorted or sent asks again by itself until it settles.
+ */
+export function useCallNoteHistory(query: CallNoteHistoryQuery, enabled = true) {
+  return useInfiniteQuery({
+    ...callNoteHistoryQueryOptions(query),
+    enabled,
+    placeholderData: keepPreviousData,
+    refetchInterval: (current) =>
+      callNotesPollMs(current.state.data?.pages.flatMap((page) => page.items)),
+  })
+}
+
+// --- The preview, the batch and its repairs (Call logs, T3-6) --------------------------------
 
 async function previewOf(ids: readonly string[], signal?: AbortSignal): Promise<CallNotePreview> {
   return unwrap(

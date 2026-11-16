@@ -1,12 +1,12 @@
 /**
  * Call logs (PLAN-V17 T3-6, "The screens" part 3; called Activity until PLAN-V18 T3-2), at
  * /companies/call-logs: the calls the rep logged, in three tabs with a sliding underline
- * (`TabIndicator`). The old address, /companies/activity, sends you on (`old-address.tsx`).
+ * (`TabIndicator`). The old address, /companies/activity, sends you on (`old-route.tsx`).
  *
  * - **To confirm:** one card per call, to check and fix, then one Navy button sends them all to
  *   HubSpot (`to-confirm.tsx`).
- * - **History:** every call you logged, newest first. Until T3-6 builds it, it is Activity's
- *   Logged list: what is in HubSpot, each with "Open in HubSpot" (`logged.tsx`).
+ * - **History:** every call you logged, newest first, by day, with a search and filters; a call
+ *   opens in place (`history.tsx`, PLAN-V18 T3-6). It took the place of Activity's Logged.
  * - **Needs a look:** a save that failed, or one HubSpot may or may not have, with what to do
  *   (`needs-look.tsx`).
  *
@@ -29,7 +29,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { melbourneDate } from '@/lib/format'
 import { PHONE, useMediaQuery } from '@/lib/use-media-query'
 import { LogCallPicker, LogCallSheet, type LogTarget } from './log-call'
-import { Logged } from './logged'
+import { History } from './history'
 import { NeedsLook } from './needs-look'
 import { CALL_LOGS_TABS, readLog, readTab, withoutLog, writeTab, type CallLogsTab } from './params'
 import { CallNotesOff, CardsPending } from './states'
@@ -154,7 +154,7 @@ export default function CallLogsPage() {
             <ToConfirm options={notes} today={today} onPhone={onPhone} batch={batch} />
           </TabsContent>
           <TabsContent value="history">
-            <Logged today={today} />
+            <History options={notes} today={today} onLogCall={setLogging} />
           </TabsContent>
           <TabsContent value="needs_look">
             <NeedsLook ready={notes.sending_ready} today={today} />

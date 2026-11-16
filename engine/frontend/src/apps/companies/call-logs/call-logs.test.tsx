@@ -199,10 +199,12 @@ interface Server {
 const OFF_THE_LIST =
   "A change on this note isn't one a call may change. Remove it, then send the note again."
 
-const IN_STATE: Record<CallNoteState, readonly CallNoteStatus[]> = {
+const IN_STATE: Record<CallNoteState | 'history', readonly CallNoteStatus[]> = {
   to_confirm: ['sorting', 'to_confirm', 'sending'],
   logged: ['logged'],
   needs_look: ['partial', 'failed', 'uncertain'],
+  // History (PLAN-V18 T3-6): every note, in any status.
+  history: ['sorting', 'to_confirm', 'sending', 'logged', 'partial', 'failed', 'uncertain'],
 }
 
 function json(value: unknown, status = 200): Response {
@@ -287,7 +289,7 @@ function mockServer(changes: Partial<Omit<Server, 'sent' | 'release'>> = {}): Se
       if (server.listsOff) {
         return problem(409, 'Call notes are off', 'An admin can switch them on.', 'call_notes_off')
       }
-      const state = (url.searchParams.get('state') ?? 'to_confirm') as CallNoteState
+      const state = (url.searchParams.get('state') ?? 'to_confirm') as keyof typeof IN_STATE
       const limit = Number(url.searchParams.get('limit') ?? '50')
       const offset = Number(url.searchParams.get('offset') ?? '0')
       const matching = server.notes.filter((item) => IN_STATE[state].includes(item.status))
@@ -1038,35 +1040,6 @@ describe('Needs a look', () => {
   })
 })
 
-describe('History, until T3-6: the Logged list', () => {
-  it('lists the calls in HubSpot, each with Open in HubSpot, paged', async () => {
-    const logged = Array.from({ length: 30 }, (_, index) =>
-      note(`l${String(index)}`, {
-        status: 'logged',
-        hubspot_url: HUBSPOT_URL,
-        confirmed_at: '2026-11-15T04:00:00Z',
-      }),
-    )
-    const server = mockServer({ notes: logged })
-    const { user } = renderCallLogs('/companies/call-logs?tab=history')
-    const list = await screen.findByRole('list', { name: 'Logged calls' })
-    expect(within(list).getAllByRole('listitem')).toHaveLength(25)
-    const [row] = within(list).getAllByRole('listitem')
-    const link = within(row).getByRole('link', { name: /^Open in HubSpot/ })
-    expect(link).toHaveAttribute('href', HUBSPOT_URL)
-    expect(link).toHaveAttribute('target', '_blank')
-    expect(link).toHaveAccessibleName(
-      'Open in HubSpot: the call with Sample Logistics Pty Ltd (opens in a new tab)',
-    )
-    expect(screen.getByText('Showing 1 to 25 of 30')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Next' }))
-    await waitFor(() => {
-      expect(sent(server, 'GET', NOTES).at(-1)?.search.get('offset')).toBe('25')
-    })
-    expect(await screen.findByText('Showing 26 to 30 of 30')).toBeInTheDocument()
-  })
-})
-
 describe('every state', () => {
   it.each([
     ['', 'Nothing to confirm.', 'Log a call and it waits here.'],
@@ -1378,8 +1351,11 @@ describe("a logged meeting's notes (T3-11)", () => {
       ],
     })
     const { user } = renderCallLogs('/companies/call-logs?tab=history')
-    const list = await screen.findByRole('list', { name: 'Logged calls' })
-    expect(within(list).getByText('Meeting notes · 13 Nov 2026, 10:00 am')).toBeInTheDocument()
+    const list = await screen.findByRole('group', { name: 'Your calls, newest first' })
+    const row = within(list).getByRole('button', { name: /Sample Logistics Pty Ltd/ })
+    // Meeting notes say so where a call says how it went.
+    expect(row).toHaveTextContent('Meeting notes')
+    await user.click(row)
     expect(within(list).getByRole('link', { name: /^Open in HubSpot/ })).toHaveAccessibleName(
       'Open in HubSpot: the meeting notes for Sample Logistics Pty Ltd (opens in a new tab)',
     )
