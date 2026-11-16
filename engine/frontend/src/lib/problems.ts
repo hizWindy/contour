@@ -22,26 +22,11 @@ const HINTS: Record<string, string> = {
     'Pick fewer cities, triggers or areas, so the plan fits inside the limit for one run.',
   idempotency_key_reused:
     'This click was already used for a different run. Reload the page and try again.',
-  // Call notes, Call logs and call prep (PLAN-V18 T3-8): the next step for each code. M1 checks
-  // them against Track 1's words (T1-8) and drops any that only repeat the server's own.
-  call_notes_off:
-    'Ask an admin to switch call notes on. Until then, log your calls in HubSpot as before.',
+  // Call notes (PLAN-V18 T3-8): only what the server's words don't say. Its details end with the
+  // next step (T1-8), so the other call notes and call prep codes get no hint here.
+  call_notes_off: 'Until then, log your calls in HubSpot as before.',
   hubspot_writes_off:
     'Your calls wait here until HubSpot can be written to. You can still check and change them.',
-  already_sending: 'Wait for that batch to finish, then send the rest.',
-  note_too_long: 'Make the note shorter, or split it into two calls.',
-  note_empty: 'Type a note or pick an outcome first.',
-  note_sorting: 'It is still being sorted. Try again in a moment.',
-  note_sent: 'It is in HubSpot already. Open it there to change it.',
-  part_sent: 'Part of it is in HubSpot already. Open it there to change that part.',
-  note_not_found: 'It may have been removed. Reload the page to see your calls.',
-  not_your_note: 'Each rep sees and changes their own calls only.',
-  nothing_to_retry: 'Everything on this call is in HubSpot already. Reload the page to see it.',
-  change_twice: 'Keep one change for each field, then save.',
-  called_later: "Pick a time that has passed: a call can't be logged ahead.",
-  task_in_past: 'Pick today or a later day for the follow-up.',
-  person_not_at_company: 'Pick someone at this company, or log the call on the company.',
-  prep_off: 'Ask an admin to switch call prep on. The facts from HubSpot still show.',
 }
 
 /** One plain next step for the problem's `code`, or `null`. */

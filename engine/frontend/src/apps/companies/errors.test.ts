@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { ApiProblem } from '@/api/client'
 import { problemHint } from '@/lib/problems'
 import { HISTORY_FAILED, STATUS_WORDS } from './call-logs/words'
 import {
@@ -120,9 +121,26 @@ describe('the Call logs and call prep table', () => {
     )
   })
 
+  // The server's detail, word for word (`note_store.py`), then the hint, as a toast or the error
+  // box says them: the hint adds only what the detail doesn't say.
   it.each([
-    'call_notes_off',
-    'hubspot_writes_off',
+    [
+      'call_notes_off',
+      'Call notes are switched off. An admin can switch them on in Settings.',
+      'Call notes are switched off. An admin can switch them on in Settings. Until then, log your calls in HubSpot as before.',
+    ],
+    [
+      'hubspot_writes_off',
+      'Waiting for HubSpot write access.',
+      'Waiting for HubSpot write access. Your calls wait here until HubSpot can be written to. You can still check and change them.',
+    ],
+  ])("adds to %s's words the one thing they don't say", (code, detail, words) => {
+    const problem = new ApiProblem({ title: 'A problem', status: 409, detail, code })
+    expect([problem.detail, problemHint(problem)].join(' ')).toBe(words)
+  })
+
+  // Track 1's details end with the next step (PLAN-V18 T1-8): a hint would say it twice.
+  it.each([
     'already_sending',
     'note_too_long',
     'note_empty',
@@ -137,15 +155,7 @@ describe('the Call logs and call prep table', () => {
     'task_in_past',
     'person_not_at_company',
     'prep_off',
-  ])('gives %s a next step in plain words', (code) => {
-    const hint = problemHint({
-      title: 'A problem',
-      status: 409,
-      detail: null,
-      code,
-      requestId: null,
-      fieldErrors: [],
-    } as unknown as Parameters<typeof problemHint>[0])
-    expect(hint).toMatch(/^[A-Z][^—–]*[.]$/)
+  ])("adds no hint to %s: the server's words end with what to do", (code) => {
+    expect(problemHint(new ApiProblem({ title: 'A problem', status: 409, code }))).toBeNull()
   })
 })
