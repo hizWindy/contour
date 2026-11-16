@@ -6,7 +6,7 @@ This plan makes the Companies module clearer and nicer to use, from Al-khair's l
 
 - **Built by:** Al-khair Pama. **Signed off by:** Al-khair for the code and every screen. Levi confirms the rules marked **TBC with Levi**.
 - **Last updated:** 16 Nov 2026 (S0 done: `plan-v18` made from `master`; the tracks are starting).
-- **Progress:** S0: 1 of 1. Track 1: 0 of 9. Track 2: 0 of 8. Track 3: 2 of 9. Merge and deploy: 0 of 3.
+- **Progress:** S0: 1 of 1. Track 1: 0 of 9. Track 2: 0 of 8. Track 3: 3 of 9. Merge and deploy: 0 of 3.
 - **Sources:**
   - Al-khair's list of changes (16 Nov, in chat), and the chat about Meetings the same day: the empty Meetings page, the team switch, and the Sync idea;
   - the code on `master` (`c4ebe58`), read on 16 Nov;
@@ -520,7 +520,7 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
 
 ## Track 3: Call logs, the mic, the history and call prep (session 3)
 
-**Progress:** 2 of 9. Every step is `frontend-agent` work. It follows `engine/DESIGN.md` and "How it should look and move", uses the `ui-build` skill, and builds against the contract with `mockApi`.
+**Progress:** 3 of 9. Every step is `frontend-agent` work. It follows `engine/DESIGN.md` and "How it should look and move", uses the `ui-build` skill, and builds against the contract with `mockApi`.
 
 - [x] **T3-1. Own copy and a baseline.** Make the worktree. Run lint, types, the tests and the build once. Note the counts and the first visit size from `node scripts/bundle-report.js`. Done 2026-11-16 on `40d9912` (numbers in the Log).
 
@@ -585,7 +585,7 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
   - **It shows at once:** the facts are fetched when the pointer rests on Prep for 150ms, or when Prep gets keyboard focus.
   - **Done when:** tests cover no first screen, each default person case, a change of person, the prefetch, and a failed facts read. Al-khair has seen it.
 
-- [ ] **T3-8. Errors on Call logs, the mic and call prep.**
+- [x] **T3-8. Errors on Call logs, the mic and call prep.** Done 2026-11-16: `86ca7f2` (and the mic's rows in `3e75301`).
   - Every row of the mic table, and of the Call logs and call prep table, in "Words for when things go wrong", with its buttons.
   - `problemHint` gains hints for the call notes codes.
   - **Done when:** a test shows every row, and `screen-words.test.ts` passes.
@@ -623,6 +623,7 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
   - **The quick look** shows the owner, the deal and its stage, staff, the next lease end and the next meeting. The deal's stage and the next meeting come from the company's record (`GET /companies/{key}`, already fetched by the panel), the rest from the free facts. The last talk keeps its own section under "Calling", and **the number stays in the footer**, so each shows once (DESIGN.md "Say it once"). "More about" is gone: Company info sits beside the quick look.
   - **For Track 2 or M1:** the phone cards' Prep button is in `company-cards.tsx` (Track 2's file), so it doesn't fetch the facts ahead. A phone has no hover; adding the same `onFocus` prefetch there would cover a keyboard. The laptop table's Prep (`company-cell.tsx`) does both.
   - `companies.test.tsx` is in no track's list. Track 3 changed only its call prep tests (the picker became the quick look).
+- 16 Nov 2026, T3-8 done (`86ca7f2`). `errors.test.ts` holds every row of both tables word for word, with its buttons; each row is also shown on its own screen by that screen's tests. Call prep off now reads "Call scripts are switched off. The facts from HubSpot still show. An admin can switch them on." `problemHint` gains 16 call notes and call prep codes as one block at the end of `HINTS` in `src/lib/problems.ts` (Track 2's block is at the top, as the lead asked). **For M1:** check those hints against Track 1's T1-8 words and drop any that only repeat the server's detail. `screen-words.test.ts` passes.
 
 ## Merge and deploy
 
