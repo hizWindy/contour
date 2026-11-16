@@ -445,16 +445,24 @@ describe('the prep box and the call prep', () => {
     expect(within(modal).getAllByText('W1').length).toBeGreaterThan(0)
   })
 
-  it('a company asks "Who are you calling?", and a cold call goes to the switchboard', async () => {
+  it('a company opens straight on the quick look, calling the last person we talked to (PLAN-V18 T3-7)', async () => {
     const backend = mockApi({ prep: prep({ person: null, kind: 'cold' }) })
     const { user } = renderCompanies()
     await screen.findByText('ABC Logistics')
     await user.click(screen.getByRole('combobox', { name: /Who are you calling/ }))
     await user.type(screen.getByRole('combobox', { name: /Who are you calling/ }), 'abc')
     await user.click(await screen.findByRole('option', { name: /^ABC Logistics/ }))
-    const modal = await screen.findByRole('dialog', { name: 'Who are you calling?' })
-    expect(await within(modal).findByText('People at ABC Logistics')).toBeInTheDocument()
-    await user.click(within(modal).getByRole('button', { name: 'Prep a cold call' }))
+    // No "Who are you calling?" screen: the facts, and the last person we talked to.
+    const modal = await screen.findByRole('dialog', { name: 'Jason Reeds' })
+    expect(within(modal).queryByText('People at ABC Logistics')).toBeNull()
+    const look = within(modal).getByRole('region', { name: 'Quick look' })
+    expect(look).toHaveTextContent('Levi')
+    expect(look).toHaveTextContent('300 staff')
+    const calling = within(modal).getByRole('button', { name: /^Calling/ })
+    expect(calling).toHaveTextContent('Jason Reeds, Head of Operations')
+    // Calling changes it: the people, then the cold call to the switchboard.
+    await user.click(calling)
+    await user.click(await screen.findByRole('menuitemradio', { name: 'Cold call (switchboard)' }))
     const card = await screen.findByRole('dialog', { name: 'ABC Logistics' })
     expect(within(card).getByText(/Cold call, no name yet/)).toBeInTheDocument()
     await waitFor(() => {
@@ -575,19 +583,20 @@ describe('the prep box and the call prep', () => {
     ).toHaveLength(1)
   })
 
-  it('folds the quick facts under "More about", and "Company info" there opens the company', async () => {
+  it('shows the quick facts at once, and "Company info" there opens the company', async () => {
     mockApi({ prepStatus: 409 })
     const { user } = renderCompanies()
     await screen.findByText('ABC Logistics')
     await user.type(screen.getByRole('combobox', { name: /Who are you calling/ }), 'jas')
     await user.click(await screen.findByRole('option', { name: /Jason Reeds/ }))
     const card = await screen.findByRole('dialog', { name: /Jason Reeds/ })
-    // Folded away at first, so the script fits with little scrolling.
-    const more = await within(card).findByRole('button', { name: 'More about ABC Logistics' })
-    expect(more).toHaveAttribute('aria-expanded', 'false')
-    expect(within(card).queryByRole('button', { name: 'Company info' })).toBeNull()
-    await user.click(more)
-    expect(within(card).getByText('Lease', { selector: 'dt' })).toBeInTheDocument()
+    // In view at once, no folding: the owner, the deal, staff, the lease and the next meeting.
+    const look = within(card).getByRole('region', { name: 'Quick look' })
+    expect(
+      within(look)
+        .getAllByRole('term')
+        .map((term) => term.textContent),
+    ).toEqual(['Owner', 'Deal', 'Staff', 'Next lease end', 'Next meeting'])
     await user.click(within(card).getByRole('button', { name: 'Company info' }))
     await waitFor(() => {
       expect(new URLSearchParams(screen.getByLabelText('Address').textContent).get('company')).toBe(
@@ -627,8 +636,9 @@ describe('Prep on the list, and the company in the middle', () => {
     await user.click(
       await within(table).findByRole('button', { name: 'Prep a call to ABC Logistics' }),
     )
-    const panel = await screen.findByRole('dialog', { name: 'Who are you calling?' })
-    expect(await within(panel).findByText('People at ABC Logistics')).toBeInTheDocument()
+    // It opens on the quick look, calling the last person we talked to (PLAN-V18 T3-7).
+    const panel = await screen.findByRole('dialog', { name: 'Jason Reeds' })
+    expect(within(panel).getByRole('region', { name: 'Quick look' })).toBeInTheDocument()
     // Prep never opens the company itself.
     expect(new URLSearchParams(screen.getByLabelText('Address').textContent).get('company')).toBe(
       null,
@@ -647,8 +657,8 @@ describe('Prep on the list, and the company in the middle', () => {
     await screen.findByRole('button', { name: 'Prep a call to ABC Logistics' })
     await user.keyboard('j')
     fireEvent.keyDown(document.body, { key: 'p' })
-    const panel = await screen.findByRole('dialog', { name: 'Who are you calling?' })
-    expect(await within(panel).findByText('People at ABC Logistics')).toBeInTheDocument()
+    const panel = await screen.findByRole('dialog', { name: 'Jason Reeds' })
+    expect(within(panel).getByRole('region', { name: 'Quick look' })).toBeInTheDocument()
   })
 
   it('"Prep a call" in the company dialog closes it and opens the prep panel', async () => {
@@ -661,7 +671,7 @@ describe('Prep on the list, and the company in the middle', () => {
       expect(prep).toBeEnabled()
     })
     await user.click(prep)
-    expect(await screen.findByRole('dialog', { name: 'Who are you calling?' })).toBeInTheDocument()
+    expect(await screen.findByRole('dialog', { name: 'Jason Reeds' })).toBeInTheDocument()
     await waitFor(() => {
       expect(screen.queryByRole('dialog', { name: 'ABC Logistics' })).toBeNull()
     })

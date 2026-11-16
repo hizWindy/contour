@@ -360,16 +360,13 @@ async function logFirstRow(view: ReturnType<typeof renderCompanies>): Promise<HT
   return noteViewIn(panel)
 }
 
-/** Prep for Jo Sample from the row, then the panel's own Log call. */
+/** Prep on the row (it calls Jo Sample), then the panel's own Log call. */
 async function logFromScript(view: ReturnType<typeof renderCompanies>): Promise<HTMLElement> {
   await ready(view)
   await view.user.click(
     screen.getByRole('button', { name: 'Prep a call to Sample Logistics Pty Ltd' }),
   )
-  const picker = await screen.findByRole('dialog', { name: 'Who are you calling?' })
-  await view.user.click(
-    await within(picker).findByRole('button', { name: 'Prep a call with Jo Sample' }),
-  )
+  // It opens on the quick look, calling Jo Sample, the first person on record (PLAN-V18 T3-7).
   const script = await screen.findByRole('dialog', { name: 'Jo Sample' })
   await view.user.click(await within(script).findByRole('button', { name: 'Log call' }))
   const panel = await screen.findByRole('dialog', { name: 'Log call' })
@@ -402,12 +399,12 @@ describe('L and the Log call button', () => {
     const who = await within(panel).findByRole('radiogroup', { name: 'Who was the call with?' })
     expect(within(who).getByRole('radio', { name: 'No one in particular' })).toBeChecked()
     expect(within(who).getByRole('radio', { name: 'Jo Sample' })).not.toBeChecked()
-    // Esc goes back to the script; it doesn't close the panel.
+    // Esc goes back to the script; it doesn't close the panel. The script calls Jo Sample, the
+    // first person on record (PLAN-V18 T3-7), so the focus lands on Log call.
     await view.user.keyboard('{Escape}')
-    const script = await screen.findByRole('dialog', { name: 'Who are you calling?' })
-    // No footer while no one is picked, so focus lands on the panel.
+    const script = await screen.findByRole('dialog', { name: 'Jo Sample' })
     await waitFor(() => {
-      expect(script).toHaveFocus()
+      expect(within(script).getByRole('button', { name: 'Log call' })).toHaveFocus()
     })
     await view.user.keyboard('l')
     expect(await screen.findByRole('dialog', { name: 'Log call' })).toBeInTheDocument()
@@ -445,10 +442,7 @@ describe('L and the Log call button', () => {
     await view.user.click(
       screen.getByRole('button', { name: 'Prep a call to Sample Logistics Pty Ltd' }),
     )
-    const picker = await screen.findByRole('dialog', { name: 'Who are you calling?' })
-    await view.user.click(
-      await within(picker).findByRole('button', { name: 'Prep a call with Jo Sample' }),
-    )
+    // It opens on the quick look, calling Jo Sample, the first person on record (PLAN-V18 T3-7).
     const script = await screen.findByRole('dialog', { name: 'Jo Sample' })
     const asked = await within(script).findByRole('checkbox', {
       name: 'Asked: When does the Perth lease end?',
@@ -488,10 +482,7 @@ describe('L and the Log call button', () => {
     await view.user.click(
       screen.getByRole('button', { name: 'Prep a call to Sample Logistics Pty Ltd' }),
     )
-    const picker = await screen.findByRole('dialog', { name: 'Who are you calling?' })
-    await view.user.click(
-      await within(picker).findByRole('button', { name: 'Prep a call with Jo Sample' }),
-    )
+    // It opens on the quick look, calling Jo Sample, the first person on record (PLAN-V18 T3-7).
     const script = await screen.findByRole('dialog', { name: 'Jo Sample' })
     expect(await within(script).findByRole('button', { name: 'Copy script' })).toBeInTheDocument()
     expect(within(script).queryByRole('button', { name: 'Log call' })).toBeNull()
