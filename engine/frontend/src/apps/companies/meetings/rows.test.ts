@@ -175,13 +175,14 @@ describe('when a meeting is, in words', () => {
     expect(dayText('2027-01-05', WEDNESDAY)).toBe('Tue 5 Jan 2027')
   })
 
-  it("says the server's sentence while the list can't show it all, then what still works", () => {
-    expect(waitingLine('Waiting for HubSpot access to meetings')).toBe(
-      'Waiting for HubSpot access to meetings. You can still start a new pre-read.',
-    )
-    expect(waitingLine("HubSpot isn't connected, so meetings can't be read from it.")).toBe(
-      "HubSpot isn't connected, so meetings can't be read from it. You can still start a new pre-read.",
-    )
+  it("says the server's sentence as it comes, which says what still works, so it is said once", () => {
+    // Track 1's sentences (`meeting_store.py`), word for word.
+    const waiting =
+      'Waiting for HubSpot access to meetings. An admin adds it in HubSpot. You can still start a new pre-read.'
+    const notConnected =
+      "HubSpot isn't connected, so meetings can't be read from it. You can still start a new pre-read."
+    expect(waitingLine(waiting)).toBe(waiting)
+    expect(waitingLine(notConnected)).toBe(notConnected)
     // No sentence from the server: one that is true for waiting and not connected alike.
     expect(waitingLine(null)).toBe(
       "Meetings can't be read from HubSpot yet. You can still start a new pre-read.",

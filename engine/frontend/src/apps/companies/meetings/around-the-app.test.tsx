@@ -258,19 +258,17 @@ describe("Home's Upcoming meetings", () => {
 
   it("says in the server's words, in Meetings' own quiet line, when meetings can't be read yet", async () => {
     asLaptop()
-    stubBackend({
-      summary: { need_pre_read: 0, draft_ready: 0 },
-      items: [],
-      sentence: 'Waiting for HubSpot access to meetings.',
-    })
+    // Track 1's sentence for a missing permission (`meeting_store.py`), word for word.
+    const waiting =
+      'Waiting for HubSpot access to meetings. An admin adds it in HubSpot. You can still start a new pre-read.'
+    stubBackend({ summary: { need_pre_read: 0, draft_ready: 0 }, items: [], sentence: waiting })
     renderAt('/')
     await home()
     const card = within(
       await screen.findByRole('region', { name: 'Upcoming meetings' }, { timeout: LAZY }),
     )
-    expect(card.getByRole('status')).toHaveTextContent(
-      'Waiting for HubSpot access to meetings. You can still start a new pre-read.',
-    )
+    // As it comes: what still works is said once.
+    expect(card.getByRole('status').textContent).toBe(waiting)
     expect(card.getByText('No meetings in the next few days.')).toBeInTheDocument()
   })
 

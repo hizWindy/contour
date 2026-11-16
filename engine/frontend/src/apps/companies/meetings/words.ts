@@ -208,14 +208,16 @@ export function noMatchWords(q: string, when: MeetingWhen): Empty {
   }
 }
 
+/** The quiet line when the server sends no sentence: true for waiting and not connected alike. */
+const NOT_READ_YET = "Meetings can't be read from HubSpot yet. You can still start a new pre-read."
+
 /**
- * The quiet line while the list can't show what was asked: the server's own sentence, like
- * "HubSpot isn't connected, so meetings can't be read from it.", or that the rep's own can't be
- * picked out yet, then what still works.
+ * The quiet line while the list can't show what was asked: the server's own sentence as it comes,
+ * which says what still works already ("HubSpot isn't connected, so meetings can't be read from it.
+ * You can still start a new pre-read."), or the page's own words when it sends none.
  */
 export function waitingLine(sentence: string | null): string {
-  const reason = sentence?.trim() || "Meetings can't be read from HubSpot yet."
-  return `${/[.!?]$/.test(reason) ? reason : `${reason}.`} You can still start a new pre-read.`
+  return sentence?.trim() || NOT_READ_YET
 }
 
 /** Under a list cut at its limit: "Showing the first 100 of 120." */

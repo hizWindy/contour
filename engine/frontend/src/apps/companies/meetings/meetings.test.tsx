@@ -46,6 +46,15 @@ const MIA = 'o-2'
 /** When a read of HubSpot's meetings ends, by default: 9:00 am. */
 const CHECKED_AT = '2026-11-17T22:00:00Z'
 
+/**
+ * Track 1's sentences while HubSpot's meetings can't be read (`meeting_store.py`), word for word:
+ * no HubSpot key, and a missing permission. Each says what still works itself.
+ */
+const NOT_CONNECTED =
+  "HubSpot isn't connected, so meetings can't be read from it. You can still start a new pre-read."
+const WAITING_FOR_ACCESS =
+  'Waiting for HubSpot access to meetings. An admin adds it in HubSpot. You can still start a new pre-read.'
+
 type ItemChanges = Partial<Omit<MeetingItem, 'meeting'>> & { meeting?: Partial<Meeting> }
 
 /** A meeting as HubSpot has it: 10:00 am today in Melbourne, on Teams, the rep's own. */
@@ -942,16 +951,9 @@ describe('Sync', () => {
   })
 
   it("is greyed while HubSpot isn't connected, which the waiting line says", async () => {
-    mockServer({
-      meetingsState: 'off',
-      sentence: "HubSpot isn't connected, so meetings can't be read from it.",
-    })
+    mockServer({ meetingsState: 'off', sentence: NOT_CONNECTED })
     renderMeetings()
-    expect(
-      await screen.findByText(
-        "HubSpot isn't connected, so meetings can't be read from it. You can still start a new pre-read.",
-      ),
-    ).toBeInTheDocument()
+    expect(await screen.findByText(NOT_CONNECTED)).toBeInTheDocument()
     await waitFor(() => {
       expect(syncButton('Sync')).toBeDisabled()
     })
@@ -972,16 +974,9 @@ describe('the states', () => {
   })
 
   it("waiting: one quiet line in the server's words, and New pre-read still works", async () => {
-    mockServer({
-      meetingsState: 'waiting',
-      sentence: 'Waiting for HubSpot access to meetings.',
-      upcoming: [],
-      past: [],
-    })
+    mockServer({ meetingsState: 'waiting', sentence: WAITING_FOR_ACCESS, upcoming: [], past: [] })
     const { user } = renderMeetings()
-    const line = await screen.findByText(
-      'Waiting for HubSpot access to meetings. You can still start a new pre-read.',
-    )
+    const line = await screen.findByText(WAITING_FOR_ACCESS)
     expect(line).toHaveAttribute('role', 'status')
     expect(line).toHaveClass('text-muted-foreground')
     // Not "No meetings this week.": the list can't know that yet.
@@ -994,21 +989,16 @@ describe('the states', () => {
   })
 
   it('HubSpot not connected (off, forms on): the same quiet line, and the typed rows it has', async () => {
-    // Track 1's sentence when no key is set and nothing was read yet.
-    const notConnected = "HubSpot isn't connected, so meetings can't be read from it."
     // A meeting typed in with New pre-read is still on the list, with a Lead Finder lead's key.
     const typed = meeting('', {
       meeting: { company_id: 'lead:7', owner_id: null, title: 'Office walk-through' },
       typed: true,
       form: { id: 'f-typed', status: 'draft' },
     })
-    mockServer({
-      meetingsState: 'off',
-      sentence: notConnected,
-      upcoming: [typed],
-    })
+    // Track 1's sentence when no key is set and nothing was read yet.
+    mockServer({ meetingsState: 'off', sentence: NOT_CONNECTED, upcoming: [typed] })
     const { user } = renderMeetings()
-    const line = await screen.findByText(`${notConnected} You can still start a new pre-read.`)
+    const line = await screen.findByText(NOT_CONNECTED)
     expect(line).toHaveAttribute('role', 'status')
     // Not the switch-off page: the controls and the rows are there.
     expect(screen.queryByText('Pre-meeting forms are switched off.')).toBeNull()
@@ -1078,18 +1068,19 @@ describe('words for when things go wrong (PLAN-V18 T2-7)', () => {
     expect(screen.getByRole('button', { name: 'New pre-read' })).toBeEnabled()
   })
 
-  it("no permission to read meetings: the server's words, then what still works", async () => {
+  it("no permission to read meetings: the server's words once, with what still works", async () => {
+    // Nothing read yet: the server says it as the list's sentence and as the read's problem.
     mockServer({
       meetingsState: 'waiting',
-      sentence: 'Waiting for HubSpot access to meetings. An admin adds it in HubSpot.',
+      sentence: WAITING_FOR_ACCESS,
+      syncProblem: WAITING_FOR_ACCESS,
       upcoming: [],
     })
     renderMeetings()
-    expect(
-      await screen.findByText(
-        'Waiting for HubSpot access to meetings. An admin adds it in HubSpot. You can still start a new pre-read.',
-      ),
-    ).toBeInTheDocument()
+    expect(await screen.findByText(WAITING_FOR_ACCESS)).toHaveAttribute('data-slot', 'waiting-line')
+    // Said once: the line under the toolbar doesn't say it again.
+    expect(screen.getAllByText(/You can still start a new pre-read\./)).toHaveLength(1)
+    expect(document.querySelector('[data-slot=sync-line]')).toHaveTextContent('')
     expect(screen.getByRole('button', { name: 'New pre-read' })).toBeEnabled()
   })
 

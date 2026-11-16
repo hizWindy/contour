@@ -91,7 +91,11 @@ export function useMeetingsSync(page: MeetingPage | undefined, today: string): M
 
   const checking = sync.isPending || reading
   const look: SyncLook = checking ? 'checking' : done ? 'done' : 'idle'
-  const problem = page?.sync_problem?.trim() || null
+  // Before anything was read, a missing permission is the list's sentence too, which the page
+  // shows already: the line doesn't say it again.
+  const said = page?.sentence?.trim() || null
+  const told = page?.sync_problem?.trim() || null
+  const problem = told !== said ? told : null
 
   let line: SyncLineWords | null = null
   if (note?.kind === 'failed') line = { words: note.words, problem: true }
