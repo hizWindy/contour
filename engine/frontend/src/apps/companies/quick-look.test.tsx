@@ -1,5 +1,6 @@
 import { act, fireEvent, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import { useCompany, usePrepFacts } from '@/api/hooks'
 import type { CompanyDetail, CompanyPerson, CompanyRow, PrepFacts } from '@/api/types'
 import { renderWithProviders } from '@/test/render'
 import { calleeFrom, defaultCallee } from './callee'
@@ -128,6 +129,47 @@ describe('the quick look', () => {
     expect(
       screen.getByText("The facts couldn't be read from our HubSpot copy. Try again in a moment."),
     ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeEnabled()
+  })
+
+  it('asks for the facts again with Try again, and shows them when they come', async () => {
+    let failing = true
+    const asked: string[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((request: Request) => {
+        const path = new URL(request.url).pathname
+        asked.push(path)
+        // The facts read works once the server is back; the company's record keeps failing.
+        if (failing || !path.endsWith('/facts')) {
+          return Promise.resolve(
+            Response.json({ title: 'Something went wrong', status: 500 }, { status: 500 }),
+          )
+        }
+        return Promise.resolve(Response.json(facts()))
+      }),
+    )
+    /** The two reads call prep's panel shows in the quick look. */
+    function Panel() {
+      const quick = usePrepFacts('101', null)
+      const company = useCompany('101')
+      return (
+        <QuickLook
+          facts={quick.data}
+          company={company.data}
+          failed={Boolean(quick.error && company.error)}
+          today="2026-11-16"
+        />
+      )
+    }
+    const { user } = renderWithProviders(<Panel />)
+    const tryAgain = await screen.findByRole('button', { name: 'Try again' })
+    expect(asked.filter((path) => path.endsWith('/facts'))).toHaveLength(1)
+    failing = false
+    await user.click(tryAgain)
+    expect(await screen.findByText('300 staff')).toBeInTheDocument()
+    expect(asked.filter((path) => path.endsWith('/facts'))).toHaveLength(2)
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
   })
 })
 

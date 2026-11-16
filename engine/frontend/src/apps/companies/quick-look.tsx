@@ -11,9 +11,13 @@
  * - **"Calling":** who the call is with. It opens on the last person we talked to, else the first
  *   person on record, else a cold call to the switchboard (`callee.ts`). Press it to change: the
  *   people, then the cold call. The script follows the person, as picking did before.
+ * - **When every read failed:** one quiet line, and Try again, which asks for them again, as the
+ *   error box's Try again does (`runFailedReadsAgain`).
  */
+import { useQueryClient } from '@tanstack/react-query'
 import { Building2, ChevronDown, PhoneOutgoing } from 'lucide-react'
 import { useId, type ReactNode } from 'react'
+import { runFailedReadsAgain } from '@/api/connection'
 import type { CompanyDetail, CompanyPerson, PrepFacts } from '@/api/types'
 import { Pending } from '@/components/skeletons'
 import { Button } from '@/components/ui/button'
@@ -41,6 +45,7 @@ import {
   NO_STAFF,
   QUICK_LOOK,
   QUICK_LOOK_LOADING,
+  TRY_AGAIN,
   WAITING_FOR_PEOPLE,
   WHO_TO_CALL,
 } from './words'
@@ -70,6 +75,7 @@ export interface QuickLookProps {
 
 export function QuickLook({ facts, company, failed, today, onOpenCompany }: QuickLookProps) {
   const title = useId()
+  const client = useQueryClient()
   const deal = company?.deals.find((item) => item.state === 'open') ?? null
   const staff = facts?.staff ?? company?.staff ?? null
   const owner = facts?.owner ?? company?.owner ?? null
@@ -136,9 +142,22 @@ export function QuickLook({ facts, company, failed, today, onOpenCompany }: Quic
           </Fact>
         </dl>
       ) : failed ? (
-        <p role="status" className="text-ui text-muted-foreground">
-          {FACTS_FAILED}
-        </p>
+        <div className="flex flex-col items-start gap-2">
+          <p role="status" className="text-ui text-muted-foreground">
+            {FACTS_FAILED}
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="touch:h-11"
+            onClick={() => {
+              runFailedReadsAgain(client)
+            }}
+          >
+            {TRY_AGAIN}
+          </Button>
+        </div>
       ) : (
         <Pending label={QUICK_LOOK_LOADING}>
           {/* The real size: five facts in two columns, so nothing jumps when they come. */}

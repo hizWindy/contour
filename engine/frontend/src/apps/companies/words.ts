@@ -17,6 +17,8 @@ export const WHO_TO_CALL = 'Who are you calling?'
 export const COLD_CALL = 'Cold call (switchboard)'
 export const FACTS_FAILED =
   "The facts couldn't be read from our HubSpot copy. Try again in a moment."
+/** The button under `FACTS_FAILED`: it asks for the facts again. */
+export const TRY_AGAIN = 'Try again'
 export const NO_PEOPLE =
   'No people on record in HubSpot for this company. The script asks the switchboard for whoever looks after the office.'
 export const PREP_OFF =
