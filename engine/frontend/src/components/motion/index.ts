@@ -46,3 +46,8 @@ export { TickIn, type TickInProps } from './tick-in'
 export { PRESS_SCALE, usePress } from './use-press'
 export { useStill, useTransition } from './use-still'
 export { useViewShown } from './view-shown'
+
+// The mic card's parts (PLAN-V18 Track 3, T3-4): bars that follow the mic's own sound, and the
+// card that grows from the mic button. The mic's code imports them from their own files.
+export { FrequencyBars, type FrequencyBarsProps } from './frequency-bars'
+export { MicSheet, MicSheetTitle, type MicSheetProps } from './mic-sheet'
