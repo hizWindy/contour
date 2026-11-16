@@ -6,7 +6,7 @@ This plan makes the Companies module clearer and nicer to use, from Al-khair's l
 
 - **Built by:** Al-khair Pama. **Signed off by:** Al-khair for the code and every screen. Levi confirms the rules marked **TBC with Levi**.
 - **Last updated:** 16 Nov 2026 (S0 done: `plan-v18` made from `master`; the tracks are starting).
-- **Progress:** S0: 1 of 1. Track 1: 0 of 9. Track 2: 0 of 8. Track 3: 3 of 9. Merge and deploy: 0 of 3.
+- **Progress:** S0: 1 of 1. Track 1: 0 of 9. Track 2: 0 of 8. Track 3: 4 of 9. Merge and deploy: 0 of 3.
 - **Sources:**
   - Al-khair's list of changes (16 Nov, in chat), and the chat about Meetings the same day: the empty Meetings page, the team switch, and the Sync idea;
   - the code on `master` (`c4ebe58`), read on 16 Nov;
@@ -520,7 +520,7 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
 
 ## Track 3: Call logs, the mic, the history and call prep (session 3)
 
-**Progress:** 3 of 9. Every step is `frontend-agent` work. It follows `engine/DESIGN.md` and "How it should look and move", uses the `ui-build` skill, and builds against the contract with `mockApi`.
+**Progress:** 4 of 9. Every step is `frontend-agent` work. It follows `engine/DESIGN.md` and "How it should look and move", uses the `ui-build` skill, and builds against the contract with `mockApi`.
 
 - [x] **T3-1. Own copy and a baseline.** Make the worktree. Run lint, types, the tests and the build once. Note the counts and the first visit size from `node scripts/bundle-report.js`. Done 2026-11-16 on `40d9912` (numbers in the Log).
 
@@ -590,7 +590,7 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
   - `problemHint` gains hints for the call notes codes.
   - **Done when:** a test shows every row, and `screen-words.test.ts` passes.
 
-- [ ] **T3-9. Track 3 check.**
+- [x] **T3-9. Track 3 check.** Done 2026-11-16: `b936171`, `5ecea40`, `9793429`, tag `v18-t3` (numbers in the Log). By the overnight rules, the screenshots, the look at each width, the 4x CPU trace and the fresh `review-agent` move to the lead session at M1, and no message was sent: this Log carries everything.
   - Lint, types, the tests, the build and `node scripts/bundle-report.js`. The first visit may grow by 1 kB at most over T3-1.
   - The `design-review` skill on each changed screen, and `speed-check` on Call logs with the mic.
   - Each screen at 1440, 1280 and 390px, light and dark, by keyboard only, and with reduced motion.
@@ -624,6 +624,13 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
   - **For Track 2 or M1:** the phone cards' Prep button is in `company-cards.tsx` (Track 2's file), so it doesn't fetch the facts ahead. A phone has no hover; adding the same `onFocus` prefetch there would cover a keyboard. The laptop table's Prep (`company-cell.tsx`) does both.
   - `companies.test.tsx` is in no track's list. Track 3 changed only its call prep tests (the picker became the quick look).
 - 16 Nov 2026, T3-8 done (`86ca7f2`). `errors.test.ts` holds every row of both tables word for word, with its buttons; each row is also shown on its own screen by that screen's tests. Call prep off now reads "Call scripts are switched off. The facts from HubSpot still show. An admin can switch them on." `problemHint` gains 16 call notes and call prep codes as one block at the end of `HINTS` in `src/lib/problems.ts` (Track 2's block is at the top, as the lead asked). **For M1:** check those hints against Track 1's T1-8 words and drop any that only repeat the server's detail. `screen-words.test.ts` passes.
+- 16 Nov 2026, T3-9 done. The final run on the last commit: lint clean, types clean, Prettier clean, 123 test files and 1,760 tests passed (was 116 and 1,640 at T3-1), the build passed. **First visit:** 238,537 bytes of JavaScript gzip, 745 over T3-1 (the limit is 1,024), and 24,091 bytes of CSS gzip, 240 over.
+  - **speed-check, Call logs with the mic:** opening Call logs adds 62 kB gzip on top of the first visit (Activity added 46 kB; History's search, filters and paged list are most of the rest), its own file 18 kB. The mic card is a file of its own (18 kB on top, 7 kB own), fetched when the pointer rests on the mic button, it gets focus, or it is pressed; the first visit carries none of it. Companies adds 103 kB (was 97 kB: the quick look and the mic button). History asks for 50 calls at a time, the search waits 250ms, the page joins the request started for it (tested), and rows never animate above 50. The first speed check found 1,577 bytes over T3-1: the menus' radio parts and five icons were pulled into the first visit through shared code. `5ecea40` keeps them out (`ChoiceItem`, and icons the first visit doesn't use).
+  - **design-review** (the skill, on Call logs, History, the mic card, Check my mic, the quick look and Settings): design-lint, contrast, screen-words, icons and fonts pass. Fixed in `b936171`: the mic card never started while developing (React's StrictMode runs effects twice), the card's keys reached the note view behind it, the card jumped when the words replaced the four lines, and History's J and K worked only inside the list. No "Must fix" left. **Ideas, TBC at the look:** the outcome dot colours, the faint dot for "No outcome" (its word carries it), the number left to the footer, "Sending" not being a filter, and the square mic button. `b936171` also carries the mic card's half of the first visit fix, so it builds only together with `5ecea40`.
+  - **Not checked:** nothing was seen in a browser: no width (1440, 1280, 390), no dark mode, no keyboard pass by hand, no reduced motion by eye and no 4x CPU trace. The lead checks the screens after M1.
+  - **DESIGN.md** (`9793429`): five lines under "Ideas waiting for a decision": the mic card that grows from its button, the bars that follow the voice, Track 2's `SpinOnce` and `StepTrail` (in Track 2's words, passed on by the lead), and the square mic button. None is in "Motion" yet.
+  - **The lead's notes:** History sends only `since` (This week, This month), never `until`, so it can't get Track 1's `dates_out_of_order`. Track 1's `voice_tool` matches the hand written `VoiceToolKind`. Website tests that copy an old server detail word for word are the lead's to fix at M1.
+  - **Track 3 ready to merge,** with T3-3 waiting for Al-khair at the keyboard, T3-4 to T3-7 waiting for his look, and T3-5's Whisper half waiting for T3-3.
 
 ## Merge and deploy
 
