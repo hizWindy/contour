@@ -118,14 +118,15 @@ export const REDRAFT = 'Redraft'
 export const EDITS_KEPT = 'Your edits are kept.'
 
 /**
- * What one draft costs, for Redraft's button: the plan's estimate (PLAN-V17 "What it costs": about
- * US$0.03 with Sonnet 5.5, measured by T2-16), not the server's. The server's `cost_usd` adds every
- * draft of the pre-read together, and Track 2 keeps no cost for each one, so it can't say what the
- * next draft costs: the page shows it as what was spent so far (`costSoFar`).
+ * What one draft costs, for Redraft's button, as measured: PLAN-V17 T2-16 found about US$0.007 for
+ * each of 3 real pre-reads, and one draft on 16 Nov 2026 cost US$0.0071 (PLAN-V18 M1). Not the
+ * server's: its `cost_usd` adds every draft of the pre-read together, and Track 2 keeps no cost for
+ * each one, so it can't say what the next draft costs: the page shows it as what was spent so far
+ * (`costSoFar`).
  */
-export const DRAFT_ESTIMATE = 'about US$0.03'
+export const DRAFT_ESTIMATE = 'under US$0.01'
 
-/** "Redraft (about US$0.03)": the button says what one more draft costs, by the plan's estimate. */
+/** "Redraft (under US$0.01)": the button says what one more draft costs, as measured. */
 export function withEstimate(label: string): string {
   return `${label} (${DRAFT_ESTIMATE})`
 }

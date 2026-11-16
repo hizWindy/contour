@@ -475,7 +475,7 @@ describe('the form', () => {
     expect(screen.getByText('Source: Call with Sam Sample, 20 Oct 2026')).toBeInTheDocument()
     // Redraft says what one draft costs by the plan's estimate, that edits stay, and what the
     // drafts have cost so far (the server's total).
-    const redraft = screen.getByRole('button', { name: 'Redraft (about US$0.03)' })
+    const redraft = screen.getByRole('button', { name: 'Redraft (under US$0.01)' })
     expect(redraft).toBeEnabled()
     expect(redraft).toHaveAccessibleDescription(
       'It writes the three summaries again. Your edits are kept. US$0.03 so far.',
@@ -625,7 +625,7 @@ describe('a summary typed into', () => {
 
     // Redraft: the AI's two go still and grey while they are written; the rep's stays a box.
     server.patch = 'ok'
-    await user.click(screen.getByRole('button', { name: 'Redraft (about US$0.03)' }))
+    await user.click(screen.getByRole('button', { name: 'Redraft (under US$0.01)' }))
     expect(await within(pageHeader()).findByText('Drafting')).toBeInTheDocument()
     expect(server.calls.filter((call) => call.path === REDRAFT)).toHaveLength(1)
     expect(stillBlocks()).toBe(2)
@@ -657,7 +657,7 @@ describe('a summary typed into', () => {
     expect(await within(pageHeader()).findByText('Draft ready')).toBeInTheDocument()
     // Two drafts so far: the button still says one draft's cost, the line what both cost.
     expect(
-      screen.getByRole('button', { name: 'Redraft (about US$0.03)' }),
+      screen.getByRole('button', { name: 'Redraft (under US$0.01)' }),
     ).toHaveAccessibleDescription(
       'It writes the three summaries again. Your edits are kept. US$0.06 so far.',
     )
@@ -930,7 +930,7 @@ describe('a failed draft', () => {
       "The summaries weren't written. Try again first.",
     )
 
-    const tryAgain = within(progress).getByRole('button', { name: 'Try again (about US$0.03)' })
+    const tryAgain = within(progress).getByRole('button', { name: 'Try again (under US$0.01)' })
     expect(tryAgain).toHaveAccessibleDescription(
       'It writes the three summaries again. Your edits are kept. US$0.03 so far.',
     )
@@ -979,7 +979,7 @@ describe('words for when things go wrong (PLAN-V18 T2-7)', () => {
       expect(alert.textContent).toBe(words)
       const progress = screen.getByRole('region', { name: 'The draft stopped' })
       expect(
-        within(progress).getByRole('button', { name: 'Try again (about US$0.03)' }),
+        within(progress).getByRole('button', { name: 'Try again (under US$0.01)' }),
       ).toBeEnabled()
       expect(screen.getByRole('textbox', { name: 'What they do' })).toBeEnabled()
     },

@@ -231,12 +231,15 @@ export const NEW_PRE_READ = 'New pre-read'
 export const NEW_DESCRIPTION = "For a meeting that isn't in HubSpot."
 /**
  * Who drafts it, from what, how long it takes, and that the rep checks it first (PLAN-V18 T2-4).
- * The seconds are TBC: the real draft in T2-8 measures them.
+ * One real draft on 16 Nov 2026 took 3.5 seconds (PLAN-V18 M1).
  */
 export const AI_DRAFTS_NOTE =
-  'AI drafts this pre-read from what we know in HubSpot: the company, its people, calls, meetings and notes. It takes about 20 seconds. You check it before anyone gets it.'
-/** What one draft costs, by the plan's estimate (PLAN-V17 "What it costs"). */
-export const AI_DRAFT_COST = 'About US$0.03.'
+  'AI drafts this pre-read from what we know in HubSpot: the company, its people, calls, meetings and notes. It takes a few seconds. You check it before anyone gets it.'
+/**
+ * What one draft costs, as measured: about US$0.007 for each of 3 real pre-reads (PLAN-V17
+ * T2-16), and US$0.0071 for one on 16 Nov 2026 (PLAN-V18 M1).
+ */
+export const AI_DRAFT_COST = 'Under US$0.01.'
 export const COMPANY = 'Company'
 export const PICK_COMPANY = 'Pick a company'
 export const WHICH_MEETING_COMPANY = 'Which company is the meeting with?'

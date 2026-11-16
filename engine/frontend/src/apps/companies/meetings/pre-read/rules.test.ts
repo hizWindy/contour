@@ -131,9 +131,9 @@ describe('a summary the rep edits', () => {
 
 describe('what a redraft costs', () => {
   it("says one draft's cost by the plan's estimate, whatever the drafts so far cost", () => {
-    expect(DRAFT_ESTIMATE).toBe('about US$0.03')
-    expect(withEstimate('Redraft')).toBe('Redraft (about US$0.03)')
-    expect(withEstimate('Try again')).toBe('Try again (about US$0.03)')
+    expect(DRAFT_ESTIMATE).toBe('under US$0.01')
+    expect(withEstimate('Redraft')).toBe('Redraft (under US$0.01)')
+    expect(withEstimate('Try again')).toBe('Try again (under US$0.01)')
   })
 
   it('says what the drafts have cost so far, from the server, rounded to the cent', () => {

@@ -1157,9 +1157,9 @@ describe('AI drafts the pre-read', () => {
     const dialog = await screen.findByRole('dialog', { name: 'New pre-read' })
     const note = dialog.querySelector('[data-slot=ai-note]')
     expect(note).toHaveTextContent(
-      'AI drafts this pre-read from what we know in HubSpot: the company, its people, calls, meetings and notes. It takes about 20 seconds. You check it before anyone gets it.',
+      'AI drafts this pre-read from what we know in HubSpot: the company, its people, calls, meetings and notes. It takes a few seconds. You check it before anyone gets it.',
     )
-    expect(within(note as HTMLElement).getByText('About US$0.03.')).toHaveClass(
+    expect(within(note as HTMLElement).getByText('Under US$0.01.')).toHaveClass(
       'text-muted-foreground',
     )
     expect(note?.querySelector('svg.lucide-cpu')).toHaveAttribute('aria-hidden', 'true')
