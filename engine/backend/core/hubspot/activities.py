@@ -43,10 +43,11 @@ link to a HubSpot owner, or None, and HubSpot then shows the call as unassigned)
    they are just run again (`RUN_AGAIN`). A row saved before the plan kept `sending`: the first
    step it didn't record is "uncertain". An apply stopped by a cancel (the backend shutting
    down) or an error settles its write at once, the same way.
-5. **Our copy at once:** a call that lands goes into `core.hubspot_calls`, and changed fields
-   refresh the company and its offices, so "Last talk" and the company are right before the next
-   sync. A failure there is logged and never fails the write. (A meeting's notes in our copy
-   catch up at the next meetings refresh: the change moves the meeting's modified date.)
+5. **Our copy at once:** a call that lands goes into `core.hubspot_calls` and moves the company's
+   `last_activity` (PLAN-V18), and changed fields refresh the company and its offices, so "Last
+   talk", the Companies list's order and the company are right before the next sync. A failure
+   there is logged and never fails the write. (A meeting's notes in our copy catch up at the
+   next meetings refresh: the change moves the meeting's modified date.)
 6. **The note on a meeting** (`meeting`, T1-9, choice 9): only for a request with a note and a
    `meeting_id`, and only while the switch `meeting_note_on_meeting` is on at the preview (off
    by default; the preview says what it will do). The note's text goes at the end of the
@@ -79,7 +80,7 @@ from typing import Any, Literal
 from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -98,7 +99,7 @@ from core.hubspot.client import (
     PropertyInfo,
 )
 from core.hubspot.mapping import DEFAULT_TIME_ZONE
-from core.hubspot.models import HubSpotCall, HubSpotOwner, HubSpotWrite
+from core.hubspot.models import HubSpotCall, HubSpotCompany, HubSpotOwner, HubSpotWrite
 from core.hubspot.owners import owner_id_of, shown_name
 from core.hubspot.people import OUTCOMES, plain
 from core.hubspot.writer import (
@@ -1203,8 +1204,10 @@ def _squeezed(text: str | None) -> str:
 
 
 async def _save_call_copy(session: AsyncSession, run: _Run, record: HubSpotObject) -> None:
-    """The call goes into our copy at once, so "Last talk" is right before the next sync. A
-    failure is logged (its kind only: the text could quote the call) and never fails the write."""
+    """The call goes into our copy at once, so "Last talk" is right before the next sync, and so
+    does the company's last activity, so the Companies list puts it first (PLAN-V18 T1-3; never
+    moved back by an older call). A failure is logged (its kind only: the text could quote the
+    call) and never fails the write."""
     call = run.request.call
     if call is None:
         return
@@ -1235,6 +1238,13 @@ async def _save_call_copy(session: AsyncSession, run: _Run, record: HubSpotObjec
                 index_elements=[HubSpotCall.hubspot_id],
                 set_={name: statement.excluded[name] for name in values if name != "hubspot_id"},
             )
+        )
+        called_at = values["called_at"]
+        await session.execute(
+            update(HubSpotCompany)
+            .where(HubSpotCompany.hubspot_id == run.company_id)
+            .values(last_activity=func.greatest(HubSpotCompany.last_activity, called_at))
+            .execution_options(synchronize_session=False)
         )
         await session.commit()
     except Exception as error:

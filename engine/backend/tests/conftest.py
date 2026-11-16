@@ -95,6 +95,7 @@ TEST_TABLES = (
     "core.memory",
     "core.hubspot_writes",
     "core.hubspot_syncs",
+    "core.hubspot_owner_teams",
     "core.hubspot_owners",
     "core.hubspot_deals",
     "core.hubspot_offices",

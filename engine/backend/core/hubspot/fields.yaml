@@ -26,6 +26,10 @@ companies:
   owner_id: hubspot_owner_id
   created_in_hubspot: createdate
   last_contacted: notes_last_contacted
+  # "Last Activity Date": the newest call, email, meeting, note or task (read from HubSpot on 16
+  # Nov 2026, PLAN-V18 T1-2: 12,900 of 13,918 companies have it, and every one with "Last
+  # Contacted" has it too, never older). The Companies list sorts by it.
+  last_activity: notes_last_updated
   contacts_count: num_associated_contacts
   description: description
   linkedin_url: linkedin_company_page

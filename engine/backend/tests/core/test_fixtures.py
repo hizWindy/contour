@@ -44,6 +44,7 @@ from core.hubspot.models import (
     HubSpotMeetingRead,
     HubSpotOffice,
     HubSpotOwner,
+    HubSpotOwnerTeam,
     HubSpotSync,
     HubSpotWrite,
 )
@@ -95,6 +96,7 @@ async def fill_every_table(factory: async_sessionmaker[AsyncSession]) -> None:
                 ),
                 HubSpotCompany(hubspot_id="1", name="Acme", source="export"),
                 HubSpotOwner(owner_id="11", name="Pat Lee"),
+                HubSpotOwnerTeam(owner_id="11", team_id="214430", team_name="Sample Sales"),
                 HubSpotSync(mode="full", trigger="command", status="running"),
                 HubSpotWrite(app="lead_finder", subject="lead:1", plan={}),
                 HubSpotMeeting(hubspot_id="401", title="Fitout chat", starts_at=datetime.now(UTC)),

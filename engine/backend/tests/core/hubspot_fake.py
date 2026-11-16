@@ -16,6 +16,8 @@ touches no real data. It follows the `HubSpot` protocol (core/hubspot/client.py)
   `HubSpotRejected`, the way HubSpot refuses a bad request.
 - An owner may have an email (`owner_email`, or `add_owner(..., email=...)`). Only
   `owner_emails` returns it, for the active owners, as the client does (PLAN-V17 T1-4).
+- An owner may be in HubSpot teams (`add_owner(..., teams=...)`, or an `Owner` with its
+  `teams`), which `owners` returns with it (PLAN-V18 T1-3).
 - Meetings (PLAN-V17 T1-8): `add_meeting` makes one with its companies and people. A search
   takes GT, GTE, LT and LTE on any date field (milliseconds or ISO text, like HubSpot), and
   sorts by `sort_by` when it names a field other than `hs_lastmodifieddate` (records without
@@ -46,6 +48,7 @@ from core.hubspot.client import (
     Link,
     ObjectType,
     Owner,
+    OwnerTeam,
     Page,
     Pipeline,
     PropertyInfo,
@@ -257,9 +260,15 @@ class FakeHubSpot:
         return record
 
     def add_owner(
-        self, owner_id: str, name: str | None, *, email: str | None = None, archived: bool = False
+        self,
+        owner_id: str,
+        name: str | None,
+        *,
+        email: str | None = None,
+        archived: bool = False,
+        teams: Sequence[OwnerTeam] = (),
     ) -> Owner:
-        owner = Owner(owner_id, name, archived)
+        owner = Owner(owner_id, name, archived, tuple(teams))
         (self.owners_archived if archived else self.owners_active).append(owner)
         if email is not None:
             self.owner_email[owner_id] = email

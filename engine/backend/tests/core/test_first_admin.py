@@ -35,6 +35,7 @@ def conninfo(database_url: str) -> Iterator[str]:
         connection.execute(
             "TRUNCATE companies.script_edits, companies.script_styles, companies.script_prefs, "
             "companies.preps, core.hubspot_meetings, core.hubspot_meeting_reads, "
+            "core.hubspot_owner_teams, "
             "companies.call_notes, "
             "companies.meeting_forms, "
             "core.audit_log, core.sessions, core.users"

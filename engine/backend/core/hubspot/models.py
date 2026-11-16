@@ -7,6 +7,8 @@ Contacts are never stored here, and neither is an owner's email.
   by the next one with the same `hubspot_id`. Offices are company fields in HubSpot, one group
   per city, so an office has no id of its own and is replaced with its company.
 - `hubspot_owners`: who owns records, so a company shows a name instead of an owner id.
+- `hubspot_owner_teams`: the HubSpot team each owner is in (PLAN-V18 T1-3), for Meetings' "My
+  team". Ids and the team's name only. The sync replaces them all each time.
 - `hubspot_syncs`: one row per sync, with its counts and any error (PLAN-V5 B4).
 - `hubspot_writes`: one row per write a person asked for, from preview to result (B5).
 - `hubspot_meetings`: our copy of HubSpot's meetings, people as ids only (PLAN-V17 T1-8), and
@@ -104,6 +106,10 @@ class HubSpotCompany(Base):
     hubspot_updated_at: Mapped[datetime | None] = mapped_column(  # last changed in HubSpot
         DateTime(timezone=True)
     )
+    # HubSpot's "Last activity date" (PLAN-V18 T1-3): the newest call, email, meeting, note or
+    # task. API rows only. A save never moves it back (`service.upsert_company_rows`), and a
+    # call that lands in HubSpot moves it at once (`activities`).
+    last_activity: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     source: Mapped[str] = mapped_column(String(16))  # "export" or "api"
     imported_at: Mapped[datetime] = mapped_column(  # when our copy of it was saved
         DateTime(timezone=True), server_default=text("now()")
@@ -180,6 +186,26 @@ class HubSpotOwner(Base):
     owner_id: Mapped[str] = mapped_column(String(32), primary_key=True)
     name: Mapped[str | None] = mapped_column(String(200))
     archived: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
+    synced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()")
+    )
+
+
+class HubSpotOwnerTeam(Base):
+    """A HubSpot team an owner is in (PLAN-V18 T1-3), as HubSpot's owners list gives it: the
+    team's id and name, and whether it is the owner's main team. Never an email. The sync
+    replaces every row each time. `owner_id` is a soft link, like the other owner ids."""
+
+    __tablename__ = "hubspot_owner_teams"
+    __table_args__ = (
+        Index("ix_hubspot_owner_teams_team", "team_id"),  # the owners in my teams
+        {"schema": CORE_SCHEMA},
+    )
+
+    owner_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    team_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    team_name: Mapped[str | None] = mapped_column(String(200))
+    is_primary: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
     synced_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("now()")
     )

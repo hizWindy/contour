@@ -59,6 +59,7 @@ class CompanyRow(BaseModel):
     hubspot_url: str | None = None
     owner_id: str | None = None
     hubspot_updated_at: datetime | None = None
+    last_activity: datetime | None = None  # HubSpot's "Last activity date" (PLAN-V18)
 
 
 class OfficeRow(BaseModel):
