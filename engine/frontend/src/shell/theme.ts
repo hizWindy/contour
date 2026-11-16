@@ -24,6 +24,17 @@ export function readThemeChoice(): ThemeChoice {
 }
 
 /**
+ * True for the colour a page has before its styles are in: none, or fully see-through. A colour
+ * with an alpha part ends with it ("... 0)"), and 0 there means see-through. Read from the numbers,
+ * so no colour is written out here: a colour is written once, in styles/tokens.css.
+ */
+function isClear(colour: string): boolean {
+  if (colour === '' || colour === 'transparent') return true
+  const parts = colour.match(/[\d.]+/g) ?? []
+  return parts.length > 3 && Number(parts[3]) === 0
+}
+
+/**
  * The browser's own bar (a phone's, and the installed app's title bar) takes the page's colour
  * (Improvements 1, #9), so the app is one piece with it in light and in dark. The colour is read
  * from the page after the theme is set, so it is whatever the tokens say, written nowhere else.
@@ -32,9 +43,20 @@ function matchBrowserBar(): void {
   const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
   const colour = getComputedStyle(document.body).backgroundColor
   // Before the styles are in, the page has no colour yet: leave the bar as it is.
-  if (meta && colour && colour !== 'rgba(0, 0, 0, 0)' && colour !== 'transparent') {
+  if (meta && !isClear(colour)) {
     meta.content = colour
   }
+}
+
+/**
+ * Keeps the bar in step when the computer itself changes colours (sunset, a schedule) while the
+ * choice is "follow the computer": the page changes by itself then, and nothing else would tell the
+ * bar. Call once, at the start.
+ */
+export function watchBrowserBar(): void {
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    matchBrowserBar()
+  })
 }
 
 /**

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { applyTheme, readThemeChoice } from './theme'
+import { applyTheme, readThemeChoice, watchBrowserBar } from './theme'
 
 const KEY = 'lead-finder-theme'
 
@@ -116,10 +116,41 @@ describe("the browser's own bar takes the page's colour (Improvements 1, #9)", (
     expect(tag.content).toBe('#F4F5EF')
   })
 
+  it('is left as it was for a colour that is fully see-through, and taken when it only is a little', () => {
+    const tag = barTag()
+    document.body.style.backgroundColor = 'rgba(0, 0, 0, 0)'
+    applyTheme('dark')
+    expect(tag.content).toBe('#F4F5EF')
+
+    document.body.style.backgroundColor = 'rgba(20, 24, 33, 0.9)'
+    applyTheme('dark')
+    expect(tag.content).toBe('rgba(20, 24, 33, 0.9)')
+  })
+
   it('does no harm on a page without the tag', () => {
     document.body.style.backgroundColor = 'rgb(20, 24, 33)'
     expect(() => {
       applyTheme('dark')
     }).not.toThrow()
+  })
+
+  it('keeps up when the computer changes colours by itself, for "follow the computer"', () => {
+    const tag = barTag()
+    let changed: () => void = () => undefined
+    vi.spyOn(window, 'matchMedia').mockImplementation(
+      (query: string) =>
+        ({
+          matches: false,
+          media: query,
+          addEventListener: (_type: string, listener: () => void) => {
+            if (query === '(prefers-color-scheme: dark)') changed = listener
+          },
+          removeEventListener: () => undefined,
+        }) as unknown as MediaQueryList,
+    )
+    watchBrowserBar()
+    document.body.style.backgroundColor = 'rgb(20, 24, 33)'
+    changed()
+    expect(tag.content).toBe('rgb(20, 24, 33)')
   })
 })

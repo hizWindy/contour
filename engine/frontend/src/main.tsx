@@ -20,10 +20,12 @@ import { createAppRouter, routes } from './router'
 import { preloadOnIntent } from './shell/intent'
 import { prefetchOnNavigation } from './shell/prefetch'
 import { preloadNextPages } from './shell/preload'
-import { applyTheme, readThemeChoice } from './shell/theme'
+import { applyTheme, readThemeChoice, watchBrowserBar } from './shell/theme'
 
 // A light or dark choice made in the command menu, kept from the last visit.
 applyTheme(readThemeChoice())
+// The browser's own bar follows the computer's switch to dark and back, in "follow the computer".
+watchBrowserBar()
 // The browser says once, soon after the page loads, that the site can be installed as an app.
 watchInstall()
 
