@@ -318,12 +318,17 @@ async def suggest(
 
 
 def admins_only() -> Problem:
-    return Problem(403, "Admins only", "Only an Admin can do this.", code="admin_only")
+    return Problem(
+        403, "Admins only", "Only an Admin can do this. Ask an Admin.", code="admin_only"
+    )
 
 
 def _note_not_found() -> Problem:
     return Problem(
-        404, "Note not found", "That team note isn't there any more.", code="note_not_found"
+        404,
+        "Note not found",
+        "That team note isn't there any more. Reload the page to see the team's notes now.",
+        code="note_not_found",
     )
 
 
@@ -347,7 +352,10 @@ async def decide(
     note = await _team_note(session, note_id)
     if note.status != "suggested":
         raise Problem(
-            409, "Already decided", "That note isn't waiting any more.", code="already_decided"
+            409,
+            "Already decided",
+            "That note isn't waiting any more. Reload the page to see what was decided.",
+            code="already_decided",
         )
     if approve and await _active_count(session) >= TEAM_MAX_NOTES:
         raise _team_full()
@@ -367,7 +375,10 @@ async def retire(
     note = await _team_note(session, note_id)
     if note.status != "active":
         raise Problem(
-            409, "Not active", "Only an active team note can be retired.", code="not_active"
+            409,
+            "Not active",
+            "Only an active team note can be retired. Reload the page to see the team's notes now.",
+            code="not_active",
         )
     note.status = "retired"
     note.decided_by = user_of(auth)

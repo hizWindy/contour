@@ -4,7 +4,7 @@ live site."""
 
 import re
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from fastapi import FastAPI
@@ -97,13 +97,21 @@ async def test_with_the_tick_every_companies_route_is_open(world: World) -> None
 # --- B2: the list ------------------------------------------------------------------------------
 
 
-async def test_the_list_is_by_name_with_each_rows_facts(world: World) -> None:
+async def test_the_list_is_by_last_activity_with_each_rows_facts(world: World) -> None:
     await a_small_copy(world)
     async with signed_in_as(world, "mia", ["companies"]) as client:
         page = (await client.get(API)).json()
     assert page["total"] == 4
     assert page["leads_shown"] is False
-    assert names(page) == ["ABC Logistics", "Nimbus Software", "Quark Foods", "Zed Mining"]
+    # The newest activity first (here Last contacted: none has a Last activity date), and Zed
+    # Mining, with neither, last (PLAN-V18 T1-6).
+    assert names(page) == ["ABC Logistics", "Quark Foods", "Nimbus Software", "Zed Mining"]
+    assert [row["last_activity"] for row in page["items"]] == [
+        "2026-10-01",
+        "2026-06-01",
+        "2025-01-05",
+        None,
+    ]
     abc = page["items"][0]
     assert abc["key"] == "101"
     assert abc["deal"] == "open"
@@ -138,9 +146,9 @@ async def test_with_the_lead_finder_tick_good_leads_not_in_hubspot_are_added(wor
         assert page["leads_shown"] is True
         assert names(page) == [
             "ABC Logistics",
-            "Delta Freight",  # a Pass, not in HubSpot yet
-            "Nimbus Software",
             "Quark Foods",
+            "Nimbus Software",
+            "Delta Freight",  # a Pass, not in HubSpot yet: no activity, so with the last, A to Z
             "Zed Mining",
         ]  # Echo Legal is a Drop, so it stays out
         by_name = {row["name"]: row for row in page["items"]}
@@ -179,15 +187,21 @@ async def test_a_newer_drop_hides_an_older_pass(world: World) -> None:
         ("city=adelaide", ["Zed Mining"]),  # an office's city, any case
         ("owner=Levi", ["ABC Logistics"]),
         ("deal=open", ["ABC Logistics"]),
-        ("deal=customer", ["Nimbus Software", "Quark Foods"]),
+        ("deal=customer", ["Quark Foods", "Nimbus Software"]),
         ("deal=none", ["Zed Mining"]),
-        ("source=hubspot", ["ABC Logistics", "Nimbus Software", "Quark Foods", "Zed Mining"]),
+        ("source=hubspot", ["ABC Logistics", "Quark Foods", "Nimbus Software", "Zed Mining"]),
         ("sort=staff", ["Zed Mining", "ABC Logistics", "Quark Foods", "Nimbus Software"]),
         ("sort=staff&order=asc", ["Nimbus Software", "Quark Foods", "ABC Logistics", "Zed Mining"]),
         ("sort=lease", ["Quark Foods", "ABC Logistics", "Zed Mining", "Nimbus Software"]),
         ("sort=last_talk", ["ABC Logistics", "Quark Foods", "Nimbus Software", "Zed Mining"]),
         ("sort=name&order=desc", ["Zed Mining", "Quark Foods", "Nimbus Software", "ABC Logistics"]),
-        ("limit=2&offset=1", ["Nimbus Software", "Quark Foods"]),
+        ("sort=name", ["ABC Logistics", "Nimbus Software", "Quark Foods", "Zed Mining"]),  # old
+        ("sort=last_activity", ["ABC Logistics", "Quark Foods", "Nimbus Software", "Zed Mining"]),
+        (
+            "sort=last_activity&order=asc",  # the oldest first, and an empty one still last
+            ["Nimbus Software", "Quark Foods", "ABC Logistics", "Zed Mining"],
+        ),
+        ("limit=2&offset=1", ["Quark Foods", "Nimbus Software"]),
     ],
 )
 async def test_each_filter_and_sort(world: World, query: str, expected: list[str]) -> None:
@@ -196,6 +210,50 @@ async def test_each_filter_and_sort(world: World, query: str, expected: list[str
         answer = await client.get(f"{API}?{query}")
     assert answer.status_code == 200, answer.text
     assert names(answer.json()) == expected
+
+
+async def test_the_newest_activity_comes_first_then_empty_ones_and_ties_go_a_to_z(
+    world: World,
+) -> None:
+    """PLAN-V18 T1-6: the newest of HubSpot's Last activity date (as its Melbourne day) and
+    Last contacted. 8 pm on 3 Nov in UTC is 7 am on 4 Nov in Melbourne."""
+    await add(
+        world,
+        company(
+            "201",
+            "Beta Sample",
+            last_activity=datetime(2026, 11, 3, 20, 0, tzinfo=UTC),
+            last_contacted=date(2026, 10, 1),
+        ),
+        company("202", "Alpha Sample", last_activity=datetime(2026, 11, 4, 1, 0, tzinfo=UTC)),
+        company(
+            "203",
+            "Gamma Sample",
+            last_activity=datetime(2026, 11, 1, 1, 0, tzinfo=UTC),
+            last_contacted=date(2026, 11, 10),  # newer than its Last activity date
+        ),
+        company("204", "Echo Sample"),
+        company("205", "Delta Sample"),
+    )
+    async with signed_in_as(world, "mia", ["companies"]) as client:
+        newest = (await client.get(API)).json()
+        oldest = (await client.get(f"{API}?sort=last_activity&order=asc")).json()
+        second = (await client.get(f"{API}?limit=2&offset=1")).json()
+    assert [(row["name"], row["last_activity"]) for row in newest["items"]] == [
+        ("Gamma Sample", "2026-11-10"),
+        ("Alpha Sample", "2026-11-04"),  # the same day as Beta: A to Z
+        ("Beta Sample", "2026-11-04"),
+        ("Delta Sample", None),  # none: last, A to Z
+        ("Echo Sample", None),
+    ]
+    assert names(oldest) == [
+        "Alpha Sample",
+        "Beta Sample",
+        "Gamma Sample",
+        "Delta Sample",
+        "Echo Sample",
+    ]
+    assert names(second) == ["Alpha Sample", "Beta Sample"]
 
 
 async def test_lead_rows_follow_the_filters(world: World) -> None:

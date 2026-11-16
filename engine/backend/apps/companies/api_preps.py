@@ -64,7 +64,8 @@ def company_not_found() -> Problem:
     return Problem(
         404,
         "We can't find that company",
-        "It may have been removed, or it isn't open to your account.",
+        "It may have been removed, or it isn't open to your account. Go back to the list "
+        "and pick it again.",
         code="company_not_found",
     )
 
@@ -73,7 +74,7 @@ def prep_not_found() -> Problem:
     return Problem(
         404,
         "We can't find that call prep",
-        "It may have been removed, or it isn't open to your account.",
+        "It may have been removed, or it isn't open to your account. Prep the call again.",
         code="prep_not_found",
     )
 
@@ -262,7 +263,8 @@ async def start_prep(
         raise Problem(
             404,
             "We can't find that person",
-            "They aren't at this company in our HubSpot copy any more.",
+            "They aren't at this company in our HubSpot copy any more. Pick someone else, or "
+            "prep a cold call.",
             code="person_not_found",
         )
     prep = Prep(

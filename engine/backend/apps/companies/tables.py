@@ -263,6 +263,8 @@ class CallNote(Base):
         ),
         # The rep's lists (to confirm, needs a look, logged) and their counts.
         Index("ix_call_notes_made_by_status", "made_by", "status", text("created_at DESC")),
+        # History in Call logs: every one of the rep's calls, the newest first (PLAN-V18 T1-3).
+        Index("ix_call_notes_made_by_called_at", "made_by", text("called_at DESC")),
         # The rep's newest note on a company, for call prep's "Last talk".
         Index("ix_call_notes_company", "company_key", text("created_at DESC")),
         # The notes logged for a meeting (Meetings' "Notes logged", PLAN-V17 T2-15).

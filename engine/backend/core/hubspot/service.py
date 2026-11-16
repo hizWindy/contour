@@ -16,7 +16,13 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.hubspot.importer import CompanyRow, DealRow, HubSpotExport, OfficeRow
-from core.hubspot.models import HubSpotCompany, HubSpotDeal, HubSpotOffice, HubSpotOwner
+from core.hubspot.models import (
+    HubSpotCompany,
+    HubSpotDeal,
+    HubSpotOffice,
+    HubSpotOwner,
+    HubSpotOwnerTeam,
+)
 
 CHUNK = 500  # rows in one statement: 500 rows x about 30 columns stays far under the limit
 ID_CHUNK = 5000  # ids in one IN list
@@ -69,17 +75,25 @@ async def upsert_company_rows(
 ) -> list[str]:
     """`upsert_companies`, returning the ids it wrote. With `saved_before`, a company our copy
     saved at or after that moment is left as it is: a sync that read HubSpot earlier never
-    overwrites it with older values (PLAN-V15 T1-5)."""
+    overwrites it with older values (PLAN-V15 T1-5).
+
+    `last_activity` never moves back (PLAN-V18 T1-3): the newer of ours and the one read is kept.
+    So a call our copy noted when it landed stays until HubSpot's own date catches up, and an
+    export (which has none) leaves it as it is."""
     rows = [company.model_dump() | {"source": source} for company in companies]
     written: list[str] = []
     for chunk in _chunks(rows):
         statement = insert(HubSpotCompany).values(list(chunk))
+        replaced: dict[str, Any] = {
+            name: statement.excluded[name] for name in chunk[0] if name != "hubspot_id"
+        }
+        if "last_activity" in replaced:
+            replaced["last_activity"] = func.greatest(
+                HubSpotCompany.__table__.c.last_activity, statement.excluded.last_activity
+            )
         upsert = statement.on_conflict_do_update(
             index_elements=[HubSpotCompany.hubspot_id],
-            set_={
-                **{name: statement.excluded[name] for name in chunk[0] if name != "hubspot_id"},
-                "imported_at": func.now(),
-            },
+            set_={**replaced, "imported_at": func.now()},
             where=None if saved_before is None else HubSpotCompany.imported_at < saved_before,
         )
         written += list(await session.scalars(upsert.returning(HubSpotCompany.hubspot_id)))
@@ -144,6 +158,17 @@ async def upsert_owners(session: AsyncSession, owners: Sequence[dict[str, Any]])
             )
         )
     return len(owners)
+
+
+async def replace_owner_teams(session: AsyncSession, teams: Sequence[dict[str, Any]]) -> int:
+    """Replaces every owner's teams with these (`owner_id`, `team_id`, `team_name`, `is_primary`):
+    a team an owner left goes, and one HubSpot renamed takes its new name (PLAN-V18 T1-3). An
+    owner listed twice in a team is saved once. The caller commits. Returns how many rows."""
+    rows = list({(row["owner_id"], row["team_id"]): row for row in teams}.values())
+    await session.execute(delete(HubSpotOwnerTeam))
+    for chunk in _chunks(rows):
+        await session.execute(insert(HubSpotOwnerTeam).values(list(chunk)))
+    return len(rows)
 
 
 async def save_export(

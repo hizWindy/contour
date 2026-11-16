@@ -1,7 +1,8 @@
 """The Meetings routes (PLAN-V17 T2-11 and T2-12, the contract's part 3), under /api/v1/companies.
 
 Behind the Companies tick, like every Companies route. Each answers 409 `meeting_forms_off` while
-meetings and pre-reads are switched off. A rep sees their own meetings, or the team's. The fixed
+meetings and pre-reads are switched off. A rep sees everyone's meetings, their own, or their
+HubSpot team's (PLAN-V18 T1-4). The fixed
 paths come before `/meetings/{meeting_id}`, and the whole router before `/{key}`. The services
 are meeting_store.py (the reads), meeting_form.py (the pre-read's draft), meeting_send.py
 (sending it, T2-14) and meeting_log.py (a past meeting's transcript, T2-15).
@@ -28,9 +29,11 @@ from apps.companies.schemas import (
     MeetingFormPatch,
     MeetingFormStart,
     MeetingPage,
+    MeetingsSyncOut,
     MeetingSummary,
     MeetingTranscriptIn,
     MeetingWhen,
+    MeetingWho,
 )
 from core.api.access import SignedInDep
 from core.api.deps import SessionDep, SettingsDep
@@ -95,13 +98,17 @@ FormId = Annotated[uuid.UUID, Path(description="The pre-read's id")]
 @router.get(
     "/meetings",
     response_model=MeetingPage,
-    summary="My meetings",
+    summary="Client meetings",
     description=(
         "A page of client meetings from HubSpot (one with no company is left out; a cancelled "
-        "one stays, with its outcome). `when`: `upcoming` (the next 7 days, soonest first, each "
-        "with its `group` by the Melbourne date: today, tomorrow, this_week or later) or `past` "
-        "(the last 30 days, newest first). `mine` (true by default): my own, as my HubSpot "
-        "owner; false: the team's, mine first. My own pre-reads for meetings typed in (New "
+        "one stays, with its outcome), always in time order. `when`: `upcoming` (the next 7 "
+        "days, soonest first, each with its `group` by the Melbourne date: today, tomorrow, "
+        "this_week or later) or `past` (the last 30 days, newest first). `who`: `all` (the "
+        "default: everyone's), `mine` (the ones I own or am on, as my HubSpot owner) or `team` "
+        "(the ones whose owner, or a Contour person on them, is in one of my HubSpot teams, mine "
+        "included). Each meeting says whether it is `mine`. `linked`, `team_state` and "
+        "`team_names` say what My meetings and My team can pick out, and `sentence` says why "
+        "one of them is empty (never for All). My own pre-reads for meetings typed in (New "
         "pre-read) join the list in the same window, marked `typed`, even while HubSpot's "
         "meetings aren't read. `q`: each word must start a word of the company's name, the "
         "title or the date in words, like 'sample 26 nov', 'thu' or '26/11'. Each meeting comes "
@@ -119,7 +126,7 @@ async def list_meetings(
     source: SourceDep,
     now: NowDep,
     when: MeetingWhen = "upcoming",
-    mine: bool = True,
+    who: MeetingWho = "all",
     q: Annotated[SafeText | None, Query(max_length=200)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = PAGE_SIZE,
     offset: Annotated[int, Query(ge=0, le=OFFSET_MAX)] = 0,
@@ -130,7 +137,7 @@ async def list_meetings(
         auth,
         source=source,
         when=when,
-        mine=mine,
+        who=who,
         q=q,
         limit=limit,
         offset=offset,
@@ -162,6 +169,27 @@ async def meeting_summary(
 
 
 @router.post(
+    "/meetings/sync",
+    response_model=MeetingsSyncOut,
+    status_code=202,
+    summary="Read HubSpot's meetings now",
+    description=(
+        "Sync on Meetings: a full read of HubSpot's meetings in our window (90 days back to 60 "
+        "days ahead, TBC), so it also finds meetings that moved or were deleted. It answers at "
+        "once: `started` (the read runs in the background, and the list's `syncing` is true "
+        "until it ends), `running` (a read was going already: nothing new starts) or `fresh` "
+        "(a good read finished under a minute ago: HubSpot isn't asked). One read at a time "
+        "for the whole site. It only reads HubSpot, and costs nothing. A HubSpot failure "
+        "doesn't fail this request: the list's `sync_problem` says it, and the list stays as "
+        "it was. 503 `hubspot_not_connected` when HubSpot isn't connected. 409 "
+        "`meeting_forms_off`."
+    ),
+)
+async def sync_meetings(request: Request, settings: MeetingsOnDep) -> MeetingsSyncOut:
+    return await meeting_store.sync_now(request.app)
+
+
+@router.post(
     "/meetings/forms",
     response_model=MeetingFormOut,
     status_code=201,
@@ -173,8 +201,8 @@ async def meeting_summary(
         "request (this costs money: about US$0.03, at most the pre-read cap). A HubSpot meeting "
         "has one pre-read: a second start gives back the first (200). So does a typed meeting I "
         "start again with the same company, title and start, so a retry makes no second one. "
-        "404 `meeting_not_found` or `company_not_found`. 422 for a body that is neither kind. "
-        "409 `meeting_forms_off`."
+        "404 `meeting_not_found` or `company_not_found`. 422 for a body that is neither kind, "
+        "and `meeting_time_missing` for a typed meeting with no start. 409 `meeting_forms_off`."
     ),
     responses={200: {"model": MeetingFormOut, "description": "This meeting's pre-read, as it is"}},
 )
@@ -227,7 +255,9 @@ async def get_form(
         "(`next_step`) and who is going (`going`). Only the parts sent change. A summary "
         "changed here is the rep's own from then on (`by: person`): a redraft leaves it, and "
         "it keeps its sources. A sent pre-read that changes is a draft again, so sending it "
-        "again emails the new words. 404 `form_not_found`. 409 `meeting_forms_off`."
+        "again emails the new words. A failed draft becomes a draft once all three summaries "
+        "have text (the rep wrote them), so it can be sent; with one or two written it stays "
+        "failed, with its `error`. 404 `form_not_found`. 409 `meeting_forms_off`."
     ),
 )
 async def edit_form(
@@ -310,7 +340,8 @@ async def preview_form(
         "(422 `blanks_empty`). Sent already: nobody is emailed again, and a copy that is "
         "waiting or failed is tried again. `hubspot_copy` says how the copy went: saved, "
         "waiting (writing to HubSpot isn't on: the email still went), off (the company isn't in "
-        "HubSpot), or failed. 409 `form_not_ready` while it is drafting or failed, "
+        "HubSpot), or failed. 422 `no_one` when there is nobody to send it to. 409 "
+        "`form_not_ready` while it is drafting or failed, `form_sending` while it is being sent, "
         "`email_not_set_up`. 502 `email_failed`: nothing was sent. 404 `form_not_found`. 409 "
         "`meeting_forms_off`."
     ),

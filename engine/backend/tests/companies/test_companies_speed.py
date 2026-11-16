@@ -1,8 +1,9 @@
 """The Companies page stays fast on a copy the size of Contour's HubSpot (PLAN-V10 B2, D1).
 
-13,913 made-up companies (the 9 Nov copy), with offices, deals and 40,000 people. A page of the
-list must come back in under 300 ms and the prep box's matches in under 150 ms (both TBC). Each is
-timed three times after one warm-up, and the best time counts, so a busy laptop doesn't fail it.
+13,913 made-up companies (the 9 Nov copy), with offices, deals and 40,000 people, and nine in ten
+with a last activity (PLAN-V18 T1-6: the list's default order). A page of the list must come back
+in under 300 ms and the prep box's matches in under 150 ms (both TBC). Each is timed three times
+after one warm-up, and the best time counts, so a busy laptop doesn't fail it.
 """
 
 import time
@@ -37,7 +38,7 @@ async def fill(world: World) -> None:
                 """
                 INSERT INTO core.hubspot_companies
                     (hubspot_id, name, domain, city, industry, employees, owner,
-                     last_contacted, source)
+                     last_contacted, last_activity, source)
                 SELECT 'f' || g,
                        'Company ' || lpad(g::text, 5, '0'),
                        'company' || g || '.com.au',
@@ -46,6 +47,9 @@ async def fill(world: World) -> None:
                        10 + g % 900,
                        'Owner ' || (g % 12),
                        DATE '2024-01-01' + (g % 700),
+                       CASE WHEN g % 10 = 0 THEN NULL
+                            ELSE TIMESTAMPTZ '2024-01-01 09:00+11'
+                                 + ((g * 37) % 1000) * INTERVAL '1 day' END,
                        'api'
                 FROM generate_series(1, :companies) AS g
                 """
@@ -127,7 +131,9 @@ async def test_a_page_and_the_prep_box_are_fast_on_a_full_copy(world: World) -> 
         timings = {
             path: await best_ms(client, path)
             for path in (
-                API,
+                API,  # by last activity, the newest first (PLAN-V18 T1-6)
+                f"{API}?sort=last_activity&offset=5000",
+                f"{API}?sort=name",  # the default before PLAN-V18
                 f"{API}?sort=lease",
                 f"{API}?sort=last_talk&offset=5000",
                 f"{API}?q=company%2012",

@@ -25,12 +25,13 @@ from typing import Any, Final, get_args
 from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI
-from sqlalchemy import delete, func, select
+from sqlalchemy import ColumnElement, delete, func, or_, select
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.companies.facts import scrub
+from apps.companies.meeting_store import search_words
 from apps.companies.note_batch import (
     ALREADY_SENDING,
     LEAD_ONLY,
@@ -82,6 +83,7 @@ from apps.companies.schemas import (
     MyLastNote,
     NoteFieldOption,
     NoteState,
+    OutcomeFilter,
     OutcomeName,
     PrepPerson,
 )
@@ -108,6 +110,7 @@ STATES: Final[dict[NoteState, tuple[str, ...]]] = {
 CHANGEABLE: Final = ("to_confirm", "partial", "failed")  # the parts not in HubSpot yet
 REMOVABLE: Final = ("sorting", "to_confirm", "failed")  # failed: only with nothing in HubSpot
 NOTE_START_CHARS: Final = 200  # a note with no summary shows its first 200 characters
+SEARCH_WORDS: Final = 12  # the most words of a search that count
 CARD_PARTS: Final = frozenset({"summary", "outcome", "changes", "tasks"})
 SENT_FIELDS: Final[set[str]] = {"state", "step", "detail"}  # where a part is with HubSpot
 WAITING_FOR_HUBSPOT = "Waiting for HubSpot to be connected."
@@ -120,7 +123,8 @@ def company_not_found() -> Problem:
     return Problem(
         404,
         "We can't find that company",
-        "It may have been removed, or it isn't open to your account.",
+        "It may have been removed, or it isn't open to your account. Go back to the list "
+        "and pick it again.",
         code="company_not_found",
     )
 
@@ -129,7 +133,8 @@ def note_not_found() -> Problem:
     return Problem(
         404,
         "We can't find that note",
-        "It may have been removed, or it isn't open to your account.",
+        "It may have been removed, or it isn't open to your account. Go back to Call logs "
+        "and pick it again.",
         code="note_not_found",
     )
 
@@ -147,7 +152,8 @@ def not_your_note() -> Problem:
     return Problem(
         403,
         "Not your note",
-        "Only the person who logged this call can change it, remove it or send it.",
+        "Only the person who logged this call can change it, remove it or send it. Ask them "
+        "to do it.",
         code="not_your_note",
     )
 
@@ -164,7 +170,10 @@ def still_sorting() -> Problem:
 SENT_WORDS: Final = {
     "sending": "This note is being sent to HubSpot. Wait for it to finish.",
     "uncertain": "Check HubSpot first, then tell us whether it's there.",
-    "partial": "Part of this note is in HubSpot already, so it can't be removed here.",
+    "partial": (
+        "Part of this note is in HubSpot already, so it can't be removed here. Change it in "
+        "HubSpot instead."
+    ),
 }
 
 
@@ -173,9 +182,20 @@ def already_sent(status: str | None = None) -> Problem:
         409,
         "Already sent",
         SENT_WORDS.get(
-            status or "", "This note has gone to HubSpot, so it can't be changed or removed here."
+            status or "",
+            "This note has gone to HubSpot, so it can't be changed or removed here. Change it in "
+            "HubSpot instead.",
         ),
         code="note_sent",
+    )
+
+
+def dates_out_of_order() -> Problem:
+    return Problem(
+        422,
+        "The days are the wrong way round",
+        "Pick a start day on or before the end day.",
+        code="dates_out_of_order",
     )
 
 
@@ -358,6 +378,7 @@ def options(app: FastAPI, settings: Settings) -> CallNoteOptions:
         soft_seconds=settings.notes_soft_seconds,
         max_chars=settings.notes_max_chars,
         transcript_max_chars=settings.transcript_max_chars,
+        voice_tool=settings.voice_tool,
     )
 
 
@@ -573,6 +594,53 @@ async def get_note(
     return await one_out(session, note)
 
 
+def _word_starts(word: str) -> str:
+    """A Postgres pattern for text where `word` starts a word: at the start, or after anything
+    that isn't a letter or a digit. Every mark in it is matched as itself."""
+    escaped = "".join(char if char.isalnum() else f"\\{char}" for char in word)
+    return f"(^|[^[:alnum:]]){escaped}"
+
+
+def melbourne_day(day: date) -> datetime:
+    """The start of a Melbourne day, in UTC."""
+    return datetime(day.year, day.month, day.day, tzinfo=MELBOURNE).astimezone(UTC)
+
+
+@dataclass(frozen=True)
+class NoteFilters:
+    """A list's filters (PLAN-V18 T1-7), for any state. `since` and `until` are Melbourne days,
+    both counted."""
+
+    q: str | None = None
+    outcome: OutcomeFilter | None = None
+    since: date | None = None
+    until: date | None = None
+
+    def where(self) -> list[ColumnElement[bool]]:
+        """The conditions, in SQL. Each word of `q` must start a word of the company's name, the
+        person's name, the note or the summary, in any case."""
+        found: list[ColumnElement[bool]] = []
+        searched = (
+            CallNote.company_name,
+            CallNote.person_name,
+            CallNote.text,
+            CallNote.card["call"]["summary"].astext,
+        )
+        for word in search_words(self.q)[:SEARCH_WORDS]:
+            pattern = _word_starts(word)
+            found.append(or_(*(func.coalesce(part, "").op("~*")(pattern) for part in searched)))
+        picked = func.coalesce(CallNote.card["call"]["outcome"].astext, "")
+        if self.outcome == "none":
+            found.append(picked.not_in(sorted(OUTCOME_NAMES)))
+        elif self.outcome is not None:
+            found.append(picked == self.outcome)
+        if self.since is not None:
+            found.append(CallNote.called_at >= melbourne_day(self.since))
+        if self.until is not None:
+            found.append(CallNote.called_at < melbourne_day(self.until + timedelta(days=1)))
+        return found
+
+
 async def list_notes(
     session: AsyncSession,
     auth: AuthContext | None,
@@ -585,16 +653,24 @@ async def list_notes(
     sorter: NoteSorter,
     sender: NoteSender,
     now: datetime,
+    filters: NoteFilters | None = None,
 ) -> CallNotePage:
-    """A page of notes. Only an Admin sees other people's (`mine` false). To confirm: the unsure
-    ones first, then the oldest call first. Logged and needs a look: the newest call first."""
+    """A page of notes. Only an Admin sees other people's (`mine` false), and never in History,
+    which is every one of my own notes, in any status (PLAN-V18 T1-7). To confirm: the unsure
+    ones first, then the oldest call first. The others: the newest call first. `filters` work
+    for any state. With sign-in off, every note is open, as everything else is then."""
+    filters = filters or NoteFilters()
+    if filters.since is not None and filters.until is not None and filters.since > filters.until:
+        raise dates_out_of_order()
     statement = select(CallNote)
-    if auth is not None and (mine or auth.user.role != "admin"):
+    own = mine or state == "history"
+    if auth is not None and (own or auth.user.role != "admin"):
         statement = statement.where(CallNote.made_by == auth.user.id)
-    if state is not None:
+    if state is not None and state != "history":
         statement = statement.where(CallNote.status.in_(STATES[state]))
     if company_key is not None:
         statement = statement.where(CallNote.company_key == company_key)
+    statement = statement.where(*filters.where())
     total = await session.scalar(select(func.count()).select_from(statement.subquery()))
     if state == "to_confirm":
         unsure_last = CallNote.card["unsure"].astext.is_(None)
@@ -699,7 +775,7 @@ def part_sent(what: str) -> Problem:
     return Problem(
         409,
         "Already in HubSpot",
-        f"{what} is in HubSpot already, so it can't change here.",
+        f"{what} is in HubSpot already, so it can't change here. Change it in HubSpot instead.",
         code="part_sent",
     )
 
@@ -752,7 +828,9 @@ def _edited_changes(
             if isinstance(found, Dropped):
                 what = found.what[:1].upper() + found.what[1:]
                 raise refused(
-                    "This change can't be made", f"{what}: {found.why}.", code="change_not_possible"
+                    "This change can't be made",
+                    f"{what}: {found.why}. Change it, or take it out.",
+                    code="change_not_possible",
                 )
             same = old is not None and old.value == found.value
             fresher = (
@@ -1143,7 +1221,8 @@ def nothing_to_retry() -> Problem:
     return Problem(
         409,
         "Nothing to send again",
-        "Only a note that failed, or was partly saved, can be sent again.",
+        "Only a note that failed, or was partly saved, can be sent again. Open the note to see "
+        "where it stands.",
         code="nothing_to_retry",
     )
 
@@ -1152,7 +1231,8 @@ def nothing_to_resolve() -> Problem:
     return Problem(
         409,
         "Nothing to check",
-        "Only a note that HubSpot may or may not have saved needs this.",
+        "Only a note that HubSpot may or may not have saved needs this. Open the note to see "
+        "where it stands.",
         code="nothing_to_resolve",
     )
 

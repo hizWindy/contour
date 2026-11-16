@@ -6,7 +6,7 @@ This plan makes the Companies module clearer and nicer to use, from Al-khair's l
 
 - **Built by:** Al-khair Pama. **Signed off by:** Al-khair for the code and every screen. Levi confirms the rules marked **TBC with Levi**.
 - **Last updated:** 16 Nov 2026 (S0 done: `plan-v18` made from `master`; the tracks are starting).
-- **Progress:** S0: 1 of 1. Track 1: 0 of 9. Track 2: 0 of 8. Track 3: 0 of 9. Merge and deploy: 0 of 3.
+- **Progress:** S0: 1 of 1. Track 1: 9 of 9. Track 2: 0 of 8. Track 3: 0 of 9. Merge and deploy: 0 of 3.
 - **Sources:**
   - Al-khair's list of changes (16 Nov, in chat), and the chat about Meetings the same day: the empty Meetings page, the team switch, and the Sync idea;
   - the code on `master` (`c4ebe58`), read on 16 Nov;
@@ -381,17 +381,17 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
 
 ## Track 1: the backend (session 1)
 
-**Progress:** 0 of 9. Every step is `backend-agent` work.
+**Progress:** 9 of 9. Every step is `backend-agent` work.
 
-- [ ] **T1-1. Own copy and a baseline.** Make the worktree and the database. Run the backend tests once and note the counts. Note `test_companies_speed`'s time too: it was about 560ms against its 300ms limit on this laptop before this plan.
+- [x] **T1-1. Own copy and a baseline.** Done 2026-11-16, on `40d9912` (see the Log). Make the worktree and the database. Run the backend tests once and note the counts. Note `test_companies_speed`'s time too: it was about 560ms against its 300ms limit on this laptop before this plan.
 
-- [ ] **T1-2. Ask HubSpot two things.** Free, read only. It loads the real key into the process only.
+- [x] **T1-2. Ask HubSpot two things.** Done 2026-11-16, read only, no code (see the Log). Free, read only. It loads the real key into the process only.
   - **Teams:** does HubSpot's owners list give each owner's `teams`? How many owners are in a team, and the teams' names. Write names and counts in the Log, never an email.
   - **Last activity:** read the company field list. Which field is "Last activity date" (we expect `notes_last_updated`)? How many companies in our copy would have it, against "Last contacted"?
   - If HubSpot has no teams, send Track 2 a message ("My team" stays hidden) and tell Al-khair.
   - **Done when:** the Log has both answers.
 
-- [ ] **T1-3. Teams and last activity in our copy.**
+- [x] **T1-3. Teams and last activity in our copy.** Done 2026-11-16 (`a5a4518`).
   - Migration `0024_v18_teams_activity`:
     - a new table `core.hubspot_owner_teams` (owner id, team id, team name, primary or not);
     - `core.hubspot_companies.last_activity` (a time), from the field T1-2 named;
@@ -401,7 +401,7 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
   - Run `scripts/schema_map.py`, and add the new table to the four table lists.
   - **Done when:** tests prove teams saved and replaced, `last_activity` read, the writer's update, and that the schema map matches.
 
-- [ ] **T1-4. Meetings: All, My meetings, My team** (the contract, part 1).
+- [x] **T1-4. Meetings: All, My meetings, My team** (the contract, part 1). Done 2026-11-16 (`88e8274`).
   - `who` in place of `mine`, with `all` as the default.
   - All is in time order. Each item says `mine`.
   - The page's new fields: `linked`, `team_state`, `team_names`.
@@ -409,7 +409,7 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
   - With sign in switched off there is no user: All works, and `linked` is false.
   - **Done when:** tests cover each `who`, an unlinked account, no team, two teams, sign in switched off, and the order.
 
-- [ ] **T1-5. Meetings: Sync now** (the contract, part 1).
+- [x] **T1-5. Meetings: Sync now** (the contract, part 1). Done 2026-11-16 (`854c94e`).
   - `POST /meetings/sync`: a full read of the window, now. It skips the 15 minute rule and the 60 second ask rule.
   - It keeps: one read at a time, the save lock (`MEETINGS_LOCK`), and the key check. A press within a minute of the last finished read answers `fresh` and asks HubSpot nothing.
   - It answers at once. The read runs in the background, and the list's `syncing` says so.
@@ -418,19 +418,19 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
   - **Measure,** with the real key in the process only: the requests and the seconds for one press on the dev copy (599 meetings). Write both in the Log, and send Track 2 the seconds for its words.
   - **Done when:** tests prove `started`, `running` and `fresh`, a failed read (the sentence shows, and the old copy stays), a missing permission, no key, and that the daily sync and a Sync never save at the same time.
 
-- [ ] **T1-6. Companies: last activity first** (the contract, part 2).
+- [x] **T1-6. Companies: last activity first** (the contract, part 2). Done 2026-11-16 (`57fc0e2`).
   - `last_activity` becomes the default sort, newest first. Empty values go last, then A to Z.
   - Lead Finder rows that aren't in HubSpot have none, so they go last.
   - Old links with `sort=name` still work.
   - `test_companies_speed` must pass. If the new sort is slower, find why (the list is sorted over a joined subquery) and fix it before moving on.
   - **Done when:** tests cover the order, empty values, ties and old links, and the Log has the speed before and after.
 
-- [ ] **T1-7. Call notes: History** (the contract, part 3).
+- [x] **T1-7. Call notes: History** (the contract, part 3). Done 2026-11-16 (`4a7e821`).
   - `state=history`, and the filters `q`, `outcome`, `since` and `until`.
   - Only my own notes, as today. Another rep's notes never show.
   - **Done when:** tests cover each filter, the order, paging, and someone else's notes, and a speed check with 2,000 notes stays under 300ms.
 
-- [ ] **T1-8. The words, and the voice setting.**
+- [x] **T1-8. The words, and the voice setting.** Done 2026-11-16 (`503dd9c`, `bdcdcde`).
   - "Activity" becomes "Call logs" in the Settings help (`core/prefs/service.py:242`) and in `schemas.py:570`.
   - The new sentences in "Words for when things go wrong": Sync, no team, the two draft failures.
   - Each route's description lists every error code it can answer. Some are missing today: `meeting_time_missing` on `POST /meetings/forms`, and `no_one` and `form_sending` on the send route.
@@ -438,7 +438,7 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
   - The `voice_tool` setting (the contract, part 4), on the Settings page, and in `GET /call-notes/options`.
   - **Done when:** the tests pass, and the screen words scanner passes.
 
-- [ ] **T1-9. Track 1 check.**
+- [x] **T1-9. Track 1 check.** Done 2026-11-16 (tag `v18-t1`). review-agent: run by the lead at M1.
   - Every backend test (`RUN_GATES=1`), and `uv run engine openapi` to prove the contract builds (the generated files are made again at M1).
   - The `security-check` skill on the whole diff.
   - A fresh `review-agent` reviews the diff against this plan.
@@ -447,7 +447,23 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
 
 ### Track 1 Log
 
-- (empty)
+- 16 Nov 2026, T1-1: the baseline on `40d9912`, all backend tests with `RUN_GATES=1` on `leadfinder_test_v18a`: 4,634 passed, 1 failed, 25 skipped, in 15 min 54 s. The one failure is `test_companies_speed`: `city=Perth&deal=open` took 543 ms against its 300 ms limit. Its other pages took 39 to 51 ms (the default list, by name, 39 ms), and the prep box 44 ms.
+- 16 Nov 2026, T1-2, read only, with the real key in the process only:
+  - **Teams: yes.** HubSpot's owners list gives each owner's `teams` (an id, a name, and whether it is the main one), in the dated API and in v3. 26 active owners, 11 of them in a team, none in two: Admin (6), Business Development (4) and Archive Team (1). None of the 35 archived owners is in a team. HubSpot's own list of teams needs a permission the key doesn't have (`settings.users.teams.read`); the owners list is enough, so it isn't needed. So "My team" stays, and `team_state` is `ready` for the 11 and `no_team` for the other 15.
+  - **Last activity: `notes_last_updated`** ("Last Activity Date", a date and time). Of HubSpot's 13,918 companies, 12,900 have it and 10,253 have "Last contacted" (`notes_last_contacted`). Every company with Last contacted has Last activity date too, and 2,647 have Last activity date only. In a sample of 200 with both, Last activity date was newer in 33 and the same in 167, never older. Our copy has 13,919 companies, 10,253 with Last contacted. So the list's `last_activity` is in effect HubSpot's Last activity date, with Last contacted as the fallback.
+- 16 Nov 2026, T1-3 (`a5a4518`): migration `0024_v18_teams_activity` (the teams table, `core.hubspot_companies.last_activity`, and the History index on `companies.call_notes`), applied to `leadfinder_v18a`, with `engine/schema/SCHEMA-0024.md` (`--check` matches). The sync replaces every owner's teams each time. A company's `last_activity` never moves back: a save keeps the newer of ours and HubSpot's, so a call our copy noted when it landed stays, and an export leaves it alone. Whether a changes sync sees a new activity at once depends on HubSpot moving the company's modified date (**TBC**); the full sync always does. 356 tests that T1-3 touches pass, and 177 more that read our copy.
+- 16 Nov 2026, T1-4 (`88e8274`): `who` (`all`, `mine`, `team`) in place of `mine`, as the contract says. All, My meetings and My team read the whole window, then pick in code, always in time order. Each item has `mine`. Sentences: "not linked" on My meetings (and its My team twin, which says "My team is empty"), "no team", and two the plan didn't list: HubSpot has no teams (for an old `who=team` link while the website hides the filter) and nobody signed in (sign in switched off: My meetings and My team are empty, All works, `linked` is false, `team_state` is `not_linked`). The new `MeetingPage` and `MeetingItem` fields are optional in the website's types (`optional_in_types`, as PLAN-V14 to V17 did): the API always sends them. A company's record marks my own meetings too. The summary of the route says "Client meetings" now.
+- 16 Nov 2026, T1-5 (`854c94e`): `POST /companies/meetings/sync` and the list's `checked_at`, `syncing` and `sync_problem`. "One read at a time" is kept in the backend's memory (one backend runs for a database): while any read of HubSpot's meetings runs (the daily one, a refresh or a Sync), Sync answers `running` and a refresh skips itself. `fresh` needs the newest read to be a good one under a minute old, so after a failed read a press reads again at once. A HubSpot failure never fails the press: the list's `sync_problem` says "HubSpot didn't answer, so this list is from 6:00 pm. Try Sync again in a minute." (the time in Melbourne, with "yesterday" or the date when it isn't today), or the waiting words when a permission is missing. The 503 detail is the contract's sentence plus one next step: "An admin can connect it on the HubSpot page in Admin."
+- 16 Nov 2026, **T1-5's measure** (the real key in the process only, read only, the full read Sync runs, on `leadfinder_v18a`): one press is **15 requests** (3 search pages and 12 link reads, 6 for companies and 6 for people) and took **10.2, 12.5 and 13.2 seconds** in three presses. The first press of the day took 64 s and 17 requests: 2 search pages were asked again after HubSpot was slow (which answer it gave is not confirmed). The copy went from 599 to 597 meetings (6 changed, 2 left the window). **For Track 2's words:** "Already checking HubSpot. It takes about 15 seconds." The time goes on the link reads, one after another; reading companies and people side by side would save about 3 seconds (not done: not in this plan).
+- 16 Nov 2026, T1-6 (`57fc0e2`): `last_activity` is the default sort, newest first, as a Melbourne day; an empty one goes last, then A to Z by name, then by key; `order=asc` starts with the oldest and keeps the empty ones last. Lead Finder rows have none. **Speed, `test_companies_speed`, best of 3:** before (the baseline's full run) the default list by name took 39 ms and `city=Perth&deal=open` 543 ms; after (the test alone) the new default takes 37 to 40 ms, `sort=last_activity&offset=5000` 45 to 48 ms, `sort=name` 39 ms and `city=Perth&deal=open` 65 ms. The new sort isn't slower. The slow one was the city filter, not the sort: "city = x OR EXISTS (an office there)" made Postgres guess a cost of 116,000 (30 times too high), so it compiled the query (JIT) on every page, which took about 75 ms alone and 543 ms while the laptop was busy. The city filter is now one list of ids (`IN (... UNION ...)`), with a cost near 2,000 and no compiling. The full run at T1-9 checks it again.
+- 16 Nov 2026, T1-7 (`4a7e821`): `state=history` and the filters `q`, `outcome`, `since` and `until`, for any state. History is always the caller's own notes, even for an Admin who asks for everyone's (`mine=false`); with sign in switched off every note shows, as everything else does then. `q` uses the same words rule as Meetings: each word must start a word of the company's name, the person's name, the note or the summary (a mark inside a word counts, like O'Brien; marks around it don't). `outcome=none` is a note with no outcome picked. `since` after `until` answers 422 `dates_out_of_order` ("Pick a start day on or before the end day."), a word the contract didn't name. **Speed** with 2,000 of my notes and 1,000 of another rep's (best of 3): History 19 ms, its page 31 (offset 1,500) 20 ms, a search for two words 34 ms, an outcome since a day 21 ms. The limit is 300 ms.
+- 16 Nov 2026, T1-8 (`503dd9c`, `bdcdcde`): "Call logs" in the Settings help and in `CallNoteOptions.enabled`. The `voice_tool` setting (`browser_model` by default, `browser_service`, `typing`) is on the Settings page and in `GET /call-notes/options`. The sentences Track 2 shows: "Meetings can't be read from HubSpot yet. You can still start a new pre-read.", the waiting one, the two draft failures (the AI limit, and the AI service, with "is busy", "took too long" and "isn't set up" in the same pattern), and "Email isn't set up yet, so nothing was sent. The pre-read stays here: copy it, or send it once email is set up.". `POST /meetings/forms` now names `meeting_time_missing`, and the send route `no_one` and `form_sending`. **A next step on every problem:** a new test (`tests/companies/test_problem_words.py`) reads every `Problem`, `refused` and `HubSpotError` in `apps/companies/` and `core/hubspot/meetings.py`; 22 details had none and now end with one, like "Go back to the list and pick it again." (company, note, call prep and pre-read not found), "Change it in HubSpot instead." (a note already sent), "Press Sync, then look for it again." (a meeting not found) and "Ask an Admin." The admin's sync warning keeps the permission's name; the Meetings page gets the plain one. **Asked by Track 2, through the lead** (`bdcdcde`): a failed pre-read whose three summaries the rep has written is a draft again (its error goes), so "write them yourself" leads to a send; with one or two written it stays failed. No new field.
+- 16 Nov 2026, T1-9: **every backend test with `RUN_GATES=1`: 4,682 passed, 0 failed, 25 skipped, in 12 min 29 s** (the baseline was 4,634 passed and 1 failed). `uv run engine openapi` builds the contract (the gate passed on it); the generated `openapi.json` was put back, for M1 to make again with `npm run types`. `test_companies_speed` passed in the full run too (the whole test took 2.4 s, against 4.7 s at the baseline), so the city filter's fix holds on a busy run. The `security-check` skill on `plan-v18...plan-v18-track1`: no blocker. No key, token or real address is in the diff; the T1-2 and T1-5 scripts read the HubSpot key into their own process only, with writing off, and stay outside git. HubSpot is only read (the owners list, the company fields, and the meetings search and links); the one write path, the activity writer, now also moves our copy's `last_activity`. The new route `POST /companies/meetings/sync` sits behind the sign-in guard and the Companies tick, like every Companies route. History shows only the caller's own notes, and its search escapes every mark, so a search can't become a pattern. Log lines carry counts and seconds only. One note, not a blocker: after a failed read, Sync reads again at once, so many presses in a row each cost about 15 HubSpot requests; one read at a time and HubSpot's own pace keep it small. review-agent: run by the lead at M1.
+- 16 Nov 2026, **for the other tracks (the lead passes it on; no message was sent):**
+  - **Track 2:** Sync takes about 15 seconds ("Already checking HubSpot. It takes about 15 seconds."). `fresh` comes only after a good read; after a failed one a press reads again. `sentence` now holds the whole not ready sentence, "You can still start a new pre-read." included, so don't add it twice. The 503 detail is the contract's sentence plus "An admin can connect it on the HubSpot page in Admin." With sign in switched off, `team_state` is `not_linked` and My meetings and My team say "Nobody is signed in ...". An old `who=team` link while HubSpot has no teams says "HubSpot has no teams yet ...". A failed pre-read is a draft again once its three summaries are written. `CompanyRow.last_activity` is a Melbourne day, or null.
+  - **Track 3:** `GET /call-notes?state=history` with `q`, `outcome` (`none` too), `since` and `until`; days the wrong way round answer 422 `dates_out_of_order` ("Pick a start day on or before the end day."), a code the contract didn't list. `GET /call-notes/options` has `voice_tool`.
+  - **Both, at M1:** every new field on an answer that existed (`MeetingPage`, `MeetingItem.mine`, `CompanyRow.last_activity`, `CallNoteOptions.voice_tool`) is optional in the generated types, as PLAN-V14 to V17 did; the API always sends it. Many problems' details now end with a next step, so a website test that copied an old detail word for word may need the new one. The Settings page puts `voice_tool` in its default group until `src/apps/lead-finder/admin/settings-groups.ts` (no V18 track owns it) maps it to `notes`; it shows the raw choices (`browser_model`, `browser_service`, `typing`) unless the website names them.
+- 16 Nov 2026: **Track 1 ready to merge.**
 
 ## Track 2: Meetings, the pre-read and the Companies list (session 2)
 

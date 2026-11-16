@@ -21,6 +21,8 @@ owner's id, and how it was matched. Never the owner's email.
   owners for the pick list (`active_owners`), one account's owner id (`owner_id_of`, which
   `activities.owner_of` uses), and the other way, an owner's account (`rep_of_owner`: its name
   and its own address, for Track 2's Meetings).
+- **Teams** (PLAN-V18 T1-3, T1-4): `teams_of` gives an owner's HubSpot teams and the owners in
+  them, from `core.hubspot_owner_teams` (the sync fills it), for Meetings' "My team".
 """
 
 import logging
@@ -35,7 +37,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from core.auth.models import User
 from core.hubspot.client import HubSpot, HubSpotError, email_key
-from core.hubspot.models import HubSpotOwner
+from core.hubspot.models import HubSpotOwner, HubSpotOwnerTeam
 
 log = logging.getLogger(__name__)
 
@@ -280,6 +282,39 @@ async def owner_id_of(session: AsyncSession, user_id: uuid.UUID) -> str | None:
         select(User.hubspot_owner_id).where(User.id == user_id)
     )
     return found
+
+
+@dataclass(frozen=True)
+class TeamsOf:
+    """An owner's HubSpot teams, as our copy has them (PLAN-V18 T1-4)."""
+
+    any_team: bool = False  # our copy holds at least one team: HubSpot has teams
+    names: tuple[str, ...] = ()  # the owner's teams' names, by name
+    members: frozenset[str] = frozenset()  # the owners in those teams, the owner included
+
+
+async def teams_of(session: AsyncSession, owner_id: str | None) -> TeamsOf:
+    """The HubSpot teams `owner_id` is in, and every owner in them. None, or an owner in no
+    team, has no names and no members. A team with no name is "HubSpot team <id>"."""
+    any_team = await session.scalar(select(HubSpotOwnerTeam.team_id).limit(1)) is not None
+    if not any_team or owner_id is None:
+        return TeamsOf(any_team=any_team)
+    rows = await session.execute(
+        select(HubSpotOwnerTeam.team_id, HubSpotOwnerTeam.team_name).where(
+            HubSpotOwnerTeam.owner_id == owner_id
+        )
+    )
+    mine = {team_id: (name or "").strip() or f"HubSpot team {team_id}" for team_id, name in rows}
+    if not mine:
+        return TeamsOf(any_team=True)
+    members = await session.scalars(
+        select(HubSpotOwnerTeam.owner_id).where(HubSpotOwnerTeam.team_id.in_(list(mine)))
+    )
+    return TeamsOf(
+        any_team=True,
+        names=tuple(sorted(set(mine.values()), key=lambda name: (name.casefold(), name))),
+        members=frozenset({owner_id, *members}),
+    )
 
 
 async def rep_of_owner(

@@ -133,7 +133,9 @@ async def log_transcript(
     text = transcript_text(body)
     if not text:
         raise refused(
-            "Nothing to save", "This transcript has no words in it.", code="transcript_empty"
+            "Nothing to save",
+            "This transcript has no words in it. Paste the words, or pick another file.",
+            code="transcript_empty",
         )
     limit = settings.transcript_max_chars
     if len(text) > limit:

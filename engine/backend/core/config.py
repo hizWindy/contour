@@ -46,6 +46,9 @@ PLAIN_DOMAIN = re.compile(rf"{_DOMAIN_LABEL}(?:\.{_DOMAIN_LABEL})+")  # like con
 
 ClaudeModel = Literal["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"]
 ClaudeEffort = Literal["low", "medium", "high", "xhigh", "max"]
+# The mic's voice to text tool (PLAN-V18): Whisper in the browser, the browser's own speech
+# service, or no mic.
+VoiceTool = Literal["browser_model", "browser_service", "typing"]
 MODEL_CHOICES: Final[tuple[str, ...]] = get_args(ClaudeModel)
 EFFORT_CHOICES: Final[tuple[str, ...]] = get_args(ClaudeEffort)
 
@@ -98,6 +101,7 @@ EDITABLE_KEYS: Final[list[str]] = [
     "call_notes_enabled",
     "call_notes_ai_enabled",
     "meeting_forms_enabled",
+    "voice_tool",  # PLAN-V18
 ]
 
 # Which env-only ceiling caps each editable key.
@@ -472,7 +476,7 @@ class Settings(BaseSettings):
     property_lookup_days: int = Field(30, ge=1, le=365)  # a company's lookup is reused this long
 
     # --- Call notes and the pre-meeting form (PLAN-V17). Off until Al-khair switches them on. ---
-    # call_notes_enabled shows Log call and Activity. call_notes_ai_enabled lets Claude sort a
+    # call_notes_enabled shows Log call and Call logs. call_notes_ai_enabled lets Claude sort a
     # note: a rep's note names clients, so it waits for Levi's OK (choice 1, TBC). It is its own
     # switch, not hubspot_names_to_claude_ok. With it off, the rep sorts a note by hand, free.
     call_notes_enabled: StrictBool = False
@@ -482,6 +486,11 @@ class Settings(BaseSettings):
     notes_max_chars: int = Field(6_000, ge=500, le=60_000)  # about 6 minutes of talk (TBC)
     notes_soft_seconds: int = Field(180, ge=30, le=1_800)  # the timer turns Ochre (TBC, Levi)
     transcript_max_chars: int = Field(60_000, ge=1_000, le=200_000)  # a meeting's (TBC)
+    # Which voice to text tool the mic uses (PLAN-V18, the contract's part 4). browser_model is
+    # Whisper in the browser: the voice stays on the laptop. browser_service is the browser's own
+    # speech service, which sends the voice to Google or Microsoft: only with Levi's OK (TBC).
+    # typing hides the mic.
+    voice_tool: VoiceTool = "browser_model"
     meeting_forms_enabled: StrictBool = False  # shows Meetings and the pre-read
     model_meeting_form: ClaudeModel = "claude-sonnet-5-5"
     meeting_form_cap_usd: Decimal = Field(Decimal("0.10"), ge=Decimal("0.01"), le=Decimal("2"))

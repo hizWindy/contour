@@ -25,6 +25,7 @@ from apps.companies.schemas import (
     SortOrder,
     Source,
 )
+from core.api.access import SignedInDep
 from core.api.deps import SessionDep, SettingsDep
 from core.api.errors import Problem
 from core.api.models import OFFSET_MAX, SafeText
@@ -47,7 +48,8 @@ def not_found() -> Problem:
     return Problem(
         404,
         "We can't find that company",
-        "It may have been removed, or it isn't open to your account.",
+        "It may have been removed, or it isn't open to your account. Go back to the list "
+        "and pick it again.",
         code="company_not_found",
     )
 
@@ -57,10 +59,13 @@ def not_found() -> Problem:
     response_model=CompanyPage,
     summary="List companies",
     description=(
-        "One page of companies from the HubSpot copy, by name unless `sort` says otherwise. "
-        "With the Lead Finder tick, its good leads that aren't in HubSpot yet are added "
-        "(`source` lead), and each row has the Lead Finder's newest result. `q` looks in the "
-        "name, website and industry. `city` matches the company's city or any of its offices."
+        "One page of companies from the HubSpot copy. `sort`: `last_activity` (the default: "
+        "the newest of HubSpot's Last activity date and Last contacted, newest first), `name`, "
+        "`staff`, `lease` or `last_talk`; `order` turns it round. An empty value goes last, "
+        "then ties go A to Z. With the Lead Finder tick, its good leads that aren't in HubSpot "
+        "yet are added (`source` lead, with no last activity, so they come last), and each row "
+        "has the Lead Finder's newest result. `q` looks in the name, website and industry. "
+        "`city` matches the company's city or any of its offices."
     ),
 )
 async def list_companies(
@@ -71,7 +76,7 @@ async def list_companies(
     owner: Annotated[SafeText | None, Query(max_length=120)] = None,
     deal: DealState | None = None,
     source: Source | None = None,
-    sort: SortKey = "name",
+    sort: SortKey = "last_activity",
     order: SortOrder | None = None,
     limit: Annotated[int, Query(ge=1, le=100)] = store.PAGE_SIZE,
     offset: Annotated[int, Query(ge=0, le=OFFSET_MAX)] = 0,
@@ -142,6 +147,7 @@ async def get_company(
     session: SessionDep,
     settings: SettingsDep,
     leads: LeadsDep,
+    auth: SignedInDep,
     source: api_meetings.SourceDep,
     now: NowDep,
     key: Key,
@@ -152,6 +158,11 @@ async def get_company(
     if detail is None:
         raise not_found()
     detail.meetings = await meeting_store.company_meetings(
-        session, key, source=source, settings=settings, now=now
+        session,
+        key,
+        source=source,
+        settings=settings,
+        now=now,
+        me=await meeting_store.my_owner(session, auth, source),
     )
     return detail

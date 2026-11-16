@@ -11,13 +11,15 @@ from pydantic.config import JsonDict
 
 from apps.companies.deals import DealState, StageKind
 from core.api.models import SafeText
+from core.config import VoiceTool
 from core.hubspot.meetings import Meeting, MeetingsState, MeetingWhere
 
 Source = Literal["hubspot", "lead"]
 # For a field named `date` with a default: in the class body the name `date` is the field by the
 # time the annotation is read, so the type needs a name of its own.
 DayOrNone = date | None
-SortKey = Literal["name", "staff", "lease", "last_talk"]
+# last_activity is the default (PLAN-V18 T1-6): the newest activity first.
+SortKey = Literal["last_activity", "name", "staff", "lease", "last_talk"]
 SortOrder = Literal["asc", "desc"]
 PeopleStatus = Literal["ready", "waiting"]
 ToneKey = Literal["friendly", "direct", "consultative", "formal"]  # the tone presets (PLAN-V15)
@@ -43,6 +45,9 @@ def optional_in_types(*names: str) -> Callable[[JsonDict], None]:
 
 
 class CompanyRow(Out):
+    # Added in PLAN-V18: the API always sends it, and the website's types leave it optional.
+    model_config = ConfigDict(json_schema_extra=optional_in_types("last_activity"))
+
     key: str = Field(description="The HubSpot id, or lead:<id> for a lead not in HubSpot yet")
     name: str
     domain: str | None
@@ -51,6 +56,11 @@ class CompanyRow(Out):
     staff: int | None = Field(description="Staff, as HubSpot has it (the whole company)")
     owner: str | None = Field(description="The HubSpot owner's name")
     last_talk: date | None = Field(description="When someone last talked to them, per HubSpot")
+    last_activity: date | None = Field(
+        None,
+        description="The newest of HubSpot's Last activity date and Last contacted, as a "
+        "Melbourne date. None for a company with neither, and for a Lead Finder row",
+    )
     next_lease_end: date | None = Field(description="The nearest lease end still to come")
     deal: DealState
     source: Source = Field(description="hubspot, or lead: found by the Lead Finder, not in HubSpot")
@@ -534,10 +544,15 @@ class StyleNoteIn(BaseModel):
 NoteSource = Literal["mic", "typed", "transcript"]
 NoteStatus = Literal["sorting", "to_confirm", "sending", "logged", "partial", "failed", "uncertain"]
 NoteSortedBy = Literal["ai", "person"]
-NoteState = Literal["to_confirm", "logged", "needs_look"]
+# history (PLAN-V18 T1-7): every one of my notes, in any status.
+NoteState = Literal["to_confirm", "logged", "needs_look", "history"]
 # HubSpot's six standard call outcomes (core.hubspot.activities.OUTCOME_NAMES; a test checks).
 OutcomeName = Literal[
     "Connected", "No answer", "Left voicemail", "Left live message", "Busy", "Wrong number"
+]
+# A list's outcome filter (PLAN-V18 T1-7): one of the six, or none (no outcome picked).
+OutcomeFilter = Literal[
+    "Connected", "No answer", "Left voicemail", "Left live message", "Busy", "Wrong number", "none"
 ]
 NoteTaskKind = Literal["call", "email", "todo"]
 NoteFieldKind = Literal["date", "number"]
@@ -565,9 +580,11 @@ WAITING_FOR = (
 
 
 class CallNoteOptions(Out):
-    model_config = ConfigDict(json_schema_extra=optional_in_types("transcript_max_chars"))
+    model_config = ConfigDict(
+        json_schema_extra=optional_in_types("transcript_max_chars", "voice_tool")
+    )
 
-    enabled: bool = Field(description="True when Log call and Activity show")
+    enabled: bool = Field(description="True when Log call and Call logs show")
     ai_enabled: bool = Field(
         description="True when Claude sorts a note: its switch is on and Claude is set up. "
         "False: the rep picks the outcome and adds follow-ups by hand"
@@ -581,6 +598,12 @@ class CallNoteOptions(Out):
     transcript_max_chars: int = Field(
         description="The longest meeting transcript, in characters, once a .vtt file's times are "
         "taken out. A longer one answers 422 `transcript_too_long`"
+    )
+    voice_tool: VoiceTool = Field(
+        "browser_model",
+        description="Which voice to text tool the mic uses: browser_model (Whisper in the "
+        "browser: the voice stays on the laptop), browser_service (the browser's own speech "
+        "service, which sends the voice to Google or Microsoft) or typing (no mic)",
     )
 
 
@@ -811,6 +834,12 @@ PrepFacts.model_rebuild()  # it names MyLastNote, which comes after it
 # --- Meetings and the pre-read (PLAN-V17 T2-11) --------------------------------------------------
 
 MeetingWhen = Literal["upcoming", "past"]
+# Whose meetings (PLAN-V18 T1-4): everyone's, mine, or my HubSpot team's.
+MeetingWho = Literal["all", "mine", "team"]
+# Whether "My team" can pick anything out (PLAN-V18 T1-4).
+TeamState = Literal["ready", "not_linked", "no_team", "none_in_hubspot"]
+# What Sync on Meetings did (PLAN-V18 T1-5).
+MeetingsSyncState = Literal["started", "running", "fresh"]
 # By the Melbourne date: today, tomorrow, the rest of this week (to Sunday), or later.
 MeetingGroup = Literal["today", "tomorrow", "this_week", "later"]
 FormStatus = Literal["drafting", "draft", "sent", "failed"]
@@ -830,7 +859,7 @@ class MeetingFormState(Out):
 class MeetingItem(Out):
     """One client meeting in a list: the meeting as HubSpot has it, and where its pre-read is."""
 
-    model_config = ConfigDict(json_schema_extra=optional_in_types("owner_name"))
+    model_config = ConfigDict(json_schema_extra=optional_in_types("owner_name", "mine"))
 
     meeting: Meeting
     company_name: str = Field(description="The company it is linked to, from our copy")
@@ -850,9 +879,21 @@ class MeetingItem(Out):
         description="True for a meeting typed in for New pre-read: it isn't in HubSpot, its "
         "`meeting.id` is empty, and `form` is its pre-read",
     )
+    mine: bool = Field(
+        False,
+        description="True when I own the meeting or am on it as a Contour person in HubSpot. A "
+        "typed one is always mine. False for everyone with sign-in off",
+    )
 
 
 class MeetingPage(Out):
+    # Added in PLAN-V18: the API always sends them, and the website's types leave them optional.
+    model_config = ConfigDict(
+        json_schema_extra=optional_in_types(
+            "who", "linked", "team_state", "team_names", "checked_at", "syncing", "sync_problem"
+        )
+    )
+
     items: list[MeetingItem]
     total: int = Field(description="How many match, on every page")
     meetings_state: MeetingsState = Field(
@@ -860,7 +901,49 @@ class MeetingPage(Out):
     )
     sentence: str | None = Field(
         description="One plain sentence when the list can't show what was asked: meetings "
-        "aren't ready, or your own can't be picked out yet"
+        "aren't ready, or My meetings or My team can't pick anything out (not linked to a "
+        "HubSpot owner, in no HubSpot team, or nobody signed in). Never for All once meetings "
+        "are ready"
+    )
+    who: MeetingWho = Field("all", description="The filter used: all, mine or team")
+    linked: bool = Field(
+        False,
+        description="True when my account is linked to a HubSpot owner. False with sign-in off",
+    )
+    team_state: TeamState = Field(
+        "none_in_hubspot",
+        description="ready (I'm in a HubSpot team), not_linked (my account has no HubSpot owner, "
+        "or nobody is signed in), no_team (I'm in none) or none_in_hubspot (HubSpot has no "
+        "teams: the website hides My team)",
+    )
+    team_names: list[str] = Field(
+        default_factory=list, description="My HubSpot teams' names, by name, or an empty list"
+    )
+    checked_at: datetime | None = Field(
+        None, description="When the last good read of HubSpot's meetings finished, or none"
+    )
+    syncing: bool = Field(
+        False,
+        description="True while a read of HubSpot's meetings is running (a Sync, the daily one, "
+        "or a refresh). The website asks again until it is false",
+    )
+    sync_problem: str | None = Field(
+        None,
+        description="One plain sentence when the newest read of HubSpot's meetings failed or is "
+        "waiting for a permission, or none. The list stays as the last good read left it",
+    )
+
+
+class MeetingsSyncOut(Out):
+    """What Sync on Meetings did (PLAN-V18 T1-5)."""
+
+    state: MeetingsSyncState = Field(
+        description="started (a read of HubSpot's meetings began now, in the background), "
+        "running (one was going already: nothing new started) or fresh (a good read finished "
+        "under a minute ago, so HubSpot isn't asked again)"
+    )
+    checked_at: datetime | None = Field(
+        description="When the last good read of HubSpot's meetings finished, or none"
     )
 
 

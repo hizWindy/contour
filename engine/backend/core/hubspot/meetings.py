@@ -19,11 +19,18 @@ title, the location or the notes is blanked before it is saved. Log lines carry 
   that asked HubSpot, one at a time. One that moved out of the window is removed. A search never
   shows a deleted meeting, so only the daily read removes one. Before the first good read, a
   refresh reads the whole window instead.
+- **Sync on Meetings** (`MeetingsRefresher.sync_now`, PLAN-V18 T1-5): a full read of the window
+  now, in the background, as the daily read does. It skips the 15-minute rule and the minute
+  between asks, but keeps one read at a time (`reading`: while any read runs in this backend,
+  it answers `running`) and asks HubSpot nothing within `SYNC_FRESH` (a minute) of a good read
+  that is the newest (`fresh`). A refresh skips itself while another read runs.
 - **Each read is a row** in `core.hubspot_meeting_reads`, so the 15-minute rule and `status`
   hold across restarts. Saves take turns (`MEETINGS_LOCK`), and no database connection is held
   while HubSpot answers.
 
-**The reads** (`upcoming`, `past`, `for_company`, `get`, `status`) only read our copy.
+**The reads** (`upcoming`, `past`, `for_company`, `get`, `status`) only read our copy. `status`
+also says when the newest good read finished (`checked_at`), whether a read runs now
+(`syncing`), and how the newest read ended (`last_read`).
 """
 
 import asyncio
@@ -74,6 +81,7 @@ MeetingWhere = Literal["online", "in_person", "unknown"]
 MeetingsState = Literal["ready", "waiting", "off"]
 ReadKind = Literal["full", "changes"]
 ReadState = Literal["done", "waiting", "failed"]
+SyncState = Literal["started", "running", "fresh"]
 Clock = Callable[[], datetime]
 
 DAYS_BACK = 90  # the window our copy keeps (TBC)
@@ -81,6 +89,7 @@ DAYS_AHEAD = 60  # (TBC)
 REFRESH_EVERY = timedelta(minutes=15)  # a refresh asks HubSpot at most this often
 OVERLAP = timedelta(minutes=10)  # a refresh reads a little before the last read, as search lags
 ASK_EVERY = 60.0  # seconds: one backend starts a refresh check at most this often
+SYNC_FRESH = timedelta(minutes=1)  # Sync asks HubSpot nothing this soon after a good read
 KEEP_READS = timedelta(days=30)  # read rows older than this go (the newest good one stays)
 MEETINGS_LOCK = 7_244_413  # a Postgres advisory lock key: one save of our copy at a time
 LIST_CAP = 5_000  # the most meetings `upcoming` and `past` return
@@ -112,7 +121,10 @@ FIELDS = (
 
 # --- The words (PLAN-V15 "Words for errors": no setting, file or command) -----------------------
 
-NOT_READ_YET = "Meetings from HubSpot aren't read yet."
+# The status's words, for anyone (PLAN-V18 "Words for when things go wrong"). WAITING names the
+# permission, for the sync's warnings an admin reads.
+NOT_READ_YET = "Meetings can't be read from HubSpot yet."
+WAITING_FOR_ACCESS = "Waiting for HubSpot access to meetings. An admin adds it in HubSpot."
 WAITING = "Waiting for HubSpot access to meetings (crm.objects.meetings.read)."
 NO_HUBSPOT = "HubSpot isn't connected, so meetings can't be read from it."
 MEETINGS_FAILED = "Meetings weren't copied this time. The ones copied before stay."
@@ -121,7 +133,10 @@ NO_PEOPLE_LINKS = (
     "(crm.objects.contacts.read)."
 )
 TOO_MANY_TITLE = "Too many meetings at one time"
-TOO_MANY_DETAIL = "HubSpot has more meetings starting at one moment than its search can list."
+TOO_MANY_DETAIL = (
+    "HubSpot has more meetings starting at one moment than its search can list, so the meetings "
+    "copied before stay. Tell an admin."
+)
 UNTITLED = "Untitled meeting"
 EMAIL_GONE = "[email left out]"
 PHONE_GONE = "[number left out]"
@@ -175,6 +190,22 @@ class Meeting(BaseModel):
 class MeetingsStatus(BaseModel):
     state: MeetingsState
     sentence: str | None = Field(None, description="One plain sentence when not ready")
+    checked_at: datetime | None = Field(
+        None, description="When the newest good read of HubSpot's meetings finished, or none"
+    )
+    syncing: bool = Field(False, description="A read of HubSpot's meetings runs in this backend")
+    last_read: ReadState | None = Field(
+        None, description="How the newest read ended: done, waiting (a permission) or failed"
+    )
+
+
+@dataclass(frozen=True)
+class SyncAnswer:
+    """What Sync on Meetings did: `started`, `running` (a read was going already) or `fresh` (a
+    good read finished under `SYNC_FRESH` ago), and when the newest good read finished."""
+
+    state: SyncState
+    checked_at: datetime | None
 
 
 def utc_now() -> datetime:
@@ -491,16 +522,24 @@ def _key_set() -> bool:
 
 async def status(session: AsyncSession) -> MeetingsStatus:
     """ready once a read has worked: our copy is there, even if a later read failed. Before
-    that: waiting, with the missing permission named, when the newest read hit one; off when no
-    HubSpot key is set (nothing can read them); otherwise waiting, `NOT_READ_YET`."""
-    if await _newest(session, ("done",)) is not None:
-        return MeetingsStatus(state="ready")
-    newest = await _newest(session, ("waiting", "failed"))
+    that: waiting for access, when the newest read hit a missing permission; off when no
+    HubSpot key is set (nothing can read them); otherwise waiting, `NOT_READ_YET`. Each also
+    says when the newest good read finished, whether a read runs now, and how the newest read
+    ended (PLAN-V18 T1-5)."""
+    good = await _newest(session, ("done",))
+    newest = await _newest(session, ("done", "waiting", "failed"))
+    more: dict[str, Any] = {
+        "checked_at": good.finished_at if good is not None else None,
+        "syncing": reading(),
+        "last_read": newest.state if newest is not None else None,
+    }
+    if good is not None:
+        return MeetingsStatus(state="ready", **more)
     if newest is not None and newest.state == "waiting":
-        return MeetingsStatus(state="waiting", sentence=newest.sentence or WAITING)
+        return MeetingsStatus(state="waiting", sentence=WAITING_FOR_ACCESS, **more)
     if not _key_set():
-        return MeetingsStatus(state="off", sentence=NO_HUBSPOT)
-    return MeetingsStatus(state="waiting", sentence=NOT_READ_YET)
+        return MeetingsStatus(state="off", sentence=NO_HUBSPOT, **more)
+    return MeetingsStatus(state="waiting", sentence=NOT_READ_YET, **more)
 
 
 # --- Reading HubSpot (no database connection is held here) --------------------------------------
@@ -807,6 +846,17 @@ async def _save(
     return outcome
 
 
+# The reads of HubSpot's meetings running in this backend (and Syncs about to start one), so
+# `reading` can say one runs. One backend runs for a database, so this is all of them.
+_running: set[object] = set()
+
+
+def reading() -> bool:
+    """True while a read of HubSpot's meetings runs in this backend: the daily one, a refresh, or
+    a Sync (from the moment it is started)."""
+    return bool(_running)
+
+
 async def _read(
     sessions: async_sessionmaker[AsyncSession],
     hubspot: HubSpot,
@@ -815,7 +865,24 @@ async def _read(
     since: datetime | None,
     clock: Clock,
 ) -> _Outcome:
-    """One read, from HubSpot to our copy, and its row. Never raises, except for a cancel."""
+    """One read, from HubSpot to our copy, and its row. Never raises, except for a cancel. While
+    it runs, `reading` says so."""
+    token = object()
+    _running.add(token)
+    try:
+        return await _read_once(sessions, hubspot, kind, since=since, clock=clock)
+    finally:
+        _running.discard(token)
+
+
+async def _read_once(
+    sessions: async_sessionmaker[AsyncSession],
+    hubspot: HubSpot,
+    kind: ReadKind,
+    *,
+    since: datetime | None,
+    clock: Clock,
+) -> _Outcome:
     started = clock()
     try:
         try:
@@ -880,9 +947,10 @@ async def refresh(
     and says how many changed in our copy. With no good read yet, the whole window is read.
 
     At most once every `REFRESH_EVERY`: within that time of the last read that asked HubSpot
-    (the daily one or a refresh, whatever its result) it returns 0 without asking HubSpot. While
-    another refresh runs in this backend, it returns 0 at once. `clock` is for tests."""
-    if _refreshing.locked():
+    (the daily one, a Sync or a refresh, whatever its result) it returns 0 without asking
+    HubSpot. While another refresh, or any other read, runs in this backend, it returns 0 at
+    once. `clock` is for tests."""
+    if _refreshing.locked() or reading():
         return 0
     async with _refreshing:
         now = clock()
@@ -902,9 +970,9 @@ async def refresh(
 class MeetingsRefresher:
     """Runs `refresh` in the background for one backend (`connection.refresh_meetings_soon`):
     one at a time, a check at most every `ASK_EVERY` seconds, and stopped when the backend stops.
-    The 15-minute rule itself is `refresh`'s, in the database. `hubspot` makes a client (None
-    when there is no key), which is closed after each refresh. `clock` and `monotonic` are for
-    tests."""
+    The 15-minute rule itself is `refresh`'s, in the database. It also runs Sync on Meetings
+    (`sync_now`, PLAN-V18 T1-5). `hubspot` makes a client (None when there is no key), which is
+    closed after each read. `clock` and `monotonic` are for tests."""
 
     def __init__(
         self,
@@ -919,11 +987,65 @@ class MeetingsRefresher:
         self._clock = clock
         self._monotonic = monotonic
         self._task: asyncio.Task[None] | None = None
+        self._sync: asyncio.Task[None] | None = None
         self._asked_at: float | None = None
 
     @property
     def running(self) -> bool:
         return self._task is not None and not self._task.done()
+
+    @property
+    def syncing(self) -> bool:
+        """A Sync this refresher started is still running."""
+        return self._sync is not None and not self._sync.done()
+
+    async def sync_now(self) -> SyncAnswer:
+        """Sync on Meetings: a full read of the window now, in the background, answered at once.
+        `running` while any read runs in this backend (nothing new starts), `fresh` when the
+        newest read is a good one that finished under `SYNC_FRESH` ago (HubSpot isn't asked),
+        else `started`. Raises `LookupError` when there is no HubSpot key."""
+        async with self._sessions() as session:
+            good = await _newest(session, ("done",))
+            newest = await _newest(session, ("done", "waiting", "failed"))
+        checked_at = good.finished_at if good is not None else None
+        # No await from here to the task's start, so two presses at once start one read.
+        if reading() or self.syncing:
+            return SyncAnswer("running", checked_at)
+        if (
+            good is not None
+            and newest is not None
+            and newest.id == good.id
+            and self._clock() - good.finished_at < SYNC_FRESH
+        ):
+            return SyncAnswer("fresh", checked_at)
+        client = self._hubspot()
+        if client is None:
+            raise LookupError("no HubSpot key")
+        token = object()
+        _running.add(token)  # `reading` says so from now, before the task first runs
+        task = asyncio.create_task(self._run_sync(client), name="hubspot-meetings-sync")
+        task.add_done_callback(lambda _: _running.discard(token))
+        self._sync = task
+        return SyncAnswer("started", checked_at)
+
+    async def _run_sync(self, client: HubSpot) -> None:
+        began = time.monotonic()
+        try:
+            outcome = await _read(self._sessions, client, "full", since=None, clock=self._clock)
+            # Counts and times only: never a meeting's title.
+            log.info(
+                "hubspot_meetings_synced",
+                extra={
+                    "state": outcome.state,
+                    "changed": outcome.changed,
+                    "seconds": round(time.monotonic() - began, 1),
+                },
+            )
+        except Exception as error:
+            log.warning("hubspot_meetings_sync_failed", extra={"error": type(error).__name__})
+        finally:
+            with contextlib.suppress(Exception):
+                await client.aclose()
 
     def soon(self) -> bool:
         """Starts a refresh in the background and answers at once. True when one started; False
@@ -953,13 +1075,18 @@ class MeetingsRefresher:
                     await client.aclose()
 
     async def wait(self) -> None:
-        """Waits for the running refresh, if any, to end (for tests and the command line)."""
-        if self._task is not None:
-            await asyncio.wait({self._task})
+        """Waits for the running refresh and Sync, if any, to end (for tests and the command
+        line)."""
+        tasks = {task for task in (self._task, self._sync) if task is not None}
+        if tasks:
+            await asyncio.wait(tasks)
 
     async def stop(self) -> None:
-        """Stops a running refresh: its save, if it had started, is rolled back."""
-        task, self._task = self._task, None
-        if task is not None and not task.done():
-            task.cancel()
-            await asyncio.gather(task, return_exceptions=True)
+        """Stops a running refresh and Sync: a save that had started is rolled back."""
+        tasks = [task for task in (self._task, self._sync) if task is not None]
+        self._task = self._sync = None
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)

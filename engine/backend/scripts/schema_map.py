@@ -90,6 +90,10 @@ PURPOSE = {
     ),
     "core.hubspot_deals": "HubSpot deals: the stage label, the pipeline, amount and close date.",
     "core.hubspot_owners": "HubSpot users who own records: the id and name only, never an email.",
+    "core.hubspot_owner_teams": (
+        "The HubSpot team each owner is in, for Meetings' My team: ids and the team's name only. "
+        "The sync replaces them all each time (PLAN-V18)."
+    ),
     "core.hubspot_syncs": (
         "One row per HubSpot sync: full or changes only, what it read and saved, and any error. "
         "Only one can be running."
@@ -148,6 +152,9 @@ COLUMN_NOTES = {
     "core.hubspot_companies.state_raw": "The state as typed in HubSpot.",
     "core.hubspot_meetings.hubspot_company_id": "The first company linked. See more_companies.",
     "core.hubspot_meetings.attendee_owner_ids": "Contour's other people on it, as owner ids.",
+    "core.hubspot_companies.last_activity": (
+        "HubSpot's Last activity date. Never moves back; a call that lands moves it at once."
+    ),
 }
 
 # Columns that hold another table's key but have no foreign key, so nothing in the database
@@ -170,6 +177,7 @@ SOFT_LINKS = (
         "core.hubspot_companies.hubspot_id",
         "a meeting's company may not be in our copy, and one must not stop a read",
     ),
+    ("core.hubspot_owner_teams.owner_id", "core.hubspot_owners.owner_id", "the same reason"),
 )
 
 INTERNAL = "('pg_catalog', 'information_schema', 'pg_toast', 'public')"

@@ -29,6 +29,8 @@ What it does for every caller, so no project needs its own copy:
 - **Owners' emails** (PLAN-V17 T1-4): `owners` keeps an owner's id and name, never the email.
   `owner_emails` gives the active owners' emails, only so the sync can match accounts to owners
   in memory (`core.hubspot.owners`). The emails are never saved, logged or shown.
+- **Owners' teams** (PLAN-V18 T1-3): `owners` also keeps the HubSpot teams each owner is in,
+  as HubSpot's owners list gives them (its id, its name, and whether it is the main one).
 
 API versions have dates, like 2026-09 (`HUBSPOT_API_VERSION`). "v3" uses HubSpot's older paths,
 which still work until a date HubSpot hasn't published.
@@ -215,12 +217,24 @@ class Page:
 
 
 @dataclass(frozen=True)
+class OwnerTeam:
+    """A HubSpot team an owner is in (PLAN-V18 T1-2: HubSpot's owners list gives each owner's
+    teams). `primary`: the owner's main team."""
+
+    id: str
+    name: str | None
+    primary: bool = False
+
+
+@dataclass(frozen=True)
 class Owner:
-    """A HubSpot user who can own records. Only the id and name are kept, never the email."""
+    """A HubSpot user who can own records. Only the id, the name and the teams are kept, never
+    the email."""
 
     id: str
     name: str | None
     archived: bool
+    teams: tuple[OwnerTeam, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -445,6 +459,27 @@ class _Page(_Reply):
         )
 
 
+class _Team(_Reply):
+    id: str
+    name: str | None = None
+    primary: bool = False
+
+    @field_validator("id", mode="before")
+    @classmethod
+    def _text_id(cls, value: Any) -> Any:
+        return str(value) if isinstance(value, int) else value
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def _text_or_nothing(cls, value: Any) -> Any:
+        return value if isinstance(value, str) else None
+
+    @field_validator("primary", mode="before")
+    @classmethod
+    def _yes_or_no(cls, value: Any) -> Any:
+        return value is True
+
+
 class _Owner(_Reply):
     id: str
     first_name: str | None = Field(None, alias="firstName")
@@ -452,11 +487,42 @@ class _Owner(_Reply):
     # Read for `owner_emails` only. `Owner` never gets it.
     email: str | None = None
     archived: bool = False
+    teams: list[_Team] = Field(default_factory=list)
 
     @field_validator("email", mode="before")
     @classmethod
     def _text_or_nothing(cls, value: Any) -> Any:
         return value if isinstance(value, str) else None  # an odd value never stops `owners`
+
+    @field_validator("teams", mode="before")
+    @classmethod
+    def _teams(cls, value: Any) -> list[Any]:
+        """Each team with an id, once. An odd entry is left out and never stops `owners`."""
+        if not isinstance(value, list):
+            return []
+        found: dict[str, Any] = {}
+        for item in value:
+            if not isinstance(item, dict):
+                continue
+            team_id = item.get("id")
+            if isinstance(team_id, int) and not isinstance(team_id, bool):
+                team_id = str(team_id)
+            if isinstance(team_id, str) and team_id.strip() and len(team_id.strip()) <= 32:
+                found.setdefault(team_id.strip(), {**item, "id": team_id.strip()})
+        return list(found.values())
+
+    def as_owner(self, *, archived: bool) -> Owner:
+        return Owner(
+            self.id,
+            owner_name(self.first_name, self.last_name),
+            self.archived or archived,
+            tuple(OwnerTeam(team.id, _team_name(team.name), team.primary) for team in self.teams),
+        )
+
+
+def _team_name(value: str | None) -> str | None:
+    name = " ".join((value or "").split())
+    return name[:200] or None
 
 
 class _Owners(_Reply):
@@ -840,10 +906,7 @@ class HttpHubSpot:
         return found
 
     async def owners(self, *, archived: bool = False) -> list[Owner]:
-        return [
-            Owner(o.id, owner_name(o.first_name, o.last_name), o.archived or archived)
-            async for o in self._owner_records(archived=archived)
-        ]
+        return [o.as_owner(archived=archived) async for o in self._owner_records(archived=archived)]
 
     async def owner_emails(self) -> dict[str, str]:
         # Active owners only: the list asks for them, and one marked archived is left out too.

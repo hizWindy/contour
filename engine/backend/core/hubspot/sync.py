@@ -16,8 +16,9 @@ How one sync goes:
    deals, a page of 100 at a time. Nothing is saved yet, except how far it has read: every
    `PROGRESS_EVERY` records the row's `companies_read` and `deals_read` are updated, so the
    website's "Sync with HubSpot" shows the sync moving (PLAN-V10 F2).
-4. **Save** (`save_snapshot`) everything in ONE transaction: owners, companies (an export row
-   with the same id is replaced), their offices, and the deals whose company is in our copy. A
+4. **Save** (`save_snapshot`) everything in ONE transaction: owners and their HubSpot teams (the
+   teams replaced in full, PLAN-V18), companies (an export row with the same id is replaced;
+   `last_activity` never moves back), their offices, and the deals whose company is in our copy. A
    full sync then removes the companies and deals HubSpot no longer has. If anything fails,
    nothing is saved. Then, in the "people" phase, contacts and calls are copied (`people.py`),
    each account is matched to its HubSpot owner by email, in memory (`owners.py`, PLAN-V17
@@ -85,6 +86,7 @@ from core.hubspot.people import read_people, save_people
 from core.hubspot.profiles import rebuild_profiles
 from core.hubspot.service import (
     replace_offices,
+    replace_owner_teams,
     upsert_company_rows,
     upsert_deals,
     upsert_owners,
@@ -493,6 +495,15 @@ async def save_snapshot(
     await upsert_owners(
         session,
         [{"owner_id": o.id, "name": o.name, "archived": o.archived} for o in snapshot.owners],
+    )
+    # Each owner's HubSpot teams (PLAN-V18 T1-3), replaced in full: every sync reads every owner.
+    await replace_owner_teams(
+        session,
+        [
+            {"owner_id": o.id, "team_id": t.id, "team_name": t.name, "is_primary": t.primary}
+            for o in snapshot.owners
+            for t in o.teams
+        ],
     )
     companies = [item.company for item in snapshot.companies]
     company_ids = [company.hubspot_id for company in companies]

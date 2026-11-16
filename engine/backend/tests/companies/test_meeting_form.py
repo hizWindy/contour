@@ -636,10 +636,47 @@ async def test_a_failed_draft_says_why_and_can_be_drafted_again(
         ready = await form_of(client, form)
     assert (failed["status"], failed["error"]) == (
         "failed",
-        "Claude couldn't write the summaries. Try again in a minute.",
+        "The summaries weren't written: the AI service didn't answer. Try again in a minute, or "
+        "write them yourself.",
     )
     assert failed["facts"] and failed["summaries"]["what_they_do"]["text"] == ""
     assert (ready["status"], ready["error"]) == ("draft", None)
+
+
+async def test_a_failed_draft_whose_summaries_the_rep_writes_is_a_draft_again(
+    world: World, settings: dict[str, Any], drafts: Drafts
+) -> None:
+    """PLAN-V18: "write them yourself". All three written: a draft, so it can be sent. One
+    written: still failed, with its reason."""
+    await a_client(world)
+    drafts.claude.answers = [ClaudeError("Claude failed", "A made-up error.")]
+    async with signed_in_as(world, "mia", ["companies"]) as client:
+        form = await started(client, meeting_id="9101")
+        await drafts.runner.wait()
+        path = f"{FORMS}/{form['id']}"
+        one = await client.patch(path, json={"summaries": {"what_they_do": "They move freight."}})
+        blank = await client.patch(path, json={"summaries": {"what_we_know": "  "}})
+        all_three = await client.patch(
+            path,
+            json={
+                "summaries": {
+                    "what_we_know": "A Perth office of 120.",
+                    "talks_so_far": "Two calls about the lease.",
+                }
+            },
+        )
+    for still_failed in (one, blank):
+        assert still_failed.status_code == 200, still_failed.text
+        assert still_failed.json()["status"] == "failed"
+        assert still_failed.json()["error"].startswith("The summaries weren't written")
+    assert all_three.status_code == 200, all_three.text
+    written = all_three.json()
+    assert (written["status"], written["error"]) == ("draft", None)
+    assert {name: part["by"] for name, part in written["summaries"].items()} == {
+        "what_they_do": "person",
+        "what_we_know": "person",
+        "talks_so_far": "person",
+    }
 
 
 async def test_a_shutdown_or_a_restart_leaves_the_form_failed_and_kept(

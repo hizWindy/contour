@@ -3,7 +3,8 @@ place, so tests and the fake backend can swap them (`app.state.hubspot_provider`
 `app.state.hubspot_syncs`, `app.state.meetings_refresher`).
 
 `refresh_meetings_soon` is how a page asks for fresh meetings (PLAN-V17 T1-8): Track 2's
-Meetings and Home routes call it, and it answers at once.
+Meetings and Home routes call it, and it answers at once. `sync_meetings_now` is Sync on Meetings
+(PLAN-V18 T1-5): a full read now, also in the background.
 
 The status the Admin page shows (`connection_status`) joins the key, the connection check (kept
 for `CHECK_FRESH_SECONDS`, so opening the page doesn't call HubSpot every time), each project's
@@ -23,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.config import Settings, get_settings
 from core.hubspot.check import ConnectionCheck, check_connection
 from core.hubspot.client import HubSpot, get_hubspot
-from core.hubspot.meetings import MeetingsRefresher
+from core.hubspot.meetings import MeetingsRefresher, SyncAnswer
 from core.hubspot.needs import ProjectReadiness, readiness
 from core.hubspot.service import HubSpotSummary, summary
 from core.hubspot.sync import SyncOut, SyncRunner, last_good, recent_syncs, running_sync
@@ -118,6 +119,15 @@ def refresh_meetings_soon(app: FastAPI) -> bool:
     except Exception as error:
         log.warning("hubspot_meetings_refresh_not_started", extra={"error": type(error).__name__})
         return False
+
+
+async def sync_meetings_now(app: FastAPI) -> SyncAnswer:
+    """Sync on Meetings (PLAN-V18 T1-5): a full read of HubSpot's meetings, in the background,
+    answered at once (`MeetingsRefresher.sync_now`: started, running or fresh). Raises
+    `LookupError` when HubSpot isn't set up: nothing can be read."""
+    if not hubspot_set_up(app):
+        raise LookupError("HubSpot isn't set up")
+    return await meetings_refresher(app).sync_now()
 
 
 @asynccontextmanager
