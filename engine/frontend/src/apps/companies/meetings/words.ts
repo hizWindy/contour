@@ -96,8 +96,8 @@ export const SYNC = 'Sync'
 export const SYNC_NOTE = "Reads HubSpot's meetings now."
 export const CHECKING_HUBSPOT = 'Checking HubSpot'
 export const UP_TO_DATE = 'Up to date'
-/** A press while a read is running already. The seconds are TBC: T1-5 measures them. */
-export const ALREADY_CHECKING = 'Already checking HubSpot. It takes about 10 seconds.'
+/** A press while a read is running already. T1-5 measured 10 to 13 seconds a press. */
+export const ALREADY_CHECKING = 'Already checking HubSpot. It takes about 15 seconds.'
 /** A press within a minute of the last read: HubSpot isn't asked again. */
 export const CHECKED_A_MOMENT_AGO = 'Up to date. Checked a moment ago.'
 

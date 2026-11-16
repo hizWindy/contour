@@ -893,7 +893,7 @@ describe('Sync', () => {
     expect(syncButton('Checking HubSpot')).toBeInTheDocument()
     await user.click(syncButton('Checking HubSpot'))
     expect(
-      await screen.findByText('Already checking HubSpot. It takes about 10 seconds.'),
+      await screen.findByText('Already checking HubSpot. It takes about 15 seconds.'),
     ).toBeInTheDocument()
     expect(syncs(server)).toBe(1)
   })
@@ -1092,7 +1092,7 @@ describe('words for when things go wrong (PLAN-V18 T2-7)', () => {
     await screen.findByRole('list', { name: 'Today' })
     await user.click(screen.getByRole('button', { name: 'Checking HubSpot' }))
     expect(
-      await screen.findByText('Already checking HubSpot. It takes about 10 seconds.'),
+      await screen.findByText('Already checking HubSpot. It takes about 15 seconds.'),
     ).toBeInTheDocument()
   })
 
