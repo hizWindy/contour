@@ -880,6 +880,7 @@ Newest first.
 - [x] **T3-1. Own copy and a baseline.** Make the worktree. Run lint, types, the tests and the build once. Note the counts and the first-visit size from `node scripts/bundle-report.js`. Done 2026-11-15 (`437a2ee`, the website unchanged from `master`): lint 0 warnings, types pass, tests 90 files and 1,246 passed (203 s, one worker). The build: `tsc -b` passes, and the bundle report's build passes. First visit: JavaScript 230 kB gzip (717 kB raw) in 30 files, CSS 23 kB gzip. Motion's late file adds 32 kB gzip (14 kB of its own). Opening Companies adds 72 kB.
 
 - [ ] **T3-2. Is the free mic good enough?** Needs Al-khair at the keyboard. Free.
+  - 2026-11-16: moved to PLAN-V18 (T3-3 to T3-5).
   - Read the current Transformers.js docs first (the Whisper models, Web Workers, WebGPU and its fallback). Don't build from memory.
   - A throwaway page, never merged: the model loads in a worker, Al-khair dictates 10 notes with real Australian company and people names, the page shows the text and the seconds it took.
   - Try two model sizes. Note for each: the download size, the time to be ready, the time to write out a 60-second note, and how many notes got the company or the person wrong.
@@ -897,6 +898,7 @@ Newest first.
   - Done 2026-11-15 (`73a72d0`). Lint, types, and the motion and design-lint tests pass (2 files, 120 tests). Motion's late file is unchanged: 14 kB gzip of its own, adding 32 kB, as in T3-1. It was measured on this branch just before the new files went in. `features.ts` didn't change and no page uses the parts yet. T3-4's bundle check measures it again. Five design questions wait for Al-khair (Log).
 
 - [ ] **T3-4. The mic** (only if T3-2 said yes; else the typing-only version).
+  - 2026-11-16: moved to PLAN-V18 (T3-3 to T3-5).
   - A Web Worker (`stt.worker.ts`) holds the model and the library. Nothing of it is in the first visit.
   - **The model's files come from our own site,** fetched by a build script at a fixed version with a checksum, never from another site while a rep works, and never committed to git. Whether App Platform's static site takes files this size is **TBC**: check before building. If it can't, tell Al-khair.
   - **It gets ready ahead:** for a person with the Companies tick, on a laptop, the worker starts when the browser is idle after Companies opens, and warms up once.
