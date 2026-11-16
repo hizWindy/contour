@@ -261,11 +261,10 @@ Run four passes. Say plainly what couldn't be checked. Accuracy matters more tha
 - Check the lead list, the client list and past pursuits before adding a company. A repeat run updates a lead and doesn't duplicate it.
 - Score a lead again when a new sign or dampener appears, and say what changed since the last run.
 
-**How many leads (PLAN-V16 T1-9, 15 Nov). Our reading, TBC.**
-- **A run a person starts** says how many good leads it wants (Tier A or B: a Pass or a Director review), 1 to 100. The default is 20, a setting an Admin can change. The run stops starting companies once it has them. An automatic run aims for its share of the round's goal, as before.
-- **The limits still apply.** No limit rises by itself. Today a manual run may research 20 companies and spend US$20.
-- **The estimate tells the truth.** It works out the companies the goal needs from the pass rate of the last 5 runs (40% until there are any; never under 5%). Example: 20 leads at 40% needs about 50 companies. When the run's limits allow fewer, it names the limit that binds: "20 leads needs about 50 companies. This run's money limit (US$20) allows about 16. An Admin can raise it in Settings."
-- **A run that ends short says why:** "Found 12 of 20 leads. It stopped at the run limit (US$20)." Or "It researched the most companies one run may (20)", or "Discovery found no more companies to research".
+**How many leads (PLAN-V16 T1-9, 15 Nov, taken out by PLAN-V20 on 17 Nov).**
+- **A run a person starts has no goal.** It researches every company it chooses, up to its company limit (today 20) and its money limit (today US$20). The Start page no longer asks "How many leads", the estimate no longer says how many companies a goal needs, and a run no longer ends with "Found 12 of 20 leads". The goal never stopped a run: the first 7 live runs found 0 to 3 good leads.
+- **An automatic run keeps Levi's goal as a number to report against.** Its share of the round's 100 good leads shows on its run page, and it never stops a run: it goes on until no company is left, or its money is spent.
+- **Every company a run researched is listed** on its run page, including those that scored under 40. Before PLAN-V20 they were only counted.
 
 ## 9. Output
 
