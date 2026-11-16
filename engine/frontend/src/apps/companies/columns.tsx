@@ -3,7 +3,9 @@
  * key, so the table's sort state and the address use the same word.
  *
  * The order follows HubSpot's own company list, so the team finds things where they expect:
- * Company name, Owner, Last activity, City, Industry, Staff, Next lease end, Deal. People with
+ * Company name, Owner, Last activity, City, Industry, Staff, Next lease end, Deal. Last activity
+ * is the newest of HubSpot's "Last activity date" and "Last contacted", and the list's default
+ * sort, the newest first (PLAN-V18 T2-6). People with
  * the Lead Finder tick also see Source (HubSpot, Lead Finder or Both) and the newest result.
  * The name stays put when the table scrolls sideways, and so does "Prep" at the end of its cell,
  * on every row. Pointing at a row shows "Open in HubSpot" at its end. Everything else is one click
@@ -16,7 +18,8 @@ import type { CompanyRow } from '@/api/types'
 import { ResultBadge } from '@/components/result-badge'
 import { formatNumber, melbourneDate } from '@/lib/format'
 import { CompanyCell } from './company-cell'
-import { DealMark, LastTalk, LeaseEnd } from './marks'
+import { DealMark, LastActivity, LeaseEnd } from './marks'
+import { lastActivityOf } from './params'
 import { RowActions, type RowActionHandlers } from './row-actions'
 import { CompanySource } from './source'
 
@@ -48,11 +51,12 @@ export function companyColumns({
       meta: { hideBelow: 'md', className: 'whitespace-nowrap' },
       cell: (info) => info.getValue() ?? <span className="text-muted-foreground">No owner</span>,
     }),
-    help.accessor('last_talk', {
-      id: 'last_talk',
+    // The list's default sort (PLAN-V18 T2-6): its header shows the sort arrow.
+    help.accessor((row) => lastActivityOf(row), {
+      id: 'last_activity',
       header: 'Last activity',
       meta: { hideBelow: 'md', className: 'whitespace-nowrap' },
-      cell: (info) => <LastTalk date={info.getValue()} today={today} />,
+      cell: (info) => <LastActivity date={info.getValue()} today={today} />,
     }),
     help.accessor('city', {
       header: 'City',

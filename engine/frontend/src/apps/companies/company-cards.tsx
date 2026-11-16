@@ -1,8 +1,9 @@
 /**
  * The Companies list on a phone (PLAN-V10 G1): one card per company instead of the table, which on
  * a phone could show only the name and the deal. A card shows what a caller checks first: the name
- * and the deal, where it is, the next lease end and the last talk (in Ochre when they need
- * attention), and the owner.
+ * and the deal, where it is, the next lease end and the last activity (in Ochre when they need
+ * attention), and the owner. The cards come in the list's order: the newest activity first by
+ * default (PLAN-V18 T2-6).
  *
  * - **A tap** opens the company. The touch that starts the tap already starts loading the
  *   company, so it opens filled.
@@ -24,7 +25,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { PREP_BUTTON } from './focus'
-import { DealMark, LastTalk, LeaseEnd } from './marks'
+import { DealMark, LastActivity, LeaseEnd } from './marks'
+import { lastActivityOf } from './params'
 import { CompanySource } from './source'
 import { companyPlace } from './words'
 
@@ -96,8 +98,8 @@ function Card({
               <LeaseEnd date={row.next_lease_end} today={today} />
             </span>
             <span className="flex min-w-0 flex-col gap-0.5">
-              <span className="text-caption text-muted-foreground">Last talk</span>
-              <LastTalk date={row.last_talk} today={today} />
+              <span className="text-caption text-muted-foreground">Last activity</span>
+              <LastActivity date={lastActivityOf(row)} today={today} />
             </span>
           </span>
           <span
