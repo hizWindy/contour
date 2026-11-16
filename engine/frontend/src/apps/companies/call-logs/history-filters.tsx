@@ -71,7 +71,10 @@ function activeFilters(filters: HistoryFilters): ActiveFilter[] {
   if (filters.where !== 'all') active.push({ key: 'where', label: WHERE_WORDS[filters.where] })
   if (filters.when !== 'all') active.push({ key: 'when', label: WHEN_WORDS[filters.when] })
   if (filters.outcome) {
-    active.push({ key: 'outcome', label: filters.outcome === 'none' ? NO_OUTCOME : filters.outcome })
+    active.push({
+      key: 'outcome',
+      label: filters.outcome === 'none' ? NO_OUTCOME : filters.outcome,
+    })
   }
   return active
 }

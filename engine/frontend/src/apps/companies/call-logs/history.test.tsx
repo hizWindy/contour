@@ -512,11 +512,11 @@ describe('how it fits a phone (17 Nov 2026)', () => {
     const { user } = renderHistory('&outcome=Connected&when=week&where=hubspot')
     await historyList()
     const inUse = await screen.findByRole('list', { name: 'Filters in use' })
-    expect(within(inUse).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
-      'In HubSpot',
-      'This week',
-      'Connected',
-    ])
+    expect(
+      within(inUse)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent),
+    ).toEqual(['In HubSpot', 'This week', 'Connected'])
     expect(screen.getByRole('button', { name: 'Filters, 3 in use' })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Clear all' }))
     await waitFor(() => {
