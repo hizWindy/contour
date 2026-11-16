@@ -17,7 +17,8 @@ Source = Literal["hubspot", "lead"]
 # For a field named `date` with a default: in the class body the name `date` is the field by the
 # time the annotation is read, so the type needs a name of its own.
 DayOrNone = date | None
-SortKey = Literal["name", "staff", "lease", "last_talk"]
+# last_activity is the default (PLAN-V18 T1-6): the newest activity first.
+SortKey = Literal["last_activity", "name", "staff", "lease", "last_talk"]
 SortOrder = Literal["asc", "desc"]
 PeopleStatus = Literal["ready", "waiting"]
 ToneKey = Literal["friendly", "direct", "consultative", "formal"]  # the tone presets (PLAN-V15)
@@ -43,6 +44,9 @@ def optional_in_types(*names: str) -> Callable[[JsonDict], None]:
 
 
 class CompanyRow(Out):
+    # Added in PLAN-V18: the API always sends it, and the website's types leave it optional.
+    model_config = ConfigDict(json_schema_extra=optional_in_types("last_activity"))
+
     key: str = Field(description="The HubSpot id, or lead:<id> for a lead not in HubSpot yet")
     name: str
     domain: str | None
@@ -51,6 +55,11 @@ class CompanyRow(Out):
     staff: int | None = Field(description="Staff, as HubSpot has it (the whole company)")
     owner: str | None = Field(description="The HubSpot owner's name")
     last_talk: date | None = Field(description="When someone last talked to them, per HubSpot")
+    last_activity: date | None = Field(
+        None,
+        description="The newest of HubSpot's Last activity date and Last contacted, as a "
+        "Melbourne date. None for a company with neither, and for a Lead Finder row",
+    )
     next_lease_end: date | None = Field(description="The nearest lease end still to come")
     deal: DealState
     source: Source = Field(description="hubspot, or lead: found by the Lead Finder, not in HubSpot")

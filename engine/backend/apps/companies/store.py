@@ -27,6 +27,7 @@ from sqlalchemy import (
     null,
     or_,
     select,
+    union,
     union_all,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -95,7 +96,7 @@ class ListQuery:
     owner: str | None = None
     deal: DealState | None = None
     source: Source | None = None
-    sort: SortKey = "name"
+    sort: SortKey = "last_activity"
     order: SortOrder | None = None
     limit: int = PAGE_SIZE
     offset: int = 0
@@ -130,6 +131,14 @@ def _deals_summary() -> Any:
     )
 
 
+def _last_activity() -> ColumnElement[Any]:
+    """The newest of HubSpot's Last activity date (a time, as its Melbourne date) and Last
+    contacted (a date). Postgres's GREATEST skips an empty one; both empty is empty."""
+    company = HubSpotCompany
+    day = cast(func.timezone(MELBOURNE.key, company.last_activity), Date)
+    return func.greatest(day, company.last_contacted)
+
+
 def _hubspot_rows(query: ListQuery, on: date, hook: CompanyLeads | None) -> AnySelect:
     company = HubSpotCompany
     offices = _offices_summary(on)
@@ -154,6 +163,7 @@ def _hubspot_rows(query: ListQuery, on: date, hook: CompanyLeads | None) -> AnyS
         company.employees.label("staff"),
         company.owner.label("owner"),
         company.last_contacted.label("last_talk"),
+        _last_activity().label("last_activity"),
         offices.c.next_lease.label("next_lease_end"),
         cast(deal, Text).label("deal"),
         cast(literal("hubspot"), Text).label("source"),
@@ -170,17 +180,18 @@ def _hubspot_rows(query: ListQuery, on: date, hook: CompanyLeads | None) -> AnyS
             )
         )
     if query.city:
+        # The companies in the city, or with an office there, as ONE list of ids (PLAN-V18
+        # T1-6). "city = x OR EXISTS (an office)" made Postgres guess a cost 30 times too high,
+        # so it compiled the query (JIT) on every page: 70 ms alone, and 543 ms on a busy laptop.
         city = query.city.strip().lower()
         office = HubSpotOffice
-        statement = statement.where(
-            or_(
-                func.lower(company.city) == city,
-                exists().where(
-                    office.hubspot_company_id == company.hubspot_id,
-                    or_(func.lower(office.label) == city, func.lower(office.city) == city),
-                ),
-            )
+        in_city = union(
+            select(company.hubspot_id).where(func.lower(company.city) == city),
+            select(office.hubspot_company_id).where(
+                or_(func.lower(office.label) == city, func.lower(office.city) == city)
+            ),
         )
+        statement = statement.where(company.hubspot_id.in_(in_city.scalar_subquery()))
     if query.owner:
         statement = statement.where(company.owner == query.owner)
     if query.deal:
@@ -203,6 +214,7 @@ def _lead_rows(query: ListQuery, hook: CompanyLeads) -> AnySelect | None:
         leads.c.staff.label("staff"),
         cast(null(), String(120)).label("owner"),
         cast(null(), Date).label("last_talk"),
+        cast(null(), Date).label("last_activity"),
         cast(null(), Date).label("next_lease_end"),
         cast(literal("none"), Text).label("deal"),
         cast(literal("lead"), Text).label("source"),
@@ -224,12 +236,16 @@ def _lead_rows(query: ListQuery, hook: CompanyLeads) -> AnySelect | None:
 
 
 def _ordering(rows: Any, sort: SortKey, order: SortOrder | None) -> list[Any]:
+    """The page's order. Name and lease start A to Z (soonest first); staff, last talk and last
+    activity (the default) start with the most, or the newest. An empty value always goes last,
+    then ties go A to Z by name, then by key, so a page never shuffles."""
     name = func.lower(rows.c.name)
     column = {
         "name": name,
         "staff": rows.c.staff,
         "lease": rows.c.next_lease_end,
         "last_talk": rows.c.last_talk,
+        "last_activity": rows.c.last_activity,
     }[sort]
     natural: SortOrder = "asc" if sort in ("name", "lease") else "desc"
     direction = order or natural
@@ -272,6 +288,7 @@ async def list_companies(
             staff=row.staff,
             owner=row.owner,
             last_talk=row.last_talk,
+            last_activity=row.last_activity,
             next_lease_end=row.next_lease_end,
             deal=row.deal,
             source=row.source,

@@ -58,10 +58,13 @@ def not_found() -> Problem:
     response_model=CompanyPage,
     summary="List companies",
     description=(
-        "One page of companies from the HubSpot copy, by name unless `sort` says otherwise. "
-        "With the Lead Finder tick, its good leads that aren't in HubSpot yet are added "
-        "(`source` lead), and each row has the Lead Finder's newest result. `q` looks in the "
-        "name, website and industry. `city` matches the company's city or any of its offices."
+        "One page of companies from the HubSpot copy. `sort`: `last_activity` (the default: "
+        "the newest of HubSpot's Last activity date and Last contacted, newest first), `name`, "
+        "`staff`, `lease` or `last_talk`; `order` turns it round. An empty value goes last, "
+        "then ties go A to Z. With the Lead Finder tick, its good leads that aren't in HubSpot "
+        "yet are added (`source` lead, with no last activity, so they come last), and each row "
+        "has the Lead Finder's newest result. `q` looks in the name, website and industry. "
+        "`city` matches the company's city or any of its offices."
     ),
 )
 async def list_companies(
@@ -72,7 +75,7 @@ async def list_companies(
     owner: Annotated[SafeText | None, Query(max_length=120)] = None,
     deal: DealState | None = None,
     source: Source | None = None,
-    sort: SortKey = "name",
+    sort: SortKey = "last_activity",
     order: SortOrder | None = None,
     limit: Annotated[int, Query(ge=1, le=100)] = store.PAGE_SIZE,
     offset: Annotated[int, Query(ge=0, le=OFFSET_MAX)] = 0,
