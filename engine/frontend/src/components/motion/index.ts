@@ -53,6 +53,10 @@ export { SpinOnce, type SpinOnceProps } from './spin-once'
 export { StepTrail, type StepTrailProps } from './step-trail'
 
 // The mic card's parts (PLAN-V18 Track 3, T3-4): bars that follow the mic's own sound, and the
-// card that grows from the mic button. The mic's code imports them from their own files.
+// card that opens in the middle of the window. The mic's code imports them from their own files.
 export { FrequencyBars, type FrequencyBarsProps } from './frequency-bars'
 export { MicSheet, MicSheetTitle, type MicSheetProps } from './mic-sheet'
+
+// The glass on the menu (Improvements 1, #7): one pane that follows the pointer along the menu.
+export { GlassMenu } from './glass'
+export { useGlassRow, type GlassHandlers, type GlassRow } from './glass-row'

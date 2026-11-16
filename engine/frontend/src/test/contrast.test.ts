@@ -98,7 +98,17 @@ describe('contrast helper', () => {
 })
 
 /** Translucent tokens (a dim layer, a shadow). They are not text or surface colours. */
-const TRANSLUCENT = new Set(['overlay', 'elevation-color'])
+const TRANSLUCENT = new Set([
+  'overlay',
+  'elevation-color',
+  // The glass on the menu (Improvements 1, #7): white that lets the menu show through, its rim and
+  // shine, its shadow, and the accent's tint at 90%. They are drawn behind text, never as text.
+  'glass-fill',
+  'glass-rim',
+  'glass-shine',
+  'glass-shadow',
+  'glass-selected-fill',
+])
 
 describe('tokens.css structure', () => {
   it('follows the computer setting and allows a data-theme override', () => {

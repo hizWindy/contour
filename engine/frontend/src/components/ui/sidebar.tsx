@@ -2,6 +2,7 @@ import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 import { Slot } from "radix-ui"
+import { useGlassRow } from "@/components/motion/glass-row"
 
 import { useIsMobile } from "@/lib/use-mobile"
 import { Button } from "@/components/ui/button"
@@ -460,11 +461,14 @@ function SidebarMenuItem({ className, ...props }: React.ComponentProps<"li">) {
 }
 
 const sidebarMenuButtonVariants = cva(
-  "peer/menu-button group/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-ui transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-9! group-data-[collapsible=icon]:p-2! hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-open:hover:bg-sidebar-accent data-open:hover:text-sidebar-accent-foreground data-active:bg-sidebar-selected data-active:font-semibold data-active:text-sidebar-selected-foreground data-active:shadow-[inset_2px_0_0_var(--accent-strong)] [&_svg]:size-5 [&_svg]:shrink-0 [&>span:last-child]:truncate",
+  // The hover and selected backgrounds are the glass's (`useGlassRow`): the row is `relative isolate`
+  // so the pane sits behind its text, and it must not clip its box, or the pane is cut off as it
+  // slides in from the row before.
+  "peer/menu-button group/menu-button relative isolate flex w-full items-center gap-2 rounded-md p-2 text-left text-ui transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-9! group-data-[collapsible=icon]:p-2! hover:text-sidebar-accent-foreground active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-active:font-semibold data-active:text-sidebar-selected-foreground [&_svg]:size-5 [&_svg]:shrink-0 [&>span:last-child]:truncate",
   {
     variants: {
       variant: {
-        default: "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+        default: "",
         outline:
           "border border-sidebar-border bg-sidebar hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
       },
@@ -488,6 +492,7 @@ function SidebarMenuButton({
   size = "default",
   tooltip,
   className,
+  children,
   ...props
 }: React.ComponentProps<"button"> & {
   asChild?: boolean
@@ -496,6 +501,8 @@ function SidebarMenuButton({
 } & VariantProps<typeof sidebarMenuButtonVariants>) {
   const Comp = asChild ? Slot.Root : "button"
   const { isMobile, state } = useSidebar()
+  // The glass: a pane that follows the pointer along the menu, and one under the selected row.
+  const glass = useGlassRow(isActive, props)
 
   const button = (
     <Comp
@@ -505,7 +512,11 @@ function SidebarMenuButton({
       data-active={isActive}
       className={cn(sidebarMenuButtonVariants({ variant, size }), className)}
       {...props}
-    />
+      {...glass.handlers}
+    >
+      {glass.layers}
+      {asChild ? <Slot.Slottable>{children}</Slot.Slottable> : children}
+    </Comp>
   )
 
   if (!tooltip) {
@@ -642,6 +653,7 @@ function SidebarMenuSubButton({
   size = "md",
   isActive = false,
   className,
+  children,
   ...props
 }: React.ComponentProps<"a"> & {
   asChild?: boolean
@@ -649,6 +661,8 @@ function SidebarMenuSubButton({
   isActive?: boolean
 }) {
   const Comp = asChild ? Slot.Root : "a"
+  // The same glass as the menu's other rows (see SidebarMenuButton).
+  const glass = useGlassRow(isActive, props)
 
   return (
     <Comp
@@ -657,11 +671,15 @@ function SidebarMenuSubButton({
       data-size={size}
       data-active={isActive}
       className={cn(
-        "flex h-7 min-w-0 -translate-x-px items-center gap-2 overflow-hidden rounded-md px-2 text-sidebar-foreground group-data-[collapsible=icon]:hidden hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[size=md]:text-ui data-[size=sm]:text-caption data-active:bg-sidebar-selected data-active:text-sidebar-selected-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-sidebar-accent-foreground",
+        "relative isolate flex h-7 min-w-0 -translate-x-px items-center gap-2 rounded-md px-2 text-sidebar-foreground group-data-[collapsible=icon]:hidden hover:text-sidebar-accent-foreground active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[size=md]:text-ui data-[size=sm]:text-caption data-active:text-sidebar-selected-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-sidebar-accent-foreground",
         className
       )}
       {...props}
-    />
+      {...glass.handlers}
+    >
+      {glass.layers}
+      {asChild ? <Slot.Slottable>{children}</Slot.Slottable> : children}
+    </Comp>
   )
 }
 

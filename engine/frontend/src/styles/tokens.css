@@ -137,6 +137,25 @@
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
 
+  /* ---- Glass on the menu (Improvements 1 #7; DESIGN.md "Glass on the menu") ------------------
+     The pane of glass that follows the pointer along the menu, and the one under the page you are
+     on. See-through white with a bright rim and a shine along its top edge, like the highlight on
+     an iPhone's menus. The menu behind it is one flat colour, so there is nothing to blur and
+     nothing to fade into: it is not blurred and its colour does not ramp. Only the menu uses it. */
+  --glass-fill: light-dark(rgb(255 255 255 / 58%), rgb(255 255 255 / 9%));
+  --glass-rim: light-dark(rgb(255 255 255 / 80%), rgb(255 255 255 / 14%));
+  --glass-shine: light-dark(rgb(255 255 255 / 100%), rgb(255 255 255 / 22%));
+  --glass-shadow: light-dark(rgb(38 35 27 / 10%), rgb(0 0 0 / 35%));
+  /* The selected row's glass: the accent's tint, a little see-through. */
+  --glass-selected-fill: color-mix(in oklab, var(--sidebar-selected) 90%, transparent);
+  --glass-hover-shadow:
+    inset 0 1px 0 var(--glass-shine), inset 0 0 0 1px var(--glass-rim),
+    0 1px 2px var(--glass-shadow), 0 6px 14px -8px var(--glass-shadow);
+  /* The selected row keeps its 2px accent bar at the left edge, now inside the glass. */
+  --glass-selected-shadow:
+    inset 2px 0 0 var(--accent-strong), inset 0 1px 0 var(--glass-shine),
+    0 1px 2px var(--glass-shadow);
+
   /* ---- Depth: flat surfaces, and a soft shadow only for things that float ------------------ */
   --elevation-color: light-dark(rgb(38 35 27 / 16%), rgb(0 0 0 / 50%));
   --elevation-float: 0 8px 24px -8px var(--elevation-color), 0 2px 6px -2px var(--elevation-color);

@@ -1,6 +1,8 @@
 import { ChevronRight } from 'lucide-react'
 import { Suspense, useState } from 'react'
 import { Link, useLocation } from 'react-router'
+import { GlassMenu } from '@/components/motion/glass'
+import { useGlassRow } from '@/components/motion/glass-row'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import {
   Sidebar,
@@ -179,6 +181,8 @@ function ModuleGroup({ app, pathname }: { app: AppModule; pathname: string }) {
  */
 function PlannedGroup({ pathname }: { pathname: string }) {
   const { state, isMobile } = useSidebar()
+  // Its row has the menu's glass too: the pane slides to it like to any other row.
+  const glass = useGlassRow(false)
   const inside = PLANNED.some((project) => isWithin(pathname, project.to))
   const [open, setOpen] = useState(inside)
   // Opening one of their pages opens the row (set while rendering, not in an effect).
@@ -210,8 +214,10 @@ function PlannedGroup({ pathname }: { pathname: string }) {
         <SidebarGroupLabel asChild>
           <CollapsibleTrigger
             id={PLANNED_LABEL_ID}
-            className="w-full justify-between hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            className="relative isolate w-full justify-between hover:text-sidebar-accent-foreground"
+            {...glass.handlers}
           >
+            {glass.layers}
             <span>To be developed</span>
             <span className="flex items-center gap-1.5">
               {open ? null : (
@@ -257,7 +263,7 @@ export function AppSidebar() {
           <span className="text-caption text-muted-foreground">Commercial Interiors</span>
         </div>
       </SidebarHeader>
-      <nav aria-label="Main menu" className="flex min-h-0 flex-1 flex-col">
+      <GlassMenu aria-label="Main menu" className="flex min-h-0 flex-1 flex-col">
         <SidebarContent>
           <SidebarGroup>
             <SidebarGroupContent>
@@ -287,7 +293,7 @@ export function AppSidebar() {
             <SidebarAccount />
           </SidebarMenu>
         </SidebarFooter>
-      </nav>
+      </GlassMenu>
       <SidebarRail />
     </Sidebar>
   )

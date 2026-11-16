@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { LEAD_FINDER } from '@/apps/lead-finder/module'
@@ -147,5 +147,54 @@ describe('the account at the foot of the menu (PLAN-V13 T1-6)', () => {
     const menu = await screen.findByRole('menu')
     expect(within(menu).getByText('al@example.test')).toBeInTheDocument()
     expect(within(menu).getByRole('menuitem', { name: 'Sign out' })).toBeInTheDocument()
+  })
+})
+
+describe('the glass on the menu (Improvements 1, #7)', () => {
+  const panes = (link: HTMLElement, kind: 'hover' | 'selected') =>
+    link.querySelectorAll(`[data-slot=glass][data-kind=${kind}]`)
+
+  it('sits under the page you are on, in the accent tint', async () => {
+    asLaptop()
+    renderAt('/runs')
+    await screen.findByRole('heading', { level: 1, name: 'Runs' }, { timeout: LAZY })
+    const runs = mainMenu().getByRole('link', { name: 'Runs' })
+    expect(runs).toHaveAttribute('aria-current', 'page')
+    expect(panes(runs, 'selected')).toHaveLength(1)
+    expect(panes(runs, 'selected')[0]).toHaveClass('bg-(--glass-selected-fill)')
+    // Only that one row has it.
+    expect(document.querySelectorAll('[data-kind=selected]')).toHaveLength(1)
+    // The row is its own layer and does not clip its box, so the pane can slide in from the next.
+    expect(runs).toHaveClass('relative', 'isolate')
+    expect(runs).not.toHaveClass('overflow-hidden')
+  })
+
+  it('follows the pointer along the menu, in the project rows and the group rows alike', async () => {
+    asLaptop()
+    renderAt('/runs')
+    await screen.findByRole('heading', { level: 1, name: 'Runs' }, { timeout: LAZY })
+    const results = mainMenu().getByRole('link', { name: 'Results' })
+    const group = mainMenu().getByRole('button', { name: LEAD_FINDER.name })
+    fireEvent.pointerOver(results, { pointerType: 'mouse' })
+    expect(panes(results, 'hover')).toHaveLength(1)
+    fireEvent.pointerOver(group, { pointerType: 'mouse' })
+    await waitFor(() => {
+      expect(panes(results, 'hover')).toHaveLength(0)
+    })
+    expect(panes(group, 'hover')).toHaveLength(1)
+    // Out of the menu: it fades away, and nothing is left behind.
+    fireEvent.pointerOut(group, { pointerType: 'mouse', relatedTarget: document.body })
+    await waitFor(() => {
+      expect(document.querySelector('[data-kind=hover]')).toBeNull()
+    })
+  })
+
+  it('also shows on the quiet "To be developed" row', async () => {
+    asLaptop()
+    renderAt('/runs')
+    await screen.findByRole('heading', { level: 1, name: 'Runs' }, { timeout: LAZY })
+    const planned = mainMenu().getByRole('button', { name: /To be developed/ })
+    fireEvent.pointerOver(planned, { pointerType: 'mouse' })
+    expect(panes(planned, 'hover')).toHaveLength(1)
   })
 })
