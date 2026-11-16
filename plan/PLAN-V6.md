@@ -157,6 +157,7 @@ These rules are for Al-khair and for Claude. At the start of every session: read
   - **Done when:** website tests cover the redirect, the return, and signing out.
 
 - [ ] **C4. The Account tab.** Admin.
+  - Moved to PLAN-V19 (T1-6).
   - Your sessions (device, IP address, last seen), "Sign out everywhere", and the last 100 entries of the sign-in log.
   - **Done when:** website tests pass, and it looks right on a desktop, a phone and in dark colours.
 
