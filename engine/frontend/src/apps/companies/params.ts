@@ -8,7 +8,7 @@
  * server's order). A link with `sort=name` (A to Z, the old default) still works, and now keeps it
  * in its address.
  */
-import type { CompanyRow, DealState, QueryOf } from '@/api/types'
+import type { DealState, QueryOf } from '@/api/types'
 
 export const PAGE_SIZE = 50
 
@@ -31,19 +31,8 @@ export const FIRST_ORDER: Record<SortKey, SortOrder> = {
   last_talk: 'desc',
 }
 
-// --- Hand written until M1 (PLAN-V18, the contract part 2) ---------------------------------------
-// The generated types don't have `last_activity` yet: Track 1 builds it at the same time. M1 makes
-// the types again: then `listQuery` drops its cast and `lastActivityOf(row)` is `row.last_activity`.
-
-/** The list's query, as the generated contract types it until M1 adds `last_activity` to `sort`. */
+/** The list's query, as the contract types it. */
 type CompanyQuery = NonNullable<QueryOf<'list_companies'>>
-
-/** A company's last activity (a date), or null when HubSpot has none. */
-export function lastActivityOf(row: CompanyRow): string | null {
-  return (row as CompanyRow & { last_activity?: string | null }).last_activity ?? null
-}
-
-// -------------------------------------------------------------------------------------------------
 
 export const DEALS: readonly DealState[] = ['open', 'customer', 'none']
 export const SOURCES = ['hubspot', 'lead'] as const
@@ -130,8 +119,7 @@ export function writeCompanies(state: CompaniesState): URLSearchParams {
 export function listQuery(state: CompaniesState): CompanyQuery {
   const { filters } = state
   const query: CompanyQuery = {
-    // Until M1 the generated sort has no `last_activity`: it goes as it is.
-    sort: state.sort as CompanyQuery['sort'],
+    sort: state.sort,
     order: state.order,
     limit: PAGE_SIZE,
     offset: state.page * PAGE_SIZE,

@@ -19,7 +19,6 @@ import { ResultBadge } from '@/components/result-badge'
 import { formatNumber, melbourneDate } from '@/lib/format'
 import { CompanyCell } from './company-cell'
 import { DealMark, LastActivity, LeaseEnd } from './marks'
-import { lastActivityOf } from './params'
 import { RowActions, type RowActionHandlers } from './row-actions'
 import { CompanySource } from './source'
 
@@ -52,7 +51,7 @@ export function companyColumns({
       cell: (info) => info.getValue() ?? <span className="text-muted-foreground">No owner</span>,
     }),
     // The list's default sort (PLAN-V18 T2-6): its header shows the sort arrow.
-    help.accessor((row) => lastActivityOf(row), {
+    help.accessor('last_activity', {
       id: 'last_activity',
       header: 'Last activity',
       meta: { hideBelow: 'md', className: 'whitespace-nowrap' },

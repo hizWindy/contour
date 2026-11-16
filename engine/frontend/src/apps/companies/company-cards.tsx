@@ -26,7 +26,6 @@ import { formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { PREP_BUTTON } from './focus'
 import { DealMark, LastActivity, LeaseEnd } from './marks'
-import { lastActivityOf } from './params'
 import { CompanySource } from './source'
 import { companyPlace } from './words'
 
@@ -99,7 +98,7 @@ function Card({
             </span>
             <span className="flex min-w-0 flex-col gap-0.5">
               <span className="text-caption text-muted-foreground">Last activity</span>
-              <LastActivity date={lastActivityOf(row)} today={today} />
+              <LastActivity date={row.last_activity} today={today} />
             </span>
           </span>
           <span
