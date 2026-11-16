@@ -200,7 +200,7 @@ function MicCheckCard({ open }: { open: boolean }) {
         open={open}
         mode="check"
         tool={voiceToolOf(options.data)}
-        anchor={null}
+        opener={null}
         onClose={closeMicCheck}
       />
     </Suspense>

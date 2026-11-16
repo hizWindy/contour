@@ -38,7 +38,7 @@ function Host({ mic, spies, ...props }: Partial<MicCardProps> & { mic: FakeMic; 
       mode="note"
       tool="browser_service"
       names={NAMES}
-      anchor={null}
+      opener={null}
       env={mic.env()}
       makeTool={mic.tool}
       onDone={spies.onDone}

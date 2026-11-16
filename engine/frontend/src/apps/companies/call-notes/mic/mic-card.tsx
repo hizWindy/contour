@@ -1,7 +1,7 @@
 /**
- * The mic card (PLAN-V18 T3-4 and T3-5, "How it should look and move"): it grows from the mic
- * button (`MicSheet`), checks the mic in under 2 seconds, then listens, with live bars that follow
- * the voice (`FrequencyBars`), a timer, and the words as they come.
+ * The mic card (PLAN-V18 T3-4 and T3-5, "How it should look and move"): it opens in the middle of
+ * the window (`MicSheet`; Al-khair, 17 Nov 2026), checks the mic in under 2 seconds, then listens,
+ * with live bars that follow the voice (`FrequencyBars`), a timer, and the words as they come.
  *
  * - **Its title says what is happening:** "Checking your mic", "Speak now", "Writing it out",
  *   "Done". A screen reader hears each change once (a status line), and never each word.
@@ -85,8 +85,8 @@ export interface MicCardProps {
   tool: VoiceToolKind
   /** The company's and the person's names, for the name fix. */
   names?: readonly string[]
-  /** The button it grows from, or null for the middle of the window. */
-  anchor: RefObject<HTMLElement | null> | null
+  /** The button that opened it: the focus goes back to it. Null: back to where it was. */
+  opener: RefObject<HTMLElement | null> | null
   /** Done: the words for the note box, and the names fixed. */
   onDone?: (text: string, fixes: readonly NameFix[]) => void
   /** Type instead (or Carry on): what was said so far, maybe nothing, goes in the box. */
@@ -256,7 +256,7 @@ export default function MicCard({
   mode,
   tool,
   names = [],
-  anchor,
+  opener,
   onDone,
   onTypeInstead,
   onClose,
@@ -363,7 +363,7 @@ export default function MicCard({
   return (
     <MicSheet
       open={open}
-      anchor={anchor}
+      opener={opener}
       onOpenChange={(next) => {
         if (!next) close('cancel')
       }}

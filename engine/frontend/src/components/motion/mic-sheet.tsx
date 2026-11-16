@@ -1,18 +1,15 @@
 /**
  * The mic card's sheet (PLAN-V18 T3-4, "How it should look and move": "The mic is pressed"): a
- * card that rises over the page from the button that opened it, like the Siri card. The page
- * behind dims.
+ * card in the middle of the window, like a dialog. The page behind dims.
  *
- * - **It grows from its button:** it sits beside the button (above it when there is room, else
- *   below, inside the window), and scales from 0.96 to 1 with a fade, on `smooth`, with the
- *   button's middle as its transform origin. The page behind dims over 250ms. Opened from no
- *   button (Ctrl+K's "Check my mic"), it sits in the middle of the window and grows from there.
- * - **Leaving is quicker:** it shrinks back toward the button and fades in 150ms (`exit`).
- * - **Above the button it grows upward** as its content grows (it is held by its bottom edge), so
- *   it never covers the button it came from. It scrolls inside itself if the window is short.
+ * - **It opens in the middle,** whichever button opened it, on a laptop and on a phone (Al-khair,
+ *   17 Nov 2026: it first sat beside the button, and he asked for it centred). It scales from 0.96
+ *   to 1 with a fade, on `smooth`, from the middle. The page behind dims over 250ms.
+ * - **Leaving is quicker:** it shrinks back and fades in 150ms (`exit`).
+ * - **It scrolls inside itself** if the window is too short, and never reaches the window's edge.
  * - **A real dialog** (Radix): the focus stays inside, Esc closes it (the caller treats that as
- *   Cancel), and the focus goes back to the button (or where it was, with no button), unless the
- *   caller sends it on. Put a `MicSheetTitle` inside it.
+ *   Cancel), and the focus goes back to the button that opened it (`opener`, or where it was),
+ *   unless the caller sends it on. Put a `MicSheetTitle` inside it.
  * - **Reduced motion:** it simply appears and goes.
  *
  * Only transform and opacity move. The card is a float, so it has the soft shadow.
@@ -22,14 +19,12 @@ import { Dialog as DialogPrimitive } from 'radix-ui'
 import {
   useLayoutEffect,
   useRef,
-  useState,
   type ComponentProps,
   type KeyboardEventHandler,
   type ReactNode,
   type RefObject,
 } from 'react'
 import { cn } from '@/lib/utils'
-import { placeCard, type CardPlace } from './card-place'
 import { EASE, INSTANT, springs } from './springs'
 import { useStill } from './use-still'
 
@@ -42,8 +37,11 @@ const DIM = { duration: 0.25, ease: EASE } as const
 export interface MicSheetProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  /** The button it grows from, or null to sit in the middle of the window. */
-  anchor: RefObject<HTMLElement | null> | null
+  /**
+   * The button that opened it. The focus goes back to it when the card closes, even in a browser
+   * that doesn't focus a button when it is pressed (Safari). Null: back to where the focus was.
+   */
+  opener: RefObject<HTMLElement | null> | null
   children: ReactNode
   className?: string
   onKeyDown?: KeyboardEventHandler<HTMLDivElement>
@@ -54,7 +52,7 @@ export interface MicSheetProps {
 export function MicSheet({
   open,
   onOpenChange,
-  anchor,
+  opener,
   children,
   className,
   onKeyDown,
@@ -62,31 +60,16 @@ export function MicSheet({
   onCloseAutoFocus,
 }: MicSheetProps) {
   const still = useStill()
-  const [place, setPlace] = useState<CardPlace | null>(null)
   // Where the focus was as it opened: it goes back there (Radix only returns it to a Trigger).
   const returnTo = useRef<HTMLElement | null>(null)
 
-  // Measured as it opens, before the first paint, and again if the window changes size.
+  // Read as it opens, before the first paint, so the dialog's own focus move hasn't happened yet.
   useLayoutEffect(() => {
-    if (!open) return undefined
-    returnTo.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    const measure = (): void => {
-      const button = anchor?.current
-      setPlace(
-        button
-          ? placeCard(button.getBoundingClientRect(), {
-              width: window.innerWidth,
-              height: window.innerHeight,
-            })
-          : null,
-      )
+    if (open) {
+      returnTo.current =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null
     }
-    measure()
-    window.addEventListener('resize', measure)
-    return () => {
-      window.removeEventListener('resize', measure)
-    }
-  }, [open, anchor])
+  }, [open])
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
@@ -102,12 +85,7 @@ export function MicSheet({
                 exit={{ opacity: 0, transition: still ? INSTANT : springs.exit }}
               />
             </DialogPrimitive.Overlay>
-            <div
-              className={cn(
-                'pointer-events-none fixed inset-0 z-50',
-                !place && 'flex items-center justify-center p-4',
-              )}
-            >
+            <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-4">
               <DialogPrimitive.Content
                 asChild
                 forceMount
@@ -117,28 +95,16 @@ export function MicSheet({
                   onCloseAutoFocus?.(event)
                   if (event.defaultPrevented) return
                   event.preventDefault()
-                  ;(anchor?.current ?? returnTo.current)?.focus()
+                  ;(opener?.current ?? returnTo.current)?.focus()
                 }}
               >
                 <m.div
                   data-slot="mic-sheet"
-                  data-place={place ? (place.top === undefined ? 'above' : 'below') : 'middle'}
                   className={cn(
-                    'pointer-events-auto flex w-[min(25rem,calc(100vw-2rem))] flex-col overflow-y-auto overscroll-contain rounded-lg border bg-popover text-ui text-popover-foreground shadow-float outline-none',
-                    place ? 'fixed' : 'max-h-[calc(100dvh-2rem)]',
+                    'pointer-events-auto flex max-h-[calc(100dvh-2rem)] w-[min(25rem,calc(100vw-2rem))] flex-col overflow-y-auto overscroll-contain rounded-lg border bg-popover text-ui text-popover-foreground shadow-float outline-none',
                     className,
                   )}
-                  style={
-                    place
-                      ? {
-                          left: place.left,
-                          top: place.top,
-                          bottom: place.bottom,
-                          maxHeight: place.maxHeight,
-                          transformOrigin: place.origin,
-                        }
-                      : { transformOrigin: 'center' }
-                  }
+                  style={{ transformOrigin: 'center' }}
                   onKeyDown={onKeyDown}
                   initial={still ? false : { opacity: 0, scale: SMALL }}
                   animate={{ opacity: 1, scale: 1, transition: still ? INSTANT : springs.smooth }}

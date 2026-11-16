@@ -1,8 +1,8 @@
 /**
  * The mic in Log call's note box (PLAN-V18 T3-4, "The mic button"): a 44px button in the box's
- * corner, named "Speak" for screen readers. Pressing it opens the mic card, which grows from the
- * button, checks the mic, and listens (`mic/mic-card.tsx`). Done puts the words in the box; Esc
- * puts nothing there. The Win+H line is gone.
+ * corner, named "Speak" for screen readers. Pressing it opens the mic card, in the middle of the
+ * window, which checks the mic and listens (`mic/mic-card.tsx`). Done puts the words in the box;
+ * Esc puts nothing there. The Win+H line is gone.
  *
  * - **Laptops only** (choice 12): on a phone the keyboard's own mic key does the talking, so there
  *   is no button. With the voice tool set to typing there is none either.
@@ -79,7 +79,7 @@ export function NoteMic({ tool, names, onText, box, className }: NoteMicProps) {
             mode="note"
             tool={tool}
             names={names}
-            anchor={button}
+            opener={button}
             focusAfter={box}
             onDone={(text, fixes) => {
               if (text.trim()) onText(text, fixes)
