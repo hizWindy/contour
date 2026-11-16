@@ -6,7 +6,7 @@ This plan makes the Companies module clearer and nicer to use, from Al-khair's l
 
 - **Built by:** Al-khair Pama. **Signed off by:** Al-khair for the code and every screen. Levi confirms the rules marked **TBC with Levi**.
 - **Last updated:** 16 Nov 2026 (S0 done: `plan-v18` made from `master`; the tracks are starting).
-- **Progress:** S0: 1 of 1. Track 1: 0 of 9. Track 2: 0 of 8. Track 3: 0 of 9. Merge and deploy: 0 of 3.
+- **Progress:** S0: 1 of 1. Track 1: 0 of 9. Track 2: 1 of 8. Track 3: 0 of 9. Merge and deploy: 0 of 3.
 - **Sources:**
   - Al-khair's list of changes (16 Nov, in chat), and the chat about Meetings the same day: the empty Meetings page, the team switch, and the Sync idea;
   - the code on `master` (`c4ebe58`), read on 16 Nov;
@@ -451,9 +451,9 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
 
 ## Track 2: Meetings, the pre-read and the Companies list (session 2)
 
-**Progress:** 0 of 8. Every step is `frontend-agent` work. It follows `engine/DESIGN.md` and "How it should look and move", uses the `ui-build` skill, and builds against the contract with `mockApi`.
+**Progress:** 1 of 8. Every step is `frontend-agent` work. It follows `engine/DESIGN.md` and "How it should look and move", uses the `ui-build` skill, and builds against the contract with `mockApi`.
 
-- [ ] **T2-1. Own copy and a baseline.** Make the worktree. Run lint, types, the tests and the build once. Note the counts and the first visit size from `node scripts/bundle-report.js`.
+- [x] **T2-1. Own copy and a baseline.** Make the worktree. Run lint, types, the tests and the build once. Note the counts and the first visit size from `node scripts/bundle-report.js`. Done 2026-11-16 on `40d9912`: the numbers are in the Track 2 Log.
 
 - [ ] **T2-2. Two motion parts** (in their own files, each with its own test file).
   - `SpinOnce`: an icon turns once for each press. A second press while it turns carries on smoothly.
@@ -516,7 +516,7 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
 
 ### Track 2 Log
 
-- (empty)
+- 16 Nov 2026, T2-1: the worktree `../contour-v18-t2` on `plan-v18-track2`, from `40d9912`. Baseline: lint and types pass; 116 test files and 1,640 tests pass (326 s on one worker); the build passes. First visit: 232 kB gzip (722 kB raw) in 35 files, CSS 23 kB gzip, main file 212 kB raw. The late motion file (`components/motion/features`): 14 kB gzip of its own, 33 kB with what it loads. Pages, extra over the first visit: Meetings 37 kB (7.9 kB its own), the pre-read 34 kB (9.6 kB), Companies 97 kB (8.8 kB).
 
 ## Track 3: Call logs, the mic, the history and call prep (session 3)
 
