@@ -1,5 +1,6 @@
-import { Suspense, useState } from 'react'
-import { Outlet, ScrollRestoration, useNavigation } from 'react-router'
+import { Suspense, useLayoutEffect, useRef, useState, type RefObject } from 'react'
+import { Outlet, ScrollRestoration, useLocation, useNavigation } from 'react-router'
+import { useStill } from '@/components/motion/use-still'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { useAfterActive } from '@/lib/use-after'
 import { cn } from '@/lib/utils'
@@ -26,6 +27,45 @@ export const MAIN_ID = 'page'
  * slides in.
  */
 const WIDE_SCREEN = '(min-width: 1024px)'
+
+/** How long a new page takes to ease in (the one curve), and how faint it starts. */
+const ENTER_MS = 160
+const ENTER_FROM = 0.55
+
+/**
+ * The page's own address: its first two parts, so `/companies/meetings` is one page whatever its
+ * tab, search or filter says, and a lead or a run is a page of its own.
+ */
+function pageOf(pathname: string): string {
+  return pathname.split('/').slice(0, 3).join('/')
+}
+
+/**
+ * A new page eases in (Improvements 1, #8): its content comes up from 55% to full in 160ms. Only
+ * the opacity moves: a transform on the page would make it the home of every fixed bar inside it,
+ * like the send bar a phone page holds at the bottom. It is never held back: the page is there and
+ * readable from the first frame. With reduced motion it simply changes. The first page of a visit
+ * has its own fade (the frame's), so it is left alone here.
+ */
+function useEnter(page: RefObject<HTMLElement | null>, key: string): void {
+  const still = useStill()
+  const first = useRef(true)
+  useLayoutEffect(() => {
+    if (first.current) {
+      first.current = false
+      return undefined
+    }
+    const element = page.current
+    if (still || !element || typeof element.animate !== 'function') return undefined
+    const run = element.animate([{ opacity: ENTER_FROM }, { opacity: 1 }], {
+      duration: ENTER_MS,
+      easing: 'cubic-bezier(0.4, 0, 0.2, 1)',
+    })
+    return () => {
+      run.cancel()
+    }
+  }, [key, page, still])
+}
 
 /**
  * The frame shows only once the backend says the person may see it (`RequireSignIn`): with
@@ -61,6 +101,8 @@ function Frame() {
   // A click on a page whose code is still on its way changes nothing for a moment. After 200 ms the
   // page you are leaving dims, the way a table dims while its next page loads (PLAN-V7 B3).
   const leaving = useAfterActive(useNavigation().state === 'loading')
+  const page = useRef<HTMLDivElement>(null)
+  useEnter(page, pageOf(useLocation().pathname))
   return (
     <InFrameContext value>
       <SidebarProvider defaultOpen={openAtStart}>
@@ -78,6 +120,7 @@ function Frame() {
           <TopBar />
           <div
             id={MAIN_ID}
+            ref={page}
             tabIndex={-1}
             aria-busy={leaving || undefined}
             className={cn(

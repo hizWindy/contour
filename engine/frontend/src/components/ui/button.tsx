@@ -9,9 +9,12 @@ import { cn } from "@/lib/utils"
   screen they are 44px (`touch:`, see index.css). Hover changes
   the background only. The focus ring comes from the global :focus-visible rule in index.css.
   Navy (primary) is for the main action on a screen. Links are not Navy.
+
+  A press shrinks the button to 0.98 and springs back (the `press` utility in index.css, which also
+  holds the 150ms colour change). It is CSS, not Motion: see the note there.
 */
 const buttonVariants = cva(
-  "inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-transparent text-ui font-semibold whitespace-nowrap select-none transition-colors disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-transparent text-ui font-semibold whitespace-nowrap select-none press disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {

@@ -85,7 +85,7 @@ function TabsContent({
   return (
     <TabsPrimitive.Content
       data-slot="tabs-content"
-      className={cn("flex-1 text-ui", className)}
+      className={cn("flex-1 animate-in text-ui duration-150 fade-in-0", className)}
       {...props}
     />
   )

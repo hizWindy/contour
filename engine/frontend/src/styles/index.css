@@ -43,6 +43,34 @@
   }
 }
 
+/*
+  A press feels physical (Improvements 1, #8): the button shrinks to 0.98 while it is held and
+  springs back, on the same `soft` curve as a chip's press (tokens.css). It is CSS and not Motion's
+  `whileTap` (the chips' `usePress`) on purpose: Motion's keyboard press fires a made-up
+  pointerdown on the button, and a Radix menu trigger (the account menu, a popover) reads that as a
+  click, so it toggled twice and never opened from the keyboard. CSS fires nothing. The individual
+  `scale` property is used, so it adds to any other transform instead of replacing it. A disabled
+  button never presses, and with reduced motion nothing moves (the base rule below also drops the
+  transition). Hover still never moves anything. Colours keep their quick 150ms change.
+*/
+@utility press {
+  transition:
+    color var(--duration-fast) var(--ease),
+    background-color var(--duration-fast) var(--ease),
+    border-color var(--duration-fast) var(--ease),
+    scale var(--duration-soft) var(--spring-soft);
+
+  &:not(:disabled, [aria-disabled='true']):active {
+    scale: 0.98;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    &:active {
+      scale: none;
+    }
+  }
+}
+
 /* Switch off Tailwind's looping animations. Enter and exit animations (tw-animate-css) stay. */
 @theme {
   --animate-spin: initial;

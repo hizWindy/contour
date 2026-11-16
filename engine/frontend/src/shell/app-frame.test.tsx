@@ -1,6 +1,6 @@
 import { act, screen } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { signInOff, stubAuthBackend } from '@/test/fake-auth'
 import { renderWithProviders, startManualClock } from '@/test/render'
 import { AppFrame, MAIN_ID } from './app-frame'
@@ -98,5 +98,54 @@ describe('a click on a page whose code is on its way (PLAN-V7 B3)', () => {
 
     expect(screen.getByText('The slow page')).toBeInTheDocument()
     expect(page()).not.toHaveClass('opacity-60')
+  })
+})
+
+describe('a new page eases in (Improvements 1, #8)', () => {
+  /** jsdom has no Web Animations: a stand-in that remembers what each page was asked to do. */
+  function watchAnimations() {
+    const runs: { keyframes: Keyframe[]; options: KeyframeAnimationOptions }[] = []
+    const cancel = vi.fn()
+    Object.defineProperty(Element.prototype, 'animate', {
+      configurable: true,
+      value: (keyframes: Keyframe[], options: KeyframeAnimationOptions) => {
+        runs.push({ keyframes, options })
+        return { cancel }
+      },
+    })
+    return runs
+  }
+
+  afterEach(() => {
+    Reflect.deleteProperty(Element.prototype, 'animate')
+  })
+
+  it('fades the page in from 55% to full in 160ms when you go to another page, and not on the first', async () => {
+    const runs = watchAnimations()
+    const { router, arrive } = renderApp()
+    expect(await screen.findByText('The home page')).toBeInTheDocument()
+    // The first page of a visit has the frame's own fade.
+    expect(runs).toHaveLength(0)
+
+    arrive()
+    await act(async () => {
+      await router.navigate('/slow')
+    })
+    expect(await screen.findByText('The slow page')).toBeInTheDocument()
+    expect(runs.length).toBeGreaterThanOrEqual(1)
+    const run = runs.at(-1)
+    // Only the opacity moves: a transform would make the page the home of its fixed bars.
+    expect(run?.keyframes).toEqual([{ opacity: 0.55 }, { opacity: 1 }])
+    expect(run?.options.duration).toBe(160)
+  })
+
+  it('does not fade for a change inside the same page (a tab, a filter, a search)', async () => {
+    const runs = watchAnimations()
+    const { router } = renderApp()
+    expect(await screen.findByText('The home page')).toBeInTheDocument()
+    await act(async () => {
+      await router.navigate('/?tab=history')
+    })
+    expect(runs).toHaveLength(0)
   })
 })

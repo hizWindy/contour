@@ -23,13 +23,25 @@ export function readThemeChoice(): ThemeChoice {
   }
 }
 
-/** Uses the choice now and keeps it for the next visit. */
+/**
+ * Uses the choice now and keeps it for the next visit. Where the browser can (Chrome, Edge and
+ * Safari), the page cross-fades from the old colours to the new in 250ms, instead of flashing
+ * (Improvements 1, #8). With reduced motion, or where it can't, the colours change at once.
+ */
 export function applyTheme(choice: ThemeChoice): void {
   const root = document.documentElement
-  if (choice === 'system') {
-    root.removeAttribute('data-theme')
+  const change = (): void => {
+    if (choice === 'system') {
+      root.removeAttribute('data-theme')
+    } else {
+      root.setAttribute('data-theme', choice)
+    }
+  }
+  const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  if (typeof document.startViewTransition === 'function' && !calm) {
+    document.startViewTransition(change)
   } else {
-    root.setAttribute('data-theme', choice)
+    change()
   }
   try {
     // "system" is saved too: with nothing saved, the site opens light.
