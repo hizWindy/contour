@@ -135,6 +135,17 @@ function matches(item: CallNoteOut, q: string): boolean {
     .every((part) => words.some((word) => word.startsWith(part)))
 }
 
+/**
+ * The server's order (`note_store.py`): To confirm puts the unsure first, then the oldest call, the
+ * way a batch is worked through; every other state, History too, the newest call first.
+ */
+function serverOrder(items: CallNoteOut[], state: string): CallNoteOut[] {
+  const at = (item: CallNoteOut) => Date.parse(item.called_at)
+  if (state !== 'to_confirm') return [...items].sort((a, b) => at(b) - at(a))
+  const sure = (item: CallNoteOut) => (item.unsure === null ? 1 : 0)
+  return [...items].sort((a, b) => sure(a) - sure(b) || at(a) - at(b))
+}
+
 /** The fake server. Returns what each list request asked for. */
 function server(notes: CallNoteOut[], { fail = false } = {}): URLSearchParams[] {
   const asked: URLSearchParams[] = []
@@ -161,13 +172,16 @@ function server(notes: CallNoteOut[], { fail = false } = {}): URLSearchParams[] 
         const q = search.get('q')
         const outcome = search.get('outcome')
         const since = search.get('since')
-        const rows = notes.filter(
-          (item) =>
-            (STATES[state] ?? []).includes(item.status) &&
-            (!q || matches(item, q)) &&
-            (!outcome ||
-              (outcome === 'none' ? !item.call.outcome : item.call.outcome === outcome)) &&
-            (!since || melbourneDate(item.called_at) >= since),
+        const rows = serverOrder(
+          notes.filter(
+            (item) =>
+              (STATES[state] ?? []).includes(item.status) &&
+              (!q || matches(item, q)) &&
+              (!outcome ||
+                (outcome === 'none' ? !item.call.outcome : item.call.outcome === outcome)) &&
+              (!since || melbourneDate(item.called_at) >= since),
+          ),
+          state,
         )
         const limit = Number(search.get('limit') ?? '50')
         const offset = Number(search.get('offset') ?? '0')
@@ -279,12 +293,34 @@ describe('History', () => {
       expect(asked.at(-1)?.get('since')).toBe('2026-11-16')
     })
     await user.click(screen.getByRole('combobox', { name: 'Where it stands' }))
-    await user.click(await screen.findByRole('option', { name: 'Needs a look' }))
+    // No "To confirm": the server lists those oldest first, which History's days can't show, and
+    // the To confirm tab lists them already.
+    expect((await screen.findAllByRole('option')).map((option) => option.textContent)).toEqual([
+      'Where it stands: All',
+      'In HubSpot',
+      'Needs a look',
+    ])
+    await user.click(screen.getByRole('option', { name: 'Needs a look' }))
     await waitFor(() => {
       expect(asked.at(-1)?.get('state')).toBe('needs_look')
     })
     expect(asked.at(-1)?.get('outcome')).toBe('Connected')
     expect(asked.at(-1)?.get('mine')).toBe('true')
+  })
+
+  it('opens an old link to its To confirm filter unfiltered, newest day first', async () => {
+    const asked = server(threeDays())
+    renderHistory('&where=to-confirm')
+    const list = await historyList()
+    expect(asked.map((search) => search.get('state'))).toEqual(['history'])
+    expect(
+      within(list)
+        .getAllByRole('heading', { level: 3 })
+        .map((heading) => heading.textContent),
+    ).toEqual(['Today', 'Yesterday', 'Mon 9 Nov'])
+    expect(screen.getByRole('combobox', { name: 'Where it stands' })).toHaveTextContent(
+      'Where it stands: All',
+    )
   })
 
   it('searches the company, the person and the note 250ms after the last key', async () => {

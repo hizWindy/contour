@@ -357,10 +357,10 @@ export const HISTORY_KEYS = 'J and K move, Enter opens a call, and / goes to the
 
 export const WHEN_WORDS = { week: 'This week', month: 'This month', all: 'All' } as const
 
+/** History's "Where it stands" filter. No "To confirm": that tab lists those calls (`params.ts`). */
 export const WHERE_WORDS = {
   all: 'All',
   logged: 'In HubSpot',
-  to_confirm: 'To confirm',
   needs_look: 'Needs a look',
 } as const
 

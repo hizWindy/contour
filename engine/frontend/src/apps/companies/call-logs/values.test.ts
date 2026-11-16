@@ -159,6 +159,8 @@ describe("History's search and filters, in the address (PLAN-V18 T3-6)", () => {
     expect(readHistory(new URLSearchParams('outcome=Nonsense&when=year&where=x'))).toEqual(
       NO_FILTERS,
     )
+    // An old link to History's "To confirm": that filter is gone, so it opens unfiltered.
+    expect(readHistory(new URLSearchParams('tab=history&where=to-confirm'))).toEqual(NO_FILTERS)
     expect(filtered(NO_FILTERS)).toBe(false)
     expect(filtered({ ...NO_FILTERS, q: '  ' })).toBe(false)
     expect(filtered({ ...NO_FILTERS, outcome: 'none' })).toBe(true)

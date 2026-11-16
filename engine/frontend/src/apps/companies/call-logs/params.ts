@@ -89,8 +89,13 @@ export function callLogsQuery(tab: 'to_confirm' | 'needs_look'): CallNoteQuery {
 /** When: this week (from Monday), this month (from the 1st), or all. */
 export type HistoryWhen = 'week' | 'month' | 'all'
 
-/** Where it stands: any, in HubSpot, to confirm (sorting and sending too), or needs a look. */
-export type HistoryWhere = 'all' | 'logged' | 'to_confirm' | 'needs_look'
+/**
+ * Where it stands: any, in HubSpot, or needs a look. "To confirm" isn't one: the server lists
+ * those the way a batch is worked through (the unsure first, then the oldest call), not newest
+ * first as History's days need, and the To confirm tab lists them already. An old link that asks
+ * for them (`where=to-confirm`) opens History unfiltered.
+ */
+export type HistoryWhere = 'all' | 'logged' | 'needs_look'
 
 export interface HistoryFilters {
   q: string
@@ -117,7 +122,6 @@ const OUTCOMES: readonly CallNoteOutcomeFilter[] = [
 const WHERE_IN_ADDRESS: Readonly<Record<HistoryWhere, string | null>> = {
   all: null,
   logged: 'hubspot',
-  to_confirm: 'to-confirm',
   needs_look: 'needs-look',
 }
 
