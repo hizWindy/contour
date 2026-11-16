@@ -532,7 +532,7 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
   - Ctrl+K: "Call logs". Its keywords keep "activity", so old habits still find it. Home's buttons and the tests follow, and DESIGN.md's mentions too.
   - **Done when:** tests cover the new address, the old address with its tab, the menu, the crumb, the title, and Ctrl+K found by "activity" and by "call logs".
 
-- [ ] **T3-3. Which voice to text tool?** Needs Al-khair at the keyboard, about 15 minutes. Free.
+- [ ] **T3-3. Which voice to text tool?** Needs Al-khair at the keyboard, about 15 minutes. Free. Waits for Al-khair at the keyboard.
   - Read the current docs first: Transformers.js (the Whisper models, Web Workers, WebGPU and its fallback) and the browser's Web Speech API. Don't build from memory.
   - A throwaway test page, never merged, with the mic card's live bars. Al-khair says 10 short notes with real Australian company and people names, on his own laptop, in Chrome or Edge.
   - Try two tools:
@@ -543,7 +543,7 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
   - No recording is kept. The notes' text stays out of git.
   - **Done when:** the Log has the numbers and the decision, and `voice_tool` is set to match.
 
-- [ ] **T3-4. The mic card and the mic check.** This works before any voice tool: it shows the bars and checks the mic.
+- [ ] **T3-4. The mic card and the mic check.** This works before any voice tool: it shows the bars and checks the mic. Built 2026-11-16 (`1ec532d`, `3e75301`, `dda777a`, `625d6ec`), waiting for a look. The 30 frames a second at 4x CPU slowdown is not measured yet (no browser tonight).
   - **The mic button:** round, 44px, in the corner of the note box on Log call, named "Speak" for screen readers. The Win+H line is gone.
   - **The card (`MicSheet`)** grows from the button. Its title moves through "Checking your mic", "Speak now", "Writing it out" and "Done".
   - **The check,** in under 2 seconds. Four lines tick as their real results come in: "Mic found", "Allowed", "We can hear you", and "Voice to text ready". A failure shows its words from the table and stops there.
@@ -554,7 +554,7 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
   - **"Check my mic"** in Ctrl+K and in the profile menu opens the card in check only mode.
   - **Done when:** tests with a fake mic cover each check line, each failure, silence, a mic change, Esc, and the mic let go on close. The bars hold 30 frames a second at 4x CPU slowdown. Al-khair has seen it.
 
-- [ ] **T3-5. Voice to text inside the card** (the tool T3-3 picked).
+- [ ] **T3-5. Voice to text inside the card** (the tool T3-3 picked). Built for the browser service and the seam (`3e75301`, `5299046`); Whisper waits for T3-3.
   - **(a) Whisper:**
     - a Web Worker (`stt.worker.ts`) holds the model and the library. Nothing of it is in the first visit;
     - the model's files come from our own site, fetched by a build script at a fixed version with a checksum, never from another site while a rep works, and never in git;
@@ -605,6 +605,15 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
 - 16 Nov 2026, T3-1: the worktree `../contour-v18-t3` on `plan-v18-track3`, made by the lead session. Baseline on `40d9912`: lint clean, types clean, 116 test files and 1,640 tests passed (vitest, one worker, about 5 minutes), the build passed. First visit: 232 kB of JavaScript gzip (237,792 bytes; 739,690 raw) in 35 files, and 23.3 kB of CSS gzip (23,851 bytes). So T3-9's limit is 238,816 bytes of JavaScript gzip.
 - 16 Nov 2026: the overnight rules from the lead session win where this plan differs. T3-3 waits for Al-khair at the keyboard. No new package and no model download. Steps that need Al-khair's look are built, tested and left unticked with "waiting for a look". No messages to the other sessions: anything they need is written here.
 - 16 Nov 2026, T3-2: `59ac46d` moves the folder alone, `fb9673a` renames the rest. The menu's icon is Lucide's `PhoneLog`. History shows Activity's old Logged list until T3-6. The old address is sent on by `call-logs/old-route.tsx`. The Settings test's fixture now says "Call logs page" (rule 6); Track 1's real help text (T1-8) replaces it on the server. Track 2: `meetings/words.ts` still says "on Activity" (T2-3 changes it).
+- 16 Nov 2026, T3-3: waits for Al-khair at the keyboard. No package was added and no model downloaded.
+- 16 Nov 2026, T3-4 built (`1ec532d` the motion parts `FrequencyBars` and `MicSheet`, `3e75301` the card, the check and the seam, `dda777a` the button in the note box, `625d6ec` Check my mic), waiting for a look. 24 mic tests, 7 bar tests and 5 sheet tests, all with a fake mic (`call-notes/mic/fake-mic.ts`). Choices made on the way, each **TBC** at the look:
+  - **The mic button is square, not round.** The plan says round; DESIGN.md bans fully round buttons and `design-lint` fails `rounded-full`. It is a 44px square with the 10px corner.
+  - **Blocked by Windows** is read from the browser's own words ("Permission denied by system"), or from a refusal while the site's permission says Allow. What Chrome on Windows says when Windows blocks the mic is not confirmed: if it says "Could not start audio source", the card shows the "Another app" words instead. T3-3 at the keyboard can check it by switching Windows' mic access off.
+  - **The levels:** a voice is a wave over 0.015 RMS, and the bars ignore a band under 0.06 (a room's hum). Both are guesses until a real mic is tried.
+  - **The four ticks stay in view 500ms** once they all pass, then the words take their place. A Mac gets its own "blocked by the computer" sentence (System Settings), the plan's Windows one stays for Windows.
+  - **Two new slots for any project** (Track 3's shell files): `AppModule.accountItems` (rows in the account menu, before Sign out) and `AppModule.frame` (a part drawn once in the frame), and Ctrl+K entries get `run()`. They carry Check my mic. `call-note-parts.ts` is in no track's list; Track 3 changed it (the rename and two late parts), since it loads call notes' parts.
+- 16 Nov 2026, T3-5 built for the browser service and the seam (`3e75301`, `5299046`). The seam is `call-notes/mic/voice-tool.ts` (start, stop, abort, and onReady, onWords, onHearing, onFinished, onProblem). The browser service runs only with `voice_tool` = `browser_service` (the Settings page now says what each choice does, rule 6). With `browser_model` the card checks the mic, keeps the bars, and its last line says "Turning speech into words isn't set up here yet. Your mic works. Type the note for now." `typing` shows no mic button. Whisper waits for T3-3. The first visit didn't grow from these (the card loads late).
+- **For M1 (hand written types):** `VoiceToolKind`, `DEFAULT_VOICE_TOOL` and `voiceToolOf` in `src/api/hooks/call-note-counts.ts` read `voice_tool` from `CallNoteOptions`; tests send it with a cast. Replace them with the generated `CallNoteOptions['voice_tool']`.
 
 ## Merge and deploy
 
