@@ -626,6 +626,7 @@ export function History({ options, today, onLogCall }: HistoryProps) {
               type="button"
               variant="outline"
               size="sm"
+              className="touch:h-11"
               onClick={() => {
                 change(NO_FILTERS)
               }}

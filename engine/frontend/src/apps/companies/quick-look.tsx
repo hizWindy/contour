@@ -89,7 +89,13 @@ export function QuickLook({ facts, company, failed, today, onOpenCompany }: Quic
           {QUICK_LOOK}
         </h3>
         {onOpenCompany ? (
-          <Button type="button" variant="ghost" size="sm" className="-mr-2" onClick={onOpenCompany}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="-mr-2 touch:h-11"
+            onClick={onOpenCompany}
+          >
             <Building2 aria-hidden="true" />
             {COMPANY_INFO}
           </Button>

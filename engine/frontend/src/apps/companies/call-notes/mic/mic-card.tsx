@@ -481,6 +481,7 @@ export default function MicCard({
                     type="button"
                     variant="ghost"
                     size="sm"
+                    className="touch:h-11"
                     aria-label={`${CHANGE_MIC} the mic`}
                   >
                     {CHANGE_MIC}
@@ -508,7 +509,13 @@ export default function MicCard({
 
       <div className="flex flex-wrap items-center gap-2 border-t bg-popover px-5 py-3">
         {noteBox && !snapshot.problem && phase !== 'writing' ? (
-          <Button type="button" variant="ghost" size="sm" className="-ml-2" onClick={typeInstead}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="-ml-2 touch:h-11"
+            onClick={typeInstead}
+          >
             {ACTION_WORDS.type_instead}
           </Button>
         ) : null}
@@ -518,6 +525,7 @@ export default function MicCard({
             type="button"
             variant="outline"
             size="sm"
+            className="touch:h-11"
             onClick={() => {
               act(action)
             }}
@@ -531,6 +539,7 @@ export default function MicCard({
               type="button"
               variant="outline"
               size="sm"
+              className="touch:h-11"
               onClick={() => {
                 close('cancel')
               }}
@@ -542,6 +551,7 @@ export default function MicCard({
             <Button
               type="button"
               size="sm"
+              className="touch:h-11"
               onClick={() => {
                 act(main)
               }}
@@ -553,6 +563,7 @@ export default function MicCard({
             <Button
               type="button"
               size="sm"
+              className="touch:h-11"
               disabled={!canFinish}
               aria-keyshortcuts="Enter"
               onClick={() => {
@@ -568,6 +579,7 @@ export default function MicCard({
             <Button
               type="button"
               size="sm"
+              className="touch:h-11"
               onClick={() => {
                 close('cancel')
               }}
