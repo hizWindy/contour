@@ -15,6 +15,24 @@ import { queryKeys } from '../query'
 import type { CallNoteOptions, CallNoteSummary } from '@/api/types'
 import { api } from '@/api/client'
 
+// --- Hand written until M1 (PLAN-V18, the contract parts 3 and 4) ------------------------------
+// `GET /call-notes/options` gains `voice_tool`. M1 makes the generated types again and replaces
+// these with `CallNoteOptions['voice_tool']`.
+
+/** Which voice to text tool the mic uses: Whisper in the browser, the browser's service, or none. */
+export type VoiceToolKind = 'browser_model' | 'browser_service' | 'typing'
+
+/** The setting's default (the contract, part 4). */
+export const DEFAULT_VOICE_TOOL: VoiceToolKind = 'browser_model'
+
+/** The voice tool the options name. An older backend sends none: the default. */
+export function voiceToolOf(options: CallNoteOptions | undefined): VoiceToolKind {
+  const value = (options as { voice_tool?: unknown } | undefined)?.voice_tool
+  return value === 'browser_service' || value === 'typing' || value === 'browser_model'
+    ? value
+    : DEFAULT_VOICE_TOOL
+}
+
 /** The switches change rarely (an Admin, on the Settings page), so a minute of fresh is fine. */
 const OPTIONS_FRESH_MS = 60_000
 

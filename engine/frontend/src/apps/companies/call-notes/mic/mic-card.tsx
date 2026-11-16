@@ -1,0 +1,584 @@
+/**
+ * The mic card (PLAN-V18 T3-4 and T3-5, "How it should look and move"): it grows from the mic
+ * button (`MicSheet`), checks the mic in under 2 seconds, then listens, with live bars that follow
+ * the voice (`FrequencyBars`), a timer, and the words as they come.
+ *
+ * - **Its title says what is happening:** "Checking your mic", "Speak now", "Writing it out",
+ *   "Done". A screen reader hears each change once (a status line), and never each word.
+ * - **The check:** four lines, each ticked by its real result, at least 40ms apart. A failure
+ *   turns its line Terracotta, with its fix under it and its buttons (the plan's table), and the
+ *   card never shakes. Everything else still works: Type instead, or Cancel.
+ * - **The words** fade in a chunk at a time (150ms), with no typewriter. Words still being heard
+ *   are quieter. A name heard nearly right is fixed, and the card says so once.
+ * - **Which mic:** its name, with Change to pick another, remembered on this computer.
+ * - **Keys:** Enter is Done, Esc is Cancel (nothing goes in the box).
+ * - **Check only** ("Check my mic", from Ctrl+K or the profile menu): the same check, the bars,
+ *   and Done. There is no note box, so no Type instead.
+ *
+ * It loads late, the first time a mic button is pressed or pointed at, so neither the first visit
+ * nor the Companies page carries it. The mic is let go the moment the card closes.
+ */
+import { Circle, CircleX, Mic, RotateCcw } from 'lucide-react'
+import { m } from 'motion/react'
+import {
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type KeyboardEvent,
+  type RefObject,
+} from 'react'
+import { FrequencyBars } from '@/components/motion/frequency-bars'
+import { MicSheet, MicSheetTitle } from '@/components/motion/mic-sheet'
+import { EASE, INSTANT } from '@/components/motion/springs'
+import { TickIn } from '@/components/motion/tick-in'
+import { useStill } from '@/components/motion/use-still'
+import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { Kbd } from '@/components/ui/kbd'
+import { cn } from '@/lib/utils'
+import { clockText } from '../words'
+import type { NameFix } from './name-fix'
+import { CHECK_STEPS, MicSession, type MicEnv, type MicSnapshot } from './session'
+import type { VoiceToolKind, VoiceToolMaker } from './voice-tool'
+import {
+  ACTION_WORDS,
+  CANCEL,
+  CHANGE_MIC,
+  CHECK_PASSED,
+  CHECKING,
+  DONE,
+  DONE_TITLE,
+  fixedWords,
+  LISTENING,
+  MIC_NOT_READY,
+  MIC_STOPPED,
+  MIC_WORKS,
+  problemActions,
+  problemWords,
+  SPEAK_NOW,
+  speakingFor,
+  STEP_WORDS,
+  WHICH_MIC,
+  WORDS_SHOW_HERE,
+  WRITING,
+  type CheckStep,
+  type MicAction,
+} from './words'
+
+/** The check's ticks show at least this far apart, so two that land together still read. */
+const TICK_GAP_MS = 40
+
+/** A chunk of words fades in this long (150ms, the one curve). */
+const WORDS_IN = { duration: 0.15, ease: EASE } as const
+
+export interface MicCardProps {
+  open: boolean
+  /** `note`: the words go in the note box. `check`: check the mic only. */
+  mode: 'note' | 'check'
+  tool: VoiceToolKind
+  /** The company's and the person's names, for the name fix. */
+  names?: readonly string[]
+  /** The button it grows from, or null for the middle of the window. */
+  anchor: RefObject<HTMLElement | null> | null
+  /** Done: the words for the note box, and the names fixed. */
+  onDone?: (text: string, fixes: readonly NameFix[]) => void
+  /** Type instead (or Carry on): what was said so far, maybe nothing, goes in the box. */
+  onTypeInstead?: (text: string) => void
+  /** The card is shut, whatever shut it. */
+  onClose: () => void
+  /** Where the focus goes after Done or Type instead: the note box. */
+  focusAfter?: RefObject<HTMLElement | null>
+  /** For tests: the browser and the voice tool. */
+  env?: MicEnv
+  makeTool?: VoiceToolMaker | null
+}
+
+const NO_SESSION_SNAPSHOT: MicSnapshot = {
+  phase: 'checking',
+  steps: { found: 'waiting', allowed: 'waiting', hear: 'waiting', ready: 'waiting' },
+  failedAt: null,
+  problem: null,
+  device: null,
+  devices: [],
+  bars: null,
+  chunks: [],
+  hearing: '',
+  fixes: [],
+  listeningSince: null,
+}
+
+const noSubscribe = (): (() => void) => () => undefined
+
+/** The card's title for where it stands. */
+function titleOf(snapshot: MicSnapshot): string {
+  switch (snapshot.phase) {
+    case 'listening':
+      return SPEAK_NOW
+    case 'writing':
+      return WRITING
+    case 'done':
+      return DONE_TITLE
+    case 'checked':
+      return MIC_WORKS
+    case 'failed':
+      if (snapshot.problem === 'cut_off') return MIC_STOPPED
+      if (snapshot.problem === 'too_slow') return WRITING
+      return snapshot.failedAt === 'ready' ? MIC_WORKS : MIC_NOT_READY
+    case 'checking':
+      return CHECKING
+  }
+}
+
+/**
+ * How many passed lines to show: the first at once, then one more at least 40ms after the one
+ * before it, so two results that land together still read as two ticks. With reduced motion, all
+ * at once.
+ */
+function useStagger(target: number, still: boolean): number {
+  const [shown, setShown] = useState(target)
+  const last = useRef(0)
+  // A new check starts the lines again.
+  if (shown > target) setShown(target)
+  useEffect(() => {
+    if (still || shown >= target) return undefined
+    const wait = Math.max(0, last.current + TICK_GAP_MS - Date.now())
+    const timer = window.setTimeout(() => {
+      last.current = Date.now()
+      setShown((now) => Math.min(target, now + 1))
+    }, wait)
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [target, shown, still])
+  return still ? target : Math.min(shown, target)
+}
+
+/** How long the four ticks stay in view once they all passed, before the words take their place. */
+const HOLD_MS = 500
+
+/** True a moment after `ready` turns true, and false again as soon as it turns false. */
+function useFolded(ready: boolean): boolean {
+  const [folded, setFolded] = useState(false)
+  if (!ready && folded) setFolded(false)
+  useEffect(() => {
+    if (!ready) return undefined
+    const timer = window.setTimeout(() => {
+      setFolded(true)
+    }, HOLD_MS)
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [ready])
+  return ready && folded
+}
+
+function CheckLine({
+  step,
+  state,
+  current,
+  problem,
+}: {
+  step: CheckStep
+  state: 'waiting' | 'pass' | 'fail'
+  current: boolean
+  problem: string | null
+}) {
+  const still = useStill()
+  const words = STEP_WORDS[step][state === 'waiting' ? 'waiting' : state]
+  return (
+    <li data-slot="mic-check-line" data-state={state} className="flex items-start gap-2.5">
+      <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center">
+        {state === 'pass' ? (
+          <TickIn className="text-pass-ink" />
+        ) : state === 'fail' ? (
+          <CircleX aria-hidden="true" className="size-4 text-destructive-ink" />
+        ) : (
+          <Circle
+            aria-hidden="true"
+            className={cn('size-3', current ? 'text-foreground' : 'text-muted-foreground')}
+          />
+        )}
+      </span>
+      <span className="flex min-w-0 flex-col gap-1">
+        <span
+          className={cn(
+            state === 'fail' && 'font-semibold text-destructive-ink',
+            state === 'pass' && 'text-foreground',
+            state === 'waiting' && (current ? 'text-foreground' : 'text-muted-foreground'),
+          )}
+        >
+          {words}
+        </span>
+        {problem ? (
+          <m.span
+            data-slot="mic-problem"
+            className="text-pretty text-foreground"
+            initial={still ? false : { opacity: 0 }}
+            animate={{ opacity: 1, transition: still ? INSTANT : WORDS_IN }}
+          >
+            {problem}
+          </m.span>
+        ) : null}
+      </span>
+    </li>
+  )
+}
+
+/** "0:42" while the rep speaks, from when the card said "Speak now". */
+function SpeakTimer({ since, now }: { since: number; now: () => number }) {
+  const [seconds, setSeconds] = useState(0)
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setSeconds(Math.max(0, Math.floor((now() - since) / 1000)))
+    }, 1000)
+    return () => {
+      window.clearInterval(timer)
+    }
+  }, [since, now])
+  const clock = clockText(seconds)
+  return (
+    <span className="text-ui text-muted-foreground tabular-nums">
+      <span className="sr-only">{speakingFor(clock)}</span>
+      <span aria-hidden="true">{clock}</span>
+    </span>
+  )
+}
+
+export default function MicCard({
+  open,
+  mode,
+  tool,
+  names = [],
+  anchor,
+  onDone,
+  onTypeInstead,
+  onClose,
+  focusAfter,
+  env,
+  makeTool,
+}: MicCardProps) {
+  const still = useStill()
+  const closing = useRef<'done' | 'type' | 'cancel' | null>(null)
+  const [picking, setPicking] = useState(false)
+  const noteBox = mode === 'note'
+
+  // A new session each time the card opens. The names and the tool are read as it opens: a call
+  // doesn't change under an open card. It starts once it is on the page, and is let go of when
+  // the card closes; while the card shrinks away it keeps showing what it had.
+  const [opened, setOpened] = useState(false)
+  const [session, setSession] = useState<MicSession | null>(null)
+  if (open !== opened) {
+    setOpened(open)
+    if (open) setSession(new MicSession({ mode, tool, names, env, makeTool }))
+  }
+  useEffect(() => {
+    if (!open || !session) return undefined
+    closing.current = null
+    session.start()
+    return () => {
+      session.close()
+    }
+  }, [open, session])
+
+  const snapshot = useSyncExternalStore(
+    session?.subscribe ?? noSubscribe,
+    session?.getSnapshot ?? (() => NO_SESSION_SNAPSHOT),
+  )
+
+  const close = (reason: 'done' | 'type' | 'cancel'): void => {
+    closing.current = reason
+    onClose()
+  }
+
+  // Done: the words go in the box as the card shrinks back to the mic.
+  const phase = snapshot.phase
+  useEffect(() => {
+    if (phase !== 'done' || !session || closing.current) return
+    onDone?.(session.text(), session.getSnapshot().fixes)
+    close('done')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, session])
+
+  const typeInstead = (): void => {
+    onTypeInstead?.(session?.text() ?? '')
+    close('type')
+  }
+
+  const act = (action: MicAction): void => {
+    switch (action) {
+      case 'try_again':
+        session?.retry()
+        return
+      case 'pick_mic':
+        setPicking(true)
+        return
+      case 'type_instead':
+      case 'carry_on':
+        typeInstead()
+    }
+  }
+
+  const passed = CHECK_STEPS.findIndex((step) => snapshot.steps[step] !== 'pass')
+  const allPassed = passed === -1
+  const shownPassed = useStagger(allPassed ? CHECK_STEPS.length : passed, still)
+  const listening = phase === 'listening' || phase === 'writing'
+  const done = phase === 'done'
+  // The lines stay until the last tick has been seen, then give way to the words.
+  const folded = useFolded(listening && shownPassed >= CHECK_STEPS.length)
+  const showSteps =
+    !done && !(listening && folded) && !(phase === 'failed' && snapshot.failedAt === null)
+  const problem = snapshot.problem ? problemWords(snapshot.problem) : null
+  const actions = snapshot.problem ? problemActions(snapshot.problem, noteBox) : []
+  const [main, ...others] = actions
+  const title = titleOf(snapshot)
+  const canFinish = noteBox && phase === 'listening'
+
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+    if (event.key !== 'Enter' || event.defaultPrevented) return
+    if (event.target instanceof HTMLButtonElement || event.target instanceof HTMLAnchorElement) {
+      return
+    }
+    if (canFinish) {
+      event.preventDefault()
+      session?.finish()
+    } else if (!noteBox && phase !== 'failed') {
+      event.preventDefault()
+      close('cancel')
+    }
+  }
+
+  const status = [title, problem].filter(Boolean).join('. ')
+  const deviceName = snapshot.device?.name ?? null
+
+  return (
+    <MicSheet
+      open={open}
+      anchor={anchor}
+      onOpenChange={(next) => {
+        if (!next) close('cancel')
+      }}
+      onKeyDown={onKeyDown}
+      onOpenAutoFocus={(event) => {
+        // The card itself takes the focus, so Enter is Done and nothing is pressed by mistake.
+        event.preventDefault()
+        if (event.currentTarget instanceof HTMLElement) event.currentTarget.focus()
+      }}
+      onCloseAutoFocus={(event) => {
+        const box = focusAfter?.current
+        if ((closing.current === 'done' || closing.current === 'type') && box) {
+          event.preventDefault()
+          box.focus()
+          if (box instanceof HTMLTextAreaElement) {
+            box.setSelectionRange(box.value.length, box.value.length)
+          }
+        }
+      }}
+    >
+      <div data-slot="mic-card" data-phase={phase} className="flex flex-col gap-4 p-5">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-secondary text-foreground">
+              <Mic aria-hidden="true" className="size-5" />
+            </span>
+            <MicSheetTitle>{title}</MicSheetTitle>
+          </div>
+          {listening && snapshot.listeningSince !== null && session ? (
+            <SpeakTimer since={snapshot.listeningSince} now={session.now} />
+          ) : null}
+        </div>
+        <p role="status" className="sr-only">
+          {status}
+        </p>
+
+        <FrequencyBars source={snapshot.bars} label={LISTENING} />
+
+        {showSteps ? (
+          <ul aria-label={CHECKING} className="flex flex-col gap-2 text-ui">
+            {CHECK_STEPS.map((step, index) => {
+              const state = snapshot.steps[step]
+              // A pass shows in turn, at least 40ms after the one before it.
+              const shownState = state === 'pass' && index >= shownPassed ? 'waiting' : state
+              return (
+                <CheckLine
+                  key={step}
+                  step={step}
+                  state={shownState}
+                  current={shownState === 'waiting' && index === Math.max(0, shownPassed)}
+                  problem={state === 'fail' ? problem : null}
+                />
+              )
+            })}
+          </ul>
+        ) : null}
+
+        {!showSteps ? (
+          <div
+            data-slot="mic-words"
+            className="max-h-40 min-h-16 overflow-y-auto rounded-md border bg-card p-3 text-body text-foreground"
+          >
+            {snapshot.chunks.length === 0 && snapshot.hearing === '' ? (
+              <p className="text-muted-foreground">{WORDS_SHOW_HERE}</p>
+            ) : (
+              <p className="text-pretty">
+                {snapshot.chunks.map((chunk, index) => (
+                  <m.span
+                    // Chunks only ever join at the end: the place is the chunk.
+                    key={index}
+                    initial={still ? false : { opacity: 0 }}
+                    animate={{ opacity: 1, transition: still ? INSTANT : WORDS_IN }}
+                  >
+                    {index > 0 ? ' ' : ''}
+                    {chunk}
+                  </m.span>
+                ))}
+                {snapshot.hearing ? (
+                  <span className="text-muted-foreground">
+                    {snapshot.chunks.length > 0 ? ' ' : ''}
+                    {snapshot.hearing}
+                  </span>
+                ) : null}
+              </p>
+            )}
+          </div>
+        ) : null}
+
+        {!showSteps && problem ? (
+          <p role="alert" data-slot="mic-problem" className="text-pretty text-destructive-ink">
+            {problem}
+          </p>
+        ) : null}
+
+        {snapshot.fixes.length > 0 ? (
+          <p className="text-caption text-muted-foreground">{fixedWords(snapshot.fixes)}</p>
+        ) : null}
+
+        {phase === 'checked' ? (
+          <p className="text-ui text-muted-foreground">{CHECK_PASSED}</p>
+        ) : null}
+
+        {snapshot.devices.length > 0 || deviceName ? (
+          <div className="flex items-center gap-2 text-ui">
+            <Mic aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+            <span className="min-w-0 flex-1 truncate text-foreground" title={deviceName ?? ''}>
+              <span className="sr-only">{WHICH_MIC}: </span>
+              {deviceName ?? snapshot.devices[0]?.name}
+            </span>
+            {snapshot.devices.length > 1 ? (
+              <DropdownMenu open={picking} onOpenChange={setPicking}>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    aria-label={`${CHANGE_MIC} the mic`}
+                  >
+                    {CHANGE_MIC}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                  <DropdownMenuLabel>{WHICH_MIC}</DropdownMenuLabel>
+                  <DropdownMenuRadioGroup
+                    value={snapshot.device?.id ?? ''}
+                    onValueChange={(id) => {
+                      session?.pick(id)
+                    }}
+                  >
+                    {snapshot.devices.map((device) => (
+                      <DropdownMenuRadioItem
+                        key={device.id}
+                        value={device.id}
+                        className="touch:min-h-11"
+                      >
+                        <span className="truncate">{device.name}</span>
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 border-t bg-popover px-5 py-3">
+        {noteBox && !snapshot.problem && phase !== 'writing' ? (
+          <Button type="button" variant="ghost" size="sm" className="-ml-2" onClick={typeInstead}>
+            {ACTION_WORDS.type_instead}
+          </Button>
+        ) : null}
+        {others.map((action) => (
+          <Button
+            key={action}
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              act(action)
+            }}
+          >
+            {ACTION_WORDS[action]}
+          </Button>
+        ))}
+        <div className="ml-auto flex items-center gap-2">
+          {noteBox || main ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                close('cancel')
+              }}
+            >
+              {noteBox ? CANCEL : DONE}
+            </Button>
+          ) : null}
+          {main ? (
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => {
+                act(main)
+              }}
+            >
+              {main === 'try_again' ? <RotateCcw aria-hidden="true" /> : null}
+              {ACTION_WORDS[main]}
+            </Button>
+          ) : noteBox ? (
+            <Button
+              type="button"
+              size="sm"
+              disabled={!canFinish}
+              aria-keyshortcuts="Enter"
+              onClick={() => {
+                session?.finish()
+              }}
+            >
+              {DONE}
+              <Kbd aria-hidden="true" className="touch:hidden">
+                Enter
+              </Kbd>
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => {
+                close('cancel')
+              }}
+            >
+              {DONE}
+            </Button>
+          )}
+        </div>
+      </div>
+    </MicSheet>
+  )
+}
