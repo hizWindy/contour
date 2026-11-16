@@ -386,7 +386,7 @@ async def test_without_the_meetings_scope_the_sync_goes_on_and_says_what_it_wait
     assert await copied(session_factory) == {}
     async with session_factory() as session:
         status = await meetings.status(session)
-    assert (status.state, status.sentence) == ("waiting", meetings.WAITING)
+    assert (status.state, status.sentence) == ("waiting", meetings.WAITING_FOR_ACCESS)
 
 
 @pytest.mark.integration

@@ -11,6 +11,7 @@ from pydantic.config import JsonDict
 
 from apps.companies.deals import DealState, StageKind
 from core.api.models import SafeText
+from core.config import VoiceTool
 from core.hubspot.meetings import Meeting, MeetingsState, MeetingWhere
 
 Source = Literal["hubspot", "lead"]
@@ -579,9 +580,11 @@ WAITING_FOR = (
 
 
 class CallNoteOptions(Out):
-    model_config = ConfigDict(json_schema_extra=optional_in_types("transcript_max_chars"))
+    model_config = ConfigDict(
+        json_schema_extra=optional_in_types("transcript_max_chars", "voice_tool")
+    )
 
-    enabled: bool = Field(description="True when Log call and Activity show")
+    enabled: bool = Field(description="True when Log call and Call logs show")
     ai_enabled: bool = Field(
         description="True when Claude sorts a note: its switch is on and Claude is set up. "
         "False: the rep picks the outcome and adds follow-ups by hand"
@@ -595,6 +598,12 @@ class CallNoteOptions(Out):
     transcript_max_chars: int = Field(
         description="The longest meeting transcript, in characters, once a .vtt file's times are "
         "taken out. A longer one answers 422 `transcript_too_long`"
+    )
+    voice_tool: VoiceTool = Field(
+        "browser_model",
+        description="Which voice to text tool the mic uses: browser_model (Whisper in the "
+        "browser: the voice stays on the laptop), browser_service (the browser's own speech "
+        "service, which sends the voice to Google or Microsoft) or typing (no mic)",
     )
 
 

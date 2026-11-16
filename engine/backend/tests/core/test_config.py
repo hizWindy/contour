@@ -68,6 +68,7 @@ CHOICE_KEYS = {
     "model_prep",
     "model_why",
     "claude_effort",
+    "voice_tool",  # PLAN-V18
 }
 BOOL_KEYS = {  # a switch has no min or max
     "prep_enabled",

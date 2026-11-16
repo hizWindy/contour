@@ -485,7 +485,7 @@ async def test_the_reps_edits_are_checked_as_the_sorter_checks_them(
         assert response.status_code == 422, (code, response.text)
         assert response.json()["code"] == code
     assert refused["change_not_possible"].json()["detail"] == (
-        "Hobart lease end: this company has no Hobart office in HubSpot."
+        "Hobart lease end: this company has no Hobart office in HubSpot. Change it, or take it out."
     )
     assert len(after["changes"]) == 2  # a refused edit changes nothing
     [row] = await stored(world)
@@ -577,7 +577,8 @@ async def test_a_failed_note_with_nothing_in_hubspot_can_be_removed(
     for name in ("partial", "uncertain", "sending", "failed, yet its call landed"):
         assert (answers[name].status_code, answers[name].json()["code"]) == (409, "note_sent")
     assert answers["partial"].json()["detail"] == (
-        "Part of this note is in HubSpot already, so it can't be removed here."
+        "Part of this note is in HubSpot already, so it can't be removed here. Change it in "
+        "HubSpot instead."
     )
     assert answers["uncertain"].json()["detail"] == (
         "Check HubSpot first, then tell us whether it's there."

@@ -636,7 +636,8 @@ async def test_a_failed_draft_says_why_and_can_be_drafted_again(
         ready = await form_of(client, form)
     assert (failed["status"], failed["error"]) == (
         "failed",
-        "Claude couldn't write the summaries. Try again in a minute.",
+        "The summaries weren't written: the AI service didn't answer. Try again in a minute, or "
+        "write them yourself.",
     )
     assert failed["facts"] and failed["summaries"]["what_they_do"]["text"] == ""
     assert (ready["status"], ready["error"]) == ("draft", None)

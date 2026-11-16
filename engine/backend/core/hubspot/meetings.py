@@ -121,7 +121,10 @@ FIELDS = (
 
 # --- The words (PLAN-V15 "Words for errors": no setting, file or command) -----------------------
 
-NOT_READ_YET = "Meetings from HubSpot aren't read yet."
+# The status's words, for anyone (PLAN-V18 "Words for when things go wrong"). WAITING names the
+# permission, for the sync's warnings an admin reads.
+NOT_READ_YET = "Meetings can't be read from HubSpot yet."
+WAITING_FOR_ACCESS = "Waiting for HubSpot access to meetings. An admin adds it in HubSpot."
 WAITING = "Waiting for HubSpot access to meetings (crm.objects.meetings.read)."
 NO_HUBSPOT = "HubSpot isn't connected, so meetings can't be read from it."
 MEETINGS_FAILED = "Meetings weren't copied this time. The ones copied before stay."
@@ -130,7 +133,10 @@ NO_PEOPLE_LINKS = (
     "(crm.objects.contacts.read)."
 )
 TOO_MANY_TITLE = "Too many meetings at one time"
-TOO_MANY_DETAIL = "HubSpot has more meetings starting at one moment than its search can list."
+TOO_MANY_DETAIL = (
+    "HubSpot has more meetings starting at one moment than its search can list, so the meetings "
+    "copied before stay. Tell an admin."
+)
 UNTITLED = "Untitled meeting"
 EMAIL_GONE = "[email left out]"
 PHONE_GONE = "[number left out]"
@@ -516,7 +522,7 @@ def _key_set() -> bool:
 
 async def status(session: AsyncSession) -> MeetingsStatus:
     """ready once a read has worked: our copy is there, even if a later read failed. Before
-    that: waiting, with the missing permission named, when the newest read hit one; off when no
+    that: waiting for access, when the newest read hit a missing permission; off when no
     HubSpot key is set (nothing can read them); otherwise waiting, `NOT_READ_YET`. Each also
     says when the newest good read finished, whether a read runs now, and how the newest read
     ended (PLAN-V18 T1-5)."""
@@ -530,7 +536,7 @@ async def status(session: AsyncSession) -> MeetingsStatus:
     if good is not None:
         return MeetingsStatus(state="ready", **more)
     if newest is not None and newest.state == "waiting":
-        return MeetingsStatus(state="waiting", sentence=newest.sentence or WAITING, **more)
+        return MeetingsStatus(state="waiting", sentence=WAITING_FOR_ACCESS, **more)
     if not _key_set():
         return MeetingsStatus(state="off", sentence=NO_HUBSPOT, **more)
     return MeetingsStatus(state="waiting", sentence=NOT_READ_YET, **more)

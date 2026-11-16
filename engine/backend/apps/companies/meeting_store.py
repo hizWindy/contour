@@ -66,7 +66,8 @@ CANCELLED: Final = frozenset({"canceled", "cancelled"})  # HubSpot writes "cance
 
 # --- The words (PLAN-V15 "Words for errors") ---------------------------------------------------
 
-NOT_READY = "Meetings from HubSpot aren't ready yet."
+NOT_READY = "Meetings can't be read from HubSpot yet."
+STILL_WORKS = "You can still start a new pre-read."  # after any "not ready" sentence
 NOT_LINKED = (
     "Your account isn't linked to a HubSpot owner yet, so My meetings is empty. All shows "
     "everyone's. An admin can link you in Admin, People."
@@ -80,10 +81,7 @@ NO_TEAMS_IN_HUBSPOT = "HubSpot has no teams yet, so My team is empty. All shows 
 NO_ACCOUNT = (
     "Nobody is signed in, so there are no meetings of your own to pick out. All shows everyone's."
 )
-SYNC_WAITING = (
-    "Waiting for HubSpot access to meetings. An admin adds it in HubSpot. You can still start a "
-    "new pre-read."
-)
+SYNC_WAITING = f"{hubspot_meetings.WAITING_FOR_ACCESS} {STILL_WORKS}"
 SYNC_FAILED_FIRST = (
     "HubSpot didn't answer, so no meetings could be read yet. Try Sync again in a minute."
 )
@@ -111,7 +109,8 @@ def meeting_not_found() -> Problem:
     return Problem(
         404,
         "We can't find that meeting",
-        "It may have moved or gone in HubSpot, or it isn't linked to a client company.",
+        "It may have moved or gone in HubSpot, or it isn't linked to a client company. Press "
+        "Sync, then look for it again.",
         code="meeting_not_found",
     )
 
@@ -492,7 +491,7 @@ async def list_meetings(
     sentence: str | None = None
     entries: list[Entry] = []
     if status.state != "ready":
-        sentence = status.sentence or NOT_READY
+        sentence = f"{status.sentence or NOT_READY} {STILL_WORKS}"
     else:
         sentence = why_empty(who, auth, me, team)
         if sentence is None:

@@ -125,7 +125,8 @@ def email_not_set_up() -> Problem:
     return Problem(
         409,
         "Email isn't set up",
-        "Nothing was sent. An admin needs to set up email first.",
+        "Email isn't set up yet, so nothing was sent. The pre-read stays here: copy it, or send "
+        "it once email is set up.",
         code="email_not_set_up",
     )
 

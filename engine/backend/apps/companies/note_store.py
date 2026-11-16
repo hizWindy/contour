@@ -123,7 +123,8 @@ def company_not_found() -> Problem:
     return Problem(
         404,
         "We can't find that company",
-        "It may have been removed, or it isn't open to your account.",
+        "It may have been removed, or it isn't open to your account. Go back to the list "
+        "and pick it again.",
         code="company_not_found",
     )
 
@@ -132,7 +133,8 @@ def note_not_found() -> Problem:
     return Problem(
         404,
         "We can't find that note",
-        "It may have been removed, or it isn't open to your account.",
+        "It may have been removed, or it isn't open to your account. Go back to Call logs "
+        "and pick it again.",
         code="note_not_found",
     )
 
@@ -150,7 +152,8 @@ def not_your_note() -> Problem:
     return Problem(
         403,
         "Not your note",
-        "Only the person who logged this call can change it, remove it or send it.",
+        "Only the person who logged this call can change it, remove it or send it. Ask them "
+        "to do it.",
         code="not_your_note",
     )
 
@@ -167,7 +170,10 @@ def still_sorting() -> Problem:
 SENT_WORDS: Final = {
     "sending": "This note is being sent to HubSpot. Wait for it to finish.",
     "uncertain": "Check HubSpot first, then tell us whether it's there.",
-    "partial": "Part of this note is in HubSpot already, so it can't be removed here.",
+    "partial": (
+        "Part of this note is in HubSpot already, so it can't be removed here. Change it in "
+        "HubSpot instead."
+    ),
 }
 
 
@@ -176,7 +182,9 @@ def already_sent(status: str | None = None) -> Problem:
         409,
         "Already sent",
         SENT_WORDS.get(
-            status or "", "This note has gone to HubSpot, so it can't be changed or removed here."
+            status or "",
+            "This note has gone to HubSpot, so it can't be changed or removed here. Change it in "
+            "HubSpot instead.",
         ),
         code="note_sent",
     )
@@ -370,6 +378,7 @@ def options(app: FastAPI, settings: Settings) -> CallNoteOptions:
         soft_seconds=settings.notes_soft_seconds,
         max_chars=settings.notes_max_chars,
         transcript_max_chars=settings.transcript_max_chars,
+        voice_tool=settings.voice_tool,
     )
 
 
@@ -766,7 +775,7 @@ def part_sent(what: str) -> Problem:
     return Problem(
         409,
         "Already in HubSpot",
-        f"{what} is in HubSpot already, so it can't change here.",
+        f"{what} is in HubSpot already, so it can't change here. Change it in HubSpot instead.",
         code="part_sent",
     )
 
@@ -819,7 +828,9 @@ def _edited_changes(
             if isinstance(found, Dropped):
                 what = found.what[:1].upper() + found.what[1:]
                 raise refused(
-                    "This change can't be made", f"{what}: {found.why}.", code="change_not_possible"
+                    "This change can't be made",
+                    f"{what}: {found.why}. Change it, or take it out.",
+                    code="change_not_possible",
                 )
             same = old is not None and old.value == found.value
             fresher = (
@@ -1210,7 +1221,8 @@ def nothing_to_retry() -> Problem:
     return Problem(
         409,
         "Nothing to send again",
-        "Only a note that failed, or was partly saved, can be sent again.",
+        "Only a note that failed, or was partly saved, can be sent again. Open the note to see "
+        "where it stands.",
         code="nothing_to_retry",
     )
 
@@ -1219,7 +1231,8 @@ def nothing_to_resolve() -> Problem:
     return Problem(
         409,
         "Nothing to check",
-        "Only a note that HubSpot may or may not have saved needs this.",
+        "Only a note that HubSpot may or may not have saved needs this. Open the note to see "
+        "where it stands.",
         code="nothing_to_resolve",
     )
 

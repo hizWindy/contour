@@ -350,7 +350,7 @@ async def test_before_hubspots_meetings_are_read_the_list_says_so(
         "items": [],
         "total": 0,
         "meetings_state": "waiting",
-        "sentence": "Meetings from HubSpot aren't read yet.",
+        "sentence": "Meetings can't be read from HubSpot yet. You can still start a new pre-read.",
         "who": "all",
         "linked": True,
         "team_state": "ready",

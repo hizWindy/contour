@@ -98,15 +98,25 @@ STUCK_ERROR = "Contour restarted while this pre-read was being written. Try agai
 INCOMPLETE = "Claude's answer came back incomplete. Try again."
 SERVER_FAULT = "Something went wrong on our side while writing the summaries. Try again."
 COMPANY_GONE = "This company is no longer in the HubSpot copy or the Lead Finder."
+NOT_WRITTEN = "The summaries weren't written:"
 DAILY_LIMIT = (
-    "Pre-reads have reached today's Claude limit. It starts again tomorrow. An admin can raise "
-    "the limit."
+    f"{NOT_WRITTEN} today's AI spending limit is reached. Write them yourself, or draft again "
+    "tomorrow."
 )
-CLAUDE_BUSY = "Claude is busy right now. Try again in a minute."
-UNREACHABLE = "Our server can't reach Claude. Try again in a few minutes."
-CLAUDE_SETUP = "Claude isn't set up correctly. An admin needs to check the Claude key."
-TOO_SLOW = "Claude took too long to answer. Nothing was lost. Try again."
-CLAUDE_ERROR = "Claude couldn't write the summaries. Try again in a minute."
+AI_SERVICE = (
+    f"{NOT_WRITTEN} the AI service didn't answer. Try again in a minute, or write them yourself."
+)
+CLAUDE_BUSY = (
+    f"{NOT_WRITTEN} the AI service is busy. Try again in a minute, or write them yourself."
+)
+UNREACHABLE = AI_SERVICE
+CLAUDE_SETUP = (
+    f"{NOT_WRITTEN} the AI service isn't set up. Write them yourself, and ask an admin to check it."
+)
+TOO_SLOW = (
+    f"{NOT_WRITTEN} the AI service took too long. Try again in a minute, or write them yourself."
+)
+CLAUDE_ERROR = AI_SERVICE
 RETRY = "\n\nYour last answer didn't fit the form. Answer in the form."
 
 
@@ -121,7 +131,8 @@ def form_not_found() -> Problem:
     return Problem(
         404,
         "We can't find that pre-read",
-        "It may have been removed, or it isn't open to your account.",
+        "It may have been removed, or it isn't open to your account. Go back to Meetings "
+        "and open it again.",
         code="form_not_found",
     )
 

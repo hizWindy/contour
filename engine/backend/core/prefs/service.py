@@ -241,7 +241,7 @@ TEXT: dict[str, tuple[str, str]] = {
     ),
     "call_notes_enabled": (
         "Call notes are on",
-        "Shows Log call in call prep and the Activity page, so a rep can log a call by talking "
+        "Shows Log call in call prep and the Call logs page, so a rep can log a call by talking "
         "or typing. Nothing goes to HubSpot until a person confirms the batch.",
     ),
     "call_notes_ai_enabled": (
@@ -249,6 +249,12 @@ TEXT: dict[str, tuple[str, str]] = {
         "Sends a rep's note to Claude, with emails and phone numbers taken out, to sort it into "
         "the call, field changes and follow-up tasks. Well under US$0.001 a note (TBC). Off: the "
         "rep picks the outcome and adds tasks by hand. Needs Levi's OK first (TBC).",
+    ),
+    "voice_tool": (
+        "Voice to text",
+        "Which tool turns a rep's voice into words on Log call. Whisper in the browser keeps "
+        "the voice on the laptop. The browser's own speech service sends the voice to Google or "
+        "Microsoft, so it waits for Levi's OK (TBC). Typing hides the mic.",
     ),
     "meeting_forms_enabled": (
         "Pre-meeting forms are on",

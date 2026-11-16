@@ -201,8 +201,8 @@ async def sync_meetings(request: Request, settings: MeetingsOnDep) -> MeetingsSy
         "request (this costs money: about US$0.03, at most the pre-read cap). A HubSpot meeting "
         "has one pre-read: a second start gives back the first (200). So does a typed meeting I "
         "start again with the same company, title and start, so a retry makes no second one. "
-        "404 `meeting_not_found` or `company_not_found`. 422 for a body that is neither kind. "
-        "409 `meeting_forms_off`."
+        "404 `meeting_not_found` or `company_not_found`. 422 for a body that is neither kind, "
+        "and `meeting_time_missing` for a typed meeting with no start. 409 `meeting_forms_off`."
     ),
     responses={200: {"model": MeetingFormOut, "description": "This meeting's pre-read, as it is"}},
 )
@@ -338,7 +338,8 @@ async def preview_form(
         "(422 `blanks_empty`). Sent already: nobody is emailed again, and a copy that is "
         "waiting or failed is tried again. `hubspot_copy` says how the copy went: saved, "
         "waiting (writing to HubSpot isn't on: the email still went), off (the company isn't in "
-        "HubSpot), or failed. 409 `form_not_ready` while it is drafting or failed, "
+        "HubSpot), or failed. 422 `no_one` when there is nobody to send it to. 409 "
+        "`form_not_ready` while it is drafting or failed, `form_sending` while it is being sent, "
         "`email_not_set_up`. 502 `email_failed`: nothing was sent. 404 `form_not_found`. 409 "
         "`meeting_forms_off`."
     ),

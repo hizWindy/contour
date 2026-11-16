@@ -202,7 +202,7 @@ def test_the_guard_knows_a_setting_by_its_own_name_and_reads_status_sentences() 
     assert SETTING_NAMES.search("Set call_notes_enabled.")
     assert not SETTING_NAMES.search("Call notes are switched off on the server.")
     read = {value for name, value in shown_texts() if name == "core/hubspot/meetings.py"}
-    assert "Meetings from HubSpot aren't read yet." in read
+    assert "Meetings can't be read from HubSpot yet." in read
 
 
 # --- The one-backend lock ----------------------------------------------------------------------
