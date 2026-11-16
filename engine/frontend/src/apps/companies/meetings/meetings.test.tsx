@@ -929,24 +929,18 @@ describe('Sync', () => {
     expect(screen.getByText('Sample Logistics Pty Ltd')).toBeInTheDocument()
   })
 
-  it("a press that doesn't reach HubSpot says why, in plain words", async () => {
+  it("a press that doesn't reach HubSpot says why, in plain words, and the next step once", async () => {
+    // Track 1's 503 (`meeting_store.py`), word for word: its detail ends with the next step.
+    const detail =
+      "HubSpot isn't connected, so meetings can't be read from it. An admin can connect it on the HubSpot page in Admin."
     mockServer({
-      sync: () =>
-        problem(
-          503,
-          "HubSpot isn't connected",
-          "HubSpot isn't connected, so meetings can't be read from it.",
-          'hubspot_not_connected',
-        ),
+      sync: () => problem(503, "HubSpot isn't connected", detail, 'hubspot_not_connected'),
     })
     const { user } = renderMeetings()
     await screen.findByRole('list', { name: 'Today' })
     await user.click(syncButton('Sync'))
-    expect(
-      await within(syncLine()).findByText(
-        "HubSpot isn't connected, so meetings can't be read from it. Ask an admin to connect HubSpot. You can still start a new pre-read.",
-      ),
-    ).toBeInTheDocument()
+    // The detail starts with the title, so it is said alone, with no hint after it.
+    expect(await within(syncLine()).findByText(detail)).toBeInTheDocument()
     expect(syncButton('Sync')).toBeInTheDocument()
   })
 
@@ -1138,21 +1132,19 @@ describe('words for when things go wrong (PLAN-V18 T2-7)', () => {
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
   })
 
-  it('gives the meetings codes a next step where the server has none, naming no setting', () => {
+  it("adds no hint to the meetings codes: the server's words end with the next step", () => {
+    // Track 1 (T1-8) ends every detail with what to do, so a hint would say it twice.
     const hint = (code: string) => problemHint(new ApiProblem({ title: 'x', status: 409, code }))
-    expect(hint('hubspot_not_connected')).toBe(
-      'Ask an admin to connect HubSpot. You can still start a new pre-read.',
-    )
-    expect(hint('meeting_not_found')).toBe(
-      "Press Sync on Meetings to read HubSpot's meetings again.",
-    )
-    expect(hint('form_not_found')).toBe('Every pre-read is on Meetings, beside its meeting.')
-    expect(hint('email_not_set_up')).toBe(
-      'The pre-read stays here: copy it, or send it once email is set up.',
-    )
-    // The server already says what to do for these: no hint, so nothing is said twice.
-    expect(hint('form_sending')).toBeNull()
-    expect(hint('no_one')).toBeNull()
+    for (const code of [
+      'hubspot_not_connected',
+      'meeting_not_found',
+      'form_not_found',
+      'email_not_set_up',
+      'form_sending',
+      'no_one',
+    ]) {
+      expect(hint(code)).toBeNull()
+    }
   })
 })
 

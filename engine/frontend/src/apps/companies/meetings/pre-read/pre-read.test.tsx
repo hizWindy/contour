@@ -194,10 +194,11 @@ function mockServer(changes: Partial<Omit<Server, 'calls' | 'release'>> = {}): S
     if (url.pathname === FORM && method === 'GET') {
       switch (server.get) {
         case 'missing':
+          // Track 1's words (`meeting_form.py`), word for word.
           return problem(
             404,
             "We can't find that pre-read",
-            "It may have been removed, or it isn't open to your account.",
+            "It may have been removed, or it isn't open to your account. Go back to Meetings and open it again.",
             'form_not_found',
           )
         case 'bad-id':

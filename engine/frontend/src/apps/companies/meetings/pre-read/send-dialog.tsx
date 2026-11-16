@@ -80,7 +80,6 @@ import {
   SENDING,
   sendProblemWords,
   sendToWords,
-  STAYS_HERE,
   COPY_PRE_READ,
   COPIED,
   NOT_COPIED,
@@ -293,15 +292,14 @@ function CopyEmail({ email }: { email: FormEmailPreview }) {
 }
 
 /** What went wrong, in the server's words: its title, then what to do. */
-function Problem({ error, extra }: { error: unknown; extra?: string }) {
+function Problem({ error }: { error: unknown }) {
   const { title, detail } = sendProblemWords(error)
-  const rest = [detail, extra].filter(Boolean).join(' ')
   return (
     <div role="alert" className="flex items-start gap-2 text-ui text-destructive-ink">
       <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
       <p className="min-w-0 break-words">
         <span className="font-semibold">{title}</span>
-        {rest ? ` ${rest}` : null}
+        {detail ? ` ${detail}` : null}
       </p>
     </div>
   )
@@ -501,10 +499,8 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
           )}
           {sendProblem !== null ? (
             <div ref={problemRef} className="flex flex-col gap-2">
-              <Problem
-                error={sendProblem}
-                extra={sendProblem.code === 'email_not_set_up' ? STAYS_HERE : undefined}
-              />
+              {/* With no email set up, the server's words say the pre-read stays here already. */}
+              <Problem error={sendProblem} />
               {sendProblem.code === 'email_not_set_up' && shown ? (
                 <CopyEmail email={shown} />
               ) : null}

@@ -199,10 +199,11 @@ function mockServer(changes: Partial<Omit<Server, 'calls' | 'release'>> = {}): S
         return json(server.form)
       }
       if (server.send === 'not_set_up') {
+        // Track 1's words (`meeting_send.py`), word for word.
         return problem(
           409,
           "Email isn't set up",
-          'Nothing was sent. An admin needs to set up email first.',
+          "Email isn't set up yet, so nothing was sent. The pre-read stays here: copy it, or send it once email is set up.",
           'email_not_set_up',
         )
       }
@@ -470,8 +471,9 @@ describe('Check and send', () => {
     const { user } = renderPreRead()
     const dialog = await openDialog(user)
     await user.click(within(dialog).getByRole('button', { name: 'Send to 1 person' }))
-    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
-      "Email isn't set up. Nothing was sent. An admin needs to set up email first. The pre-read stays here: copy it, or send it once email is set up.",
+    // The title, then the server's words, which end with what still works: said once.
+    expect((await within(dialog).findByRole('alert')).textContent).toBe(
+      "Email isn't set up. Email isn't set up yet, so nothing was sent. The pre-read stays here: copy it, or send it once email is set up.",
     )
     expect(screen.getByRole('alertdialog')).toBeInTheDocument()
     expect(within(status()).getByText('Draft ready')).toBeInTheDocument()

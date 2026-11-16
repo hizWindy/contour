@@ -11,12 +11,6 @@ import { toApiProblem, type ApiProblem } from '@/api/client'
 import { problemKind } from '@/api/connection'
 
 const HINTS: Record<string, string> = {
-  // Meetings and the pre-read (PLAN-V18 T2-7): only where the server's own words don't already
-  // say what to do, so a toast never says it twice.
-  hubspot_not_connected: 'Ask an admin to connect HubSpot. You can still start a new pre-read.',
-  meeting_not_found: "Press Sync on Meetings to read HubSpot's meetings again.",
-  form_not_found: 'Every pre-read is on Meetings, beside its meeting.',
-  email_not_set_up: 'The pre-read stays here: copy it, or send it once email is set up.',
   run_already_active: 'Only one run goes at a time. Open the run that is going, or stop it first.',
   hubspot_names_not_approved:
     'Researching from HubSpot names needs approval first. Ask an admin to switch it on.',
