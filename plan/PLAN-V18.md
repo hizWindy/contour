@@ -6,7 +6,7 @@ This plan makes the Companies module clearer and nicer to use, from Al-khair's l
 
 - **Built by:** Al-khair Pama. **Signed off by:** Al-khair for the code and every screen. Levi confirms the rules marked **TBC with Levi**.
 - **Last updated:** 16 Nov 2026 (S0 done: `plan-v18` made from `master`; the tracks are starting).
-- **Progress:** S0: 1 of 1. Track 1: 4 of 9. Track 2: 0 of 8. Track 3: 0 of 9. Merge and deploy: 0 of 3.
+- **Progress:** S0: 1 of 1. Track 1: 5 of 9. Track 2: 0 of 8. Track 3: 0 of 9. Merge and deploy: 0 of 3.
 - **Sources:**
   - Al-khair's list of changes (16 Nov, in chat), and the chat about Meetings the same day: the empty Meetings page, the team switch, and the Sync idea;
   - the code on `master` (`c4ebe58`), read on 16 Nov;
@@ -381,7 +381,7 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
 
 ## Track 1: the backend (session 1)
 
-**Progress:** 4 of 9. Every step is `backend-agent` work.
+**Progress:** 5 of 9. Every step is `backend-agent` work.
 
 - [x] **T1-1. Own copy and a baseline.** Done 2026-11-16, on `40d9912` (see the Log). Make the worktree and the database. Run the backend tests once and note the counts. Note `test_companies_speed`'s time too: it was about 560ms against its 300ms limit on this laptop before this plan.
 
@@ -409,7 +409,7 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
   - With sign in switched off there is no user: All works, and `linked` is false.
   - **Done when:** tests cover each `who`, an unlinked account, no team, two teams, sign in switched off, and the order.
 
-- [ ] **T1-5. Meetings: Sync now** (the contract, part 1).
+- [x] **T1-5. Meetings: Sync now** (the contract, part 1). Done 2026-11-16 (`854c94e`).
   - `POST /meetings/sync`: a full read of the window, now. It skips the 15 minute rule and the 60 second ask rule.
   - It keeps: one read at a time, the save lock (`MEETINGS_LOCK`), and the key check. A press within a minute of the last finished read answers `fresh` and asks HubSpot nothing.
   - It answers at once. The read runs in the background, and the list's `syncing` says so.
@@ -453,6 +453,8 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
   - **Last activity: `notes_last_updated`** ("Last Activity Date", a date and time). Of HubSpot's 13,918 companies, 12,900 have it and 10,253 have "Last contacted" (`notes_last_contacted`). Every company with Last contacted has Last activity date too, and 2,647 have Last activity date only. In a sample of 200 with both, Last activity date was newer in 33 and the same in 167, never older. Our copy has 13,919 companies, 10,253 with Last contacted. So the list's `last_activity` is in effect HubSpot's Last activity date, with Last contacted as the fallback.
 - 16 Nov 2026, T1-3 (`a5a4518`): migration `0024_v18_teams_activity` (the teams table, `core.hubspot_companies.last_activity`, and the History index on `companies.call_notes`), applied to `leadfinder_v18a`, with `engine/schema/SCHEMA-0024.md` (`--check` matches). The sync replaces every owner's teams each time. A company's `last_activity` never moves back: a save keeps the newer of ours and HubSpot's, so a call our copy noted when it landed stays, and an export leaves it alone. Whether a changes sync sees a new activity at once depends on HubSpot moving the company's modified date (**TBC**); the full sync always does. 356 tests that T1-3 touches pass, and 177 more that read our copy.
 - 16 Nov 2026, T1-4 (`88e8274`): `who` (`all`, `mine`, `team`) in place of `mine`, as the contract says. All, My meetings and My team read the whole window, then pick in code, always in time order. Each item has `mine`. Sentences: "not linked" on My meetings (and its My team twin, which says "My team is empty"), "no team", and two the plan didn't list: HubSpot has no teams (for an old `who=team` link while the website hides the filter) and nobody signed in (sign in switched off: My meetings and My team are empty, All works, `linked` is false, `team_state` is `not_linked`). The new `MeetingPage` and `MeetingItem` fields are optional in the website's types (`optional_in_types`, as PLAN-V14 to V17 did): the API always sends them. A company's record marks my own meetings too. The summary of the route says "Client meetings" now.
+- 16 Nov 2026, T1-5 (`854c94e`): `POST /companies/meetings/sync` and the list's `checked_at`, `syncing` and `sync_problem`. "One read at a time" is kept in the backend's memory (one backend runs for a database): while any read of HubSpot's meetings runs (the daily one, a refresh or a Sync), Sync answers `running` and a refresh skips itself. `fresh` needs the newest read to be a good one under a minute old, so after a failed read a press reads again at once. A HubSpot failure never fails the press: the list's `sync_problem` says "HubSpot didn't answer, so this list is from 6:00 pm. Try Sync again in a minute." (the time in Melbourne, with "yesterday" or the date when it isn't today), or the waiting words when a permission is missing. The 503 detail is the contract's sentence plus one next step: "An admin can connect it on the HubSpot page in Admin."
+- 16 Nov 2026, **T1-5's measure** (the real key in the process only, read only, the full read Sync runs, on `leadfinder_v18a`): one press is **15 requests** (3 search pages and 12 link reads, 6 for companies and 6 for people) and took **10.2, 12.5 and 13.2 seconds** in three presses. The first press of the day took 64 s and 17 requests: 2 search pages were asked again after HubSpot was slow (which answer it gave is not confirmed). The copy went from 599 to 597 meetings (6 changed, 2 left the window). **For Track 2's words:** "Already checking HubSpot. It takes about 15 seconds." The time goes on the link reads, one after another; reading companies and people side by side would save about 3 seconds (not done: not in this plan).
 
 ## Track 2: Meetings, the pre-read and the Companies list (session 2)
 
