@@ -145,8 +145,16 @@ frontend/
   src/api/             the typed API client and the data hooks
   src/modules.ts       the projects on the website (MODULES) and the ones still to be developed
                        (PLANNED); the menu, Home, Ctrl+K and routes read both
-  src/shell/           the app frame: sidebar, Home, breadcrumbs, Ctrl+K menu, the shared page list (nav.ts)
-  src/components/      shared parts: table, map, badges, money; ui/ is shadcn, restyled
+  src/shell/           the app frame: sidebar, Home, breadcrumbs, Ctrl+K menu, the shared page list (nav.ts);
+                       warm.ts and warm-module.ts quietly fetch what someone is likely to switch to next
+                       (Improvements 1, #10); theme.ts light and dark, and the browser bar's colour
+  src/pwa/             the website as an installable app (Improvements 1, #9): sw.js is the service
+                       worker (vite-pwa.ts writes it into dist/ with the list of files), register.ts
+                       registers it and shows "A new version is ready", install.ts is Ctrl+K's Install
+  src/components/      shared parts: table, map, badges, money; ui/ is shadcn, restyled; motion/ is the
+                       motion kit (springs, Segmented, ChipGroup, the glass on the menu)
+  public/              manifest.webmanifest and icons/ (drawn by scripts/make-icons.py, needs Pillow, run
+                       only if the mark changes; the files are in git)
   src/apps/lead-finder/ module.tsx (its menu pages and addresses), then one folder per page:
                        start, run, results, lead, rules, test-set; admin/ still holds the shared Admin tabs
   src/test/            test helpers, and the design and contrast checks
@@ -215,7 +223,7 @@ frontend/
 4. Put its tables in its own schema, added with a migration.
 5. Add its pages in `frontend/src/apps/<name>/`, and its tests in `backend/tests/<name>/`.
 6. In `frontend/src/apps/<name>/module.tsx`, define its `AppModule`: name, icon, one-line description, menu pages and routes. Add it to `MODULES` in `frontend/src/modules.ts`, and take it out of `PLANNED` there (the list of projects still to be developed, each with one "to be developed" page). The sidebar group, its card on Home and the Ctrl+K entries then appear by themselves. Its own admin pages go in its menu; only what every project shares goes under Admin. Three optional slots: `commands` (its own Ctrl+K actions; `run(action)` closes the menu, then does the action), `accountItems` (its rows in the account menu, before "Sign out") and `frame` (a part drawn once on every page, for something any page may open, like the mic check; PLAN-V18 T3-4).
-7. For each page, put what it asks for first in the route's `handle.prefetch` (a function that calls `client.prefetchQuery(...)` with the same `xxxQueryOptions` the page uses, built from the same address). The website starts it when a navigation starts, and when someone points at a link, so the data downloads with the page's code (PLAN-V7). Add the page to the list in `frontend/src/apps/lead-finder/prefetch.test.tsx` (or one like it): it proves the page uses everything started for it and asks once.
+7. For each page, put what it asks for first in the route's `handle.prefetch` (a function that calls `client.prefetchQuery(...)` with the same `xxxQueryOptions` the page uses, built from the same address). The website starts it when a navigation starts, and when someone points at a link, so the data downloads with the page's code (PLAN-V7). Add the page to the list in `frontend/src/apps/lead-finder/prefetch.test.tsx` (or one like it): it proves the page uses everything started for it and asks once. If its pages' first reads are cheap, set `warm: true` on its `AppModule`: while someone is on one of its pages, the code and first reads of its other pages are then fetched quietly, so a switch between them has nothing left to wait for (`shell/warm-module.ts`, Improvements 1, #10). Leave it off when a page's first reads are costly, like the Lead Finder's lead counts: those run on the server whether or not the page is opened.
 8. If it uses HubSpot, see "How a project uses HubSpot" below.
 9. If it has work that should start on its own, list `JobSpec`s in `AppSpec.jobs` (see "Schedules" below).
 10. If it finds companies of its own, give them to the Companies page with `AppSpec.company_leads` (see "The Companies page and call prep" below).

@@ -185,6 +185,16 @@ A file that isn't there must be a plain 404, never the home page. This should pr
 curl -s -o /dev/null -w '%{http_code}\n' https://your-domain/assets/nope.js
 ```
 
+The website installs as an app (Improvements 1, #9), so its service worker and manifest must be served as files, not as the home page. Each of these should print `200`. Caddy sends `Cache-Control: no-cache` on both, so a new `sw.js` is found at once. Checking this on the live site after the next deploy is **TBC**, and on App Platform too.
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' https://your-domain/sw.js
+```
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' https://your-domain/manifest.webmanifest
+```
+
 ## Stopping
 
 ```bash
