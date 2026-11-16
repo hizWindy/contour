@@ -10,6 +10,7 @@ service is note_store.py, the sorter notes.py, and the batch to HubSpot note_bat
 """
 
 import uuid
+from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, Path, Query, Request, Response
@@ -30,6 +31,7 @@ from apps.companies.schemas import (
     CallNoteResolve,
     CallNoteSummary,
     NoteState,
+    OutcomeFilter,
 )
 from core.api.access import SignedInDep
 from core.api.deps import SessionDep, SettingsDep
@@ -174,10 +176,15 @@ async def confirm_call_notes(
     summary="My call notes",
     description=(
         "A page of notes. `state`: `to_confirm` (being sorted, waiting for me, or being sent), "
-        "`logged`, or `needs_look` (failed, partly saved, or unsure in HubSpot). `mine` is true "
+        "`logged`, `needs_look` (failed, partly saved, or unsure in HubSpot), or `history` "
+        "(every one of my own notes, in any status, for History in Call logs). `mine` is true "
         "by default: `mine=false` shows everyone's notes to an Admin, and anyone else still gets "
-        "only their own. To confirm: the notes the sorter was unsure of first, then the oldest "
-        "call first. Otherwise the newest call first. 409 `call_notes_off`."
+        "only their own; History is always my own. Filters, for any state: `q` (each word must "
+        "start a word of the company's name, the person's name, the note or the summary), "
+        "`outcome` (one of the call outcomes, or `none`), and `since` and `until` (Melbourne "
+        "days, both counted). To confirm: the notes the sorter was unsure of first, then the "
+        "oldest call first. Otherwise the newest call first. 422 `dates_out_of_order` when "
+        "`since` is after `until`. 409 `call_notes_off`."
     ),
 )
 async def list_call_notes(
@@ -190,6 +197,10 @@ async def list_call_notes(
     state: NoteState | None = None,
     company_key: Annotated[SafeText | None, Query(max_length=64)] = None,
     mine: bool = True,
+    q: Annotated[SafeText | None, Query(max_length=200)] = None,
+    outcome: OutcomeFilter | None = None,
+    since: Annotated[date | None, Query(description="A Melbourne day, counted")] = None,
+    until: Annotated[date | None, Query(description="A Melbourne day, counted")] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = PAGE_SIZE,
     offset: Annotated[int, Query(ge=0, le=OFFSET_MAX)] = 0,
 ) -> CallNotePage:
@@ -204,6 +215,7 @@ async def list_call_notes(
         sorter=sorter,
         sender=sender,
         now=now,
+        filters=note_store.NoteFilters(q=q or None, outcome=outcome, since=since, until=until),
     )
 
 

@@ -25,12 +25,13 @@ from typing import Any, Final, get_args
 from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI
-from sqlalchemy import delete, func, select
+from sqlalchemy import ColumnElement, delete, func, or_, select
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.companies.facts import scrub
+from apps.companies.meeting_store import search_words
 from apps.companies.note_batch import (
     ALREADY_SENDING,
     LEAD_ONLY,
@@ -82,6 +83,7 @@ from apps.companies.schemas import (
     MyLastNote,
     NoteFieldOption,
     NoteState,
+    OutcomeFilter,
     OutcomeName,
     PrepPerson,
 )
@@ -108,6 +110,7 @@ STATES: Final[dict[NoteState, tuple[str, ...]]] = {
 CHANGEABLE: Final = ("to_confirm", "partial", "failed")  # the parts not in HubSpot yet
 REMOVABLE: Final = ("sorting", "to_confirm", "failed")  # failed: only with nothing in HubSpot
 NOTE_START_CHARS: Final = 200  # a note with no summary shows its first 200 characters
+SEARCH_WORDS: Final = 12  # the most words of a search that count
 CARD_PARTS: Final = frozenset({"summary", "outcome", "changes", "tasks"})
 SENT_FIELDS: Final[set[str]] = {"state", "step", "detail"}  # where a part is with HubSpot
 WAITING_FOR_HUBSPOT = "Waiting for HubSpot to be connected."
@@ -176,6 +179,15 @@ def already_sent(status: str | None = None) -> Problem:
             status or "", "This note has gone to HubSpot, so it can't be changed or removed here."
         ),
         code="note_sent",
+    )
+
+
+def dates_out_of_order() -> Problem:
+    return Problem(
+        422,
+        "The days are the wrong way round",
+        "Pick a start day on or before the end day.",
+        code="dates_out_of_order",
     )
 
 
@@ -573,6 +585,53 @@ async def get_note(
     return await one_out(session, note)
 
 
+def _word_starts(word: str) -> str:
+    """A Postgres pattern for text where `word` starts a word: at the start, or after anything
+    that isn't a letter or a digit. Every mark in it is matched as itself."""
+    escaped = "".join(char if char.isalnum() else f"\\{char}" for char in word)
+    return f"(^|[^[:alnum:]]){escaped}"
+
+
+def melbourne_day(day: date) -> datetime:
+    """The start of a Melbourne day, in UTC."""
+    return datetime(day.year, day.month, day.day, tzinfo=MELBOURNE).astimezone(UTC)
+
+
+@dataclass(frozen=True)
+class NoteFilters:
+    """A list's filters (PLAN-V18 T1-7), for any state. `since` and `until` are Melbourne days,
+    both counted."""
+
+    q: str | None = None
+    outcome: OutcomeFilter | None = None
+    since: date | None = None
+    until: date | None = None
+
+    def where(self) -> list[ColumnElement[bool]]:
+        """The conditions, in SQL. Each word of `q` must start a word of the company's name, the
+        person's name, the note or the summary, in any case."""
+        found: list[ColumnElement[bool]] = []
+        searched = (
+            CallNote.company_name,
+            CallNote.person_name,
+            CallNote.text,
+            CallNote.card["call"]["summary"].astext,
+        )
+        for word in search_words(self.q)[:SEARCH_WORDS]:
+            pattern = _word_starts(word)
+            found.append(or_(*(func.coalesce(part, "").op("~*")(pattern) for part in searched)))
+        picked = func.coalesce(CallNote.card["call"]["outcome"].astext, "")
+        if self.outcome == "none":
+            found.append(picked.not_in(sorted(OUTCOME_NAMES)))
+        elif self.outcome is not None:
+            found.append(picked == self.outcome)
+        if self.since is not None:
+            found.append(CallNote.called_at >= melbourne_day(self.since))
+        if self.until is not None:
+            found.append(CallNote.called_at < melbourne_day(self.until + timedelta(days=1)))
+        return found
+
+
 async def list_notes(
     session: AsyncSession,
     auth: AuthContext | None,
@@ -585,16 +644,24 @@ async def list_notes(
     sorter: NoteSorter,
     sender: NoteSender,
     now: datetime,
+    filters: NoteFilters | None = None,
 ) -> CallNotePage:
-    """A page of notes. Only an Admin sees other people's (`mine` false). To confirm: the unsure
-    ones first, then the oldest call first. Logged and needs a look: the newest call first."""
+    """A page of notes. Only an Admin sees other people's (`mine` false), and never in History,
+    which is every one of my own notes, in any status (PLAN-V18 T1-7). To confirm: the unsure
+    ones first, then the oldest call first. The others: the newest call first. `filters` work
+    for any state. With sign-in off, every note is open, as everything else is then."""
+    filters = filters or NoteFilters()
+    if filters.since is not None and filters.until is not None and filters.since > filters.until:
+        raise dates_out_of_order()
     statement = select(CallNote)
-    if auth is not None and (mine or auth.user.role != "admin"):
+    own = mine or state == "history"
+    if auth is not None and (own or auth.user.role != "admin"):
         statement = statement.where(CallNote.made_by == auth.user.id)
-    if state is not None:
+    if state is not None and state != "history":
         statement = statement.where(CallNote.status.in_(STATES[state]))
     if company_key is not None:
         statement = statement.where(CallNote.company_key == company_key)
+    statement = statement.where(*filters.where())
     total = await session.scalar(select(func.count()).select_from(statement.subquery()))
     if state == "to_confirm":
         unsure_last = CallNote.card["unsure"].astext.is_(None)

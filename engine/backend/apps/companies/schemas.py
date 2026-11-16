@@ -543,10 +543,15 @@ class StyleNoteIn(BaseModel):
 NoteSource = Literal["mic", "typed", "transcript"]
 NoteStatus = Literal["sorting", "to_confirm", "sending", "logged", "partial", "failed", "uncertain"]
 NoteSortedBy = Literal["ai", "person"]
-NoteState = Literal["to_confirm", "logged", "needs_look"]
+# history (PLAN-V18 T1-7): every one of my notes, in any status.
+NoteState = Literal["to_confirm", "logged", "needs_look", "history"]
 # HubSpot's six standard call outcomes (core.hubspot.activities.OUTCOME_NAMES; a test checks).
 OutcomeName = Literal[
     "Connected", "No answer", "Left voicemail", "Left live message", "Busy", "Wrong number"
+]
+# A list's outcome filter (PLAN-V18 T1-7): one of the six, or none (no outcome picked).
+OutcomeFilter = Literal[
+    "Connected", "No answer", "Left voicemail", "Left live message", "Busy", "Wrong number", "none"
 ]
 NoteTaskKind = Literal["call", "email", "todo"]
 NoteFieldKind = Literal["date", "number"]
