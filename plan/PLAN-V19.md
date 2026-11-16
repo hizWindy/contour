@@ -6,7 +6,7 @@ This plan builds Al-khair's Improvements 2 list of 17 Nov. Log call opens one pa
 
 - **Built by:** Al-khair Pama. **Signed off by:** Al-khair, for the code, the roles and every screen.
 - **Last updated:** 17 Nov 2026 (one session instead of three tracks; nothing built).
-- **Progress:** S0: 1 of 1. Part 1: 0 of 9. Part 2: 0 of 6. Part 3: 0 of 7. Merge and deploy: 0 of 3.
+- **Progress:** S0: 1 of 1. Part 1: 1 of 9. Part 2: 0 of 6. Part 3: 0 of 7. Merge and deploy: 0 of 3.
 - **Sources:**
   - Al-khair's Improvements 2 list (17 Nov, in chat) and his answers the same day;
   - the code on `master` (`0c9b68f`), read on 17 Nov;
@@ -261,9 +261,9 @@ New error codes, each with a title and a detail in the server's words: `feature_
 
 Read first: `.claude/skills/api-change/SKILL.md` and `.claude/skills/db-migration/SKILL.md`.
 
-- [ ] **T1-1. A baseline.** Make the database. Run the backend tests, and the website's lint, types, tests and build, once. Note the counts and the first visit size from `node scripts/bundle-report.js`.
+- [x] **T1-1. A baseline.** (17 Nov 2026) Make the database. Run the backend tests, and the website's lint, types, tests and build, once. Note the counts and the first visit size from `node scripts/bundle-report.js`.
 
-- [ ] **T1-2. Does HubSpot alert on a task?** On Al-khair's word in chat only: it writes to the real HubSpot.
+- [ ] **T1-2. Does HubSpot alert on a task?** *(Blocked — waiting for Al-khair's word in chat before writing to real HubSpot; pre-read tasks stay the default.)* On Al-khair's word in chat only: it writes to the real HubSpot.
   - Make one task assigned to Al-khair's HubSpot owner, due today, subject "Contour test: please ignore". Through `core/hubspot/` and the activity writer, as a real send would.
   - Al-khair says whether HubSpot alerted him (the bell, an email, or neither). Then delete the task.
   - **Done when:** the Log says what alerted him. If nothing did, Al-khair decides before T2-3's look whether tasks stay the default.
@@ -314,7 +314,8 @@ Read first: `.claude/skills/api-change/SKILL.md` and `.claude/skills/db-migratio
 
 ### Part 1 Log
 
-- (none yet)
+- 17 Nov 2026 (T1-1): Created `leadfinder_v19_imp2` at `0024_v18_teams_activity`. Backend: `ruff check .` passed, `mypy` clean (397 files), full `pytest` (`RUN_GATES=1`, `_v19_imp2`) `4717 passed, 25 skipped`. Website: `eslint` and `tsc -b` clean, `vitest` `137 files / 1956 tests passed`, `vite build` + `bundle-report.js` first visit `236 kB gzip (732 kB raw) JS in 36 files, 24 kB gzip CSS`.
+- 17 Nov 2026 (T1-2): Blocked waiting on Al-khair's explicit OK in chat (HubSpot write). Per "Choices made for you", HubSpot pre-read tasks remain the default while building Part 1–3.
 
 ## Part 2: Log call and the pre-read
 
