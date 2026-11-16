@@ -146,7 +146,7 @@ export interface paths {
         };
         /**
          * List companies
-         * @description One page of companies from the HubSpot copy, by name unless `sort` says otherwise. With the Lead Finder tick, its good leads that aren't in HubSpot yet are added (`source` lead), and each row has the Lead Finder's newest result. `q` looks in the name, website and industry. `city` matches the company's city or any of its offices.
+         * @description One page of companies from the HubSpot copy. `sort`: `last_activity` (the default: the newest of HubSpot's Last activity date and Last contacted, newest first), `name`, `staff`, `lease` or `last_talk`; `order` turns it round. An empty value goes last, then ties go A to Z. With the Lead Finder tick, its good leads that aren't in HubSpot yet are added (`source` lead, with no last activity, so they come last), and each row has the Lead Finder's newest result. `q` looks in the name, website and industry. `city` matches the company's city or any of its offices.
          */
         get: operations["list_companies"];
         put?: never;
@@ -166,7 +166,7 @@ export interface paths {
         };
         /**
          * My call notes
-         * @description A page of notes. `state`: `to_confirm` (being sorted, waiting for me, or being sent), `logged`, or `needs_look` (failed, partly saved, or unsure in HubSpot). `mine` is true by default: `mine=false` shows everyone's notes to an Admin, and anyone else still gets only their own. To confirm: the notes the sorter was unsure of first, then the oldest call first. Otherwise the newest call first. 409 `call_notes_off`.
+         * @description A page of notes. `state`: `to_confirm` (being sorted, waiting for me, or being sent), `logged`, `needs_look` (failed, partly saved, or unsure in HubSpot), or `history` (every one of my own notes, in any status, for History in Call logs). `mine` is true by default: `mine=false` shows everyone's notes to an Admin, and anyone else still gets only their own; History is always my own. Filters, for any state: `q` (each word must start a word of the company's name, the person's name, the note or the summary), `outcome` (one of the call outcomes, or `none`), and `since` and `until` (Melbourne days, both counted). To confirm: the notes the sorter was unsure of first, then the oldest call first. Otherwise the newest call first. 422 `dates_out_of_order` when `since` is after `until`. 409 `call_notes_off`.
          */
         get: operations["list_call_notes"];
         put?: never;
@@ -357,8 +357,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * My meetings
-         * @description A page of client meetings from HubSpot (one with no company is left out; a cancelled one stays, with its outcome). `when`: `upcoming` (the next 7 days, soonest first, each with its `group` by the Melbourne date: today, tomorrow, this_week or later) or `past` (the last 30 days, newest first). `mine` (true by default): my own, as my HubSpot owner; false: the team's, mine first. My own pre-reads for meetings typed in (New pre-read) join the list in the same window, marked `typed`, even while HubSpot's meetings aren't read. `q`: each word must start a word of the company's name, the title or the date in words, like 'sample 26 nov', 'thu' or '26/11'. Each meeting comes with its pre-read's state (`form`) and, once past, whether notes were logged. While HubSpot's meetings aren't read, `meetings_state` and `sentence` say why. Opening it asks HubSpot for changed meetings in the background (at most every 15 minutes). 409 `meeting_forms_off`.
+         * Client meetings
+         * @description A page of client meetings from HubSpot (one with no company is left out; a cancelled one stays, with its outcome), always in time order. `when`: `upcoming` (the next 7 days, soonest first, each with its `group` by the Melbourne date: today, tomorrow, this_week or later) or `past` (the last 30 days, newest first). `who`: `all` (the default: everyone's), `mine` (the ones I own or am on, as my HubSpot owner) or `team` (the ones whose owner, or a Contour person on them, is in one of my HubSpot teams, mine included). Each meeting says whether it is `mine`. `linked`, `team_state` and `team_names` say what My meetings and My team can pick out, and `sentence` says why one of them is empty (never for All). My own pre-reads for meetings typed in (New pre-read) join the list in the same window, marked `typed`, even while HubSpot's meetings aren't read. `q`: each word must start a word of the company's name, the title or the date in words, like 'sample 26 nov', 'thu' or '26/11'. Each meeting comes with its pre-read's state (`form`) and, once past, whether notes were logged. While HubSpot's meetings aren't read, `meetings_state` and `sentence` say why. Opening it asks HubSpot for changed meetings in the background (at most every 15 minutes). 409 `meeting_forms_off`.
          */
         get: operations["list_meetings"];
         put?: never;
@@ -380,7 +380,7 @@ export interface paths {
         put?: never;
         /**
          * Start a pre-read
-         * @description For a HubSpot meeting (`meeting_id`), or for one typed in (`company_key`, `title`, `starts_at`, and `ends_at` and `where` when known). It answers at once with the form `drafting`: the facts come first, with no AI, then the three summaries from one Claude request (this costs money: about US$0.03, at most the pre-read cap). A HubSpot meeting has one pre-read: a second start gives back the first (200). So does a typed meeting I start again with the same company, title and start, so a retry makes no second one. 404 `meeting_not_found` or `company_not_found`. 422 for a body that is neither kind. 409 `meeting_forms_off`.
+         * @description For a HubSpot meeting (`meeting_id`), or for one typed in (`company_key`, `title`, `starts_at`, and `ends_at` and `where` when known). It answers at once with the form `drafting`: the facts come first, with no AI, then the three summaries from one Claude request (this costs money: about US$0.03, at most the pre-read cap). A HubSpot meeting has one pre-read: a second start gives back the first (200). So does a typed meeting I start again with the same company, title and start, so a retry makes no second one. 404 `meeting_not_found` or `company_not_found`. 422 for a body that is neither kind, and `meeting_time_missing` for a typed meeting with no start. 409 `meeting_forms_off`.
          */
         post: operations["start_form"];
         delete?: never;
@@ -408,7 +408,7 @@ export interface paths {
         head?: never;
         /**
          * Change a pre-read
-         * @description The rep's edits: a summary's new text (`summaries`), the ideal next step (`next_step`) and who is going (`going`). Only the parts sent change. A summary changed here is the rep's own from then on (`by: person`): a redraft leaves it, and it keeps its sources. A sent pre-read that changes is a draft again, so sending it again emails the new words. 404 `form_not_found`. 409 `meeting_forms_off`.
+         * @description The rep's edits: a summary's new text (`summaries`), the ideal next step (`next_step`) and who is going (`going`). Only the parts sent change. A summary changed here is the rep's own from then on (`by: person`): a redraft leaves it, and it keeps its sources. A sent pre-read that changes is a draft again, so sending it again emails the new words. A failed draft becomes a draft once all three summaries have text (the rep wrote them), so it can be sent; with one or two written it stays failed, with its `error`. 404 `form_not_found`. 409 `meeting_forms_off`.
          */
         patch: operations["edit_form"];
         trace?: never;
@@ -464,7 +464,7 @@ export interface paths {
         put?: never;
         /**
          * Send the pre-read
-         * @description Emails the pre-read to these addresses (in the body, never an attachment), then saves its copy in HubSpot: a note on the company, and on its deal when it has exactly one open deal. Every address must be Contour's: one that isn't refuses the whole send (422 `outside_address`, naming it). The ideal next step and who is going must be filled in (422 `blanks_empty`). Sent already: nobody is emailed again, and a copy that is waiting or failed is tried again. `hubspot_copy` says how the copy went: saved, waiting (writing to HubSpot isn't on: the email still went), off (the company isn't in HubSpot), or failed. 409 `form_not_ready` while it is drafting or failed, `email_not_set_up`. 502 `email_failed`: nothing was sent. 404 `form_not_found`. 409 `meeting_forms_off`.
+         * @description Emails the pre-read to these addresses (in the body, never an attachment), then saves its copy in HubSpot: a note on the company, and on its deal when it has exactly one open deal. Every address must be Contour's: one that isn't refuses the whole send (422 `outside_address`, naming it). The ideal next step and who is going must be filled in (422 `blanks_empty`). Sent already: nobody is emailed again, and a copy that is waiting or failed is tried again. `hubspot_copy` says how the copy went: saved, waiting (writing to HubSpot isn't on: the email still went), off (the company isn't in HubSpot), or failed. 422 `no_one` when there is nobody to send it to. 409 `form_not_ready` while it is drafting or failed, `form_sending` while it is being sent, `email_not_set_up`. 502 `email_failed`: nothing was sent. 404 `form_not_found`. 409 `meeting_forms_off`.
          */
         post: operations["send_form"];
         delete?: never;
@@ -487,6 +487,26 @@ export interface paths {
         get: operations["meeting_summary"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/meetings/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read HubSpot's meetings now
+         * @description Sync on Meetings: a full read of HubSpot's meetings in our window (90 days back to 60 days ahead, TBC), so it also finds meetings that moved or were deleted. It answers at once: `started` (the read runs in the background, and the list's `syncing` is true until it ends), `running` (a read was going already: nothing new starts) or `fresh` (a good read finished under a minute ago: HubSpot isn't asked). One read at a time for the whole site. It only reads HubSpot, and costs nothing. A HubSpot failure doesn't fail this request: the list's `sync_problem` says it, and the list stays as it was. 503 `hubspot_not_connected` when HubSpot isn't connected. 409 `meeting_forms_off`.
+         */
+        post: operations["sync_meetings"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2233,7 +2253,7 @@ export interface components {
             ai_enabled: boolean;
             /**
              * Enabled
-             * @description True when Log call and Activity show
+             * @description True when Log call and Call logs show
              */
             enabled: boolean;
             /**
@@ -2266,6 +2286,13 @@ export interface components {
              * @description The longest meeting transcript, in characters, once a .vtt file's times are taken out. A longer one answers 422 `transcript_too_long`
              */
             transcript_max_chars?: number;
+            /**
+             * Voice Tool
+             * @description Which voice to text tool the mic uses: browser_model (Whisper in the browser: the voice stays on the laptop), browser_service (the browser's own speech service, which sends the voice to Google or Microsoft) or typing (no mic)
+             * @default browser_model
+             * @enum {string}
+             */
+            voice_tool: "browser_model" | "browser_service" | "typing";
             /**
              * Waiting For
              * @description What sending waits for, in plain words, like 'Waiting for HubSpot write access.' None when ready
@@ -3142,6 +3169,11 @@ export interface components {
              * @description The HubSpot id, or lead:<id> for a lead not in HubSpot yet
              */
             key: string;
+            /**
+             * Last Activity
+             * @description The newest of HubSpot's Last activity date and Last contacted, as a Melbourne date. None for a company with neither, and for a Lead Finder row
+             */
+            last_activity?: string | null;
             /**
              * Last Talk
              * @description When someone last talked to them, per HubSpot
@@ -5465,6 +5497,12 @@ export interface components {
             group: ("today" | "tomorrow" | "this_week" | "later") | null;
             meeting: components["schemas"]["Meeting"];
             /**
+             * Mine
+             * @description True when I own the meeting or am on it as a Contour person in HubSpot. A typed one is always mine. False for everyone with sign-in off
+             * @default false
+             */
+            mine: boolean;
+            /**
              * Notes Logged
              * @description A call note is linked to it (Log meeting)
              */
@@ -5483,8 +5521,19 @@ export interface components {
         };
         /** MeetingPage */
         MeetingPage: {
+            /**
+             * Checked At
+             * @description When the last good read of HubSpot's meetings finished, or none
+             */
+            checked_at?: string | null;
             /** Items */
             items: components["schemas"]["MeetingItem"][];
+            /**
+             * Linked
+             * @description True when my account is linked to a HubSpot owner. False with sign-in off
+             * @default false
+             */
+            linked: boolean;
             /**
              * Meetings State
              * @description ready, waiting (HubSpot's meetings aren't read yet) or off
@@ -5493,14 +5542,44 @@ export interface components {
             meetings_state: "ready" | "waiting" | "off";
             /**
              * Sentence
-             * @description One plain sentence when the list can't show what was asked: meetings aren't ready, or your own can't be picked out yet
+             * @description One plain sentence when the list can't show what was asked: meetings aren't ready, or My meetings or My team can't pick anything out (not linked to a HubSpot owner, in no HubSpot team, or nobody signed in). Never for All once meetings are ready
              */
             sentence: string | null;
+            /**
+             * Sync Problem
+             * @description One plain sentence when the newest read of HubSpot's meetings failed or is waiting for a permission, or none. The list stays as the last good read left it
+             */
+            sync_problem?: string | null;
+            /**
+             * Syncing
+             * @description True while a read of HubSpot's meetings is running (a Sync, the daily one, or a refresh). The website asks again until it is false
+             * @default false
+             */
+            syncing: boolean;
+            /**
+             * Team Names
+             * @description My HubSpot teams' names, by name, or an empty list
+             */
+            team_names?: string[];
+            /**
+             * Team State
+             * @description ready (I'm in a HubSpot team), not_linked (my account has no HubSpot owner, or nobody is signed in), no_team (I'm in none) or none_in_hubspot (HubSpot has no teams: the website hides My team)
+             * @default none_in_hubspot
+             * @enum {string}
+             */
+            team_state: "ready" | "not_linked" | "no_team" | "none_in_hubspot";
             /**
              * Total
              * @description How many match, on every page
              */
             total: number;
+            /**
+             * Who
+             * @description The filter used: all, mine or team
+             * @default all
+             * @enum {string}
+             */
+            who: "all" | "mine" | "team";
         };
         /** MeetingSummary */
         MeetingSummary: {
@@ -5530,6 +5609,23 @@ export interface components {
              * @description The transcript. A .vtt file's text is cleaned of its times here
              */
             text: string;
+        };
+        /**
+         * MeetingsSyncOut
+         * @description What Sync on Meetings did (PLAN-V18 T1-5).
+         */
+        MeetingsSyncOut: {
+            /**
+             * Checked At
+             * @description When the last good read of HubSpot's meetings finished, or none
+             */
+            checked_at: string | null;
+            /**
+             * State
+             * @description started (a read of HubSpot's meetings began now, in the background), running (one was going already: nothing new started) or fresh (a good read finished under a minute ago, so HubSpot isn't asked again)
+             * @enum {string}
+             */
+            state: "started" | "running" | "fresh";
         };
         /** MemoryHitOut */
         MemoryHitOut: {
@@ -10404,7 +10500,7 @@ export interface operations {
                 owner?: string | null;
                 deal?: ("open" | "customer" | "none") | null;
                 source?: ("hubspot" | "lead") | null;
-                sort?: "name" | "staff" | "lease" | "last_talk";
+                sort?: "last_activity" | "name" | "staff" | "lease" | "last_talk";
                 order?: ("asc" | "desc") | null;
                 limit?: number;
                 offset?: number;
@@ -10528,9 +10624,15 @@ export interface operations {
     list_call_notes: {
         parameters: {
             query?: {
-                state?: ("to_confirm" | "logged" | "needs_look") | null;
+                state?: ("to_confirm" | "logged" | "needs_look" | "history") | null;
                 company_key?: string | null;
                 mine?: boolean;
+                q?: string | null;
+                outcome?: ("Connected" | "No answer" | "Left voicemail" | "Left live message" | "Busy" | "Wrong number" | "none") | null;
+                /** @description A Melbourne day, counted */
+                since?: string | null;
+                /** @description A Melbourne day, counted */
+                until?: string | null;
                 limit?: number;
                 offset?: number;
             };
@@ -12008,7 +12110,7 @@ export interface operations {
         parameters: {
             query?: {
                 when?: "upcoming" | "past";
-                mine?: boolean;
+                who?: "all" | "mine" | "team";
                 q?: string | null;
                 limit?: number;
                 offset?: number;
@@ -12899,6 +13001,125 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MeetingSummary"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    sync_meetings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeetingsSyncOut"];
                 };
             };
             /** @description The request can't be understood */
