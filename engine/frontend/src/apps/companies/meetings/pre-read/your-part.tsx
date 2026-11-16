@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
+import { STATUS_LOOK } from '../status-look'
 import { STATUS_WORDS } from '../words'
 import type { SendBlock } from './rules'
 import type { Blank, SaveState } from './use-blank'
@@ -158,6 +159,7 @@ export function FormFooter({
 }: FormFooterProps) {
   const reasonId = useId()
   const reason = block ? SEND_REASONS[block] : null
+  const { icon: StatusIcon, ink: statusInk } = STATUS_LOOK[form.status]
   // Sent and unchanged: nothing to send, and the page says who got it. An edit makes it a draft
   // again, and the footer comes back.
   if (form.status === 'sent') return null
@@ -173,7 +175,9 @@ export function FormFooter({
       )}
     >
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <p data-slot="form-status" className="text-ui text-foreground">
+        <p data-slot="form-status" className="flex items-center gap-1.5 text-ui text-foreground">
+          {/* An icon and a word, as everywhere the status shows. */}
+          <StatusIcon aria-hidden="true" className={cn('size-4 shrink-0', statusInk)} />
           {formStatusWords(STATUS_WORDS[form.status], savedAt)}
         </p>
         {reason ? (

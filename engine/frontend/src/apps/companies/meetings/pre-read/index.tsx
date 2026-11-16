@@ -234,7 +234,7 @@ function PreReadView({ form }: { form: MeetingFormOut }) {
         onKeyDown={onKeyDown}
       >
         {showSteps ? (
-          <DraftProgress form={form} className="border-b px-6 py-5 max-sm:px-4" />
+          <DraftProgress form={form} className="border-b px-6 py-6 max-sm:px-4" />
         ) : null}
         <div className="flex flex-col divide-y">
           <Reveal index={0}>

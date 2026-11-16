@@ -288,7 +288,7 @@ export function SummariesSection({
 
   return (
     <FormSection number={number} title={THE_SUMMARIES} note={SUMMARIES_NOTE} headingRef={title}>
-      <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-6">
         {SUMMARY_NAMES.map((name) => (
           <SummaryField key={name} form={form} name={name} onSaved={onSaved} />
         ))}
