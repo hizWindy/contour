@@ -1,4 +1,4 @@
-import { Moon, Monitor, PanelLeft, Search, Sun } from 'lucide-react'
+import { Download, Moon, Monitor, PanelLeft, Search, Sun } from 'lucide-react'
 import { Suspense, useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
 import { Button } from '@/components/ui/button'
@@ -15,6 +15,7 @@ import {
 import { Kbd, KbdGroup } from '@/components/ui/kbd'
 import { useSidebar } from '@/components/ui/sidebar'
 import { PLANNED } from '@/modules'
+import { install, INSTALL_STEPS, useInstallWay } from '@/pwa/install'
 import { useVisibleModules } from './visible-modules'
 import { ADMIN_TABS, HOME, type CommandsProps, type NavItem } from './nav'
 import { applyTheme, type ThemeChoice } from './theme'
@@ -63,6 +64,9 @@ export function CommandMenu(): ReactNode {
   const modules = useVisibleModules()
   const navigate = useNavigate()
   const { toggleSidebar } = useSidebar()
+  // Install Contour as an app: the browser's own dialog, or the steps on an iPhone. Only while it
+  // can still be done (Improvements 1, #9).
+  const installWay = useInstallWay()
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -161,6 +165,22 @@ export function CommandMenu(): ReactNode {
                 <PanelLeft aria-hidden="true" />
                 <span>Show or hide the menu</span>
               </CommandItem>
+              {installWay ? (
+                <CommandItem
+                  value="Install Contour as an app"
+                  keywords={['app', 'home screen', 'phone', 'desktop']}
+                  onSelect={() => {
+                    run(() => {
+                      void install()
+                    })
+                  }}
+                >
+                  <Download aria-hidden="true" />
+                  <span>
+                    {installWay === 'prompt' ? 'Install Contour on this device' : INSTALL_STEPS}
+                  </span>
+                </CommandItem>
+              ) : null}
               {THEME_ACTIONS.map(({ choice, label, icon: Icon }) => (
                 <CommandItem
                   key={choice}

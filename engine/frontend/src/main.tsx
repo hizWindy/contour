@@ -14,6 +14,8 @@ import { createQueryClient } from './api/query'
 import { App } from './App'
 // By its own file, not the kit's index: the first visit then carries only MotionRoot.
 import { MotionRoot } from './components/motion/motion-root'
+import { watchInstall } from './pwa/install'
+import { registerServiceWorker } from './pwa/register'
 import { createAppRouter, routes } from './router'
 import { preloadOnIntent } from './shell/intent'
 import { prefetchOnNavigation } from './shell/prefetch'
@@ -22,6 +24,8 @@ import { applyTheme, readThemeChoice } from './shell/theme'
 
 // A light or dark choice made in the command menu, kept from the last visit.
 applyTheme(readThemeChoice())
+// The browser says once, soon after the page loads, that the site can be installed as an app.
+watchInstall()
 
 const root = document.getElementById('root')
 if (!root) {
@@ -44,6 +48,9 @@ createRoot(root).render(
     </MotionRoot>
   </StrictMode>,
 )
+
+// The website as an app (Improvements 1, #9): the service worker, once the page has loaded.
+registerServiceWorker()
 
 // Once the first screen is up and the browser is idle: the code of the pages people open next.
 preloadNextPages(routes)

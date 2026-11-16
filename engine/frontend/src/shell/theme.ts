@@ -24,6 +24,20 @@ export function readThemeChoice(): ThemeChoice {
 }
 
 /**
+ * The browser's own bar (a phone's, and the installed app's title bar) takes the page's colour
+ * (Improvements 1, #9), so the app is one piece with it in light and in dark. The colour is read
+ * from the page after the theme is set, so it is whatever the tokens say, written nowhere else.
+ */
+function matchBrowserBar(): void {
+  const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
+  const colour = getComputedStyle(document.body).backgroundColor
+  // Before the styles are in, the page has no colour yet: leave the bar as it is.
+  if (meta && colour && colour !== 'rgba(0, 0, 0, 0)' && colour !== 'transparent') {
+    meta.content = colour
+  }
+}
+
+/**
  * Uses the choice now and keeps it for the next visit. Where the browser can (Chrome, Edge and
  * Safari), the page cross-fades from the old colours to the new in 250ms, instead of flashing
  * (Improvements 1, #8). With reduced motion, or where it can't, the colours change at once.
@@ -36,6 +50,7 @@ export function applyTheme(choice: ThemeChoice): void {
     } else {
       root.setAttribute('data-theme', choice)
     }
+    matchBrowserBar()
   }
   const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches
   if (typeof document.startViewTransition === 'function' && !calm) {

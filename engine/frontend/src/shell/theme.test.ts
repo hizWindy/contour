@@ -87,3 +87,39 @@ describe('changing colours smoothly (Improvements 1, #8)', () => {
     expect(document.documentElement).toHaveAttribute('data-theme', 'dark')
   })
 })
+
+describe("the browser's own bar takes the page's colour (Improvements 1, #9)", () => {
+  /** The tag the page head carries, with the light colour it starts with. */
+  function barTag(): HTMLMetaElement {
+    const tag = document.createElement('meta')
+    tag.name = 'theme-color'
+    tag.content = '#F4F5EF'
+    document.head.append(tag)
+    return tag
+  }
+
+  afterEach(() => {
+    document.head.querySelector('meta[name="theme-color"]')?.remove()
+    document.body.removeAttribute('style')
+  })
+
+  it("is set to the page's colour as the colours change, so dark mode is dark all the way up", () => {
+    const tag = barTag()
+    document.body.style.backgroundColor = 'rgb(20, 24, 33)'
+    applyTheme('dark')
+    expect(tag.content).toBe('rgb(20, 24, 33)')
+  })
+
+  it('is left as it was while the page has no colour yet (the styles are not in)', () => {
+    const tag = barTag()
+    applyTheme('dark')
+    expect(tag.content).toBe('#F4F5EF')
+  })
+
+  it('does no harm on a page without the tag', () => {
+    document.body.style.backgroundColor = 'rgb(20, 24, 33)'
+    expect(() => {
+      applyTheme('dark')
+    }).not.toThrow()
+  })
+})
