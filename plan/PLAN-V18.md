@@ -6,7 +6,7 @@ This plan makes the Companies module clearer and nicer to use, from Al-khair's l
 
 - **Built by:** Al-khair Pama. **Signed off by:** Al-khair for the code and every screen. Levi confirms the rules marked **TBC with Levi**.
 - **Last updated:** 16 Nov 2026 (S0 done: `plan-v18` made from `master`; the tracks are starting).
-- **Progress:** S0: 1 of 1. Track 1: 0 of 9. Track 2: 0 of 8. Track 3: 0 of 9. Merge and deploy: 0 of 3.
+- **Progress:** S0: 1 of 1. Track 1: 2 of 9. Track 2: 0 of 8. Track 3: 0 of 9. Merge and deploy: 0 of 3.
 - **Sources:**
   - Al-khair's list of changes (16 Nov, in chat), and the chat about Meetings the same day: the empty Meetings page, the team switch, and the Sync idea;
   - the code on `master` (`c4ebe58`), read on 16 Nov;
@@ -381,11 +381,11 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
 
 ## Track 1: the backend (session 1)
 
-**Progress:** 0 of 9. Every step is `backend-agent` work.
+**Progress:** 2 of 9. Every step is `backend-agent` work.
 
-- [ ] **T1-1. Own copy and a baseline.** Make the worktree and the database. Run the backend tests once and note the counts. Note `test_companies_speed`'s time too: it was about 560ms against its 300ms limit on this laptop before this plan.
+- [x] **T1-1. Own copy and a baseline.** Done 2026-11-16, on `40d9912` (see the Log). Make the worktree and the database. Run the backend tests once and note the counts. Note `test_companies_speed`'s time too: it was about 560ms against its 300ms limit on this laptop before this plan.
 
-- [ ] **T1-2. Ask HubSpot two things.** Free, read only. It loads the real key into the process only.
+- [x] **T1-2. Ask HubSpot two things.** Done 2026-11-16, read only, no code (see the Log). Free, read only. It loads the real key into the process only.
   - **Teams:** does HubSpot's owners list give each owner's `teams`? How many owners are in a team, and the teams' names. Write names and counts in the Log, never an email.
   - **Last activity:** read the company field list. Which field is "Last activity date" (we expect `notes_last_updated`)? How many companies in our copy would have it, against "Last contacted"?
   - If HubSpot has no teams, send Track 2 a message ("My team" stays hidden) and tell Al-khair.
@@ -447,7 +447,10 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
 
 ### Track 1 Log
 
-- (empty)
+- 16 Nov 2026, T1-1: the baseline on `40d9912`, all backend tests with `RUN_GATES=1` on `leadfinder_test_v18a`: 4,634 passed, 1 failed, 25 skipped, in 15 min 54 s. The one failure is `test_companies_speed`: `city=Perth&deal=open` took 543 ms against its 300 ms limit. Its other pages took 39 to 51 ms (the default list, by name, 39 ms), and the prep box 44 ms.
+- 16 Nov 2026, T1-2, read only, with the real key in the process only:
+  - **Teams: yes.** HubSpot's owners list gives each owner's `teams` (an id, a name, and whether it is the main one), in the dated API and in v3. 26 active owners, 11 of them in a team, none in two: Admin (6), Business Development (4) and Archive Team (1). None of the 35 archived owners is in a team. HubSpot's own list of teams needs a permission the key doesn't have (`settings.users.teams.read`); the owners list is enough, so it isn't needed. So "My team" stays, and `team_state` is `ready` for the 11 and `no_team` for the other 15.
+  - **Last activity: `notes_last_updated`** ("Last Activity Date", a date and time). Of HubSpot's 13,918 companies, 12,900 have it and 10,253 have "Last contacted" (`notes_last_contacted`). Every company with Last contacted has Last activity date too, and 2,647 have Last activity date only. In a sample of 200 with both, Last activity date was newer in 33 and the same in 167, never older. Our copy has 13,919 companies, 10,253 with Last contacted. So the list's `last_activity` is in effect HubSpot's Last activity date, with Last contacted as the fallback.
 
 ## Track 2: Meetings, the pre-read and the Companies list (session 2)
 
