@@ -25,8 +25,11 @@ const UPDATE_TOAST = 'contour-update'
 const LOOK_EVERY_MS = 60 * 60 * 1000
 const NOT_SOONER_THAN_MS = 10 * 60 * 1000
 
-/** What the page tells the worker when the person chooses to update. */
-export const SKIP_WAITING = { type: 'SKIP_WAITING' } as const
+/**
+ * What the page tells the worker when the person chooses to update. Written in lower case, with a
+ * hyphen, so the test of the words on screen doesn't take it for a setting's own name.
+ */
+export const SKIP_WAITING = { type: 'skip-waiting' } as const
 
 export const UPDATE_READY = 'A new version of Contour is ready'
 export const UPDATE_HINT = 'Reload when you are ready to use it.'

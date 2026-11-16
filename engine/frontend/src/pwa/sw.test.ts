@@ -186,7 +186,7 @@ describe('installing', () => {
     worker.message({ type: 'something else' })
     worker.message(undefined)
     expect(worker.skipWaiting).not.toHaveBeenCalled()
-    worker.message({ type: 'SKIP_WAITING' })
+    worker.message({ type: 'skip-waiting' })
     expect(worker.skipWaiting).toHaveBeenCalledTimes(1)
   })
 })

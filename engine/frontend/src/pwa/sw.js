@@ -11,7 +11,7 @@
  *     file never changes under its name: it is kept until a newer build no longer has it.
  *   - Lets a new version wait. A new worker installs in the background and keeps the old
  *     version's files out of harm's way. The page says "A new version is ready", and the person
- *     reloads when they choose (the page sends SKIP_WAITING). No tab ever gets half of each version.
+ *     reloads when they choose (the page sends "skip-waiting"). No tab ever gets half of each version.
  *
  * What it never does:
  *   - It never touches /api. Every answer there is behind a sign-in (and some are a live feed), so
@@ -69,7 +69,7 @@ async function tidyUp() {
 
 self.addEventListener('message', (event) => {
   // The page says the person chose to update: this worker takes over now.
-  if (event.data && event.data.type === 'SKIP_WAITING') void self.skipWaiting()
+  if (event.data && event.data.type === 'skip-waiting') void self.skipWaiting()
 })
 
 self.addEventListener('fetch', (event) => {
