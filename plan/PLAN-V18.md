@@ -6,7 +6,7 @@ This plan makes the Companies module clearer and nicer to use, from Al-khair's l
 
 - **Built by:** Al-khair Pama. **Signed off by:** Al-khair for the code and every screen. Levi confirms the rules marked **TBC with Levi**.
 - **Last updated:** 16 Nov 2026 (S0 done: `plan-v18` made from `master`; the tracks are starting).
-- **Progress:** S0: 1 of 1. Track 1: 0 of 9. Track 2: 2 of 8. Track 3: 0 of 9. Merge and deploy: 0 of 3.
+- **Progress:** S0: 1 of 1. Track 1: 0 of 9. Track 2: 3 of 8. Track 3: 0 of 9. Merge and deploy: 0 of 3.
 - **Sources:**
   - Al-khair's list of changes (16 Nov, in chat), and the chat about Meetings the same day: the empty Meetings page, the team switch, and the Sync idea;
   - the code on `master` (`c4ebe58`), read on 16 Nov;
@@ -451,7 +451,7 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
 
 ## Track 2: Meetings, the pre-read and the Companies list (session 2)
 
-**Progress:** 2 of 8. Every step is `frontend-agent` work. It follows `engine/DESIGN.md` and "How it should look and move", uses the `ui-build` skill, and builds against the contract with `mockApi`.
+**Progress:** 3 of 8. Every step is `frontend-agent` work. It follows `engine/DESIGN.md` and "How it should look and move", uses the `ui-build` skill, and builds against the contract with `mockApi`.
 
 - [x] **T2-1. Own copy and a baseline.** Make the worktree. Run lint, types, the tests and the build once. Note the counts and the first visit size from `node scripts/bundle-report.js`. Done 2026-11-16 on `40d9912`: the numbers are in the Track 2 Log.
 
@@ -498,7 +498,7 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
   - Phone cards say "Last activity" and follow the same order.
   - **Done when:** tests cover the default, the column, old links and the phone cards. Al-khair has seen it.
 
-- [ ] **T2-7. Errors on Meetings and the pre-read.**
+- [x] **T2-7. Errors on Meetings and the pre-read.** Done 2026-11-16 (`c603834`).
   - Every row of its table in "Words for when things go wrong", with its button.
   - `problemHint` (`lib/problems.ts`) gains hints for the meetings codes.
   - **Done when:** a test shows every row, and `screen-words.test.ts` passes.
@@ -522,6 +522,7 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
 - 16 Nov 2026, T2-4 (`7239682`), built and waiting for a look. New pre-read's line sits above its buttons, with the `Cpu` icon the summaries' "Written by AI" mark uses (no sparkle), and its description is now only "For a meeting that isn't in HubSpot.", so the drafting is said once. "Draft it" has its words as a tooltip and as its screen reader description. The steps (`pre-read/draft-progress.tsx`, `draftReached` in `rules.ts`) sit under the pre-read's header: no facts is step 1, facts is step 2, `draft` or `sent` is all three. They stay full once ready on that visit, and a pre-read that opens ready shows none. A failed draft's reason and Try again moved from the summaries into the steps, and the three summaries now stay, empty, so the rep can write them. For Track 1: after a failed draft, does a PATCH that fills the summaries make the form `draft`? If not, "Write them yourself" can't lead to a send (the send needs a written pre-read). The "about 20 seconds" stays TBC until a real draft (skipped tonight, see T2-8).
 - 16 Nov 2026, T2-5 (`36ea3d4`), built and waiting for a look. One card, `max-w-[52.5rem]` (840px, TBC), `mx-auto`, with Back and the header in the same column. Sections (`pre-read/form-section.tsx`): 1 The meeting (Date, Time, Teams or in person from the form's own copy, so they show at once; then Who we meet and Contour people), 2 The company (the company as a link, then the server's facts in its order; any new fact label goes here), 3 The summaries (boxes typed into, saved when left, `use-blank.ts` and `SaveNote` for "Saving." and "Saved."), 4 Your part (two blanks with a star and `aria-required`). The footer (`FormFooter`) is sticky at the form's bottom, fixed on a phone, and is gone while the pre-read is sent and unchanged, as the bar was. The draft's steps sit at the top of the card. The send dialog's "Add someone" label now has the form's label style. 70 pre-read tests pass. Two points for the look: the footer's status repeats the header's status word (the plan asks for it in the footer; the header's stays for its tick when sent), and the facts' "When" is split into Date and Time on the website. The screenshots at 1440, 1280 and 390px, light and dark, wait for the lead session's browser check after M1.
 - 16 Nov 2026, T2-6 (`8faf704`), built and waiting for a look. `last_activity` is the default sort (`DEFAULT_SORT`, first order `desc`), so a plain list has a plain address and `sort=name` is now written when chosen. The "Last activity" column has the id `last_activity` and shows `last_activity` through a new `LastActivity` mark (Ochre after 6 months with no activity, "None on record" when there is none); `sort=last_talk` still works, but no column shows its arrow. Phone cards say "Last activity". Home's card asks with `HOME_COMPANIES`, the same `listQuery` as the page. Hand written until M1, in `apps/companies/params.ts`: `lastActivityOf(row)` and the cast of `sort` in `listQuery`. 6 tests in `list-sort.test.tsx`; the Companies and Home tests pass.
+- 16 Nov 2026, T2-7 (`c603834`): every row of "Meetings and the pre-read" shows with its button, and a describe in `meetings.test.tsx` (8 tests), `pre-read.test.tsx` (the two draft failures) and `send.test.tsx` (email not set up) walks through them. Where each shows: not read yet and no permission in the waiting line, with New pre-read; Sync's failure, running and "a moment ago" in the line under the toolbar, with Sync; not linked and no team as the empty state of My meetings and My team, with "Show all meetings"; the draft's failures in the draft's steps, with Try again; email not set up in the send dialog, with a new "Copy the pre-read" (it copies the email's subject and plain text); no connection as the quiet line that points at the connection bar. `problemHint` gains four hints, only where the server's words have no next step: `hubspot_not_connected`, `meeting_not_found`, `form_not_found` and `email_not_set_up`. For M1: `lib/problems.ts` isn't in the table of owners, and Track 3's T3-8 adds its hints there too; Track 2's are a block of their own at the top of `HINTS`. The words for a press while Sync runs, and for "a moment ago", are the website's own (`MeetingsSyncOut` has no sentence); the rest come from Track 1. The screen-words test passes.
 
 ## Track 3: Call logs, the mic, the history and call prep (session 3)
 
