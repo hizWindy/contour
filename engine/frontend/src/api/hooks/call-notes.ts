@@ -218,9 +218,25 @@ export function dropNoteFromLists(
   )
 }
 
-/** Every page of notes counts as old: the ones on screen ask again now, the others when shown. */
-export function refreshCallNoteLists(client: QueryClient): Promise<void> {
-  return client.invalidateQueries({ queryKey: queryKeys.companies.callNoteLists() })
+/**
+ * Every page of notes, and History's pages too, count as old: the ones on screen ask again now,
+ * the others when shown. History has its own key (below), so it is named here as well: without
+ * it, a call logged or sent from Call logs stayed out of History until a reload (PLAN-V18 M1).
+ */
+export async function refreshCallNoteLists(client: QueryClient): Promise<void> {
+  await Promise.all([
+    client.invalidateQueries({ queryKey: queryKeys.companies.callNoteLists() }),
+    client.invalidateQueries({ queryKey: [...queryKeys.companies.callNotes(), 'history'] }),
+  ])
+}
+
+/**
+ * After a note is saved or removed: the counts are marked old (without asking again now, see
+ * `markCountsOld`), and the lists and History on screen ask again, so the call shows at once.
+ */
+export function markNotesOld(client: QueryClient): void {
+  markCountsOld(client)
+  void refreshCallNoteLists(client)
 }
 
 // --- History (PLAN-V18 T3-6) -------------------------------------------------------------------
@@ -405,7 +421,7 @@ export function useSaveCallNote() {
     onMutate: () => bumpToConfirm(client, 1),
     onError: () => bumpToConfirm(client, -1),
     onSuccess: () => {
-      markCountsOld(client)
+      markNotesOld(client)
     },
   })
 }
@@ -418,7 +434,7 @@ export function useDeleteCallNote() {
     onMutate: () => bumpToConfirm(client, -1),
     onError: () => bumpToConfirm(client, 1),
     onSuccess: () => {
-      markCountsOld(client)
+      markNotesOld(client)
     },
   })
 }
