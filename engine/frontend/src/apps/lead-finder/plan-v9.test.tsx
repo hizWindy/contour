@@ -328,7 +328,7 @@ describe('the People tab (PLAN-V9 E1)', () => {
     })
   })
 
-  it('ticks the Companies page too, one tick per project (PLAN-V10 B1)', async () => {
+  it('ticks Relationships (once the Companies page) too, one tick per project (PLAN-V10 B1)', async () => {
     const calls = mockApi({
       '/api/v1/auth/me': { auth_required: false, user: null, session: null },
       'GET /api/v1/people': [ADMIN, { ...MARCUS, apps: ['lead_finder'] }],
@@ -338,14 +338,14 @@ describe('the People tab (PLAN-V9 E1)', () => {
     await screen.findByRole('table', { name: 'People' })
     await user.click(screen.getByRole('button', { name: 'Edit Al Khair' }))
     const adminTick = within(await screen.findByRole('dialog')).getByRole('checkbox', {
-      name: /Companies/,
+      name: /Relationships/,
     })
     expect(adminTick).toBeChecked()
     expect(adminTick).toBeDisabled()
     await user.keyboard('{Escape}')
     await user.click(await screen.findByRole('button', { name: 'Edit Marcus Lee' }))
     await user.click(
-      within(await screen.findByRole('dialog')).getByRole('checkbox', { name: /Companies/ }),
+      within(await screen.findByRole('dialog')).getByRole('checkbox', { name: /Relationships/ }),
     )
     await waitFor(() => {
       expect(calls.find((call) => call.method === 'PATCH')?.body).toEqual({
