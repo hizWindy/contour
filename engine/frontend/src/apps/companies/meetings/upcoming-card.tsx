@@ -11,11 +11,14 @@
  *   Its code loads late too (`call-note-parts.ts`), so the first visit doesn't grow.
  * - **The meetings** are the rep's own, upcoming: My meetings on Meetings, which shows everyone's
  *   first (PLAN-V18 T2-3). The card's sentence counts the rep's own, so its rows are the rep's own
- *   too (TBC at Al-khair's look). A cancelled meeting needs nothing, so it isn't one of the
- *   three.
+ *   too (TBC at Al-khair's look). With sign-in off there is no "me" and the counts cover everyone's,
+ *   so the rows are everyone's (All), as Meetings shows then. A cancelled meeting needs nothing, so
+ *   it isn't one of the three.
  * - **Empty:** "No meetings in the next few days." in the serif voice. While HubSpot's meetings
  *   can't be read, or the rep's own can't be picked out, the server's sentence says so under it,
  *   in Meetings' own quiet line (`WaitingLine`). A list that fails says so in one quiet line.
+ * - **The rep's own can't be picked out** (their account isn't linked to a HubSpot owner): the
+ *   sentence says All shows everyone's, so "Show all meetings" under it opens Meetings, on All.
  *
  * **The first visit:** this file's imports decide how the bundler (Rolldown) splits the code that
  * every first visit loads, so three of them are chosen by measuring (`node
@@ -27,6 +30,7 @@
  */
 import { ArrowRight, CalendarCheck } from 'lucide-react'
 import { Link } from 'react-router'
+import { useMe } from '@/api/hooks'
 import { isMeetingFormsOff, useMeetings, useMeetingSummary } from '@/api/hooks/meetings'
 import type { MeetingItem } from '@/api/types'
 import { Reveal } from '@/components/motion'
@@ -44,6 +48,7 @@ import {
   NO_MEETINGS_SOON,
   NO_MEETINGS_SOON_NOTE,
   OPEN_MEETINGS,
+  SHOW_ALL,
   UPCOMING_MEETINGS,
   upcomingSentence,
 } from './words'
@@ -59,6 +64,10 @@ const SHOWN = 3
  */
 const CARD =
   'flex h-full flex-col gap-4 overflow-hidden rounded-lg border bg-card py-6 text-ui text-card-foreground'
+
+/** A link to another page, which ends in an arrow (DESIGN.md "Home"). */
+const LINK =
+  'inline-flex shrink-0 items-center gap-1 rounded-sm text-ui text-link underline-offset-4 hover:underline'
 
 function UpcomingRow({ item, today }: { item: MeetingItem; today: string }) {
   const draftIt = useDraftIt(item)
@@ -87,13 +96,20 @@ function UpcomingRow({ item, today }: { item: MeetingItem; today: string }) {
   )
 }
 
-/** The rep's own upcoming meetings: My meetings, as before PLAN-V18. */
-const HOME_VIEW: MeetingsView = { ...FIRST_VIEW, who: 'mine' }
+/**
+ * Whose upcoming meetings the card lists: the rep's own (My meetings), as its sentence counts them.
+ * With sign-in off there is no "me", and the counts cover everyone's, so it lists All, as Meetings
+ * does then.
+ */
+function homeView(signInOff: boolean): MeetingsView {
+  return { ...FIRST_VIEW, who: signInOff ? 'all' : 'mine' }
+}
 
 export function UpcomingMeetings() {
   const summary = useMeetingSummary()
   const on = summary.data !== undefined
-  const list = useMeetings(meetingsQuery(HOME_VIEW), { enabled: on })
+  const view = homeView(useMe().data?.state === 'off')
+  const list = useMeetings(meetingsQuery(view), { enabled: on })
   const today = melbourneDate()
   // Off, unknown, or on its way: nothing, so Home looks as it did before.
   if (!summary.data || list.isPending || isMeetingFormsOff(list.error)) return null
@@ -102,6 +118,9 @@ export function UpcomingMeetings() {
   const page = list.data
   const shown = page ? page.items.filter((item) => !isCancelled(item)).slice(0, SHOWN) : []
   const waiting = page?.sentence?.trim() || null
+  // My meetings can't pick out the rep's own: the sentence says All shows everyone's, and All is
+  // on Meetings.
+  const showAll = waiting !== null && view.who === 'mine' && page?.meetings_state === 'ready'
 
   let body
   if (!page) {
@@ -141,19 +160,22 @@ export function UpcomingMeetings() {
           <h2 id={TITLE_ID} className="flex-1 text-section font-semibold text-foreground">
             {UPCOMING_MEETINGS}
           </h2>
-          <Link
-            to={MEETINGS_PATH}
-            aria-label={OPEN_MEETINGS}
-            className="inline-flex shrink-0 items-center gap-1 rounded-sm text-ui text-link underline-offset-4 hover:underline"
-          >
+          <Link to={MEETINGS_PATH} aria-label={OPEN_MEETINGS} className={LINK}>
             Open
             <ArrowRight aria-hidden="true" className="size-4" />
           </Link>
         </div>
         {words ? <p className="px-6 text-ui text-foreground">{words}</p> : null}
         {waiting ? (
-          <div className="px-6">
+          <div className="flex flex-col gap-2 px-6">
             <WaitingLine sentence={waiting} />
+            {showAll ? (
+              // Under the sentence's words, past its icon.
+              <Link to={MEETINGS_PATH} className={cn(LINK, 'ml-6 self-start')}>
+                {SHOW_ALL}
+                <ArrowRight aria-hidden="true" className="size-4" />
+              </Link>
+            ) : null}
           </div>
         ) : null}
         {body}

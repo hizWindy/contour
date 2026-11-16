@@ -85,10 +85,28 @@ interface Backend {
   /** The counts, or 'off' for the 409 the server answers while pre-meeting forms are off. */
   summary?: MeetingSummary | 'off'
   items?: MeetingItem[]
-  /** The list's sentence while it can't show what was asked. */
+  /** The list's sentence while HubSpot's meetings can't be read. */
   sentence?: string | null
   /** Who is signed in. Left out: sign-in is off, so everyone sees every project. */
   user?: { role: 'admin' | 'staff'; apps: string[] }
+  /** The signed-in rep's account is linked to a HubSpot owner (it is, unless said). */
+  linked?: boolean
+}
+
+/**
+ * Track 1's sentences (`meeting_store.py`), word for word, when My meetings can't pick out the
+ * rep's own: nobody is signed in, or the rep's account has no HubSpot owner.
+ */
+const NO_ACCOUNT =
+  "Nobody is signed in, so there are no meetings of your own to pick out. All shows everyone's."
+const NOT_LINKED =
+  "Your account isn't linked to a HubSpot owner yet, so My meetings is empty. All shows everyone's. An admin can link you in Admin, People."
+
+/** Why My meetings can't pick out the rep's own, as Track 1's list says it, or null. */
+function whyEmpty(who: string, user: Backend['user'], linked: boolean): string | null {
+  if (who !== 'mine') return null
+  if (!user) return NO_ACCOUNT
+  return linked ? null : NOT_LINKED
 }
 
 const OFF = () =>
@@ -108,6 +126,7 @@ function stubBackend({
   items = upcoming(),
   sentence = null,
   user,
+  linked = true,
 }: Backend = {}): string[] {
   const requests: string[] = []
   vi.stubGlobal(
@@ -139,15 +158,21 @@ function stubBackend({
         return Promise.resolve(summary === 'off' ? OFF() : Response.json(summary))
       }
       if (path === MEETINGS) {
+        if (summary === 'off') return Promise.resolve(OFF())
+        // As Track 1's list answers: once meetings are read, My meetings holds none of HubSpot's
+        // while it can't pick out the rep's own, and says why.
+        const who = url.searchParams.get('who') ?? 'all'
+        const why = sentence ? null : whyEmpty(who, user, linked)
+        const shown = why ? [] : items
         return Promise.resolve(
-          summary === 'off'
-            ? OFF()
-            : Response.json({
-                items,
-                total: items.length,
-                meetings_state: sentence ? 'waiting' : 'ready',
-                sentence,
-              }),
+          Response.json({
+            items: shown,
+            total: shown.length,
+            meetings_state: sentence ? 'waiting' : 'ready',
+            sentence: sentence ?? why,
+            who,
+            linked: user !== undefined && linked,
+          }),
         )
       }
       return Promise.resolve(Response.json({ title: 'Not found', status: 404 }, { status: 404 }))
@@ -222,10 +247,48 @@ describe("Home's Upcoming meetings", () => {
       'href',
       '/companies/meetings',
     )
-    // The rep's own: My meetings on Meetings (PLAN-V18 T2-3), as the card's sentence counts.
+    // Sign-in is off: there is no "me", and the counts cover everyone's, so the rows are
+    // everyone's too (All), as Meetings asks then. My meetings would be empty.
+    expect(meetingRequests(requests)).toContain(
+      `GET ${MEETINGS}?when=upcoming&who=all&limit=100&offset=0`,
+    )
+    expect(meetingRequests(requests).some((request) => request.includes('who=mine'))).toBe(false)
+  })
+
+  it("lists a signed-in rep's own meetings: My meetings, as the card's sentence counts", async () => {
+    asLaptop()
+    const requests = stubBackend({ user: { role: 'staff', apps: ['lead_finder', 'companies'] } })
+    renderAt('/')
+    await home()
+    const card = within(
+      await screen.findByRole('region', { name: 'Upcoming meetings' }, { timeout: LAZY }),
+    )
+    expect(card.getAllByRole('listitem')).toHaveLength(3)
     expect(meetingRequests(requests)).toContain(
       `GET ${MEETINGS}?when=upcoming&who=mine&limit=100&offset=0`,
     )
+    expect(card.queryByRole('link', { name: 'Show all meetings' })).toBeNull()
+  })
+
+  it("says why a rep's own can't be picked out, and links to everyone's on Meetings", async () => {
+    asLaptop()
+    stubBackend({
+      summary: { need_pre_read: 0, draft_ready: 0 },
+      user: { role: 'staff', apps: ['lead_finder', 'companies'] },
+      linked: false,
+    })
+    renderAt('/')
+    await home()
+    const card = within(
+      await screen.findByRole('region', { name: 'Upcoming meetings' }, { timeout: LAZY }),
+    )
+    expect(card.getByRole('status').textContent).toBe(NOT_LINKED)
+    // Home has no All of its own: the sentence's All is on Meetings, which opens on it.
+    expect(card.getByRole('link', { name: 'Show all meetings' })).toHaveAttribute(
+      'href',
+      '/companies/meetings',
+    )
+    expect(card.getByText('No meetings in the next few days.')).toBeInTheDocument()
   })
 
   it('comes after every other card, so its coming moves none of them', async () => {
@@ -270,6 +333,7 @@ describe("Home's Upcoming meetings", () => {
     // As it comes: what still works is said once.
     expect(card.getByRole('status').textContent).toBe(waiting)
     expect(card.getByText('No meetings in the next few days.')).toBeInTheDocument()
+    expect(card.queryByRole('link', { name: 'Show all meetings' })).toBeNull()
   })
 
   it('is not there while pre-meeting forms are off, and asks for no meetings', async () => {
