@@ -1,0 +1,54 @@
+{
+  "id": "/",
+  "name": "Contour",
+  "short_name": "Contour",
+  "description": "Contour's work tools: the Lead Finder, companies, client meetings and call logs.",
+  "lang": "en-AU",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#F4F5EF",
+  "theme_color": "#F4F5EF",
+  "categories": ["business", "productivity"],
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Call logs",
+      "short_name": "Call logs",
+      "description": "Check the calls you logged and send them to HubSpot",
+      "url": "/companies/call-logs",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Meetings",
+      "short_name": "Meetings",
+      "description": "Client meetings and their pre-reads",
+      "url": "/companies/meetings",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Companies",
+      "short_name": "Companies",
+      "description": "Find a company and prep a call",
+      "url": "/companies",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Start a run",
+      "short_name": "Start a run",
+      "description": "Start a Lead Finder run",
+      "url": "/start",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ]
+}

@@ -8,6 +8,16 @@
       content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; connect-src 'self'; base-uri 'none'; object-src 'none'"
     />
     <meta name="color-scheme" content="light dark" />
+    <!-- The website as an app (Improvements 1, #9): the manifest, the colour of the browser bar
+         (the page's own, kept in step with the theme by src/shell/theme.ts), and what iOS reads
+         for "Add to Home Screen". -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#F4F5EF" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Contour" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <!-- The two weights of the body font that the first screen uses start downloading with the page, not
          after the styles are read (PLAN-V7 D3). The build puts in the hashed file names. -->
