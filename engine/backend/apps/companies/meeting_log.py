@@ -3,7 +3,8 @@
 - **The words:** the rep pastes the transcript, or the website reads a .txt or .vtt file and sends
   its text. The server cleans a .vtt itself: it keeps who said what ("Jo Sample: ..."), and drops
   the header, the cue numbers, the times, the tags, and the NOTE, STYLE and REGION blocks. Text
-  only, up to `transcript_max_chars` (60,000, TBC) once cleaned.
+  only, up to `transcript_max_chars` (60,000, TBC) once cleaned, and never more than fits whole
+  in one HubSpot note with its first line and summary (`longest`: 58,000 now).
 - **A call note like any other:** saved through the same path as Log call, with the source
   `transcript` and the meeting it came from (`call_notes.meeting_id`), so Meetings shows "Notes
   logged". It is scrubbed (no email address or phone number is kept), goes through the same
@@ -25,6 +26,7 @@ from typing import Final
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.companies.meeting_store import MeetingSource, client_meetings, meeting_not_found
+from apps.companies.note_batch import longest
 from apps.companies.note_store import NewNote, call_notes_off, refused, store_note
 from apps.companies.schemas import MeetingTranscriptIn
 from apps.companies.tables import CallNote
@@ -137,7 +139,7 @@ async def log_transcript(
             "This transcript has no words in it. Paste the words, or pick another file.",
             code="transcript_empty",
         )
-    limit = settings.transcript_max_chars
+    limit = longest(settings.transcript_max_chars)
     if len(text) > limit:
         raise refused(
             "This transcript is too long",

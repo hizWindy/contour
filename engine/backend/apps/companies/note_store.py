@@ -39,6 +39,7 @@ from apps.companies.note_batch import (
     STOPPED_MID_SEND,
     NoteSender,
     is_meeting,
+    longest,
     mark_sending,
     off_the_list,
     parts_of,
@@ -394,8 +395,8 @@ def options(app: FastAPI, settings: Settings) -> CallNoteOptions:
             for field in note_fields()
         ],
         soft_seconds=settings.notes_soft_seconds,
-        max_chars=settings.notes_max_chars,
-        transcript_max_chars=settings.transcript_max_chars,
+        max_chars=longest(settings.notes_max_chars),
+        transcript_max_chars=longest(settings.transcript_max_chars),
         voice_tool=settings.voice_tool,
     )
 
@@ -486,7 +487,7 @@ async def save_note(
         leads=leads,
         idempotency_key=idempotency_key,
         now=now,
-        max_chars=settings.notes_max_chars,
+        max_chars=longest(settings.notes_max_chars),
     )
 
 

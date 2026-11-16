@@ -157,6 +157,18 @@ def meeting_body(note: CallNote, card: NoteCard) -> str:
     return "\n\n".join(part for part in parts if part)[:BODY_MAX_CHARS]
 
 
+# Room in a HubSpot body for what goes around the rep's words: a meeting's first line, the summary
+# (the rep's is at most 600 characters), and a line for each thing said that didn't change a field
+# (at most 10). So the words a note may hold always reach HubSpot whole.
+BODY_ROOM: Final = 2_000
+
+
+def longest(setting: int) -> int:
+    """The longest a note or a transcript may be, in characters: the setting, but never more than
+    fits in one HubSpot body with what goes around it."""
+    return min(setting, BODY_MAX_CHARS - BODY_ROOM)
+
+
 def change_label(change: CardChange) -> str:
     """Like "Melbourne lease end"."""
     return f"{change.office} {change.label.lower()}"

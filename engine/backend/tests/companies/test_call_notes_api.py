@@ -173,7 +173,7 @@ async def test_options_say_what_log_call_offers(world: World, settings: dict[str
         {"id": "staff", "label": "Staff", "kind": "number"},
     ]
     limits = (options["soft_seconds"], options["max_chars"], options["transcript_max_chars"])
-    assert limits == (180, 6000, 60_000)
+    assert limits == (180, 6000, 58_000)  # a transcript must fit whole in one HubSpot note
 
 
 @pytest.mark.parametrize(
