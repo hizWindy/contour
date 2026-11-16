@@ -2,7 +2,7 @@
 
 How the Lead Finder website looks and behaves. This file is the one to update. It started as a copy of the design system section in [PLAN-V1.md](../plan/PLAN-V1.md) (25 Oct 2026).
 
-Last updated: 16 Nov 2026 (Activity is now called Call logs, PLAN-V18 T3-2; 15 Nov: the call notes rules Al-khair agreed for Log call and Activity, PLAN-V17 T3-8, and a left-out card dimmed with the quieter text colour; earlier that day, call prep moved to a side panel on Companies; 14 Nov: rules added from the design principles).
+Last updated: 16 Nov 2026 (Activity is now called Call logs, PLAN-V18 T3-2, and four motion lines from PLAN-V18 wait under "Ideas waiting for a decision"; 15 Nov: the call notes rules Al-khair agreed for Log call and Activity, PLAN-V17 T3-8, and a left-out card dimmed with the quieter text colour; earlier that day, call prep moved to a side panel on Companies; 14 Nov: rules added from the design principles).
 
 The general principles behind these rules, with their sources, are in [design/principles/](../design/principles/README.md). A rule taken from there names it, like "(principles 03 #14)": library item 03, point 14. Where a principle and this file disagree, this file wins until it is changed. The `frontend-agent` (`.claude/agents/frontend-agent.md`) works from both.
 
@@ -282,6 +282,14 @@ From the design principles. None of these is a rule yet (**TBC**). Al-khair deci
 - **A range control** (`Segmented`: 7, 30 or 90 days) on Runs and cost. (principles 05)
 - **A funnel of leads over time** (found, called, meeting), only if the date of each step is stored. Home's split of results is not a funnel: those are outcomes, not stages. (principles 05)
 - **A shared element move:** a company's name travels from the table into its lead card. (principles 01 #20)
+
+From [PLAN-V18](../plan/PLAN-V18.md) (16 Nov 2026): four motion lines, built and waiting for Al-khair's look before they join "Motion" (**TBC**).
+
+- **The mic card grows from its button** (`MicSheet`): it sits beside the mic button, above it when there is room, and grows from 0.96 to 1 with a fade on `smooth`, the button's middle as its transform origin, while the page behind dims over 250ms. It shrinks back toward the button in 150ms (`exit`). Opened from no button (Ctrl+K's "Check my mic"), it grows from the middle of the window. Its four check lines tick with `TickIn`, at least 40ms apart, each on its real result: one more use of the drawn tick, so it is part of the same decision. With reduced motion it simply appears. (PLAN-V18 T3-4)
+- **Bars that follow the voice** (`FrequencyBars`): 24 bars in the accent, each a band of the mic's own sound, as `scaleY` and nothing else, at most 30 updates a second. Below a small gate a band counts as silence, and a settled bar is never written again, so silence is still and low. With reduced motion: one still bar and the word "Listening". (PLAN-V18 T3-4)
+- **An icon that turns once** (`SpinOnce`): a refresh icon turns one full turn for each press, on `smooth` (400ms, no bounce), as on Meetings' Sync. A second press while it turns carries on from where it is and ends one turn further. It never loops, and the words beside it say what is going on ("Checking HubSpot"). With reduced motion it stays still. (PLAN-V18 T2-2, T2-3)
+- **Steps that fill as they arrive** (`StepTrail`): a few steps in a row, like the pre-read's "Reading HubSpot", "Writing the summaries" and "Ready for you to check". A dot fills only when the server says its state has arrived, never on a timer: it grows from its centre on `soft`, and the line to it fills along on `snappy`, both as a scale. The fill is the accent, as progress is. A failure stops the trail at its step, with a Terracotta cross and the reason beside it. With reduced motion the dots are simply filled. (PLAN-V18 T2-2, T2-4)
+- **The mic button is square,** 44px with the 10px corner. PLAN-V18 asked for a round one; "No pills" keeps it square until Al-khair decides. (PLAN-V18 T3-4)
 
 ## Tokens for shadcn
 
