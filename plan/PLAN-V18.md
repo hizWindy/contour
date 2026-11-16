@@ -6,7 +6,7 @@ This plan makes the Companies module clearer and nicer to use, from Al-khair's l
 
 - **Built by:** Al-khair Pama. **Signed off by:** Al-khair for the code and every screen. Levi confirms the rules marked **TBC with Levi**.
 - **Last updated:** 16 Nov 2026 (S0 done: `plan-v18` made from `master`; the tracks are starting).
-- **Progress:** S0: 1 of 1. Track 1: 3 of 9. Track 2: 0 of 8. Track 3: 0 of 9. Merge and deploy: 0 of 3.
+- **Progress:** S0: 1 of 1. Track 1: 4 of 9. Track 2: 0 of 8. Track 3: 0 of 9. Merge and deploy: 0 of 3.
 - **Sources:**
   - Al-khair's list of changes (16 Nov, in chat), and the chat about Meetings the same day: the empty Meetings page, the team switch, and the Sync idea;
   - the code on `master` (`c4ebe58`), read on 16 Nov;
@@ -381,7 +381,7 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
 
 ## Track 1: the backend (session 1)
 
-**Progress:** 3 of 9. Every step is `backend-agent` work.
+**Progress:** 4 of 9. Every step is `backend-agent` work.
 
 - [x] **T1-1. Own copy and a baseline.** Done 2026-11-16, on `40d9912` (see the Log). Make the worktree and the database. Run the backend tests once and note the counts. Note `test_companies_speed`'s time too: it was about 560ms against its 300ms limit on this laptop before this plan.
 
@@ -401,7 +401,7 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
   - Run `scripts/schema_map.py`, and add the new table to the four table lists.
   - **Done when:** tests prove teams saved and replaced, `last_activity` read, the writer's update, and that the schema map matches.
 
-- [ ] **T1-4. Meetings: All, My meetings, My team** (the contract, part 1).
+- [x] **T1-4. Meetings: All, My meetings, My team** (the contract, part 1). Done 2026-11-16 (`88e8274`).
   - `who` in place of `mine`, with `all` as the default.
   - All is in time order. Each item says `mine`.
   - The page's new fields: `linked`, `team_state`, `team_names`.
@@ -452,6 +452,7 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
   - **Teams: yes.** HubSpot's owners list gives each owner's `teams` (an id, a name, and whether it is the main one), in the dated API and in v3. 26 active owners, 11 of them in a team, none in two: Admin (6), Business Development (4) and Archive Team (1). None of the 35 archived owners is in a team. HubSpot's own list of teams needs a permission the key doesn't have (`settings.users.teams.read`); the owners list is enough, so it isn't needed. So "My team" stays, and `team_state` is `ready` for the 11 and `no_team` for the other 15.
   - **Last activity: `notes_last_updated`** ("Last Activity Date", a date and time). Of HubSpot's 13,918 companies, 12,900 have it and 10,253 have "Last contacted" (`notes_last_contacted`). Every company with Last contacted has Last activity date too, and 2,647 have Last activity date only. In a sample of 200 with both, Last activity date was newer in 33 and the same in 167, never older. Our copy has 13,919 companies, 10,253 with Last contacted. So the list's `last_activity` is in effect HubSpot's Last activity date, with Last contacted as the fallback.
 - 16 Nov 2026, T1-3 (`a5a4518`): migration `0024_v18_teams_activity` (the teams table, `core.hubspot_companies.last_activity`, and the History index on `companies.call_notes`), applied to `leadfinder_v18a`, with `engine/schema/SCHEMA-0024.md` (`--check` matches). The sync replaces every owner's teams each time. A company's `last_activity` never moves back: a save keeps the newer of ours and HubSpot's, so a call our copy noted when it landed stays, and an export leaves it alone. Whether a changes sync sees a new activity at once depends on HubSpot moving the company's modified date (**TBC**); the full sync always does. 356 tests that T1-3 touches pass, and 177 more that read our copy.
+- 16 Nov 2026, T1-4 (`88e8274`): `who` (`all`, `mine`, `team`) in place of `mine`, as the contract says. All, My meetings and My team read the whole window, then pick in code, always in time order. Each item has `mine`. Sentences: "not linked" on My meetings (and its My team twin, which says "My team is empty"), "no team", and two the plan didn't list: HubSpot has no teams (for an old `who=team` link while the website hides the filter) and nobody signed in (sign in switched off: My meetings and My team are empty, All works, `linked` is false, `team_state` is `not_linked`). The new `MeetingPage` and `MeetingItem` fields are optional in the website's types (`optional_in_types`, as PLAN-V14 to V17 did): the API always sends them. A company's record marks my own meetings too. The summary of the route says "Client meetings" now.
 
 ## Track 2: Meetings, the pre-read and the Companies list (session 2)
 
