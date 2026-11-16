@@ -166,7 +166,7 @@ export interface paths {
         };
         /**
          * My call notes
-         * @description A page of notes. `state`: `to_confirm` (being sorted, waiting for me, or being sent), `logged`, `needs_look` (failed, partly saved, or unsure in HubSpot), or `history` (every one of my own notes, in any status, for History in Call logs). `mine` is true by default: `mine=false` shows everyone's notes to an Admin, and anyone else still gets only their own; History is always my own. Filters, for any state: `q` (each word must start a word of the company's name, the person's name, the note or the summary), `outcome` (one of the call outcomes, or `none`), and `since` and `until` (Melbourne days, both counted). To confirm: the notes the sorter was unsure of first, then the oldest call first. Otherwise the newest call first. 422 `dates_out_of_order` when `since` is after `until`. 409 `call_notes_off`.
+         * @description A page of notes. `state`: `to_confirm` (being sorted, waiting for me, or being sent), `logged`, `needs_look` (failed, partly saved, or unsure in HubSpot), or `history` (every one of my own notes, in any status, for History in Call logs). `mine` is true by default: `mine=false` shows everyone's notes to an Admin, and anyone else still gets only their own; History is always my own. Filters, for any state: `q` (each word must start a word of the company's name, the person's name, the note or the summary), `outcome` (one of the call outcomes, or `none`), and `since` and `until` (Melbourne days, both counted, from 2000-01-01 to 2100-12-31). To confirm: the notes the sorter was unsure of first, then the oldest call first. Otherwise the newest call first. 422 `day_out_of_range` for a day outside those, with each one in `errors` (`query.since`, `query.until`). 422 `dates_out_of_order` when `since` is after `until`. 409 `call_notes_off`.
          */
         get: operations["list_call_notes"];
         put?: never;
@@ -210,7 +210,7 @@ export interface paths {
         };
         /**
          * What Log call offers
-         * @description Whether call notes are on, whether Claude sorts a note, whether sending to HubSpot is ready (and what it waits for, in plain words), the call outcomes, the fields a call may change, when the timer turns Ochre, the longest note, and the longest meeting transcript. It answers while call notes are off too.
+         * @description Whether call notes are on, whether Claude sorts a note, whether sending to HubSpot is ready (and what it waits for, in plain words), the call outcomes, the fields a call may change, when the timer turns Ochre, the longest note, the longest meeting transcript, and which voice to text tool the mic uses. The browser's own speech service (`browser_service`) sends the voice to Google or Microsoft, so until the server allows it (Levi's OK) a saved or server value of it comes as `browser_model`, Whisper in the browser. It answers while call notes are off too.
          */
         get: operations["call_note_options"];
         put?: never;
@@ -1911,7 +1911,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** All settings, with their limits and current values */
+        /**
+         * All settings, with their limits and current values
+         * @description Every setting a person may change, then the ones set only on the server, as read-only rows (`editable` false). The browser's own speech service (`voice_tool` `browser_service`) sends the voice to Google or Microsoft, so it waits for Levi's OK, set only on the server (`browser_speech_ok`, a read-only row). Until then, `voice_tool` doesn't list it in `choices`, and a saved or server value of it shows as `browser_model` (Whisper in the browser).
+         */
         get: operations["read_settings"];
         put?: never;
         post?: never;
@@ -1920,7 +1923,7 @@ export interface paths {
         head?: never;
         /**
          * Change some settings
-         * @description Only the settings in `values` change. A value outside its limits is a 422 whose error field is `body.values.<key>` (like `body.values.run_cap_usd`, the same style as every other 422), and then nothing changes. Send a decimal setting (money and shares) as a string like "15.00", and an int setting as a number. A change applies to the next run and the next request. A run in progress keeps the caps it started with.
+         * @description Only the settings in `values` change. A value outside its limits is a 422 whose error field is `body.values.<key>` (like `body.values.run_cap_usd`, the same style as every other 422), and then nothing changes. Send a decimal setting (money and shares) as a string like "15.00", and an int setting as a number. A change applies to the next run and the next request. A run in progress keeps the caps it started with. The browser's own speech service (`voice_tool` `browser_service`) sends the voice to Google or Microsoft, so it waits for Levi's OK, set only on the server (`browser_speech_ok`, a read-only row). Until then, `voice_tool` `browser_service` is a 422 `browser_speech_off` (with `body.values.voice_tool`), and nothing changes.
          */
         patch: operations["update_settings"];
         trace?: never;
@@ -2288,7 +2291,7 @@ export interface components {
             transcript_max_chars?: number;
             /**
              * Voice Tool
-             * @description Which voice to text tool the mic uses: browser_model (Whisper in the browser: the voice stays on the laptop), browser_service (the browser's own speech service, which sends the voice to Google or Microsoft) or typing (no mic)
+             * @description Which voice to text tool the mic uses: browser_model (Whisper in the browser: the voice stays on the laptop), browser_service (the browser's own speech service, which sends the voice to Google or Microsoft) or typing (no mic). browser_service comes only once the server allows it, after Levi's OK: until then a saved or server value of it comes as browser_model
              * @default browser_model
              * @enum {string}
              */
@@ -10629,9 +10632,9 @@ export interface operations {
                 mine?: boolean;
                 q?: string | null;
                 outcome?: ("Connected" | "No answer" | "Left voicemail" | "Left live message" | "Busy" | "Wrong number" | "none") | null;
-                /** @description A Melbourne day, counted */
+                /** @description A Melbourne day, counted, from 2000-01-01 to 2100-12-31 */
                 since?: string | null;
-                /** @description A Melbourne day, counted */
+                /** @description A Melbourne day, counted, from 2000-01-01 to 2100-12-31 */
                 until?: string | null;
                 limit?: number;
                 offset?: number;
