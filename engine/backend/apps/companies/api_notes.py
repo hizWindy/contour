@@ -46,6 +46,8 @@ from core.hubspot.connection import open_hubspot
 
 router = APIRouter()
 PAGE_SIZE = 50
+DAYS = f"from {note_store.FIRST_DAY} to {note_store.LAST_DAY}"  # from 2000-01-01 to 2100-12-31
+DAY = f"A Melbourne day, counted, {DAYS}"
 
 
 def note_sorter(request: Request) -> NoteSorter:
@@ -185,9 +187,10 @@ async def confirm_call_notes(
         "only their own; History is always my own. Filters, for any state: `q` (each word must "
         "start a word of the company's name, the person's name, the note or the summary), "
         "`outcome` (one of the call outcomes, or `none`), and `since` and `until` (Melbourne "
-        "days, both counted). To confirm: the notes the sorter was unsure of first, then the "
-        "oldest call first. Otherwise the newest call first. 422 `dates_out_of_order` when "
-        "`since` is after `until`. 409 `call_notes_off`."
+        f"days, both counted, {DAYS}). To confirm: the notes the sorter was unsure of first, "
+        "then the oldest call first. Otherwise the newest call first. 422 `day_out_of_range` for "
+        "a day outside those, with each one in `errors` (`query.since`, `query.until`). 422 "
+        "`dates_out_of_order` when `since` is after `until`. 409 `call_notes_off`."
     ),
 )
 async def list_call_notes(
@@ -202,11 +205,18 @@ async def list_call_notes(
     mine: bool = True,
     q: Annotated[SafeText | None, Query(max_length=200)] = None,
     outcome: OutcomeFilter | None = None,
-    since: Annotated[date | None, Query(description="A Melbourne day, counted")] = None,
-    until: Annotated[date | None, Query(description="A Melbourne day, counted")] = None,
+    since: Annotated[date | None, Query(description=DAY)] = None,
+    until: Annotated[date | None, Query(description=DAY)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = PAGE_SIZE,
     offset: Annotated[int, Query(ge=0, le=OFFSET_MAX)] = 0,
 ) -> CallNotePage:
+    outside = [
+        name
+        for name, day in (("since", since), ("until", until))
+        if day is not None and not note_store.FIRST_DAY <= day <= note_store.LAST_DAY
+    ]
+    if outside:
+        raise note_store.day_out_of_range(outside)
     return await note_store.list_notes(
         session,
         auth,

@@ -8,6 +8,7 @@
 - `outcome`: one of HubSpot's six, or `none`;
 - `since` and `until`: Melbourne days, both counted;
 - the filters work for the other states too, and days the wrong way round are refused;
+- a day before 1 January 2000 or after 31 December 2100 is a plain 422, not a 500 (PLAN-V18 M1);
 - 2,000 notes come back in under 300 ms.
 
 Made-up companies and people only (Sample Logistics Pty Ltd, Jo Sample).
@@ -201,6 +202,48 @@ async def test_the_outcome_and_the_days_filter_any_state(
     assert (backwards.status_code, backwards.json()["code"]) == (422, "dates_out_of_order")
     assert backwards.json()["detail"] == "Pick a start day on or before the end day."
     assert odd.status_code == 422 and long_q.status_code == 422
+
+
+@pytest.mark.parametrize(
+    ("params", "fields"),
+    [
+        ({"since": "0001-01-01"}, ["query.since"]),  # was a 500
+        ({"until": "9999-12-31"}, ["query.until"]),  # was a 500 too
+        ({"since": "1999-12-31"}, ["query.since"]),  # the day before the first
+        ({"until": "2101-01-01"}, ["query.until"]),  # the day after the last
+        ({"since": "0001-01-01", "until": "9999-12-31"}, ["query.since", "query.until"]),
+        ({"state": "to_confirm", "until": "9999-12-31"}, ["query.until"]),  # any state
+    ],
+)
+async def test_a_day_outside_2000_to_2100_is_a_plain_422(
+    world: World, settings: dict[str, Any], params: dict[str, str], fields: list[str]
+) -> None:
+    await person(world, "mia", apps=["companies"])
+    async with browser_as(world, "mia") as client:
+        response = await client.get(NOTES, params={"state": "history", **params})
+    assert response.status_code == 422, response.text
+    assert response.headers["content-type"].startswith("application/problem+json")
+    body = response.json()
+    assert (body["code"], body["title"], body["detail"]) == (
+        "day_out_of_range",
+        "That day is out of range",
+        "Pick a day from 1 January 2000 to 31 December 2100.",
+    )
+    assert [error["field"] for error in body["errors"]] == fields
+
+
+async def test_the_first_and_the_last_day_are_allowed(
+    world: World, settings: dict[str, Any]
+) -> None:
+    await a_company(world)
+    mia = (await person(world, "mia", apps=["companies"])).id
+    await add(world, a_note(mia, BASE, "one"))
+    async with browser_as(world, "mia") as client:
+        whole = await listed(client, since="2000-01-01", until="2100-12-31")
+        first = await listed(client, since="2000-01-01", until="2000-01-01")
+        last = await listed(client, since="2100-12-31", until="2100-12-31")
+    assert said(whole) == ["one"]
+    assert first["total"] == 0 and last["total"] == 0
 
 
 async def test_two_thousand_notes_come_back_fast(world: World, settings: dict[str, Any]) -> None:

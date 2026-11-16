@@ -199,6 +199,24 @@ def dates_out_of_order() -> Problem:
     )
 
 
+# The days a list can be filtered on (PLAN-V18 M1). A day far outside them, like 0001-01-01 or
+# 9999-12-31, has no Melbourne start time Python can count, so it was a 500.
+FIRST_DAY: Final = date(2000, 1, 1)
+LAST_DAY: Final = date(2100, 12, 31)
+DAY_RANGE_DETAIL = "Pick a day from 1 January 2000 to 31 December 2100."  # the two days above
+
+
+def day_out_of_range(fields: Sequence[str]) -> Problem:
+    """A filter day outside FIRST_DAY to LAST_DAY. `fields` names each one, like `since`."""
+    return Problem(
+        422,
+        "That day is out of range",
+        DAY_RANGE_DETAIL,
+        code="day_out_of_range",
+        errors=[{"field": f"query.{name}", "message": DAY_RANGE_DETAIL} for name in fields],
+    )
+
+
 def writes_off(waiting_for: str) -> Problem:
     return Problem(409, "Waiting for write access", waiting_for, code="hubspot_writes_off")
 

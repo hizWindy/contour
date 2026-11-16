@@ -541,6 +541,15 @@ def test_the_browser_speech_service_says_it_waits_for_levis_ok(schema: dict[str,
         assert "browser_service" in text and "browser_model" in text
 
 
+def test_a_notes_list_says_which_days_it_takes(schema: dict[str, Any]) -> None:
+    """PLAN-V18 M1: from 2000 to 2100, so an extreme day is a 422, not a 500."""
+    notes = operation(schema, "get", f"{API}/companies/call-notes")
+    assert "day_out_of_range" in notes["description"]
+    days = {item["name"]: item.get("description", "") for item in notes["parameters"]}
+    for name in ("since", "until"):
+        assert "from 2000-01-01 to 2100-12-31" in days[name], name
+
+
 def test_run_days_are_melbourne_dates_and_the_run_filters_use_the_same_kind_of_date(
     schema: dict[str, Any],
 ) -> None:
