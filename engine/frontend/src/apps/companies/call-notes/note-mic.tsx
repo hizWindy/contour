@@ -1,70 +1,98 @@
 /**
- * The mic in the note view (PLAN-V17 T3-4, "The screens" part 2).
+ * The mic in Log call's note box (PLAN-V18 T3-4, "The mic button"): a 44px button in the box's
+ * corner, named "Speak" for screen readers. Pressing it opens the mic card, which grows from the
+ * button, checks the mic, and listens (`mic/mic-card.tsx`). Done puts the words in the box; Esc
+ * puts nothing there. The Win+H line is gone.
  *
- * For now it is T3-4's typing-only version: T3-2 (is the free browser model good enough?) waits
- * for Al-khair's dictation. So there is no mic button. On a Windows laptop it says "Type the note,
- * or press Win+H to dictate.", because Windows' own dictation types straight into the box. On a
- * phone it shows nothing: the keyboard's own mic does the talking (choice 8). On any other laptop
- * it shows nothing either.
+ * - **Laptops only** (choice 12): on a phone the keyboard's own mic key does the talking, so there
+ *   is no button. With the voice tool set to typing there is none either.
+ * - **The card's code loads late:** the first time the pointer rests on the button, it gets focus,
+ *   or it is pressed. Neither the first visit nor the Companies page carries it.
+ * - **Never round:** a square with the 10px corner, as every button (DESIGN.md "No pills"; the plan
+ *   said round, TBC with Al-khair).
  *
- * The props are the browser model's already, so T3-4 can add it here without touching the note
- * view:
- *   onWords    gets the words as they arrive, one chunk at a time, after the name fix
- *   names      the company's and the person's names, for that fix ("Vitara" becomes "Vitera")
- *   autoStart  start listening as soon as the view opens (it opened from L; TBC after T3-2)
- *   onState    hears each change of state, from the table in "The screens", part 2
- *
- * The audio never leaves the browser (T3-4 proves it with a test).
+ * The audio never leaves the browser through our code: the card hands the words back, never the
+ * sound.
  */
-import { useEffect, useEffectEvent, useState } from 'react'
-import { Kbd } from '@/components/ui/kbd'
-import { isWindows } from '@/lib/platform'
-import { PHONE, useMediaQuery } from '@/lib/use-media-query'
+import { Mic } from 'lucide-react'
+import { lazy, Suspense, useRef, useState, type RefObject } from 'react'
+import type { VoiceToolKind } from '@/api/hooks/call-note-counts'
+import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import type { NameFix } from './mic/name-fix'
+import { SPEAK, SPEAK_HINT } from './mic/words'
 
-/**
- * typing         no browser model: type, or use the computer's own dictation (Win+H)
- * getting_ready  the model is loading ("Getting the mic ready"); typing works meanwhile
- * listening      the level meter follows the voice
- * writing        the words arrive, a chunk at a time
- * done           the text is in the box, ready to edit, with a fixed name shown once
- * blocked        the browser has blocked the mic
- * no_mic         no mic, or a browser that can't
- */
-export type MicState =
-  'typing' | 'getting_ready' | 'listening' | 'writing' | 'done' | 'blocked' | 'no_mic'
+const loadMicCard = () => import('./mic/mic-card')
+const MicCard = lazy(loadMicCard)
+
+/** Starts the card's download ahead of the press. A failed download tries again on the press. */
+function preload(): void {
+  void loadMicCard().catch(() => undefined)
+}
 
 export interface NoteMicProps {
-  /** The words as they arrive, a chunk at a time, after the name fix. The view adds them. */
-  onWords: (chunk: string) => void
-  /** The company's and the person's names, so a near miss of one is fixed. */
+  tool: VoiceToolKind
+  /** The company's and the person's names, for the name fix ("Vitara" becomes "Vitera"). */
   names: readonly string[]
-  /** Start listening as soon as the view opens. */
-  autoStart?: boolean
-  /** Each change of state. */
-  onState?: (state: MicState) => void
+  /** The words to add to the note, after the name fix, and the names fixed. */
+  onText: (text: string, fixes: readonly NameFix[]) => void
+  /** The note box: the focus goes back there once the words are in. */
+  box: RefObject<HTMLTextAreaElement | null>
   className?: string
 }
 
-export function NoteMic({ onState, className }: NoteMicProps) {
-  const onPhone = useMediaQuery(PHONE)
-  const [windows] = useState(isWindows)
-  const report = useEffectEvent((state: MicState) => {
-    onState?.(state)
-  })
-  useEffect(() => {
-    report('typing')
-  }, [])
-  if (onPhone || !windows) return null
+export function NoteMic({ tool, names, onText, box, className }: NoteMicProps) {
+  const button = useRef<HTMLButtonElement>(null)
+  const [open, setOpen] = useState(false)
+  const [wanted, setWanted] = useState(false)
   return (
-    <p
-      data-slot="note-mic"
-      className={cn(
-        'flex flex-wrap items-center gap-x-1.5 text-ui text-muted-foreground',
-        className,
-      )}
-    >
-      Type the note, or press <Kbd>Win+H</Kbd> to dictate.
-    </p>
+    <>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            ref={button}
+            type="button"
+            variant="outline"
+            size="icon"
+            data-slot="note-mic"
+            aria-label={SPEAK}
+            aria-haspopup="dialog"
+            aria-expanded={open}
+            className={cn('size-11 rounded-lg bg-card touch:size-11', className)}
+            onPointerEnter={preload}
+            onFocus={preload}
+            onClick={() => {
+              setWanted(true)
+              setOpen(true)
+            }}
+          >
+            <Mic aria-hidden="true" className="size-5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{SPEAK_HINT}</TooltipContent>
+      </Tooltip>
+      {wanted ? (
+        <Suspense fallback={null}>
+          <MicCard
+            open={open}
+            mode="note"
+            tool={tool}
+            names={names}
+            anchor={button}
+            focusAfter={box}
+            onDone={(text, fixes) => {
+              if (text.trim()) onText(text, fixes)
+            }}
+            onTypeInstead={(text) => {
+              if (text.trim()) onText(text, [])
+            }}
+            onClose={() => {
+              setOpen(false)
+            }}
+          />
+        </Suspense>
+      ) : null}
+    </>
   )
 }

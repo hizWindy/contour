@@ -4,30 +4,40 @@
  * read it from src/modules.ts.
  *
  * Its other pages are Meetings (PLAN-V17 T3-9, `/companies/meetings`): the client meetings and
- * their pre-reads, and Activity (T3-6, `/companies/activity`): the calls a rep logged, to confirm
- * and send to HubSpot in one go. Their addresses sit before a company's (`:key`), so neither is
- * ever read as a company. Companies is a group in the menu (Companies, Meetings, Activity), after
- * the Lead Finder's, in the order of MODULES, as on Home and in Ctrl+K (T3-7). Meetings and
- * Activity stay in the group for everyone who sees Companies, even while their switches are off
- * (each page says so), so the menu never changes shape once it has loaded. A pre-read's own page
- * sits under Meetings (`/companies/meetings/{form_id}`, T3-10), so the menu marks Meetings there.
- * Activity's row shows how many calls wait to be confirmed, and Ctrl+K gains "Log a call" and
- * "Calls to confirm" (`call-note-links.tsx`, which loads late through `call-note-parts.ts`, so the
- * first visit doesn't grow). With pre-meeting forms on (T3-11), Home gains "Upcoming meetings", a
- * card that comes late and goes after the others, and Ctrl+K "Pre-read for a meeting", loaded the
- * same way.
+ * their pre-reads, and Call logs (T3-6, `/companies/call-logs`; called Activity, at
+ * `/companies/activity`, until PLAN-V18 T3-2, and the old address sends you on): the calls a rep
+ * logged, to confirm, send to HubSpot in one go, and look back at. Their addresses sit before a
+ * company's (`:key`), so neither is ever read as a company. Companies is a group in the menu
+ * (Companies, Meetings, Call logs), after the Lead Finder's, in the order of MODULES, as on Home
+ * and in Ctrl+K (T3-7). Meetings and Call logs stay in the group for everyone who sees Companies,
+ * even while their switches are off (each page says so), so the menu never changes shape once it
+ * has loaded. A pre-read's own page sits under Meetings (`/companies/meetings/{form_id}`, T3-10),
+ * so the menu marks Meetings there. Call logs' row shows how many calls wait to be confirmed, and
+ * Ctrl+K gains "Log a call" and "Calls to confirm" (`call-note-links.tsx`, which loads late through
+ * `call-note-parts.ts`, so the first visit doesn't grow). Ctrl+K still finds Call logs by
+ * "activity", so old habits work. With pre-meeting forms on (T3-11), Home gains "Upcoming
+ * meetings", a card that comes late and goes after the others, and Ctrl+K "Pre-read for a
+ * meeting", loaded the same way.
  */
-import { Building2, CalendarCheck, ClipboardCheck } from 'lucide-react'
+import { Building2, CalendarCheck, PhoneLog } from 'lucide-react'
 import type { PrefetchArgs, RouteHandle } from '@/shell/crumbs'
 import type { AppModule } from '@/shell/nav'
 import { page } from '@/shell/page-route'
-import { CompaniesCommands, ToConfirmCount, UpcomingMeetings } from './call-note-parts'
+import {
+  CompaniesCommands,
+  MicCheckHost,
+  MicCheckMenuItem,
+  ToConfirmCount,
+  UpcomingMeetings,
+} from './call-note-parts'
+import { OLD_PATH } from './call-logs/old-address'
+import { OldActivityAddress } from './call-logs/old-route'
 import { CompaniesHomeCard } from './home-card'
 import { prefetchCompanies, prefetchCompaniesHome, prefetchCompany } from './prefetch'
 
 /** The pages' addresses, as in each page's `params.ts`, which loads with the page, not here. */
 const MEETINGS = '/companies/meetings'
-const ACTIVITY = '/companies/activity'
+const CALL_LOGS = '/companies/call-logs'
 
 type Prefetch = (args: PrefetchArgs) => void
 
@@ -47,7 +57,7 @@ function late(load: () => Promise<Prefetch>): Prefetch {
 
 const prefetchMeetings = late(async () => (await import('./meetings/prefetch')).prefetchMeetings)
 const prefetchPreRead = late(async () => (await import('./meetings/prefetch')).prefetchPreRead)
-const prefetchActivity = late(async () => (await import('./activity/prefetch')).prefetchActivity)
+const prefetchCallLogs = late(async () => (await import('./call-logs/prefetch')).prefetchCallLogs)
 
 export const COMPANIES: AppModule = {
   id: 'companies',
@@ -69,7 +79,7 @@ export const COMPANIES: AppModule = {
       icon: Building2,
       keywords: ['clients', 'prospects', 'call', 'prep', 'script', 'hubspot'],
       purpose: 'Find a company, see what we know, and prep a call in seconds.',
-      notActiveOn: [MEETINGS, ACTIVITY],
+      notActiveOn: [MEETINGS, CALL_LOGS, OLD_PATH],
     },
     {
       to: MEETINGS,
@@ -79,15 +89,19 @@ export const COMPANIES: AppModule = {
       purpose: 'Draft the pre-read for each client meeting, then send it to the team.',
     },
     {
-      to: ACTIVITY,
-      label: 'Activity',
-      icon: ClipboardCheck,
-      keywords: ['call notes', 'log a call', 'confirm', 'logged', 'send', 'hubspot'],
-      purpose: 'Check the calls you logged, then send them to HubSpot in one go.',
+      to: CALL_LOGS,
+      label: 'Call logs',
+      icon: PhoneLog,
+      // "activity" is its old name (PLAN-V18 T3-2), so old habits still find it.
+      keywords: ['activity', 'call notes', 'log a call', 'confirm', 'history', 'send', 'hubspot'],
+      purpose: 'Check the calls you logged, send them to HubSpot, and look back at old ones.',
       count: ToConfirmCount,
     },
   ],
   commands: CompaniesCommands,
+  // "Check my mic" (PLAN-V18 T3-4): a row in the account menu, and the card it opens.
+  accountItems: MicCheckMenuItem,
+  frame: MicCheckHost,
   routes: [
     {
       path: 'companies',
@@ -117,9 +131,14 @@ export const COMPANIES: AppModule = {
           ],
         },
         {
+          path: 'call-logs',
+          handle: { crumb: 'Call logs', prefetch: prefetchCallLogs } satisfies RouteHandle,
+          ...page(() => import('./call-logs')),
+        },
+        {
+          // Call logs' old address (PLAN-V17): sent on with its tab and `log=1`.
           path: 'activity',
-          handle: { crumb: 'Activity', prefetch: prefetchActivity } satisfies RouteHandle,
-          ...page(() => import('./activity')),
+          element: <OldActivityAddress />,
         },
         {
           // A company has its own address, so it can be shared. The list also opens it in a panel.

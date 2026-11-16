@@ -66,6 +66,23 @@ const GROUP_OF: Record<string, GroupId> = {
   call_notes_enabled: 'notes',
   call_notes_ai_enabled: 'notes',
   meeting_forms_enabled: 'notes',
+  voice_tool: 'notes', // PLAN-V18: which voice to text tool the mic uses
+}
+
+/**
+ * A choice's words, where its value would mean nothing to a person (PLAN-V18 T3-5: the voice tool).
+ * A choice not listed here shows as it is.
+ */
+const CHOICE_WORDS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  voice_tool: {
+    browser_model: 'Whisper in the browser: the voice stays on this computer',
+    browser_service: "The browser's speech service: the voice goes to Google or Microsoft",
+    typing: 'Typing only: no mic button',
+  },
+}
+
+export function choiceWords(key: string, choice: string): string {
+  return CHOICE_WORDS[key]?.[choice] ?? choice
 }
 
 export function groupOf(key: string): GroupId {

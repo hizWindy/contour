@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import { Outlet, ScrollRestoration, useNavigation } from 'react-router'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { useAfterActive } from '@/lib/use-after'
@@ -8,6 +8,7 @@ import { ConnectionBar } from './connection-bar'
 import { InFrameContext } from './in-frame'
 import { RequireSignIn } from './require-sign-in'
 import { TopBar } from './top-bar'
+import { useVisibleModules } from './visible-modules'
 
 /** Where "Skip to the page" lands: the page content, after the menu and the top bar. */
 export const MAIN_ID = 'page'
@@ -36,6 +37,23 @@ export function AppFrame() {
       <Frame />
     </RequireSignIn>
   )
+}
+
+/**
+ * The parts a project draws once in the frame (`AppModule.frame`), like the mic check that Ctrl+K
+ * and the account menu open (PLAN-V18 T3-4). Each draws nothing until it is asked, and may load
+ * late. Only the projects this person may use.
+ */
+function FrameParts() {
+  const modules = useVisibleModules()
+  return modules.map((app) => {
+    const Part = app.frame
+    return Part ? (
+      <Suspense key={app.id} fallback={null}>
+        <Part />
+      </Suspense>
+    ) : null
+  })
 }
 
 function Frame() {
@@ -71,6 +89,7 @@ function Frame() {
           </div>
         </SidebarInset>
         <ScrollRestoration />
+        <FrameParts />
       </SidebarProvider>
     </InFrameContext>
   )

@@ -6,13 +6,23 @@
  * "Prep" sits at the end of the cell, on every row and always in view: the name column stays put
  * when the table scrolls sideways, so the button does too. It is the page's everyday action, so it
  * is never hidden behind a hover.
+ *
+ * The panel opens on the quick look (PLAN-V18 T3-7), so its facts are fetched ahead: once the
+ * pointer has rested on Prep for 150ms, or as soon as Prep gets the keyboard's focus. A pointer
+ * passing over the list fetches nothing.
  */
+import { useQueryClient } from '@tanstack/react-query'
 import { PhoneCall } from 'lucide-react'
+import { useEffect, useRef } from 'react'
+import { prepFactsQueryOptions } from '@/api/hooks/companies'
 import type { CompanyRow } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { PREP_BUTTON } from './focus'
 import { NotInHubSpot } from './marks'
 import { initialsOf } from './source-words'
+
+/** How long the pointer rests on Prep before the quick look's facts are fetched. */
+export const PREP_REST_MS = 150
 
 export function CompanyCell({
   row,
@@ -22,6 +32,17 @@ export function CompanyCell({
   /** "Prep": opens the prep panel for this company. Without it, no button. */
   onPrep?: (row: CompanyRow) => void
 }) {
+  const client = useQueryClient()
+  const resting = useRef(0)
+  useEffect(
+    () => () => {
+      window.clearTimeout(resting.current)
+    },
+    [],
+  )
+  const fetchFacts = (): void => {
+    void client.prefetchQuery(prepFactsQueryOptions(row.key, null))
+  }
   return (
     <span className="flex min-w-0 items-center gap-2.5">
       <span
@@ -58,6 +79,14 @@ export function CompanyCell({
           className="ml-auto shrink-0"
           aria-label={`Prep a call to ${row.name}`}
           {...{ [PREP_BUTTON]: row.key }}
+          onPointerEnter={() => {
+            window.clearTimeout(resting.current)
+            resting.current = window.setTimeout(fetchFacts, PREP_REST_MS)
+          }}
+          onPointerLeave={() => {
+            window.clearTimeout(resting.current)
+          }}
+          onFocus={fetchFacts}
           onClick={(event) => {
             // The row itself opens the company; Prep must not do that as well.
             event.stopPropagation()

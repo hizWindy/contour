@@ -2,7 +2,7 @@
 
 How the Lead Finder website looks and behaves. This file is the one to update. It started as a copy of the design system section in [PLAN-V1.md](../plan/PLAN-V1.md) (25 Oct 2026).
 
-Last updated: 15 Nov 2026 (the call notes rules Al-khair agreed for Log call and Activity, PLAN-V17 T3-8, and a left-out card dimmed with the quieter text colour; earlier that day, call prep moved to a side panel on Companies; 14 Nov: rules added from the design principles).
+Last updated: 16 Nov 2026 (Activity is now called Call logs, PLAN-V18 T3-2, and four motion lines from PLAN-V18 wait under "Ideas waiting for a decision"; 15 Nov: the call notes rules Al-khair agreed for Log call and Activity, PLAN-V17 T3-8, and a left-out card dimmed with the quieter text colour; earlier that day, call prep moved to a side panel on Companies; 14 Nov: rules added from the design principles).
 
 The general principles behind these rules, with their sources, are in [design/principles/](../design/principles/README.md). A rule taken from there names it, like "(principles 03 #14)": library item 03, point 14. Where a principle and this file disagree, this file wins until it is changed. The `frontend-agent` (`.claude/agents/frontend-agent.md`) works from both.
 
@@ -130,7 +130,7 @@ Sizes are in rem, so browser zoom works. Nothing is smaller than 13px. Sentence 
 - **Width:** up to 1440px. Tables and the map can use the full width.
 - **List and detail:** clicking a result opens its lead card in a side panel, so the list stays in view. Each card also has its own page and link.
   - **Companies is the other way round,** because call prep is the job done all day: "Prep" on every row (or P on the active row) opens the prep card in a side panel, 576px wide, one column in the order of the call, and the list stays usable beside it. The company's record, the long read, opens in a dialog in the middle (768px). One of them at a time.
-- **A card list the rep works through keeps each card in place,** like Activity's "To confirm". New cards join at the end, so a card never jumps while it is read. (Al-khair, 15 Nov 2026; PLAN-V17 T3-6)
+- **A card list the rep works through keeps each card in place,** like Call logs' "To confirm". New cards join at the end, so a card never jumps while it is read. (Al-khair, 15 Nov 2026; PLAN-V17 T3-6)
 - **Map page:** the map and the list sit side by side, with a divider you can drag.
 - **Screens:** the site works at every width, from a phone (360px) to a wide laptop.
   - **Laptop (1024px and up):** the menu is open, and a page may use two columns.
@@ -186,7 +186,7 @@ Smooth and quick, like a well-made phone app (PLAN-V13, 11 Nov 2026). Motion sho
 
 - **Act at once, undo after.** An action that can be undone (Reject, Watch, ticking a task) shows its result at once, with an Undo toast. If the server says no, the result rolls back and a toast says why. Whether each action does this today is **TBC**. (principles 01 #6; 04 #2, #5)
 - **A real confirmation** is only for what can't be undone or leaves Contour: Send to HubSpot (an Alert Dialog with the preview), and starting a run that costs money (the cost shows first). Never "Are you sure?" for something an Undo can fix.
-- **A batch send** (Activity's "Send 7 to HubSpot") opens an Alert Dialog with the totals from a fresh preview: "7 calls, 3 tasks, 2 field changes". Then a bar fills, and each card holds its tick about a second before it leaves. (Al-khair, 15 Nov 2026; PLAN-V17 T3-6)
+- **A batch send** (Call logs' "Send 7 to HubSpot") opens an Alert Dialog with the totals from a fresh preview: "7 calls, 3 tasks, 2 field changes". Then a bar fills, and each card holds its tick about a second before it leaves. (Al-khair, 15 Nov 2026; PLAN-V17 T3-6)
 - **Fields forgive.** A field accepts any reasonable way of typing a value and stores one strict form. "$1.5M", "1,500,000" and "1.5m" are the same budget, and "300 staff" and "300" are the same count. Only a value it truly can't read gets an error, in plain words. Which fields do this today is **TBC**. (principles 02 #18)
 - **Long forms group:** about 5 to 7 fields to a group, each group with a title. (principles 02 #16)
 - **A note being written is kept in the browser** until the server has it, through a refresh or a closed panel. A failed save keeps the text and says so: "Not saved yet. Try again." (Al-khair, 15 Nov 2026; PLAN-V17 T3-5)
@@ -282,6 +282,14 @@ From the design principles. None of these is a rule yet (**TBC**). Al-khair deci
 - **A range control** (`Segmented`: 7, 30 or 90 days) on Runs and cost. (principles 05)
 - **A funnel of leads over time** (found, called, meeting), only if the date of each step is stored. Home's split of results is not a funnel: those are outcomes, not stages. (principles 05)
 - **A shared element move:** a company's name travels from the table into its lead card. (principles 01 #20)
+
+From [PLAN-V18](../plan/PLAN-V18.md) (16 Nov 2026): four motion lines, built and waiting for Al-khair's look before they join "Motion" (**TBC**).
+
+- **The mic card grows from its button** (`MicSheet`): it sits beside the mic button, above it when there is room, and grows from 0.96 to 1 with a fade on `smooth`, the button's middle as its transform origin, while the page behind dims over 250ms. It shrinks back toward the button in 150ms (`exit`). Opened from no button (Ctrl+K's "Check my mic"), it grows from the middle of the window. Its four check lines tick with `TickIn`, at least 40ms apart, each on its real result: one more use of the drawn tick, so it is part of the same decision. With reduced motion it simply appears. (PLAN-V18 T3-4)
+- **Bars that follow the voice** (`FrequencyBars`): 24 bars in the accent, each a band of the mic's own sound, as `scaleY` and nothing else, at most 30 updates a second. Below a small gate a band counts as silence, and a settled bar is never written again, so silence is still and low. With reduced motion: one still bar and the word "Listening". (PLAN-V18 T3-4)
+- **An icon that turns once** (`SpinOnce`): a refresh icon turns one full turn for each press, on `smooth` (400ms, no bounce), as on Meetings' Sync. A second press while it turns carries on from where it is and ends one turn further. It never loops, and the words beside it say what is going on ("Checking HubSpot"). With reduced motion it stays still. (PLAN-V18 T2-2, T2-3)
+- **Steps that fill as they arrive** (`StepTrail`): a few steps in a row, like the pre-read's "Reading HubSpot", "Writing the summaries" and "Ready for you to check". A dot fills only when the server says its state has arrived, never on a timer: it grows from its centre on `soft`, and the line to it fills along on `snappy`, both as a scale. The fill is the accent, as progress is. A failure stops the trail at its step, with a Terracotta cross and the reason beside it. With reduced motion the dots are simply filled. (PLAN-V18 T2-2, T2-4)
+- **The mic button is square,** 44px with the 10px corner. PLAN-V18 asked for a round one; "No pills" keeps it square until Al-khair decides. (PLAN-V18 T3-4)
 
 ## Tokens for shadcn
 

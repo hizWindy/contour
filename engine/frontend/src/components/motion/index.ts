@@ -51,3 +51,8 @@ export { useViewShown } from './view-shown'
 // whose dots fill as each state arrives (the pre-read while the AI drafts it).
 export { SpinOnce, type SpinOnceProps } from './spin-once'
 export { StepTrail, type StepTrailProps } from './step-trail'
+
+// The mic card's parts (PLAN-V18 Track 3, T3-4): bars that follow the mic's own sound, and the
+// card that grows from the mic button. The mic's code imports them from their own files.
+export { FrequencyBars, type FrequencyBarsProps } from './frequency-bars'
+export { MicSheet, MicSheetTitle, type MicSheetProps } from './mic-sheet'

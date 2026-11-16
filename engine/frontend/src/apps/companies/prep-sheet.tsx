@@ -4,9 +4,9 @@
  * the thing done all day, so it gets the narrow, quick panel and the list stays in view beside it.
  *
  * - **One column, top to bottom, in the order of the call:** who you are calling, Still there?,
- *   Last talk and News (`before-you-dial.tsx`, in the header, which doesn't scroll), then the last
- *   call's note, then the script (opener, why now, questions, if they say, goal). Quick facts sit
- *   folded under "More about" at the end. The number and Copy script stay at the bottom.
+ *   Last talk and News (`before-you-dial.tsx`, in the header, which doesn't scroll), then the quick
+ *   look and "Calling", the last call's note, then the script (opener, why now, questions, if they
+ *   say, goal). The number and Copy script stay at the bottom.
  * - **At once:** the sales script and the guided questions are written here from what we already
  *   know (`playbook.ts`). Free, and ready as the card opens.
  * - **Then complete:** with call prep switched on, Claude checks the web for news and "still
@@ -15,8 +15,11 @@
  * - **The list stays usable** on a laptop: the panel doesn't block the page, so "Prep" on another
  *   row, or P on the active row, switches the panel to that company. Esc or Close shuts it, and
  *   focus goes back to the row's Prep button.
- * - **A company with no person** asks "Who are you calling?", with "Prep a cold call" for the
- *   switchboard.
+ * - **It opens on the quick look** (PLAN-V18 T3-7): the facts from our HubSpot copy, with no AI,
+ *   fetched while the pointer rested on Prep (`quick-look.tsx`). "Calling" names who the call is
+ *   with: the last person we talked to, else the first on record, else the switchboard
+ *   (`callee.ts`). Press it to change the person, and the script follows. There is no "Who are you
+ *   calling?" screen first any more.
  * - **Log call** (PLAN-V17 T3-5): with call notes on, "Log call" in the footer, or L anywhere in
  *   the panel outside a text field, brings the note view in from the right (`call-notes/`). The
  *   panel keeps its size. Esc or the arrow goes back to the script, and focus lands on Log call.
@@ -32,7 +35,6 @@ import {
   Building2,
   CircleAlert,
   Copy,
-  Hourglass,
   NotebookPen,
   PhoneCall,
   PhoneOutgoing,
@@ -45,30 +47,29 @@ import { useCompany, useMe, usePrep, usePrepFacts, useStartPrep } from '@/api/ho
 import { useCallNoteOptions } from '@/api/hooks/call-notes'
 import { prepLost } from '@/api/hooks/companies'
 import { toneInUse, useScriptStyle } from '@/api/hooks/script'
-import type { CompanyDetail, CompanyPerson } from '@/api/types'
+import type { CompanyPerson } from '@/api/types'
 import { ErrorState } from '@/components/error-state'
 import { PushView } from '@/components/motion'
-import { Pending } from '@/components/skeletons'
 import { Button } from '@/components/ui/button'
 import { Kbd } from '@/components/ui/kbd'
 import { Sheet, SheetContent, SheetHeader } from '@/components/ui/sheet'
-import { Skeleton } from '@/components/ui/skeleton'
 import { melbourneDate } from '@/lib/format'
 import { PHONE, useMediaQuery } from '@/lib/use-media-query'
 import { cn } from '@/lib/utils'
 import { BeforeYouDial } from './before-you-dial'
+import { calleeFrom } from './callee'
 import { NoteView } from './call-notes/note-view'
 import { LOG_CALL } from './call-notes/words'
 import { focusMovedOn, PREP_BUTTON } from './focus'
 import { SourcesContext } from './guide-sources'
 import { PanelDescription, PanelTitle } from './panel-title'
-import { LastTalk, MoreAbout } from './prep-card'
+import { LastTalk } from './prep-card'
 import type { PrepTarget } from './prep-box'
 import { guideText } from './playbook'
+import { CallingRow, QuickLook } from './quick-look'
 import { SalesScript, SalesScriptPending } from './sales-script'
 import { SCRIPT_TITLE_ID, ScriptHeader } from './script-header'
 import { useGuide } from './use-guide'
-import { WAITING_FOR_PEOPLE } from './words'
 
 const COPIED_MS = 2000
 
@@ -158,97 +159,6 @@ function CopyButton({
   )
 }
 
-/** "Who are you calling?": the company's people, and a cold call to the switchboard. */
-function WhoPicker({
-  company,
-  onPick,
-}: {
-  company: CompanyDetail | undefined
-  onPick: (person: CompanyPerson | null) => void
-}) {
-  if (!company) {
-    return (
-      <Pending label="Loading the people.">
-        <div className="flex flex-col gap-2">
-          {[0, 1, 2].map((index) => (
-            <Skeleton key={index} className="h-14 w-full" />
-          ))}
-        </div>
-      </Pending>
-    )
-  }
-  return (
-    <div className="flex flex-col gap-5">
-      <section aria-labelledby="who-people" className="flex flex-col gap-2">
-        <h3 id="who-people" className="text-ui font-semibold text-foreground">
-          People at {company.name}
-        </h3>
-        {company.people_status === 'waiting' ? (
-          <p className="flex items-start gap-2 text-ui text-muted-foreground">
-            <Hourglass aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-            {WAITING_FOR_PEOPLE}
-          </p>
-        ) : company.people.length === 0 ? (
-          <p className="font-serif text-body text-muted-foreground">
-            No people on record in HubSpot.
-          </p>
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {company.people.map((person) => (
-              <li
-                key={person.id}
-                className="flex items-center gap-3 rounded-lg border bg-card p-2.5 pl-3 transition-colors hover:bg-muted"
-              >
-                <Avatar name={person.name} small />
-                <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate font-semibold">{person.name}</span>
-                  <span className="truncate text-caption text-muted-foreground">
-                    {person.title ?? 'No title on record'}
-                  </span>
-                </span>
-                <Button
-                  type="button"
-                  size="sm"
-                  aria-label={`Prep a call with ${person.name}`}
-                  onClick={() => {
-                    onPick(person)
-                  }}
-                >
-                  Prep
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-      <section
-        aria-labelledby="who-cold"
-        className="flex flex-wrap items-center justify-between gap-3 border-t pt-4"
-      >
-        <div className="flex flex-col gap-0.5">
-          <h3 id="who-cold" className="text-ui font-semibold text-foreground">
-            No name yet?
-          </h3>
-          <p className="text-caption text-muted-foreground">
-            A cold call script asks the switchboard for whoever looks after the office.
-          </p>
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            onPick(null)
-          }}
-        >
-          <PhoneOutgoing aria-hidden="true" />
-          Prep a cold call
-        </Button>
-      </section>
-    </div>
-  )
-}
-
 export interface PrepSheetProps {
   target: PrepTarget | null
   onClose: () => void
@@ -277,16 +187,27 @@ export function PrepSheet({ target, onClose, onChangeTarget, onOpenCompany }: Pr
 
   const key = shown ? targetKey(shown) : ''
   const off = offFor !== null && offFor === key
-  const picking = shown !== null && !shown.prepId && !shown.person && !shown.cold
+  // No person and no cold call yet (Prep on a row): the panel picks one itself (PLAN-V18 T3-7).
+  const choosing = shown !== null && !shown.prepId && !shown.person && !shown.cold
   // A Refresh replaces what a chip opened, so the newest prep for this key wins.
   const prepId = prepIds[key] ?? shown?.prepId
   const prep = usePrep(prepId)
   const companyKey = shown?.companyKey || prep.data?.company_key || undefined
   const company = useCompany(companyKey)
+  // The company's own facts (no person): the quick look, fetched while the pointer rested on Prep.
+  const quick = usePrepFacts(companyKey, null)
+  // Who to call, while choosing: undefined until the facts or the record come.
+  const callee = choosing
+    ? calleeFrom(quick.data, company.data, Boolean(quick.error && company.error))
+    : undefined
+  // Log call opened on the note view asks "Who was the call with?" itself: nothing is picked.
+  const picking = choosing && (callee === undefined || view === 'note')
   const person = picking
     ? null
-    : (shown?.person ?? (prep.data?.kind === 'person' ? (prep.data.person ?? null) : null))
-  const contactId = person?.id ?? null
+    : choosing
+      ? (callee ?? null)
+      : (shown?.person ?? (prep.data?.kind === 'person' ? (prep.data.person ?? null) : null))
+  const contactId = picking ? null : (person?.id ?? null)
   const facts = usePrepFacts(companyKey, contactId)
 
   const ask = (refresh: boolean): void => {
@@ -315,6 +236,23 @@ export function PrepSheet({ target, onClose, onChangeTarget, onOpenCompany }: Pr
       },
     )
   }
+
+  // The panel picked who to call (PLAN-V18 T3-7): the parent hears it as if it were picked by hand,
+  // so call prep starts for that person, as it did after "Who are you calling?".
+  useEffect(() => {
+    if (!shown || !choosing || picking || callee === undefined) return
+    onChangeTarget(
+      callee
+        ? {
+            ...shown,
+            person: { id: callee.id, name: callee.name, title: callee.title },
+            note: false,
+          }
+        : { ...shown, cold: true, note: false },
+    )
+    // It tells the parent once per choice; the parent's new target ends the choosing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [choosing, picking, callee])
 
   // A person or a cold call: start (or reuse) call prep once. Switched off, it answers at once.
   useEffect(() => {
@@ -360,13 +298,31 @@ export function PrepSheet({ target, onClose, onChangeTarget, onOpenCompany }: Pr
   const companyName =
     shown?.companyName || prep.data?.company_name || company.data?.name || 'Company'
   const personTitle = person?.title ?? null
-  const title = picking ? 'Who are you calling?' : person ? person.name : companyName
+  const title = !picking && person ? person.name : companyName
   const phone = facts.data?.phone ?? null
   const tel = phone ? `tel:${phone.replace(/[^\d+]/g, '')}` : null
   const problem = start.error && !(isApiProblem(start.error) && start.error.code === 'prep_off')
   const who = person
     ? `${person.name}${personTitle ? `, ${personTitle}` : ''}, ${companyName}`
     : `${companyName} (cold call)`
+  // The body cross-fades for another person or company, but not when the panel's own pick is
+  // confirmed: the same person, now in the target.
+  const bodyKey = `${companyKey ?? ''}|${picking ? '' : (person?.id ?? 'cold')}`
+  // "Calling", changed by hand: the script for that person (or the switchboard), not the note view.
+  const pickCallee = (picked: CompanyPerson | null): void => {
+    if (!shown) return
+    onChangeTarget(
+      picked
+        ? {
+            ...shown,
+            person: { id: picked.id, name: picked.name, title: picked.title },
+            cold: false,
+            prepId: undefined,
+            note: false,
+          }
+        : { ...shown, person: null, cold: true, prepId: undefined, note: false },
+    )
+  }
   const openCompany = (): void => {
     if (companyKey && onOpenCompany) onOpenCompany(companyKey)
   }
@@ -555,113 +511,105 @@ export function PrepSheet({ target, onClose, onChangeTarget, onOpenCompany }: Pr
             </SheetHeader>
             <SourcesContext.Provider value={sources}>
               <div
-                key={key}
+                key={bodyKey}
                 className="min-h-0 flex-1 animate-in overflow-y-auto overscroll-contain p-5 duration-150 fade-in-0 max-sm:p-4"
               >
-                {picking ? (
-                  <WhoPicker
-                    company={company.data}
-                    onPick={(picked) => {
-                      if (!shown) return
-                      // The script for that person: not the note view the panel may have opened on.
-                      onChangeTarget(
-                        picked
-                          ? {
-                              ...shown,
-                              person: { id: picked.id, name: picked.name, title: picked.title },
-                              note: false,
-                            }
-                          : { ...shown, cold: true, note: false },
-                      )
-                    }}
-                  />
-                ) : (
-                  <div className="flex flex-col gap-6">
-                    {problem ? (
-                      <ErrorState
-                        error={start.error}
-                        context="Call prep couldn't start. The script below is from our HubSpot copy."
-                        onRetry={() => {
-                          ask(false)
-                        }}
-                      />
-                    ) : prep.data?.status === 'failed' ? (
-                      // What happened and what to do come from the server, in one sentence each
-                      // (PLAN-V15 T3-7); the card says what it means for the script.
-                      <div
-                        role="alert"
-                        className="flex items-start gap-2 rounded-lg border border-destructive bg-destructive-soft p-3 text-ui text-destructive-ink"
-                      >
-                        <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-                        <span>
-                          {prep.data.error ?? "Call prep couldn't finish. Try again."} The script
-                          below is from our HubSpot copy.
-                        </span>
-                      </div>
-                    ) : lost ? (
-                      <div
-                        role="alert"
-                        className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-destructive bg-destructive-soft p-3 text-ui text-destructive-ink"
-                      >
-                        <span className="flex min-w-0 flex-1 items-start gap-2">
-                          <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-                          <span>
-                            Lost touch with the server. The script below is from our HubSpot copy.
-                          </span>
-                        </span>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          disabled={prep.isFetching}
-                          onClick={() => {
-                            void prep.refetch()
-                          }}
-                        >
-                          Try again
-                        </Button>
-                      </div>
-                    ) : null}
-                    <LastTalk company={company.data} facts={facts.data} />
-                    {guide ? (
-                      <section
-                        key={guide.madeFrom}
-                        aria-labelledby={SCRIPT_TITLE_ID}
-                        className="flex min-w-0 animate-in flex-col gap-4 duration-150 fade-in-0"
-                      >
-                        <ScriptHeader
-                          madeFrom={guide.madeFrom}
-                          prep={prep.data}
-                          enabled={enabled}
-                          namesOk={facts.data?.names_ok !== false}
-                          capUsd={facts.data?.prep_cap_usd ?? null}
-                          running={checking || start.isPending}
-                          stage={prep.data?.stage ?? 0}
-                          failed={Boolean(problem) || prep.data?.status === 'failed'}
-                          toneNow={toneNow}
-                          copyAt={facts.data?.copy_at ?? null}
-                          onResearch={() => {
-                            ask(true)
-                          }}
-                        />
-                        <SalesScript guide={guide} />
-                      </section>
-                    ) : company.error ? (
-                      <ErrorState
-                        error={company.error}
-                        context="The company couldn't be loaded, so there is no script."
-                      />
-                    ) : (
-                      <SalesScriptPending />
-                    )}
-                    <MoreAbout
+                <div className="flex flex-col gap-6">
+                  <div className="flex flex-col gap-3">
+                    <QuickLook
+                      facts={quick.data ?? facts.data}
                       company={company.data}
-                      companyName={companyName}
+                      failed={Boolean(quick.error && facts.error && company.error)}
                       today={today}
-                      onOpenCompany={openCompany}
+                      onOpenCompany={onOpenCompany && companyKey ? openCompany : undefined}
+                    />
+                    <CallingRow
+                      people={quick.data?.people ?? company.data?.people ?? []}
+                      waiting={
+                        (quick.data?.people_status ?? company.data?.people_status) === 'waiting'
+                      }
+                      person={picking ? undefined : person}
+                      onPick={pickCallee}
                     />
                   </div>
-                )}
+                  {problem ? (
+                    <ErrorState
+                      error={start.error}
+                      context="Call prep couldn't start. The script below is from our HubSpot copy."
+                      onRetry={() => {
+                        ask(false)
+                      }}
+                    />
+                  ) : prep.data?.status === 'failed' ? (
+                    // What happened and what to do come from the server, in one sentence each
+                    // (PLAN-V15 T3-7); the card says what it means for the script.
+                    <div
+                      role="alert"
+                      className="flex items-start gap-2 rounded-lg border border-destructive bg-destructive-soft p-3 text-ui text-destructive-ink"
+                    >
+                      <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+                      <span>
+                        {prep.data.error ?? "Call prep couldn't finish. Try again."} The script
+                        below is from our HubSpot copy.
+                      </span>
+                    </div>
+                  ) : lost ? (
+                    <div
+                      role="alert"
+                      className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-destructive bg-destructive-soft p-3 text-ui text-destructive-ink"
+                    >
+                      <span className="flex min-w-0 flex-1 items-start gap-2">
+                        <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+                        <span>
+                          Lost touch with the server. The script below is from our HubSpot copy.
+                        </span>
+                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={prep.isFetching}
+                        onClick={() => {
+                          void prep.refetch()
+                        }}
+                      >
+                        Try again
+                      </Button>
+                    </div>
+                  ) : null}
+                  <LastTalk company={company.data} facts={facts.data} />
+                  {guide ? (
+                    <section
+                      key={guide.madeFrom}
+                      aria-labelledby={SCRIPT_TITLE_ID}
+                      className="flex min-w-0 animate-in flex-col gap-4 duration-150 fade-in-0"
+                    >
+                      <ScriptHeader
+                        madeFrom={guide.madeFrom}
+                        prep={prep.data}
+                        enabled={enabled}
+                        namesOk={facts.data?.names_ok !== false}
+                        capUsd={facts.data?.prep_cap_usd ?? null}
+                        running={checking || start.isPending}
+                        stage={prep.data?.stage ?? 0}
+                        failed={Boolean(problem) || prep.data?.status === 'failed'}
+                        toneNow={toneNow}
+                        copyAt={facts.data?.copy_at ?? null}
+                        onResearch={() => {
+                          ask(true)
+                        }}
+                      />
+                      <SalesScript guide={guide} />
+                    </section>
+                  ) : company.error ? (
+                    <ErrorState
+                      error={company.error}
+                      context="The company couldn't be loaded, so there is no script."
+                    />
+                  ) : (
+                    <SalesScriptPending />
+                  )}
+                </div>
               </div>
             </SourcesContext.Provider>
             {!picking && onPhone ? (

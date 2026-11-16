@@ -156,7 +156,7 @@ describe('Admin, Settings', () => {
                   toggle(
                     'call_notes_enabled',
                     'Call notes are on',
-                    'Shows Log call in call prep and the Activity page.',
+                    'Shows Log call in call prep and the Call logs page.',
                   ),
                   toggle(
                     'call_notes_ai_enabled',
@@ -212,6 +212,36 @@ describe('Admin, Settings', () => {
         values: { call_notes_enabled: true, meeting_forms_enabled: true },
       })
     })
+  })
+
+  it('puts the voice tool under Call notes, its choices in plain words (PLAN-V18 T3-5)', async () => {
+    const voice = {
+      ...SETTING,
+      key: 'voice_tool',
+      label: 'Voice to text',
+      description: 'Which voice to text tool the mic uses.',
+      type: 'choice',
+      choices: ['browser_model', 'browser_service', 'typing'],
+      min: null,
+      max: null,
+      default: 'browser_model',
+      value: 'browser_model',
+    }
+    mockApi({
+      '/api/v1/settings': { ...settingsOut(), fields: [...settingsOut().fields, voice] },
+    })
+    const { user } = renderWithProviders(<AdminSettingsTab />)
+    await screen.findByRole('list', { name: 'Money' })
+    await user.click(screen.getByRole('radio', { name: 'Call notes' }))
+    const notes = screen.getByRole('list', { name: 'Call notes' })
+    const select = within(notes).getByRole('combobox')
+    expect(select).toHaveTextContent('Whisper in the browser: the voice stays on this computer')
+    await user.click(select)
+    expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual([
+      'Whisper in the browser: the voice stays on this computer',
+      "The browser's speech service: the voice goes to Google or Microsoft",
+      'Typing only: no mic button',
+    ])
   })
 
   it('lists the forms switch under "Set on the server" when the server sets it', async () => {

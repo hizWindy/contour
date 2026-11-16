@@ -19,6 +19,7 @@ import { SAMPLE_USER } from '@/test/fake-auth'
 import { createTestQueryClient, renderWithProviders, startManualClock } from '@/test/render'
 import { asPhone } from '@/test/screen'
 import CompaniesPage from '../index'
+import { FakeMic } from './mic/fake-mic'
 import { NoteTimer } from './note-timer'
 import { dueWords } from './words'
 
@@ -359,16 +360,13 @@ async function logFirstRow(view: ReturnType<typeof renderCompanies>): Promise<HT
   return noteViewIn(panel)
 }
 
-/** Prep for Jo Sample from the row, then the panel's own Log call. */
+/** Prep on the row (it calls Jo Sample), then the panel's own Log call. */
 async function logFromScript(view: ReturnType<typeof renderCompanies>): Promise<HTMLElement> {
   await ready(view)
   await view.user.click(
     screen.getByRole('button', { name: 'Prep a call to Sample Logistics Pty Ltd' }),
   )
-  const picker = await screen.findByRole('dialog', { name: 'Who are you calling?' })
-  await view.user.click(
-    await within(picker).findByRole('button', { name: 'Prep a call with Jo Sample' }),
-  )
+  // It opens on the quick look, calling Jo Sample, the first person on record (PLAN-V18 T3-7).
   const script = await screen.findByRole('dialog', { name: 'Jo Sample' })
   await view.user.click(await within(script).findByRole('button', { name: 'Log call' }))
   const panel = await screen.findByRole('dialog', { name: 'Log call' })
@@ -401,12 +399,12 @@ describe('L and the Log call button', () => {
     const who = await within(panel).findByRole('radiogroup', { name: 'Who was the call with?' })
     expect(within(who).getByRole('radio', { name: 'No one in particular' })).toBeChecked()
     expect(within(who).getByRole('radio', { name: 'Jo Sample' })).not.toBeChecked()
-    // Esc goes back to the script; it doesn't close the panel.
+    // Esc goes back to the script; it doesn't close the panel. The script calls Jo Sample, the
+    // first person on record (PLAN-V18 T3-7), so the focus lands on Log call.
     await view.user.keyboard('{Escape}')
-    const script = await screen.findByRole('dialog', { name: 'Who are you calling?' })
-    // No footer while no one is picked, so focus lands on the panel.
+    const script = await screen.findByRole('dialog', { name: 'Jo Sample' })
     await waitFor(() => {
-      expect(script).toHaveFocus()
+      expect(within(script).getByRole('button', { name: 'Log call' })).toHaveFocus()
     })
     await view.user.keyboard('l')
     expect(await screen.findByRole('dialog', { name: 'Log call' })).toBeInTheDocument()
@@ -444,10 +442,7 @@ describe('L and the Log call button', () => {
     await view.user.click(
       screen.getByRole('button', { name: 'Prep a call to Sample Logistics Pty Ltd' }),
     )
-    const picker = await screen.findByRole('dialog', { name: 'Who are you calling?' })
-    await view.user.click(
-      await within(picker).findByRole('button', { name: 'Prep a call with Jo Sample' }),
-    )
+    // It opens on the quick look, calling Jo Sample, the first person on record (PLAN-V18 T3-7).
     const script = await screen.findByRole('dialog', { name: 'Jo Sample' })
     const asked = await within(script).findByRole('checkbox', {
       name: 'Asked: When does the Perth lease end?',
@@ -487,10 +482,7 @@ describe('L and the Log call button', () => {
     await view.user.click(
       screen.getByRole('button', { name: 'Prep a call to Sample Logistics Pty Ltd' }),
     )
-    const picker = await screen.findByRole('dialog', { name: 'Who are you calling?' })
-    await view.user.click(
-      await within(picker).findByRole('button', { name: 'Prep a call with Jo Sample' }),
-    )
+    // It opens on the quick look, calling Jo Sample, the first person on record (PLAN-V18 T3-7).
     const script = await screen.findByRole('dialog', { name: 'Jo Sample' })
     expect(await within(script).findByRole('button', { name: 'Copy script' })).toBeInTheDocument()
     expect(within(script).queryByRole('button', { name: 'Log call' })).toBeNull()
@@ -866,24 +858,59 @@ describe('with the AI off', () => {
   })
 })
 
-describe('the mic, typing only for now', () => {
-  it('on a Windows laptop says to type or press Win+H', async () => {
+describe('the mic button (PLAN-V18 T3-4)', () => {
+  it('sits in the corner of the note box on a laptop, named Speak, and the Win+H line is gone', async () => {
     vi.spyOn(navigator, 'platform', 'get').mockReturnValue('Win32')
     mockBackend()
     const view = renderCompanies()
     const panel = await logFirstRow(view)
-    expect(within(panel).getByText(/Type the note, or press/)).toHaveTextContent(
-      'Type the note, or press Win+H to dictate.',
-    )
-    expect(within(panel).getByText('Win+H').tagName).toBe('KBD')
+    const speak = within(panel).getByRole('button', { name: 'Speak' })
+    // Never round (DESIGN.md "No pills"), and 44px.
+    expect(speak).toHaveClass('size-11', 'rounded-lg')
+    expect(speak).not.toHaveClass('rounded-full')
+    const box = within(panel).getByRole('textbox', { name: 'Call note' })
+    expect(box.parentElement).toContainElement(speak)
+    // Room at the foot of the box, so the last line never hides under the button.
+    expect(box).toHaveClass('pb-14')
+    expect(within(panel).queryByText(/Win\+H/)).toBeNull()
   })
 
-  it('on another laptop shows nothing', async () => {
-    vi.spyOn(navigator, 'platform', 'get').mockReturnValue('MacIntel')
-    mockBackend()
+  it('opens the mic card from the button, and Done puts the words in the box', async () => {
+    vi.spyOn(navigator, 'platform', 'get').mockReturnValue('Win32')
+    const mic = new FakeMic()
+    mic.install()
+    mockBackend({ options: { ...options(), voice_tool: 'browser_service' } as CallNoteOptions })
     const view = renderCompanies()
     const panel = await logFirstRow(view)
-    expect(within(panel).queryByText(/Win\+H/)).toBeNull()
+    const box = within(panel).getByRole('textbox', { name: 'Call note' })
+    await view.user.click(within(panel).getByRole('button', { name: 'Speak' }))
+    await screen.findByRole('dialog', { name: 'Speak now' }, { timeout: 5000 })
+    // The browser's own speech service, in Australian English.
+    const [service] = mic.recognitions
+    expect(service?.lang).toBe('en-AU')
+    act(() => {
+      service?.result('Spoke to Jo about the lease')
+    })
+    await view.user.keyboard('{Enter}')
+    await waitFor(() => {
+      expect(box).toHaveValue('Spoke to Jo about the lease')
+    })
+    await waitFor(() => {
+      expect(box).toHaveFocus()
+    })
+    // The mic is let go, and the card is gone.
+    expect(mic.live()).toBe(0)
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: /Speak now|Writing it out|Done/ })).toBeNull()
+    })
+  })
+
+  it('is not there when the voice tool is typing', async () => {
+    mockBackend({ options: { ...options(), voice_tool: 'typing' } as CallNoteOptions })
+    const view = renderCompanies()
+    const panel = await logFirstRow(view)
+    expect(within(panel).getByRole('textbox', { name: 'Call note' })).toBeInTheDocument()
+    expect(within(panel).queryByRole('button', { name: 'Speak' })).toBeNull()
   })
 })
 
@@ -912,8 +939,8 @@ describe('on a phone', () => {
     const who = await within(panel).findByRole('radiogroup', { name: 'Who was the call with?' })
     // The text box comes first.
     expect(box.compareDocumentPosition(who) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    // The keyboard's own mic does the talking: no Win+H line, even on Windows.
-    expect(within(panel).queryByText(/Win\+H/)).toBeNull()
+    // The keyboard's own mic does the talking: no mic button, even on Windows.
+    expect(within(panel).queryByRole('button', { name: 'Speak' })).toBeNull()
 
     const save = within(panel).getByRole('button', { name: 'Save and next' })
     expect(save).toHaveClass('w-full')

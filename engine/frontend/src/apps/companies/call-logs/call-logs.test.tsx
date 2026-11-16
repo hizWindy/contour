@@ -22,14 +22,15 @@ import { prefetchPage } from '@/shell/prefetch'
 import { createTestQueryClient, renderWithProviders } from '@/test/render'
 import { asPhone } from '@/test/screen'
 import { dueWords } from '../call-notes/words'
-import ActivityPage from './index'
+import CallLogsPage from './index'
 import { ToConfirm } from './to-confirm'
 import { useBatch } from './use-batch'
 import { batchSentence } from './words'
 
 /*
-  Activity (PLAN-V17 T3-6), against the generated contract and a fake server that keeps its notes
-  between requests. Made-up names only: Sample Logistics Pty Ltd, Jo Sample.
+  Call logs (PLAN-V17 T3-6; called Activity until PLAN-V18 T3-2), against the generated contract
+  and a fake server that keeps its notes between requests. Made-up names only: Sample Logistics
+  Pty Ltd, Jo Sample.
 */
 
 const API = '/api/v1/companies'
@@ -198,10 +199,12 @@ interface Server {
 const OFF_THE_LIST =
   "A change on this note isn't one a call may change. Remove it, then send the note again."
 
-const IN_STATE: Record<CallNoteState, readonly CallNoteStatus[]> = {
+const IN_STATE: Record<CallNoteState | 'history', readonly CallNoteStatus[]> = {
   to_confirm: ['sorting', 'to_confirm', 'sending'],
   logged: ['logged'],
   needs_look: ['partial', 'failed', 'uncertain'],
+  // History (PLAN-V18 T3-6): every note, in any status.
+  history: ['sorting', 'to_confirm', 'sending', 'logged', 'partial', 'failed', 'uncertain'],
 }
 
 function json(value: unknown, status = 200): Response {
@@ -286,7 +289,7 @@ function mockServer(changes: Partial<Omit<Server, 'sent' | 'release'>> = {}): Se
       if (server.listsOff) {
         return problem(409, 'Call notes are off', 'An admin can switch them on.', 'call_notes_off')
       }
-      const state = (url.searchParams.get('state') ?? 'to_confirm') as CallNoteState
+      const state = (url.searchParams.get('state') ?? 'to_confirm') as keyof typeof IN_STATE
       const limit = Number(url.searchParams.get('limit') ?? '50')
       const offset = Number(url.searchParams.get('offset') ?? '0')
       const matching = server.notes.filter((item) => IN_STATE[state].includes(item.status))
@@ -427,8 +430,8 @@ function sent(server: Server, method: string, path: string): Sent[] {
   return server.sent.filter((item) => item.method === method && item.path === path)
 }
 
-function renderActivity(route = '/companies/activity') {
-  return renderWithProviders(<ActivityPage />, { route })
+function renderCallLogs(route = '/companies/call-logs') {
+  return renderWithProviders(<CallLogsPage />, { route })
 }
 
 async function toConfirmList(): Promise<HTMLElement> {
@@ -458,7 +461,7 @@ describe('To confirm', () => {
       notes,
       hubspotNow: { c1: { current: '2027-06-30', current_changed: true } },
     })
-    const { user } = renderActivity()
+    const { user } = renderCallLogs()
     const list = await toConfirmList()
     expect(cardNames(list)).toEqual([
       'Sample Freight Pty Ltd',
@@ -511,7 +514,7 @@ describe('To confirm', () => {
 
   it('an edit answers at once and goes as a PATCH, and the date forgives', async () => {
     const server = mockServer({ notes: threeNotes(), patch: 'wait' })
-    const { user } = renderActivity()
+    const { user } = renderCallLogs()
     await toConfirmList()
     const logistics = card('Sample Logistics Pty Ltd')
     await user.click(within(logistics).getByRole('button', { name: /^Edit/ }))
@@ -564,7 +567,7 @@ describe('To confirm', () => {
 
   it('a change opens as the card shows it, and the same day left or typed again saves nothing', async () => {
     const server = mockServer({ notes: threeNotes() })
-    const { user } = renderActivity()
+    const { user } = renderCallLogs()
     await toConfirmList()
     const logistics = card('Sample Logistics Pty Ltd')
     await user.click(within(logistics).getByRole('button', { name: /^Edit/ }))
@@ -600,7 +603,7 @@ describe('To confirm', () => {
       due_words: 'next Monday',
     }
     mockServer({ notes: [note('n1', { tasks: [later, gone] })] })
-    const { user } = renderActivity()
+    const { user } = renderCallLogs()
     await toConfirmList()
     const logistics = card('Sample Logistics Pty Ltd')
     expect(
@@ -627,7 +630,7 @@ describe('To confirm', () => {
 
   it('a follow-up removed while editing goes at once, and Undo puts it back as a new one', async () => {
     const server = mockServer({ notes: threeNotes() })
-    const { user } = renderActivity()
+    const { user } = renderCallLogs()
     await toConfirmList()
     const logistics = card('Sample Logistics Pty Ltd')
     await user.click(within(logistics).getByRole('button', { name: /^Edit/ }))
@@ -667,7 +670,7 @@ describe('To confirm', () => {
 
   it('an edit the server refuses goes back, and a toast says why', async () => {
     const server = mockServer({ notes: threeNotes(), patch: 'fail' })
-    const { user } = renderActivity()
+    const { user } = renderCallLogs()
     await toConfirmList()
     const mining = card('Sample Mining Pty Ltd')
     await user.click(within(mining).getByRole('button', { name: /^Edit/ }))
@@ -688,7 +691,7 @@ describe('To confirm', () => {
 
   it('Leave out keeps a card here, dimmed, and the count rolls; Put back brings it back', async () => {
     const server = mockServer({ notes: threeNotes() })
-    const { user } = renderActivity()
+    const { user } = renderCallLogs()
     await toConfirmList()
     const send = screen.getByRole('button', { name: 'Send 3 to HubSpot' })
     expect(send).toBeEnabled()
@@ -739,7 +742,7 @@ describe('To confirm', () => {
 
   it('J and K move between cards, E edits, X leaves out, and Ctrl+Enter opens the send dialog', async () => {
     const server = mockServer({ notes: threeNotes() })
-    const { user } = renderActivity()
+    const { user } = renderCallLogs()
     const list = await toConfirmList()
     const [first, second] = within(list).getAllByRole('article')
 
@@ -801,7 +804,7 @@ describe('To confirm', () => {
         },
       },
     })
-    const { user } = renderActivity()
+    const { user } = renderCallLogs()
     const list = await toConfirmList()
     await user.click(screen.getByRole('button', { name: 'Send 3 to HubSpot' }))
     const dialog = await screen.findByRole('alertdialog', { name: 'Send 3 calls to HubSpot?' })
@@ -834,7 +837,7 @@ describe('To confirm', () => {
 
   it('a second batch while one is sending says so in words', async () => {
     mockServer({ notes: threeNotes(), alreadySending: true })
-    const { user } = renderActivity()
+    const { user } = renderCallLogs()
     await toConfirmList()
     await user.click(screen.getByRole('button', { name: 'Send 3 to HubSpot' }))
     const dialog = await screen.findByRole('alertdialog')
@@ -852,7 +855,7 @@ describe('To confirm', () => {
       notes: threeNotes(),
       options: options({ sending_ready: false, waiting_for: 'Waiting for HubSpot write access.' }),
     })
-    const { user } = renderActivity()
+    const { user } = renderCallLogs()
     await toConfirmList()
     expect(
       screen.getByText(
@@ -878,7 +881,7 @@ describe('To confirm', () => {
 
   it('Remove takes a card away at once with Undo, and the server hears of it when the toast closes', async () => {
     const server = mockServer({ notes: threeNotes() })
-    const { user } = renderActivity()
+    const { user } = renderCallLogs()
     const list = await toConfirmList()
     await user.click(within(card('Sample Mining Pty Ltd')).getByRole('button', { name: 'Remove' }))
     await waitFor(() => {
@@ -913,7 +916,7 @@ describe('To confirm', () => {
         note('n1', { status: 'sorting', call: { summary: '', outcome: null, in_hubspot: false } }),
       ],
     })
-    renderActivity()
+    renderCallLogs()
     const list = await toConfirmList()
     const sorting = card('Sample Logistics Pty Ltd')
     expect(within(sorting).getByText('Sorting the note.')).toBeInTheDocument()
@@ -961,7 +964,7 @@ describe('Needs a look', () => {
       ],
       summary: { to_confirm: 0, needs_look: 2, logged_today: 0 },
     })
-    const { user } = renderActivity('/companies/activity?tab=needs-look')
+    const { user } = renderCallLogs('/companies/call-logs?tab=needs-look')
     const first = await screen.findByRole('article', { name: 'Sample Logistics Pty Ltd' })
     expect(within(first).getByText('Not sure it reached HubSpot.')).toBeInTheDocument()
     expect(within(first).getByText('Check HubSpot, then tell us:')).toBeInTheDocument()
@@ -1007,7 +1010,7 @@ describe('Needs a look', () => {
         }),
       ],
     })
-    const { user } = renderActivity('/companies/activity?tab=needs-look')
+    const { user } = renderCallLogs('/companies/call-logs?tab=needs-look')
     const failed = await screen.findByRole('article', { name: 'Sample Logistics Pty Ltd' })
     await user.click(within(failed).getByRole('button', { name: 'Try again' }))
     await waitFor(() => {
@@ -1029,7 +1032,7 @@ describe('Needs a look', () => {
       ],
       options: options({ sending_ready: false, waiting_for: 'Waiting for HubSpot write access.' }),
     })
-    renderActivity('/companies/activity?tab=needs-look')
+    renderCallLogs('/companies/call-logs?tab=needs-look')
     const failed = await screen.findByRole('article', { name: 'Sample Logistics Pty Ltd' })
     const tryAgain = within(failed).getByRole('button', { name: 'Try again' })
     expect(tryAgain).toBeDisabled()
@@ -1037,42 +1040,13 @@ describe('Needs a look', () => {
   })
 })
 
-describe('Logged', () => {
-  it('lists the calls in HubSpot, each with Open in HubSpot, paged', async () => {
-    const logged = Array.from({ length: 30 }, (_, index) =>
-      note(`l${String(index)}`, {
-        status: 'logged',
-        hubspot_url: HUBSPOT_URL,
-        confirmed_at: '2026-11-15T04:00:00Z',
-      }),
-    )
-    const server = mockServer({ notes: logged })
-    const { user } = renderActivity('/companies/activity?tab=logged')
-    const list = await screen.findByRole('list', { name: 'Logged calls' })
-    expect(within(list).getAllByRole('listitem')).toHaveLength(25)
-    const [row] = within(list).getAllByRole('listitem')
-    const link = within(row).getByRole('link', { name: /^Open in HubSpot/ })
-    expect(link).toHaveAttribute('href', HUBSPOT_URL)
-    expect(link).toHaveAttribute('target', '_blank')
-    expect(link).toHaveAccessibleName(
-      'Open in HubSpot: the call with Sample Logistics Pty Ltd (opens in a new tab)',
-    )
-    expect(screen.getByText('Showing 1 to 25 of 30')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Next' }))
-    await waitFor(() => {
-      expect(sent(server, 'GET', NOTES).at(-1)?.search.get('offset')).toBe('25')
-    })
-    expect(await screen.findByText('Showing 26 to 30 of 30')).toBeInTheDocument()
-  })
-})
-
 describe('every state', () => {
   it.each([
     ['', 'Nothing to confirm.', 'Log a call and it waits here.'],
     [
-      '?tab=logged',
-      'Nothing logged yet.',
-      'The calls you send to HubSpot show here, each with a link to it.',
+      '?tab=history',
+      'No calls logged yet.',
+      'Press Log call after your next call, and it shows here.',
     ],
     [
       '?tab=needs-look',
@@ -1081,7 +1055,7 @@ describe('every state', () => {
     ],
   ])('an empty tab speaks in the serif voice (%s)', async (search, title, description) => {
     mockServer()
-    renderActivity(`/companies/activity${search}`)
+    renderCallLogs(`/companies/call-logs${search}`)
     const heading = await screen.findByRole('heading', { name: title })
     expect(heading).toHaveClass('font-serif')
     expect(screen.getByText(description)).toBeInTheDocument()
@@ -1089,7 +1063,7 @@ describe('every state', () => {
 
   it('says call notes are off in plain words, with no Log call', async () => {
     mockServer({ options: options({ enabled: false }) })
-    renderActivity()
+    renderCallLogs()
     expect(await screen.findByText('Call notes are switched off.')).toBeInTheDocument()
     expect(
       screen.getByText(
@@ -1102,34 +1076,34 @@ describe('every state', () => {
 
   it('says so when the server switched call notes off meanwhile (409)', async () => {
     mockServer({ listsOff: true })
-    renderActivity()
+    renderCallLogs()
     expect(await screen.findByText('Call notes are switched off.')).toBeInTheDocument()
   })
 
   it('shows the error box when the switches cannot be read', async () => {
     mockServer({ options: null })
-    renderActivity()
+    renderCallLogs()
     expect(await screen.findByText("Your calls couldn't be loaded.")).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
   })
 
   it('has its title, and the counts on the tabs', async () => {
     mockServer({ notes: threeNotes(), summary: { to_confirm: 3, needs_look: 1, logged_today: 2 } })
-    renderActivity()
-    expect(screen.getByRole('heading', { level: 1, name: 'Your call notes' })).toBeInTheDocument()
+    renderCallLogs()
+    expect(screen.getByRole('heading', { level: 1, name: 'Call logs' })).toBeInTheDocument()
     expect(await screen.findByRole('tab', { name: 'To confirm 3' })).toHaveAttribute(
       'aria-selected',
       'true',
     )
     expect(screen.getByRole('tab', { name: 'Needs a look 1' })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: 'Logged' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'History' })).toBeInTheDocument()
   })
 })
 
 describe('Log call', () => {
   it('asks for the company, then the note view asks who the call was with', async () => {
     const server = mockServer({ options: options({ ai_enabled: true }) })
-    const { user } = renderActivity()
+    const { user } = renderCallLogs()
     await screen.findByText('Nothing to confirm.')
     await user.click(screen.getByRole('button', { name: 'Log call' }))
     const box = await screen.findByRole('combobox', { name: 'Which company was the call with?' })
@@ -1168,7 +1142,7 @@ describe('on a phone', () => {
   it('puts the Navy button at the bottom, full width, above the safe area', async () => {
     asPhone()
     mockServer({ notes: threeNotes() })
-    renderActivity()
+    renderCallLogs()
     await toConfirmList()
     const button = screen.getByRole('button', { name: 'Send 3 to HubSpot' })
     expect(button).toHaveClass('w-full')
@@ -1182,7 +1156,7 @@ describe('on a phone', () => {
 
   it('but on a laptop the bar sits at the top, so the page keeps no room at the bottom', async () => {
     mockServer({ notes: threeNotes() })
-    renderActivity()
+    renderCallLogs()
     await toConfirmList()
     expect(screen.getByRole('button', { name: 'Send 3 to HubSpot' })).toBeInTheDocument()
     expect(document.documentElement.style.scrollPaddingBottom).toBe('')
@@ -1238,7 +1212,7 @@ describe('the line beside Send', () => {
   })
 })
 
-describe('what Activity asks for first (PLAN-V7 C1)', () => {
+describe('what Call logs asks for first (PLAN-V7 C1)', () => {
   it('starts the switches, the counts and To confirm while its code downloads, and uses them', async () => {
     // The switches answer (the page shows its tabs only once it knows call notes are on); the
     // rest stays on its way, so a second request for it would show.
@@ -1255,7 +1229,7 @@ describe('what Activity asks for first (PLAN-V7 C1)', () => {
       }),
     )
     const client = createTestQueryClient()
-    prefetchPage(routes, { pathname: '/companies/activity', search: '' }, client)
+    prefetchPage(routes, { pathname: '/companies/call-logs', search: '' }, client)
     // The prefetch loads its own small file first.
     await waitFor(() => {
       expect(calls.size).toBe(3)
@@ -1265,7 +1239,7 @@ describe('what Activity asks for first (PLAN-V7 C1)', () => {
       `${NOTES}/summary`,
       `${NOTES}?state=to_confirm&mine=true&limit=100&offset=0`,
     ])
-    renderWithProviders(<ActivityPage />, { route: '/companies/activity', queryClient: client })
+    renderWithProviders(<CallLogsPage />, { route: '/companies/call-logs', queryClient: client })
     expect(await screen.findByRole('tab', { name: 'To confirm' })).toBeInTheDocument()
     await waitFor(() => {
       expect(
@@ -1310,7 +1284,7 @@ describe("a logged meeting's notes (T3-11)", () => {
 
   it('reads as meeting notes, with no call outcome to show or to pick', async () => {
     mockServer({ notes: [meetingNotes('m1')] })
-    const { user } = renderActivity()
+    const { user } = renderCallLogs()
     await toConfirmList()
     const card = screen.getByRole('article', { name: 'Sample Logistics Pty Ltd' })
     expect(within(card).getByText('Meeting notes · 13 Nov 2026, 10:00 am')).toBeInTheDocument()
@@ -1337,7 +1311,7 @@ describe("a logged meeting's notes (T3-11)", () => {
         }),
       ],
     })
-    const { user } = renderActivity()
+    const { user } = renderCallLogs()
     await toConfirmList()
     const card = screen.getByRole('article', { name: 'Sample Logistics Pty Ltd' })
     const showAll = within(card).getByRole('button', { name: 'Show all' })
@@ -1361,7 +1335,7 @@ describe("a logged meeting's notes (T3-11)", () => {
     expect(server.sent.filter((one) => one.method === 'PATCH')).toEqual([])
   })
 
-  it('names the meeting notes in Logged and in Needs a look', async () => {
+  it('names the meeting notes in History and in Needs a look', async () => {
     mockServer({
       notes: [
         meetingNotes('m1', {
@@ -1376,9 +1350,12 @@ describe("a logged meeting's notes (T3-11)", () => {
         }),
       ],
     })
-    const { user } = renderActivity('/companies/activity?tab=logged')
-    const list = await screen.findByRole('list', { name: 'Logged calls' })
-    expect(within(list).getByText('Meeting notes · 13 Nov 2026, 10:00 am')).toBeInTheDocument()
+    const { user } = renderCallLogs('/companies/call-logs?tab=history')
+    const list = await screen.findByRole('group', { name: 'Your calls, newest first' })
+    const row = within(list).getByRole('button', { name: /Sample Logistics Pty Ltd/ })
+    // Meeting notes say so where a call says how it went.
+    expect(row).toHaveTextContent('Meeting notes')
+    await user.click(row)
     expect(within(list).getByRole('link', { name: /^Open in HubSpot/ })).toHaveAccessibleName(
       'Open in HubSpot: the meeting notes for Sample Logistics Pty Ltd (opens in a new tab)',
     )
@@ -1403,7 +1380,7 @@ describe("a logged meeting's notes (T3-11)", () => {
         skip: { n2: OFF_THE_LIST },
         oldTotals,
       })
-      const { user } = renderActivity()
+      const { user } = renderCallLogs()
       await toConfirmList()
       await user.click(screen.getByRole('button', { name: 'Send 4 to HubSpot' }))
       // The cards say 3 calls and 1 meeting note; the server leaves one call out.
@@ -1421,7 +1398,7 @@ describe("a logged meeting's notes (T3-11)", () => {
 describe('a call the server leaves out of a send (T3-11)', () => {
   it('names it with why before the send, and after it the card stays with why', async () => {
     const server = mockServer({ notes: threeNotes(), skip: { n2: OFF_THE_LIST } })
-    const { user } = renderActivity()
+    const { user } = renderCallLogs()
     const list = await toConfirmList()
     await user.click(screen.getByRole('button', { name: 'Send 3 to HubSpot' }))
     // The title counts only what will go, and the totals are the server's, without it.
@@ -1463,7 +1440,7 @@ describe('a call the server leaves out of a send (T3-11)', () => {
 
   it('with every call left out, Send is greyed with why', async () => {
     mockServer({ notes: [note('n1')], skip: { n1: OFF_THE_LIST } })
-    const { user } = renderActivity()
+    const { user } = renderCallLogs()
     await toConfirmList()
     await user.click(screen.getByRole('button', { name: 'Send 1 to HubSpot' }))
     const dialog = await screen.findByRole('alertdialog')
@@ -1486,7 +1463,7 @@ describe('a call the server leaves out of a send (T3-11)', () => {
       ],
       retryRefused: true,
     })
-    const { user } = renderActivity('/companies/activity?tab=needs-look')
+    const { user } = renderCallLogs('/companies/call-logs?tab=needs-look')
     const card = await screen.findByRole('article', { name: 'Sample Logistics Pty Ltd' })
     await user.click(within(card).getByRole('button', { name: 'Try again' }))
     const shown = (await screen.findByText("That didn't go through")).closest('[data-sonner-toast]')

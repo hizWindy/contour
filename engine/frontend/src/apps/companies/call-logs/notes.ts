@@ -1,4 +1,4 @@
-/** Small rules about notes that Activity's tabs share (PLAN-V17 T3-6). */
+/** Small rules about notes that Call logs' tabs share (PLAN-V17 T3-6). */
 import type { QueryClient } from '@tanstack/react-query'
 import { isApiProblem } from '@/api/client'
 import { updateNoteInLists } from '@/api/hooks/call-notes'

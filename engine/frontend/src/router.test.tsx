@@ -56,7 +56,8 @@ describe('the router', () => {
     ['/rules', 'Rules', ['Rules']],
     ['/test-set', 'Test set', ['Test set']],
     // Before a company's own address, so neither is ever read as one (PLAN-V17 T3-6, T3-9).
-    ['/companies/activity', 'Your call notes', ['Companies', 'Activity']],
+    // Call logs was Activity until PLAN-V18 T3-2.
+    ['/companies/call-logs', 'Call logs', ['Companies', 'Call logs']],
     ['/companies/meetings', 'Client meetings', ['Companies', 'Meetings']],
     // A pre-read's own page sits under Meetings (T3-10). Every call answers 404 here, so it
     // says, under its own title, that it can't find the pre-read.
@@ -203,13 +204,14 @@ describe('the router', () => {
         expect(group.getByRole('link', { name: item.label })).toHaveAttribute('href', item.to)
       }
     }
-    // Companies is a group of its own since Activity (PLAN-V17 T3-6): its list first, then
-    // Meetings (T3-9), then Activity. The group follows the order of the projects (T3-7).
+    // Companies is a group of its own since Call logs (PLAN-V17 T3-6, then called Activity): its
+    // list first, then Meetings (T3-9), then Call logs. The group follows the order of the
+    // projects (T3-7).
     const companies = within(menu.getByRole('group', { name: COMPANIES.name }))
     expect(companies.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual([
       '/companies',
       '/companies/meetings',
-      '/companies/activity',
+      '/companies/call-logs',
     ])
     expect(menu.getByRole('link', { name: ADMIN.label })).toHaveAttribute('href', '/admin')
     // Rules and the Test set are the Lead Finder's own, not shared Admin tabs.
@@ -222,12 +224,42 @@ describe('the router', () => {
     expect(menu.getByRole('link', { name: 'Home' })).not.toHaveAttribute('aria-current')
   })
 
-  it('marks Activity in the menu on its page, and not Companies, whose address it sits in', async () => {
-    renderAt('/companies/activity')
-    await screen.findByRole('heading', { level: 1, name: 'Your call notes' }, { timeout: LAZY })
+  it('marks Call logs in the menu on its page, and not Companies, whose address it sits in', async () => {
+    renderAt('/companies/call-logs')
+    await screen.findByRole('heading', { level: 1, name: 'Call logs' }, { timeout: LAZY })
     const menu = within(screen.getByRole('navigation', { name: 'Main menu' }))
-    expect(menu.getByRole('link', { name: 'Activity' })).toHaveAttribute('aria-current', 'page')
+    expect(menu.getByRole('link', { name: 'Call logs' })).toHaveAttribute('aria-current', 'page')
     expect(menu.getByRole('link', { name: 'Companies' })).not.toHaveAttribute('aria-current')
+  })
+
+  // Call logs was Activity, at /companies/activity, until PLAN-V18 T3-2: an old link still works.
+  it.each([
+    ['/companies/activity', ''],
+    ['/companies/activity?tab=logged', '?tab=history'],
+    ['/companies/activity?tab=needs-look&log=1', '?tab=needs-look&log=1'],
+  ])('sends the old address %s on to Call logs, with its tab', async (old, search) => {
+    const { router } = renderAt(old)
+    await screen.findByRole('heading', { level: 1, name: 'Call logs' }, { timeout: LAZY })
+    expect(router.state.location.pathname).toBe('/companies/call-logs')
+    // `log=1` opens the company picker once call notes are known, then leaves the address
+    // (every call answers 404 here, so the page drops it at once or keeps it a moment).
+    expect([search, search.replace(/&?log=1/, '')]).toContain(router.state.location.search)
+    expect(crumbs()).toEqual(['Companies', 'Call logs'])
+    expect(document.title).toBe('Call logs - Contour')
+    // The old address is replaced, so Back doesn't bounce to it.
+    expect(router.state.historyAction).toBe('REPLACE')
+  })
+
+  it.each([['activity'], ['call logs']])('finds Call logs in Ctrl+K by "%s"', async (typed) => {
+    const { user, router } = renderAt('/start')
+    await screen.findByRole('heading', { level: 1, name: 'Start a run' }, { timeout: LAZY })
+    await user.keyboard('{Control>}k{/Control}')
+    await user.type(await screen.findByPlaceholderText('Type a page or an action'), typed)
+    expect(await screen.findByRole('option', { name: 'Call logs' })).toBeInTheDocument()
+    await user.click(screen.getByRole('option', { name: 'Call logs' }))
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/companies/call-logs')
+    })
   })
 
   it.each([

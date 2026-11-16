@@ -1,5 +1,5 @@
 /**
- * What Activity shows while a tab loads, when it is empty, and when call notes are off (PLAN-V17
+ * What Call logs shows while a tab loads, when it is empty, and when call notes are off (PLAN-V17
  * "Every state is drawn"). Loading shows the still shape of what is coming, at its real size, only
  * after 200ms (`Pending`), so a quick answer never flashes grey blocks.
  */
@@ -7,7 +7,7 @@ import { CirclePause } from 'lucide-react'
 import { EmptyState } from '@/components/empty-state'
 import { Pending } from '@/components/skeletons'
 import { Skeleton } from '@/components/ui/skeleton'
-import type { ActivityTab } from './params'
+import type { CallLogsTab } from './params'
 import { EMPTY, LOADING, OFF_DESCRIPTION, OFF_TITLE } from './words'
 
 /** Cards, as tall as a call with a summary and one change. */
@@ -33,7 +33,7 @@ export function CardsPending({ cards = 3 }: { cards?: number }) {
   )
 }
 
-/** Rows of the Logged list. */
+/** Rows of a list of calls. */
 export function RowsPending({ rows = 5 }: { rows?: number }) {
   return (
     <Pending label={LOADING}>
@@ -50,7 +50,7 @@ export function RowsPending({ rows = 5 }: { rows?: number }) {
   )
 }
 
-export function TabEmpty({ tab }: { tab: ActivityTab }) {
+export function TabEmpty({ tab }: { tab: CallLogsTab }) {
   const { title, description } = EMPTY[tab]
   return <EmptyState title={title} description={description} headingLevel={2} />
 }

@@ -41,7 +41,14 @@ import {
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { toastProblem } from '@/lib/problems'
-import { firstSentence, groupOf, GROUPS, isShown, type GroupId } from './settings-groups'
+import {
+  choiceWords,
+  firstSentence,
+  groupOf,
+  GROUPS,
+  isShown,
+  type GroupId,
+} from './settings-groups'
 
 const DEFAULT_CHOICE = '__default__'
 
@@ -101,7 +108,7 @@ function Control({
           ) : null}
           {(field.choices ?? []).map((choice) => (
             <SelectItem key={choice} value={choice}>
-              {choice}
+              {choiceWords(field.key, choice)}
             </SelectItem>
           ))}
         </SelectContent>

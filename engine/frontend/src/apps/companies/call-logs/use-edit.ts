@@ -1,5 +1,5 @@
 /**
- * An edit on Activity answers at once (DESIGN.md "Act at once, undo after"; PLAN-V17 "It answers
+ * An edit on Call logs answers at once (DESIGN.md "Act at once, undo after"; PLAN-V17 "It answers
  * at once"): the card shows the change, then PATCH /call-notes/{note_id} tells the server. If the
  * server says no, every page of notes goes back to what it was, and a toast says why in the
  * server's own words. When the last edit in flight has answered, the pages are asked for again,

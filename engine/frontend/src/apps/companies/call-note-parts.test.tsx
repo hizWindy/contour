@@ -11,6 +11,8 @@ import { renderWithProviders } from '@/test/render'
 import {
   CallNoteButtons,
   CompaniesCommands,
+  MicCheckHost,
+  MicCheckMenuItem,
   ToConfirmCount,
   UpcomingMeetings,
 } from './call-note-parts'
@@ -32,8 +34,10 @@ describe('a Companies part whose file is gone', () => {
         <Suspense fallback={<p>Still loading</p>}>
           <ToConfirmCount />
           <CallNoteButtons />
-          <CompaniesCommands go={go} />
+          <CompaniesCommands go={go} run={go} />
           <UpcomingMeetings />
+          <MicCheckMenuItem />
+          <MicCheckHost />
         </Suspense>
       </>,
     )

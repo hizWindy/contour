@@ -38,12 +38,12 @@ export interface NavItem {
   alsoActiveOn?: readonly string[]
   /**
    * Addresses inside this one that are another page of the menu, so this page isn't marked there:
-   * Activity ("/companies/activity") is not Companies.
+   * Call logs ("/companies/call-logs") is not Companies.
    */
   notActiveOn?: readonly string[]
   /**
-   * A count at the end of the page's row in the menu, like Activity's calls to confirm (PLAN-V17
-   * T3-7). It asks for its own data, gives the link its words for a screen reader ("Activity, 7
+   * A count at the end of the page's row in the menu, like Call logs' calls to confirm (PLAN-V17
+   * T3-7). It asks for its own data, gives the link its words for a screen reader ("Call logs, 7
    * calls to confirm"), and draws nothing when there is nothing to count. It may be a `lazy`
    * component: the menu draws it inside a `Suspense`. Folded to icons, the menu hides it.
    */
@@ -54,6 +54,8 @@ export interface NavItem {
 export interface CommandsProps {
   /** Closes the menu and opens `to`. A page that takes the focus as it opens keeps it. */
   go: (to: string) => void
+  /** Closes the menu, then does `action`, like opening the mic check (PLAN-V18 T3-4). */
+  run: (action: () => void) => void
 }
 
 /**
@@ -98,6 +100,18 @@ export interface AppModule {
    * open, inside a `Suspense`, so it may be a `lazy` component. Optional.
    */
   commands?: ComponentType<CommandsProps>
+  /**
+   * Its own rows in the account menu, before "Sign out", like "Check my mic" (PLAN-V18 T3-4). The
+   * component draws `DropdownMenuItem`s, or nothing. It is drawn inside a `Suspense`, so it may be
+   * a `lazy` component. Optional.
+   */
+  accountItems?: ComponentType
+  /**
+   * A part drawn once in the app frame, on every page, for something that may open from anywhere,
+   * like the mic check that Ctrl+K and the account menu open (PLAN-V18 T3-4). It draws nothing
+   * until it is asked. It is drawn inside a `Suspense`, so it may be a `lazy` component. Optional.
+   */
+  frame?: ComponentType
   /** Its addresses, inside the app frame. */
   routes: RouteObject[]
 }

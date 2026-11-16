@@ -1,10 +1,12 @@
 /**
- * Activity (PLAN-V17 T3-6, "The screens" part 3), at /companies/activity: the calls the rep logged,
- * in three tabs with a sliding underline (`TabIndicator`).
+ * Call logs (PLAN-V17 T3-6, "The screens" part 3; called Activity until PLAN-V18 T3-2), at
+ * /companies/call-logs: the calls the rep logged, in three tabs with a sliding underline
+ * (`TabIndicator`). The old address, /companies/activity, sends you on (`old-route.tsx`).
  *
  * - **To confirm:** one card per call, to check and fix, then one Navy button sends them all to
  *   HubSpot (`to-confirm.tsx`).
- * - **Logged:** what is in HubSpot, each with "Open in HubSpot" (`logged.tsx`).
+ * - **History:** every call you logged, newest first, by day, with a search and filters; a call
+ *   opens in place (`history.tsx`, PLAN-V18 T3-6). It took the place of Activity's Logged.
  * - **Needs a look:** a save that failed, or one HubSpot may or may not have, with what to do
  *   (`needs-look.tsx`).
  *
@@ -16,7 +18,7 @@
  * the tabs says so, in the server's words; everything up to the send still works. With call notes
  * off, the page says so in plain words.
  */
-import { ClipboardCheck, Hourglass } from 'lucide-react'
+import { Hourglass, PhoneLog } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { useCallNoteOptions, useCallNoteSummary } from '@/api/hooks/call-notes'
@@ -27,29 +29,29 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { melbourneDate } from '@/lib/format'
 import { PHONE, useMediaQuery } from '@/lib/use-media-query'
 import { LogCallPicker, LogCallSheet, type LogTarget } from './log-call'
-import { Logged } from './logged'
+import { History } from './history'
 import { NeedsLook } from './needs-look'
-import { ACTIVITY_TABS, readLog, readTab, withoutLog, writeTab, type ActivityTab } from './params'
+import { CALL_LOGS_TABS, readLog, readTab, withoutLog, writeTab, type CallLogsTab } from './params'
 import { CallNotesOff, CardsPending } from './states'
 import { ToConfirm } from './to-confirm'
 import { useBatch } from './use-batch'
 import {
-  ACTIVITY_DESCRIPTION,
-  ACTIVITY_TITLE,
+  CALL_LOGS_DESCRIPTION,
+  CALL_LOGS_TITLE,
   LOAD_FAILED,
-  TAB_LOGGED,
+  TAB_HISTORY,
   TAB_NEEDS_LOOK,
   TAB_TO_CONFIRM,
   waitingLine,
 } from './words'
 
-const TAB_LABELS: Readonly<Record<ActivityTab, string>> = {
+const TAB_LABELS: Readonly<Record<CallLogsTab, string>> = {
   to_confirm: TAB_TO_CONFIRM,
-  logged: TAB_LOGGED,
+  history: TAB_HISTORY,
   needs_look: TAB_NEEDS_LOOK,
 }
 
-export default function ActivityPage() {
+export default function CallLogsPage() {
   const [params, setParams] = useSearchParams()
   const tab = readTab(params)
   const options = useCallNoteOptions()
@@ -84,7 +86,7 @@ export default function ActivityPage() {
   }, [asked, notes, setParams])
 
   // The counts on the tabs (To confirm and Needs a look), when there are some.
-  const counts: Partial<Record<ActivityTab, number>> = {
+  const counts: Partial<Record<CallLogsTab, number>> = {
     to_confirm: summary.data?.to_confirm,
     needs_look: summary.data?.needs_look,
   }
@@ -118,7 +120,7 @@ export default function ActivityPage() {
         <Tabs
           value={tab}
           onValueChange={(next) => {
-            const picked = ACTIVITY_TABS.find((value) => value === next)
+            const picked = CALL_LOGS_TABS.find((value) => value === next)
             if (picked) {
               setParams(writeTab(params, picked), { replace: true, preventScrollReset: true })
             }
@@ -129,7 +131,7 @@ export default function ActivityPage() {
             aria-label="Your calls by where they stand"
             className="w-full justify-start overflow-x-auto [scrollbar-width:none] max-sm:-mx-4 max-sm:w-[calc(100%+2rem)] max-sm:px-4"
           >
-            {ACTIVITY_TABS.map((value) => {
+            {CALL_LOGS_TABS.map((value) => {
               const count = counts[value]
               return (
                 <TabsTrigger
@@ -143,7 +145,7 @@ export default function ActivityPage() {
                       <RollingNumber value={count} />
                     </span>
                   ) : null}
-                  <TabIndicator group="activity-tabs" active={tab === value} />
+                  <TabIndicator group="call-logs-tabs" active={tab === value} />
                 </TabsTrigger>
               )
             })}
@@ -151,8 +153,8 @@ export default function ActivityPage() {
           <TabsContent value="to_confirm">
             <ToConfirm options={notes} today={today} onPhone={onPhone} batch={batch} />
           </TabsContent>
-          <TabsContent value="logged">
-            <Logged today={today} />
+          <TabsContent value="history">
+            <History options={notes} today={today} onLogCall={setLogging} />
           </TabsContent>
           <TabsContent value="needs_look">
             <NeedsLook ready={notes.sending_ready} today={today} />
@@ -165,10 +167,10 @@ export default function ActivityPage() {
   return (
     <>
       <PageHeader
-        icon={ClipboardCheck}
+        icon={PhoneLog}
         tone="companies"
-        title={ACTIVITY_TITLE}
-        description={onPhone ? undefined : ACTIVITY_DESCRIPTION}
+        title={CALL_LOGS_TITLE}
+        description={onPhone ? undefined : CALL_LOGS_DESCRIPTION}
         actions={
           on ? (
             <LogCallPicker open={picking} onOpenChange={setPicking} onPick={setLogging} />

@@ -3,6 +3,25 @@ import { formatNumber, pluralise } from '@/lib/format'
 
 export const WAITING_FOR_PEOPLE = 'Waiting for HubSpot access to contacts and calls.'
 
+// Call prep's quick look (PLAN-V18 T3-7, and "Words for when things go wrong", call prep).
+
+export const QUICK_LOOK = 'Quick look'
+export const QUICK_LOOK_LOADING = 'Loading the quick facts.'
+export const COMPANY_INFO = 'Company info'
+export const NO_OWNER = 'No owner'
+export const NO_STAFF = 'Not on record'
+export const NO_LEASE = 'None on record'
+export const NEXT_MEETING_NONE = 'None booked'
+export const CALLING = 'Calling'
+export const WHO_TO_CALL = 'Who are you calling?'
+export const COLD_CALL = 'Cold call (switchboard)'
+export const FACTS_FAILED =
+  "The facts couldn't be read from our HubSpot copy. Try again in a moment."
+export const NO_PEOPLE =
+  'No people on record in HubSpot for this company. The script asks the switchboard for whoever looks after the office.'
+export const PREP_OFF =
+  'Call scripts are switched off. The facts from HubSpot still show. An admin can switch them on.'
+
 // Call notes around the app (PLAN-V17 T3-7): the menu's count, Home's quick buttons, Ctrl+K.
 
 export const LOG_A_CALL = 'Log a call'
@@ -30,7 +49,7 @@ export function needsLookWords(count: number): string {
   return `${formatNumber(count)} ${needsLookTail(count)}`
 }
 
-// The company picker (`company-search.tsx`): Log call on Activity, New pre-read on Meetings.
+// The company picker (`company-search.tsx`): Log call on Call logs, New pre-read on Meetings.
 
 export const FIND_COMPANY = 'Find a company'
 export const TYPE_TWO = 'Type 2 letters or more.'
