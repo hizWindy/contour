@@ -57,14 +57,17 @@ describe('the router', () => {
     ['/test-set', 'Test set', ['Test set']],
     // Before a company's own address, so neither is ever read as one (PLAN-V17 T3-6, T3-9).
     // Call logs was Activity until PLAN-V18 T3-2.
-    ['/companies/call-logs', 'Call logs', ['Companies', 'Call logs']],
-    ['/companies/meetings', 'Client meetings', ['Companies', 'Meetings']],
+    ['/companies/call-logs', 'Call logs', ['Relationships', 'Call logs']],
+    ['/companies/meetings', 'Client meetings', ['Relationships', 'Meetings']],
+    // The group is Relationships (17 Nov 2026); its first page keeps the name Companies, so the
+    // trail reads "Relationships > Companies" rather than the one word twice.
+    ['/companies', 'Companies', ['Relationships', 'Companies']],
     // A pre-read's own page sits under Meetings (T3-10). Every call answers 404 here, so it
     // says, under its own title, that it can't find the pre-read.
     [
       '/companies/meetings/0f3c9a2e-1111-2222-3333-444444444444',
       'Pre-read',
-      ['Companies', 'Meetings', 'Pre-read'],
+      ['Relationships', 'Meetings', 'Pre-read'],
     ],
   ])('shows the page at %s with its title and breadcrumbs', async (path, title, trail) => {
     renderAt(path)
@@ -204,9 +207,10 @@ describe('the router', () => {
         expect(group.getByRole('link', { name: item.label })).toHaveAttribute('href', item.to)
       }
     }
-    // Companies is a group of its own since Call logs (PLAN-V17 T3-6, then called Activity): its
-    // list first, then Meetings (T3-9), then Call logs. The group follows the order of the
-    // projects (T3-7).
+    // Relationships (once Companies) is a group of its own since Call logs (PLAN-V17 T3-6, then
+    // called Activity): the Companies list first, then Meetings (T3-9), then Call logs. The group
+    // follows the order of the projects (T3-7).
+    expect(COMPANIES.name).toBe('Relationships')
     const companies = within(menu.getByRole('group', { name: COMPANIES.name }))
     expect(companies.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual([
       '/companies',
@@ -244,7 +248,7 @@ describe('the router', () => {
     // `log=1` opens the company picker once call notes are known, then leaves the address
     // (every call answers 404 here, so the page drops it at once or keeps it a moment).
     expect([search, search.replace(/&?log=1/, '')]).toContain(router.state.location.search)
-    expect(crumbs()).toEqual(['Companies', 'Call logs'])
+    expect(crumbs()).toEqual(['Relationships', 'Call logs'])
     expect(document.title).toBe('Call logs - Contour')
     // The old address is replaced, so Back doesn't bounce to it.
     expect(router.state.historyAction).toBe('REPLACE')

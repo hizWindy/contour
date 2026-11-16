@@ -3,14 +3,22 @@
  * HubSpot, a panel for each, and call prep. The router, the sidebar, the command menu and Home
  * read it from src/modules.ts.
  *
+ * The module is called **Relationships** in the menu (Al-khair, 17 Nov 2026: "think of a really
+ * good name"). It holds Companies, Meetings and Call logs, which are all about the people and
+ * firms Contour works with, so a name for the group that was also the name of its first page read
+ * as "Companies, Companies". Relationships covers a prospect, a client and a firm met only once,
+ * and keeps working when a page is added. The pages keep their names, and so do the addresses
+ * (`/companies/...`): old links, bookmarks and the morning email's pre-read link still work. The
+ * Companies page is still "Companies" in its title, its breadcrumb and Home's card.
+ *
  * Its other pages are Meetings (PLAN-V17 T3-9, `/companies/meetings`): the client meetings and
  * their pre-reads, and Call logs (T3-6, `/companies/call-logs`; called Activity, at
  * `/companies/activity`, until PLAN-V18 T3-2, and the old address sends you on): the calls a rep
  * logged, to confirm, send to HubSpot in one go, and look back at. Their addresses sit before a
- * company's (`:key`), so neither is ever read as a company. Companies is a group in the menu
+ * company's (`:key`), so neither is ever read as a company. Relationships is a group in the menu
  * (Companies, Meetings, Call logs), after the Lead Finder's, in the order of MODULES, as on Home
- * and in Ctrl+K (T3-7). Meetings and Call logs stay in the group for everyone who sees Companies,
- * even while their switches are off (each page says so), so the menu never changes shape once it
+ * and in Ctrl+K (T3-7). Meetings and Call logs stay in the group for everyone who sees
+ * Relationships, even while their switches are off (each page says so), so the menu never changes shape once it
  * has loaded. A pre-read's own page sits under Meetings (`/companies/meetings/{form_id}`, T3-10),
  * so the menu marks Meetings there. Call logs' row shows how many calls wait to be confirmed, and
  * Ctrl+K gains "Log a call" and "Calls to confirm" (`call-note-links.tsx`, which loads late through
@@ -19,7 +27,7 @@
  * meetings", a card that comes late and goes after the others, and Ctrl+K "Pre-read for a
  * meeting", loaded the same way.
  */
-import { Building2, CalendarCheck, PhoneLog } from 'lucide-react'
+import { Building2, CalendarCheck, Handshake, PhoneLog } from 'lucide-react'
 import type { PrefetchArgs, RouteHandle } from '@/shell/crumbs'
 import type { AppModule } from '@/shell/nav'
 import { page } from '@/shell/page-route'
@@ -62,8 +70,9 @@ const prefetchCallLogs = late(async () => (await import('./call-logs/prefetch'))
 export const COMPANIES: AppModule = {
   id: 'companies',
   app: 'companies',
-  name: 'Companies',
-  icon: Building2,
+  // The group's name and icon. Its first page keeps the name Companies and the building.
+  name: 'Relationships',
+  icon: Handshake,
   tone: 'companies',
   homeCards: [
     { id: 'companies', component: CompaniesHomeCard },
@@ -71,7 +80,7 @@ export const COMPANIES: AppModule = {
   ],
   prefetchSummary: prefetchCompaniesHome,
   description:
-    'Every client and prospect in HubSpot, with what we know about each, and a call script before you ring.',
+    'Every client and prospect in HubSpot, a call script before you ring, your client meetings and the calls you logged.',
   pages: [
     {
       to: '/companies',
@@ -105,11 +114,12 @@ export const COMPANIES: AppModule = {
   routes: [
     {
       path: 'companies',
-      handle: { crumb: 'Companies' } satisfies RouteHandle,
+      // The group's name, so Meetings reads "Relationships > Meetings" and Companies below it.
+      handle: { crumb: 'Relationships' } satisfies RouteHandle,
       children: [
         {
           index: true,
-          handle: { prefetch: prefetchCompanies } satisfies RouteHandle,
+          handle: { crumb: 'Companies', prefetch: prefetchCompanies } satisfies RouteHandle,
           ...page(() => import('./index')),
         },
         {

@@ -1,5 +1,6 @@
 /**
- * The Companies page on Home (the "bento" Home, 11 Nov): how many companies we have and how fresh
+ * The Relationships card on Home (the "bento" Home, 11 Nov; it was titled Companies until 17 Nov
+ * 2026, when the group took the name Relationships, with the handshake icon): how many companies we have and how fresh
  * the HubSpot copy is, a box to find a company, the calls I prepped today, and, while call notes
  * are on (PLAN-V17 T3-7), a quick button for each kind of work waiting: "7 calls to confirm",
  * "2 need a look". Those come last: they arrive after two requests, and at the foot of the card
@@ -9,7 +10,7 @@
  * from here shows the list at once. The box opens Companies with the name typed in its search, and
  * a call prepped today opens that company.
  */
-import { ArrowRight, Building2, Search } from 'lucide-react'
+import { ArrowRight, Handshake, Search } from 'lucide-react'
 import { Suspense, useId, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useCompanies, useHubSpotSyncs, useTodayPreps } from '@/api/hooks'
@@ -151,10 +152,10 @@ export function CompaniesHomeCard() {
             TONE_CLASSES.companies.tile,
           )}
         >
-          <Building2 className="size-5" />
+          <Handshake className="size-5" />
         </span>
         <h2 id={TITLE_ID} className="flex-1 text-section font-semibold text-foreground">
-          Companies
+          Relationships
         </h2>
         <Link
           to="/companies"

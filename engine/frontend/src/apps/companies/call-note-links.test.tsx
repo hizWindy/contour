@@ -127,7 +127,7 @@ function mainMenu() {
 }
 
 function companiesCard() {
-  return within(screen.getByRole('region', { name: 'Companies' }))
+  return within(screen.getByRole('region', { name: 'Relationships' }))
 }
 
 function callNoteRequests(requests: readonly string[]): string[] {
@@ -142,7 +142,7 @@ describe("Call logs' count in the menu", () => {
     stubBackend()
     renderAt('/')
     await home()
-    const companies = within(mainMenu().getByRole('group', { name: 'Companies' }))
+    const companies = within(mainMenu().getByRole('group', { name: 'Relationships' }))
     const callLogs = await companies.findByRole('link', { name: 'Call logs, 7 calls to confirm' })
     expect(callLogs).toHaveAttribute('href', '/companies/call-logs')
     expect(callLogs.querySelector('[data-slot=menu-count]')).not.toBeNull()
@@ -339,11 +339,11 @@ describe('who sees it', () => {
     expect(await mainMenu().findByRole('group', { name: 'Lead Finder' })).toBeInTheDocument()
 
     // The menu: no Companies group, so no Meetings, no Call logs and no count.
-    expect(mainMenu().queryByRole('group', { name: 'Companies' })).toBeNull()
+    expect(mainMenu().queryByRole('group', { name: 'Relationships' })).toBeNull()
     expect(mainMenu().queryByRole('link', { name: /Meetings/ })).toBeNull()
     expect(mainMenu().queryByRole('link', { name: /Call logs/ })).toBeNull()
     // Home: no Companies card, so no quick buttons.
-    expect(screen.queryByRole('region', { name: 'Companies' })).toBeNull()
+    expect(screen.queryByRole('region', { name: 'Relationships' })).toBeNull()
     expect(screen.queryByText(/to confirm|a look/)).toBeNull()
     // Ctrl+K: neither entry.
     await user.keyboard('{Control>}k{/Control}')

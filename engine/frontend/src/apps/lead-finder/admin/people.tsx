@@ -87,7 +87,7 @@ interface Project {
 
 const PHRASES: Record<string, string> = {
   lead_finder: 'the Lead Finder',
-  companies: 'the Companies page',
+  companies: 'Relationships',
 }
 
 /** Every project that has a tick, in menu order. */

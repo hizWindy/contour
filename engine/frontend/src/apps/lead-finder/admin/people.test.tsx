@@ -197,7 +197,7 @@ describe("each person's HubSpot owner (PLAN-V17 T3-7)", () => {
     await user.keyboard('{Escape}')
     // The role and the project ticks never waited for the owners.
     expect(sheet.getByRole('combobox', { name: 'Role' })).toBeEnabled()
-    expect(sheet.getByRole('checkbox', { name: /Companies/ })).toBeEnabled()
+    expect(sheet.getByRole('checkbox', { name: /Relationships/ })).toBeEnabled()
   })
 
   it('an empty list says so, and None still clears', async () => {

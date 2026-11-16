@@ -120,7 +120,8 @@ function stubBackend({
 }
 
 const leadFinder = () => screen.getByRole('region', { name: 'Lead Finder' })
-const companies = () => screen.getByRole('region', { name: 'Companies' })
+// The group is Relationships since 17 Nov 2026; its card still opens the Companies page.
+const companies = () => screen.getByRole('region', { name: 'Relationships' })
 const cost = () => screen.getByRole('region', { name: 'Runs and cost' })
 
 describe('the greeting on Home', () => {
@@ -282,7 +283,7 @@ function Where() {
   return <p>At {`${location.pathname}${location.search}`}</p>
 }
 
-describe('the Companies card on Home', () => {
+describe('the Relationships card on Home', () => {
   it('counts the companies and says how fresh the HubSpot copy is', async () => {
     stubBackend()
     renderHome()
