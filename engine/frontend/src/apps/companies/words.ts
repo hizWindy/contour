@@ -19,7 +19,8 @@ export const FACTS_FAILED =
   "The facts couldn't be read from our HubSpot copy. Try again in a moment."
 export const NO_PEOPLE =
   'No people on record in HubSpot for this company. The script asks the switchboard for whoever looks after the office.'
-export const PREP_OFF = 'Call scripts are switched off. The facts from HubSpot still show.'
+export const PREP_OFF =
+  'Call scripts are switched off. The facts from HubSpot still show. An admin can switch them on.'
 
 // Call notes around the app (PLAN-V17 T3-7): the menu's count, Home's quick buttons, Ctrl+K.
 

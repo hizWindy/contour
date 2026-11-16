@@ -555,7 +555,7 @@ describe('the prep box and the call prep', () => {
     await user.type(screen.getByRole('combobox', { name: /Who are you calling/ }), 'jas')
     await user.click(await screen.findByRole('option', { name: /Jason Reeds/ }))
     const modal = await screen.findByRole('dialog', { name: /Jason Reeds/ })
-    expect(await within(modal).findByText(/Call prep is off/)).toBeInTheDocument()
+    expect(await within(modal).findByText(/^Call scripts are switched off\./)).toBeInTheDocument()
     expect(within(modal).getByText('Lease ends next year. Call back in March.')).toBeInTheDocument()
     expect(await within(modal).findByText('Sales script')).toBeInTheDocument()
     expect(within(modal).getByText('Written from our HubSpot copy.')).toBeInTheDocument()
@@ -564,7 +564,9 @@ describe('the prep box and the call prep', () => {
     // "Research again" stays in view, greyed out, and says who can switch call prep on.
     expect(within(modal).getByRole('button', { name: 'Research again' })).toBeDisabled()
     expect(
-      within(modal).getByText('Call prep is off. An admin can switch it on.'),
+      within(modal).getByText(
+        'Call scripts are switched off. The facts from HubSpot still show. An admin can switch them on.',
+      ),
     ).toBeInTheDocument()
 
     // The guided questions: the first is open; ticking it opens the next one.

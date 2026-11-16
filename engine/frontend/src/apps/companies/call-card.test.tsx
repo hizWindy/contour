@@ -465,7 +465,9 @@ describe('"Research again" in the script header', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Written from our HubSpot copy.')
     const again = screen.getByRole('button', { name: 'Research again' })
     expect(again).toBeDisabled()
-    expect(again).toHaveAccessibleDescription('Call prep is off. An admin can switch it on.')
+    expect(again).toHaveAccessibleDescription(
+      'Call scripts are switched off. The facts from HubSpot still show. An admin can switch them on.',
+    )
   })
 
   it('waits, greyed out, until the facts say whether call prep is on', () => {

@@ -22,6 +22,7 @@ import { formatMoney } from '@/lib/money'
 import { cn } from '@/lib/utils'
 import type { CallGuide } from './playbook'
 import { copyWords, toneHint } from './style-words'
+import { PREP_OFF } from './words'
 
 /** The id of the title, for the section's `aria-labelledby`. */
 export const SCRIPT_TITLE_ID = 'sales-script'
@@ -102,7 +103,9 @@ export interface ScriptHeaderProps {
 }
 
 function hintWords({ enabled, namesOk, capUsd, running }: ScriptHeaderProps): string {
-  if (enabled === false) return 'Call prep is off. An admin can switch it on.'
+  // "Words for when things go wrong" (PLAN-V18, call prep): what happened, what still works, and
+  // the one thing to do.
+  if (enabled === false) return PREP_OFF
   if (running) return 'Call prep is checking the web and writing a new script.'
   const cost = capUsd === null ? '' : ` Costs up to ${formatMoney(capUsd)}.`
   if (!namesOk) return `Names don't go to Claude yet, so there is no web check.${cost}`
