@@ -674,10 +674,12 @@ describe('To confirm', () => {
     // them in the summary box would send them twice, or past the summary's 600 be refused.
     const words = 'Spoke to the office manager about the lease. Call back in two weeks.'
     const notes = threeNotes().map((item) =>
-      item.id === 'n2' ? { ...item, text: words, call: { summary: '', outcome: null } } : item,
+      item.id === 'n2'
+        ? { ...item, text: words, call: { summary: '', outcome: null, in_hubspot: false } }
+        : item,
     )
     const server = mockServer({ notes })
-    const { user } = renderActivity()
+    const { user } = renderCallLogs()
     await toConfirmList()
     const mining = card('Sample Mining Pty Ltd')
     await user.click(within(mining).getByRole('button', { name: /^Edit/ }))
@@ -698,11 +700,11 @@ describe('To confirm', () => {
   it('with the AI off, leaving the empty summary box sends nothing', async () => {
     const notes = threeNotes().map((item) =>
       item.id === 'n2'
-        ? { ...item, text: 'No answer.', call: { summary: '', outcome: null } }
+        ? { ...item, text: 'No answer.', call: { summary: '', outcome: null, in_hubspot: false } }
         : item,
     )
     const server = mockServer({ notes })
-    const { user } = renderActivity()
+    const { user } = renderCallLogs()
     await toConfirmList()
     const mining = card('Sample Mining Pty Ltd')
     await user.click(within(mining).getByRole('button', { name: /^Edit/ }))
