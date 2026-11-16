@@ -903,7 +903,23 @@ async def edit_form(session: AsyncSession, form: MeetingForm, patch: MeetingForm
         locked.version += 1
         if locked.status == "sent":
             locked.status = "draft"
+    # A failed draft the rep has written all three summaries for is a draft again, so it can be
+    # sent (PLAN-V18: "write them yourself"). One or two written: it stays failed, with its why.
+    if locked.status == "failed" and all_written(locked.summaries):
+        locked.status = "draft"
+        locked.error = None
     await session.commit()
+
+
+def all_written(summaries: object) -> bool:
+    """Every one of the three summaries has text."""
+    if not isinstance(summaries, dict):
+        return False
+    for name in SUMMARY_NAMES:
+        summary = summaries.get(name)
+        if not (isinstance(summary, dict) and str(summary.get("text") or "").strip()):
+            return False
+    return True
 
 
 async def redraft_form(

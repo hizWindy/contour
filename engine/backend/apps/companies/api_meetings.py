@@ -255,7 +255,9 @@ async def get_form(
         "(`next_step`) and who is going (`going`). Only the parts sent change. A summary "
         "changed here is the rep's own from then on (`by: person`): a redraft leaves it, and "
         "it keeps its sources. A sent pre-read that changes is a draft again, so sending it "
-        "again emails the new words. 404 `form_not_found`. 409 `meeting_forms_off`."
+        "again emails the new words. A failed draft becomes a draft once all three summaries "
+        "have text (the rep wrote them), so it can be sent; with one or two written it stays "
+        "failed, with its `error`. 404 `form_not_found`. 409 `meeting_forms_off`."
     ),
 )
 async def edit_form(
