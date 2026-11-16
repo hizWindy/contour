@@ -22,9 +22,8 @@
 import {
   ChevronDown,
   CircleCheck,
-  Clock,
   FileText,
-  Keyboard,
+  Hourglass,
   ListTodo,
   Mic,
   NotebookPen,
@@ -32,19 +31,12 @@ import {
   Search,
   SendHorizontal,
   TriangleAlert,
+  Type,
   X,
   type LucideIcon,
 } from 'lucide-react'
 import { m } from 'motion/react'
-import {
-  useEffect,
-  useId,
-  useRef,
-  useState,
-  type KeyboardEvent,
-  type ReactNode,
-  type RefObject,
-} from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { useSearchParams } from 'react-router'
 import { useCallNoteHistory, type CallNoteOutcomeFilter } from '@/api/hooks/call-notes'
 import type { CallNoteOptions, CallNoteOut } from '@/api/types'
@@ -152,7 +144,7 @@ function standingOf(note: Pick<CallNoteOut, 'status'>): Standing {
 
 const STANDING_LOOK: Readonly<Record<Standing, { icon: LucideIcon; tone: string }>> = {
   logged: { icon: CircleCheck, tone: 'text-pass-ink' },
-  to_confirm: { icon: Clock, tone: 'text-muted-foreground' },
+  to_confirm: { icon: Hourglass, tone: 'text-muted-foreground' },
   sending: { icon: SendHorizontal, tone: 'text-muted-foreground' },
   needs_look: { icon: TriangleAlert, tone: 'text-destructive-ink' },
 }
@@ -167,7 +159,7 @@ const OUTCOME_TONE: Readonly<Record<string, string>> = {
 
 const SOURCE_ICON: Readonly<Record<CallNoteOut['source'], LucideIcon>> = {
   mic: Mic,
-  typed: Keyboard,
+  typed: Type,
   transcript: FileText,
 }
 
@@ -580,35 +572,34 @@ export function History({ options, today, onLogCall }: HistoryProps) {
     setParams((current) => writeHistory(current, next), { replace: true, preventScrollReset: true })
   }
 
-  // / goes to the search, from anywhere on the page but a field.
+  // The keys, from anywhere on the page but a field, a dialog or a menu: / goes to the search, and
+  // J and K move between the calls (Enter, the row's own button, opens one).
   useEffect(() => {
     const onKey = (event: globalThis.KeyboardEvent): void => {
-      if (event.key !== '/' || event.ctrlKey || event.metaKey || event.altKey) return
-      if (event.target instanceof Element && event.target.closest(EDITABLE)) return
+      if (event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented) return
+      const target = event.target instanceof Element ? event.target : null
+      if (target?.closest(`${EDITABLE}, [role=dialog], [role=menu], [role=listbox]`)) return
+      if (event.key === '/') {
+        event.preventDefault()
+        searchRef.current?.focus()
+        return
+      }
+      const key = event.key.toLowerCase()
+      if (key !== 'j' && key !== 'k') return
+      const rows = Array.from(listRef.current?.querySelectorAll<HTMLElement>(`[${ROW}]`) ?? [])
+      if (rows.length === 0) return
       event.preventDefault()
-      searchRef.current?.focus()
+      const here = rows.findIndex((row) => row === document.activeElement)
+      const next =
+        here === -1 ? 0 : Math.max(0, Math.min(rows.length - 1, here + (key === 'j' ? 1 : -1)))
+      rows[next]?.focus()
+      rows[next]?.scrollIntoView({ block: 'nearest' })
     }
     document.addEventListener('keydown', onKey)
     return () => {
       document.removeEventListener('keydown', onKey)
     }
   }, [])
-
-  // J and K move between the calls; Enter (the row's own button) opens one.
-  const onListKey = (event: KeyboardEvent<HTMLDivElement>): void => {
-    if (event.ctrlKey || event.metaKey || event.altKey) return
-    const key = event.key.toLowerCase()
-    if (key !== 'j' && key !== 'k') return
-    if (event.target instanceof Element && event.target.closest(EDITABLE)) return
-    const rows = Array.from(listRef.current?.querySelectorAll<HTMLElement>(`[${ROW}]`) ?? [])
-    if (rows.length === 0) return
-    event.preventDefault()
-    const here = rows.findIndex((row) => row === document.activeElement)
-    const next =
-      here === -1 ? 0 : Math.max(0, Math.min(rows.length - 1, here + (key === 'j' ? 1 : -1)))
-    rows[next]?.focus()
-    rows[next]?.scrollIntoView({ block: 'nearest' })
-  }
 
   const toolbar = (
     <Toolbar filters={filters} options={options} onChange={change} searchRef={searchRef} />
@@ -663,7 +654,6 @@ export function History({ options, today, onLogCall }: HistoryProps) {
             aria-label={HISTORY_LIST}
             aria-describedby={`${HISTORY_LIST_ID}-keys`}
             aria-busy={list.isPlaceholderData || undefined}
-            onKeyDown={onListKey}
             className={cn(
               'flex flex-col gap-4 transition-opacity',
               // The old list dims while the new one loads, as the tables do.

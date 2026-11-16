@@ -18,7 +18,7 @@
  * It loads late, the first time a mic button is pressed or pointed at, so neither the first visit
  * nor the Companies page carries it. The mic is let go the moment the card closes.
  */
-import { Circle, CircleX, Mic, RotateCcw } from 'lucide-react'
+import { CircleAlert, CircleDashed, Mic, RotateCcw } from 'lucide-react'
 import { m } from 'motion/react'
 import {
   useEffect,
@@ -38,12 +38,11 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Kbd } from '@/components/ui/kbd'
 import { cn } from '@/lib/utils'
+import { ChoiceItem } from '../../choice-item'
 import { clockText } from '../words'
 import type { NameFix } from './name-fix'
 import { CHECK_STEPS, MicSession, type MicEnv, type MicSnapshot } from './session'
@@ -199,9 +198,9 @@ function CheckLine({
         {state === 'pass' ? (
           <TickIn className="text-pass-ink" />
         ) : state === 'fail' ? (
-          <CircleX aria-hidden="true" className="size-4 text-destructive-ink" />
+          <CircleAlert aria-hidden="true" className="size-4 text-destructive-ink" />
         ) : (
-          <Circle
+          <CircleDashed
             aria-hidden="true"
             className={cn('size-3', current ? 'text-foreground' : 'text-muted-foreground')}
           />
@@ -342,6 +341,9 @@ export default function MicCard({
   const canFinish = noteBox && phase === 'listening'
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+    // The card's keys stay in the card: the note view and the panel behind it (Ctrl+Enter saves,
+    // L logs a call) never hear them. Esc is the dialog's own, so it goes on.
+    if (event.key !== 'Escape') event.stopPropagation()
     if (event.key !== 'Enter' || event.defaultPrevented) return
     if (event.target instanceof HTMLButtonElement || event.target instanceof HTMLAnchorElement) {
       return
@@ -420,9 +422,10 @@ export default function MicCard({
         ) : null}
 
         {!showSteps ? (
+          // As tall as the four check lines it takes the place of, so the card doesn't jump.
           <div
             data-slot="mic-words"
-            className="max-h-40 min-h-16 overflow-y-auto rounded-md border bg-card p-3 text-body text-foreground"
+            className="max-h-40 min-h-[6.5rem] overflow-y-auto rounded-md border bg-card p-3 text-body text-foreground"
           >
             {snapshot.chunks.length === 0 && snapshot.hearing === '' ? (
               <p className="text-muted-foreground">{WORDS_SHOW_HERE}</p>
@@ -485,22 +488,17 @@ export default function MicCard({
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-64">
                   <DropdownMenuLabel>{WHICH_MIC}</DropdownMenuLabel>
-                  <DropdownMenuRadioGroup
-                    value={snapshot.device?.id ?? ''}
-                    onValueChange={(id) => {
-                      session?.pick(id)
-                    }}
-                  >
-                    {snapshot.devices.map((device) => (
-                      <DropdownMenuRadioItem
-                        key={device.id}
-                        value={device.id}
-                        className="touch:min-h-11"
-                      >
-                        <span className="truncate">{device.name}</span>
-                      </DropdownMenuRadioItem>
-                    ))}
-                  </DropdownMenuRadioGroup>
+                  {snapshot.devices.map((device) => (
+                    <ChoiceItem
+                      key={device.id}
+                      checked={device.id === snapshot.device?.id}
+                      onPick={() => {
+                        session?.pick(device.id)
+                      }}
+                    >
+                      <span className="truncate">{device.name}</span>
+                    </ChoiceItem>
+                  ))}
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : null}

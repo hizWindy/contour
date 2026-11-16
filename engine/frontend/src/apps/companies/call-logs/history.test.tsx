@@ -361,7 +361,9 @@ describe('History', () => {
       within(list).getByRole('button', { name: /Sample Logistics Pty Ltd/ }),
       within(list).getByRole('button', { name: /Sample Mining Pty Ltd/ }),
     ]
-    first?.focus()
+    // From anywhere on the page: J goes to the first call, then the next.
+    await user.keyboard('j')
+    expect(first).toHaveFocus()
     await user.keyboard('j')
     expect(second).toHaveFocus()
     await user.keyboard('k')

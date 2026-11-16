@@ -228,7 +228,6 @@ export class MicSession {
   private toolReady = false
   private timers: number[] = []
   private hearTimer = 0
-  private closed = false
 
   constructor({ mode, tool, names = [], env = browserEnv(), makeTool }: MicSessionOptions) {
     this.mode = mode
@@ -281,7 +280,8 @@ export class MicSession {
 
   /** Runs the check, with the mic the rep picked on this computer, if any. */
   start(): void {
-    if (this.closed) return
+    // A start after a close opens the mic again: React runs an effect twice while developing
+    // (StrictMode), close then start, and the card must still work.
     this.release()
     this.run += 1
     this.toolReady = false
@@ -335,7 +335,6 @@ export class MicSession {
   /** The card is shut: the mic is let go, and nothing more comes. */
   close(): void {
     this.run += 1
-    this.closed = true
     this.release()
     this.set({ bars: null })
   }

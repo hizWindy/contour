@@ -1,5 +1,5 @@
 import { act, screen, waitFor, within } from '@testing-library/react'
-import { useState } from 'react'
+import { StrictMode, useState } from 'react'
 import { describe, expect, it, vi, type Mock } from 'vitest'
 import { renderWithProviders } from '@/test/render'
 import { FakeMic, HEADSET, LAPTOP_MIC, type FakeMicOptions } from './fake-mic'
@@ -124,6 +124,21 @@ describe('the check', () => {
       allow?.()
     })
     await speakNow()
+  })
+})
+
+describe('while developing', () => {
+  it('still checks and listens when React runs the card twice (StrictMode)', async () => {
+    const mic = new FakeMic()
+    const spies = spiesOf()
+    renderWithProviders(
+      <StrictMode>
+        <Host mic={mic} spies={spies} />
+      </StrictMode>,
+    )
+    await speakNow()
+    // The first run's mic was let go: only one is open.
+    expect(mic.live()).toBe(1)
   })
 })
 
