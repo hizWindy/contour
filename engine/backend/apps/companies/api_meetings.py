@@ -35,7 +35,7 @@ from apps.companies.schemas import (
     MeetingWhen,
     MeetingWho,
 )
-from core.api.access import SignedInDep
+from core.api.access import SignedInDep, need
 from core.api.deps import SessionDep, SettingsDep
 from core.api.models import OFFSET_MAX, SafeText
 from core.api.runs import IDEMPOTENCY_PATTERN
@@ -98,6 +98,7 @@ FormId = Annotated[uuid.UUID, Path(description="The pre-read's id")]
 @router.get(
     "/meetings",
     response_model=MeetingPage,
+    dependencies=[Depends(need("companies.meetings"))],
     summary="Client meetings",
     description=(
         "A page of client meetings from HubSpot (one with no company is left out; a cancelled "
@@ -159,6 +160,7 @@ async def list_meetings(
 @router.get(
     "/meetings/summary",
     response_model=MeetingSummary,
+    dependencies=[Depends(need("companies.meetings"))],
     summary="My meeting counts",
     description=(
         "For Home: my upcoming client meetings (the next 7 days, my typed ones too) that need "
@@ -183,6 +185,7 @@ async def meeting_summary(
     "/meetings/sync",
     response_model=MeetingsSyncOut,
     status_code=202,
+    dependencies=[Depends(need("companies.meetings", write=True))],
     summary="Read HubSpot's meetings now",
     description=(
         "Sync on Meetings: a full read of HubSpot's meetings in our window (90 days back to 60 "
@@ -204,6 +207,7 @@ async def sync_meetings(request: Request, settings: MeetingsOnDep) -> MeetingsSy
     "/meetings/forms",
     response_model=MeetingFormOut,
     status_code=201,
+    dependencies=[Depends(need("companies.meetings", write=True))],
     summary="Start a pre-read",
     description=(
         "For a HubSpot meeting (`meeting_id`), or for one typed in (`company_key`, `title`, "
@@ -238,6 +242,7 @@ async def start_form(
 @router.get(
     "/meetings/forms/{form_id}",
     response_model=MeetingFormOut,
+    dependencies=[Depends(need("companies.meetings"))],
     summary="One pre-read",
     description=(
         "The pre-read: the meeting, the facts, the three summaries, the rep's two blanks, and "
@@ -260,6 +265,7 @@ async def get_form(
 @router.patch(
     "/meetings/forms/{form_id}",
     response_model=MeetingFormOut,
+    dependencies=[Depends(need("companies.meetings", write=True))],
     summary="Change a pre-read",
     description=(
         "The rep's edits: a summary's new text (`summaries`), the ideal next step "
@@ -289,6 +295,7 @@ async def edit_form(
     "/meetings/forms/{form_id}/redraft",
     response_model=MeetingFormOut,
     status_code=202,
+    dependencies=[Depends(need("companies.meetings", write=True))],
     summary="Write the summaries again",
     description=(
         "Writes the three summaries again with one more Claude request. This costs money: "
@@ -314,6 +321,7 @@ async def redraft_form(
 @router.post(
     "/meetings/forms/{form_id}/preview",
     response_model=FormEmailPreview,
+    dependencies=[Depends(need("companies.meetings", write=True))],
     summary="See the pre-read's email",
     description=(
         "The email as it would arrive (a subject, plain text, and HTML with every value "
@@ -342,6 +350,7 @@ async def preview_form(
 @router.post(
     "/meetings/forms/{form_id}/send",
     response_model=MeetingFormOut,
+    dependencies=[Depends(need("companies.meetings", write=True))],
     summary="Send the pre-read",
     description=(
         "Emails the pre-read to these addresses (in the body, never an attachment), then saves "
@@ -379,6 +388,7 @@ async def send_form(
 @router.get(
     "/meetings/{meeting_id}",
     response_model=MeetingDetail,
+    dependencies=[Depends(need("companies.meetings"))],
     summary="One meeting",
     description=(
         "A client meeting from HubSpot, its company's name, and its pre-read if it has one. "
@@ -396,6 +406,7 @@ async def get_meeting(
     "/meetings/{meeting_id}/transcript",
     response_model=CallNoteOut,
     status_code=201,
+    dependencies=[Depends(need("companies.meetings", write=True))],
     summary="Log a meeting",
     description=(
         "A past client meeting's transcript, pasted or read from a .txt or .vtt file "

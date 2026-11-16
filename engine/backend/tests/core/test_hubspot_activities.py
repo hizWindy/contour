@@ -78,7 +78,7 @@ from core.hubspot.writer import (
     apply_write,
     write_out,
 )
-from tests.core.auth_world import FAST, GOOD, World, make_account, sign_in
+from tests.core.auth_world import FAST, GOOD, World, make_platform_admin, sign_in
 from tests.core.hubspot_fake import FakeHubSpot, _plain
 
 Factory = async_sessionmaker[AsyncSession]
@@ -1295,7 +1295,7 @@ async def test_only_an_admin_may_read_the_write_log_or_apply_a_write(
         assert (await stranger.get(WRITES)).status_code == 401
         assert (await stranger.post(apply)).status_code == 401
 
-    await make_account(world)  # the Admin
+    await make_platform_admin(world)  # the Platform admin
     async with world.factory() as session:
         await admin.create_person(
             session,
@@ -1308,10 +1308,24 @@ async def test_only_an_admin_may_read_the_write_log_or_apply_a_write(
             now=world.clock.now,
             hasher=FAST,
         )
+        await admin.create_person(
+            session,
+            email="ada.admin@example.test",
+            username="adaadmin",
+            name="Ada Admin",
+            role="admin",
+            password=GOOD,
+            now=world.clock.now,
+            hasher=FAST,
+        )
     assert (await sign_in(browser, login="josample")).status_code == 200
     for answer in (await browser.get(WRITES), await browser.post(apply)):
         assert answer.status_code == 403, answer.text
-        assert answer.json()["code"] == "admin_only"
+        assert answer.json()["code"] == "platform_admin_only"
+    async with world.browser() as admin_browser:
+        assert (await sign_in(admin_browser, login="adaadmin")).status_code == 200
+        for answer in (await admin_browser.get(WRITES), await admin_browser.post(apply)):
+            assert answer.status_code == 403 and answer.json()["code"] == "platform_admin_only"
     assert writes_of(fake) == []
     async with world.factory() as session:
         assert (await row_of(session, out.id)).status == "previewed"

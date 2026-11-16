@@ -171,6 +171,23 @@ async def end_for_user(db: AsyncSession, user_id: uuid.UUID, now: datetime) -> i
     return sum(1 for (expires_at,) in rows if expires_at > now)
 
 
+async def end_other_for_user(
+    db: AsyncSession, user_id: uuid.UUID, keep_session_id: uuid.UUID, now: datetime
+) -> int:
+    """Ends every session of one user except `keep_session_id`. Returns live sessions ended."""
+    rows = await db.execute(
+        update(UserSession)
+        .where(
+            UserSession.user_id == user_id,
+            UserSession.id != keep_session_id,
+            UserSession.ended_at.is_(None),
+        )
+        .values(ended_at=now)
+        .returning(UserSession.expires_at)
+    )
+    return sum(1 for (expires_at,) in rows if expires_at > now)
+
+
 async def end_all(db: AsyncSession, now: datetime) -> Counter[uuid.UUID]:
     """Ends every session of every user. Returns, for each user, how many were still live."""
     rows = await db.execute(

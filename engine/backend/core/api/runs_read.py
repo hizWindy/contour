@@ -45,7 +45,13 @@ router = APIRouter(prefix="/runs", tags=["runs"])
 async def estimate_run(
     access: AppAccessDep, body: RunCreate, manager: RunManagerDep
 ) -> RunEstimate:
-    access.check(body.app)
+    access.check_not_viewer()
+    if body.mode == "testset":
+        access.check_platform_admin()
+    if body.app == "lead_finder":
+        access.check_feature("lead_finder.start_run", write=True)
+    else:
+        access.check(body.app, write=True)
     return await manager.estimate(body)
 
 

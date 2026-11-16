@@ -18,16 +18,26 @@ logged (it would only fill the log).
 These functions commit. They are called with a database session of their own (one request).
 """
 
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.auth import audit, sessions, throttle, users
 from core.auth.models import User, UserSession
-from core.auth.passwords import Hasher, get_hasher
+from core.auth.passwords import Hasher, get_hasher, require_good_password
 from core.auth.sessions import AuthContext, Limits
 from core.auth.throttle import Rules, Standing, UnknownLogins
+
+
+class WrongCurrentPassword(Exception):
+    """The typed current password was wrong."""
+
+    def __init__(self, retry_after: timedelta | None = None) -> None:
+        self.retry_after = retry_after
+        super().__init__("wrong current password")
 
 
 class InvalidLogin(Exception):
@@ -183,6 +193,83 @@ async def logout_everywhere(
         db,
         "sign_out_everywhere",
         user_id=auth.user.id,
+        ip=ip,
+        user_agent=user_agent,
+        details={"by": "person", "sessions_ended": ended},
+        at=now,
+    )
+    await db.commit()
+    return ended
+
+
+async def change_password(
+    db: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    current_session_id: uuid.UUID,
+    current_password: str,
+    new_password: str,
+    ip: str | None,
+    user_agent: str | None,
+    now: datetime,
+    rules: Rules,
+    hasher: Hasher | None = None,
+) -> int:
+    """Changes the signed-in person's own password (PLAN-V19 T1-6).
+
+    Checks lock standing, counts wrong current tries toward the lock (as sign-in does), checks the
+    new password against today's rules, and ends every other session of this user.
+    """
+    hasher = hasher or get_hasher()
+    user = await db.scalar(select(User).where(User.id == user_id).with_for_update())
+    if user is None:
+        raise InvalidLogin()
+    standing = Standing(user.failed_attempts, user.locked_until)
+    wait = throttle.wait_for(standing, now)
+    if wait is not None:
+        await db.rollback()
+        raise TooManyTries(wait)
+
+    right, _ = await hasher.averify(user.password_hash, current_password)
+    if not right:
+        after, locked = throttle.after_failure(standing, rules, now)
+        user.failed_attempts, user.locked_until = after.failed, after.blocked_until
+        audit.add_entry(
+            db,
+            "sign_in_failed",
+            user_id=user.id,
+            ip=ip,
+            user_agent=user_agent,
+            details={"reason": "wrong_current_password"},
+            at=now,
+        )
+        if locked:
+            minutes = int(rules.lock_for.total_seconds() // 60)
+            audit.add_entry(
+                db,
+                "account_locked",
+                user_id=user.id,
+                ip=ip,
+                user_agent=user_agent,
+                details={"tries": after.failed, "minutes": minutes},
+                at=now,
+            )
+        await db.commit()
+        raise WrongCurrentPassword(throttle.wait_for(after, now))
+
+    try:
+        require_good_password(new_password, email=user.email, username=user.username)
+    except Exception:
+        await db.rollback()
+        raise
+
+    password_hash = await hasher.ahash(new_password)
+    users.set_password(user, password_hash, now)
+    ended = await sessions.end_other_for_user(db, user.id, current_session_id, now)
+    audit.add_entry(
+        db,
+        "password_changed",
+        user_id=user.id,
         ip=ip,
         user_agent=user_agent,
         details={"by": "person", "sessions_ended": ended},

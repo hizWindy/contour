@@ -7,10 +7,10 @@ from typing import Annotated, Any, Literal
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
-from core.api.access import AppAccessDep
 from core.api.deps import EmbedderDep, SessionDep, SettingsDep
 from core.api.errors import Problem
 from core.api.models import SafeText
+from core.api.signin import PlatformAdminDep
 from core.config import Settings
 from core.memory.service import remember, search
 
@@ -89,9 +89,8 @@ async def save_note(
     session: SessionDep,
     embedder: EmbedderDep,
     settings: SettingsDep,
-    access: AppAccessDep,
+    admin: PlatformAdminDep,
 ) -> MemoryOut:
-    access.check(body.app)
     check_note_limits(body, settings)
     item = await remember(
         session,
@@ -115,7 +114,7 @@ async def save_note(
 async def search_memory(
     session: SessionDep,
     embedder: EmbedderDep,
-    access: AppAccessDep,
+    admin: PlatformAdminDep,
     q: Annotated[
         SafeText, Query(min_length=2, max_length=500, examples=["dairy company moving offices"])
     ],
@@ -123,12 +122,7 @@ async def search_memory(
     kind: Kind | None = None,
     limit: Annotated[int, Query(ge=1, le=50)] = 5,
 ) -> list[MemoryHitOut]:
-    apps: list[str] | None = None
-    if app is not None:
-        access.check(app)
-    else:
-        apps = access.allowed()  # only the projects this person may use
-    hits = await search(session, embedder, q, app=app, apps=apps, kind=kind, limit=limit)
+    hits = await search(session, embedder, q, app=app, kind=kind, limit=limit)
     return [
         MemoryHitOut.model_validate(
             MemoryOut.model_validate(hit.item).model_dump() | {"similarity": hit.similarity}

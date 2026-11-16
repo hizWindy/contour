@@ -657,6 +657,11 @@ def test_0013_rivals_reasons_projects_and_the_old_schedule(scratch: Scratch) -> 
             (gone,),
         )
 
+    command.upgrade(config, "0013_plan_v9")
+    with scratch.connect() as connection:
+        apps = connection.execute("SELECT apps FROM core.users").fetchone()
+        assert apps == {"apps": []}
+
     command.upgrade(config, "head")
     command.check(config)  # the models declare the same tables, columns and keys
     with scratch.connect() as connection:
@@ -668,8 +673,8 @@ def test_0013_rivals_reasons_projects_and_the_old_schedule(scratch: Scratch) -> 
             connection.execute(
                 "UPDATE lead_finder.leads SET reject_reason = 'free text' WHERE id = %s", (lead,)
             )
-        apps = connection.execute("SELECT apps FROM core.users").fetchone()
-        assert apps == {"apps": []}
+        apps = connection.execute("SELECT role, apps FROM core.users").fetchone()
+        assert apps == {"role": "platform_admin", "apps": ["lead_finder", "companies"]}
         left = connection.execute("SELECT id FROM core.schedules").fetchall()
         assert left == []  # the old one was off and never ran, so it went
         connection.execute(
@@ -818,6 +823,88 @@ def test_0022_adds_and_removes_our_copy_of_meetings(scratch: Scratch) -> None:
     assert meeting_tables(scratch) == set()
     command.upgrade(config, "head")
     assert meeting_tables(scratch) == {"hubspot_meetings", "hubspot_meeting_reads"}
+
+
+@pytest.mark.integration
+def test_0025_v19_roles_access_upgrade_and_downgrade(scratch: Scratch) -> None:
+    """PLAN-V19 T1-3 & T1-4: oldest active admin becomes platform_admin, partial unique index
+    refuses a second one, features are backfilled from apps, and downgrade cleanly reverses."""
+    config = alembic_config(scratch.url)
+    command.upgrade(config, "0024_v18_teams_activity")
+
+    inactive_admin = uuid.uuid4()
+    oldest_admin = uuid.uuid4()
+    newer_admin = uuid.uuid4()
+    staff_both = uuid.uuid4()
+    viewer_lf = uuid.uuid4()
+    with scratch.connect() as connection:
+        connection.execute(
+            "INSERT INTO core.users (id, email, name, role, active, apps, password_hash, "
+            "created_at) VALUES "
+            "(%s, 'inactive@example.test', 'Inactive Admin', 'admin', false, "
+            "ARRAY['lead_finder']::varchar[], '$argon2id$x', '2026-11-01 00:00+00'), "
+            "(%s, 'boss@example.test', 'Oldest Active', 'admin', true, "
+            "ARRAY[]::varchar[], '$argon2id$x', '2026-11-02 00:00+00'), "
+            "(%s, 'second@example.test', 'Second Admin', 'admin', true, "
+            "ARRAY['companies']::varchar[], '$argon2id$x', '2026-11-03 00:00+00'), "
+            "(%s, 'staff@example.test', 'Staff Member', 'staff', true, "
+            "ARRAY['lead_finder', 'companies']::varchar[], '$argon2id$x', '2026-11-04 00:00+00'), "
+            "(%s, 'viewer@example.test', 'Viewer User', 'viewer', true, "
+            "ARRAY['lead_finder']::varchar[], '$argon2id$x', '2026-11-05 00:00+00')",
+            (inactive_admin, oldest_admin, newer_admin, staff_both, viewer_lf),
+        )
+
+    command.upgrade(config, "head")
+    command.check(config)
+    with scratch.connect() as connection:
+        rows_by_id = {
+            row["id"]: row
+            for row in connection.execute(
+                "SELECT id, role, apps, features, position FROM core.users"
+            ).fetchall()
+        }
+        assert rows_by_id[inactive_admin]["role"] == "admin"
+        assert rows_by_id[oldest_admin]["role"] == "platform_admin"
+        assert rows_by_id[newer_admin]["role"] == "admin"
+        assert set(rows_by_id[oldest_admin]["features"]) == {
+            "lead_finder.start_run",
+            "lead_finder.results",
+            "lead_finder.rules",
+            "lead_finder.send_to_hubspot",
+            "companies.companies",
+            "companies.call_logs",
+            "companies.meetings",
+            "companies.call_prep",
+        }
+        assert set(rows_by_id[staff_both]["features"]) == set(rows_by_id[oldest_admin]["features"])
+        assert set(rows_by_id[viewer_lf]["features"]) == {
+            "lead_finder.start_run",
+            "lead_finder.results",
+            "lead_finder.rules",
+            "lead_finder.send_to_hubspot",
+        }
+        assert rows_by_id[oldest_admin]["position"] is None
+        with pytest.raises(psycopg.errors.UniqueViolation, match="ix_users_one_platform_admin"):
+            connection.execute(
+                "UPDATE core.users SET role = 'platform_admin' WHERE id = %s", (newer_admin,)
+            )
+
+    command.downgrade(config, "0024_v18_teams_activity")
+    with scratch.connect() as connection:
+        roles = {
+            row["id"]: row["role"]
+            for row in connection.execute("SELECT id, role FROM core.users").fetchall()
+        }
+        assert roles[oldest_admin] == "admin"
+        cols = {
+            row["column_name"]
+            for row in connection.execute(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_schema = 'core' AND table_name = 'users'"
+            ).fetchall()
+        }
+        assert "features" not in cols and "position" not in cols
+    command.upgrade(config, "head")
 
 
 def fact(value: Any) -> dict[str, Any]:

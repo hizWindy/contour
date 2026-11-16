@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 from core.api.deps import SessionDep
 from core.api.errors import Problem
 from core.api.models import OutModel
-from core.api.signin import AdminDep
+from core.api.signin import PlatformAdminDep
 from core.browser.reader import SourceStopped
 from core.browser.worker import BrowserError
 from core.prefs.service import effective_settings
@@ -121,7 +121,7 @@ SourcePath = Annotated[SourceId, Path(description="property_daily or arealytics"
     summary="The tools and how each is doing",
     description="Property Daily, and Arealytics (listed, but not connected). Admins only.",
 )
-async def list_sources(session: SessionDep, admin: AdminDep) -> ToolList:
+async def list_sources(session: SessionDep, admin: PlatformAdminDep) -> ToolList:
     return ToolList(items=[await _source_out(session, source) for source in SOURCE_NAMES])
 
 
@@ -136,7 +136,9 @@ async def list_sources(session: SessionDep, admin: AdminDep) -> ToolList:
     ),
     responses={409: {"description": "The tool isn't ready to check"}},
 )
-async def check_source(source_id: SourcePath, session: SessionDep, admin: AdminDep) -> ToolOut:
+async def check_source(
+    source_id: SourcePath, session: SessionDep, admin: PlatformAdminDep
+) -> ToolOut:
     if source_id == "arealytics":
         raise Problem(409, NOT_CONNECTED_TITLE, NOT_CONNECTED_DETAIL, code="not_connected")
     settings = await effective_settings(session)
@@ -153,10 +155,12 @@ async def check_source(source_id: SourcePath, session: SessionDep, admin: AdminD
     "/{source_id}/resume",
     response_model=ToolOut,
     summary="Lift a pause",
-    description="Reading may go on now, before the 24 hours are up. Admins only.",
+    description="Reading may go on now, before the 24 hours are up. Platform admin only.",
     responses={409: {"description": "Arealytics isn't connected"}},
 )
-async def resume_source(source_id: SourcePath, session: SessionDep, admin: AdminDep) -> ToolOut:
+async def resume_source(
+    source_id: SourcePath, session: SessionDep, admin: PlatformAdminDep
+) -> ToolOut:
     if source_id == "arealytics":
         raise Problem(409, NOT_CONNECTED_TITLE, NOT_CONNECTED_DETAIL, code="not_connected")
     await store.resume(session, source_id)

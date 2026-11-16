@@ -11,7 +11,7 @@ notes (PLAN-V14) in api_script.py, the call notes (PLAN-V17) in api_notes.py, an
 
 from typing import Annotated
 
-from fastapi import APIRouter, Path, Query
+from fastapi import APIRouter, Depends, Path, Query
 
 from apps.companies import api_meetings, api_notes, api_preps, api_script, meeting_store, store
 from apps.companies.deals import DealState
@@ -25,7 +25,7 @@ from apps.companies.schemas import (
     SortOrder,
     Source,
 )
-from core.api.access import SignedInDep
+from core.api.access import SignedInDep, need
 from core.api.deps import SessionDep, SettingsDep
 from core.api.errors import Problem
 from core.api.models import OFFSET_MAX, SafeText
@@ -57,6 +57,7 @@ def not_found() -> Problem:
 @router.get(
     "",
     response_model=CompanyPage,
+    dependencies=[Depends(need("companies.companies", "companies.call_logs"))],
     summary="List companies",
     description=(
         "One page of companies from the HubSpot copy. `sort`: `last_activity` (the default: "
@@ -98,6 +99,7 @@ async def list_companies(
 @router.get(
     "/facets",
     response_model=CompanyFacets,
+    dependencies=[Depends(need("companies.companies"))],
     summary="What the filters offer",
     description="The cities, with how many companies have an office there, and the owners.",
 )
@@ -108,6 +110,16 @@ async def company_facets(session: SessionDep, leads: LeadsDep) -> CompanyFacets:
 @router.get(
     "/search",
     response_model=CompanySearch,
+    dependencies=[
+        Depends(
+            need(
+                "companies.call_prep",
+                "companies.companies",
+                "companies.call_logs",
+                "companies.meetings",
+            )
+        )
+    ],
     summary="Matches for the prep box",
     description=(
         "Up to 4 people (once HubSpot's contacts are copied) and up to 4 companies whose name "
@@ -133,6 +145,7 @@ router.include_router(api_meetings.router)
 @router.get(
     "/{key}",
     response_model=CompanyDetail,
+    dependencies=[Depends(need("companies.companies"))],
     summary="One company",
     description=(
         "What it does, its offices, deals and owner, the last talk, saved notes under 30 days "

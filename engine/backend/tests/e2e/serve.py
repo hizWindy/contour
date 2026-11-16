@@ -338,6 +338,7 @@ async def make_demo_admin(password: str) -> str:
                 name="Demo Admin",
                 password=password,
                 now=datetime.now(UTC),
+                role="platform_admin",
             )
     finally:
         await get_engine().dispose()

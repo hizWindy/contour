@@ -18,9 +18,10 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Path, Request
 
+from core.api.access import SignedInDep
 from core.api.deps import SessionDep
 from core.api.errors import Problem
-from core.api.signin import AdminDep, NowDep
+from core.api.signin import NowDep, PlatformAdminDep
 from core.schedules import service
 from core.schedules.calc import Cadence, describe
 from core.schedules.jobs import JobContext, JobEstimate, JobSettingsError, JobSkipped, JobSpec
@@ -167,7 +168,9 @@ async def build_out(
     response_model=ScheduleList,
     summary="Every schedule, with its next run, its last run and what one start costs",
 )
-async def list_schedules(request: Request, session: SessionDep, now: NowDep) -> ScheduleList:
+async def list_schedules(
+    request: Request, session: SessionDep, now: NowDep, auth: SignedInDep
+) -> ScheduleList:
     specs = specs_of(request)
     rows = await service.all_schedules(session)
     return ScheduleList(
@@ -194,7 +197,7 @@ async def edit_schedule(
     request: Request,
     session: SessionDep,
     now: NowDep,
-    admin: AdminDep,
+    admin: PlatformAdminDep,
 ) -> ScheduleOut:
     row = await service.get_locked(session, schedule_id)
     if row is None:
@@ -230,7 +233,7 @@ async def edit_schedule(
     ),
 )
 async def run_schedule_now(
-    schedule_id: Annotated[uuid.UUID, Path()], request: Request, admin: AdminDep
+    schedule_id: Annotated[uuid.UUID, Path()], request: Request, admin: PlatformAdminDep
 ) -> RunNow:
     scheduler: Scheduler | None = getattr(request.app.state, "scheduler", None)
     if scheduler is None:

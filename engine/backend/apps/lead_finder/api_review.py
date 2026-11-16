@@ -16,7 +16,7 @@ import uuid
 from decimal import Decimal
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Path, Request
+from fastapi import APIRouter, Depends, Path, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 
@@ -27,6 +27,7 @@ from apps.lead_finder.rules import load_rules
 from apps.lead_finder.run_email import cost_per_good_lead, good_leads
 from apps.lead_finder.schemas import LeadPatch, RejectReason
 from apps.lead_finder.tables import Lead
+from core.api.access import need
 from core.api.deps import EmbedderDep, SessionDep
 from core.api.errors import Problem
 from core.api.hubspot import KEY_MISSING
@@ -112,6 +113,7 @@ class ReviewResult(BaseModel):
 @router.get(
     "/{run_id}",
     response_model=ReviewOut,
+    dependencies=[Depends(need("lead_finder.results"))],
     summary="The review bar for one run",
     description=(
         "The run's city, its good leads (Pass and Director review), Watch and Drop, the cost and "
@@ -144,6 +146,7 @@ async def get_review(run_id: Annotated[uuid.UUID, Path()], session: SessionDep) 
 @router.post(
     "/status",
     response_model=ReviewResult,
+    dependencies=[Depends(need("lead_finder.results", write=True))],
     summary="Watch or reject the ticked leads",
     description=(
         "Each lead is changed as the lead card changes it. Rejecting needs reject_reason, and the "
@@ -188,6 +191,7 @@ async def review_status(
 @router.post(
     "/send",
     response_model=ReviewResult,
+    dependencies=[Depends(need("lead_finder.send_to_hubspot", write=True))],
     summary="Approve the ticked leads and send them to HubSpot",
     description=(
         "Each lead is previewed and written with the HubSpot writer, once only (a lead already "

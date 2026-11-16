@@ -185,14 +185,21 @@ async def test_only_an_admin_may_save(world: World, session_factory: Factory) ->
     world.settings(auth_required=True)
     world.clock.now = NOW
     await make_account(world)
-    async with session_factory() as db:
-        await db.execute(text("UPDATE core.users SET role = 'staff', apps = '{lead_finder}'"))
-        await db.commit()
-    async with world.browser() as browser:
-        assert (await sign_in(browser)).status_code == 200
-        assert (await browser.get(URL)).status_code == 200  # reading needs only the project
-        refused = await browser.put(URL, json=plan())
-        assert (refused.status_code, refused.json()["code"]) == (403, "admin_only")
+    for role in ("staff", "admin"):
+        async with session_factory() as db:
+            await db.execute(
+                text(
+                    "UPDATE core.users SET role = :role, apps = '{lead_finder}', "
+                    'features = \'{"lead_finder.results","lead_finder.start_run"}\''
+                ),
+                {"role": role},
+            )
+            await db.commit()
+        async with world.browser() as browser:
+            assert (await sign_in(browser)).status_code == 200
+            assert (await browser.get(URL)).status_code == 200  # reading needs only the tick
+            refused = await browser.put(URL, json=plan())
+            assert (refused.status_code, refused.json()["code"]) == (403, "platform_admin_only")
     assert not any(row.enabled for row in (await rows_of(session_factory)).values())
 
 

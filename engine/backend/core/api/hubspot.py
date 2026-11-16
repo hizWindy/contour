@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 
 from core.api.deps import EmbedderDep, SessionDep
 from core.api.errors import Problem
-from core.api.signin import AdminDep
+from core.api.signin import PlatformAdminDep
 from core.hubspot.activities import apply_activity
 from core.hubspot.client import HubSpotError, HubSpotWritesOff
 from core.hubspot.connection import (
@@ -94,6 +94,7 @@ class RebuildResult(BaseModel):
 async def get_hubspot_status(
     request: Request,
     session: SessionDep,
+    admin: PlatformAdminDep,
     refresh: Annotated[bool, Query(description="Check HubSpot again now")] = False,
 ) -> HubSpotStatus:
     return await connection_status(request.app, session, refresh=refresh)
@@ -112,6 +113,7 @@ async def get_hubspot_status(
 )
 async def start_hubspot_sync(
     request: Request,
+    admin: PlatformAdminDep,
     mode: Annotated[Literal["auto", "full", "changes"], Query(description="What to read")] = "auto",
 ) -> SyncOut:
     try:
@@ -128,9 +130,15 @@ async def start_hubspot_sync(
         ) from error
 
 
-@router.get("/syncs", response_model=list[SyncOut], summary="The newest HubSpot syncs")
+@router.get(
+    "/syncs",
+    response_model=list[SyncOut],
+    summary="The newest HubSpot syncs",
+)
 async def list_hubspot_syncs(
-    session: SessionDep, limit: Annotated[int, Query(ge=1, le=50)] = 10
+    session: SessionDep,
+    admin: PlatformAdminDep,
+    limit: Annotated[int, Query(ge=1, le=50)] = 10,
 ) -> list[SyncOut]:
     return await recent_syncs(session, limit=limit)
 
@@ -148,7 +156,7 @@ async def list_hubspot_syncs(
         "while the other backend (during a deploy) stops it. Follow it with GET /hubspot/syncs."
     ),
 )
-async def cancel_hubspot_sync(request: Request, sync_id: int) -> SyncOut:
+async def cancel_hubspot_sync(request: Request, sync_id: int, admin: PlatformAdminDep) -> SyncOut:
     try:
         return await sync_runner(request.app).cancel(sync_id)
     except SyncNotFound as error:
@@ -174,7 +182,7 @@ async def cancel_hubspot_sync(request: Request, sync_id: int) -> SyncOut:
     ),
 )
 async def list_hubspot_writes(
-    session: SessionDep, admin: AdminDep, limit: Annotated[int, Query(ge=1, le=200)] = 50
+    session: SessionDep, admin: PlatformAdminDep, limit: Annotated[int, Query(ge=1, le=200)] = 50
 ) -> list[WriteOut]:
     return await recent_writes(session, limit=limit)
 
@@ -186,13 +194,13 @@ async def list_hubspot_writes(
     description=(
         "Writes once only: applying a finished write returns its result. A Lead Finder send "
         "and a call note's activity (a call, field changes, tasks, a note) each go through "
-        "their own writer. Admins only: each project sends its own writes through its own "
+        "their own writer. Platform admin only: each project sends its own writes through its own "
         "routes. Needs the write scopes and HUBSPOT_WRITE_ENABLED=true; until then it answers "
         "409 hubspot_write_off."
     ),
 )
 async def apply_hubspot_write(
-    request: Request, session: SessionDep, admin: AdminDep, write_id: uuid.UUID
+    request: Request, session: SessionDep, admin: PlatformAdminDep, write_id: uuid.UUID
 ) -> WriteOut:
     try:
         row = await get_write(session, write_id)
@@ -218,7 +226,7 @@ async def apply_hubspot_write(
     ),
 )
 async def import_export(
-    file: UploadFile, session: SessionDep, embedder: EmbedderDep
+    file: UploadFile, session: SessionDep, embedder: EmbedderDep, admin: PlatformAdminDep
 ) -> ImportResult:
     if not (file.filename or "").lower().endswith(".xlsx"):
         raise Problem(422, "Upload an .xlsx file", "Export the companies from HubSpot as Excel.")
@@ -252,7 +260,7 @@ async def import_export(
 
 
 @router.get("/summary", response_model=HubSpotSummary, summary="How much HubSpot data is loaded")
-async def get_summary(session: SessionDep) -> HubSpotSummary:
+async def get_summary(session: SessionDep, admin: PlatformAdminDep) -> HubSpotSummary:
     return await summary(session)
 
 
@@ -263,12 +271,12 @@ async def get_summary(session: SessionDep) -> HubSpotSummary:
     description=(
         "Each active owner's id and name from our copy of HubSpot, which the sync keeps, sorted "
         "by name. An owner with no name in HubSpot shows as 'HubSpot owner 301'. Never an "
-        "email. At most 500: Contour has a few dozen. Admins only."
+        "email. At most 500: Contour has a few dozen. Platform admin only."
     ),
 )
 async def list_hubspot_owners(
     session: SessionDep,
-    admin: AdminDep,
+    admin: PlatformAdminDep,
     limit: Annotated[
         int, Query(ge=1, le=OWNERS_CAP, description="The most owners to send")
     ] = OWNERS_CAP,
@@ -286,7 +294,9 @@ async def list_hubspot_owners(
         "possible match and find look-alike companies. No contacts, phones or streets go in."
     ),
 )
-async def rebuild_profiles(session: SessionDep, embedder: EmbedderDep) -> RebuildResult:
+async def rebuild_profiles(
+    session: SessionDep, embedder: EmbedderDep, admin: PlatformAdminDep
+) -> RebuildResult:
     try:
         built = await build_profiles(session, embedder, wait=False)
     except RebuildRunning as error:  # a second press, or a sync rebuilding them now

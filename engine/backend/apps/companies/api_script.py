@@ -15,7 +15,7 @@ sit before `/{key}` in the Companies router, so `script-style` is never read as 
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Path, Query, Response
+from fastapi import APIRouter, Depends, Path, Query, Response
 
 from apps.companies import script_notes, store, tones
 from apps.companies.schemas import (
@@ -28,7 +28,7 @@ from apps.companies.schemas import (
     TeamToneIn,
     ToneIn,
 )
-from core.api.access import SignedInDep
+from core.api.access import SignedInDep, need
 from core.api.deps import SessionDep
 from core.api.errors import Problem
 from core.api.signin import NowDep
@@ -58,6 +58,7 @@ def _check_key(key: str) -> None:
 @router.get(
     "/script-edits",
     response_model=list[ScriptEditOut],
+    dependencies=[Depends(need("companies.call_prep"))],
     summary="My own lines for one call",
     description=(
         "The lines I rewrote for a call to this person (or a cold call). Only I see them. The "
@@ -78,6 +79,7 @@ async def list_script_edits(
 @router.put(
     "/script-edits",
     response_model=ScriptEditOut,
+    dependencies=[Depends(need("companies.call_prep", write=True))],
     summary="Save my own line",
     description=(
         "Saves my wording for one slot of one call: `opener.0`, `why_now.1`, `question.2`, "
@@ -94,6 +96,7 @@ async def save_script_edit(
 @router.delete(
     "/script-edits",
     status_code=204,
+    dependencies=[Depends(need("companies.call_prep", write=True))],
     summary="Back to the draft",
     description="Removes my line for this slot, so the draft shows again. Nothing there is fine.",
 )
@@ -113,6 +116,7 @@ async def reset_script_edit(
 @router.get(
     "/script-style",
     response_model=ScriptStyleOut,
+    dependencies=[Depends(need("companies.call_prep"))],
     summary="My style and the team's",
     description=(
         "What the next script is written with: my own style, and the team's active notes. An "
@@ -126,6 +130,7 @@ async def get_script_style(session: SessionDep, auth: SignedInDep) -> ScriptStyl
 @router.put(
     "/script-style/mine",
     response_model=ScriptStyleOut,
+    dependencies=[Depends(need("companies.call_prep", write=True))],
     summary="Save my style",
     description=(
         "My own style note, up to 600 characters. An empty text clears it. It goes into my "
@@ -141,6 +146,7 @@ async def save_my_style(
 @router.put(
     "/script-style/tone",
     response_model=ScriptStyleOut,
+    dependencies=[Depends(need("companies.call_prep", write=True))],
     summary="Save my tone",
     description=(
         "My tone preset: friendly, direct, consultative or formal, or null to follow the team's "
@@ -158,6 +164,7 @@ async def save_my_tone(
 @router.put(
     "/script-style/team-tone",
     response_model=ScriptStyleOut,
+    dependencies=[Depends(need("companies.call_prep", write=True))],
     summary="Save the team's tone",
     description="Admins only. The tone for everyone who hasn't picked their own. 403 `admin_only`.",
 )
@@ -174,6 +181,7 @@ async def save_team_tone(
     "/script-style/team",
     response_model=ScriptStyleOut,
     status_code=201,
+    dependencies=[Depends(need("companies.call_prep", write=True))],
     summary="Suggest a team note",
     description=(
         "A note for everyone's scripts, up to 200 characters. It waits for an Admin; an Admin's "
@@ -190,6 +198,7 @@ async def suggest_team_note(
 @router.post(
     "/script-style/team/{note_id}/approve",
     response_model=ScriptStyleOut,
+    dependencies=[Depends(need("companies.call_prep", write=True))],
     summary="Approve a team note",
     description="Admins only. The note goes into everyone's next scripts.",
 )
@@ -202,6 +211,7 @@ async def approve_team_note(
 @router.post(
     "/script-style/team/{note_id}/reject",
     response_model=ScriptStyleOut,
+    dependencies=[Depends(need("companies.call_prep", write=True))],
     summary="Reject a team note",
     description="Admins only. The note stays visible to the one who suggested it, as rejected.",
 )
@@ -214,6 +224,7 @@ async def reject_team_note(
 @router.delete(
     "/script-style/team/{note_id}",
     response_model=ScriptStyleOut,
+    dependencies=[Depends(need("companies.call_prep", write=True))],
     summary="Retire a team note",
     description="Admins only. The note leaves everyone's next scripts.",
 )

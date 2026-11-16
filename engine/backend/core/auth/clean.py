@@ -12,6 +12,7 @@ from core.auth.models import IP_MAX, USER_AGENT_MAX, USERNAME_PATTERN
 
 EMAIL_MAX = 254
 LOGIN_MAX = 254  # the longest an email can be: a longer login can't be anyone's
+POSITION_MAX = 80  # optional job title (PLAN-V19 T1-5)
 _EMAIL_SHAPE = re.compile(r"[^@\s]{1,64}@[a-z0-9-]+(\.[a-z0-9-]+)+")  # name@host.domain
 _USERNAME = re.compile(USERNAME_PATTERN)
 
@@ -20,6 +21,7 @@ BAD_USERNAME = (
     "A username is 3 to 64 letters, digits, dots, dashes or underscores, and starts with a "
     "letter or a digit. It can't hold an @."
 )
+BAD_POSITION = f"Use {POSITION_MAX} characters or fewer."
 
 
 def email(text: str) -> str:
@@ -37,6 +39,18 @@ def username(text: str | None) -> str | None:
     value = text.strip().lower()
     if _USERNAME.fullmatch(value) is None:
         raise ValueError(BAD_USERNAME)
+    return value
+
+
+def position(text: str | None) -> str | None:
+    """The optional job title, trimmed and single-spaced, or None when blank."""
+    if text is None:
+        return None
+    value = " ".join(text.split())
+    if not value:
+        return None
+    if len(value) > POSITION_MAX:
+        raise ValueError(BAD_POSITION)
     return value
 
 

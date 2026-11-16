@@ -39,6 +39,7 @@ from apps.companies.schemas import (
 )
 from apps.companies.tables import NO_USER, ScriptEdit, ScriptStyle
 from core.api.errors import Problem
+from core.auth.features import is_admin
 from core.auth.models import User
 from core.auth.sessions import AuthContext
 
@@ -58,7 +59,7 @@ def user_of(auth: AuthContext | None) -> uuid.UUID | None:
 
 def can_decide(auth: AuthContext | None) -> bool:
     """An Admin decides team notes. With sign-in off, anyone (as for every route then)."""
-    return auth is None or auth.user.role == "admin"
+    return auth is None or is_admin(auth.user.role)
 
 
 def _owned(

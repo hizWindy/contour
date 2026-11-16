@@ -22,7 +22,7 @@ from sqlalchemy.exc import DBAPIError
 from core.api.deps import SessionDep
 from core.api.errors import Problem
 from core.api.models import OutModel
-from core.api.signin import AdminDep, NowDep
+from core.api.signin import NowDep, PlatformAdminDep
 from core.config import get_settings
 from core.db.engine import get_sessionmaker
 from core.health.checks import Context, Probes, ScheduleState, all_checks
@@ -277,7 +277,7 @@ async def health_details_of(app: FastAPI, now: datetime, *, refresh: bool) -> He
 async def health_details(
     request: Request,
     now: NowDep,
-    admin: AdminDep,
+    admin: PlatformAdminDep,
     refresh: Annotated[bool, Query(description="Check again now")] = False,
 ) -> HealthDetails:
     return await health_details_of(request.app, now, refresh=refresh)

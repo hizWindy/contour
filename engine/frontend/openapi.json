@@ -1201,6 +1201,29 @@
         "title": "CapReachedEvent",
         "type": "object"
       },
+      "ChangePasswordIn": {
+        "additionalProperties": false,
+        "properties": {
+          "current": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Current",
+            "type": "string"
+          },
+          "new": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "New",
+            "type": "string"
+          }
+        },
+        "required": [
+          "current",
+          "new"
+        ],
+        "title": "ChangePasswordIn",
+        "type": "object"
+      },
       "Cities": {
         "additionalProperties": false,
         "description": "Where a lead's office may be, for all of Australia (PLAN-V16 T1-2, Al-khair 15 Nov).\n\nEvery place in a group passes the location filter. The groups only change the city points of\nthe score. A place that isn't listed passes too, with the flag \"check the city\"\n(`scoring._city`). `national` is not a place: it is the name of the run choice that searches\nall of Australia at once, one search for each sign instead of one for each city.",
@@ -7820,6 +7843,24 @@
       },
       "LoginOut": {
         "properties": {
+          "first_sign_in": {
+            "default": false,
+            "description": "True on a person's first sign-in before changing their password",
+            "title": "First Sign In",
+            "type": "boolean"
+          },
+          "platform_admin_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The Platform admin's name, for access messages",
+            "title": "Platform Admin Name"
+          },
           "session": {
             "$ref": "#/components/schemas/SessionOut"
           },
@@ -7829,7 +7870,9 @@
         },
         "required": [
           "user",
-          "session"
+          "session",
+          "platform_admin_name",
+          "first_sign_in"
         ],
         "title": "LoginOut",
         "type": "object"
@@ -8040,6 +8083,24 @@
             "title": "Auth Required",
             "type": "boolean"
           },
+          "first_sign_in": {
+            "default": false,
+            "description": "True on a person's first sign-in before changing their password",
+            "title": "First Sign In",
+            "type": "boolean"
+          },
+          "platform_admin_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The Platform admin's name, for Ask <name> access messages",
+            "title": "Platform Admin Name"
+          },
           "session": {
             "anyOf": [
               {
@@ -8064,7 +8125,9 @@
         "required": [
           "auth_required",
           "user",
-          "session"
+          "session",
+          "platform_admin_name",
+          "first_sign_in"
         ],
         "title": "MeOut",
         "type": "object"
@@ -9720,6 +9783,127 @@
         "title": "PartRule",
         "type": "object"
       },
+      "PersonCreatedOut": {
+        "properties": {
+          "active": {
+            "description": "false: this account can't sign in",
+            "title": "Active",
+            "type": "boolean"
+          },
+          "apps": {
+            "description": "The projects this person may use, filled from features",
+            "items": {
+              "type": "string"
+            },
+            "title": "Apps",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "features": {
+            "description": "The feature ticks enabled on this account",
+            "items": {
+              "type": "string"
+            },
+            "title": "Features",
+            "type": "array"
+          },
+          "hubspot_owner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HubSpotOwnerLink"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who this person is in HubSpot: the calls they log land under this owner. null: no link, so HubSpot shows their calls as unassigned"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_signed_in_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Signed In At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional job title, like Sales Director",
+            "title": "Position"
+          },
+          "role": {
+            "enum": [
+              "platform_admin",
+              "admin",
+              "staff",
+              "viewer"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "starting_password": {
+            "description": "The generated starting password, returned once here and never kept.",
+            "title": "Starting Password",
+            "type": "string"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "email",
+          "username",
+          "position",
+          "role",
+          "apps",
+          "features",
+          "active",
+          "created_at",
+          "last_signed_in_at",
+          "hubspot_owner",
+          "starting_password"
+        ],
+        "title": "PersonCreatedOut",
+        "type": "object"
+      },
       "PersonHit": {
         "properties": {
           "company_key": {
@@ -9777,19 +9961,6 @@
       "PersonIn": {
         "additionalProperties": false,
         "properties": {
-          "apps": {
-            "examples": [
-              [
-                "lead_finder"
-              ]
-            ],
-            "items": {
-              "type": "string"
-            },
-            "maxItems": 20,
-            "title": "Apps",
-            "type": "array"
-          },
           "email": {
             "examples": [
               "marcus@contourinteriors.com.au"
@@ -9798,6 +9969,32 @@
             "pattern": "^[^\\x00]*$",
             "title": "Email",
             "type": "string"
+          },
+          "features": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "lead_finder.start_run",
+                    "lead_finder.results",
+                    "lead_finder.rules",
+                    "lead_finder.send_to_hubspot",
+                    "companies.companies",
+                    "companies.call_logs",
+                    "companies.meetings",
+                    "companies.call_prep"
+                  ],
+                  "type": "string"
+                },
+                "maxItems": 20,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Ticks for this account. Left out: the role's starting ticks.",
+            "title": "Features"
           },
           "name": {
             "examples": [
@@ -9809,12 +10006,18 @@
             "title": "Name",
             "type": "string"
           },
-          "password": {
-            "description": "The starting password, under today's rules. Never shown again.",
-            "maxLength": 1024,
-            "minLength": 1,
-            "title": "Password",
-            "type": "string"
+          "position": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
           },
           "role": {
             "default": "staff",
@@ -9842,8 +10045,7 @@
         },
         "required": [
           "name",
-          "email",
-          "password"
+          "email"
         ],
         "title": "PersonIn",
         "type": "object"
@@ -9856,7 +10058,7 @@
             "type": "boolean"
           },
           "apps": {
-            "description": "The projects this person may use. An Admin may use all",
+            "description": "The projects this person may use, filled from features",
             "items": {
               "type": "string"
             },
@@ -9871,6 +10073,14 @@
           "email": {
             "title": "Email",
             "type": "string"
+          },
+          "features": {
+            "description": "The feature ticks enabled on this account",
+            "items": {
+              "type": "string"
+            },
+            "title": "Features",
+            "type": "array"
           },
           "hubspot_owner": {
             "anyOf": [
@@ -9904,8 +10114,21 @@
             "title": "Name",
             "type": "string"
           },
+          "position": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional job title, like Sales Director",
+            "title": "Position"
+          },
           "role": {
             "enum": [
+              "platform_admin",
               "admin",
               "staff",
               "viewer"
@@ -9930,8 +10153,10 @@
           "name",
           "email",
           "username",
+          "position",
           "role",
           "apps",
+          "features",
           "active",
           "created_at",
           "last_signed_in_at",
@@ -9955,10 +10180,20 @@
             ],
             "title": "Active"
           },
-          "apps": {
+          "features": {
             "anyOf": [
               {
                 "items": {
+                  "enum": [
+                    "lead_finder.start_run",
+                    "lead_finder.results",
+                    "lead_finder.rules",
+                    "lead_finder.send_to_hubspot",
+                    "companies.companies",
+                    "companies.call_logs",
+                    "companies.meetings",
+                    "companies.call_prep"
+                  ],
                   "type": "string"
                 },
                 "maxItems": 20,
@@ -9968,7 +10203,20 @@
                 "type": "null"
               }
             ],
-            "title": "Apps"
+            "title": "Features"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "pattern": "^[^\\x00]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
           },
           "role": {
             "anyOf": [
@@ -11570,6 +11818,20 @@
           "company"
         ],
         "title": "ResearchRequest",
+        "type": "object"
+      },
+      "ResetPasswordOut": {
+        "properties": {
+          "starting_password": {
+            "description": "The new generated password, returned once here and never kept.",
+            "title": "Starting Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "starting_password"
+        ],
+        "title": "ResetPasswordOut",
         "type": "object"
       },
       "ReviewItem": {
@@ -17114,7 +17376,7 @@
       "UserOut": {
         "properties": {
           "apps": {
-            "description": "The projects this person may use, like lead_finder. An Admin may use all.",
+            "description": "The projects this person may use, filled from features",
             "items": {
               "type": "string"
             },
@@ -17124,6 +17386,14 @@
           "email": {
             "title": "Email",
             "type": "string"
+          },
+          "features": {
+            "description": "The ticks this account may use across Lead Finder and Relationships",
+            "items": {
+              "type": "string"
+            },
+            "title": "Features",
+            "type": "array"
           },
           "id": {
             "format": "uuid",
@@ -17135,9 +17405,22 @@
             "title": "Name",
             "type": "string"
           },
+          "position": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional job title, like Sales Director",
+            "title": "Position"
+          },
           "role": {
-            "description": "admin, staff or viewer",
+            "description": "platform_admin, admin, staff or viewer",
             "enum": [
+              "platform_admin",
               "admin",
               "staff",
               "viewer"
@@ -17163,8 +17446,10 @@
           "email",
           "username",
           "name",
+          "position",
           "role",
-          "apps"
+          "apps",
+          "features"
         ],
         "title": "UserOut",
         "type": "object"
@@ -18925,6 +19210,146 @@
           }
         ],
         "summary": "Who is signed in",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/password": {
+      "post": {
+        "description": "Checks current password, checks rules on the new one, and signs out other sessions.",
+        "operationId": "change_own_password",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "`wrong_password` when current is wrong, or password rule errors on body.new"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "`too_many_attempts` after too many wrong current tries"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Change your own password",
         "tags": [
           "auth"
         ]
@@ -26081,7 +26506,7 @@
     },
     "/hubspot/owners": {
       "get": {
-        "description": "Each active owner's id and name from our copy of HubSpot, which the sync keeps, sorted by name. An owner with no name in HubSpot shows as 'HubSpot owner 301'. Never an email. At most 500: Contour has a few dozen. Admins only.",
+        "description": "Each active owner's id and name from our copy of HubSpot, which the sync keeps, sorted by name. An owner with no name in HubSpot shows as 'HubSpot owner 301'. Never an email. At most 500: Contour has a few dozen. Platform admin only.",
         "operationId": "list_hubspot_owners",
         "parameters": [
           {
@@ -27271,7 +27696,7 @@
     },
     "/hubspot/writes/{write_id}/apply": {
       "post": {
-        "description": "Writes once only: applying a finished write returns its result. A Lead Finder send and a call note's activity (a call, field changes, tasks, a note) each go through their own writer. Admins only: each project sends its own writes through its own routes. Needs the write scopes and HUBSPOT_WRITE_ENABLED=true; until then it answers 409 hubspot_write_off.",
+        "description": "Writes once only: applying a finished write returns its result. A Lead Finder send and a call note's activity (a call, field changes, tasks, a note) each go through their own writer. Platform admin only: each project sends its own writes through its own routes. Needs the write scopes and HUBSPOT_WRITE_ENABLED=true; until then it answers 409 hubspot_write_off.",
         "operationId": "apply_hubspot_write",
         "parameters": [
           {
@@ -32666,7 +33091,7 @@
     },
     "/lead-finder/tests/run": {
       "post": {
-        "description": "A short way to start a `testset` run. Returns the run.",
+        "description": "A short way to start a `testset` run. Returns the run. Platform admin only.",
         "operationId": "start_test_run",
         "responses": {
           "201": {
@@ -33664,7 +34089,7 @@
         ]
       },
       "post": {
-        "description": "A new account with a starting password under today's rules (the same rules as create-admin). `apps` is the projects it may use, like [\"lead_finder\"]. Admins only.",
+        "description": "A new account with a generated starting password shown once in this answer. Platform admin only.",
         "operationId": "add_person",
         "requestBody": {
           "content": {
@@ -33681,7 +34106,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PersonOut"
+                  "$ref": "#/components/schemas/PersonCreatedOut"
                 }
               }
             },
@@ -33961,7 +34386,7 @@
             "sessionCookie": []
           }
         ],
-        "summary": "Change a person's projects, role or whether they can sign in",
+        "summary": "Change a person's ticks, position, role or whether they can sign in",
         "tags": [
           "people"
         ]
@@ -33969,7 +34394,7 @@
     },
     "/people/{user_id}/hubspot-owner": {
       "put": {
-        "description": "Links the account to a HubSpot owner by hand, so the calls, tasks and notes this person logs land under that owner in HubSpot. `owner_id` is an active owner from GET /hubspot/owners. The HubSpot sync never changes a link set by hand. `{\"owner_id\": null}` clears the link, and the next sync may then match the person by email again. Admins only.",
+        "description": "Links the account to a HubSpot owner by hand, so the calls, tasks and notes this person logs land under that owner in HubSpot. `owner_id` is an active owner from GET /hubspot/owners. The HubSpot sync never changes a link set by hand. `{\"owner_id\": null}` clears the link, and the next sync may then match the person by email again. Platform admin only.",
         "operationId": "set_hubspot_owner",
         "parameters": [
           {
@@ -34121,6 +34546,155 @@
           }
         ],
         "summary": "Set or clear who a person is in HubSpot",
+        "tags": [
+          "people"
+        ]
+      }
+    },
+    "/people/{user_id}/password": {
+      "post": {
+        "description": "Generates a new starting password, ends all open sessions for that person, and returns the password once. Platform admin only.",
+        "operationId": "reset_person_password",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResetPasswordOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Reset a person's password and sign them out",
         "tags": [
           "people"
         ]
@@ -35956,7 +36530,7 @@
         ]
       },
       "put": {
-        "description": "Changes the four city schedules in one transaction. Picked cities are on, one day apart in the order Melbourne, Adelaide, Perth, Sydney, from the first day (`weekday`, 0 Monday to 6 Sunday) at `at` (24-hour, Melbourne time). The others are off. A round must end before the next starts, so `every` in days is at least the number of cities. `budget_usd` is the most a whole round may spend (the setting `lead_finder_round_cap_usd`). Saving the same times again keeps each schedule's next run. Switching it on spends money, so it needs the Admin role.",
+        "description": "Changes the four city schedules in one transaction. Picked cities are on, one day apart in the order Melbourne, Adelaide, Perth, Sydney, from the first day (`weekday`, 0 Monday to 6 Sunday) at `at` (24-hour, Melbourne time). The others are off. A round must end before the next starts, so `every` in days is at least the number of cities. `budget_usd` is the most a whole round may spend (the setting `lead_finder_round_cap_usd`). Saving the same times again keeps each schedule's next run. Switching it on spends money, so it needs Platform admin.",
         "operationId": "put_lead_finder_round",
         "requestBody": {
           "content": {
@@ -37399,7 +37973,7 @@
     },
     "/sources/{source_id}/resume": {
       "post": {
-        "description": "Reading may go on now, before the 24 hours are up. Admins only.",
+        "description": "Reading may go on now, before the 24 hours are up. Platform admin only.",
         "operationId": "resume_source",
         "parameters": [
           {

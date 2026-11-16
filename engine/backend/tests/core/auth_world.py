@@ -103,6 +103,11 @@ async def make_account(world: World, **changes: Any) -> User:
         return await admin.create_admin(db, **{**values, **changes})
 
 
+async def make_platform_admin(world: World, **changes: Any) -> User:
+    """Makes the Platform admin account (Al-khair by default)."""
+    return await make_account(world, role="platform_admin", **changes)
+
+
 async def sign_in(client: httpx.AsyncClient, **changes: Any) -> httpx.Response:
     body = {"login": "alkhair", "password": GOOD, **changes}
     return await client.post(f"{API}/login", json=body)

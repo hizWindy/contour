@@ -33,7 +33,7 @@ from apps.companies.schemas import (
     NoteState,
     OutcomeFilter,
 )
-from core.api.access import SignedInDep
+from core.api.access import SignedInDep, need
 from core.api.deps import SessionDep, SettingsDep
 from core.api.models import OFFSET_MAX, SafeText
 from core.api.runs import IDEMPOTENCY_PATTERN
@@ -88,6 +88,16 @@ NoteId = Annotated[uuid.UUID, Path(description="The note's id")]
 @router.get(
     "/call-notes/options",
     response_model=CallNoteOptions,
+    dependencies=[
+        Depends(
+            need(
+                "companies.call_logs",
+                "companies.companies",
+                "companies.meetings",
+                "companies.call_prep",
+            )
+        )
+    ],
     summary="What Log call offers",
     description=(
         "Whether call notes are on, whether Claude sorts a note, whether sending to HubSpot is "
@@ -106,6 +116,7 @@ async def call_note_options(request: Request, settings: SettingsDep) -> CallNote
 @router.get(
     "/call-notes/summary",
     response_model=CallNoteSummary,
+    dependencies=[Depends(need("companies.call_logs"))],
     summary="My call note counts",
     description=(
         "For Home and the menu: my notes to confirm (being sorted, or waiting for me), those "
@@ -122,6 +133,7 @@ async def call_note_summary(
 @router.post(
     "/call-notes/preview",
     response_model=CallNotePreview,
+    dependencies=[Depends(need("companies.call_logs", write=True))],
     summary="Check notes before sending",
     description=(
         "For a list of my notes (waiting to be sent, or the parts not yet sent of a note that "
@@ -150,6 +162,7 @@ async def preview_call_notes(
     "/call-notes/confirm",
     response_model=CallNoteConfirm,
     status_code=202,
+    dependencies=[Depends(need("companies.call_logs", write=True))],
     summary="Send notes to HubSpot",
     description=(
         "Sends my notes to HubSpot, one after another, in the background, in the order given, "
@@ -178,6 +191,7 @@ async def confirm_call_notes(
 @router.get(
     "/call-notes",
     response_model=CallNotePage,
+    dependencies=[Depends(need("companies.call_logs"))],
     summary="My call notes",
     description=(
         "A page of notes. `state`: `to_confirm` (being sorted, waiting for me, or being sent), "
@@ -236,6 +250,7 @@ async def list_call_notes(
     "/call-notes",
     response_model=CallNoteOut,
     status_code=201,
+    dependencies=[Depends(need("companies.call_logs", write=True))],
     summary="Log a call",
     description=(
         "Saves a note after a call. The text may be empty when an outcome is picked (No "
@@ -288,6 +303,7 @@ async def save_call_note(
 @router.get(
     "/call-notes/{note_id}",
     response_model=CallNoteOut,
+    dependencies=[Depends(need("companies.call_logs"))],
     summary="One call note",
     description=(
         "Mine, or anyone's for an Admin. A note left `sorting` by a restart goes to the batch "
@@ -310,6 +326,7 @@ async def get_call_note(
 @router.patch(
     "/call-notes/{note_id}",
     response_model=CallNoteOut,
+    dependencies=[Depends(need("companies.call_logs", write=True))],
     summary="Change a call note",
     description=(
         "My edits while the note waits for me, or to the parts not yet in HubSpot of a note "
@@ -341,6 +358,7 @@ async def edit_call_note(
 @router.delete(
     "/call-notes/{note_id}",
     status_code=204,
+    dependencies=[Depends(need("companies.call_logs", write=True))],
     summary="Remove a call note",
     description=(
         "Removes my note before it is sent (the toast's Undo), or a note that failed with "
@@ -365,6 +383,7 @@ async def delete_call_note(
     "/call-notes/{note_id}/retry",
     response_model=CallNoteOut,
     status_code=202,
+    dependencies=[Depends(need("companies.call_logs", write=True))],
     summary="Send a note again",
     description=(
         "Sends what didn't land, for my note that failed or was partly saved: a field held "
@@ -395,6 +414,7 @@ async def retry_call_note(
 @router.post(
     "/call-notes/{note_id}/resolve",
     response_model=CallNoteOut,
+    dependencies=[Depends(need("companies.call_logs", write=True))],
     summary="Say whether HubSpot has it",
     description=(
         "For a step HubSpot may or may not have saved (HubSpot didn't answer): `step` as the "

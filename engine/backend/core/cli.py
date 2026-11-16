@@ -569,6 +569,31 @@ async def _rename(login: str, name: str) -> tuple[str, bool]:
     return f"{user.email} is now called {saved}.", True
 
 
+async def _set_platform_admin(email: str) -> tuple[str, bool]:
+    """Makes an existing active account the single Platform admin (`PLAN-V19 T1-3`)."""
+    from core.auth import admin, clean, users
+    from core.db.engine import get_engine, get_sessionmaker
+
+    try:
+        cleaned = clean.email(email)
+    except ValueError as error:
+        return str(error), False
+    try:
+        async with get_sessionmaker()() as db:
+            user = await users.find_by_email(db, cleaned, lock=True)
+            if user is None:
+                return f"No account has email {cleaned}.", False
+            try:
+                changed = await admin.set_platform_admin(db, user, now=datetime.now(UTC))
+            except ValueError as error:
+                return str(error), False
+    finally:
+        await get_engine().dispose()
+    if not changed:
+        return f"{user.email} is already the Platform admin.", True
+    return f"{user.email} is now the Platform admin.", True
+
+
 async def _sign_out_everyone() -> str:
     """Ends every session of every account."""
     from core.auth import admin
@@ -685,6 +710,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     rename_cmd.add_argument("--user", required=True, help="The account's email or username")
     rename_cmd.add_argument("--name", required=True, help='The new name, like "Al-khair M. Pama"')
+    platform_cmd = commands.add_parser(
+        "set-platform-admin",
+        help="Hand the single Platform admin role to an active account by email.",
+    )
+    platform_cmd.add_argument("email", help="The account's email, like name@company.com.au")
     commands.add_parser("sign-out-everyone", help="End every session of every account.")
     commands.add_parser(
         "sources-check",
@@ -755,6 +785,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0 if ok else 1
         elif args.command == "rename":
             text, ok = asyncio.run(_rename(args.user, args.name), loop_factory=loop_factory())
+            print(text, file=sys.stdout if ok else sys.stderr)
+            return 0 if ok else 1
+        elif args.command == "set-platform-admin":
+            text, ok = asyncio.run(_set_platform_admin(args.email), loop_factory=loop_factory())
             print(text, file=sys.stdout if ok else sys.stderr)
             return 0 if ok else 1
         elif args.command == "sources-check":

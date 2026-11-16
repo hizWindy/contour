@@ -137,7 +137,13 @@ async def create_run(
         ),
     ] = None,
 ) -> RunOut:
-    access.check(body.app)
+    access.check_not_viewer()
+    if body.mode == "testset":
+        access.check_platform_admin()
+    if body.app == "lead_finder":
+        access.check_feature("lead_finder.start_run", write=True)
+    else:
+        access.check(body.app, write=True)
     manager = manager_of(request)
     run = await manager.start(body.app, body.mode, body.params, idempotency_key)
     response.headers["Location"] = f"{request.url.path.rstrip('/')}/{run.id}"
@@ -187,7 +193,11 @@ async def stream_run_events(
 ) -> Response:
     manager = manager_of(request)
     if not access.open:
-        access.check((await manager.get_run(run_id)).app)
+        run = await manager.get_run(run_id)
+        if run.app == "lead_finder":
+            access.check_feature("lead_finder.results", "lead_finder.start_run")
+        else:
+            access.check(run.app)
     start = max(after, last_event_id_of(last_event_id))
     if await manager.stream_is_over(run_id, start):
         return Response(status_code=204)  # so the browser's EventSource stops trying again
@@ -205,9 +215,16 @@ async def stream_run_events(
     ),
 )
 async def cancel_run(run_id: uuid.UUID, request: Request, access: AppAccessDep) -> RunOut:
+    access.check_not_viewer()
     manager = manager_of(request)
+    run = await manager.get_run(run_id)
+    if run.mode == "testset":
+        access.check_platform_admin()
     if not access.open:
-        access.check((await manager.get_run(run_id)).app)
+        if run.app == "lead_finder":
+            access.check_feature("lead_finder.start_run", write=True)
+        else:
+            access.check(run.app, write=True)
     return await manager.cancel(run_id)
 
 
@@ -222,7 +239,14 @@ async def cancel_run(run_id: uuid.UUID, request: Request, access: AppAccessDep) 
     ),
 )
 async def resume_run(run_id: uuid.UUID, request: Request, access: AppAccessDep) -> RunOut:
+    access.check_not_viewer()
     manager = manager_of(request)
+    run = await manager.get_run(run_id)
+    if run.mode == "testset":
+        access.check_platform_admin()
     if not access.open:
-        access.check((await manager.get_run(run_id)).app)
+        if run.app == "lead_finder":
+            access.check_feature("lead_finder.start_run", write=True)
+        else:
+            access.check(run.app, write=True)
     return await manager.resume(run_id)

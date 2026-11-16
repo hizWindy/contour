@@ -91,6 +91,7 @@ from apps.companies.schemas import (
 from apps.companies.store import people_of, valid_key
 from apps.companies.tables import CallNote, Prep
 from core.api.errors import Problem
+from core.auth.features import is_admin
 from core.auth.models import User
 from core.auth.sessions import AuthContext
 from core.company_leads import CompanyLeads
@@ -234,7 +235,7 @@ def maker_of(auth: AuthContext | None) -> uuid.UUID | None:
 
 
 def may_read(note: CallNote, auth: AuthContext | None) -> bool:
-    return auth is None or note.made_by == auth.user.id or auth.user.role == "admin"
+    return auth is None or note.made_by == auth.user.id or is_admin(auth.user.role)
 
 
 def may_change(note: CallNote, auth: AuthContext | None) -> bool:
@@ -683,7 +684,7 @@ async def list_notes(
         raise dates_out_of_order()
     statement = select(CallNote)
     own = mine or state == "history"
-    if auth is not None and (own or auth.user.role != "admin"):
+    if auth is not None and (own or not is_admin(auth.user.role)):
         statement = statement.where(CallNote.made_by == auth.user.id)
     if state is not None and state != "history":
         statement = statement.where(CallNote.status.in_(STATES[state]))

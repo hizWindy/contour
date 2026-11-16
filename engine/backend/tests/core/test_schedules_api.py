@@ -478,15 +478,19 @@ async def test_only_a_signed_in_person_may_read_and_only_an_admin_may_change(
         await db.commit()
     assert (await sign_in(setup.client)).status_code == 200
     assert (await setup.client.get(URL)).status_code == 200  # reading needs only a session
-    refused = await setup.client.patch(f"{URL}/{row.id}", json={"enabled": True})
-    assert (refused.status_code, refused.json()["code"]) == (403, "admin_only")
-    refused = await setup.client.post(f"{URL}/{row.id}/run")
-    assert (refused.status_code, refused.json()["code"]) == (403, "admin_only")
-    assert setup.job.calls == []
-    assert (await schedule_of(setup)).enabled is False
+    for role in ("viewer", "admin"):
+        async with setup.factory() as db:
+            await db.execute(text("UPDATE core.users SET role = :role"), {"role": role})
+            await db.commit()
+        refused = await setup.client.patch(f"{URL}/{row.id}", json={"enabled": True})
+        assert (refused.status_code, refused.json()["code"]) == (403, "platform_admin_only")
+        refused = await setup.client.post(f"{URL}/{row.id}/run")
+        assert (refused.status_code, refused.json()["code"]) == (403, "platform_admin_only")
+        assert setup.job.calls == []
+        assert (await schedule_of(setup)).enabled is False
 
     async with setup.factory() as db:
-        await db.execute(text("UPDATE core.users SET role = 'admin'"))
+        await db.execute(text("UPDATE core.users SET role = 'platform_admin'"))
         await db.commit()
     changed = await setup.client.patch(f"{URL}/{row.id}", json={"enabled": True})
     assert changed.status_code == 200

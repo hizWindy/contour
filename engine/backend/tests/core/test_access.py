@@ -14,7 +14,16 @@ from core.api.routes import api_routes
 from core.auth import admin
 from core.auth.models import AuditEntry, User
 from core.searches.models import SearchLog
-from tests.core.auth_world import FAST, GOOD, World, build_world, make_account, me, sign_in
+from tests.core.auth_world import (
+    FAST,
+    GOOD,
+    World,
+    build_world,
+    make_account,
+    make_platform_admin,
+    me,
+    sign_in,
+)
 from tests.lead_finder.factories import make_run
 
 pytestmark = pytest.mark.integration
@@ -27,7 +36,14 @@ def world(session_factory: Any) -> World:
     return build_world(session_factory)
 
 
-async def person(world: World, login: str, *, role: str = "staff", apps: list[str]) -> User:
+async def person(
+    world: World,
+    login: str,
+    *,
+    role: str = "staff",
+    apps: list[str] | None = None,
+    features: list[str] | None = None,
+) -> User:
     async with world.factory() as db:
         return await admin.create_person(
             db,
@@ -36,6 +52,7 @@ async def person(world: World, login: str, *, role: str = "staff", apps: list[st
             name=login.title(),
             role=role,
             apps=apps,
+            features=features,
             password=GOOD,
             now=world.clock.now,
             hasher=FAST,
@@ -79,7 +96,7 @@ async def test_every_lead_finder_route_refuses_a_person_without_the_tick(world: 
         for method, path in lead_finder_routes(world.app):
             answer = await client.request(method, filled(path), json={})
             assert answer.status_code == 403, (method, path, answer.status_code, answer.text)
-            assert answer.json()["code"] == "app_not_allowed"
+            assert answer.json()["code"] == "feature_not_allowed"
         for method, path, body in CORE_LEAD_FINDER_DATA:
             answer = await client.request(method, path, json=body)
             assert answer.status_code == 403, (method, path, answer.status_code, answer.text)
@@ -91,6 +108,8 @@ async def test_with_the_tick_every_lead_finder_route_is_open(world: World) -> No
     async with world.browser() as client:
         assert (await sign_in(client, login="marcus")).status_code == 200
         for method, path in lead_finder_routes(world.app):
+            if path.startswith(f"{LF}/tests") or (method == "PUT" and path == f"{LF}/round"):
+                continue  # Admin settings: Platform admin only
             answer = await client.request(method, filled(path), json={})
             assert answer.status_code != 403, (method, path, answer.text)
         for path in ("rules", "leads", "leads/facets", "leads/reject-reasons"):
@@ -111,7 +130,7 @@ async def test_an_admin_needs_no_tick(world: World) -> None:
 
 
 async def test_an_admin_adds_a_person_with_the_tick_and_they_can_sign_in(world: World) -> None:
-    await make_account(world)
+    await make_platform_admin(world)
     async with world.browser() as admin_browser:
         await sign_in(admin_browser)
         added = await admin_browser.post(
@@ -119,54 +138,57 @@ async def test_an_admin_adds_a_person_with_the_tick_and_they_can_sign_in(world: 
             json={
                 "name": "Marcus Lee",
                 "email": "Marcus@Example.test",
+                "position": "Sales Rep",
                 "role": "staff",
-                "apps": ["lead_finder"],
-                "password": GOOD,
+                "features": ["lead_finder.rules", "lead_finder.results"],
             },
         )
         assert added.status_code == 201, added.text
+        assert added.headers.get("cache-control") == "no-store"
         body = added.json()
-        assert (body["email"], body["role"], body["apps"]) == (
+        assert (body["email"], body["role"], body["position"], body["apps"]) == (
             "marcus@example.test",
             "staff",
+            "Sales Rep",
             ["lead_finder"],
         )
-        assert "password" not in body
+        assert set(body["features"]) == {"lead_finder.rules", "lead_finder.results"}
+        assert "starting_password" in body and len(body["starting_password"]) >= 14
+        marcus_password = body["starting_password"]
         listed = (await admin_browser.get(PEOPLE)).json()
         assert [p["email"] for p in listed] == ["al.khair@example.test", "marcus@example.test"]
+        assert "starting_password" not in listed[1]
 
-        weak = await admin_browser.post(
-            PEOPLE,
-            json={"name": "Weak", "email": "weak@example.test", "password": "password1"},
-        )
-        assert weak.status_code == 422
-        assert weak.json()["errors"][0]["field"] == "body.password"
         again = await admin_browser.post(
             PEOPLE,
-            json={"name": "Again", "email": "marcus@example.test", "password": GOOD},
+            json={"name": "Again", "email": "marcus@example.test"},
         )
         assert again.status_code == 422 and again.json()["errors"][0]["field"] == "body.email"
         unknown = await admin_browser.post(
             PEOPLE,
-            json={"name": "X", "email": "x@example.test", "apps": ["nothing"], "password": GOOD},
+            json={"name": "X", "email": "x@example.test", "features": ["nothing"]},
         )
-        assert unknown.status_code == 422 and unknown.json()["errors"][0]["field"] == "body.apps"
+        assert (
+            unknown.status_code == 422 and unknown.json()["errors"][0]["field"] == "body.features.0"
+        )
 
     async with world.browser() as marcus:
-        assert (await sign_in(marcus, login="marcus@example.test")).status_code == 200
+        assert (
+            await sign_in(marcus, login="marcus@example.test", password=marcus_password)
+        ).status_code == 200
         assert (await marcus.get(f"{LF}/rules")).status_code == 200
-        assert (await marcus.get(PEOPLE)).status_code == 403  # Admins only
+        assert (await marcus.get(PEOPLE)).status_code == 403  # Platform admin only
 
 
 async def test_taking_the_tick_away_closes_the_lead_finder(world: World) -> None:
-    await make_account(world)
+    await make_platform_admin(world)
     marcus = await person(world, "marcus", apps=["lead_finder"])
     async with world.browser() as admin_browser, world.browser() as marcus_browser:
         await sign_in(admin_browser)
         await sign_in(marcus_browser, login="marcus")
         assert (await marcus_browser.get(f"{LF}/rules")).status_code == 200
 
-        changed = await admin_browser.patch(f"{PEOPLE}/{marcus.id}", json={"apps": []})
+        changed = await admin_browser.patch(f"{PEOPLE}/{marcus.id}", json={"features": []})
         assert changed.status_code == 200 and changed.json()["apps"] == []
         assert (await marcus_browser.get(f"{LF}/rules")).status_code == 403
 
@@ -178,14 +200,14 @@ async def test_taking_the_tick_away_closes_the_lead_finder(world: World) -> None
 
 
 async def test_an_admin_cant_lock_themselves_out(world: World) -> None:
-    me_admin = await make_account(world)
+    me_admin = await make_platform_admin(world)
     async with world.browser() as client:
         await sign_in(client)
         demote = await client.patch(f"{PEOPLE}/{me_admin.id}", json={"role": "staff"})
         assert demote.status_code == 422
         off = await client.patch(f"{PEOPLE}/{me_admin.id}", json={"active": False})
         assert off.status_code == 422
-        missing = await client.patch(f"{PEOPLE}/{uuid.uuid4()}", json={"apps": []})
+        missing = await client.patch(f"{PEOPLE}/{uuid.uuid4()}", json={"features": []})
         assert missing.status_code == 404
 
 

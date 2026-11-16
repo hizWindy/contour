@@ -15,22 +15,25 @@ from datetime import datetime, timedelta
 from typing import Annotated, Any, Literal, cast
 
 from fastapi import APIRouter, Query, Request, Response
-from pydantic import BaseModel, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from core.api.deps import SessionDep
-from core.api.errors import Problem
+from core.api.errors import Problem, ProblemDetails, ValidationProblem
 from core.api.models import OFFSET_MAX, OutModel, SafeText
 from core.api.signin import (
-    AdminDep,
     AuthSettingsDep,
     HasherDep,
     MaybeAuthDep,
     NowDep,
+    PlatformAdminDep,
     UnknownLoginsDep,
     client_ip,
 )
-from core.auth import audit, clean, cookies, service, sessions, words
+from core.auth import audit, clean, cookies, service, sessions, users, words
+from core.auth.features import Role as Role
+from core.auth.features import apps_from_features, effective_features
 from core.auth.models import AuditEntry, User, UserSession
+from core.auth.passwords import PasswordRefused
 from core.auth.sessions import Limits
 from core.auth.throttle import Rules
 from core.config import Settings
@@ -38,7 +41,6 @@ from core.config import Settings
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 # The same lists as the tables' checks. A test keeps them equal.
-Role = Literal["admin", "staff", "viewer"]
 Event = Literal[
     "sign_in",
     "sign_in_failed",
@@ -69,15 +71,27 @@ class LoginRequest(BaseModel):
     )
 
 
+class ChangePasswordIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    current: str = Field(min_length=1, max_length=1024)
+    new: str = Field(min_length=1, max_length=1024)
+
+
 class UserOut(OutModel):
     id: uuid.UUID
     email: str
     username: str | None = Field(description="The second way to sign in, if the account has one")
     name: str = Field(description="What the top bar shows")
-    role: Role = Field(description="admin, staff or viewer")
+    position: str | None = Field(None, description="Optional job title, like Sales Director")
+    role: Role = Field(description="platform_admin, admin, staff or viewer")
     apps: list[str] = Field(
         default_factory=list,
-        description="The projects this person may use, like lead_finder. An Admin may use all.",
+        description="The projects this person may use, filled from features",
+    )
+    features: list[str] = Field(
+        default_factory=list,
+        description="The ticks this account may use across Lead Finder and Relationships",
     )
 
 
@@ -101,6 +115,12 @@ class SessionOut(OutModel):
 class LoginOut(OutModel):
     user: UserOut
     session: SessionOut
+    platform_admin_name: str | None = Field(
+        None, description="The Platform admin's name, for access messages"
+    )
+    first_sign_in: bool = Field(
+        False, description="True on a person's first sign-in before changing their password"
+    )
 
 
 class MeOut(OutModel):
@@ -111,6 +131,12 @@ class MeOut(OutModel):
     )
     user: UserOut | None
     session: SessionOut | None
+    platform_admin_name: str | None = Field(
+        None, description="The Platform admin's name, for Ask <name> access messages"
+    )
+    first_sign_in: bool = Field(
+        False, description="True on a person's first sign-in before changing their password"
+    )
 
 
 class SessionPage(OutModel):
@@ -141,13 +167,17 @@ class LogPage(OutModel):
 
 
 def user_out(user: User) -> UserOut:
+    resolved_features = effective_features(user.role, user.features)
+    resolved_apps = apps_from_features(resolved_features) or list(user.apps or [])
     return UserOut(
         id=user.id,
         email=user.email,
         username=user.username,
         name=user.name,
-        role=cast(Role, user.role),  # the table's check keeps it one of the three
-        apps=list(user.apps or []),
+        position=user.position,
+        role=cast(Role, user.role),
+        apps=resolved_apps,
+        features=resolved_features,
     )
 
 
@@ -291,9 +321,13 @@ async def login(
             max_age=_cookie_life(result.session, now),
         ),
     )
+    admin_name = await users.platform_admin_name(db)
+    first = await audit.is_first_sign_in(db, result.user.id)
     return LoginOut(
         user=user_out(result.user),
         session=session_out(result.session, current=True, limits=limits),
+        platform_admin_name=admin_name,
+        first_sign_in=first,
     )
 
 
@@ -332,16 +366,98 @@ async def logout_everywhere(
     return SignedOut(sessions_ended=ended)
 
 
+@router.post(
+    "/password",
+    status_code=204,
+    summary="Change your own password",
+    responses={
+        422: {
+            "model": ValidationProblem,
+            "description": (
+                "`wrong_password` when current is wrong, or password rule errors on body.new"
+            ),
+        },
+        429: {
+            "model": ProblemDetails,
+            "description": "`too_many_attempts` after too many wrong current tries",
+        },
+    },
+)
+async def change_own_password(
+    body: ChangePasswordIn,
+    request: Request,
+    response: Response,
+    db: SessionDep,
+    auth: MaybeAuthDep,
+    settings: AuthSettingsDep,
+    hasher: HasherDep,
+    now: NowDep,
+) -> Response:
+    """Checks current password, checks rules on the new one, and signs out other sessions."""
+    if auth is None:
+        raise Problem(
+            401,
+            "Sign in needed",
+            "Sign in to an account before changing its password.",
+            code="auth_required",
+        )
+    try:
+        await service.change_password(
+            db,
+            user_id=auth.user.id,
+            current_session_id=auth.session.id,
+            current_password=body.current,
+            new_password=body.new,
+            ip=client_ip(request),
+            user_agent=_agent(request),
+            now=now,
+            rules=Rules.from_settings(settings),
+            hasher=hasher,
+        )
+    except service.TooManyTries as tries:
+        seconds = _seconds(tries.retry_after)
+        raise Problem(
+            429,
+            "Too many tries",
+            words.too_many_tries(seconds),
+            code="too_many_attempts",
+            headers={"Retry-After": str(seconds)},
+            retry_after_seconds=seconds,
+        ) from None
+    except service.WrongCurrentPassword:
+        detail = "That isn't your current password."
+        raise Problem(
+            422,
+            "Wrong password",
+            detail,
+            code="wrong_password",
+            errors=[{"field": "body.current", "message": detail}],
+        ) from None
+    except PasswordRefused as refused:
+        message = " ".join(refused.problems)
+        raise Problem(
+            422,
+            "Choose a stronger password",
+            message,
+            errors=[{"field": "body.new", "message": message}],
+        ) from None
+    return Response(status_code=204, headers={"Cache-Control": "no-store"})
+
+
 @router.get("/me", response_model=MeOut, summary="Who is signed in")
-async def me(auth: MaybeAuthDep, settings: AuthSettingsDep) -> MeOut:
+async def me(db: SessionDep, auth: MaybeAuthDep, settings: AuthSettingsDep) -> MeOut:
     """The signed-in user and this session. The website asks first, to know whether to show the
     sign-in page. With sign-in off on this backend, `auth_required` is false and `user` is null."""
     if auth is None:
         return MeOut(auth_required=settings.auth_required, user=None, session=None)
+    admin_name = await users.platform_admin_name(db)
+    first = await audit.is_first_sign_in(db, auth.user.id)
     return MeOut(
         auth_required=settings.auth_required,
         user=user_out(auth.user),
         session=session_out(auth.session, current=True, limits=Limits.from_settings(settings)),
+        platform_admin_name=admin_name,
+        first_sign_in=first,
     )
 
 
@@ -367,7 +483,7 @@ async def my_sessions(
 @router.get("/log", response_model=LogPage, summary="The sign-in log, newest first")
 async def sign_in_log(
     db: SessionDep,
-    admin: AdminDep,
+    admin: PlatformAdminDep,
     limit: Annotated[int, Query(ge=1, le=200)] = 100,
     offset: Annotated[int, Query(ge=0, le=OFFSET_MAX)] = 0,
 ) -> LogPage:

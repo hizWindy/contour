@@ -98,11 +98,14 @@ def test_migrate_makes_the_first_admin_from_the_settings(
         "al.khair@example.test",
         "alkhair",
         "Al-khair Pama",
-        "admin",
+        "platform_admin",
     )
     assert get_hasher().verify(user["password_hash"], GOOD) == (True, False)
     (entry,) = rows(conninfo, "SELECT event, details FROM core.audit_log")
-    assert entry == {"event": "account_created", "details": {"by": "settings", "role": "admin"}}
+    assert entry == {
+        "event": "account_created",
+        "details": {"by": "settings", "role": "platform_admin"},
+    }
     for shown in (out, err):
         assert GOOD not in shown
 

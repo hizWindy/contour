@@ -56,8 +56,8 @@ async def test_every_companies_route_refuses_a_person_without_the_tick(world: Wo
         for method, path in companies_routes(world.app):
             answer = await client.request(method, filled(path) + "?q=ab", json={})
             assert answer.status_code == 403, (method, path, answer.status_code, answer.text)
-            assert answer.json()["code"] == "app_not_allowed"
-            assert "Companies page" in answer.json()["detail"]
+            assert answer.json()["code"] == "feature_not_allowed"
+            assert "You don't have access to " in answer.json()["detail"]
 
 
 @pytest.mark.parametrize(
@@ -83,7 +83,7 @@ async def test_every_companies_route_walked_as_four_accounts(
                 assert answer.status_code != 403, (login, method, path, answer.text)
             else:
                 assert answer.status_code == 403, (login, method, path, answer.status_code)
-                assert answer.json()["code"] == "app_not_allowed"
+                assert answer.json()["code"] == "feature_not_allowed"
 
 
 async def test_with_the_tick_every_companies_route_is_open(world: World) -> None:

@@ -8,7 +8,7 @@ route (`manager_of`), so a bad request is a 422 before an engine that isn't runn
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Query, Request, Response
+from fastapi import APIRouter, Depends, Query, Request, Response
 
 from apps.lead_finder.options import build_run_options
 from apps.lead_finder.rules import load_rules
@@ -18,10 +18,12 @@ from apps.lead_finder.sanitize import clean_company_name
 from apps.lead_finder.schemas import RunOptions, TestPage, TestReport
 from apps.lead_finder.tables import Lead
 from apps.lead_finder.testing import list_testset_runs, report_of_testset
+from core.api.access import need
 from core.api.deps import SessionDep, SettingsDep
 from core.api.errors import Problem
 from core.api.models import OFFSET_MAX
 from core.api.runs import manager_of
+from core.api.signin import PlatformAdminDep
 from core.runs.estimate import daily_left, spent_last_24h
 from core.runs.schemas import RunOut
 
@@ -38,6 +40,7 @@ def _run_location(request: Request, run: RunOut) -> str:
 @router.get(
     "/run-options",
     response_model=RunOptions,
+    dependencies=[Depends(need("lead_finder.start_run"))],
     summary="What the Start page offers",
     description=(
         "Cities (with their areas and map centres), triggers, the 7 or 30 day choice, the "
@@ -55,6 +58,7 @@ async def get_run_options(session: SessionDep, settings: SettingsDep) -> RunOpti
     "/leads/{lead_id}/recheck",
     status_code=201,
     response_model=RunOut,
+    dependencies=[Depends(need("lead_finder.start_run", write=True))],
     summary="Research this company again",
     description=(
         "Starts a one-company run that searches again even when memory is fresh, and returns "
@@ -93,9 +97,9 @@ async def recheck_lead(
     status_code=201,
     response_model=RunOut,
     summary="Run the test set",
-    description="A short way to start a `testset` run. Returns the run.",
+    description="A short way to start a `testset` run. Returns the run. Platform admin only.",
 )
-async def start_test_run(request: Request, response: Response) -> RunOut:
+async def start_test_run(request: Request, response: Response, admin: PlatformAdminDep) -> RunOut:
     run = await manager_of(request).start(APP, "testset", {})
     response.headers["Location"] = _run_location(request, run)
     return run
@@ -109,6 +113,7 @@ async def start_test_run(request: Request, response: Response) -> RunOut:
 )
 async def list_tests(
     session: SessionDep,
+    admin: PlatformAdminDep,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0, le=OFFSET_MAX)] = 0,
 ) -> TestPage:
@@ -121,5 +126,7 @@ async def list_tests(
     summary="The report of one test set run",
     description="Each company: the result that was expected, the result it got, and the cost.",
 )
-async def get_test_report(run_id: uuid.UUID, session: SessionDep) -> TestReport:
+async def get_test_report(
+    run_id: uuid.UUID, session: SessionDep, admin: PlatformAdminDep
+) -> TestReport:
     return await report_of_testset(session, run_id)

@@ -22,7 +22,7 @@ from core.health.checks import Probes
 from core.hubspot.check import PROBES, ConnectionCheck, ScopeOut
 from core.runs.models import Run
 from core.signalhire.client import SignalHireUnavailable
-from tests.core.auth_world import START, World, make_account, sign_in
+from tests.core.auth_world import START, World, make_platform_admin, sign_in
 
 pytestmark = pytest.mark.integration
 
@@ -86,10 +86,11 @@ async def setup(world: World, session_factory: Factory) -> AsyncIterator[Setup]:
 
 
 async def signed_in_as(setup: Setup, role: str) -> None:
-    await make_account(setup.world)
-    async with setup.factory() as db:
-        await db.execute(text("UPDATE core.users SET role = :role"), {"role": role})
-        await db.commit()
+    await make_platform_admin(setup.world)
+    if role != "platform_admin":
+        async with setup.factory() as db:
+            await db.execute(text("UPDATE core.users SET role = :role"), {"role": role})
+            await db.commit()
     assert (await sign_in(setup.client)).status_code == 200
 
 
@@ -98,16 +99,16 @@ async def test_no_session_is_401(setup: Setup) -> None:
     assert (answer.status_code, answer.json()["code"]) == (401, "auth_required")
 
 
-@pytest.mark.parametrize("role", ["staff", "viewer"])
+@pytest.mark.parametrize("role", ["admin", "staff", "viewer"])
 async def test_staff_and_viewers_get_403_and_nothing_is_checked(setup: Setup, role: str) -> None:
     await signed_in_as(setup, role)
     answer = await setup.client.get(URL)
-    assert (answer.status_code, answer.json()["code"]) == (403, "admin_only")
+    assert (answer.status_code, answer.json()["code"]) == (403, "platform_admin_only")
     assert (setup.calls.claude, setup.calls.signalhire, setup.calls.hubspot) == ([], 0, [])
 
 
 async def test_an_admin_gets_every_system(setup: Setup) -> None:
-    await signed_in_as(setup, "admin")
+    await signed_in_as(setup, "platform_admin")
     answer = await setup.client.get(URL)
     assert answer.status_code == 200, answer.text
     body = answer.json()
@@ -153,7 +154,7 @@ async def test_an_admin_gets_every_system(setup: Setup) -> None:
 
 
 async def test_the_answer_is_kept_for_a_minute_unless_asked_again(setup: Setup) -> None:
-    await signed_in_as(setup, "admin")
+    await signed_in_as(setup, "platform_admin")
     first = (await setup.client.get(URL)).json()
     again = (await setup.client.get(URL)).json()
     assert again == first
@@ -180,8 +181,8 @@ async def test_the_answer_is_kept_for_a_minute_unless_asked_again(setup: Setup) 
 
 
 async def test_check_again_pressed_while_a_check_is_going_checks_once(setup: Setup) -> None:
-    """Several presses, or two Admins at once: HubSpot, Claude and Signal Hire are asked once."""
-    await signed_in_as(setup, "admin")
+    """Several presses, or two checks at once: HubSpot, Claude and Signal Hire are asked once."""
+    await signed_in_as(setup, "platform_admin")
     setup.calls.claude_seconds = 0.5
     first, second = await asyncio.gather(
         setup.client.get(URL, params={"refresh": "true"}),
@@ -207,7 +208,7 @@ async def add_run(setup: Setup, status: str, stopped_hours_ago: float, resumes: 
 
 
 async def test_the_runs_row_names_a_run_a_restart_cut_off(setup: Setup) -> None:
-    await signed_in_as(setup, "admin")
+    await signed_in_as(setup, "platform_admin")
     state = setup.world.app.state
     state.run_manager = SimpleNamespace(active_run_ids=[uuid.uuid4()])
     state.run_engine_ready_at = START - timedelta(hours=3)  # 5:00 pm in Melbourne

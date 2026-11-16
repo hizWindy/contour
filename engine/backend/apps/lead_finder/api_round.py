@@ -7,11 +7,12 @@ session; saving needs the Admin role, because switching the round on spends mone
 for what a save does.
 """
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 
 from apps.lead_finder.round import RoundIn, RoundOut, read_round, save_round
+from core.api.access import need
 from core.api.deps import SessionDep
-from core.api.signin import AdminDep, NowDep
+from core.api.signin import NowDep, PlatformAdminDep
 from core.prefs.service import effective_settings
 
 router = APIRouter()
@@ -20,6 +21,7 @@ router = APIRouter()
 @router.get(
     "",
     response_model=RoundOut,
+    dependencies=[Depends(need("lead_finder.results", "lead_finder.start_run"))],
     summary="The city schedules as one plan, the round so far and its budget",
 )
 async def get_lead_finder_round(session: SessionDep, now: NowDep) -> RoundOut:
@@ -40,11 +42,11 @@ async def get_lead_finder_round(session: SessionDep, now: NowDep) -> RoundOut:
         "before the next starts, so `every` in days is at least the number of cities. "
         "`budget_usd` is the most a whole round may spend (the setting "
         "`lead_finder_round_cap_usd`). Saving the same times again keeps each schedule's next "
-        "run. Switching it on spends money, so it needs the Admin role."
+        "run. Switching it on spends money, so it needs Platform admin."
     ),
 )
 async def put_lead_finder_round(
-    body: RoundIn, request: Request, session: SessionDep, now: NowDep, admin: AdminDep
+    body: RoundIn, request: Request, session: SessionDep, now: NowDep, admin: PlatformAdminDep
 ) -> RoundOut:
     await save_round(session, body, now)
     settings = await effective_settings(session)

@@ -19,6 +19,7 @@ from core.api.deps import SessionDep
 from core.api.errors import Problem
 from core.auth import cookies, sessions, words
 from core.auth.clock import utcnow
+from core.auth.features import is_admin, is_platform_admin
 from core.auth.passwords import Hasher, get_hasher
 from core.auth.sessions import AuthContext, Gone, Limits
 from core.auth.throttle import UnknownLogins
@@ -128,12 +129,31 @@ async def maybe_auth(
 MaybeAuthDep = Annotated[AuthContext | None, Depends(maybe_auth)]
 
 
+_GUARD_ATTR = "_contour_guard"
+
+
 async def require_admin(auth: MaybeAuthDep) -> AuthContext | None:
-    """The signed-in Admin. Sign-in off (no one signed in, none required) lets the request pass,
-    as everything else does then. A signed-in user who isn't an Admin gets a 403."""
-    if auth is not None and auth.user.role != "admin":
+    """Platform admin or Admin. Staff and Viewer get 403 `admin_only`."""
+    if auth is not None and not is_admin(auth.user.role):
         raise Problem(403, "Admins only", "Only an Admin can do this.", code="admin_only")
     return auth
 
 
+setattr(require_admin, _GUARD_ATTR, ("role", "admin"))
 AdminDep = Annotated[AuthContext | None, Depends(require_admin)]
+
+
+async def require_platform_admin(auth: MaybeAuthDep) -> AuthContext | None:
+    """Only the single Platform admin (PLAN-V19 T1-3). With sign-in off, opens as before."""
+    if auth is not None and not is_platform_admin(auth.user.role):
+        raise Problem(
+            403,
+            "Platform admin only",
+            "Only the Platform admin can open Admin settings.",
+            code="platform_admin_only",
+        )
+    return auth
+
+
+setattr(require_platform_admin, _GUARD_ATTR, ("role", "platform_admin"))
+PlatformAdminDep = Annotated[AuthContext | None, Depends(require_platform_admin)]

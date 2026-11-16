@@ -12,6 +12,7 @@ from fastapi import APIRouter, Path
 
 from core.api.deps import SessionDep
 from core.api.models import SafeText
+from core.api.signin import PlatformAdminDep
 from core.prefs import service
 from core.prefs.schemas import SettingsOut, SettingsPatch
 
@@ -34,7 +35,7 @@ BROWSER_SPEECH = (
         "and a saved or server value of it shows as `browser_model` (Whisper in the browser)."
     ),
 )
-async def read_settings(session: SessionDep) -> SettingsOut:
+async def read_settings(session: SessionDep, admin: PlatformAdminDep) -> SettingsOut:
     return await service.get_settings_out(session)
 
 
@@ -52,7 +53,9 @@ async def read_settings(session: SessionDep) -> SettingsOut:
         "`body.values.voice_tool`), and nothing changes."
     ),
 )
-async def update_settings(body: SettingsPatch, session: SessionDep) -> SettingsOut:
+async def update_settings(
+    body: SettingsPatch, session: SessionDep, admin: PlatformAdminDep
+) -> SettingsOut:
     return await service.patch_settings(session, body.values)
 
 
@@ -64,5 +67,6 @@ async def update_settings(body: SettingsPatch, session: SessionDep) -> SettingsO
 async def reset_setting_to_default(
     key: Annotated[SafeText, Path(max_length=64, examples=["run_cap_usd"])],
     session: SessionDep,
+    admin: PlatformAdminDep,
 ) -> SettingsOut:
     return await service.reset_setting(session, key)

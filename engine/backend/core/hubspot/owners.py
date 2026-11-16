@@ -35,6 +35,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import exists, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from core.auth.features import feature_app, is_admin
 from core.auth.models import User
 from core.hubspot.client import HubSpot, HubSpotError, email_key
 from core.hubspot.models import HubSpotOwner, HubSpotOwnerTeam
@@ -339,6 +340,7 @@ async def rep_of_owner(
         )
     )
     for user in rows:
-        if user.role == "admin" or app in (user.apps or []):
+        has_feature = any(feature_app(f) == app for f in (user.features or []))
+        if is_admin(user.role) or has_feature or app in (user.apps or []):
             return user.name, user.email
     return None

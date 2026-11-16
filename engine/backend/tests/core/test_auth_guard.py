@@ -319,6 +319,8 @@ async def test_where_sign_in_is_off_the_guard_does_nothing() -> None:
             "auth_required": False,
             "user": None,
             "session": None,
+            "platform_admin_name": None,
+            "first_sign_in": False,
         }
         # Nothing was looked up: there was no cookie, and the guard never even asked.
         assert (

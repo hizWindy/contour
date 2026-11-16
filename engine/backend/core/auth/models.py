@@ -37,10 +37,9 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
+from core.auth.features import ROLES as ROLES
 from core.db.base import CORE_SCHEMA, Base
 
-# admin is the only one used today. staff and viewer are allowed so the table needs no change later.
-ROLES = ("admin", "staff", "viewer")
 # How a user's HubSpot owner was found: the sync matched the email, or an Admin chose it by hand.
 OWNER_MATCHES = ("email", "person")
 
@@ -86,6 +85,12 @@ class User(Base):
             "(hubspot_owner_id IS NULL) = (hubspot_owner_matched_by IS NULL)",
             name="hubspot_owner_link",
         ),
+        Index(
+            "ix_users_one_platform_admin",
+            "role",
+            unique=True,
+            postgresql_where=text("role = 'platform_admin'"),
+        ),
         {"schema": CORE_SCHEMA},
     )
 
@@ -93,6 +98,7 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(254), unique=True)  # lower case
     username: Mapped[str | None] = mapped_column(String(64), unique=True)  # lower case, or none
     name: Mapped[str] = mapped_column(String(120))  # what the top bar shows
+    position: Mapped[str | None] = mapped_column(String(80))  # optional job title (PLAN-V19 T1-5)
     role: Mapped[str] = mapped_column(String(16), server_default="admin")
     password_hash: Mapped[str] = mapped_column(Text)  # argon2id, with its settings in the text
     password_changed_at: Mapped[datetime] = mapped_column(
@@ -105,9 +111,13 @@ class User(Base):
         DateTime(timezone=True), server_default=text("now()")
     )
     last_signed_in_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    # The projects this person may use, by name, like ["lead_finder"] (PLAN-V9 E1). An Admin may use
-    # every project, whatever this says.
+    # The projects this person may use, by name, like ["lead_finder"] (PLAN-V9 E1). Kept synced
+    # from `features` so rolling back still works (PLAN-V19 Choice 3).
     apps: Mapped[list[str]] = mapped_column(
+        ARRAY(String(64)), default=list, server_default=text("'{}'::varchar[]")
+    )
+    # The eight feature ticks (PLAN-V19 T1-4), like ["lead_finder.results", "companies.call_logs"].
+    features: Mapped[list[str]] = mapped_column(
         ARRAY(String(64)), default=list, server_default=text("'{}'::varchar[]")
     )
     # Who this person is in HubSpot (PLAN-V17 T1-4): an owner's id, or none. Never the email.

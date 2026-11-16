@@ -26,7 +26,7 @@ from core.hubspot.owners import (
     rep_of_owner,
     shown_name,
 )
-from tests.core.auth_world import FAST, GOOD, World, make_account, sign_in
+from tests.core.auth_world import FAST, GOOD, World, make_account, make_platform_admin, sign_in
 from tests.core.test_hubspot_sync import contour, sync
 
 Factory = async_sessionmaker[AsyncSession]
@@ -423,7 +423,7 @@ async def test_an_admin_sees_sets_and_clears_who_a_person_is_in_hubspot(
     world: World, browser: httpx.AsyncClient
 ) -> None:
     await our_copy(world.factory)
-    await make_account(world)
+    await make_platform_admin(world)
     jo = await staff(world)
     matched = await add_account(world.factory, "lee.sample@contourinteriors.com.au", "305", "email")
     assert (await sign_in(browser)).status_code == 200
@@ -504,13 +504,22 @@ async def test_only_an_admin_may_see_or_change_who_a_person_is_in_hubspot(
         assert (await stranger.get(OWNERS)).status_code == 401
         assert (await stranger.put(path, json={"owner_id": "301"})).status_code == 401
 
+    await make_account(world, email="ada.admin@example.test", username="adaadmin")
     assert (await sign_in(browser, login="josample")).status_code == 200
     for answer in (
         await browser.get(OWNERS),
         await browser.put(path, json={"owner_id": "301"}),
         await browser.get(PEOPLE),
     ):
-        assert answer.status_code == 403 and answer.json()["code"] == "admin_only"
+        assert answer.status_code == 403 and answer.json()["code"] == "platform_admin_only"
+    async with world.browser() as admin_browser:
+        assert (await sign_in(admin_browser, login="adaadmin")).status_code == 200
+        for answer in (
+            await admin_browser.get(OWNERS),
+            await admin_browser.put(path, json={"owner_id": "301"}),
+            await admin_browser.get(PEOPLE),
+        ):
+            assert answer.status_code == 403 and answer.json()["code"] == "platform_admin_only"
     async with world.factory() as session:
         user = await session.get(User, jo.id)
         assert user is not None and user.hubspot_owner_id is None

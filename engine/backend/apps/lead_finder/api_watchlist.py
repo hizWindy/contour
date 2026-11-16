@@ -7,13 +7,14 @@ Claude, so it needs no approval to use HubSpot names. The Start page's lease and
 
 from typing import Annotated
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import ValidationError
 
 from apps.lead_finder.params import WatchlistOptions
 from apps.lead_finder.rules import load_rules
 from apps.lead_finder.schemas import WatchlistOut
 from apps.lead_finder.watchlist import load_watchlist
+from core.api.access import need
 from core.api.deps import SessionDep
 from core.api.errors import Problem
 
@@ -23,6 +24,7 @@ router = APIRouter()
 @router.get(
     "/watchlist",
     response_model=WatchlistOut,
+    dependencies=[Depends(need("lead_finder.results"))],
     summary="Preview the HubSpot watchlist",
     description=(
         "The HubSpot companies a watchlist run would research, with the counts of how the "

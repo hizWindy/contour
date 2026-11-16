@@ -18,6 +18,7 @@ from sqlalchemy import text
 
 from core.api.app import create_app
 from core.auth import admin
+from core.auth.features import FEATURES
 from core.auth.models import AuditEntry, User, UserSession
 from core.auth.passwords import Hasher
 from tests.core.auth_world import (
@@ -30,6 +31,7 @@ from tests.core.auth_world import (
     World,
     all_rows,
     make_account,
+    make_platform_admin,
     me,
     moment,
     sign_in,
@@ -55,8 +57,10 @@ async def test_signing_in_sets_the_cookie_and_answers_with_the_user_and_the_sess
         "email": "al.khair@example.test",
         "username": "alkhair",
         "name": "Al Khair",
+        "position": None,
         "role": "admin",
-        "apps": [],
+        "apps": ["lead_finder", "companies"],
+        "features": list(FEATURES),
     }
     session = body["session"]
     assert (session["current"], session["keep_signed_in"]) == (True, False)
@@ -267,7 +271,13 @@ async def test_where_sign_in_is_off_me_says_so_and_nothing_needs_a_session(
     world: World, browser: httpx.AsyncClient
 ) -> None:
     world.settings(auth_required=False)
-    assert (await me(browser)).json() == {"auth_required": False, "user": None, "session": None}
+    assert (await me(browser)).json() == {
+        "auth_required": False,
+        "user": None,
+        "session": None,
+        "platform_admin_name": None,
+        "first_sign_in": False,
+    }
     # A person can still sign in there (to try it), and then me knows them.
     await make_account(world)
     assert (await sign_in(browser)).status_code == 200
@@ -589,7 +599,7 @@ async def test_where_sign_in_is_off_the_list_is_empty(
 async def test_the_log_lists_what_happened_newest_first_with_who_and_from_where(
     world: World, browser: httpx.AsyncClient
 ) -> None:
-    user = await make_account(world)
+    user = await make_platform_admin(world)
     world.clock.advance(minutes=1)
     await browser.post(f"{API}/login", json={"login": "nobody@example.test", "password": "x" * 15})
     world.clock.advance(minutes=1)
@@ -617,7 +627,7 @@ async def test_the_log_lists_what_happened_newest_first_with_who_and_from_where(
 
 
 async def test_the_log_is_paged(world: World, browser: httpx.AsyncClient) -> None:
-    await make_account(world)
+    await make_platform_admin(world)
     for _ in range(4):
         world.clock.advance(minutes=1)
         await sign_in(browser)
@@ -633,8 +643,9 @@ async def test_the_log_is_paged(world: World, browser: httpx.AsyncClient) -> Non
 
 
 async def test_only_an_admin_may_read_the_log(world: World) -> None:
-    await make_account(world, email="boss@example.test", username="boss")
-    async with world.factory() as db:  # a staff member, made by hand (only Admins exist today)
+    await make_platform_admin(world, email="boss@example.test", username="boss")
+    await make_account(world, email="mid@example.test", username="adminuser")
+    async with world.factory() as db:
         db.add(
             User(
                 email="staff@example.test",
@@ -645,12 +656,19 @@ async def test_only_an_admin_may_read_the_log(world: World) -> None:
             )
         )
         await db.commit()
-    async with world.browser() as staff, world.browser() as boss, world.browser() as nobody:
+    async with (
+        world.browser() as staff,
+        world.browser() as admin_user,
+        world.browser() as boss,
+        world.browser() as nobody,
+    ):
         assert (await sign_in(staff, login="staffer")).status_code == 200
+        assert (await sign_in(admin_user, login="adminuser")).status_code == 200
         assert (await sign_in(boss, login="boss")).status_code == 200
-        refused = await staff.get(f"{API}/log")
-        assert refused.status_code == 403
-        assert refused.json()["code"] == "admin_only"
+        for caller in (staff, admin_user):
+            refused = await caller.get(f"{API}/log")
+            assert refused.status_code == 403
+            assert refused.json()["code"] == "platform_admin_only"
         assert (await me(staff)).status_code == 200  # a staff member can still use the rest
         assert (await boss.get(f"{API}/log")).status_code == 200
         assert (await nobody.get(f"{API}/log")).status_code == 401
@@ -702,6 +720,8 @@ def test_the_routes_are_documented_with_their_answers() -> None:
         "auth_required",
         "user",
         "session",
+        "platform_admin_name",
+        "first_sign_in",
     }
     problem = schema["components"]["schemas"]["ProblemDetails"]["properties"]
     assert {"reason", "retry_after_seconds"} <= set(problem)

@@ -7,12 +7,22 @@ its own entry in the sign-in log in the same transaction, and commits. The comma
 asks for the password (twice, never shown) and calls these.
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import datetime
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.auth import audit, clean, sessions, users
+from core.auth.features import (
+    APPS_ORDER,
+    FEATURES,
+    apps_from_features,
+    default_features,
+    features_from_apps,
+    is_admin,
+    normalize_features,
+)
 from core.auth.models import User
 from core.auth.passwords import Hasher, check_rules, get_hasher, require_good_password
 
@@ -38,17 +48,19 @@ async def create_admin(
     now: datetime,
     hasher: Hasher | None = None,
     by: str = BY_COMMAND,
+    role: str = "admin",
 ) -> User:
-    """Makes an Admin account. Raises ValueError for a login that isn't allowed, `PasswordRefused`
-    for a password that breaks the rules, and `users.LoginTaken` for a login already in use.
-    `by` is what the sign-in log says made it."""
+    """Makes an Admin account (or Platform admin when specified). Raises ValueError for a login
+    that isn't allowed, `PasswordRefused` for a password that breaks the rules, and
+    `users.LoginTaken` for a login already in use. `by` is what the sign-in log says made it."""
     return await create_person(
         db,
         email=email,
         username=username,
         name=name,
-        role="admin",
-        apps=[],
+        role=role,
+        apps=list(APPS_ORDER),
+        features=list(FEATURES),
         password=password,
         now=now,
         hasher=hasher,
@@ -63,16 +75,28 @@ async def create_person(
     username: str | None,
     name: str | None,
     role: str,
-    apps: list[str],
     password: str,
     now: datetime,
+    position: str | None = None,
+    apps: Sequence[str] | None = None,
+    features: Sequence[str] | None = None,
     hasher: Hasher | None = None,
     by: str = BY_COMMAND,
 ) -> User:
-    """Makes an account with a role and the projects it may use (PLAN-V9 E1). The same rules as
-    `create_admin`: a starting password under today's rules, and a login nobody has."""
+    """Makes an account with a role, optional position, and ticks (`PLAN-V19 T1-4, T1-5`)."""
     email = clean.email(email)
     username = clean.username(username)
+    cleaned_position = clean.position(position)
+    resolved_features: list[str]
+    if is_admin(role):
+        resolved_features = list(FEATURES)
+    elif features is not None:
+        resolved_features = normalize_features(features)
+    elif apps is not None:
+        resolved_features = features_from_apps(apps)
+    else:
+        resolved_features = default_features(role)
+    resolved_apps = apps_from_features(resolved_features)
     require_good_password(password, email=email, username=username)
     password_hash = await (hasher or get_hasher()).ahash(password)
     user = await users.create(
@@ -80,11 +104,13 @@ async def create_person(
         email=email,
         username=username,
         name=(name or "").strip()[:120] or default_name(email),
+        position=cleaned_position,
         role=role,
+        apps=resolved_apps,
+        features=resolved_features,
         password_hash=password_hash,
         now=now,
     )
-    user.apps = list(dict.fromkeys(apps))
     audit.add_entry(
         db,
         "account_created",
@@ -106,10 +132,7 @@ async def create_first_admin(
     now: datetime,
     hasher: Hasher | None = None,
 ) -> User | None:
-    """Makes the first Admin account, unless there is an Admin already: then it changes nothing and
-    returns None (and does not look at the password). Raises like `create_admin` for a login that
-    isn't allowed and a password that breaks the rules. If another `engine migrate` made the same
-    account a moment ago, that is the same as "there is an Admin already"."""
+    """Makes the first Platform admin account, unless an Admin/Platform admin exists already."""
     if await users.admin_exists(db):
         return None
     try:
@@ -122,6 +145,7 @@ async def create_first_admin(
             now=now,
             hasher=hasher,
             by=BY_SETTINGS,
+            role="platform_admin",
         )
     except users.LoginTaken:
         return None
@@ -134,6 +158,7 @@ async def reset_password(
     *,
     now: datetime,
     hasher: Hasher | None = None,
+    by: str = BY_COMMAND,
 ) -> int:
     """Gives a user a new password. Every session of that user ends, so whoever had the old
     password (or a stolen cookie) is out. The lock, if there is one, is lifted. Returns how many
@@ -146,11 +171,44 @@ async def reset_password(
         db,
         "password_changed",
         user_id=user.id,
-        details={"by": BY_COMMAND, "sessions_ended": ended},
+        details={"by": by, "sessions_ended": ended},
         at=now,
     )
     await db.commit()
     return ended
+
+
+async def set_platform_admin(
+    db: AsyncSession, user: User, *, now: datetime, by: str = BY_COMMAND
+) -> bool:
+    """Makes `user` the single Platform admin, demoting any previous Platform admin to Admin."""
+    if not user.active:
+        raise ValueError("Switch the account on before making it the Platform admin.")
+    if user.role == "platform_admin":
+        user.features = list(FEATURES)
+        user.apps = list(APPS_ORDER)
+        await db.commit()
+        return False
+    previous = await db.scalars(
+        select(User).where(User.role == "platform_admin", User.id != user.id).with_for_update()
+    )
+    for old in previous:
+        old.role = "admin"
+        old.features = list(FEATURES)
+        old.apps = list(APPS_ORDER)
+    await db.flush()
+    user.role = "platform_admin"
+    user.features = list(FEATURES)
+    user.apps = list(APPS_ORDER)
+    audit.add_entry(
+        db,
+        "account_changed",
+        user_id=user.id,
+        details={"by": by, "fields": ["role"], "role": "platform_admin"},
+        at=now,
+    )
+    await db.commit()
+    return True
 
 
 NAME_MAX = 120  # the users.name column

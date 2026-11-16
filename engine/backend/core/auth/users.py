@@ -4,6 +4,7 @@ These add to the caller's transaction. The caller commits.
 """
 
 import uuid
+from collections.abc import Sequence
 from datetime import datetime
 
 from sqlalchemy import or_, select
@@ -41,8 +42,24 @@ async def find_by_id(db: AsyncSession, user_id: uuid.UUID) -> User | None:
 
 
 async def admin_exists(db: AsyncSession) -> bool:
-    """True when at least one Admin account exists."""
-    return await db.scalar(select(User.id).where(User.role == "admin").limit(1)) is not None
+    """True when at least one Platform admin or Admin account exists."""
+    return (
+        await db.scalar(select(User.id).where(User.role.in_(("platform_admin", "admin"))).limit(1))
+        is not None
+    )
+
+
+async def platform_admin_name(db: AsyncSession) -> str | None:
+    """The Platform admin's display name, for the 'Ask ...' error words, or None."""
+    return await db.scalar(
+        select(User.name).where(User.role == "platform_admin").order_by(User.created_at).limit(1)
+    )
+
+
+async def find_by_email(db: AsyncSession, email: str, *, lock: bool = False) -> User | None:
+    value = clean.email(email)
+    query = select(User).where(User.email == value)
+    return await db.scalar(query.with_for_update() if lock else query)
 
 
 async def create(
@@ -53,6 +70,9 @@ async def create(
     name: str,
     password_hash: str,
     role: str = "admin",
+    position: str | None = None,
+    apps: Sequence[str] = (),
+    features: Sequence[str] = (),
     now: datetime,
 ) -> User:
     """Makes a user. `email` and `username` must already be clean (`core.auth.clean`).
@@ -64,7 +84,10 @@ async def create(
         email=email,
         username=username,
         name=name,
+        position=position,
         role=role,
+        apps=list(apps),
+        features=list(features),
         password_hash=password_hash,
         password_changed_at=now,
     )

@@ -31,7 +31,7 @@ from apps.companies.prep import (
 )
 from apps.companies.schemas import PrepAsk, PrepChip, PrepFacts, PrepOut
 from apps.companies.tables import Prep
-from core.api.access import SignedInDep
+from core.api.access import SignedInDep, need
 from core.api.deps import SessionDep, SettingsDep
 from core.api.errors import Problem
 from core.auth.models import User
@@ -125,6 +125,7 @@ def context_for(settings: Settings, leads: list[CompanyLeads]) -> PrepContext:
 @router.get(
     "/preps/today",
     response_model=list[PrepChip],
+    dependencies=[Depends(need("companies.call_prep"))],
     summary="My call preps from today",
     description="For the chips under the prep box: newest first, at most 8, one per person.",
 )
@@ -158,6 +159,7 @@ async def my_preps_today(session: SessionDep, auth: SignedInDep, leads: LeadsDep
 @router.get(
     "/preps/{prep_id}",
     response_model=PrepOut,
+    dependencies=[Depends(need("companies.call_prep"))],
     summary="One call prep",
     description=(
         "Asked again every 2 seconds while it is searching. A prep left searching for 5 minutes "
@@ -203,6 +205,7 @@ async def _join(session: SessionDep, prep: Prep, leads: list[CompanyLeads]) -> P
     "/preps",
     response_model=PrepOut,
     status_code=202,
+    dependencies=[Depends(need("companies.call_prep", write=True))],
     summary="Prep a call",
     description=(
         "For a person at the company (`contact_id`), or a cold call to the switchboard (`cold`). "
@@ -297,6 +300,7 @@ async def start_prep(
 @router.get(
     "/{key}/facts",
     response_model=PrepFacts,
+    dependencies=[Depends(need("companies.call_prep"))],
     summary="What we know, before any Claude request",
     description=(
         "The facts pack for a company and, with `contact_id`, a person at it: each fact with its "

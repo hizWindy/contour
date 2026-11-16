@@ -35,7 +35,7 @@ from apps.lead_finder.schemas import (
 )
 from apps.lead_finder.scoring import Confidence, Tier
 from apps.lead_finder.similar import similar_for
-from core.api.access import SignedInDep
+from core.api.access import SignedInDep, need
 from core.api.deps import EmbedderDep, SessionDep
 from core.api.errors import Problem
 from core.api.models import INT32_MAX, OFFSET_MAX, SafeText
@@ -144,6 +144,7 @@ OffsetParam = Annotated[int, Query(ge=0, le=OFFSET_MAX)]
 @router.get(
     "",
     response_model=LeadPage,
+    dependencies=[Depends(need("lead_finder.results"))],
     summary="List leads",
     description=(
         "One page of leads, best score first unless `sort` says otherwise. By default each "
@@ -167,6 +168,7 @@ async def list_leads(
     "/export",
     response_model=None,
     response_class=Response,
+    dependencies=[Depends(need("lead_finder.results"))],
     summary="Download the filtered leads as a CSV file",
     description=(
         "Takes the same filters and sort as the list. UTF-8 with a byte order mark, so Excel "
@@ -207,6 +209,7 @@ async def export_leads(
 @router.get(
     "/facets",
     response_model=LeadFacets,
+    dependencies=[Depends(need("lead_finder.results"))],
     summary="What the filters offer, with counts",
     description=(
         "Takes the same filters as the list. Each count applies every active filter except "
@@ -220,6 +223,7 @@ async def lead_facets(session: SessionDep, filters: Filters) -> LeadFacets:
 @router.get(
     "/map",
     response_model=MapOut,
+    dependencies=[Depends(need("lead_finder.results"))],
     summary="Pins for the map",
     description=(
         "Up to 2000 leads that match the filters. The places are approximate: the centre of "
@@ -233,6 +237,7 @@ async def lead_map(session: SessionDep, filters: Filters) -> MapOut:
 @router.get(
     "/reject-reasons",
     response_model=RejectReasonCounts,
+    dependencies=[Depends(need("lead_finder.results"))],
     summary="How many leads were rejected for each reason",
     description=(
         "Counts the rejected leads by reason, over the last `days` days (90 by default), by when "
@@ -250,6 +255,7 @@ async def reject_reasons(
 @router.get(
     "/{lead_id}/profile",
     response_model=LeadProfile,
+    dependencies=[Depends(need("lead_finder.results"))],
     summary="The one-page profile of a Tier A lead",
     description=(
         "Everything Levi's section 9 lists for a lead, in one answer, for the print view: the "
@@ -266,7 +272,12 @@ async def get_profile(session: SessionDep, lead_id: uuid.UUID) -> LeadProfile:
     return profile
 
 
-@router.get("/{lead_id}", response_model=LeadDetail, summary="One lead card")
+@router.get(
+    "/{lead_id}",
+    response_model=LeadDetail,
+    dependencies=[Depends(need("lead_finder.results"))],
+    summary="One lead card",
+)
 async def get_lead(lead_id: uuid.UUID, session: SessionDep) -> LeadDetail:
     detail = await lead_store.get_detail(session, lead_id)
     if detail is None:
@@ -277,6 +288,7 @@ async def get_lead(lead_id: uuid.UUID, session: SessionDep) -> LeadDetail:
 @router.patch(
     "/{lead_id}",
     response_model=LeadDetail,
+    dependencies=[Depends(need("lead_finder.results", write=True))],
     summary="Change a lead's status, note or feedback",
     description=(
         "A merge patch: a field you leave out stays as it is, and `null` clears it. `status` "
@@ -295,6 +307,7 @@ async def patch_lead(
 @router.get(
     "/{lead_id}/similar",
     response_model=SimilarOut,
+    dependencies=[Depends(need("lead_finder.results"))],
     summary="Companies that look like this lead",
     description=(
         "Compares this lead's profile with HubSpot companies that have a deal and with other "
@@ -309,6 +322,7 @@ async def similar_leads(lead_id: uuid.UUID, session: SessionDep) -> SimilarOut:
 @router.post(
     "/{lead_id}/override-exclusion",
     response_model=LeadDetail,
+    dependencies=[Depends(need("lead_finder.results", write=True))],
     summary="Judge an excluded lead again, without its exclusion",
     description=(
         "For a lead a rule left out (Levi's exclusions: a law firm, a government department, a "

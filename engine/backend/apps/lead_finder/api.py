@@ -4,11 +4,12 @@ This file puts the pieces together: the rules and the synchronous research here,
 api_leads.py, and the run-related routes in api_runs.py.
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from apps.lead_finder import api_hubspot, api_leads, api_review, api_runs, api_watchlist
 from apps.lead_finder.research import LeadCard, ResearchRequest, research_company
 from apps.lead_finder.rules import LeadFinderRules, load_rules
+from core.api.access import need
 from core.api.deps import ClaudeDep, EmbedderDep, SessionDep, SettingsDep, claude_dependency
 from core.api.errors import Problem
 from core.claude.client import ClaudeError, ClaudeUnavailable
@@ -23,6 +24,7 @@ router = APIRouter()
 @router.get(
     "/rules",
     response_model=LeadFinderRules,
+    dependencies=[Depends(need("lead_finder.rules"))],
     summary="The rules in use, and their version",
     description=(
         "The company criteria, search templates and HubSpot field map, as checked at start-up. "
@@ -36,6 +38,7 @@ async def get_rules() -> LeadFinderRules:
 @router.post(
     "/research",
     response_model=LeadCard,
+    dependencies=[Depends(need("lead_finder.start_run", write=True))],
     summary="Research one company now",
     description=(
         "Checks memory first, then searches the web from three angles (property, people, "

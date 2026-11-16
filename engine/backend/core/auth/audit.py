@@ -90,3 +90,27 @@ async def failures_from(db: AsyncSession, ip: str | None, since: datetime) -> li
 
 async def count(db: AsyncSession) -> int:
     return int(await db.scalar(select(func.count()).select_from(AuditEntry)) or 0)
+
+
+async def is_first_sign_in(db: AsyncSession, user_id: uuid.UUID) -> bool:
+    """True when the account has signed in once and hasn't changed its own password yet."""
+    sign_ins = int(
+        await db.scalar(
+            select(func.count())
+            .select_from(AuditEntry)
+            .where(AuditEntry.user_id == user_id, AuditEntry.event == "sign_in")
+        )
+        or 0
+    )
+    if sign_ins != 1:
+        return False
+    changed = await db.scalar(
+        select(AuditEntry.id)
+        .where(
+            AuditEntry.user_id == user_id,
+            AuditEntry.event == "password_changed",
+            AuditEntry.details["by"].astext == "person",
+        )
+        .limit(1)
+    )
+    return changed is None

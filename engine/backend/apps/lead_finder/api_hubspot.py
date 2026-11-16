@@ -8,13 +8,14 @@ scopes and HUBSPOT_WRITE_ENABLED=true; until then the preview works and sending 
 
 import uuid
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from apps.lead_finder.hubspot_send import APP, mark_sent, send_request, subject_of
 from apps.lead_finder.rules import load_rules
 from apps.lead_finder.tables import Lead
+from core.api.access import need
 from core.api.deps import SessionDep
 from core.api.errors import Problem
 from core.api.hubspot import KEY_MISSING, write_problem
@@ -55,6 +56,7 @@ def card_url(lead_id: uuid.UUID) -> str | None:
 @router.get(
     "/{lead_id}/hubspot",
     response_model=WriteOut | None,
+    dependencies=[Depends(need("lead_finder.send_to_hubspot"))],
     summary="This lead's HubSpot send, if there is one",
     description="The newest write for this lead: previewed, sent, or part sent. Null if none.",
 )
@@ -72,6 +74,7 @@ async def get_lead_hubspot(lead_id: uuid.UUID, session: SessionDep) -> WriteOut 
 @router.post(
     "/{lead_id}/hubspot/preview",
     response_model=WriteOut,
+    dependencies=[Depends(need("lead_finder.send_to_hubspot", write=True))],
     summary="Preview sending this lead to HubSpot",
     description=(
         "Reads HubSpot (free) and says what would be written: a new company or an update of its "
@@ -96,6 +99,7 @@ async def preview_lead_hubspot(
 @router.post(
     "/{lead_id}/hubspot/send",
     response_model=WriteOut,
+    dependencies=[Depends(need("lead_finder.send_to_hubspot", write=True))],
     summary="Send this lead to HubSpot, as previewed",
     description=(
         "Writes the preview with this write_id, once only: a second click returns the first "
