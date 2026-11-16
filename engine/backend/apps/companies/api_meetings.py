@@ -115,7 +115,9 @@ FormId = Annotated[uuid.UUID, Path(description="The pre-read's id")]
         "with its pre-read's state (`form`) and, once past, whether notes were logged. While "
         "HubSpot's meetings aren't read, `meetings_state` and `sentence` say why. Opening it "
         "asks HubSpot for changed meetings in the background (at most every 15 minutes). 409 "
-        "`meeting_forms_off`."
+        "`meeting_forms_off`. `owner` narrows the list to the meetings one HubSpot owner owns or "
+        "is on (an id from `owners`), on top of `who`, and it works with sign-in off too. "
+        "`owners` names the people who own a meeting in the window, for an Owner filter."
     ),
 )
 async def list_meetings(
@@ -130,6 +132,14 @@ async def list_meetings(
     q: Annotated[SafeText | None, Query(max_length=200)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = PAGE_SIZE,
     offset: Annotated[int, Query(ge=0, le=OFFSET_MAX)] = 0,
+    owner: Annotated[
+        str | None,
+        Query(
+            max_length=32,
+            pattern=r"^[A-Za-z0-9_-]+$",
+            description="A HubSpot owner id, from `owners`: only the meetings they own or are on",
+        ),
+    ] = None,
 ) -> MeetingPage:
     refresh_meetings_soon(request.app)  # in the background, at most every 15 minutes
     return await meeting_store.list_meetings(
@@ -142,6 +152,7 @@ async def list_meetings(
         limit=limit,
         offset=offset,
         now=now,
+        owner=owner,
     )
 
 

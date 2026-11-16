@@ -195,12 +195,16 @@ describe("Meetings' address", () => {
     expect(readMeetings(new URLSearchParams())).toEqual({
       when: 'upcoming',
       who: 'all',
+      owner: null,
       q: '',
       page: 0,
     })
-    expect(readMeetings(new URLSearchParams('when=past&who=team&q=vitera&page=3'))).toEqual({
+    expect(
+      readMeetings(new URLSearchParams('when=past&who=team&owner=o-2&q=vitera&page=3')),
+    ).toEqual({
       when: 'past',
       who: 'team',
+      owner: 'o-2',
       q: 'vitera',
       page: 2,
     })

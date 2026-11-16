@@ -7,20 +7,42 @@
  * - **Whose meetings:** All is the default, so nobody opens an empty page. "My team" is left out
  *   when HubSpot has no teams (unless the address asks for it, so the choice in use always shows),
  *   and the whole choice is left out while sign-in is off, when there is no "me".
+ * - **Owner** (Improvements 1, #5): a list of the people who own a meeting in the window, "Anyone"
+ *   first. Picking one shows the meetings they own or are on, with sign-in on or off: where the
+ *   three choices above can't say who "my" is, this can (the laptop with no sign-in). It narrows
+ *   whichever of the three is picked. It shows when the server named at least one owner, and
+ *   whenever the address already holds one, so the choice in use is never hidden.
  * - The search finds a meeting by its company, its title or date words ("vitera 26 nov"). The
  *   server reads them, in plain code. It goes 250ms after the last key, so one request goes out per
  *   pause (DESIGN.md "Speed").
  */
 import { Search } from 'lucide-react'
 import { useEffect, useEffectEvent, useState } from 'react'
-import type { MeetingWhen, MeetingWho } from '@/api/types'
+import type { MeetingOwner, MeetingWhen, MeetingWho } from '@/api/types'
 import { Segmented, type SegmentedOption } from '@/components/motion'
 import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { useDebounced } from '@/hooks/useDebounced'
 import type { MeetingsView } from './params'
 import { SyncButton } from './sync'
 import type { MeetingsSync } from './use-sync'
-import { PAST, SEARCH_LABEL, SEARCH_PLACEHOLDER, UPCOMING, WHEN_LABEL, WHO_LABEL } from './words'
+import {
+  ANYONE,
+  OWNER_LABEL,
+  OWNER_UNKNOWN,
+  PAST,
+  SEARCH_LABEL,
+  SEARCH_PLACEHOLDER,
+  UPCOMING,
+  WHEN_LABEL,
+  WHO_LABEL,
+} from './words'
 
 /** Typed searches wait this long after the last key (DESIGN.md "Speed"). */
 export const SEARCH_SETTLE_MS = 250
@@ -67,16 +89,60 @@ function MeetingSearch({ value, onSettle }: { value: string; onSettle: (q: strin
   )
 }
 
+/** The select's value for "Anyone": a select item can't have an empty value. */
+const ANYONE_VALUE = 'anyone'
+
+/**
+ * The Owner filter. The closed select reads "Owner: Alex Sample", so it says what it is even when
+ * it is set. An owner the list no longer offers (an old link) still shows, as "This person".
+ */
+function OwnerSelect({
+  owners,
+  value,
+  onChange,
+}: {
+  owners: readonly MeetingOwner[]
+  value: string | null
+  onChange: (owner: string | null) => void
+}) {
+  const known = owners.find((owner) => owner.id === value)
+  const choices =
+    value !== null && !known ? [...owners, { id: value, name: OWNER_UNKNOWN }] : owners
+  const name = value === null ? ANYONE : (known?.name ?? OWNER_UNKNOWN)
+  return (
+    <Select
+      value={value ?? ANYONE_VALUE}
+      onValueChange={(next) => {
+        onChange(next === ANYONE_VALUE ? null : next)
+      }}
+    >
+      <SelectTrigger aria-label={OWNER_LABEL} className="w-52 max-sm:w-full">
+        <SelectValue>{`${OWNER_LABEL}: ${name}`}</SelectValue>
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={ANYONE_VALUE}>{ANYONE}</SelectItem>
+        {choices.map((owner) => (
+          <SelectItem key={owner.id} value={owner.id}>
+            {owner.name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
+}
+
 export interface MeetingsToolbarProps {
   view: MeetingsView
   onChange: (changes: Partial<MeetingsView>) => void
   /** The choices of whose meetings, or null to leave the choice out (sign-in off). */
   who: readonly SegmentedOption<MeetingWho>[] | null
+  /** The people who own a meeting here, for the Owner filter. None: it is left out (until chosen). */
+  owners?: readonly MeetingOwner[]
   /** Sync, at the right end. Left out of a toolbar that has none. */
   sync?: MeetingsSync
 }
 
-export function MeetingsToolbar({ view, onChange, who, sync }: MeetingsToolbarProps) {
+export function MeetingsToolbar({ view, onChange, who, owners = [], sync }: MeetingsToolbarProps) {
   return (
     <div data-slot="meetings-toolbar" className="flex flex-wrap items-center gap-3">
       <Segmented
@@ -94,6 +160,15 @@ export function MeetingsToolbar({ view, onChange, who, sync }: MeetingsToolbarPr
           value={view.who}
           onChange={(next) => {
             onChange({ who: next })
+          }}
+        />
+      ) : null}
+      {owners.length > 0 || view.owner !== null ? (
+        <OwnerSelect
+          owners={owners}
+          value={view.owner}
+          onChange={(owner) => {
+            onChange({ owner })
           }}
         />
       ) : null}

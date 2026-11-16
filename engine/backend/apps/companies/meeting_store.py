@@ -40,6 +40,7 @@ from apps.companies.schemas import (
     MeetingFormState,
     MeetingGroup,
     MeetingItem,
+    MeetingOwner,
     MeetingPage,
     MeetingsSyncOut,
     MeetingSummary,
@@ -352,9 +353,24 @@ async def owner_names(session: AsyncSession, owner_ids: Iterable[str]) -> dict[s
     return {owner_id: name for owner_id, name in rows.all() if name}
 
 
+def is_on(meeting: Meeting, owner: str) -> bool:
+    """This HubSpot owner owns the meeting, or is on it as a Contour person."""
+    return meeting.owner_id == owner or owner in meeting.attendee_owner_ids
+
+
 def is_mine(meeting: Meeting, me: str | None) -> bool:
     """I own the meeting, or I am on it as a Contour person."""
-    return me is not None and (meeting.owner_id == me or me in meeting.attendee_owner_ids)
+    return me is not None and is_on(meeting, me)
+
+
+async def owners_of(session: AsyncSession, meetings: Sequence[Meeting]) -> list[MeetingOwner]:
+    """The people who own one of these meetings, by name, for the Owner filter. An owner our copy
+    of HubSpot has no name for is left out: the filter couldn't say who they are."""
+    names = await owner_names(session, (meeting.owner_id or "" for meeting in meetings))
+    return sorted(
+        (MeetingOwner(id=owner_id, name=name) for owner_id, name in names.items()),
+        key=lambda owner: owner.name.lower(),
+    )
 
 
 async def items_of(
@@ -479,10 +495,14 @@ async def list_meetings(
     limit: int,
     offset: int,
     now: datetime,
+    owner: str | None = None,
 ) -> MeetingPage:
     """A page of client meetings: upcoming (the next 7 days, soonest first, grouped by day) or
     past (newest first), always in time order. Everyone's, mine, or my HubSpot team's (`who`).
-    My own typed pre-reads join them, even while HubSpot's meetings aren't read."""
+    `owner` narrows that to the meetings one HubSpot owner owns or is on, signed in or not (the
+    Owner filter), and `owners` names the people who own a meeting in the window, before `owner`
+    and `q` narrow it. My own typed pre-reads join them, even while HubSpot's meetings aren't
+    read; they are mine, so an `owner` other than me leaves them out."""
     status = await source.status(session)
     upcoming = when == "upcoming"
     me = await my_owner(session, auth, source)
@@ -490,6 +510,7 @@ async def list_meetings(
     team = team_state_of(me, teams)
     sentence: str | None = None
     entries: list[Entry] = []
+    owners: list[MeetingOwner] = []
     if status.state != "ready":
         sentence = f"{status.sentence or NOT_READY} {STILL_WORKS}"
     else:
@@ -500,10 +521,14 @@ async def list_meetings(
                 session, owner_id=None, days=UPCOMING_DAYS if upcoming else PAST_DAYS
             )
             shown = [meeting for meeting in found if picked(meeting, who, me, teams.members)]
-            entries += [
-                Entry(meeting, name) for meeting, name in await client_meetings(session, shown)
-            ]
-    entries += await typed_meetings(session, auth, upcoming=upcoming, now=now)
+            linked = await client_meetings(session, shown)
+            # The choices come before `owner` narrows the list, so picking one never empties them.
+            owners = await owners_of(session, [meeting for meeting, _ in linked])
+            if owner is not None:
+                linked = [(meeting, name) for meeting, name in linked if is_on(meeting, owner)]
+            entries += [Entry(meeting, name) for meeting, name in linked]
+    if owner is None or owner == me:
+        entries += await typed_meetings(session, auth, upcoming=upcoming, now=now)
     words = search_words(q)
     entries = [entry for entry in entries if matches(entry.meeting, entry.company_name, words)]
     # Time order only (no "mine first"): soonest first, or newest first for past meetings.
@@ -526,6 +551,7 @@ async def list_meetings(
         linked=me is not None,
         team_state=team,
         team_names=list(teams.names),
+        owners=owners,
         checked_at=status.checked_at,
         syncing=status.syncing,
         sync_problem=sync_problem(status, now),

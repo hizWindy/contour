@@ -5,8 +5,11 @@
  * - **Upcoming** (grouped Today, Tomorrow, This week, Later, in Melbourne days, as the server
  *   groups them) and **Past**, picked with `Segmented`. **Whose meetings:** All (the default, so
  *   nobody opens an empty page), My meetings, or My team, in time order. On All and My team the
- *   rep's own rows carry a small "You" mark, and the others say whose they are. A search finds a
- *   meeting by company, title or date words. All of it is in the address (`params.ts`).
+ *   rep's own rows carry a small "You" mark, and the others say whose they are. **Owner**
+ *   (Improvements 1, #5): one person's meetings, the ones they own or are on, picked from the
+ *   people the server names. It works with sign-in off too, where My meetings can't know who "my"
+ *   is. A search finds a meeting by company, title or date words. All of it is in the address
+ *   (`params.ts`).
  * - **A filter change** slides the highlight at once, and the new list fades in over 250ms, as a
  *   whole: the rows never move one by one.
  * - **Sync** (`sync.tsx`) reads HubSpot's meetings now. The line under the toolbar says when they
@@ -36,7 +39,7 @@ import { useSearchParams } from 'react-router'
 import { useMe } from '@/api/hooks'
 import { useCallNoteOptions } from '@/api/hooks/call-note-counts'
 import { isMeetingFormsOff, useMeetings } from '@/api/hooks/meetings'
-import type { MeetingItem, MeetingPage, MeetingWho, TeamState } from '@/api/types'
+import type { MeetingItem, MeetingOwner, MeetingPage, MeetingWho, TeamState } from '@/api/types'
 import type { SegmentedOption } from '@/components/motion'
 import { EmptyState } from '@/components/empty-state'
 import { ErrorState } from '@/components/error-state'
@@ -64,6 +67,8 @@ import {
   noMatchWords,
   NOT_LINKED_MINE,
   NOT_LINKED_TEAM,
+  OWNER_UNKNOWN,
+  ownerEmptyWords,
   SHOW_ALL,
   WHO_WORDS,
 } from './words'
@@ -72,6 +77,10 @@ import {
 interface HubSpotLine {
   waiting: boolean
   sentence: string | null
+}
+
+function ownerKey(owner: MeetingOwner): string {
+  return `${owner.id}:${owner.name}`
 }
 
 function lineOf(page: MeetingPage): HubSpotLine {
@@ -100,12 +109,19 @@ function whoWords(who: MeetingWho, page: MeetingPage): Empty | null {
   return words && sentence ? { ...words, description: sentence } : words
 }
 
-/** The serif words of an empty list: no match, HubSpot not read, a filter that can't fill, or none. */
+/**
+ * The serif words of an empty list: no match, HubSpot not read, a filter that can't fill, one
+ * person with none, or none. "Show all meetings" clears Whose and Owner both.
+ */
 function emptyOf(view: MeetingsView, page: MeetingPage): Empty & { showAll: boolean } {
   if (view.q.trim() !== '') return { ...noMatchWords(view.q, view.when), showAll: false }
   if (page.meetings_state !== 'ready') return { ...EMPTY_WAITING, showAll: false }
   const why = whoWords(view.who, page)
   if (why) return { ...why, showAll: true }
+  if (view.owner !== null) {
+    const name = page.owners?.find((owner) => owner.id === view.owner)?.name ?? OWNER_UNKNOWN
+    return { ...ownerEmptyWords(name, view.when), showAll: true }
+  }
   return { ...emptyWords(view.when, view.who), showAll: false }
 }
 
@@ -159,12 +175,16 @@ export default function MeetingsPage() {
   const [formsOn, setFormsOn] = useState(false)
   const [line, setLine] = useState<HubSpotLine | null>(null)
   const [teamState, setTeamState] = useState<TeamState | null>(null)
+  const [owners, setOwners] = useState<readonly MeetingOwner[]>([])
   if (list.data && !formsOn) setFormsOn(true)
   if (off && formsOn) setFormsOn(false)
   if (list.data) {
     const next = lineOf(list.data)
     if (line?.waiting !== next.waiting || line.sentence !== next.sentence) setLine(next)
     if (list.data.team_state !== teamState) setTeamState(list.data.team_state)
+    // The people the Owner filter offers: kept while the next list loads, so it never blinks.
+    const offered = list.data.owners ?? []
+    if (offered.map(ownerKey).join('|') !== owners.map(ownerKey).join('|')) setOwners(offered)
   }
 
   // The rows on screen when a read of HubSpot's meetings started: rows that come with it fade in.
@@ -209,7 +229,7 @@ export default function MeetingsPage() {
               type="button"
               variant="outline"
               onClick={() => {
-                change({ who: 'all' })
+                change({ who: 'all', owner: null })
               }}
             >
               {SHOW_ALL}
@@ -252,10 +272,10 @@ export default function MeetingsPage() {
         <>
           {line?.waiting ? <WaitingLine sentence={line.sentence} /> : null}
           <div className="flex flex-col gap-2">
-            <MeetingsToolbar view={view} onChange={change} who={who} sync={sync} />
+            <MeetingsToolbar view={view} onChange={change} who={who} owners={owners} sync={sync} />
             <SyncLine line={sync.line} />
           </div>
-          <ListFade view={`${view.when}-${view.who}`}>{content}</ListFade>
+          <ListFade view={`${view.when}-${view.who}-${view.owner ?? ''}`}>{content}</ListFade>
         </>
       )}
       <LogMeetingSheet

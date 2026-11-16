@@ -16,6 +16,7 @@ import type {
   MeetingFormOut,
   MeetingFormState,
   MeetingItem,
+  MeetingOwner,
   MeetingPage,
   MeetingsState,
   MeetingsSyncOut,
@@ -29,7 +30,7 @@ import { prefetchPage } from '@/shell/prefetch'
 import { signedIn, signInOff } from '@/test/fake-auth'
 import { createTestQueryClient, renderWithProviders, startManualClock } from '@/test/render'
 import MeetingsPage from './index'
-import { readMeetings } from './params'
+import { meetingsQuery, readMeetings, writeMeetings } from './params'
 import { MeetingsToolbar, SEARCH_SETTLE_MS } from './toolbar'
 
 const API = '/api/v1/companies'
@@ -292,6 +293,18 @@ function serverOrder(items: MeetingItem[], when: string): MeetingItem[] {
 /** The rep's HubSpot team: the rep and Mia. */
 const TEAM = new Set([MINE, MIA])
 
+/** The owners our copy of HubSpot has a name for (the server offers only these). */
+const OWNER_NAMES: Readonly<Record<string, string>> = { [MINE]: 'Jo Sample', [MIA]: 'Mia Sample' }
+
+/** The people who own one of these meetings, by name, as the server's `owners` lists them. */
+function ownersOf(items: readonly MeetingItem[]): MeetingOwner[] {
+  const ids = new Set(items.map((item) => item.meeting.owner_id ?? ''))
+  return Object.keys(OWNER_NAMES)
+    .filter((id) => ids.has(id))
+    .map((id) => ({ id, name: OWNER_NAMES[id] ?? '' }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
 /** Whether a meeting is in a list of `who`'s, as the server decides (PLAN-V18 T1-4). */
 function whose(item: MeetingItem, who: string, server: Server): boolean {
   if (item.typed || who === 'all') return true
@@ -349,9 +362,16 @@ function mockServer(changes: Partial<Omit<Server, 'sent' | 'release'>> = {}): Se
       const q = url.searchParams.get('q') ?? ''
       const limit = Number(url.searchParams.get('limit') ?? '50')
       const offset = Number(url.searchParams.get('offset') ?? '0')
+      const owner = url.searchParams.get('owner')
+      const inWindow = (when === 'past' ? server.past : server.upcoming).filter((item) =>
+        whose(item, who, server),
+      )
+      // `owner` narrows to one person's (owned or been on); a typed one is the rep's own.
       const items = serverOrder(
-        (when === 'past' ? server.past : server.upcoming).filter(
-          (item) => whose(item, who, server) && matches(item, q),
+        inWindow.filter(
+          (item) =>
+            (owner === null || (item.typed ? owner === MINE : item.meeting.owner_id === owner)) &&
+            matches(item, q),
         ),
         when,
       )
@@ -366,6 +386,7 @@ function mockServer(changes: Partial<Omit<Server, 'sent' | 'release'>> = {}): Se
         linked: server.linked,
         team_state: server.teamState,
         team_names: server.teamState === 'ready' ? ['Sales'] : [],
+        owners: ownersOf(inWindow),
         checked_at: server.checkedAt,
         syncing: server.syncing,
         sync_problem: server.syncProblem,
@@ -806,6 +827,116 @@ describe('whose meetings', () => {
         "You aren't in a HubSpot team yet, so My team is empty. All shows everyone's.",
       ),
     ).toBeInTheDocument()
+  })
+})
+
+describe('the Owner filter (Improvements 1, #5)', () => {
+  it("offers the people who own a meeting, and shows one person's, in the address and to the server", async () => {
+    const server = mockServer()
+    const { user, router } = renderMeetings()
+    await screen.findByText('Sample Energy Pty Ltd')
+    const owner = screen.getByRole('combobox', { name: 'Owner' })
+    expect(owner).toHaveTextContent('Owner: Anyone')
+    await user.click(owner)
+    expect((await screen.findAllByRole('option')).map((option) => option.textContent)).toEqual([
+      'Anyone',
+      'Jo Sample',
+      'Mia Sample',
+    ])
+    await user.click(screen.getByRole('option', { name: 'Mia Sample' }))
+    // Mia owns the one meeting at Sample Energy: the rest of the list goes.
+    await waitFor(() => {
+      expect(screen.queryByText('Sample Logistics Pty Ltd')).toBeNull()
+    })
+    expect(screen.getByText('Sample Energy Pty Ltd')).toBeInTheDocument()
+    expect(router.state.location.search).toBe(`?owner=${MIA}`)
+    expect(lists(server).at(-1)?.get('owner')).toBe(MIA)
+    expect(screen.getByRole('combobox', { name: 'Owner' })).toHaveTextContent('Owner: Mia Sample')
+
+    // The choices stay, so another person is one pick away, and Anyone takes it out again.
+    await user.click(screen.getByRole('combobox', { name: 'Owner' }))
+    expect((await screen.findAllByRole('option')).map((option) => option.textContent)).toEqual([
+      'Anyone',
+      'Jo Sample',
+      'Mia Sample',
+    ])
+    await user.click(screen.getByRole('option', { name: 'Anyone' }))
+    await waitFor(() => {
+      expect(router.state.location.search).toBe('')
+    })
+    expect(lists(server).at(-1)?.has('owner')).toBe(false)
+    expect(await screen.findByText('Sample Logistics Pty Ltd')).toBeInTheDocument()
+  })
+
+  it('is there with sign-in off, where My meetings cannot know who "my" is', async () => {
+    const server = mockServer({ signIn: 'off' })
+    renderMeetings()
+    await screen.findByText('Sample Energy Pty Ltd')
+    // No Whose choice (there is no "me"), but the Owner choice is.
+    expect(screen.queryByRole('radiogroup', { name: 'Whose meetings' })).toBeNull()
+    expect(screen.getByRole('combobox', { name: 'Owner' })).toBeInTheDocument()
+    expect(lists(server).at(-1)?.get('who')).toBe('all')
+  })
+
+  it('sits beside the three choices when signed in, and narrows whichever is picked', async () => {
+    const server = mockServer()
+    const { user } = renderMeetings('/companies/meetings?who=team')
+    await screen.findByText('Sample Energy Pty Ltd')
+    expect(screen.getByRole('radiogroup', { name: 'Whose meetings' })).toBeInTheDocument()
+    await user.click(screen.getByRole('combobox', { name: 'Owner' }))
+    await user.click(await screen.findByRole('option', { name: 'Jo Sample' }))
+    await waitFor(() => {
+      expect(lists(server).at(-1)?.get('owner')).toBe(MINE)
+    })
+    // Both go to the server: the team's meetings, narrowed to the ones Jo owns.
+    expect(lists(server).at(-1)?.get('who')).toBe('team')
+    await waitFor(() => {
+      expect(screen.queryByText('Sample Energy Pty Ltd')).toBeNull()
+    })
+  })
+
+  it('keeps a person from a link, and says whose when they have none, with Show all meetings', async () => {
+    const server = mockServer()
+    const { user, router } = renderMeetings('/companies/meetings?owner=o-9')
+    expect(
+      await screen.findByRole('heading', { name: 'No meetings for This person this week.' }),
+    ).toBeInTheDocument()
+    // The list no longer offers that person: the choice still says something.
+    expect(screen.getByRole('combobox', { name: 'Owner' })).toHaveTextContent('Owner: This person')
+    expect(lists(server).at(-1)?.get('owner')).toBe('o-9')
+    await user.click(screen.getByRole('button', { name: 'Show all meetings' }))
+    await waitFor(() => {
+      expect(router.state.location.search).toBe('')
+    })
+    expect(await screen.findByText('Sample Energy Pty Ltd')).toBeInTheDocument()
+  })
+
+  it('says whose, by name, when a person has no past meetings', async () => {
+    mockServer({ past: [] })
+    renderMeetings('/companies/meetings?when=past&owner=o-2')
+    // No past meetings at all: the server offers nobody, so the name is not known.
+    expect(
+      await screen.findByRole('heading', { name: 'No past meetings for This person.' }),
+    ).toBeInTheDocument()
+  })
+
+  it('reads and writes the address: a stray id means Anyone, and a change goes back to page 1', () => {
+    expect(readMeetings(new URLSearchParams('owner=o-2')).owner).toBe('o-2')
+    expect(readMeetings(new URLSearchParams('owner=a%20b')).owner).toBeNull()
+    expect(readMeetings(new URLSearchParams('owner=')).owner).toBeNull()
+    expect(readMeetings(new URLSearchParams('owner=' + 'x'.repeat(33))).owner).toBeNull()
+    expect(
+      writeMeetings(new URLSearchParams('when=past&page=3'), { owner: 'o-2' }).toString(),
+    ).toBe('when=past&owner=o-2')
+    expect(
+      writeMeetings(new URLSearchParams('owner=o-2&q=lease'), { owner: null }).toString(),
+    ).toBe('q=lease')
+    expect(meetingsQuery(readMeetings(new URLSearchParams('owner=o-2')))).toMatchObject({
+      when: 'upcoming',
+      who: 'all',
+      owner: 'o-2',
+    })
+    expect(meetingsQuery(readMeetings(new URLSearchParams()))).not.toHaveProperty('owner')
   })
 })
 

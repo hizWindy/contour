@@ -358,7 +358,7 @@ export interface paths {
         };
         /**
          * Client meetings
-         * @description A page of client meetings from HubSpot (one with no company is left out; a cancelled one stays, with its outcome), always in time order. `when`: `upcoming` (the next 7 days, soonest first, each with its `group` by the Melbourne date: today, tomorrow, this_week or later) or `past` (the last 30 days, newest first). `who`: `all` (the default: everyone's), `mine` (the ones I own or am on, as my HubSpot owner) or `team` (the ones whose owner, or a Contour person on them, is in one of my HubSpot teams, mine included). Each meeting says whether it is `mine`. `linked`, `team_state` and `team_names` say what My meetings and My team can pick out, and `sentence` says why one of them is empty (never for All). My own pre-reads for meetings typed in (New pre-read) join the list in the same window, marked `typed`, even while HubSpot's meetings aren't read. `q`: each word must start a word of the company's name, the title or the date in words, like 'sample 26 nov', 'thu' or '26/11'. Each meeting comes with its pre-read's state (`form`) and, once past, whether notes were logged. While HubSpot's meetings aren't read, `meetings_state` and `sentence` say why. Opening it asks HubSpot for changed meetings in the background (at most every 15 minutes). 409 `meeting_forms_off`.
+         * @description A page of client meetings from HubSpot (one with no company is left out; a cancelled one stays, with its outcome), always in time order. `when`: `upcoming` (the next 7 days, soonest first, each with its `group` by the Melbourne date: today, tomorrow, this_week or later) or `past` (the last 30 days, newest first). `who`: `all` (the default: everyone's), `mine` (the ones I own or am on, as my HubSpot owner) or `team` (the ones whose owner, or a Contour person on them, is in one of my HubSpot teams, mine included). Each meeting says whether it is `mine`. `linked`, `team_state` and `team_names` say what My meetings and My team can pick out, and `sentence` says why one of them is empty (never for All). My own pre-reads for meetings typed in (New pre-read) join the list in the same window, marked `typed`, even while HubSpot's meetings aren't read. `q`: each word must start a word of the company's name, the title or the date in words, like 'sample 26 nov', 'thu' or '26/11'. Each meeting comes with its pre-read's state (`form`) and, once past, whether notes were logged. While HubSpot's meetings aren't read, `meetings_state` and `sentence` say why. Opening it asks HubSpot for changed meetings in the background (at most every 15 minutes). 409 `meeting_forms_off`. `owner` narrows the list to the meetings one HubSpot owner owns or is on (an id from `owners`), on top of `who`, and it works with sign-in off too. `owners` names the people who own a meeting in the window, for an Owner filter.
          */
         get: operations["list_meetings"];
         put?: never;
@@ -5522,6 +5522,22 @@ export interface components {
              */
             typed: boolean;
         };
+        /**
+         * MeetingOwner
+         * @description A person who owns at least one meeting in the list's window (Improvements 1, #5).
+         */
+        MeetingOwner: {
+            /**
+             * Id
+             * @description Their HubSpot owner id, to send back as `owner`
+             */
+            id: string;
+            /**
+             * Name
+             * @description Their name, from our copy of HubSpot's owners
+             */
+            name: string;
+        };
         /** MeetingPage */
         MeetingPage: {
             /**
@@ -5543,6 +5559,11 @@ export interface components {
              * @enum {string}
              */
             meetings_state: "ready" | "waiting" | "off";
+            /**
+             * Owners
+             * @description The people who own a meeting in this window (upcoming or past), by name, for the website's Owner filter. Only owners our copy of HubSpot has a name for. It follows `who`, but never `owner` or `q`, so the filter keeps its choices
+             */
+            owners?: components["schemas"]["MeetingOwner"][];
             /**
              * Sentence
              * @description One plain sentence when the list can't show what was asked: meetings aren't ready, or My meetings or My team can't pick anything out (not linked to a HubSpot owner, in no HubSpot team, or nobody signed in). Never for All once meetings are ready
@@ -12117,6 +12138,8 @@ export interface operations {
                 q?: string | null;
                 limit?: number;
                 offset?: number;
+                /** @description A HubSpot owner id, from `owners`: only the meetings they own or are on */
+                owner?: string | null;
             };
             header?: never;
             path?: never;

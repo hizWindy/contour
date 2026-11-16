@@ -888,11 +888,26 @@ class MeetingItem(Out):
     )
 
 
+class MeetingOwner(Out):
+    """A person who owns at least one meeting in the list's window (Improvements 1, #5)."""
+
+    id: str = Field(description="Their HubSpot owner id, to send back as `owner`")
+    name: str = Field(description="Their name, from our copy of HubSpot's owners")
+
+
 class MeetingPage(Out):
-    # Added in PLAN-V18: the API always sends them, and the website's types leave them optional.
+    # Added in PLAN-V18 and Improvements 1: the API always sends them, and the website's types
+    # leave them optional.
     model_config = ConfigDict(
         json_schema_extra=optional_in_types(
-            "who", "linked", "team_state", "team_names", "checked_at", "syncing", "sync_problem"
+            "who",
+            "linked",
+            "team_state",
+            "team_names",
+            "checked_at",
+            "syncing",
+            "sync_problem",
+            "owners",
         )
     )
 
@@ -920,6 +935,12 @@ class MeetingPage(Out):
     )
     team_names: list[str] = Field(
         default_factory=list, description="My HubSpot teams' names, by name, or an empty list"
+    )
+    owners: list[MeetingOwner] = Field(
+        default_factory=list,
+        description="The people who own a meeting in this window (upcoming or past), by name, "
+        "for the website's Owner filter. Only owners our copy of HubSpot has a name for. It "
+        "follows `who`, but never `owner` or `q`, so the filter keeps its choices",
     )
     checked_at: datetime | None = Field(
         None, description="When the last good read of HubSpot's meetings finished, or none"

@@ -23,6 +23,11 @@ export const UPCOMING = 'Upcoming'
 export const PAST = 'Past'
 export const WHEN_LABEL = 'Upcoming or past meetings'
 export const WHO_LABEL = 'Whose meetings'
+/** The Owner filter (Improvements 1, #5): one person's meetings, the ones they own or are on. */
+export const OWNER_LABEL = 'Owner'
+export const ANYONE = 'Anyone'
+/** An owner in a link that the list no longer offers, so the choice still says something. */
+export const OWNER_UNKNOWN = 'This person'
 /** The three filters (PLAN-V18 T2-3). All is the default. */
 export const WHO_WORDS: Readonly<Record<MeetingWho, string>> = {
   all: 'All',
@@ -190,6 +195,22 @@ export const NO_TEAMS_IN_HUBSPOT: Empty = {
   description: "HubSpot has no teams set up, so My team is empty. All shows everyone's.",
 }
 export const SHOW_ALL = 'Show all meetings'
+
+/**
+ * One person's meetings, and there are none (Improvements 1, #5). It says whose, and what puts
+ * something here: a meeting they own, or are on, in the window.
+ */
+export function ownerEmptyWords(name: string, when: MeetingWhen): Empty {
+  return when === 'past'
+    ? {
+        title: `No past meetings for ${name}.`,
+        description: 'Meetings they owned, or were on, in the last 30 days show here.',
+      }
+    : {
+        title: `No meetings for ${name} this week.`,
+        description: 'Meetings they own, or are on, in HubSpot show here.',
+      }
+}
 
 /** An empty list while meetings can't come from HubSpot yet (waiting, or not connected). */
 export const EMPTY_WAITING: Empty = {

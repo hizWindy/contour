@@ -7,6 +7,8 @@
   cancelled one stays;
 - My team: one team, two teams, no team, HubSpot with no teams, and our copy's own teams;
 - the search: company, title and date words, in any case;
+- the Owner filter (Improvements 1, #5): one HubSpot owner's meetings, owned or been on,
+  with sign-in off too, and the people it offers;
 - HubSpot's meetings not read yet: an empty list that says so, and zero counts;
 - a rep whose account isn't linked to a HubSpot owner; sign-in off;
 - the counts for Home; one meeting with its pre-read; a company's next three and last three;
@@ -44,7 +46,7 @@ from core.api.deps import settings_dependency
 from core.auth.models import User
 from core.hubspot import meetings as core_meetings
 from core.hubspot.meetings import NOT_READ_YET, Meeting, MeetingsRefresher, MeetingsStatus
-from core.hubspot.models import HubSpotOwnerTeam
+from core.hubspot.models import HubSpotOwner, HubSpotOwnerTeam
 from core.hubspot.owners import TeamsOf
 from tests.companies.helpers import API, add, signed_in_as
 from tests.companies.test_call_notes_api import a_company, log_call, notes_settings, set_note
@@ -355,6 +357,7 @@ async def test_before_hubspots_meetings_are_read_the_list_says_so(
         "linked": True,
         "team_state": "ready",
         "team_names": ["Sample Sales"],
+        "owners": [],
         "checked_at": None,
         "syncing": False,
         "sync_problem": None,
@@ -732,3 +735,62 @@ def test_the_time_of_the_last_read_is_said_the_way_a_person_says_it() -> None:
     assert clock_words(datetime(2026, 11, 15, 13, 5, tzinfo=UTC), now) == "12:05 am"
     assert clock_words(datetime(2026, 11, 15, 2, 14, tzinfo=UTC), now) == "1:14 pm yesterday"
     assert clock_words(datetime(2026, 11, 13, 22, 0, tzinfo=UTC), now) == "9:00 am on 14 Nov"
+
+
+# --- The Owner filter (Improvements 1, #5) --------------------------------------------------------
+
+
+async def test_the_owner_filter_shows_one_persons_meetings_and_works_with_sign_in_off(
+    world: World, settings: dict[str, Any], fake: FakeMeetings
+) -> None:
+    await a_company(world)
+    await add(world, HubSpotOwner(owner_id="o2", name="Ann Sample"))
+    await add(world, form(None, "draft", title="Typed in", starts_at=melbourne(5, 10)))
+    fake.coming += MORE
+    world.settings(auth_required=False)  # sign-in off, as on the laptop: there is no "me"
+    settings.update(auth_required=False)
+    async with world.browser() as client:
+        everyone = await page(client)
+        sam = await page(client, owner="o2")
+        mia = await page(client, owner="o1")
+        past = await page(client, when="past", owner="o2")
+        nobody = await page(client, owner="o99")
+    # Without `owner` nothing changes: every meeting, and the typed one (it has no HubSpot id).
+    assert "" in ids(everyone) and everyone["total"] == 11
+    # Sam's: the two he owns, and the one he is on (9010, which Sample BD's o4 owns).
+    assert ids(sam) == ["9002", "9010", "9009"]
+    assert sam["total"] == 3 and sam["sentence"] is None
+    # Mia's: the five she owns, and the one she is on (9012). The typed one is nobody's here.
+    assert ids(mia) == ["9001", "9006", "9003", "9012", "9005", "9008"]
+    # The past window answers to it too.
+    assert ids(past) == ["8002"]
+    # A person with no meetings leaves an empty list and no complaint: it is a filter.
+    assert (nobody["items"], nobody["total"], nobody["sentence"]) == ([], 0, None)
+    # The choices: everyone who owns a meeting and has a name in our copy, by name, and they stay
+    # whatever `owner` says, so picking one never takes the others away. o4, o5 and o7 have no
+    # name there, so they are left out.
+    expected = [{"id": "o2", "name": "Ann Sample"}, {"id": "o1", "name": "Lee Sample"}]
+    for found in (everyone, sam, mia, nobody, past):
+        assert found["owners"] == expected
+
+
+async def test_the_owner_filter_stacks_on_my_meetings_and_a_bad_owner_is_refused(
+    world: World, settings: dict[str, Any], fake: FakeMeetings
+) -> None:
+    await a_company(world)
+    fake.coming += MORE
+    async with signed_in_as(world, "mia", ["companies"]) as client:
+        mine = await page(client, who="mine")
+        mine_and_mia = await page(client, who="mine", owner="o1")
+        mine_and_sam = await page(client, who="mine", owner="o2")
+        refused = await client.get(MEETINGS, params={"owner": "o1 or 1=1"})
+        too_long = await client.get(MEETINGS, params={"owner": "x" * 33})
+    # The two filters both apply: Mia's own, narrowed to the ones Sam owns or is on. None of her
+    # meetings has Sam on it.
+    assert ids(mine_and_mia) == ids(mine)
+    assert (mine_and_sam["items"], mine_and_sam["total"], mine_and_sam["sentence"]) == ([], 0, None)
+    # What the filter offers follows My meetings: the people who own one of Mia's. Only Lee has
+    # a name in our copy.
+    assert mine["owners"] == [{"id": "o1", "name": "Lee Sample"}]
+    assert mine_and_sam["owners"] == mine["owners"]
+    assert (refused.status_code, too_long.status_code) == (422, 422)

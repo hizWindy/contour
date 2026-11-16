@@ -179,6 +179,8 @@ export type MeetingWhen = NonNullable<MeetingQuery['when']>
 export type MeetingWho = NonNullable<MeetingQuery['who']>
 export type MeetingQuery = NonNullable<operations['list_meetings']['parameters']['query']>
 export type MeetingPage = Schemas['MeetingPage']
+/** A person who owns a meeting in the list's window, for the Owner filter (Improvements 1, #5). */
+export type MeetingOwner = Schemas['MeetingOwner']
 /** Where "My team" stands for the rep. `none_in_hubspot`: HubSpot has no teams, so it is hidden. */
 export type TeamState = MeetingPage['team_state']
 /** What a press of Sync on Meetings answers (PLAN-V18 T1-5). */
