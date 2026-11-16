@@ -5,8 +5,8 @@ This plan makes the Companies module clearer and nicer to use, from Al-khair's l
 **TBC** means to be confirmed.
 
 - **Built by:** Al-khair Pama. **Signed off by:** Al-khair for the code and every screen. Levi confirms the rules marked **TBC with Levi**.
-- **Last updated:** 16 Nov 2026 (S0 done: `plan-v18` made from `master`; the tracks are starting).
-- **Progress:** S0: 1 of 1. Track 1: 9 of 9. Track 2: 4 of 8. Track 3: 4 of 9. Merge and deploy: 0 of 3.
+- **Last updated:** 16 Nov 2026 (M1 done: the three tracks joined into `plan-v18`, every check passed, and `master` moved to it; not deployed).
+- **Progress:** S0: 1 of 1. Track 1: 9 of 9. Track 2: 4 of 8. Track 3: 4 of 9. Merge and deploy: 1 of 3.
 - **Sources:**
   - Al-khair's list of changes (16 Nov, in chat), and the chat about Meetings the same day: the empty Meetings page, the team switch, and the Sync idea;
   - the code on `master` (`c4ebe58`), read on 16 Nov;
@@ -666,13 +666,14 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
 
 ## Merge and deploy
 
-- [ ] **M1. Join the tracks** (`merge v18`, on Al-khair's word).
+- [x] **M1. Join the tracks** (`merge v18`, on Al-khair's word). Done 2026-11-16 by the lead session, on "Please implement this all the way". Both reviews said Ready with notes, and their fixes are in. Details in the Log.
   - A fresh `review-agent` runs the `merge-check` skill first. It must say Ready.
   - In a worktree on `plan-v18`: merge `plan-v18-track1`, then `-track2`, then `-track3`, each with `--no-ff`.
   - The known joins: keep both sides in `src/components/motion/index.ts` and `src/test/mock-api.ts`. Run `uv run engine openapi` and `npm run types`, then replace the hand written types with the generated ones.
   - Run every test and build on the joined branch.
   - Then move `master`: `git merge --ff-only plan-v18` in the main folder. If it won't fast-forward, stop and ask.
   - **Done when:** every test and build passes on `plan-v18`, and `master` has moved to it.
+  - **Left from the tracks' own checks** (T1-9, T2-8 and T3-9 ticked with these open; do them before `deploy v18`): the screens at 1280px, My meetings and My team with sign in on, a keyboard pass by hand, reduced motion by eye, and the 4x CPU trace. M1 did the review-agent's checks, 1440px light and dark and 390px light, and (by mistake) one paid draft.
 
 - [ ] **M2. Deploy and check live** (`deploy v18`, on Al-khair's word).
   - Push, deploy, and watch the log. Migration `0024` runs on deploy.
@@ -689,19 +690,20 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
   - `CLAUDE.md` and `projects/prep/PREP.md`.
   - A short note for the team on what changed, written with `/plain`, sent on Al-khair's word.
   - **Done when:** no doc calls the page "Activity", and the note is sent or skipped on Al-khair's word.
+  - 2026-11-16: the docs are done (`AGENTS.md`, `PREP.md`, `CLAUDE.md`, `DESIGN.md`). The team note waits for Al-khair's word.
 
 ## Waiting on
 
 - **Levi:**
-  - **The browser's speech service,** only if T3-3 picks it: his OK for the voice to go to Google or Microsoft.
+  - **The browser's speech service,** only if T3-3 picks it: his OK for the voice to go to Google or Microsoft. Until then the server refuses it; after it, set `BROWSER_SPEECH_OK=true` on the server.
   - **HubSpot teams,** if T1-2 finds none: whether Contour wants them set up in HubSpot.
   - **A team view of call logs:** who may see other people's calls.
   - **The contacts permission** (`crm.objects.contacts.read`, PLAN-V17 W1): without it, the quick look and History show no people's names.
 - **Al-khair:**
   - the answers to "Questions for you";
-  - T3-3 at the keyboard, and a look at each screen;
-  - OK for the new DESIGN.md lines;
-  - the one paid draft, the merge and the deploy.
+  - T3-3 at the keyboard, and a look at each screen (sign in on, to see My meetings and My team);
+  - OK for the new DESIGN.md lines, and the 7 decisions in the Log (16 Nov);
+  - `deploy v18`.
 
 ## Risks
 
@@ -721,9 +723,47 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
 - **A phone app.**
 - **Found while planning, for their own tasks:**
   - Any signed in account can change the Settings switches and spending limits (`core/api/settings.py` has no Admin check). This matters once reps have their own accounts.
+  - `Segmented` (the motion kit) is 40px tall on a touch screen, under the 44px rule. Changing it changes every screen that uses it (found at T2-8 and M1).
+  - Some backend titles nearly repeat their details, like "Call notes are off" above "Call notes are switched off. ...". The error box and toasts show both (found at M1).
+  - A track backend gets `ANTHROPIC_API_KEY` from a Windows user setting, not only from `engine/.env`. Start track backends with the key removed (see the M1 Log).
   - The HubSpot check doesn't test the permission to write meeting notes (`core/hubspot/check.py`, `ACTIVITY_WRITE_KINDS` has no `meetings`). So a missing permission would show only when a pre-read is sent.
 
 ## Log
 
 - 16 Nov 2026: plan written from Al-khair's list of changes. Nothing built.
 - 16 Nov 2026: Al-khair said "Please implement this all the way" and went to sleep. S0 done. The lead session runs the three tracks with one agent each, and is the go-between for their messages (the tracks write requests in their Logs). Steps that need Al-khair (T3-3 at the keyboard, each look, the paid draft) are marked waiting, and the tracks carry on around them. No push and no deploy without `deploy v18`.
+- 16 Nov 2026, **M1, the join** (the lead session, on "Please implement this all the way"; Al-khair asleep). Worktree `../contour-v18`, branch `plan-v18`.
+  - **Pre-merge check** (a fresh `review-agent`, `merge-check` sections 1 and 2, on each track branch): Track 1, Track 2 and Track 3 each **Ready with notes**, no blocker.
+  - **Joined** in order, each `--no-ff`: track1 (`1eca548`), track2 (`b5ace3a`), track3 (`c3f5556`). Conflicts only in the Progress line and `src/components/motion/index.ts` (both sides kept). The contract and the website's types made again (`00c774e`), and every hand written type now uses the generated one.
+  - **Join fixes** (a `frontend-agent`), each with a test:
+    - Track 2's side: "You can still start a new pre-read." and each next step show once (the server's sentences now carry them); Home's meetings card asks for All while sign in is off, and shows "Show all meetings" for a rep with no HubSpot owner; Sync says "about 15 seconds" (T1-5 measured 10 to 13); the tests use the server's real words.
+    - Track 3's side: History's "Where it stands" has no "To confirm" (the server lists that state unsure first, then oldest first, which broke the days); 14 of Track 3's 16 hints only repeated the server's words and are gone; the send dialog says "Email isn't set up" once; test data has `voice_tool`.
+    - Settings doesn't offer the browser speech service (`CHOICES_WAITING` in `settings-groups.ts`) until Levi's OK.
+  - **Final check** (a fresh `review-agent`, `merge-check` sections 3 to 5): **Ready with notes**, no blocker. The generated files match a fresh run byte for byte; one migration head; no hand written types left; security found no key, no contact detail and no new HubSpot write; History only ever shows your own notes. Fixed after it, each with a test:
+    - the server refuses `voice_tool = browser_service` until `BROWSER_SPEECH_OK=true` in `engine/.env` (422 `browser_speech_off`; a saved value or `VOICE_TOOL` reads as `browser_model` meanwhile, and Settings doesn't list it) (`fd66c5e`, and `65ac9c3` for the website, so one switch decides);
+    - History's `since` and `until` take days from 2000 to 2100 (422 `day_out_of_range`): two extreme dates gave a 500 (`c6df96a`); the contract's words made again (`0a49c67`);
+    - the new small buttons are 44px on a touch screen (`21a51b9`);
+    - the pre-read words use measured numbers: "It takes a few seconds." and "Under US$0.01." (`d80f8ff`; PLAN-V17 T2-16 measured about US$0.007 a draft, and one draft tonight cost US$0.0071 in 3.5 seconds);
+    - the quick look's failed read has Try again (`b7f74cc`), and the unused More about is gone (`d5927f2`).
+  - **Browser check** (the joined copy on ports 8064 and 5234, the track database `leadfinder_v18a`, sign in off, no HubSpot key; 1440px light and dark, 390px light):
+    - Meetings opens on everyone's meetings, with Sync and "Checked 5:49 pm". Sync with no HubSpot key says so once, in plain words, and greys out; the rows stay.
+    - "Draft it" opens the pre-read as one centered form: the AI notice, the three step dots, four numbered sections, summaries typed in directly with "Written by AI", the two starred blanks, and the footer bar.
+    - Companies sorts by Last activity, newest first. Prep opens straight on the quick look, with "Calling: Cold call (switchboard)".
+    - Log call has the mic button. The mic card says the browser blocked the mic and how to allow it (this pane has no mic).
+    - `/companies/activity?tab=logged` opens Call logs on History. History groups by day, and a row opens in place.
+    - **Found and fixed:** a call logged from Call logs stayed out of History until a reload (`e0dec80`).
+    - **Not seen:** the All, My meetings and My team choice (it needs sign in, which is off on this laptop; tests cover it), 1280px, a working mic, Sync with HubSpot connected.
+  - **A paid draft by mistake:** the joined backend inherited `ANTHROPIC_API_KEY` from a Windows user setting (not `engine/.env`), so one "Draft it" called Claude: US$0.0071 and 3.5 seconds, for "Coffee Catch Up" (ResolveXO), in the track database only. Nothing was sent. The backend was started again with the key removed, and Admin's health check then said "No Claude key is set". **Risk for later tracks:** a track backend gets the Claude key from Windows unless its start removes it.
+  - **Two local test calls** were logged in `leadfinder_v18a` (Bapcor Limited and CBRE Asia Pacific, made up words). They stay there, unsent.
+  - **Windows** blocks a new copy's `engine.exe` and `pytest.exe` (Application Control). In a new worktree use `uv run python -m core.cli ...` and `python -m pytest`.
+  - **Docs (M3):** `engine/AGENTS.md`, `projects/prep/PREP.md`, `CLAUDE.md` (the open steps of PLAN-V18 and PLAN-V17) and `engine/DESIGN.md` (five lines waiting for Al-khair's look; `LevelMeter` gives way to `FrequencyBars` once he agrees).
+  - **Checks on the final branch:** on `5ae27fa`: the generated files match a fresh run; Ruff, the format check (430 files) and mypy (397 files) are clean; one migration head (`0024_v18_teams_activity`); every backend test with `RUN_GATES=1`: 4,714 passed, 25 skipped, 0 failed (12 min 7 s); the website's lint and typecheck are clean, 127 files and 1,825 tests passed, the build passes, and the first visit is 233 kB of JavaScript gzip (238,558 B, 766 B over the T3-1 base, inside the 1,024 B limit) and 24 kB of CSS.
+  - **master:** after this commit, `master` moves here by fast forward, with a backup branch `backup/master-before-v18` at `c4ebe58` first. The main folder's pre-S0 draft of this plan and its copy of the CLAUDE.md edit are set aside with `git stash` (both are in `plan-v18`). Not pushed, not deployed. The dev backend on port 8000 runs the old code until it restarts, and a restart moves the dev database to 0024.
+- 16 Nov 2026: **Decisions for Al-khair** (made tonight, each easy to change):
+  1. Home's meetings card keeps your own meetings while you are signed in (its sentence counts your own); everyone's while sign in is off.
+  2. Sync is greyed while HubSpot isn't connected.
+  3. A new Meetings list fades in over 250ms, and the old one goes at once.
+  4. The mic button is square (DESIGN.md has no fully round buttons), not round as the plan said.
+  5. History has no "To confirm" filter, and no "Sending" one.
+  6. The browser speech service is refused by the server and not listed in Settings. After Levi's OK, set `BROWSER_SPEECH_OK=true` on the server: that one switch brings it back.
+  7. The phone number stays in the prep footer, not in the quick look.
