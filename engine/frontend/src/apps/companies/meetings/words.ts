@@ -7,7 +7,7 @@ import type { MeetingWho } from '@/api/hooks/meetings'
 import type { Meeting, MeetingWhen, MeetingWhere } from '@/api/types'
 import { addDays } from '@/lib/due-date'
 import { formatNumber, formatTime, melbourneDate } from '@/lib/format'
-import { changeDetail } from '@/lib/problems'
+import { changeDetail, problemHint } from '@/lib/problems'
 import type { DayGroup, RowStatus } from './rows'
 
 /** Ends a sentence that has no stop yet. */
@@ -115,17 +115,19 @@ export function checkedWords(at: string, today: string): string {
 }
 
 /**
- * Why a press of Sync didn't go, for the line under the toolbar: what happened, then what to do.
- * A detail that already starts with the title says it alone, so nothing is said twice.
+ * Why a press of Sync didn't go, for the line under the toolbar: what happened, then what to do
+ * (the server's words, then the hint for its code). A detail that already starts with the title
+ * says it alone, so nothing is said twice.
  */
 export function syncNotSentWords(error: unknown): string {
   const problem = toApiProblem(error)
   const title = problem.title.trim()
   const detail = changeDetail(problem)?.trim() ?? ''
+  const hint = problemHint(problem)
   if (detail !== '' && detail.toLowerCase().startsWith(title.toLowerCase())) {
-    return sentence(detail)
+    return [sentence(detail), hint].filter(Boolean).join(' ')
   }
-  return [title ? sentence(title) : null, detail || null].filter(Boolean).join(' ')
+  return [title ? sentence(title) : null, detail || null, hint].filter(Boolean).join(' ')
 }
 
 // --- The states -----------------------------------------------------------------------------

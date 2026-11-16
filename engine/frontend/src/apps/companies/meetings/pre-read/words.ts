@@ -244,8 +244,11 @@ export const OVER_THE_MOST = `Send it to ${String(MOST_PEOPLE)} people or fewer.
 export const SEND = 'Send'
 export const SENDING = 'Sending.'
 export const CANCEL = 'Cancel'
-/** With no sender set up (409 `email_not_set_up`): nothing is lost. */
-export const STAYS_HERE = 'The pre-read stays here, so you can send it once email is set up.'
+/** With no sender set up (409 `email_not_set_up`): nothing is lost, and it can be copied. */
+export const STAYS_HERE = 'The pre-read stays here: copy it, or send it once email is set up.'
+export const COPY_PRE_READ = 'Copy the pre-read'
+export const COPIED = 'Copied. Paste it into an email to the team.'
+export const NOT_COPIED = "It couldn't be copied. Select the email above and copy it."
 
 /** "Remove mia@example.com" */
 export function removeWords(address: string): string {

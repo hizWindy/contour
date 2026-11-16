@@ -957,6 +957,32 @@ describe('a failed draft', () => {
   })
 })
 
+describe('words for when things go wrong (PLAN-V18 T2-7)', () => {
+  it.each([
+    [
+      'the AI limit',
+      "The summaries weren't written: today's AI spending limit is reached. Write them yourself, or draft again tomorrow.",
+    ],
+    [
+      'the AI service',
+      "The summaries weren't written: the AI service didn't answer. Try again in a minute, or write them yourself.",
+    ],
+  ])(
+    "the draft failed for %s: the server's sentence as it is, Try again, and the boxes to write in",
+    async (_, words) => {
+      mockServer({ form: form({ status: 'failed', error: words, summaries: NONE_WRITTEN }) })
+      renderPreRead()
+      const alert = await screen.findByRole('alert')
+      expect(alert.textContent).toBe(words)
+      const progress = screen.getByRole('region', { name: 'The draft stopped' })
+      expect(
+        within(progress).getByRole('button', { name: 'Try again (about US$0.03)' }),
+      ).toBeEnabled()
+      expect(screen.getByRole('textbox', { name: 'What they do' })).toBeEnabled()
+    },
+  )
+})
+
 describe('sent', () => {
   it('says who got it and when, and where its copy in HubSpot stands', async () => {
     mockServer({

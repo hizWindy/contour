@@ -19,6 +19,8 @@ import type {
   MeetingItem,
   MeetingsState,
 } from '@/api/types'
+import { ApiProblem } from '@/api/client'
+import { problemHint } from '@/lib/problems'
 import { routes } from '@/router'
 import { prefetchPage } from '@/shell/prefetch'
 import { signedIn, signInOff } from '@/test/fake-auth'
@@ -928,7 +930,7 @@ describe('Sync', () => {
     await user.click(syncButton('Sync'))
     expect(
       await within(syncLine()).findByText(
-        "HubSpot isn't connected, so meetings can't be read from it.",
+        "HubSpot isn't connected, so meetings can't be read from it. Ask an admin to connect HubSpot. You can still start a new pre-read.",
       ),
     ).toBeInTheDocument()
     expect(syncButton('Sync')).toBeInTheDocument()
@@ -1053,6 +1055,108 @@ describe('the states', () => {
     expect(server.sent.map((one) => `${one.path}?${one.search.toString()}`)).toEqual([
       `${MEETINGS}?when=past&who=team&limit=25&offset=0`,
     ])
+  })
+})
+
+describe('words for when things go wrong (PLAN-V18 T2-7)', () => {
+  // Each row of the plan's table for Meetings, with its button. The draft's two rows are in the
+  // pre-read's tests, and "Email isn't set up" in the send dialog's.
+
+  it("HubSpot's meetings aren't read yet: one quiet line, and New pre-read still works", async () => {
+    mockServer({ meetingsState: 'waiting', sentence: null, upcoming: [], past: [] })
+    renderMeetings()
+    expect(
+      await screen.findByText(
+        "Meetings can't be read from HubSpot yet. You can still start a new pre-read.",
+      ),
+    ).toHaveAttribute('role', 'status')
+    expect(screen.getByRole('button', { name: 'New pre-read' })).toBeEnabled()
+  })
+
+  it("no permission to read meetings: the server's words, then what still works", async () => {
+    mockServer({
+      meetingsState: 'waiting',
+      sentence: 'Waiting for HubSpot access to meetings. An admin adds it in HubSpot.',
+      upcoming: [],
+    })
+    renderMeetings()
+    expect(
+      await screen.findByText(
+        'Waiting for HubSpot access to meetings. An admin adds it in HubSpot. You can still start a new pre-read.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'New pre-read' })).toBeEnabled()
+  })
+
+  it("HubSpot didn't answer a Sync: when the list is from, and Sync to press again", async () => {
+    const words = "HubSpot didn't answer, so this list is from 9:02 am. Try Sync again in a minute."
+    mockServer({ syncProblem: words, checkedAt: '2026-11-17T22:02:00Z' })
+    renderMeetings()
+    expect(await screen.findByText(words)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Sync' })).toBeEnabled()
+  })
+
+  it('a Sync already running: says HubSpot is being checked, and how long it takes', async () => {
+    mockServer({ sync: 'running', syncing: true, syncReads: 5 })
+    const { user } = renderMeetings()
+    await screen.findByRole('list', { name: 'Today' })
+    await user.click(screen.getByRole('button', { name: 'Checking HubSpot' }))
+    expect(
+      await screen.findByText('Already checking HubSpot. It takes about 10 seconds.'),
+    ).toBeInTheDocument()
+  })
+
+  it('synced a moment ago: up to date, and HubSpot is not asked', async () => {
+    mockServer({ sync: 'fresh', checkedAt: '2026-11-17T21:59:30Z' })
+    const { user } = renderMeetings()
+    await screen.findByRole('list', { name: 'Today' })
+    await user.click(screen.getByRole('button', { name: 'Sync' }))
+    expect(await screen.findByText('Up to date. Checked a moment ago.')).toBeInTheDocument()
+  })
+
+  it("My meetings while the account isn't linked, and My team in no team: why, and Show all meetings", async () => {
+    const notLinked =
+      "Your account isn't linked to a HubSpot owner yet, so My meetings is empty. All shows everyone's. An admin can link you in Admin, People."
+    mockServer({ linked: false, teamState: 'no_team', whoSentence: null })
+    const { user } = renderMeetings('/companies/meetings?who=mine')
+    expect(await screen.findByText(notLinked)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Show all meetings' })).toBeInTheDocument()
+    await user.click(screen.getByRole('radio', { name: 'My team' }))
+    expect(
+      await screen.findByText(
+        "You aren't in a HubSpot team yet, so My team is empty. All shows everyone's.",
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Show all meetings' })).toBeInTheDocument()
+  })
+
+  it('no connection: a quiet line that points at the connection bar, never a red box', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.reject(new TypeError('Failed to fetch'))),
+    )
+    renderMeetings()
+    const quiet = await screen.findByText('The bar at the top shows when the connection is back.')
+    expect(quiet.closest('[data-slot=error-state]')).toHaveAttribute('role', 'status')
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
+  })
+
+  it('gives the meetings codes a next step where the server has none, naming no setting', () => {
+    const hint = (code: string) => problemHint(new ApiProblem({ title: 'x', status: 409, code }))
+    expect(hint('hubspot_not_connected')).toBe(
+      'Ask an admin to connect HubSpot. You can still start a new pre-read.',
+    )
+    expect(hint('meeting_not_found')).toBe(
+      "Press Sync on Meetings to read HubSpot's meetings again.",
+    )
+    expect(hint('form_not_found')).toBe('Every pre-read is on Meetings, beside its meeting.')
+    expect(hint('email_not_set_up')).toBe(
+      'The pre-read stays here: copy it, or send it once email is set up.',
+    )
+    // The server already says what to do for these: no hint, so nothing is said twice.
+    expect(hint('form_sending')).toBeNull()
+    expect(hint('no_one')).toBeNull()
   })
 })
 
