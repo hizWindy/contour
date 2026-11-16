@@ -897,10 +897,12 @@ describe('while it drafts', () => {
 
 describe('a failed draft', () => {
   it('stops the steps where it failed, says why in plain words, with Try again and what it costs', async () => {
+    // Track 1's words for a fault on its side (`meeting_form.py`), word for word. They don't say
+    // what wasn't written, so the page says that first.
     const server = mockServer({
       form: form({
         status: 'failed',
-        error: 'Claude is busy right now. Try again in a minute.',
+        error: 'Something went wrong on our side while writing the summaries. Try again.',
         summaries: NONE_WRITTEN,
         next_step: 'Book a site visit.',
         going: 'Jo Sample',
@@ -908,8 +910,8 @@ describe('a failed draft', () => {
     })
     const { user } = renderPreRead()
     const notice = await screen.findByRole('alert')
-    expect(notice).toHaveTextContent(
-      "The summaries weren't written. Claude is busy right now. Try again in a minute.",
+    expect(notice.textContent).toBe(
+      "The summaries weren't written. Something went wrong on our side while writing the summaries. Try again.",
     )
     expect(within(pageHeader()).getByText('Draft failed')).toBeInTheDocument()
     // The facts were read: it stopped while writing the summaries.
