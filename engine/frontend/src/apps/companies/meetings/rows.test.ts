@@ -3,14 +3,8 @@
  * row, how each row writes its time, when the list asks again, and the address. Made-up names only.
  */
 import { describe, expect, it } from 'vitest'
-import {
-  DRAFTING_POLL_MS,
-  listPollMs,
-  meetingsPollMs,
-  SYNC_POLL_MS,
-  type MeetingListPage,
-} from '@/api/hooks/meetings'
-import type { Meeting, MeetingItem } from '@/api/types'
+import { DRAFTING_POLL_MS, listPollMs, meetingsPollMs, SYNC_POLL_MS } from '@/api/hooks/meetings'
+import type { Meeting, MeetingItem, MeetingPage } from '@/api/types'
 import { meetingsHref, meetingsQuery, preReadHref, readMeetings, writeMeetings } from './params'
 import { groupUpcoming, isCancelled, rowKey, rowStatus } from './rows'
 import { dayText, pastWhen, upcomingWhen, waitingLine, whereWords } from './words'
@@ -133,7 +127,7 @@ describe('one status a row', () => {
   })
 
   it('asks again every 2 seconds while HubSpot is read (Sync), and stops once it is done', () => {
-    const page = (syncing: boolean, items: MeetingItem[] = []): MeetingListPage => ({
+    const page = (syncing: boolean, items: MeetingItem[] = []): MeetingPage => ({
       items: items.map((one) => ({ ...one, mine: true })),
       total: items.length,
       meetings_state: 'ready',

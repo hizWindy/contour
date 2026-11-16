@@ -1,15 +1,14 @@
 /**
  * Meetings (PLAN-V17 T3-9, PLAN-V18 T2-3), against the contract and a fake server that keeps its
  * meetings between requests and answers as Track 1's does: in time order, each with its day group,
- * filtered by whose meetings (`who`), and with Sync's fields. Until M1 the new fields are the hand
- * written types in `api/hooks/meetings.ts`. The clock is fixed at 9:00 am on Wednesday 18 Nov
- * 2026, Melbourne time. Made-up names only: Sample Logistics Pty Ltd, Jo Sample.
+ * filtered by whose meetings (`who`), and with Sync's fields, in the generated types. The clock is
+ * fixed at 9:00 am on Wednesday 18 Nov 2026, Melbourne time. Made-up names only: Sample Logistics
+ * Pty Ltd, Jo Sample.
  */
 import { act, screen, waitFor, within } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider, useParams } from 'react-router'
 import { toast } from 'sonner'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { MeetingListPage, MeetingsSyncOut, MeetingWho, TeamState } from '@/api/hooks/meetings'
 import type {
   FormMeeting,
   FormSummary,
@@ -17,7 +16,11 @@ import type {
   MeetingFormOut,
   MeetingFormState,
   MeetingItem,
+  MeetingPage,
   MeetingsState,
+  MeetingsSyncOut,
+  MeetingWho,
+  TeamState,
 } from '@/api/types'
 import { ApiProblem } from '@/api/client'
 import { problemHint } from '@/lib/problems'
@@ -341,7 +344,7 @@ function mockServer(changes: Partial<Omit<Server, 'sent' | 'release'>> = {}): Se
         ),
         when,
       )
-      const page: MeetingListPage = {
+      const page: MeetingPage = {
         items: items
           .slice(offset, offset + limit)
           .map((item) => ({ ...item, mine: item.meeting.owner_id === MINE })),

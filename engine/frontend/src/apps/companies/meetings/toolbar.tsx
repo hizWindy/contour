@@ -13,8 +13,7 @@
  */
 import { Search } from 'lucide-react'
 import { useEffect, useEffectEvent, useState } from 'react'
-import type { MeetingWho } from '@/api/hooks/meetings'
-import type { MeetingWhen } from '@/api/types'
+import type { MeetingWhen, MeetingWho } from '@/api/types'
 import { Segmented, type SegmentedOption } from '@/components/motion'
 import { Input } from '@/components/ui/input'
 import { useDebounced } from '@/hooks/useDebounced'

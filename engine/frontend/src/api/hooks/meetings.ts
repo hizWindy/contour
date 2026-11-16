@@ -43,6 +43,7 @@ import type {
   MeetingItem,
   MeetingPage,
   MeetingQuery,
+  MeetingsSyncOut,
   MeetingTranscriptIn,
 } from '@/api/types'
 import { api } from '@/api/client'
@@ -56,63 +57,6 @@ export {
   meetingSummaryQueryOptions,
   useMeetingSummary,
 } from './meeting-summary'
-
-// --- Hand written until M1 (PLAN-V18, the contract part 1) -------------------------------------
-// The generated types don't have Meetings' new filter and Sync yet: Track 1 builds them at the same
-// time. M1 makes the types again and turns each of these into the generated one it names.
-
-/** Whose meetings a list shows: everyone's (the default), the rep's own, or their HubSpot team's. */
-export type MeetingWho = 'all' | 'mine' | 'team'
-
-/** GET /meetings's filters, with `who` in place of `mine`. M1: the generated `MeetingQuery`. */
-export type MeetingListQuery = Omit<MeetingQuery, 'mine'> & { who?: MeetingWho }
-
-/** A meeting on a list. `mine`: the rep owns it or attends it. M1: the generated `MeetingItem`. */
-export type MeetingListItem = MeetingItem & { mine: boolean }
-
-/**
- * Where "My team" stands for this person: in a team, not linked to a HubSpot owner, in no team, or
- * HubSpot has no teams at all (then the website hides "My team").
- */
-export type TeamState = 'ready' | 'not_linked' | 'no_team' | 'none_in_hubspot'
-
-/** A page of meetings, with the filter and Sync's fields. M1: the generated `MeetingPage`. */
-export interface MeetingListPage extends Omit<MeetingPage, 'items'> {
-  items: MeetingListItem[]
-  /** The filter used. */
-  who: MeetingWho
-  /** True when the rep's account has a HubSpot owner. */
-  linked: boolean
-  team_state: TeamState
-  /** The rep's HubSpot teams' names. */
-  team_names: string[]
-  /** When the last good read of HubSpot's meetings finished, or null. */
-  checked_at: string | null
-  /** True while a read of HubSpot's meetings is running. */
-  syncing: boolean
-  /** One plain sentence when the last read failed or waits for a permission, or null. */
-  sync_problem: string | null
-}
-
-/** POST /meetings/sync's answer. M1: the generated `MeetingsSyncOut`. */
-export interface MeetingsSyncOut {
-  /** Started now, already running, or one finished under a minute ago (nothing new asked). */
-  state: 'started' | 'running' | 'fresh'
-  checked_at: string | null
-}
-
-/**
- * The client for the one route the generated contract doesn't have yet (Sync). It is the same
- * `api`, with the same time limits and errors, typed loosely until M1.
- */
-const untypedApi = api as unknown as {
-  POST: (
-    path: string,
-    init: Record<string, unknown>,
-  ) => Promise<{ data?: unknown; error?: unknown; response: Response }>
-}
-
-// -------------------------------------------------------------------------------------------------
 
 /** How often a page with a form still being drafted asks again. */
 export const DRAFTING_POLL_MS = 3000
@@ -129,34 +73,28 @@ export function meetingsPollMs(items: readonly MeetingItem[] | undefined): numbe
  * Every 2 seconds while HubSpot's meetings are being read, until `syncing` is false; otherwise
  * every 3 seconds while a form on the page is being drafted; otherwise not at all.
  */
-export function listPollMs(page: MeetingListPage | undefined): number | false {
+export function listPollMs(page: MeetingPage | undefined): number | false {
   return page?.syncing === true ? SYNC_POLL_MS : meetingsPollMs(page?.items)
 }
 
 /** The cache key of one list of meetings, by its filters. */
-export function meetingListKey(query: MeetingListQuery) {
+export function meetingListKey(query: MeetingQuery) {
   return [...queryKeys.companies.meetingLists(), query] as const
 }
 
 /** GET /companies/meetings: a page of meetings, by `when`, `who` and `q`. */
-export function meetingsQueryOptions(query: MeetingListQuery) {
+export function meetingsQueryOptions(query: MeetingQuery) {
   return queryOptions({
     queryKey: meetingListKey(query),
-    queryFn: async ({ signal }): Promise<MeetingListPage> =>
-      unwrap(
-        await api.GET('/companies/meetings', {
-          // Until M1 the generated query still has `mine`: `who` goes as it is.
-          params: { query },
-          signal,
-        }),
-      ) as MeetingListPage,
+    queryFn: async ({ signal }): Promise<MeetingPage> =>
+      unwrap(await api.GET('/companies/meetings', { params: { query }, signal })),
     refetchInterval: (current) => listPollMs(current.state.data),
   })
 }
 
 /** The filters a cached page of meetings was asked with. */
-function queryOf(key: readonly unknown[] | undefined): MeetingListQuery | undefined {
-  return key?.[3] as MeetingListQuery | undefined
+function queryOf(key: readonly unknown[] | undefined): MeetingQuery | undefined {
+  return key?.[3] as MeetingQuery | undefined
 }
 
 /**
@@ -164,10 +102,7 @@ function queryOf(key: readonly unknown[] | undefined): MeetingListQuery | undefi
  * page) until the next one comes. Upcoming and Past, or another filter (All, My meetings, My
  * team), are other lists: those show their own loading shape instead of the wrong list.
  */
-export function useMeetings(
-  query: MeetingListQuery,
-  { enabled = true }: { enabled?: boolean } = {},
-) {
+export function useMeetings(query: MeetingQuery, { enabled = true }: { enabled?: boolean } = {}) {
   return useQuery({
     ...meetingsQueryOptions(query),
     enabled,
@@ -180,9 +115,8 @@ export function useMeetings(
 
 /** Every page of meetings in the cache says HubSpot's meetings are being read, so each asks again. */
 function markSyncing(client: QueryClient): void {
-  client.setQueriesData<MeetingListPage>(
-    { queryKey: queryKeys.companies.meetingLists() },
-    (page) => (page ? { ...page, syncing: true } : page),
+  client.setQueriesData<MeetingPage>({ queryKey: queryKeys.companies.meetingLists() }, (page) =>
+    page ? { ...page, syncing: true } : page,
   )
 }
 
@@ -196,8 +130,7 @@ export function useSyncMeetings() {
   const client = useQueryClient()
   return useMutation<MeetingsSyncOut, ApiProblem, undefined>({
     mutationKey: [...queryKeys.companies.meetings(), 'sync'],
-    mutationFn: async () =>
-      unwrap(await untypedApi.POST('/companies/meetings/sync', {})) as MeetingsSyncOut,
+    mutationFn: async () => unwrap(await api.POST('/companies/meetings/sync')),
     onSuccess: (answer) => {
       if (answer.state !== 'fresh') markSyncing(client)
       void client.invalidateQueries({ queryKey: queryKeys.companies.meetingLists() })

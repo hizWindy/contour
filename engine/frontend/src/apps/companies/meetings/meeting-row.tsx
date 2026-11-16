@@ -28,8 +28,7 @@
 import { MapPin, UserRound, Video } from 'lucide-react'
 import { m } from 'motion/react'
 import type { ReactNode } from 'react'
-import type { MeetingListItem, MeetingWho } from '@/api/hooks/meetings'
-import type { MeetingItem } from '@/api/types'
+import type { MeetingItem, MeetingWho } from '@/api/types'
 import { springs, useStill } from '@/components/motion'
 import { cn } from '@/lib/utils'
 import { RowAction, StatusLine } from './row-parts'
@@ -38,7 +37,7 @@ import { useDraftIt } from './use-draft-it'
 import { whereWords, WHOSE, YOU } from './words'
 
 export interface MeetingRowProps {
-  item: MeetingListItem
+  item: MeetingItem
   /** When it is, as its group writes it: "10:00 am", "Thu, 10:00 am", "Yesterday, 4:00 pm". */
   when: string
   past: boolean
@@ -51,7 +50,7 @@ export interface MeetingRowProps {
 }
 
 /** Whose meeting it is, for All and My team: "You", its owner's name, or nothing when not known. */
-function whoseWords(item: MeetingListItem, who: MeetingWho): string | null {
+function whoseWords(item: MeetingItem, who: MeetingWho): string | null {
   if (who === 'mine') return null
   if (item.mine) return YOU
   return item.owner_name?.trim() || null

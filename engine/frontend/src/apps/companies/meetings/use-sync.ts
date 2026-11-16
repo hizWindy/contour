@@ -4,7 +4,8 @@
  * pressed, the line's words, and the press itself.
  */
 import { useEffect, useState } from 'react'
-import { useSyncMeetings, type MeetingListPage } from '@/api/hooks/meetings'
+import { useSyncMeetings } from '@/api/hooks/meetings'
+import type { MeetingPage } from '@/api/types'
 import { ALREADY_CHECKING, CHECKED_A_MOMENT_AGO, checkedWords, syncNotSentWords } from './words'
 
 /** How long "Up to date" stays on the button after a read, before it says "Sync" again. */
@@ -32,14 +33,14 @@ export interface MeetingsSync {
 }
 
 /** Sync's state for the page of meetings on screen. */
-export function useMeetingsSync(page: MeetingListPage | undefined, today: string): MeetingsSync {
+export function useMeetingsSync(page: MeetingPage | undefined, today: string): MeetingsSync {
   const sync = useSyncMeetings()
   const [turns, setTurns] = useState(0)
   const [note, setNote] = useState<Note | null>(null)
   const [done, setDone] = useState(false)
   // A read this page asked for, or saw running, with the page that was on screen then. It has
   // ended once a newer page says nothing is being read: never on the page it started from.
-  const [awaiting, setAwaiting] = useState<{ from: MeetingListPage | undefined } | null>(null)
+  const [awaiting, setAwaiting] = useState<{ from: MeetingPage | undefined } | null>(null)
 
   const reading = page?.syncing === true
   const [wasReading, setWasReading] = useState(reading)

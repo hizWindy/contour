@@ -12,8 +12,7 @@
  * list of 50 rows or fewer.
  */
 import { useId } from 'react'
-import type { MeetingListItem, MeetingListPage } from '@/api/hooks/meetings'
-import type { MeetingItem } from '@/api/types'
+import type { MeetingItem, MeetingPage } from '@/api/types'
 import { Pager } from '@/components/pager'
 import { cn } from '@/lib/utils'
 import { MeetingRow } from './meeting-row'
@@ -25,7 +24,7 @@ import { firstOfWords, GROUP_LABELS, PAST_LIST, pastWhen, upcomingWhen } from '.
 const MOST_TO_MOVE = 50
 
 export interface MeetingListProps {
-  page: MeetingListPage
+  page: MeetingPage
   view: MeetingsView
   today: string
   /** The list is the one before, while the next one loads. */
@@ -48,7 +47,7 @@ export function MeetingList({
 }: MeetingListProps) {
   const id = useId()
   const dim = cn('transition-opacity', dimmed && 'opacity-60')
-  const fresh = (item: MeetingListItem): boolean =>
+  const fresh = (item: MeetingItem): boolean =>
     fadeInAfter !== null && page.items.length <= MOST_TO_MOVE && !fadeInAfter.has(rowKey(item))
 
   if (view.when === 'past') {

@@ -3,8 +3,7 @@
  * setting or file name (the screen-words test reads them). The wording is Al-khair's to change.
  */
 import { toApiProblem } from '@/api/client'
-import type { MeetingWho } from '@/api/hooks/meetings'
-import type { Meeting, MeetingWhen, MeetingWhere } from '@/api/types'
+import type { Meeting, MeetingWhen, MeetingWhere, MeetingWho } from '@/api/types'
 import { addDays } from '@/lib/due-date'
 import { formatNumber, formatTime, melbourneDate } from '@/lib/format'
 import { changeDetail, problemHint } from '@/lib/problems'

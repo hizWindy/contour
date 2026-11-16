@@ -171,8 +171,14 @@ export type MeetingFormState = Schemas['MeetingFormState']
 export type MeetingItem = Schemas['MeetingItem']
 export type MeetingsState = MeetingPage['meetings_state']
 export type MeetingWhen = NonNullable<MeetingQuery['when']>
+/** Whose meetings a list shows: everyone's (the default), the rep's own, or their team's (PLAN-V18). */
+export type MeetingWho = NonNullable<MeetingQuery['who']>
 export type MeetingQuery = NonNullable<operations['list_meetings']['parameters']['query']>
 export type MeetingPage = Schemas['MeetingPage']
+/** Where "My team" stands for the rep. `none_in_hubspot`: HubSpot has no teams, so it is hidden. */
+export type TeamState = MeetingPage['team_state']
+/** What a press of Sync on Meetings answers (PLAN-V18 T1-5). */
+export type MeetingsSyncOut = Schemas['MeetingsSyncOut']
 export type FormMeeting = Schemas['FormMeeting']
 export type FormFact = Schemas['FormFact']
 export type SummaryBy = FormSummary['by']

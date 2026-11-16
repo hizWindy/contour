@@ -11,8 +11,7 @@
  * A pre-read has its own address under Meetings, `/companies/meetings/{form_id}` (T3-10), where
  * Track 2's morning email links. The rows, New pre-read and the email open it.
  */
-import type { MeetingListQuery, MeetingWho } from '@/api/hooks/meetings'
-import type { MeetingWhen } from '@/api/types'
+import type { MeetingQuery, MeetingWhen, MeetingWho } from '@/api/types'
 
 /** Meetings' address. */
 export const MEETINGS_PATH = '/companies/meetings'
@@ -84,9 +83,9 @@ export function meetingsHref(view: Partial<MeetingsView> = {}): string {
 }
 
 /** What the list asks the server for: every value sent, so each list has one cache entry. */
-export function meetingsQuery(view: MeetingsView): MeetingListQuery {
+export function meetingsQuery(view: MeetingsView): MeetingQuery {
   const q = view.q.trim()
-  const query: MeetingListQuery =
+  const query: MeetingQuery =
     view.when === 'past'
       ? {
           when: 'past',

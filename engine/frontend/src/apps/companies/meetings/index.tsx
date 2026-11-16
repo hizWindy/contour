@@ -35,14 +35,8 @@ import { useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router'
 import { useMe } from '@/api/hooks'
 import { useCallNoteOptions } from '@/api/hooks/call-note-counts'
-import {
-  isMeetingFormsOff,
-  useMeetings,
-  type MeetingListPage,
-  type MeetingWho,
-  type TeamState,
-} from '@/api/hooks/meetings'
-import type { MeetingItem } from '@/api/types'
+import { isMeetingFormsOff, useMeetings } from '@/api/hooks/meetings'
+import type { MeetingItem, MeetingPage, MeetingWho, TeamState } from '@/api/types'
 import type { SegmentedOption } from '@/components/motion'
 import { EmptyState } from '@/components/empty-state'
 import { ErrorState } from '@/components/error-state'
@@ -80,7 +74,7 @@ interface HubSpotLine {
   sentence: string | null
 }
 
-function lineOf(page: MeetingListPage): HubSpotLine {
+function lineOf(page: MeetingPage): HubSpotLine {
   return { waiting: page.meetings_state !== 'ready', sentence: page.sentence }
 }
 
@@ -94,7 +88,7 @@ interface Empty {
  * they are in no team, or HubSpot has no teams. The server's own sentence is the description when
  * it sends one. Null when the list can be filled.
  */
-function whoWords(who: MeetingWho, page: MeetingListPage): Empty | null {
+function whoWords(who: MeetingWho, page: MeetingPage): Empty | null {
   let words: Empty | null = null
   if (who === 'mine' && page.linked === false) words = NOT_LINKED_MINE
   if (who === 'team') {
@@ -107,7 +101,7 @@ function whoWords(who: MeetingWho, page: MeetingListPage): Empty | null {
 }
 
 /** The serif words of an empty list: no match, HubSpot not read, a filter that can't fill, or none. */
-function emptyOf(view: MeetingsView, page: MeetingListPage): Empty & { showAll: boolean } {
+function emptyOf(view: MeetingsView, page: MeetingPage): Empty & { showAll: boolean } {
   if (view.q.trim() !== '') return { ...noMatchWords(view.q, view.when), showAll: false }
   if (page.meetings_state !== 'ready') return { ...EMPTY_WAITING, showAll: false }
   const why = whoWords(view.who, page)
