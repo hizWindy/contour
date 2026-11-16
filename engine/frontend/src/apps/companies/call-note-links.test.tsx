@@ -22,10 +22,11 @@ const NOTES = '/api/v1/companies/call-notes'
 const GREETING = /^Good (morning|afternoon|evening)/
 const PICKER = 'Which company was the call with?'
 
-function options(enabled: boolean, voiceTool?: string): CallNoteOptions {
+function options(
+  enabled: boolean,
+  voiceTool: CallNoteOptions['voice_tool'] = 'browser_model',
+): CallNoteOptions {
   return {
-    // The voice tool (PLAN-V18 contract part 4), hand written until M1 makes the types again.
-    ...(voiceTool ? { voice_tool: voiceTool } : {}),
     enabled,
     ai_enabled: false,
     sending_ready: false,
@@ -34,6 +35,7 @@ function options(enabled: boolean, voiceTool?: string): CallNoteOptions {
     fields: [],
     soft_seconds: 180,
     max_chars: 6000,
+    voice_tool: voiceTool,
   }
 }
 
@@ -44,8 +46,8 @@ interface Backend {
   summary?: CallNoteSummary | 'off'
   /** Who is signed in. Left out: sign-in is off, so everyone sees every project. */
   user?: { role: 'admin' | 'staff'; apps: string[] }
-  /** The voice tool the options name (PLAN-V18 T3-4). Left out: the options name none. */
-  voiceTool?: string
+  /** The voice tool the options name (PLAN-V18 T3-4). Left out: the setting's default. */
+  voiceTool?: CallNoteOptions['voice_tool']
 }
 
 /** The fake server. Returns every request it got, as "GET /path?query". */
@@ -447,7 +449,7 @@ describe('Check my mic (PLAN-V18 T3-4)', () => {
     SLOW,
   )
 
-  it.each([
+  it.each<[string, Backend, boolean]>([
     ['on a phone', { voiceTool: 'browser_service' }, true],
     ['with the voice tool set to typing', { voiceTool: 'typing' }, false],
     ['while call notes are off', { voiceTool: 'browser_service', enabled: false }, false],

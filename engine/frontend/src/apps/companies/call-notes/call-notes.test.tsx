@@ -172,6 +172,7 @@ function options(changes: Partial<CallNoteOptions> = {}): CallNoteOptions {
     fields: [{ id: 'lease_end', label: 'Lease end', kind: 'date' }],
     soft_seconds: 180,
     max_chars: 6000,
+    voice_tool: 'browser_model',
     ...changes,
   }
 }
@@ -879,7 +880,7 @@ describe('the mic button (PLAN-V18 T3-4)', () => {
     vi.spyOn(navigator, 'platform', 'get').mockReturnValue('Win32')
     const mic = new FakeMic()
     mic.install()
-    mockBackend({ options: { ...options(), voice_tool: 'browser_service' } as CallNoteOptions })
+    mockBackend({ options: options({ voice_tool: 'browser_service' }) })
     const view = renderCompanies()
     const panel = await logFirstRow(view)
     const box = within(panel).getByRole('textbox', { name: 'Call note' })
@@ -906,7 +907,7 @@ describe('the mic button (PLAN-V18 T3-4)', () => {
   })
 
   it('is not there when the voice tool is typing', async () => {
-    mockBackend({ options: { ...options(), voice_tool: 'typing' } as CallNoteOptions })
+    mockBackend({ options: options({ voice_tool: 'typing' }) })
     const view = renderCompanies()
     const panel = await logFirstRow(view)
     expect(within(panel).getByRole('textbox', { name: 'Call note' })).toBeInTheDocument()

@@ -28,6 +28,7 @@ function options(): CallNoteOptions {
     fields: [{ id: 'lease_end', label: 'Lease end', kind: 'date' }],
     soft_seconds: 180,
     max_chars: 6000,
+    voice_tool: 'browser_model',
   }
 }
 

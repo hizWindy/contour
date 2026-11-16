@@ -50,6 +50,7 @@ function options(changes: Partial<CallNoteOptions> = {}): CallNoteOptions {
     ],
     soft_seconds: 180,
     max_chars: 6000,
+    voice_tool: 'browser_model',
     ...changes,
   }
 }
