@@ -567,7 +567,7 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
   - The first visit doesn't grow.
   - **Done when:** tests with a fake tool cover each state, and Al-khair has said one real note in the real page.
 
-- [ ] **T3-6. History.**
+- [ ] **T3-6. History.** Built 2026-11-16 (`ae22de0`), waiting for a look.
   - The calls are grouped by day: "Today", "Yesterday", "Mon 14 Nov". Each day's heading stays at the top while you scroll its calls.
   - **Each call is one row:** the time, the company, the person, how it went (a coloured dot and a word, never colour alone), the summary's first line, and where it stands ("In HubSpot", "To confirm", "Needs a look" or "Sending"). Small marks show its follow ups and field changes, and how it was logged (mic, typed or transcript).
   - **Press a row and it opens in place:** the whole note, the changes (old value to new), the follow ups, each step's result, "Open in HubSpot", and "Log another call with {company}".
@@ -577,7 +577,7 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
   - **Keys:** J and K move, Enter opens, and / goes to the search.
   - **Done when:** tests cover the day groups, a row opened, each filter, the search, "Show older", the empty and error states, and the keys. Al-khair has seen it.
 
-- [ ] **T3-7. Prep opens on the quick look.**
+- [ ] **T3-7. Prep opens on the quick look.** Built 2026-11-16 (`84c0ef7`), waiting for a look.
   - Pressing Prep opens the panel straight on the quick look. The "Who are you calling?" screen goes.
   - **The quick look,** from `GET /companies/{key}/facts` (no AI): the company, the owner, the deal and its stage, staff, the next lease end, the last talk (when, with whom, how it went), the next meeting, and the phone number with Copy.
   - **A "Calling" row** under it names the person. It defaults to the last person we talked to, else the first person on record, else "Cold call (switchboard)". Press it to change: a short list drops down, with the people, then the cold call.
@@ -604,7 +604,7 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
 
 - 16 Nov 2026, T3-1: the worktree `../contour-v18-t3` on `plan-v18-track3`, made by the lead session. Baseline on `40d9912`: lint clean, types clean, 116 test files and 1,640 tests passed (vitest, one worker, about 5 minutes), the build passed. First visit: 232 kB of JavaScript gzip (237,792 bytes; 739,690 raw) in 35 files, and 23.3 kB of CSS gzip (23,851 bytes). So T3-9's limit is 238,816 bytes of JavaScript gzip.
 - 16 Nov 2026: the overnight rules from the lead session win where this plan differs. T3-3 waits for Al-khair at the keyboard. No new package and no model download. Steps that need Al-khair's look are built, tested and left unticked with "waiting for a look". No messages to the other sessions: anything they need is written here.
-- 16 Nov 2026, T3-2: `59ac46d` moves the folder alone, `fb9673a` renames the rest. The menu's icon is Lucide's `PhoneLog`. History shows Activity's old Logged list until T3-6. The old address is sent on by `call-logs/old-route.tsx`. The Settings test's fixture now says "Call logs page" (rule 6); Track 1's real help text (T1-8) replaces it on the server. Track 2: `meetings/words.ts` still says "on Activity" (T2-3 changes it).
+- 16 Nov 2026, T3-2: `59ac46d` moves the folder alone, `fb9673a` renames the rest. The menu's icon is Lucide's `PhoneLog`. History shows Activity's old Logged list until T3-6. The old address is sent on by `call-logs/old-route.tsx`. The Settings test's fixture now says "Call logs page" (rule 6); Track 1's real help text (T1-8) replaces it on the server. `meetings/words.ts` now says "in Call logs" (Track 2 changed it, as the lead passed on).
 - 16 Nov 2026, T3-3: waits for Al-khair at the keyboard. No package was added and no model downloaded.
 - 16 Nov 2026, T3-4 built (`1ec532d` the motion parts `FrequencyBars` and `MicSheet`, `3e75301` the card, the check and the seam, `dda777a` the button in the note box, `625d6ec` Check my mic), waiting for a look. 24 mic tests, 7 bar tests and 5 sheet tests, all with a fake mic (`call-notes/mic/fake-mic.ts`). Choices made on the way, each **TBC** at the look:
   - **The mic button is square, not round.** The plan says round; DESIGN.md bans fully round buttons and `design-lint` fails `rounded-full`. It is a 44px square with the 10px corner.
@@ -613,7 +613,16 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
   - **The four ticks stay in view 500ms** once they all pass, then the words take their place. A Mac gets its own "blocked by the computer" sentence (System Settings), the plan's Windows one stays for Windows.
   - **Two new slots for any project** (Track 3's shell files): `AppModule.accountItems` (rows in the account menu, before Sign out) and `AppModule.frame` (a part drawn once in the frame), and Ctrl+K entries get `run()`. They carry Check my mic. `call-note-parts.ts` is in no track's list; Track 3 changed it (the rename and two late parts), since it loads call notes' parts.
 - 16 Nov 2026, T3-5 built for the browser service and the seam (`3e75301`, `5299046`). The seam is `call-notes/mic/voice-tool.ts` (start, stop, abort, and onReady, onWords, onHearing, onFinished, onProblem). The browser service runs only with `voice_tool` = `browser_service` (the Settings page now says what each choice does, rule 6). With `browser_model` the card checks the mic, keeps the bars, and its last line says "Turning speech into words isn't set up here yet. Your mic works. Type the note for now." `typing` shows no mic button. Whisper waits for T3-3. The first visit didn't grow from these (the card loads late).
-- **For M1 (hand written types):** `VoiceToolKind`, `DEFAULT_VOICE_TOOL` and `voiceToolOf` in `src/api/hooks/call-note-counts.ts` read `voice_tool` from `CallNoteOptions`; tests send it with a cast. Replace them with the generated `CallNoteOptions['voice_tool']`.
+- **For M1 (hand written types):** `VoiceToolKind`, `DEFAULT_VOICE_TOOL` and `voiceToolOf` in `src/api/hooks/call-note-counts.ts` read `voice_tool` from `CallNoteOptions`; tests send it with a cast. Replace them with the generated `CallNoteOptions['voice_tool']`. For History, `CallNoteStateV18`, `CallNoteOutcomeFilter` and `CallNoteHistoryQuery` in `src/api/hooks/call-notes.ts` (with a cast to `CallNoteQuery` in `callNoteHistoryQueryOptions`): replace them with the generated `CallNoteQuery`.
+- 16 Nov 2026, T3-6 built (`ae22de0`), waiting for a look. History replaces Logged (`call-logs/logged.tsx` is gone). 9 History tests (day groups, a row opened in place, each filter, the search, Show older, empty, error, keys, the prefetch) and the params tests. On the way, each **TBC** at the look:
+  - **"Where it stands"** filters by the contract's `state` (All is `history`, then `logged`, `to_confirm`, `needs_look`). A row still says "Sending" on its own; it isn't a filter of its own, because the contract puts sending under `to_confirm`.
+  - **How it went** is a dot and a word: Olive for Connected, Ochre for a voicemail or a live message, Terracotta for a wrong number, grey for the rest. The colours are a guess for the look.
+  - **When:** This week starts on Monday, This month on the 1st, both in Melbourne time.
+  - Rows glide (Motion's `layout`, by position) only while 50 rows or fewer are loaded.
+- 16 Nov 2026, T3-7 built (`84c0ef7`), waiting for a look. Choices, each **TBC** at the look:
+  - **The quick look** shows the owner, the deal and its stage, staff, the next lease end and the next meeting. The deal's stage and the next meeting come from the company's record (`GET /companies/{key}`, already fetched by the panel), the rest from the free facts. The last talk keeps its own section under "Calling", and **the number stays in the footer**, so each shows once (DESIGN.md "Say it once"). "More about" is gone: Company info sits beside the quick look.
+  - **For Track 2 or M1:** the phone cards' Prep button is in `company-cards.tsx` (Track 2's file), so it doesn't fetch the facts ahead. A phone has no hover; adding the same `onFocus` prefetch there would cover a keyboard. The laptop table's Prep (`company-cell.tsx`) does both.
+  - `companies.test.tsx` is in no track's list. Track 3 changed only its call prep tests (the picker became the quick look).
 
 ## Merge and deploy
 
