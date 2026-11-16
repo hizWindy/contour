@@ -21,13 +21,12 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatDateTime, formatNumber } from '@/lib/format'
+import { ChoiceItem } from './choice-item'
 import { DealMark, LeaseEnd } from './marks'
 import type { PrepPerson } from './prep-box'
 import {
@@ -45,8 +44,6 @@ import {
   WAITING_FOR_PEOPLE,
   WHO_TO_CALL,
 } from './words'
-
-const COLD = 'cold'
 
 function Fact({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -198,29 +195,31 @@ export function CallingRow({ people, waiting, person, onPick }: CallingRowProps)
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-(--radix-dropdown-menu-trigger-width)">
           <DropdownMenuLabel>{WHO_TO_CALL}</DropdownMenuLabel>
-          <DropdownMenuRadioGroup
-            value={person ? person.id : COLD}
-            onValueChange={(value) => {
-              onPick(value === COLD ? null : (people.find((item) => item.id === value) ?? null))
+          {people.map((item) => (
+            <ChoiceItem
+              key={item.id}
+              checked={person?.id === item.id}
+              onPick={() => {
+                onPick(item)
+              }}
+            >
+              <span className="flex min-w-0 flex-col">
+                <span className="truncate">{item.name}</span>
+                {item.title ? (
+                  <span className="truncate text-caption text-muted-foreground">{item.title}</span>
+                ) : null}
+              </span>
+            </ChoiceItem>
+          ))}
+          {people.length > 0 ? <DropdownMenuSeparator /> : null}
+          <ChoiceItem
+            checked={person === null}
+            onPick={() => {
+              onPick(null)
             }}
           >
-            {people.map((item) => (
-              <DropdownMenuRadioItem key={item.id} value={item.id} className="touch:min-h-11">
-                <span className="flex min-w-0 flex-col">
-                  <span className="truncate">{item.name}</span>
-                  {item.title ? (
-                    <span className="truncate text-caption text-muted-foreground">
-                      {item.title}
-                    </span>
-                  ) : null}
-                </span>
-              </DropdownMenuRadioItem>
-            ))}
-            {people.length > 0 ? <DropdownMenuSeparator /> : null}
-            <DropdownMenuRadioItem value={COLD} className="touch:min-h-11">
-              {COLD_CALL}
-            </DropdownMenuRadioItem>
-          </DropdownMenuRadioGroup>
+            {COLD_CALL}
+          </ChoiceItem>
         </DropdownMenuContent>
       </DropdownMenu>
       {waiting || people.length === 0 ? (
