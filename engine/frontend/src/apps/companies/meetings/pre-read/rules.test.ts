@@ -316,6 +316,17 @@ describe('who the send goes to (T3-11)', () => {
       detail:
         'A pre-read goes to Contour addresses only, so nothing was sent. Take out: mia@elsewhere.com.',
     })
+    // Track 1's words (`meeting_send.py`): the detail starts with the title, so it is said alone.
+    const notSetUp =
+      "Email isn't set up yet, so nothing was sent. The pre-read stays here: copy it, or send it once email is set up."
+    const noEmail = new ApiProblem({
+      title: "Email isn't set up",
+      detail: notSetUp,
+      status: 409,
+      code: 'email_not_set_up',
+    })
+    expect(sendProblemWords(noEmail)).toEqual({ title: null, detail: notSetUp })
+    expect(copyNotTriedWords(noEmail)).toBe(`The copy wasn't tried again. ${notSetUp}`)
     expect(copyNotTriedWords(new ApiProblem({ title: 'Email failed', status: 502 }))).toBe(
       "The copy wasn't tried again. Email failed.",
     )

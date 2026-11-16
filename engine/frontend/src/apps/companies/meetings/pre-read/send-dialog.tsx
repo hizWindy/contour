@@ -291,15 +291,18 @@ function CopyEmail({ email }: { email: FormEmailPreview }) {
   )
 }
 
-/** What went wrong, in the server's words: its title, then what to do. */
+/**
+ * What went wrong, in the server's words: its title, then what to do. A detail that starts with
+ * the title is said alone (`sendProblemWords`).
+ */
 function Problem({ error }: { error: unknown }) {
   const { title, detail } = sendProblemWords(error)
   return (
     <div role="alert" className="flex items-start gap-2 text-ui text-destructive-ink">
       <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
       <p className="min-w-0 break-words">
-        <span className="font-semibold">{title}</span>
-        {detail ? ` ${detail}` : null}
+        {title ? <span className="font-semibold">{title}</span> : null}
+        {title && detail ? ` ${detail}` : detail}
       </p>
     </div>
   )

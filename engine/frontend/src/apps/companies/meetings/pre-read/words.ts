@@ -268,11 +268,16 @@ export function whyLine(why: string): string {
 /**
  * What a refused send says, in the server's own words: its title, then what to do. An address
  * that isn't Contour's is named there ("Take out: mia@example.com."). A lost connection says
- * whether it may have gone, as every change does.
+ * whether it may have gone, as every change does. A detail that starts with the title says it
+ * already ("Email isn't set up yet, so nothing was sent. ..."): it is said alone, with no title,
+ * as on Meetings' Sync line.
  */
-export function sendProblemWords(error: unknown): { title: string; detail: string | null } {
+export function sendProblemWords(error: unknown): { title: string | null; detail: string | null } {
   const problem = toApiProblem(error)
-  return { title: sentence(problem.title), detail: changeDetail(problem) }
+  const detail = changeDetail(problem)
+  const title = problem.title.trim()
+  if (detail?.trim().toLowerCase().startsWith(title.toLowerCase())) return { title: null, detail }
+  return { title: sentence(title), detail }
 }
 
 // --- Sent ------------------------------------------------------------------------------------------
@@ -325,5 +330,5 @@ export function hubspotCopyWords(copy: HubSpotCopy): string {
 /** "The copy wasn't tried again. You're offline. ..." */
 export function copyNotTriedWords(error: unknown): string {
   const { title, detail } = sendProblemWords(error)
-  return [`The copy wasn't tried again. ${title}`, detail].filter(Boolean).join(' ')
+  return ["The copy wasn't tried again.", title, detail].filter(Boolean).join(' ')
 }

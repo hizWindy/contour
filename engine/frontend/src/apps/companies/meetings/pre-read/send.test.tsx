@@ -471,9 +471,10 @@ describe('Check and send', () => {
     const { user } = renderPreRead()
     const dialog = await openDialog(user)
     await user.click(within(dialog).getByRole('button', { name: 'Send to 1 person' }))
-    // The title, then the server's words, which end with what still works: said once.
+    // The server's words alone: they start with the title and end with what still works, so
+    // nothing is said twice.
     expect((await within(dialog).findByRole('alert')).textContent).toBe(
-      "Email isn't set up. Email isn't set up yet, so nothing was sent. The pre-read stays here: copy it, or send it once email is set up.",
+      "Email isn't set up yet, so nothing was sent. The pre-read stays here: copy it, or send it once email is set up.",
     )
     expect(screen.getByRole('alertdialog')).toBeInTheDocument()
     expect(within(status()).getByText('Draft ready')).toBeInTheDocument()
