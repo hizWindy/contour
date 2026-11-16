@@ -1,7 +1,7 @@
 /**
  * The Companies list sorts by last activity, the newest first (PLAN-V18 T2-6), against the
  * contract and a fake server that sorts as Track 1's does: the newest last activity first, and
- * companies with none last, A to Z. Until M1, `last_activity` is hand written (`params.ts`).
+ * companies with none last, A to Z. `last_activity` is the generated `CompanyRow` field (M1).
  * In a file of its own, so the two website tracks never edit the same test file. Made-up names.
  */
 import { screen, waitFor, within } from '@testing-library/react'
