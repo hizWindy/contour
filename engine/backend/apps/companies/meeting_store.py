@@ -7,8 +7,11 @@ routes are in api_meetings.py.
   status says so.
 - **Only client meetings:** one with no company, or with a company not in our copy, is left out.
   A cancelled one stays, with its outcome.
-- **Mine** is the rep's own, by their HubSpot owner (`owner_of`). With sign-in off nobody is
-  signed in, so it is everyone's. The team's list puts the rep's own first.
+- **Whose** (PLAN-V18 T1-4): `all` (the default) is every client meeting, in time order. `mine`
+  is the rep's own, by their HubSpot owner (`owner_of`): the ones they own or are on. `team` is
+  the ones whose owner, or a Contour person on them, is in one of the rep's HubSpot teams
+  (`teams_of`), the rep's own included. Each item says whether it is mine. With sign-in off
+  nobody is signed in: All works, and My meetings and My team say why they are empty.
 - **The search** is plain code: each word must start a word of the company's name, the title, or
   the date in words (Melbourne time). So "sample 26 nov", "thu" and "26/11" all work.
 """
@@ -39,6 +42,8 @@ from apps.companies.schemas import (
     MeetingPage,
     MeetingSummary,
     MeetingWhen,
+    MeetingWho,
+    TeamState,
 )
 from apps.companies.tables import CallNote, MeetingForm
 from core.api.errors import Problem
@@ -50,6 +55,7 @@ from core.hubspot import meetings as hubspot_meetings
 from core.hubspot import owners as hubspot_owners
 from core.hubspot.meetings import Meeting, MeetingsStatus
 from core.hubspot.models import HubSpotCompany, HubSpotOwner
+from core.hubspot.owners import TeamsOf
 
 UPCOMING_DAYS: Final = 7  # Upcoming is the next 7 days
 PAST_DAYS: Final = 30  # how far back Past looks (TBC)
@@ -60,8 +66,17 @@ CANCELLED: Final = frozenset({"canceled", "cancelled"})  # HubSpot writes "cance
 
 NOT_READY = "Meetings from HubSpot aren't ready yet."
 NOT_LINKED = (
-    "Your account isn't linked to a HubSpot owner yet, so your own meetings can't be picked "
-    "out. Show the team's meetings to see them."
+    "Your account isn't linked to a HubSpot owner yet, so My meetings is empty. All shows "
+    "everyone's. An admin can link you in Admin, People."
+)
+NOT_LINKED_TEAM = (
+    "Your account isn't linked to a HubSpot owner yet, so My team is empty. All shows "
+    "everyone's. An admin can link you in Admin, People."
+)
+NO_TEAM = "You aren't in a HubSpot team yet, so My team is empty. All shows everyone's."
+NO_TEAMS_IN_HUBSPOT = "HubSpot has no teams yet, so My team is empty. All shows everyone's."
+NO_ACCOUNT = (
+    "Nobody is signed in, so there are no meetings of your own to pick out. All shows everyone's."
 )
 
 
@@ -112,6 +127,10 @@ class RepOf(Protocol):
     async def __call__(self, session: AsyncSession, owner_id: str) -> tuple[str, str] | None: ...
 
 
+class TeamsOfRead(Protocol):
+    async def __call__(self, session: AsyncSession, owner_id: str | None) -> TeamsOf: ...
+
+
 async def no_rep(session: AsyncSession, owner_id: str) -> tuple[str, str] | None:
     """No owner has a rep: a source that knows nobody (tests use it)."""
     return None
@@ -119,9 +138,10 @@ async def no_rep(session: AsyncSession, owner_id: str) -> tuple[str, str] | None
 
 @dataclass(frozen=True)
 class MeetingSource:
-    """Core's meeting reads, the rep's HubSpot owner, and the rep for an owner (their name and
-    address: who gets "your pre-read is ready", and who is ticked when it is sent), as Meetings
-    uses them. A test gives made-up ones. It lives on `app.state.meeting_source`."""
+    """Core's meeting reads, the rep's HubSpot owner, the rep for an owner (their name and
+    address: who gets "your pre-read is ready", and who is ticked when it is sent), and an
+    owner's HubSpot teams (PLAN-V18), as Meetings uses them. A test gives made-up ones. It lives
+    on `app.state.meeting_source`."""
 
     upcoming: Window = hubspot_meetings.upcoming
     past: Window = hubspot_meetings.past
@@ -130,6 +150,7 @@ class MeetingSource:
     status: Status = hubspot_meetings.status
     owner_of: OwnerOf = activities.owner_of
     rep_of_owner: RepOf = hubspot_owners.rep_of_owner  # the account linked to the owner
+    teams_of: TeamsOfRead = hubspot_owners.teams_of  # an owner's teams and the owners in them
 
 
 # --- Groups and the search ------------------------------------------------------------------------
@@ -287,7 +308,15 @@ async def owner_names(session: AsyncSession, owner_ids: Iterable[str]) -> dict[s
     return {owner_id: name for owner_id, name in rows.all() if name}
 
 
-async def items_of(session: AsyncSession, rows: Sequence[Row]) -> list[MeetingItem]:
+def is_mine(meeting: Meeting, me: str | None) -> bool:
+    """I own the meeting, or I am on it as a Contour person."""
+    return me is not None and (meeting.owner_id == me or me in meeting.attendee_owner_ids)
+
+
+async def items_of(
+    session: AsyncSession, rows: Sequence[Row], *, me: str | None = None
+) -> list[MeetingItem]:
+    """The rows as the list sends them. `me`: the asking rep's HubSpot owner, for `mine`."""
     ids = [row.meeting.id for row in rows if row.typed is None]
     forms = await forms_of(session, ids)
     noted = await with_notes(session, ids)
@@ -301,6 +330,7 @@ async def items_of(session: AsyncSession, rows: Sequence[Row]) -> list[MeetingIt
             form=row.typed or forms.get(row.meeting.id),
             notes_logged=row.typed is None and row.meeting.id in noted,
             typed=row.typed is not None,
+            mine=row.typed is not None or is_mine(row.meeting, me),
         )
         for row in rows
     ]
@@ -354,53 +384,86 @@ async def typed_meetings(
     ]
 
 
+def team_state_of(me: str | None, teams: TeamsOf) -> TeamState:
+    """Whether My team can pick anything out: HubSpot has no teams, my account has no HubSpot
+    owner (or nobody is signed in), I'm in no team, or ready."""
+    if not teams.any_team:
+        return "none_in_hubspot"
+    if me is None:
+        return "not_linked"
+    return "ready" if teams.names else "no_team"
+
+
+def why_empty(
+    who: MeetingWho, auth: AuthContext | None, me: str | None, team: TeamState
+) -> str | None:
+    """Why My meetings or My team can't pick anything out, in plain words. None when it can,
+    and always for All."""
+    if who == "all":
+        return None
+    if auth is None:
+        return NO_ACCOUNT
+    if who == "mine":
+        return NOT_LINKED if me is None else None
+    return {
+        "none_in_hubspot": NO_TEAMS_IN_HUBSPOT,
+        "not_linked": NOT_LINKED_TEAM,
+        "no_team": NO_TEAM,
+        "ready": None,
+    }[team]
+
+
+def picked(meeting: Meeting, who: MeetingWho, me: str | None, team: frozenset[str]) -> bool:
+    """Whether the filter shows this meeting: every one for All, mine for My meetings, and for
+    My team one whose owner, or a Contour person on it, is in one of my teams."""
+    if who == "all":
+        return True
+    if who == "mine":
+        return is_mine(meeting, me)
+    people = {meeting.owner_id, *meeting.attendee_owner_ids}
+    return not team.isdisjoint(people)
+
+
 async def list_meetings(
     session: AsyncSession,
     auth: AuthContext | None,
     *,
     source: MeetingSource,
     when: MeetingWhen,
-    mine: bool,
+    who: MeetingWho,
     q: str | None,
     limit: int,
     offset: int,
     now: datetime,
 ) -> MeetingPage:
     """A page of client meetings: upcoming (the next 7 days, soonest first, grouped by day) or
-    past (newest first). Mine, or the team's with mine first. My own typed pre-reads join them,
-    even while HubSpot's meetings aren't read."""
+    past (newest first), always in time order. Everyone's, mine, or my HubSpot team's (`who`).
+    My own typed pre-reads join them, even while HubSpot's meetings aren't read."""
     status = await source.status(session)
     upcoming = when == "upcoming"
-    owner = await my_owner(session, auth, source) if status.state == "ready" else None
+    me = await my_owner(session, auth, source)
+    teams = await source.teams_of(session, me)
+    team = team_state_of(me, teams)
     sentence: str | None = None
     entries: list[Entry] = []
     if status.state != "ready":
         sentence = status.sentence or NOT_READY
-    elif mine and auth is not None and owner is None:
-        sentence = NOT_LINKED
     else:
-        read = source.upcoming if upcoming else source.past
-        found = await read(
-            session,
-            owner_id=owner if mine else None,
-            days=UPCOMING_DAYS if upcoming else PAST_DAYS,
-        )
-        entries += [Entry(meeting, name) for meeting, name in await client_meetings(session, found)]
+        sentence = why_empty(who, auth, me, team)
+        if sentence is None:
+            read = source.upcoming if upcoming else source.past
+            found = await read(
+                session, owner_id=None, days=UPCOMING_DAYS if upcoming else PAST_DAYS
+            )
+            shown = [meeting for meeting in found if picked(meeting, who, me, teams.members)]
+            entries += [
+                Entry(meeting, name) for meeting, name in await client_meetings(session, shown)
+            ]
     entries += await typed_meetings(session, auth, upcoming=upcoming, now=now)
     words = search_words(q)
     entries = [entry for entry in entries if matches(entry.meeting, entry.company_name, words)]
-
-    def order(entry: Entry) -> tuple[bool, float]:
-        theirs = (  # mine first: a typed one is always mine
-            not mine
-            and owner is not None
-            and entry.typed is None
-            and entry.meeting.owner_id != owner
-        )
-        moment = entry.meeting.starts_at.timestamp()
-        return theirs, (moment if upcoming else -moment)
-
-    entries.sort(key=order)
+    # Time order only (no "mine first"): soonest first, or newest first for past meetings.
+    entries.sort(key=lambda entry: entry.meeting.starts_at, reverse=not upcoming)
     rows = [
         Row(
             entry.meeting,
@@ -411,10 +474,14 @@ async def list_meetings(
         for entry in entries[offset : offset + limit]
     ]
     return MeetingPage(
-        items=await items_of(session, rows),
+        items=await items_of(session, rows, me=me),
         total=len(entries),
         meetings_state=status.state,
         sentence=sentence,
+        who=who,
+        linked=me is not None,
+        team_state=team,
+        team_names=list(teams.names),
     )
 
 
@@ -460,10 +527,17 @@ async def meeting_detail(
 
 
 async def company_meetings(
-    session: AsyncSession, key: str, *, source: MeetingSource, settings: Settings, now: datetime
+    session: AsyncSession,
+    key: str,
+    *,
+    source: MeetingSource,
+    settings: Settings,
+    now: datetime,
+    me: str | None = None,
 ) -> list[MeetingItem]:
     """A company's next three meetings, soonest first, then its last three, newest first. Empty
-    while meetings are off or not read yet, and for a company not in HubSpot."""
+    while meetings are off or not read yet, and for a company not in HubSpot. `me`: the asking
+    rep's HubSpot owner, for each item's `mine`."""
     if not settings.meeting_forms_enabled or key.startswith("lead:"):
         return []
     if (await source.status(session)).state != "ready":
@@ -476,7 +550,7 @@ async def company_meetings(
     behind = sorted((m for m in found if m.starts_at < now), key=lambda m: m.starts_at)
     rows = [Row(m, names[key], group_of(m.starts_at, now)) for m in ahead[:COMPANY_MEETINGS]]
     rows += [Row(m, names[key], None) for m in reversed(behind[-COMPANY_MEETINGS:])]
-    return await items_of(session, rows)
+    return await items_of(session, rows, me=me)
 
 
 # --- A pre-read, as the routes send it ---------------------------------------------------------

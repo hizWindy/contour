@@ -1,9 +1,11 @@
 """The Meetings reads (PLAN-V17 T2-11), with made-up meetings in place of core's reads:
 
 - off: every Meetings route answers 409, and the company's record shows no meetings;
-- my upcoming meetings, grouped by the Melbourne day; the team's, mine first; the past ones, with
-  "notes logged"; a meeting with no company, or a company not in our copy, is left out; a
+- All (the default), My meetings and My team (PLAN-V18 T1-4), always in time order, each item
+  saying whether it is mine; my upcoming meetings, grouped by the Melbourne day; the past ones,
+  with "notes logged"; a meeting with no company, or a company not in our copy, is left out; a
   cancelled one stays;
+- My team: one team, two teams, no team, HubSpot with no teams, and our copy's own teams;
 - the search: company, title and date words, in any case;
 - HubSpot's meetings not read yet: an empty list that says so, and zero counts;
 - a rep whose account isn't linked to a HubSpot owner; sign-in off;
@@ -23,11 +25,20 @@ import httpx
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.companies.meeting_store import NOT_LINKED, MeetingSource
+from apps.companies.meeting_store import (
+    NO_ACCOUNT,
+    NO_TEAM,
+    NO_TEAMS_IN_HUBSPOT,
+    NOT_LINKED,
+    NOT_LINKED_TEAM,
+    MeetingSource,
+)
 from apps.companies.tables import MeetingForm
 from core.api.deps import settings_dependency
 from core.auth.models import User
 from core.hubspot.meetings import NOT_READ_YET, Meeting, MeetingsStatus
+from core.hubspot.models import HubSpotOwnerTeam
+from core.hubspot.owners import TeamsOf
 from tests.companies.helpers import API, add, signed_in_as
 from tests.companies.test_call_notes_api import a_company, log_call, notes_settings, set_note
 from tests.core.auth_world import START, World
@@ -79,30 +90,43 @@ PAST = [
 ]
 
 
+def sample_teams() -> dict[str, set[str]]:
+    """HubSpot's teams, made up: Mia (o1) and Sam (o2) are in Sample Sales, o4 and o5 in Sample
+    BD. Kim (o6) is linked, and in no team. Lee isn't linked to an owner."""
+    return {"Sample Sales": {"o1", "o2"}, "Sample BD": {"o4", "o5"}}
+
+
 @dataclass
 class FakeMeetings:
     """Core's meeting reads, made up: the meetings above, read from START."""
 
     state: MeetingsStatus = field(default_factory=lambda: MeetingsStatus(state="ready"))
-    owners: dict[str, str] = field(default_factory=lambda: {"mia": "o1", "sam": "o2"})
+    owners: dict[str, str] = field(default_factory=lambda: {"mia": "o1", "sam": "o2", "kim": "o6"})
     windows: list[tuple[str, str | None, int]] = field(default_factory=list)
+    coming: list[Meeting] = field(default_factory=lambda: list(UPCOMING))
+    teams: dict[str, set[str]] = field(default_factory=sample_teams)
+    real_teams: bool = False  # True: our copy's own teams (core.hubspot_owner_teams)
 
     def source(self) -> MeetingSource:
-        return MeetingSource(
+        made = MeetingSource(
             upcoming=self.upcoming,
             past=self.past,
             for_company=self.for_company,
             get=self.get,
             status=self.status,
             owner_of=self.owner_of,
+            teams_of=self.teams_of,
         )
+        if self.real_teams:
+            made = MeetingSource(**{**vars(made), "teams_of": MeetingSource().teams_of})
+        return made
 
     async def upcoming(
         self, session: AsyncSession, *, owner_id: str | None, days: int
     ) -> list[Meeting]:
         self.windows.append(("upcoming", owner_id, days))
         end = START + timedelta(days=days)
-        found = [m for m in UPCOMING if START <= m.starts_at < end]
+        found = [m for m in self.coming if START <= m.starts_at < end]
         found = [m for m in found if owner_id is None or m.owner_id == owner_id]
         return sorted(found, key=lambda m: m.starts_at)
 
@@ -116,10 +140,10 @@ class FakeMeetings:
         return sorted(found, key=lambda m: m.starts_at, reverse=True)
 
     async def for_company(self, session: AsyncSession, company_id: str) -> list[Meeting]:
-        return [m for m in [*UPCOMING, *PAST] if m.company_id == company_id]
+        return [m for m in [*self.coming, *PAST] if m.company_id == company_id]
 
     async def get(self, session: AsyncSession, meeting_id: str) -> Meeting | None:
-        return next((m for m in [*UPCOMING, *PAST] if m.id == meeting_id), None)
+        return next((m for m in [*self.coming, *PAST] if m.id == meeting_id), None)
 
     async def status(self, session: AsyncSession) -> MeetingsStatus:
         return self.state
@@ -128,6 +152,13 @@ class FakeMeetings:
         person = await session.get(User, user_id) if user_id is not None else None
         login = person.email.split("@")[0] if person is not None else ""
         return self.owners.get(login)
+
+    async def teams_of(self, session: AsyncSession, owner_id: str | None) -> TeamsOf:
+        if not self.teams:
+            return TeamsOf(any_team=False)
+        names = sorted(name for name, people in self.teams.items() if owner_id in people)
+        members = frozenset(person for name in names for person in self.teams[name])
+        return TeamsOf(True, tuple(names), members)
 
 
 @pytest.fixture
@@ -200,8 +231,15 @@ async def test_my_upcoming_meetings_are_grouped_by_the_melbourne_day(
     await a_company(world)
     await some_forms(world)
     async with signed_in_as(world, "mia", ["companies"]) as client:
-        mine = await page(client)
+        mine = await page(client, who="mine")
     assert (mine["meetings_state"], mine["sentence"], mine["total"]) == ("ready", None, 5)
+    assert (mine["who"], mine["linked"], mine["team_state"], mine["team_names"]) == (
+        "mine",
+        True,
+        "ready",
+        ["Sample Sales"],
+    )
+    assert all(item["mine"] for item in mine["items"])
     # Grouped by the Melbourne day, whose week ends on Sunday 8 Nov. The cancelled meeting
     # stays. The one with no company, and the one whose company isn't in our copy, don't.
     assert [(item["meeting"]["id"], item["group"]) for item in mine["items"]] == [
@@ -222,33 +260,36 @@ async def test_my_upcoming_meetings_are_grouped_by_the_melbourne_day(
         None,
     )
     assert mine["items"][1]["meeting"]["outcome"] == "canceled"
-    assert fake.windows == [("upcoming", "o1", 7)]
+    assert fake.windows == [("upcoming", None, 7)]  # the window is read, then mine picked out
 
 
-async def test_the_teams_meetings_put_mine_first_and_past_ones_say_if_notes_were_logged(
+async def test_all_is_the_default_in_time_order_and_past_ones_say_if_notes_were_logged(
     world: World, settings: dict[str, Any], fake: FakeMeetings
 ) -> None:
     await a_company(world)
     async with signed_in_as(world, "mia", ["companies"]) as client:
         note = await log_call(client, source="transcript")
         await set_note(world, note["id"], meeting_id="8001")
-        team = await page(client, mine="false")
-        past = await page(client, when="past")
-        team_past = await page(client, when="past", mine="false")
-        second_page = await page(client, mine="false", limit=2, offset=1)
-    assert [item["meeting"]["id"] for item in team["items"]] == [
-        "9001",
-        "9006",
-        "9003",
-        "9005",
-        "9008",
-        "9002",  # Sam's, after Mia's own
-        "9009",
+        everyone = await page(client)
+        past = await page(client, when="past", who="mine")
+        everyone_past = await page(client, when="past", who="all")
+        second_page = await page(client, limit=2, offset=1)
+        old_link = await page(client, mine="false")  # the old switch is gone: All
+    # Everyone's, soonest first: no "mine first". Mia's own say so.
+    assert [(item["meeting"]["id"], item["mine"]) for item in everyone["items"]] == [
+        ("9001", True),
+        ("9002", False),  # Sam's
+        ("9006", True),
+        ("9003", True),
+        ("9005", True),
+        ("9008", True),
+        ("9009", False),  # Sam's
     ]
-    assert [item["group"] for item in team["items"]][-2:] == ["tomorrow", "later"]
+    assert (everyone["who"], everyone["sentence"], everyone["total"]) == ("all", None, 7)
+    assert [item["group"] for item in everyone["items"]][:3] == ["today", "tomorrow", "tomorrow"]
     # Whose each one is, as our copy of HubSpot's owners names them: o1 is Lee Sample there,
     # and o2 isn't in it.
-    owners = {item["meeting"]["id"]: item["owner_name"] for item in team["items"]}
+    owners = {item["meeting"]["id"]: item["owner_name"] for item in everyone["items"]}
     assert (owners["9001"], owners["9002"]) == ("Lee Sample", None)
     # The last 30 days, newest first. No groups.
     assert [(item["meeting"]["id"], item["group"]) for item in past["items"]] == [
@@ -256,19 +297,20 @@ async def test_the_teams_meetings_put_mine_first_and_past_ones_say_if_notes_were
         ("8003", None),
     ]
     assert [item["notes_logged"] for item in past["items"]] == [True, False]
-    assert [item["meeting"]["id"] for item in team_past["items"]] == ["8001", "8003", "8002"]
+    assert [item["meeting"]["id"] for item in everyone_past["items"]] == ["8002", "8001", "8003"]
     assert second_page["total"] == 7
-    assert [item["meeting"]["id"] for item in second_page["items"]] == ["9006", "9003"]
+    assert [item["meeting"]["id"] for item in second_page["items"]] == ["9002", "9006"]
+    assert old_link["who"] == "all" and old_link["total"] == 7
     assert ("past", None, 30) in fake.windows and ("upcoming", None, 7) in fake.windows
 
 
 @pytest.mark.parametrize(
     ("q", "found"),
     [
-        ("freight", ["9005", "9008", "9002"]),
+        ("freight", ["9002", "9005", "9008"]),
         ("FREIGHT mon", ["9005"]),
-        ("5/11", ["9006", "9002"]),
-        ("thu", ["9006", "9002"]),
+        ("5/11", ["9002", "9006"]),
+        ("thu", ["9002", "9006"]),
         ("walk", ["9001"]),
         ("sample log nov", ["9001", "9006", "9003", "9009"]),
         ("logistics 6 november", ["9003"]),
@@ -282,7 +324,7 @@ async def test_the_search_finds_meetings_by_company_title_and_date_words(
 ) -> None:
     await a_company(world)
     async with signed_in_as(world, "mia", ["companies"]) as client:
-        result = await page(client, mine="false", q=q)
+        result = await page(client, q=q)
     assert [item["meeting"]["id"] for item in result["items"]] == found
     assert result["total"] == len(found)
 
@@ -301,28 +343,160 @@ async def test_before_hubspots_meetings_are_read_the_list_says_so(
         "total": 0,
         "meetings_state": "waiting",
         "sentence": "Meetings from HubSpot aren't read yet.",
+        "who": "all",
+        "linked": True,
+        "team_state": "ready",
+        "team_names": ["Sample Sales"],
     }
     assert counts == {"need_pre_read": 0, "draft_ready": 0}
     assert record["meetings"] == []
     assert fake.windows == []  # nothing was read
 
 
-async def test_a_rep_not_linked_to_a_hubspot_owner_sees_the_team_and_sign_in_off_sees_all(
+async def test_a_rep_not_linked_to_a_hubspot_owner_sees_all_and_hears_why_the_rest_are_empty(
     world: World, settings: dict[str, Any], fake: FakeMeetings
 ) -> None:
     await a_company(world)
     async with signed_in_as(world, "lee", ["companies"]) as client:
-        mine = await page(client)
-        team = await page(client, mine="false")
+        everyone = await page(client)
+        mine = await page(client, who="mine")
+        team = await page(client, who="team")
         counts = (await client.get(f"{MEETINGS}/summary")).json()
+    # The "not linked" sentence shows on My meetings and My team only, never on All.
+    assert (everyone["total"], everyone["sentence"], everyone["linked"]) == (7, None, False)
+    assert not any(item["mine"] for item in everyone["items"])
+    assert (mine["items"], mine["total"], mine["sentence"]) == ([], 0, NOT_LINKED)
+    assert (team["items"], team["total"], team["sentence"]) == ([], 0, NOT_LINKED_TEAM)
+    assert (team["team_state"], team["team_names"]) == ("not_linked", [])
+    assert counts == {"need_pre_read": 0, "draft_ready": 0}
+
+
+async def test_with_sign_in_off_all_works_and_nobody_is_linked(
+    world: World, settings: dict[str, Any], fake: FakeMeetings
+) -> None:
+    await a_company(world)
     world.settings(auth_required=False)  # sign-in off, as on the laptop
     settings.update(auth_required=False)
     async with world.browser() as client:
         everyone = await page(client)
-    assert (mine["items"], mine["total"], mine["sentence"]) == ([], 0, NOT_LINKED)
-    assert team["total"] == 7
-    assert counts == {"need_pre_read": 0, "draft_ready": 0}
-    assert everyone["total"] == 7 and everyone["sentence"] is None
+        mine = await page(client, who="mine")
+        team = await page(client, who="team")
+    assert (everyone["total"], everyone["sentence"]) == (7, None)
+    assert (everyone["linked"], everyone["team_state"], everyone["team_names"]) == (
+        False,
+        "not_linked",
+        [],
+    )
+    assert not any(item["mine"] for item in everyone["items"])
+    for empty in (mine, team):
+        assert (empty["items"], empty["total"], empty["sentence"]) == ([], 0, NO_ACCOUNT)
+
+
+# --- My team (PLAN-V18 T1-4) ----------------------------------------------------------------------
+
+# Three more upcoming meetings: one owned in Sample BD with Sam on it, one owned in Sample BD
+# only, and one owned by someone in no team with Mia on it.
+MORE = [
+    meeting(
+        "9010", "202", "o4", melbourne(6, 14), title="Lease options", attendee_owner_ids=["o2"]
+    ),
+    meeting("9011", "201", "o5", melbourne(7, 11), title="Office tour"),
+    meeting("9012", "202", "o7", melbourne(8, 9), title="Kick-off", attendee_owner_ids=["o1"]),
+]
+
+
+def ids(found: dict[str, Any]) -> list[str]:
+    return [item["meeting"]["id"] for item in found["items"]]
+
+
+async def test_my_team_is_the_meetings_my_teams_people_own_or_are_on(
+    world: World, settings: dict[str, Any], fake: FakeMeetings
+) -> None:
+    await a_company(world)
+    fake.coming += MORE
+    async with signed_in_as(world, "mia", ["companies"]) as client:
+        everyone = await page(client)
+        mine = await page(client, who="mine")
+        team = await page(client, who="team")
+    assert ids(everyone) == [
+        "9001",
+        "9002",
+        "9006",
+        "9003",
+        "9010",
+        "9011",
+        "9012",
+        "9005",
+        "9008",
+        "9009",
+    ]
+    # Mine: the ones Mia owns, and the one she is on (9012).
+    assert ids(mine) == ["9001", "9006", "9003", "9012", "9005", "9008"]
+    # Sample Sales is Mia and Sam: theirs, the one Sam is on (9010) and the one Mia is on (9012).
+    # Not 9011: nobody of Sample Sales owns it or is on it.
+    assert ids(team) == ["9001", "9002", "9006", "9003", "9010", "9012", "9005", "9008", "9009"]
+    assert (team["who"], team["sentence"], team["team_state"], team["team_names"]) == (
+        "team",
+        None,
+        "ready",
+        ["Sample Sales"],
+    )
+    by_id = {item["meeting"]["id"]: item["mine"] for item in team["items"]}
+    assert (by_id["9010"], by_id["9012"]) == (False, True)
+
+
+async def test_in_two_teams_my_team_joins_both(
+    world: World, settings: dict[str, Any], fake: FakeMeetings
+) -> None:
+    await a_company(world)
+    fake.coming += MORE
+    fake.teams["Sample BD"].add("o2")  # Sam is in both
+    async with signed_in_as(world, "sam", ["companies"]) as client:
+        team = await page(client, who="team")
+    assert team["team_names"] == ["Sample BD", "Sample Sales"]
+    assert "9011" in ids(team) and team["total"] == 10
+
+
+async def test_in_no_team_or_with_no_teams_in_hubspot_my_team_says_why_it_is_empty(
+    world: World, settings: dict[str, Any], fake: FakeMeetings
+) -> None:
+    await a_company(world)
+    async with signed_in_as(world, "kim", ["companies"]) as client:
+        no_team = await page(client, who="team")
+        everyone = await page(client)
+        fake.teams = {}  # HubSpot has no teams at all
+        none_at_all = await page(client, who="team")
+        all_again = await page(client)
+    assert (no_team["items"], no_team["sentence"], no_team["team_state"]) == (
+        [],
+        NO_TEAM,
+        "no_team",
+    )
+    assert (no_team["linked"], no_team["team_names"]) == (True, [])
+    assert (everyone["total"], everyone["sentence"], everyone["team_state"]) == (7, None, "no_team")
+    assert (none_at_all["items"], none_at_all["sentence"]) == ([], NO_TEAMS_IN_HUBSPOT)
+    assert all_again["team_state"] == "none_in_hubspot"  # the website hides My team
+    assert all_again["total"] == 7
+
+
+async def test_my_team_reads_our_copys_teams(
+    world: World, settings: dict[str, Any], fake: FakeMeetings
+) -> None:
+    """The real `teams_of` behind the page: the teams the sync saved."""
+    await a_company(world)
+    fake.coming += MORE
+    fake.real_teams = True
+    world.app.state.meeting_source = fake.source()
+    await add(
+        world,
+        HubSpotOwnerTeam(owner_id="o1", team_id="7001", team_name="Sample Sales", is_primary=True),
+        HubSpotOwnerTeam(owner_id="o4", team_id="7001", team_name="Sample Sales"),
+    )
+    async with signed_in_as(world, "mia", ["companies"]) as client:
+        team = await page(client, who="team")
+    assert team["team_names"] == ["Sample Sales"]
+    # Mia's own, and 9010 and 9011's owners: o4 is in Mia's team now, o5 isn't.
+    assert ids(team) == ["9001", "9006", "9003", "9010", "9012", "9005", "9008"]
 
 
 # --- Counts, one meeting, and a company's record --------------------------------------------------

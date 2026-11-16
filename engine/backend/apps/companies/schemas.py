@@ -811,6 +811,10 @@ PrepFacts.model_rebuild()  # it names MyLastNote, which comes after it
 # --- Meetings and the pre-read (PLAN-V17 T2-11) --------------------------------------------------
 
 MeetingWhen = Literal["upcoming", "past"]
+# Whose meetings (PLAN-V18 T1-4): everyone's, mine, or my HubSpot team's.
+MeetingWho = Literal["all", "mine", "team"]
+# Whether "My team" can pick anything out (PLAN-V18 T1-4).
+TeamState = Literal["ready", "not_linked", "no_team", "none_in_hubspot"]
 # By the Melbourne date: today, tomorrow, the rest of this week (to Sunday), or later.
 MeetingGroup = Literal["today", "tomorrow", "this_week", "later"]
 FormStatus = Literal["drafting", "draft", "sent", "failed"]
@@ -830,7 +834,7 @@ class MeetingFormState(Out):
 class MeetingItem(Out):
     """One client meeting in a list: the meeting as HubSpot has it, and where its pre-read is."""
 
-    model_config = ConfigDict(json_schema_extra=optional_in_types("owner_name"))
+    model_config = ConfigDict(json_schema_extra=optional_in_types("owner_name", "mine"))
 
     meeting: Meeting
     company_name: str = Field(description="The company it is linked to, from our copy")
@@ -850,9 +854,19 @@ class MeetingItem(Out):
         description="True for a meeting typed in for New pre-read: it isn't in HubSpot, its "
         "`meeting.id` is empty, and `form` is its pre-read",
     )
+    mine: bool = Field(
+        False,
+        description="True when I own the meeting or am on it as a Contour person in HubSpot. A "
+        "typed one is always mine. False for everyone with sign-in off",
+    )
 
 
 class MeetingPage(Out):
+    # Added in PLAN-V18: the API always sends them, and the website's types leave them optional.
+    model_config = ConfigDict(
+        json_schema_extra=optional_in_types("who", "linked", "team_state", "team_names")
+    )
+
     items: list[MeetingItem]
     total: int = Field(description="How many match, on every page")
     meetings_state: MeetingsState = Field(
@@ -860,7 +874,23 @@ class MeetingPage(Out):
     )
     sentence: str | None = Field(
         description="One plain sentence when the list can't show what was asked: meetings "
-        "aren't ready, or your own can't be picked out yet"
+        "aren't ready, or My meetings or My team can't pick anything out (not linked to a "
+        "HubSpot owner, in no HubSpot team, or nobody signed in). Never for All once meetings "
+        "are ready"
+    )
+    who: MeetingWho = Field("all", description="The filter used: all, mine or team")
+    linked: bool = Field(
+        False,
+        description="True when my account is linked to a HubSpot owner. False with sign-in off",
+    )
+    team_state: TeamState = Field(
+        "none_in_hubspot",
+        description="ready (I'm in a HubSpot team), not_linked (my account has no HubSpot owner, "
+        "or nobody is signed in), no_team (I'm in none) or none_in_hubspot (HubSpot has no "
+        "teams: the website hides My team)",
+    )
+    team_names: list[str] = Field(
+        default_factory=list, description="My HubSpot teams' names, by name, or an empty list"
     )
 
 

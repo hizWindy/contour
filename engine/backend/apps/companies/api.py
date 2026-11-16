@@ -25,6 +25,7 @@ from apps.companies.schemas import (
     SortOrder,
     Source,
 )
+from core.api.access import SignedInDep
 from core.api.deps import SessionDep, SettingsDep
 from core.api.errors import Problem
 from core.api.models import OFFSET_MAX, SafeText
@@ -142,6 +143,7 @@ async def get_company(
     session: SessionDep,
     settings: SettingsDep,
     leads: LeadsDep,
+    auth: SignedInDep,
     source: api_meetings.SourceDep,
     now: NowDep,
     key: Key,
@@ -152,6 +154,11 @@ async def get_company(
     if detail is None:
         raise not_found()
     detail.meetings = await meeting_store.company_meetings(
-        session, key, source=source, settings=settings, now=now
+        session,
+        key,
+        source=source,
+        settings=settings,
+        now=now,
+        me=await meeting_store.my_owner(session, auth, source),
     )
     return detail

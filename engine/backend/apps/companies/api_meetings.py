@@ -1,7 +1,8 @@
 """The Meetings routes (PLAN-V17 T2-11 and T2-12, the contract's part 3), under /api/v1/companies.
 
 Behind the Companies tick, like every Companies route. Each answers 409 `meeting_forms_off` while
-meetings and pre-reads are switched off. A rep sees their own meetings, or the team's. The fixed
+meetings and pre-reads are switched off. A rep sees everyone's meetings, their own, or their
+HubSpot team's (PLAN-V18 T1-4). The fixed
 paths come before `/meetings/{meeting_id}`, and the whole router before `/{key}`. The services
 are meeting_store.py (the reads), meeting_form.py (the pre-read's draft), meeting_send.py
 (sending it, T2-14) and meeting_log.py (a past meeting's transcript, T2-15).
@@ -31,6 +32,7 @@ from apps.companies.schemas import (
     MeetingSummary,
     MeetingTranscriptIn,
     MeetingWhen,
+    MeetingWho,
 )
 from core.api.access import SignedInDep
 from core.api.deps import SessionDep, SettingsDep
@@ -95,13 +97,17 @@ FormId = Annotated[uuid.UUID, Path(description="The pre-read's id")]
 @router.get(
     "/meetings",
     response_model=MeetingPage,
-    summary="My meetings",
+    summary="Client meetings",
     description=(
         "A page of client meetings from HubSpot (one with no company is left out; a cancelled "
-        "one stays, with its outcome). `when`: `upcoming` (the next 7 days, soonest first, each "
-        "with its `group` by the Melbourne date: today, tomorrow, this_week or later) or `past` "
-        "(the last 30 days, newest first). `mine` (true by default): my own, as my HubSpot "
-        "owner; false: the team's, mine first. My own pre-reads for meetings typed in (New "
+        "one stays, with its outcome), always in time order. `when`: `upcoming` (the next 7 "
+        "days, soonest first, each with its `group` by the Melbourne date: today, tomorrow, "
+        "this_week or later) or `past` (the last 30 days, newest first). `who`: `all` (the "
+        "default: everyone's), `mine` (the ones I own or am on, as my HubSpot owner) or `team` "
+        "(the ones whose owner, or a Contour person on them, is in one of my HubSpot teams, mine "
+        "included). Each meeting says whether it is `mine`. `linked`, `team_state` and "
+        "`team_names` say what My meetings and My team can pick out, and `sentence` says why "
+        "one of them is empty (never for All). My own pre-reads for meetings typed in (New "
         "pre-read) join the list in the same window, marked `typed`, even while HubSpot's "
         "meetings aren't read. `q`: each word must start a word of the company's name, the "
         "title or the date in words, like 'sample 26 nov', 'thu' or '26/11'. Each meeting comes "
@@ -119,7 +125,7 @@ async def list_meetings(
     source: SourceDep,
     now: NowDep,
     when: MeetingWhen = "upcoming",
-    mine: bool = True,
+    who: MeetingWho = "all",
     q: Annotated[SafeText | None, Query(max_length=200)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = PAGE_SIZE,
     offset: Annotated[int, Query(ge=0, le=OFFSET_MAX)] = 0,
@@ -130,7 +136,7 @@ async def list_meetings(
         auth,
         source=source,
         when=when,
-        mine=mine,
+        who=who,
         q=q,
         limit=limit,
         offset=offset,
