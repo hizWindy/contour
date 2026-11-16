@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { searchForWorkspaceRoot, type ProxyOptions } from 'vite'
 import { defineConfig } from 'vitest/config'
+import { contourServiceWorker } from './vite-pwa.ts'
 
 /**
  * The files the dev server may hand out: this project, and wherever node_modules really is. In a
@@ -106,7 +107,8 @@ export const FRAMEWORK_LIBRARIES =
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), ...(process.env.VITEST ? [] : [tailwindcss()])],
+  // `contourServiceWorker` writes dist/sw.js when a build ends (vite-pwa.ts). It does nothing in dev.
+  plugins: [react(), ...(process.env.VITEST ? [] : [tailwindcss()]), contourServiceWorker()],
   resolve: {
     alias: {
       '@': resolve(import.meta.dirname, 'src'),

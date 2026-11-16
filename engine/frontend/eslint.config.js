@@ -127,6 +127,18 @@ export default defineConfig([
   globalIgnores(['dist', 'coverage', 'src/api/schema.d.ts']),
 
   {
+    // The service worker runs in a worker, not in a page, and the build puts `__BUILD__` in front
+    // of it (vite-pwa.ts). It is plain JavaScript because nothing compiles it.
+    files: ['src/pwa/sw.js'],
+    extends: [js.configs.recommended],
+    languageOptions: {
+      ecmaVersion: 2023,
+      sourceType: 'script',
+      globals: { ...globals.serviceworker, __BUILD__: 'readonly' },
+    },
+  },
+
+  {
     files: ['**/*.{ts,tsx}'],
     extends: [
       js.configs.recommended,
