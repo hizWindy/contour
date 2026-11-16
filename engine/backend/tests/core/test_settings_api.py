@@ -1,6 +1,6 @@
 """The settings routes: GET, PATCH and DELETE /api/v1/settings, on the test database."""
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from typing import Any
 
 import httpx
@@ -13,6 +13,7 @@ from core.api.deps import settings_dependency
 from core.claude.client import claude_holder
 from core.config import EDITABLE_KEYS, get_settings
 from core.db.engine import get_session
+from core.prefs.service import BROWSER_SPEECH_OFF_DETAIL
 
 pytestmark = pytest.mark.integration
 
@@ -105,6 +106,41 @@ async def test_the_hubspot_approval_cant_be_turned_on_through_the_api(
     assert "engine/.env" in errors_of(response)["body.values.hubspot_names_to_claude_ok"]
     fields = by_key((await client.get(SETTINGS)).json())
     assert fields["hubspot_names_to_claude_ok"]["value"] is False
+
+
+async def test_the_browser_speech_service_waits_for_levis_ok_on_the_server(
+    client: httpx.AsyncClient, server_env: Callable[..., None]
+) -> None:
+    """PLAN-V18 M1: it sends each rep's voice to Google or Microsoft."""
+    refused = await client.patch(SETTINGS, json={"values": {"voice_tool": "browser_service"}})
+    assert errors_of(refused) == {"body.values.voice_tool": BROWSER_SPEECH_OFF_DETAIL}
+    body = refused.json()
+    assert (body["code"], body["title"], body["detail"]) == (
+        "browser_speech_off",
+        "The browser's speech service is off",
+        "The browser's speech service sends the voice to Google or Microsoft, so it stays off "
+        "until Levi says yes. Pick Whisper in the browser or Typing only.",
+    )
+    assert body["request_id"]
+    given = await client.patch(SETTINGS, json={"values": {"browser_speech_ok": True}})
+    assert "engine/.env" in errors_of(given)["body.values.browser_speech_ok"]
+    fields = by_key((await client.get(SETTINGS)).json())
+    assert (fields["voice_tool"]["value"], fields["voice_tool"]["overridden"]) == (
+        "browser_model",
+        False,
+    )
+    assert fields["voice_tool"]["choices"] == ["browser_model", "typing"]
+    assert (fields["browser_speech_ok"]["value"], fields["browser_speech_ok"]["editable"]) == (
+        False,
+        False,
+    )
+
+    server_env(BROWSER_SPEECH_OK="true")  # Levi said yes, on the server
+    saved = await client.patch(SETTINGS, json={"values": {"voice_tool": "browser_service"}})
+    assert saved.status_code == 200, saved.text
+    chosen = by_key(saved.json())["voice_tool"]
+    assert (chosen["value"], chosen["overridden"]) == ("browser_service", True)
+    assert chosen["choices"] == ["browser_model", "browser_service", "typing"]
 
 
 async def test_delete_puts_a_setting_back_and_an_unknown_key_is_a_404(

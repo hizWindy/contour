@@ -18,6 +18,8 @@ from core.config import CEILINGS, EDITABLE_KEYS, Settings
 from core.prefs import service
 from core.prefs.models import Setting
 from core.prefs.service import (
+    BROWSER_SPEECH_OFF_DETAIL,
+    BROWSER_SPEECH_OFF_TITLE,
     ENV_ONLY_KEYS,
     TEXT,
     build_settings_out,
@@ -172,6 +174,48 @@ def test_overridden_means_saved_and_different_from_the_default() -> None:
     assert fields["run_cap_usd"].overridden is False
 
 
+# --- The mic's browser speech service (PLAN-V18 M1, fast) ---------------------------------------
+# It sends each rep's voice to Google or Microsoft, so it waits for Levi's OK: browser_speech_ok,
+# set only on the server.
+
+
+def test_the_browser_speech_service_is_offered_only_once_the_server_allows_it() -> None:
+    off = fields_of(build_settings_out(resolve_settings(base(), {}), D("1")))
+    on = fields_of(build_settings_out(resolve_settings(base(browser_speech_ok=True), {}), D("1")))
+    assert off["voice_tool"].choices == ["browser_model", "typing"]
+    assert on["voice_tool"].choices == ["browser_model", "browser_service", "typing"]
+    assert (off["browser_speech_ok"].value, off["browser_speech_ok"].editable) == (False, False)
+    assert on["browser_speech_ok"].value is True
+
+
+@pytest.mark.parametrize("allowed", [False, True])
+def test_a_saved_browser_speech_service_waits_for_the_ok(allowed: bool) -> None:
+    resolved = resolve_settings(base(browser_speech_ok=allowed), {"voice_tool": "browser_service"})
+    field = fields_of(build_settings_out(resolved, D("1")))["voice_tool"]
+    used = "browser_service" if allowed else "browser_model"
+    assert resolved.settings.voice_tool == used
+    assert (field.value, field.default, field.overridden) == (used, "browser_model", allowed)
+    assert resolved.ignored == ()  # kept, for when the OK comes
+
+
+@pytest.mark.parametrize("allowed", [False, True])
+def test_a_browser_speech_service_set_on_the_server_waits_for_the_ok(allowed: bool) -> None:
+    env = base(voice_tool="browser_service", browser_speech_ok=allowed)
+    resolved = resolve_settings(env, {})
+    field = fields_of(build_settings_out(resolved, D("1")))["voice_tool"]
+    used = "browser_service" if allowed else "browser_model"
+    assert resolved.settings.voice_tool == used
+    assert (field.value, field.default, field.overridden) == (used, used, False)
+
+
+def test_a_row_written_straight_into_the_table_cant_give_the_ok() -> None:
+    resolved = resolve_settings(
+        base(), {"browser_speech_ok": True, "voice_tool": "browser_service"}
+    )
+    assert resolved.settings.browser_speech_ok is False
+    assert resolved.settings.voice_tool == "browser_model"
+
+
 @pytest.mark.parametrize(
     ("value", "text"),
     [
@@ -251,6 +295,12 @@ async def test_null_puts_a_step_model_back_to_the_main_model(session: AsyncSessi
             "engine/.env",
         ),
         ({"hard_daily_cap_usd": "1.00"}, "body.values.hard_daily_cap_usd", "engine/.env"),
+        ({"browser_speech_ok": True}, "body.values.browser_speech_ok", "engine/.env"),
+        (
+            {"voice_tool": "shouting"},
+            "body.values.voice_tool",
+            "Send one of: browser_model, typing.",
+        ),
         ({"run_cap_usd": 15}, "body.values.run_cap_usd", 'Send this as a string, like "2.50".'),
         ({"run_cap_usd": "lots"}, "body.values.run_cap_usd", "This isn't a number."),
         ({"run_cap_usd": "0.50"}, "body.values.run_cap_usd", "Must be at least 1.00."),
@@ -298,6 +348,34 @@ async def test_a_value_above_its_ceiling_is_refused(
     assert errors_of(problem) == {
         "body.values.run_cap_usd": "Must be at most 10.00. The ceiling on the server is lower."
     }
+
+
+@pytest.mark.integration
+async def test_the_browser_speech_service_cant_be_saved_until_the_server_allows_it(
+    session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    alone = await problem_of(patch_settings(session, {"voice_tool": "browser_service"}))
+    assert (alone.code, alone.title, alone.detail) == (
+        "browser_speech_off",
+        BROWSER_SPEECH_OFF_TITLE,
+        BROWSER_SPEECH_OFF_DETAIL,
+    )
+    assert errors_of(alone) == {"body.values.voice_tool": BROWSER_SPEECH_OFF_DETAIL}
+    # With other changes, all or nothing still holds, and another wrong value is listed too.
+    both = await problem_of(
+        patch_settings(
+            session,
+            {"voice_tool": "browser_service", "run_max_companies": 9, "run_cap_usd": 15},
+        )
+    )
+    assert both.code == "browser_speech_off"
+    assert set(errors_of(both)) == {"body.values.voice_tool", "body.values.run_cap_usd"}
+    assert await stored(session) == {}
+
+    monkeypatch.setattr(service, "get_settings", lambda: base(browser_speech_ok=True))
+    out = await patch_settings(session, {"voice_tool": "browser_service"})
+    assert fields_of(out)["voice_tool"].value == "browser_service"
+    assert await stored(session) == {"voice_tool": "browser_service"}
 
 
 @pytest.mark.integration

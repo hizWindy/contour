@@ -14,6 +14,9 @@ The rules this follows:
 - `effective_settings` never fails because of a bad row. A row that no longer fits (a bound was
   tightened, a ceiling was lowered) is left out and logged by key. The ceilings clamp the result
   as a last guard.
+- The mic's browser speech service (`voice_tool` `browser_service`) waits for Levi's OK, the
+  env-only `browser_speech_ok` (PLAN-V18). Until then the page doesn't offer it, a change to it is
+  a 422 `browser_speech_off`, and a saved one reads as `browser_model` (`Settings` does that).
 - Nothing here returns a SecretStr or any other env-only secret.
 
 One row is not a setting: `lead_finder_round` holds the Lead Finder's round plan (the cities picked
@@ -60,6 +63,7 @@ ENV_ONLY_KEYS: tuple[str, ...] = (
     "hubspot_names_to_claude_ok",
     "property_daily_to_claude_ok",
     "arealytics_to_claude_ok",
+    "browser_speech_ok",  # PLAN-V18 M1
     "hard_run_cap_usd",
     "hard_scheduled_run_cap_usd",
     "hard_daily_cap_usd",
@@ -68,6 +72,15 @@ ENV_ONLY_KEYS: tuple[str, ...] = (
 )
 
 ENV_ONLY_NOTE = "Changes only in engine/.env, then restart the backend."
+
+# The mic's voice tool that sends the voice to Google or Microsoft (PLAN-V18 M1). It waits for
+# Levi's OK: the env-only switch `browser_speech_ok`.
+BROWSER_SERVICE = "browser_service"
+BROWSER_SPEECH_OFF_TITLE = "The browser's speech service is off"
+BROWSER_SPEECH_OFF_DETAIL = (
+    "The browser's speech service sends the voice to Google or Microsoft, so it stays off until "
+    "Levi says yes. Pick Whisper in the browser or Typing only."
+)
 
 # key: (label, what it does). Plain words, shown on the Settings page.
 TEXT: dict[str, tuple[str, str]] = {
@@ -254,7 +267,8 @@ TEXT: dict[str, tuple[str, str]] = {
         "Voice to text",
         "Which tool turns a rep's voice into words on Log call. Whisper in the browser keeps "
         "the voice on the laptop. The browser's own speech service sends the voice to Google or "
-        "Microsoft, so it waits for Levi's OK (TBC). Typing hides the mic.",
+        "Microsoft, so it is offered only once the server allows it, after Levi's OK (TBC). "
+        "Until then the mic uses Whisper in the browser in its place. Typing hides the mic.",
     ),
     "meeting_forms_enabled": (
         "Pre-meeting forms are on",
@@ -277,6 +291,12 @@ TEXT: dict[str, tuple[str, str]] = {
         "HubSpot names may go to Claude",
         "The data approval from Levi. While it is off, no HubSpot company name is sent to "
         "Claude. " + ENV_ONLY_NOTE,
+    ),
+    "browser_speech_ok": (
+        "The mic may use the browser's speech service",
+        "Levi's OK for the mic to send a rep's voice to Google or Microsoft, through the "
+        "browser's own speech service. While it is off, Voice to text offers Whisper in the "
+        "browser and Typing only. " + ENV_ONLY_NOTE,
     ),
     "hard_run_cap_usd": (
         "Highest run cap (US$)",
@@ -335,6 +355,15 @@ def setting_choices(key: str) -> list[str] | None:
     return None
 
 
+def offered_choices(key: str, settings: Settings) -> list[str] | None:
+    """The values a person may pick for a choice setting, or None. The browser's speech service
+    is left out while the server doesn't allow it (`browser_speech_ok`, Levi's OK)."""
+    choices = setting_choices(key)
+    if choices is not None and key == "voice_tool" and not settings.browser_speech_ok:
+        return [choice for choice in choices if choice != BROWSER_SERVICE]
+    return choices
+
+
 def decimal_text(value: Decimal | float) -> str:
     """A decimal as text with at least two places and no loss: 2.5 -> "2.50", 0.455 -> "0.455"."""
     exact = value if isinstance(value, Decimal) else Decimal(repr(value))
@@ -356,10 +385,10 @@ def to_json(key: str, value: Any) -> SettingValue:
     return plain
 
 
-def _read(key: str, raw: Any, *, strict: bool) -> Any:
+def _read(key: str, raw: Any, *, strict: bool, choices: list[str] | None = None) -> Any:
     """A value from a request (strict) or from a stored row (lenient), as a Python value for
     `Settings`. Raises ValueError with a plain message when it can't be used. It does not check
-    bounds: `Settings` does."""
+    bounds: `Settings` does. `choices` narrows a choice setting's values (`offered_choices`)."""
     kind = setting_type(key)
     if kind == "int":
         if isinstance(raw, bool) or not isinstance(raw, int):
@@ -383,12 +412,12 @@ def _read(key: str, raw: Any, *, strict: bool) -> Any:
         if not isinstance(raw, bool):
             raise ValueError("Send true or false.")
         return raw
-    choices = setting_choices(key) or []
+    allowed = (setting_choices(key) if choices is None else choices) or []
     if raw is None and kind == "choice_or_null":
         return None
-    if not isinstance(raw, str) or raw not in choices:
+    if not isinstance(raw, str) or raw not in allowed:
         extra = ", or null for the default" if kind == "choice_or_null" else ""
-        raise ValueError(f"Send one of: {', '.join(choices)}{extra}.")
+        raise ValueError(f"Send one of: {', '.join(allowed)}{extra}.")
     return raw
 
 
@@ -477,7 +506,7 @@ def _editable_field(key: str, resolved: Resolved) -> SettingField:
         type=kind,
         min=low,
         max=high,
-        choices=setting_choices(key),
+        choices=offered_choices(key, resolved.base),
         default=to_json(key, default),
         value=to_json(key, value),
         overridden=key in resolved.used and value != default,
@@ -531,12 +560,28 @@ def _error(key: str, message: str) -> FieldError:
     return FieldError(field=f"body.values.{key}", message=message)
 
 
+def _speech_off() -> FieldError:
+    return _error("voice_tool", BROWSER_SPEECH_OFF_DETAIL)
+
+
 def _invalid(errors: list[FieldError]) -> Problem:
+    """The 422 for a change that can't be saved. Asking for the browser's speech service while the
+    server doesn't allow it has its own title, detail and code, `browser_speech_off`. Every field
+    that is wrong is still listed."""
+    listed = [error.model_dump() for error in errors]
+    if _speech_off() in errors:
+        return Problem(
+            422,
+            BROWSER_SPEECH_OFF_TITLE,
+            BROWSER_SPEECH_OFF_DETAIL,
+            code="browser_speech_off",
+            errors=listed,
+        )
     return Problem(
         422,
         "The settings aren't valid",
         "Nothing was changed. Fix the fields listed in errors.",
-        errors=[error.model_dump() for error in errors],
+        errors=listed,
     )
 
 
@@ -582,8 +627,11 @@ def _field_errors(error: ValidationError) -> list[FieldError]:
     return found or [_error("settings", "These settings don't fit together.")]
 
 
-def _parse_patch(values: Mapping[str, SettingValue]) -> tuple[dict[str, Any], list[FieldError]]:
-    """Checks each key and the kind of each value. Bounds and rules between settings come next."""
+def _parse_patch(
+    values: Mapping[str, SettingValue], base: Settings
+) -> tuple[dict[str, Any], list[FieldError]]:
+    """Checks each key and the kind of each value. Bounds and rules between settings come next.
+    The browser's speech service is refused while the server (`base`) doesn't allow it."""
     parsed: dict[str, Any] = {}
     errors: list[FieldError] = []
     for key, raw in values.items():
@@ -591,9 +639,11 @@ def _parse_patch(values: Mapping[str, SettingValue]) -> tuple[dict[str, Any], li
             errors.append(_error(key, "No setting has this name."))
         elif key not in EDITABLE_KEYS:
             errors.append(_error(key, ENV_ONLY_NOTE))
+        elif key == "voice_tool" and raw == BROWSER_SERVICE and not base.browser_speech_ok:
+            errors.append(_speech_off())
         else:
             try:
-                parsed[key] = _read(key, raw, strict=True)
+                parsed[key] = _read(key, raw, strict=True, choices=offered_choices(key, base))
             except ValueError as problem:
                 errors.append(_error(key, str(problem)))
     return parsed, errors
@@ -609,13 +659,14 @@ async def patch_settings(session: AsyncSession, values: dict[str, SettingValue])
 
     Raises Problem 422 with `errors` as `body.values.<key>` for an unknown or env-only key, a
     value of the wrong kind, a value outside its bounds or above its ceiling, and a pair that
-    breaks a rule between settings (every setting in the rule is named). A value equal to the
+    breaks a rule between settings (every setting in the rule is named). The browser's speech
+    service while the server doesn't allow it is a 422 `browser_speech_off`. A value equal to the
     default is not stored: it removes the override.
     """
-    parsed, errors = _parse_patch(values)
+    base = get_settings()
+    parsed, errors = _parse_patch(values, base)
     if errors:
         raise _invalid(errors)
-    base = get_settings()
     await _lock(session)
     # Start from the overrides that are in use, so a stale row can't make this change fail.
     wanted = {**resolve_settings(base, await _load_rows(session)).used, **parsed}

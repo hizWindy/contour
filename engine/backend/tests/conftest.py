@@ -10,7 +10,8 @@ Run one pytest process for each suffix at a time. Tests never touch the real `le
 database: the name is forced below, before the settings are read.
 
 Fixtures for integration tests: `engine`, `session_factory`, `session`, `embedder`,
-`checkpointer` and `live_server` (which needs an `app` fixture from the test). A test that
+`checkpointer` and `live_server` (which needs an `app` fixture from the test). For any test,
+`server_env` sets the server's own settings (the environment) for that test only. A test that
 uses the database or the memory model without the `integration` marker fails at once with
 "mark this test integration", so the fast suite stays fast and never needs Docker.
 
@@ -24,7 +25,7 @@ import asyncio
 import contextlib
 import os
 import re
-from collections.abc import AsyncIterator, Generator, Iterator
+from collections.abc import AsyncIterator, Callable, Generator, Iterator
 from typing import TYPE_CHECKING, Literal, NoReturn
 
 import httpx
@@ -71,6 +72,9 @@ for _login in ("USERNAME", "PASSWORD"):
     os.environ[f"AREALYTICS_{_login}"] = ""
 os.environ["PROPERTY_DAILY_ENABLED"] = "false"
 os.environ["AREALYTICS_ENABLED"] = "false"
+# The mic's browser speech service waits for Levi's OK (PLAN-V18 M1): a test that wants it on says
+# so, whatever engine/.env holds.
+os.environ["BROWSER_SPEECH_OK"] = "false"
 get_settings.cache_clear()
 
 TEST_TABLES = (
@@ -191,6 +195,22 @@ def _fast_tests_need_no_database(
 def _only_the_test_database() -> None:
     name = get_settings().postgres_db
     assert name.startswith("leadfinder_test"), f"tests must use a leadfinder_test* database: {name}"
+
+
+@pytest.fixture
+def server_env() -> Iterator[Callable[..., None]]:
+    """Sets some of the server's own settings for one test, as engine/.env would:
+    `server_env(BROWSER_SPEECH_OK="true")`. At the end the environment is put back first and the
+    cached settings are dropped after, so no later test sees what this one set."""
+    with pytest.MonkeyPatch.context() as patch:
+
+        def put(**values: str) -> None:
+            for name, value in values.items():
+                patch.setenv(name, value)
+            get_settings.cache_clear()
+
+        yield put
+    get_settings.cache_clear()
 
 
 # --- Database -------------------------------------------------------------------------------

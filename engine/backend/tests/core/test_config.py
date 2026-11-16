@@ -26,6 +26,7 @@ from core.memory.embedder import Embedder, get_embedder
 ENV_ONLY = [
     "hubspot_names_to_claude_ok",
     "hubspot_names_to_signalhire_ok",
+    "browser_speech_ok",  # PLAN-V18 M1: Levi's OK for the browser's speech service
     "hard_run_cap_usd",
     "hard_company_cap_usd",
     "hard_concurrency",
@@ -450,6 +451,50 @@ def test_each_hubspot_switch_turns_on_by_itself(monkeypatch: pytest.MonkeyPatch)
         False,
         True,
     )
+
+
+# --- The mic's browser speech service (PLAN-V18 M1): Levi's OK, env-only and strict ----------
+# It sends each rep's voice to Google or Microsoft.
+
+
+def test_the_browser_speech_ok_starts_off_and_turns_on_only_with_the_exact_text_true(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert make().browser_speech_ok is False
+    monkeypatch.setenv("BROWSER_SPEECH_OK", "true")
+    assert Settings(_env_file=None).browser_speech_ok is True
+    monkeypatch.setenv("BROWSER_SPEECH_OK", "FALSE")
+    assert Settings(_env_file=None).browser_speech_ok is False
+    for stray in ("1", "yes", "on", "t", "2"):
+        monkeypatch.setenv("BROWSER_SPEECH_OK", stray)
+        with pytest.raises(ValidationError):
+            Settings(_env_file=None)
+
+
+@pytest.mark.parametrize(
+    ("asked", "allowed", "used"),
+    [
+        ("browser_service", False, "browser_model"),  # Whisper in the browser in its place
+        ("browser_service", True, "browser_service"),
+        ("browser_model", False, "browser_model"),
+        ("browser_model", True, "browser_model"),
+        ("typing", False, "typing"),
+        ("typing", True, "typing"),
+    ],
+)
+def test_the_browser_speech_service_is_whisper_in_the_browser_until_levis_ok(
+    asked: str, allowed: bool, used: str
+) -> None:
+    assert make(voice_tool=asked, browser_speech_ok=allowed).voice_tool == used
+
+
+def test_the_browser_speech_service_in_the_env_waits_for_the_ok_too(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("VOICE_TOOL", "browser_service")
+    assert Settings(_env_file=None).voice_tool == "browser_model"
+    monkeypatch.setenv("BROWSER_SPEECH_OK", "true")
+    assert Settings(_env_file=None).voice_tool == "browser_service"
 
 
 # --- Loopback only -----------------------------------------------------------------------

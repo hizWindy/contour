@@ -90,8 +90,11 @@ NoteId = Annotated[uuid.UUID, Path(description="The note's id")]
     description=(
         "Whether call notes are on, whether Claude sorts a note, whether sending to HubSpot is "
         "ready (and what it waits for, in plain words), the call outcomes, the fields a call may "
-        "change, when the timer turns Ochre, the longest note, and the longest meeting "
-        "transcript. It answers while call notes are off too."
+        "change, when the timer turns Ochre, the longest note, the longest meeting transcript, "
+        "and which voice to text tool the mic uses. The browser's own speech service "
+        "(`browser_service`) sends the voice to Google or Microsoft, so until the server allows "
+        "it (Levi's OK) a saved or server value of it comes as `browser_model`, Whisper in the "
+        "browser. It answers while call notes are off too."
     ),
 )
 async def call_note_options(request: Request, settings: SettingsDep) -> CallNoteOptions:

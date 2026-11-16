@@ -530,6 +530,17 @@ def test_settings_say_how_values_are_sent_and_where_an_error_points(
         assert "string for a decimal" in field[name]["description"], name
 
 
+def test_the_browser_speech_service_says_it_waits_for_levis_ok(schema: dict[str, Any]) -> None:
+    """PLAN-V18 M1: it sends the voice to Google or Microsoft."""
+    patch = operation(schema, "patch", f"{API}/settings")["description"]
+    read = operation(schema, "get", f"{API}/settings")["description"]
+    options = operation(schema, "get", f"{API}/companies/call-notes/options")["description"]
+    voice = schema["components"]["schemas"]["CallNoteOptions"]["properties"]["voice_tool"]
+    assert "browser_speech_off" in patch
+    for text in (read, options, voice["description"]):
+        assert "browser_service" in text and "browser_model" in text
+
+
 def test_run_days_are_melbourne_dates_and_the_run_filters_use_the_same_kind_of_date(
     schema: dict[str, Any],
 ) -> None:

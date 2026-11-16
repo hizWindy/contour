@@ -5,10 +5,11 @@ Two kinds of setting:
   pool, the allowed web origins, the API address, the sign-in settings (on or off, the session
   times), the Signal Hire key and every HubSpot setting (the key, the version, the write switch,
   the pace and the sync times), for Property Daily and Arealytics (PLAN-V16) their logins,
-  whether their facts may go to Claude, and the pause between pages, and for call notes and the
+  whether their facts may go to Claude, and the pause between pages, for call notes and the
   pre-meeting form (PLAN-V17) the models, caps and limits, the switch that writes a pre-read on
-  the meeting itself, and the internal email domains. They change only in engine/.env, then a
-  restart. The website can't change them.
+  the meeting itself, and the internal email domains, and for the mic (PLAN-V18) the OK for the
+  browser's own speech service. They change only in engine/.env, then a restart. The website
+  can't change them.
 - **Editable:** caps, concurrency, models and thresholds (the keys in EDITABLE_KEYS). The
   `core.prefs` package stores overrides in the database, checks each against its min and max
   here, and then clamps the result to the ceilings with `clamp_to_ceilings`.
@@ -318,6 +319,12 @@ class Settings(BaseSettings):
     # watchlist company) be sent to Signal Hire, to count its people? Off until Levi says yes. It is
     # a switch of its own because the data goes to another company. Same exact-text rule.
     hubspot_names_to_signalhire_ok: StrictBool = False
+    # The same kind of OK for the mic (PLAN-V18): may Log call use the browser's own speech
+    # service (voice_tool browser_service)? It sends each rep's voice to Google or Microsoft, so it
+    # is off until Levi says yes. While it is off, browser_service reads as browser_model (Whisper
+    # in the browser), whether it is in .env or saved on the Settings page, and the Settings page
+    # refuses to save it. Same exact-text rule.
+    browser_speech_ok: StrictBool = False
     # A ceiling can't sit below the lowest value its editable settings allow (a test checks this
     # against CEILINGS), or a valid setting would be clamped to something its own minimum refuses.
     hard_run_cap_usd: Decimal = Field(Decimal("50"), ge=Decimal("1"), le=1000)
@@ -488,8 +495,8 @@ class Settings(BaseSettings):
     transcript_max_chars: int = Field(60_000, ge=1_000, le=200_000)  # a meeting's (TBC)
     # Which voice to text tool the mic uses (PLAN-V18, the contract's part 4). browser_model is
     # Whisper in the browser: the voice stays on the laptop. browser_service is the browser's own
-    # speech service, which sends the voice to Google or Microsoft: only with Levi's OK (TBC).
-    # typing hides the mic.
+    # speech service, which sends the voice to Google or Microsoft: used only while
+    # browser_speech_ok is on (Levi's OK, TBC), and browser_model until then. typing hides the mic.
     voice_tool: VoiceTool = "browser_model"
     meeting_forms_enabled: StrictBool = False  # shows Meetings and the pre-read
     model_meeting_form: ClaudeModel = "claude-sonnet-5-5"
@@ -507,6 +514,7 @@ class Settings(BaseSettings):
     @field_validator(
         "hubspot_names_to_claude_ok",
         "hubspot_names_to_signalhire_ok",
+        "browser_speech_ok",
         "hubspot_write_enabled",
         "auth_required",
         "session_cookie_secure",
@@ -818,6 +826,17 @@ class Settings(BaseSettings):
             raise ValueError(
                 "login_free_tries must be below login_lock_tries, or the waits would never start"
             )
+        return self
+
+    @model_validator(mode="after")
+    def _browser_speech_waits_for_its_ok(self) -> "Settings":
+        """The browser's own speech service sends each rep's voice to Google or Microsoft, so the
+        mic uses it only while browser_speech_ok is on (Levi's OK, PLAN-V18). Until then
+        voice_tool browser_service, from .env or saved on the Settings page, reads as
+        browser_model: Whisper in the browser, where the voice stays on the laptop. Every reader
+        gets the safe value. The Settings page refuses to save it (core.prefs.service)."""
+        if self.voice_tool == "browser_service" and not self.browser_speech_ok:
+            self.voice_tool = "browser_model"
         return self
 
     @model_validator(mode="after")
