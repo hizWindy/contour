@@ -160,3 +160,18 @@ export function sendTo(
 ): string[] {
   return people.filter((person) => isTicked(person, picks)).map((person) => person.email)
 }
+
+/** The draft's steps: reading HubSpot, writing the summaries, ready for the rep (PLAN-V18 T2-4). */
+export const DRAFT_STEP_COUNT = 3
+
+/**
+ * How many of the draft's steps have arrived, from what the server says, never from a timer.
+ * Drafting with no facts yet: HubSpot is being read. The facts are there: the summaries are being
+ * written. A draft, or sent: ready for the rep. A failure stops at the step it reached.
+ */
+export function draftReached(form: Pick<MeetingFormOut, 'status' | 'facts'>): number {
+  if (form.status === 'drafting' || form.status === 'failed') {
+    return form.facts.length > 0 ? 2 : 1
+  }
+  return DRAFT_STEP_COUNT
+}

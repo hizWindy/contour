@@ -10,17 +10,21 @@
  *   "Open", for its pre-read.
  *
  * Each button's name ends with the meeting (`context`, for a screen reader, which hears many such
- * buttons in a list).
+ * buttons in a list). "Draft it" says that AI drafts it and the rep checks it first, as its
+ * description: a tooltip for the pointer, and words a screen reader hears after its name
+ * (PLAN-V18 T2-4).
  */
+import { useId } from 'react'
 import { Link } from 'react-router'
 import type { MeetingItem } from '@/api/types'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { preReadHref } from './params'
 import type { RowStatus } from './rows'
 import { STATUS_LOOK } from './status-look'
 import type { DraftIt } from './use-draft-it'
-import { CHECK_AND_SEND, DRAFT_IT, LOG_MEETING, OPEN, STATUS_WORDS } from './words'
+import { CHECK_AND_SEND, DRAFT_IT, DRAFT_IT_NOTE, LOG_MEETING, OPEN, STATUS_WORDS } from './words'
 
 /** A row's one status: an icon and a word, never colour alone. */
 export function StatusLine({ status }: { status: RowStatus }) {
@@ -46,6 +50,7 @@ export interface RowActionProps {
 
 /** A row's one button, or nothing. */
 export function RowAction({ item, status, past, draftIt, context, onLogMeeting }: RowActionProps) {
+  const noteId = useId()
   const heard = <span className="sr-only">{context}</span>
   if (past && !item.typed) {
     if (!onLogMeeting || item.meeting.id === '' || status === 'cancelled') return null
@@ -76,17 +81,29 @@ export function RowAction({ item, status, past, draftIt, context, onLogMeeting }
   }
   if (!past && status !== 'cancelled' && draftIt.possible) {
     return (
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="touch:h-11"
-        disabled={draftIt.pending}
-        onClick={draftIt.draft}
-      >
-        {DRAFT_IT}
-        {heard}
-      </Button>
+      <>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="touch:h-11"
+              disabled={draftIt.pending}
+              aria-describedby={noteId}
+              onClick={draftIt.draft}
+            >
+              {DRAFT_IT}
+              {heard}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{DRAFT_IT_NOTE}</TooltipContent>
+        </Tooltip>
+        {/* Beside the button, not in it: inside, it would be read as part of its name. */}
+        <span id={noteId} className="sr-only">
+          {DRAFT_IT_NOTE}
+        </span>
+      </>
     )
   }
   return null

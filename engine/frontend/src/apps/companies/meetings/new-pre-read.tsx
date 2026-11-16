@@ -12,9 +12,12 @@
  * - **A double press is one form:** the button is greyed while the server answers, and the server
  *   gives back the first pre-read when the same person types the same meeting again (the same
  *   company, title and start), so a retry after a lost answer opens it and makes no second one.
+ * - **AI drafts it** (PLAN-V18 T2-4): one line above the buttons says so, with an icon, what it
+ *   reads, how long it takes and that the rep checks it before anyone gets it, then its cost in
+ *   quiet text.
  * - The dialog's one Navy button is "Draft the pre-read". It closes when the form has started.
  */
-import { ChevronsUpDown, FilePlus, MapPin, Video } from 'lucide-react'
+import { ChevronsUpDown, Cpu, FilePlus, MapPin, Video } from 'lucide-react'
 import { useId, useRef, useState, type FormEvent, type ReactNode, type RefObject } from 'react'
 import { useNavigate } from 'react-router'
 import { fieldErrorMap, toApiProblem } from '@/api/client'
@@ -49,6 +52,8 @@ import {
   DAY_PAST,
   DAY_PLACEHOLDER,
   DAY_UNREADABLE,
+  AI_DRAFT_COST,
+  AI_DRAFTS_NOTE,
   DRAFT_THE_PRE_READ,
   NEW_DESCRIPTION,
   NEW_PRE_READ,
@@ -356,6 +361,14 @@ function NewPreReadForm({
           {general.detail ? <p>{general.detail}</p> : null}
         </div>
       ) : null}
+
+      <div data-slot="ai-note" className="flex items-start gap-2 text-ui">
+        <Cpu aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+        <p className="flex flex-col gap-0.5 text-pretty">
+          <span className="text-foreground">{AI_DRAFTS_NOTE}</span>
+          <span className="text-caption text-muted-foreground">{AI_DRAFT_COST}</span>
+        </p>
+      </div>
 
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onCancel}>

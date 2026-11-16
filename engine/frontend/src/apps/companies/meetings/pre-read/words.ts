@@ -30,16 +30,48 @@ export const MISSING_DESCRIPTION =
   'It may have been removed, or the link is wrong. Every pre-read is on Meetings, beside its meeting.'
 export const BACK_TO_MEETINGS = 'Back to Meetings'
 
+// --- The form's sections (PLAN-V18 T2-5) ------------------------------------------------------
+
+export const THE_MEETING = 'The meeting'
+export const THE_COMPANY = 'The company'
+export const THE_SUMMARIES = 'The summaries'
+
 // --- The facts ---------------------------------------------------------------------------------
 
-export const FACTS = 'The facts'
 export const FACTS_NOTE = 'From HubSpot and our notes, with no AI.'
 export const FACTS_COMING = 'The facts show in a moment.'
 export const NO_FACTS = "The facts weren't read. Try again to read them."
+export const DATE = 'Date'
+export const TIME = 'Time'
+export const WHERE_LABEL = 'Teams or in person'
+export const WHO_WE_MEET = 'Who we meet'
+export const CONTOUR_PEOPLE = 'Contour people'
+export const COMPANY = 'Company'
+export const NOT_KNOWN = 'Not known'
+/** Where the meeting's date and time come from, when the server doesn't say. */
+export const HUBSPOT_MEETING = 'HubSpot meeting'
+export const TYPED_IN = 'Typed in'
+
+const fullDateParts = new Intl.DateTimeFormat('en-AU', {
+  timeZone: 'Australia/Melbourne',
+  weekday: 'short',
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+})
+
+/** "Fri 27 Nov 2026": the meeting's day in Melbourne, in full, for the form's Date field. */
+export function fullDate(at: string): string {
+  const parts = fullDateParts.formatToParts(new Date(at))
+  const part = (type: Intl.DateTimeFormatPartTypes): string =>
+    parts.find((item) => item.type === type)?.value ?? ''
+  return `${part('weekday')} ${part('day')} ${part('month')} ${part('year')}`
+}
 
 // --- The summaries ------------------------------------------------------------------------------
 
-export const SUMMARIES = 'Summaries'
+export const SUMMARIES_NOTE =
+  'Written by AI from the facts. Change any of them: your words stay through a redraft.'
 export const SUMMARY_TITLES = {
   what_they_do: 'What they do',
   what_we_know: 'What we know about the project',
@@ -49,14 +81,38 @@ export const SUMMARY_TITLES = {
 export const WRITTEN_BY_AI = 'Written by AI'
 export const EDITED_BY_YOU = 'Edited by you'
 export const WRITING = 'Writing the summaries.'
-/** A summary the AI found nothing for. */
-export const NOTHING_FROM_AI = 'Nothing in the facts for this yet. Write it with the pencil.'
-/** A summary the rep emptied. */
-export const LEFT_EMPTY = 'Left empty. Write it with the pencil.'
-export const SUMMARY_HINT = "Your words take the place of the AI's, and stay through a redraft."
+/** The box of a summary the AI found nothing for. */
+export const NOTHING_FROM_AI = 'Nothing in the facts for this yet. Write it here.'
+/** The box of a summary the rep emptied. */
+export const LEFT_EMPTY = 'Left empty. Write it here.'
 
 export const FAILED_TITLE = "The summaries weren't written"
 export const FAILED_FALLBACK = 'Something went wrong while writing them. Try again.'
+
+// --- While AI drafts it (PLAN-V18 T2-4) ---------------------------------------------------------
+
+/** The draft's steps, each filled when its real state arrives: the facts, the summaries, ready. */
+export const DRAFT_STEPS = [
+  'Reading HubSpot',
+  'Writing the summaries',
+  'Ready for you to check',
+] as const
+export const DRAFT_STEPS_LABEL = 'How the draft is going'
+export const DRAFTING_TITLE = 'AI is drafting this pre-read'
+export const DRAFTED_TITLE = 'AI drafted this pre-read'
+export const DRAFT_STOPPED = 'The draft stopped'
+export const CHECK_BEFORE_SENDING = 'You check it before anyone gets it.'
+
+/**
+ * Why a draft failed, in the server's plain words (PLAN-V18 "Words for when things go wrong"):
+ * "The summaries weren't written: today's AI spending limit is reached. Write them yourself, or
+ * draft again tomorrow." A sentence that doesn't say what wasn't written gets the title first.
+ */
+export function failedReason(error: string | null | undefined): string {
+  const reason = error?.trim() || FAILED_FALLBACK
+  if (reason.toLowerCase().startsWith(FAILED_TITLE.toLowerCase())) return sentence(reason)
+  return `${FAILED_TITLE}. ${sentence(reason)}`
+}
 export const TRY_AGAIN = 'Try again'
 export const REDRAFT = 'Redraft'
 export const EDITS_KEPT = 'Your edits are kept.'
@@ -103,6 +159,14 @@ export const GOING_PLACEHOLDER = 'Like: Jo Sample and Mia Sample.'
 export const SAVING = 'Saving.'
 export const SAVED = 'Saved.'
 export const NOT_SAVED = 'Not saved yet. Try again.'
+
+/**
+ * The status at the left of the form's footer (PLAN-V18 T2-5): "Draft ready", then when it was
+ * last saved on this visit, "Draft ready, saved 2:14 pm".
+ */
+export function formStatusWords(statusWord: string, savedAt: string | null): string {
+  return savedAt ? `${statusWord}, saved ${formatTime(savedAt)}` : statusWord
+}
 
 /** "Too long: 1,050 of 1,000 characters." */
 export function tooLongWords(count: number, most: number): string {
@@ -180,8 +244,11 @@ export const OVER_THE_MOST = `Send it to ${String(MOST_PEOPLE)} people or fewer.
 export const SEND = 'Send'
 export const SENDING = 'Sending.'
 export const CANCEL = 'Cancel'
-/** With no sender set up (409 `email_not_set_up`): nothing is lost. */
-export const STAYS_HERE = 'The pre-read stays here, so you can send it once email is set up.'
+/** With no sender set up (409 `email_not_set_up`): nothing is lost, and it can be copied. */
+export const STAYS_HERE = 'The pre-read stays here: copy it, or send it once email is set up.'
+export const COPY_PRE_READ = 'Copy the pre-read'
+export const COPIED = 'Copied. Paste it into an email to the team.'
+export const NOT_COPIED = "It couldn't be copied. Select the email above and copy it."
 
 /** "Remove mia@example.com" */
 export function removeWords(address: string): string {

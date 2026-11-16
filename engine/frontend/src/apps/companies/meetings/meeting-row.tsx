@@ -15,32 +15,79 @@
  * - **A cancelled meeting** says "Cancelled", dimmed with the quieter text colour, never lower
  *   opacity, so every line stays readable (as a card left out of a batch is). It keeps "Open"
  *   while it has a pre-read.
- * - **The team's list** says whose each meeting is: its owner, as our copy of HubSpot names them
- *   (`owner_name`, T3-11). Nothing shows when the server doesn't know.
+ * - **Whose it is** (PLAN-V18 T2-3): on All and My team, the rep's own meetings carry a small
+ *   "You" mark, and the others name their owner, as our copy of HubSpot names them (`owner_name`,
+ *   T3-11). Nothing shows when the server doesn't know. My meetings are all the rep's, so they say
+ *   nothing about it.
+ * - **A meeting that comes with a read of HubSpot** (Sync) fades and rises 4px once (`fresh`). No
+ *   other row ever moves.
  *
  * Each button's name ends with the meeting ("Draft it: Sample Logistics Pty Ltd, 10:00 am") for a
  * screen reader, which hears many such buttons in a list.
  */
 import { MapPin, UserRound, Video } from 'lucide-react'
+import { m } from 'motion/react'
+import type { ReactNode } from 'react'
+import type { MeetingListItem, MeetingWho } from '@/api/hooks/meetings'
 import type { MeetingItem } from '@/api/types'
+import { springs, useStill } from '@/components/motion'
 import { cn } from '@/lib/utils'
 import { RowAction, StatusLine } from './row-parts'
 import { rowStatus, type RowStatus } from './rows'
 import { useDraftIt } from './use-draft-it'
-import { whereWords, WHOSE } from './words'
+import { whereWords, WHOSE, YOU } from './words'
 
 export interface MeetingRowProps {
-  item: MeetingItem
+  item: MeetingListItem
   /** When it is, as its group writes it: "10:00 am", "Thu, 10:00 am", "Yesterday, 4:00 pm". */
   when: string
   past: boolean
-  /** The team's list: the row says whose meeting it is. */
-  team?: boolean
+  /** Whose meetings the list shows: on All and My team, the row says whose it is. */
+  who: MeetingWho
+  /** It came with a read of HubSpot just now: it fades in once. */
+  fresh?: boolean
   /** "Log meeting" on a past meeting. Left out: call notes are off, and there is none. */
   onLogMeeting?: (item: MeetingItem) => void
 }
 
-export function MeetingRow({ item, when, past, team = false, onLogMeeting }: MeetingRowProps) {
+/** Whose meeting it is, for All and My team: "You", its owner's name, or nothing when not known. */
+function whoseWords(item: MeetingListItem, who: MeetingWho): string | null {
+  if (who === 'mine') return null
+  if (item.mine) return YOU
+  return item.owner_name?.trim() || null
+}
+
+interface RowShellProps {
+  'data-slot': string
+  'data-status': RowStatus
+  className: string
+  children: ReactNode
+}
+
+/** The row itself: a plain list item, or one that fades and rises once as it comes. */
+function RowShell({ fresh, ...props }: { fresh: boolean } & RowShellProps) {
+  const still = useStill()
+  if (fresh && !still) {
+    return (
+      <m.li
+        {...props}
+        initial={{ opacity: 0, y: 4 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={springs.smooth}
+      />
+    )
+  }
+  return <li {...props} />
+}
+
+export function MeetingRow({
+  item,
+  when,
+  past,
+  who,
+  fresh = false,
+  onLogMeeting,
+}: MeetingRowProps) {
   const draftIt = useDraftIt(item)
   const { meeting } = item
   // "Draft it" shows its result at once: the row says Drafting while the server answers.
@@ -49,10 +96,11 @@ export function MeetingRow({ item, when, past, team = false, onLogMeeting }: Mee
   // Teams, Zoom, Google Meet or In person; nothing when it isn't known.
   const where = whereWords(meeting)
   const WhereIcon = meeting.where === 'online' ? Video : MapPin
-  const owner = team ? item.owner_name?.trim() || null : null
+  const owner = whoseWords(item, who)
 
   return (
-    <li
+    <RowShell
+      fresh={fresh}
       data-slot="meeting-row"
       data-status={status}
       className="flex flex-col gap-2 px-4 py-3 sm:grid sm:grid-cols-[10rem_minmax(0,1fr)_auto] sm:items-center sm:gap-4"
@@ -93,7 +141,11 @@ export function MeetingRow({ item, when, past, team = false, onLogMeeting }: Mee
               </span>
             ) : null}
             {owner ? (
-              <span data-slot="meeting-owner" className="flex min-w-0 items-center gap-1.5">
+              <span
+                data-slot="meeting-owner"
+                data-you={owner === YOU && item.mine ? true : undefined}
+                className="flex min-w-0 items-center gap-1.5"
+              >
                 <UserRound aria-hidden="true" className="size-3.5 shrink-0" />
                 <span className="sr-only">{WHOSE} </span>
                 <span className="break-words">{owner}</span>
@@ -113,6 +165,6 @@ export function MeetingRow({ item, when, past, team = false, onLogMeeting }: Mee
           onLogMeeting={onLogMeeting}
         />
       </div>
-    </li>
+    </RowShell>
   )
 }

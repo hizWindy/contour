@@ -1,9 +1,15 @@
 /**
- * Meetings' rules without a screen (PLAN-V17 T3-9): the day groups, one status a row, how each row
- * writes its time, and the address. Made-up names only.
+ * Meetings' rules without a screen (PLAN-V17 T3-9, PLAN-V18 T2-3): the day groups, one status a
+ * row, how each row writes its time, when the list asks again, and the address. Made-up names only.
  */
 import { describe, expect, it } from 'vitest'
-import { DRAFTING_POLL_MS, meetingsPollMs } from '@/api/hooks/meetings'
+import {
+  DRAFTING_POLL_MS,
+  listPollMs,
+  meetingsPollMs,
+  SYNC_POLL_MS,
+  type MeetingListPage,
+} from '@/api/hooks/meetings'
 import type { Meeting, MeetingItem } from '@/api/types'
 import { meetingsHref, meetingsQuery, preReadHref, readMeetings, writeMeetings } from './params'
 import { groupUpcoming, isCancelled, rowKey, rowStatus } from './rows'
@@ -125,6 +131,34 @@ describe('one status a row', () => {
     expect(meetingsPollMs([item({ form: { id: 'f1', status: 'draft' } })])).toBe(false)
     expect(meetingsPollMs(undefined)).toBe(false)
   })
+
+  it('asks again every 2 seconds while HubSpot is read (Sync), and stops once it is done', () => {
+    const page = (syncing: boolean, items: MeetingItem[] = []): MeetingListPage => ({
+      items: items.map((one) => ({ ...one, mine: true })),
+      total: items.length,
+      meetings_state: 'ready',
+      sentence: null,
+      who: 'all',
+      linked: true,
+      team_state: 'ready',
+      team_names: [],
+      checked_at: null,
+      syncing,
+      sync_problem: null,
+    })
+    expect(SYNC_POLL_MS).toBe(2000)
+    expect(listPollMs(page(true))).toBe(SYNC_POLL_MS)
+    // Reading wins over a draft on its way: the quicker of the two.
+    expect(listPollMs(page(true, [item({ form: { id: 'f1', status: 'drafting' } })]))).toBe(
+      SYNC_POLL_MS,
+    )
+    // Done: only a draft on its way keeps it asking, and nothing else does.
+    expect(listPollMs(page(false, [item({ form: { id: 'f1', status: 'drafting' } })]))).toBe(
+      DRAFTING_POLL_MS,
+    )
+    expect(listPollMs(page(false))).toBe(false)
+    expect(listPollMs(undefined)).toBe(false)
+  })
 })
 
 describe('when a meeting is, in words', () => {
@@ -161,19 +195,23 @@ describe('when a meeting is, in words', () => {
 })
 
 describe("Meetings' address", () => {
-  it("reads Upcoming, the rep's own, unsearched, by default", () => {
+  it("reads Upcoming, everyone's, unsearched, by default", () => {
     expect(readMeetings(new URLSearchParams())).toEqual({
       when: 'upcoming',
-      team: false,
+      who: 'all',
       q: '',
       page: 0,
     })
-    expect(readMeetings(new URLSearchParams('when=past&team=1&q=vitera&page=3'))).toEqual({
+    expect(readMeetings(new URLSearchParams('when=past&who=team&q=vitera&page=3'))).toEqual({
       when: 'past',
-      team: true,
+      who: 'team',
       q: 'vitera',
       page: 2,
     })
+    expect(readMeetings(new URLSearchParams('who=mine')).who).toBe('mine')
+    // Anything else is All, and so is an old link to the team's meetings (PLAN-V17's switch).
+    expect(readMeetings(new URLSearchParams('who=everyone')).who).toBe('all')
+    expect(readMeetings(new URLSearchParams('team=1')).who).toBe('all')
     // Upcoming is one page.
     expect(readMeetings(new URLSearchParams('page=3')).page).toBe(0)
   })
@@ -186,22 +224,28 @@ describe("Meetings' address", () => {
     expect(writeMeetings(second, { q: 'vitera 26 nov' }).toString()).toBe(
       'when=past&q=vitera+26+nov',
     )
-    expect(writeMeetings(second, { team: true }).toString()).toBe('when=past&team=1')
+    expect(writeMeetings(second, { who: 'mine' }).toString()).toBe('when=past&who=mine')
+    expect(writeMeetings(new URLSearchParams('who=team'), { who: 'all' }).toString()).toBe('')
     expect(writeMeetings(new URLSearchParams('q=x'), { q: '' }).toString()).toBe('')
+    // An old link's team=1 goes with the next change.
+    expect(writeMeetings(new URLSearchParams('team=1'), { when: 'past' }).toString()).toBe(
+      'when=past',
+    )
     expect(meetingsHref()).toBe('/companies/meetings')
     expect(meetingsHref({ when: 'past' })).toBe('/companies/meetings?when=past')
+    expect(meetingsHref({ who: 'team' })).toBe('/companies/meetings?who=team')
   })
 
   it('asks the server with every value, and q only when there are words', () => {
     expect(meetingsQuery(readMeetings(new URLSearchParams()))).toEqual({
       when: 'upcoming',
-      mine: true,
+      who: 'all',
       limit: 100,
       offset: 0,
     })
     expect(
-      meetingsQuery(readMeetings(new URLSearchParams('when=past&team=1&page=2&q=+x+'))),
-    ).toEqual({ when: 'past', mine: false, limit: 25, offset: 25, q: 'x' })
+      meetingsQuery(readMeetings(new URLSearchParams('when=past&who=mine&page=2&q=+x+'))),
+    ).toEqual({ when: 'past', who: 'mine', limit: 25, offset: 25, q: 'x' })
   })
 
   it('links each pre-read to its own page', () => {

@@ -3,11 +3,18 @@
  * setting or file name (the screen-words test reads them). The wording is Al-khair's to change.
  */
 import { toApiProblem } from '@/api/client'
+import type { MeetingWho } from '@/api/hooks/meetings'
 import type { Meeting, MeetingWhen, MeetingWhere } from '@/api/types'
 import { addDays } from '@/lib/due-date'
 import { formatNumber, formatTime, melbourneDate } from '@/lib/format'
-import { changeDetail } from '@/lib/problems'
+import { changeDetail, problemHint } from '@/lib/problems'
 import type { DayGroup, RowStatus } from './rows'
+
+/** Ends a sentence that has no stop yet. */
+function sentence(text: string): string {
+  const trimmed = text.trim()
+  return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`
+}
 
 export const MEETINGS_TITLE = 'Client meetings'
 export const MEETINGS_DESCRIPTION =
@@ -16,7 +23,13 @@ export const MEETINGS_DESCRIPTION =
 export const UPCOMING = 'Upcoming'
 export const PAST = 'Past'
 export const WHEN_LABEL = 'Upcoming or past meetings'
-export const TEAM_SWITCH = "The team's meetings"
+export const WHO_LABEL = 'Whose meetings'
+/** The three filters (PLAN-V18 T2-3). All is the default. */
+export const WHO_WORDS: Readonly<Record<MeetingWho, string>> = {
+  all: 'All',
+  mine: 'My meetings',
+  team: 'My team',
+}
 export const SEARCH_LABEL = 'Find a meeting by company, title or date'
 export const SEARCH_PLACEHOLDER = 'Find a meeting'
 
@@ -68,11 +81,54 @@ export const STATUS_WORDS: Readonly<Record<RowStatus, string>> = {
 }
 
 export const DRAFT_IT = 'Draft it'
+/** "Draft it"'s description, for the pointer and for screen readers (PLAN-V18 T2-4). */
+export const DRAFT_IT_NOTE = "AI drafts it. You check it before it's sent."
 export const CHECK_AND_SEND = 'Check and send'
 export const OPEN = 'Open'
 export const LOG_MEETING = 'Log meeting'
 /** Before the owner's name on the team's list, for a screen reader: whose meeting it is. */
 export const WHOSE = 'Whose meeting:'
+/** The small mark on the rep's own meetings, on All and My team. */
+export const YOU = 'You'
+
+// --- Sync (PLAN-V18 T2-3) -------------------------------------------------------------------
+
+export const SYNC = 'Sync'
+export const SYNC_NOTE = "Reads HubSpot's meetings now."
+export const CHECKING_HUBSPOT = 'Checking HubSpot'
+export const UP_TO_DATE = 'Up to date'
+/** A press while a read is running already. The seconds are TBC: T1-5 measures them. */
+export const ALREADY_CHECKING = 'Already checking HubSpot. It takes about 10 seconds.'
+/** A press within a minute of the last read: HubSpot isn't asked again. */
+export const CHECKED_A_MOMENT_AGO = 'Up to date. Checked a moment ago.'
+
+/**
+ * The quiet line under the toolbar, from when HubSpot's meetings were last read: "Checked 2:14 pm",
+ * "Checked yesterday, 4:00 pm" or "Checked Thu 12 Nov, 9:00 am", in Melbourne time.
+ */
+export function checkedWords(at: string, today: string): string {
+  const day = melbourneDate(at)
+  const time = formatTime(at)
+  if (day === today) return `Checked ${time}`
+  if (day === addDays(today, -1)) return `Checked yesterday, ${time}`
+  return `Checked ${dayText(day, today)}, ${time}`
+}
+
+/**
+ * Why a press of Sync didn't go, for the line under the toolbar: what happened, then what to do
+ * (the server's words, then the hint for its code). A detail that already starts with the title
+ * says it alone, so nothing is said twice.
+ */
+export function syncNotSentWords(error: unknown): string {
+  const problem = toApiProblem(error)
+  const title = problem.title.trim()
+  const detail = changeDetail(problem)?.trim() ?? ''
+  const hint = problemHint(problem)
+  if (detail !== '' && detail.toLowerCase().startsWith(title.toLowerCase())) {
+    return [sentence(detail), hint].filter(Boolean).join(' ')
+  }
+  return [title ? sentence(title) : null, detail || null, hint].filter(Boolean).join(' ')
+}
 
 // --- The states -----------------------------------------------------------------------------
 
@@ -87,36 +143,58 @@ interface Empty {
   description: string
 }
 
+/** Whose meetings an empty list would have held, for its words. */
+const WHOSE_MEETINGS: Readonly<Record<MeetingWho, string>> = {
+  all: 'Client meetings',
+  mine: 'Your client meetings',
+  team: "Your team's client meetings",
+}
+
 /** The serif voice of an empty list: what it is, and what puts something there. */
-export function emptyWords(when: MeetingWhen, team: boolean): Empty {
+export function emptyWords(when: MeetingWhen, who: MeetingWho): Empty {
   if (when === 'past') {
     return {
       title: 'No past meetings yet.',
-      description: team
-        ? "The team's client meetings show here once they are over."
-        : 'Your client meetings show here once they are over.',
+      description: `${WHOSE_MEETINGS[who]} show here once they are over.`,
     }
   }
   return {
     title: 'No meetings this week.',
-    description: team
-      ? "The team's client meetings from HubSpot show here."
-      : "Your client meetings from HubSpot show here. For one that isn't in HubSpot, start a new pre-read.",
+    description:
+      who === 'team'
+        ? `${WHOSE_MEETINGS.team} from HubSpot show here.`
+        : `${WHOSE_MEETINGS[who]} from HubSpot show here. For one that isn't in HubSpot, start a new pre-read.`,
   }
 }
+
+/**
+ * My meetings or My team while it can't be filled (PLAN-V18 "Words for when things go wrong"): the
+ * rep's account has no HubSpot owner, the rep is in no HubSpot team, or HubSpot has no teams. The
+ * server's own sentence takes the place of the description when it sends one.
+ */
+export const NOT_LINKED_MINE: Empty = {
+  title: 'No meetings of your own to show yet.',
+  description:
+    "Your account isn't linked to a HubSpot owner yet, so My meetings is empty. All shows everyone's. An admin can link you in Admin, People.",
+}
+export const NOT_LINKED_TEAM: Empty = {
+  title: 'No team meetings to show yet.',
+  description:
+    "Your account isn't linked to a HubSpot owner yet, so My team is empty. All shows everyone's. An admin can link you in Admin, People.",
+}
+export const NO_TEAM: Empty = {
+  title: 'No team meetings to show yet.',
+  description: "You aren't in a HubSpot team yet, so My team is empty. All shows everyone's.",
+}
+export const NO_TEAMS_IN_HUBSPOT: Empty = {
+  title: 'No team meetings to show.',
+  description: "HubSpot has no teams set up, so My team is empty. All shows everyone's.",
+}
+export const SHOW_ALL = 'Show all meetings'
 
 /** An empty list while meetings can't come from HubSpot yet (waiting, or not connected). */
 export const EMPTY_WAITING: Empty = {
   title: 'No meetings from HubSpot yet.',
-  description: 'For a meeting coming up, start a new pre-read.',
-}
-
-/**
- * An empty list of the rep's own while their own can't be picked out (their account has no
- * HubSpot owner yet). The line above it says to show the team's.
- */
-export const EMPTY_NOT_YOURS: Empty = {
-  title: 'No meetings of your own to show yet.',
   description: 'For a meeting coming up, start a new pre-read.',
 }
 
@@ -149,8 +227,15 @@ export function firstOfWords(shown: number, total: number): string {
 // --- New pre-read ---------------------------------------------------------------------------
 
 export const NEW_PRE_READ = 'New pre-read'
-export const NEW_DESCRIPTION =
-  "For a meeting that isn't in HubSpot. It is drafted from what we know about the company."
+export const NEW_DESCRIPTION = "For a meeting that isn't in HubSpot."
+/**
+ * Who drafts it, from what, how long it takes, and that the rep checks it first (PLAN-V18 T2-4).
+ * The seconds are TBC: the real draft in T2-8 measures them.
+ */
+export const AI_DRAFTS_NOTE =
+  'AI drafts this pre-read from what we know in HubSpot: the company, its people, calls, meetings and notes. It takes about 20 seconds. You check it before anyone gets it.'
+/** What one draft costs, by the plan's estimate (PLAN-V17 "What it costs"). */
+export const AI_DRAFT_COST = 'About US$0.03.'
 export const COMPANY = 'Company'
 export const PICK_COMPANY = 'Pick a company'
 export const WHICH_MEETING_COMPANY = 'Which company is the meeting with?'
@@ -227,7 +312,7 @@ export function meetingDay(at: string, today: string): string {
 export const TRANSCRIPT = 'Transcript'
 export const TRANSCRIPT_PLACEHOLDER = 'Paste the transcript here.'
 export const LOG_MEETING_NOTE =
-  'Paste the transcript, or read a .txt or .vtt file. It joins your calls to confirm on Activity, and nothing goes to HubSpot until you send it.'
+  'Paste the transcript, or read a .txt or .vtt file. It joins your calls to confirm in Call logs, and nothing goes to HubSpot until you send it.'
 export const READ_A_FILE = 'Read a file'
 export const VTT_HINT = 'The times and cue numbers are taken out when it is saved.'
 export const SAVE_NOTES = 'Save notes'
@@ -259,12 +344,6 @@ export function charactersWords(length: number, max: number): string {
 /** "Too long: 61,200 of 60,000 characters. Shorten it, or split it into two." */
 export function transcriptTooLongWords(length: number, max: number): string {
   return `Too long: ${charactersWords(length, max)}. Shorten it, or split it into two.`
-}
-
-/** Ends a sentence that has no stop yet. */
-function sentence(text: string): string {
-  const trimmed = text.trim()
-  return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`
 }
 
 /**

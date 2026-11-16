@@ -221,9 +221,9 @@ describe("Home's Upcoming meetings", () => {
       'href',
       '/companies/meetings',
     )
-    // The list Meetings shows first, so opening Meetings from here shows it at once.
+    // The rep's own: My meetings on Meetings (PLAN-V18 T2-3), as the card's sentence counts.
     expect(meetingRequests(requests)).toContain(
-      `GET ${MEETINGS}?when=upcoming&mine=true&limit=100&offset=0`,
+      `GET ${MEETINGS}?when=upcoming&who=mine&limit=100&offset=0`,
     )
   })
 
@@ -408,12 +408,12 @@ describe("a company's record", () => {
     expect(coming.getByText('Needs pre-read')).toBeInTheDocument()
     expect(
       coming.getByRole('link', { name: 'Open Meetings: Site visit, Tue 24 Nov, 3:00 pm' }),
-    ).toHaveAttribute('href', '/companies/meetings?team=1&q=Sample+Logistics+Pty+Ltd')
+    ).toHaveAttribute('href', '/companies/meetings?q=Sample+Logistics+Pty+Ltd')
     // A past one says whether its notes are logged, and opens Meetings' Past.
     expect(past.getByText('No notes yet')).toBeInTheDocument()
     expect(past.getByRole('link', { name: /^Open Meetings: Lease review/ })).toHaveAttribute(
       'href',
-      '/companies/meetings?when=past&team=1&q=Sample+Logistics+Pty+Ltd',
+      '/companies/meetings?when=past&q=Sample+Logistics+Pty+Ltd',
     )
   })
 

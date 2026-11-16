@@ -6,7 +6,7 @@ This plan makes the Companies module clearer and nicer to use, from Al-khair's l
 
 - **Built by:** Al-khair Pama. **Signed off by:** Al-khair for the code and every screen. Levi confirms the rules marked **TBC with Levi**.
 - **Last updated:** 16 Nov 2026 (S0 done: `plan-v18` made from `master`; the tracks are starting).
-- **Progress:** S0: 1 of 1. Track 1: 9 of 9. Track 2: 0 of 8. Track 3: 0 of 9. Merge and deploy: 0 of 3.
+- **Progress:** S0: 1 of 1. Track 1: 9 of 9. Track 2: 4 of 8. Track 3: 0 of 9. Merge and deploy: 0 of 3.
 - **Sources:**
   - Al-khair's list of changes (16 Nov, in chat), and the chat about Meetings the same day: the empty Meetings page, the team switch, and the Sync idea;
   - the code on `master` (`c4ebe58`), read on 16 Nov;
@@ -467,17 +467,17 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
 
 ## Track 2: Meetings, the pre-read and the Companies list (session 2)
 
-**Progress:** 0 of 8. Every step is `frontend-agent` work. It follows `engine/DESIGN.md` and "How it should look and move", uses the `ui-build` skill, and builds against the contract with `mockApi`.
+**Progress:** 4 of 8 (T2-3 to T2-6 are built and wait for a look). Every step is `frontend-agent` work. It follows `engine/DESIGN.md` and "How it should look and move", uses the `ui-build` skill, and builds against the contract with `mockApi`.
 
-- [ ] **T2-1. Own copy and a baseline.** Make the worktree. Run lint, types, the tests and the build once. Note the counts and the first visit size from `node scripts/bundle-report.js`.
+- [x] **T2-1. Own copy and a baseline.** Make the worktree. Run lint, types, the tests and the build once. Note the counts and the first visit size from `node scripts/bundle-report.js`. Done 2026-11-16 on `40d9912`: the numbers are in the Track 2 Log.
 
-- [ ] **T2-2. Two motion parts** (in their own files, each with its own test file).
+- [x] **T2-2. Two motion parts** (in their own files, each with its own test file). Done 2026-11-16 (`587a837`).
   - `SpinOnce`: an icon turns once for each press. A second press while it turns carries on smoothly.
   - `StepTrail`: three steps in a row. Each dot fills when the page says its state has arrived.
   - Each follows reduced motion (`useStill`) and uses the kit's springs.
   - **Done when:** their tests pass, the design-lint test passes (nothing loops), and the late motion file's size is in the Log.
 
-- [ ] **T2-3. Meetings: All, My meetings, My team, and Sync.**
+- [ ] **T2-3. Meetings: All, My meetings, My team, and Sync.** Built 2026-11-16 (`07f7547`), waiting for a look.
   - A `Segmented` control in place of the switch: "All", "My meetings", "My team". All is the default.
   - The address: `who=mine` or `who=team`. All is left out. An old link with `team=1` opens All.
   - "My team" is hidden when `team_state` is `none_in_hubspot`. Both filters are hidden while sign in is switched off. Otherwise each shows, and its empty state says why it is empty.
@@ -488,13 +488,13 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
   - In `meetings/words.ts`, "on Activity" becomes "in Call logs".
   - **Done when:** tests cover each filter, the default, old links, the hidden filters, Sync's three answers, a failed Sync, and the asking that stops. Al-khair has seen it.
 
-- [ ] **T2-4. People see that AI drafts the pre-read.**
+- [ ] **T2-4. People see that AI drafts the pre-read.** Built 2026-11-16 (`7239682`), waiting for a look.
   - **The New pre-read dialog** gets one line with an AI icon, above its buttons: "AI drafts this pre-read from what we know in HubSpot: the company, its people, calls, meetings and notes. It takes about 20 seconds. You check it before anyone gets it." Then the cost in quiet text: "About US$0.03." (**TBC**: the seconds, measured once by the real draft in T2-8.)
   - **"Draft it"** on each row says the same in short, as its description for the pointer and for screen readers: "AI drafts it. You check it before it's sent."
   - **While it drafts,** the `StepTrail` shows "Reading HubSpot", "Writing the summaries" and "Ready for you to check". Each step fills on its real trigger: the facts arrive, then the summaries are being written, then the status is "draft". A failed draft stops the trail at its step, with the reason in plain words.
   - **Done when:** tests cover the words, each step's real trigger, and a failure. Al-khair has seen it.
 
-- [ ] **T2-5. The pre-read as a centered form.**
+- [ ] **T2-5. The pre-read as a centered form.** Built 2026-11-16 (`36ea3d4`), waiting for a look and the screenshots.
   - **Centered:** `mx-auto`, about 840px wide (**TBC** after the look). One card on the page's background, like a sheet of paper.
   - **HubSpot's form pattern, in Contour's look:**
     - a label above each field;
@@ -508,18 +508,18 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
   - **Keyboard:** Tab goes from top to bottom. Ctrl+Enter opens "Check and send".
   - **Done when:** tests cover the sections, a summary edited in place, the required blanks, the footer, and the phone layout. Screenshots at 1440, 1280 and 390px, light and dark. Al-khair has seen it.
 
-- [ ] **T2-6. Companies: the newest activity first.**
+- [ ] **T2-6. Companies: the newest activity first.** Built 2026-11-16 (`8faf704`), waiting for a look.
   - The default sort is `last_activity`, newest first. The "Last activity" column shows `last_activity`, and its header shows the sort arrow.
   - Old links with `sort=name` still work. Home's prefetch asks the same request as the page.
   - Phone cards say "Last activity" and follow the same order.
   - **Done when:** tests cover the default, the column, old links and the phone cards. Al-khair has seen it.
 
-- [ ] **T2-7. Errors on Meetings and the pre-read.**
+- [x] **T2-7. Errors on Meetings and the pre-read.** Done 2026-11-16 (`c603834`).
   - Every row of its table in "Words for when things go wrong", with its button.
   - `problemHint` (`lib/problems.ts`) gains hints for the meetings codes.
   - **Done when:** a test shows every row, and `screen-words.test.ts` passes.
 
-- [ ] **T2-8. Track 2 check.**
+- [x] **T2-8. Track 2 check.** Done 2026-11-16 (`4e564e6`), with four checks left to the lead session at M1 (see the Log).
   - Lint, types, the tests, the build and `node scripts/bundle-report.js`. The first visit may grow by 1 kB at most over T2-1.
   - The `design-review` skill on each changed screen, and `speed-check` on Meetings.
   - Each screen at 1440, 1280 and 390px, light and dark, by keyboard only, and with reduced motion.
@@ -532,7 +532,23 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
 
 ### Track 2 Log
 
-- (empty)
+- 16 Nov 2026, T2-1: the worktree `../contour-v18-t2` on `plan-v18-track2`, from `40d9912`. Baseline: lint and types pass; 116 test files and 1,640 tests pass (326 s on one worker); the build passes. First visit: 232 kB gzip (722 kB raw) in 35 files, CSS 23 kB gzip, main file 212 kB raw. The late motion file (`components/motion/features`): 14 kB gzip of its own, 33 kB with what it loads. Pages, extra over the first visit: Meetings 37 kB (7.9 kB its own), the pre-read 34 kB (9.6 kB), Companies 97 kB (8.8 kB).
+- 16 Nov 2026, T2-2 (`587a837`): `SpinOnce` (`motion/spin-once.tsx`) and `StepTrail` (`motion/step-trail.tsx`), each with its own test file (14 tests), exported from the motion kit's index in a block of their own. Both use only `m.*` and the kit's springs, so the late motion file stays as it was: 14 kB gzip of its own, 33 kB with what it loads; the first visit stays 232 kB. The design-lint and screen-words tests pass. The dots are SVG circles, since the `rounded-full` class is banned.
+- 16 Nov 2026, T2-3 (`07f7547`), built and waiting for a look. A `Segmented` choice (All, My meetings, My team) takes the place of the switch; the address keeps `who=mine` or `who=team`, and `team=1` opens All. "My team" hides for `none_in_hubspot` (unless the address asks for it), and the choice hides while sign-in is off (`useMe` says `off`), when the list asks for All. On All and My team the rep's own rows say "You". My meetings and My team say why they are empty (not linked, no team, no teams in HubSpot), in the server's sentence when it sends one, with "Show all meetings". Sync (`meetings/sync.tsx`, `use-sync.ts`) sits at the toolbar's end; the line under the toolbar says "Checked 8:14 am" once the time is known and keeps its height before. Meetings that come with a read fade in once (50 rows or fewer). Three choices for Al-khair's look: (1) a new view fades in over 250ms and the old one goes at once, with no 150ms exit, because an exit that waits on Motion left the list stuck in tests and would on a failed load (the company dialog does the same); (2) Home's "Upcoming meetings" card keeps the rep's own meetings (`who=mine`), since its sentence counts the rep's own; (3) Sync is greyed while HubSpot isn't connected (`meetings_state` is `off`). Hand written until M1, in `api/hooks/meetings.ts`: `MeetingWho`, `MeetingListQuery`, `MeetingListItem`, `TeamState`, `MeetingListPage`, `MeetingsSyncOut`, and `untypedApi` for `POST /meetings/sync`. 142 Meetings tests pass.
+- 16 Nov 2026, T2-4 (`7239682`), built and waiting for a look. New pre-read's line sits above its buttons, with the `Cpu` icon the summaries' "Written by AI" mark uses (no sparkle), and its description is now only "For a meeting that isn't in HubSpot.", so the drafting is said once. "Draft it" has its words as a tooltip and as its screen reader description. The steps (`pre-read/draft-progress.tsx`, `draftReached` in `rules.ts`) sit under the pre-read's header: no facts is step 1, facts is step 2, `draft` or `sent` is all three. They stay full once ready on that visit, and a pre-read that opens ready shows none. A failed draft's reason and Try again moved from the summaries into the steps, and the three summaries now stay, empty, so the rep can write them. For Track 1: after a failed draft, does a PATCH that fills the summaries make the form `draft`? If not, "Write them yourself" can't lead to a send (the send needs a written pre-read). The "about 20 seconds" stays TBC until a real draft (skipped tonight, see T2-8).
+- 16 Nov 2026, T2-5 (`36ea3d4`), built and waiting for a look. One card, `max-w-[52.5rem]` (840px, TBC), `mx-auto`, with Back and the header in the same column. Sections (`pre-read/form-section.tsx`): 1 The meeting (Date, Time, Teams or in person from the form's own copy, so they show at once; then Who we meet and Contour people), 2 The company (the company as a link, then the server's facts in its order; any new fact label goes here), 3 The summaries (boxes typed into, saved when left, `use-blank.ts` and `SaveNote` for "Saving." and "Saved."), 4 Your part (two blanks with a star and `aria-required`). The footer (`FormFooter`) is sticky at the form's bottom, fixed on a phone, and is gone while the pre-read is sent and unchanged, as the bar was. The draft's steps sit at the top of the card. The send dialog's "Add someone" label now has the form's label style. 70 pre-read tests pass. Two points for the look: the footer's status repeats the header's status word (the plan asks for it in the footer; the header's stays for its tick when sent), and the facts' "When" is split into Date and Time on the website. The screenshots at 1440, 1280 and 390px, light and dark, wait for the lead session's browser check after M1.
+- 16 Nov 2026, T2-6 (`8faf704`), built and waiting for a look. `last_activity` is the default sort (`DEFAULT_SORT`, first order `desc`), so a plain list has a plain address and `sort=name` is now written when chosen. The "Last activity" column has the id `last_activity` and shows `last_activity` through a new `LastActivity` mark (Ochre after 6 months with no activity, "None on record" when there is none); `sort=last_talk` still works, but no column shows its arrow. Phone cards say "Last activity". Home's card asks with `HOME_COMPANIES`, the same `listQuery` as the page. Hand written until M1, in `apps/companies/params.ts`: `lastActivityOf(row)` and the cast of `sort` in `listQuery`. 6 tests in `list-sort.test.tsx`; the Companies and Home tests pass.
+- 16 Nov 2026, T2-7 (`c603834`): every row of "Meetings and the pre-read" shows with its button, and a describe in `meetings.test.tsx` (8 tests), `pre-read.test.tsx` (the two draft failures) and `send.test.tsx` (email not set up) walks through them. Where each shows: not read yet and no permission in the waiting line, with New pre-read; Sync's failure, running and "a moment ago" in the line under the toolbar, with Sync; not linked and no team as the empty state of My meetings and My team, with "Show all meetings"; the draft's failures in the draft's steps, with Try again; email not set up in the send dialog, with a new "Copy the pre-read" (it copies the email's subject and plain text); no connection as the quiet line that points at the connection bar. `problemHint` gains four hints, only where the server's words have no next step: `hubspot_not_connected`, `meeting_not_found`, `form_not_found` and `email_not_set_up`. For M1: `lib/problems.ts` isn't in the table of owners, and Track 3's T3-8 adds its hints there too; Track 2's are a block of their own at the top of `HINTS`. The words for a press while Sync runs, and for "a moment ago", are the website's own (`MeetingsSyncOut` has no sentence); the rest come from Track 1. The screen-words test passes.
+- 16 Nov 2026, T2-8 (`4e564e6`). Lint, types and Prettier pass; 119 test files and 1,698 tests pass (335 s on one worker; T2-1 had 116 and 1,640); the build passes. First visit: 232 kB gzip (723 kB raw) in 35 files, CSS 23 kB: no growth in gzip over T2-1 (the raw main file is 1 kB bigger, from the four hints in `lib/problems.ts`). The late motion file stays 14 kB of its own, 33 kB with what it loads.
+  - `speed-check` on Meetings: the page is 39 kB over the first visit (37 at T2-1; its own file 9.5 kB, was 7.9), the pre-read 36 kB (34; 11 kB, was 9.6), Companies 98 kB (97), Home's meetings card 19 kB (17). No new library. Searches still wait 250ms; the list asks every 2 seconds only while HubSpot is being read, and stops after. Lighthouse not run: it needs a browser.
+  - `design-review` on Meetings, New pre-read, the pre-read and Companies: the design-lint, contrast, screen-words, icons and fonts tests pass (263 tests). Fixed in `4e564e6`: two gaps of 20px in the pre-read are now 24px (DESIGN.md "Spacing"), and the footer's status has its icon (DESIGN.md "Every status has an icon and a word"). Ideas for Al-khair's look (TBC): (1) the footer's status repeats the header's word, as the plan asks (principles 03 #2, "Say it once"); (2) "My team" shows until the first list says HubSpot has no teams, then goes: one small shift on a first visit, only if Contour has no teams; (3) a new list fades in with no 150ms fade out of the old one (T2-3); (4) `Segmented` is 40px tall on touch (`touch:min-h-10` in the kit), under the plan's 44px: a change to the kit, which isn't Track 2's file; (5) `new-pre-read.tsx` and `log-meeting.tsx` keep PLAN-V17's 20px gaps (`gap-5`, `p-5`), not changed here.
+  - Keyboard and reduced motion are proven by tests (the choices' arrows, Tab saves a field, Ctrl+Enter, Sync, the steps, the form's sections, the new rows), not by hand.
+  - **Skipped tonight, on the lead's overnight rules:** each screen in a browser at 1440, 1280 and 390px, light and dark (the lead checks them after M1); the 4x CPU trace in Chrome (the lead, after M1); the one real pre-read draft, about US$0.03, which waits for Al-khair's word (so "about 20 seconds" stays TBC); and a fresh `review-agent` (the lead runs it at M1). No message to the other sessions: the lead carries this Log.
+  - **DESIGN.md lines for Track 3** (T3-9, after Al-khair's look), for "Motion":
+    - **An icon that turns once** (`SpinOnce`): a refresh icon turns one full turn for each press, on `smooth` (400ms, no bounce), as on Meetings' Sync. A second press while it turns carries on from where it is and ends one turn further. It never loops, and the words beside it say what is going on ("Checking HubSpot"). With reduced motion it stays still. (PLAN-V18 T2-2, T2-3)
+    - **Steps that fill as they arrive** (`StepTrail`): a few steps in a row, like the pre-read's "Reading HubSpot", "Writing the summaries" and "Ready for you to check". A dot fills only when the server says its state has arrived, never on a timer: it grows from its centre on `soft`, and the line to it fills along on `snappy`, both as a scale. The fill is the accent, as progress is. A failure stops the trail at its step, with a Terracotta cross and the reason beside it. With reduced motion the dots are simply filled. (PLAN-V18 T2-2, T2-4)
+  - **For M1:** replace the hand written types in `api/hooks/meetings.ts` (`MeetingWho`, `MeetingListQuery`, `MeetingListItem`, `TeamState`, `MeetingListPage`, `MeetingsSyncOut`, `untypedApi`) and `apps/companies/params.ts` (`lastActivityOf`, the cast of `sort` in `listQuery`) with the generated ones. The shared files: `components/motion/index.ts` gains one block at its end; `lib/problems.ts` one block at the top of `HINTS`; `src/test/mock-api.ts` is untouched.
+  - Track 2 ready to merge.
 
 ## Track 3: Call logs, the mic, the history and call prep (session 3)
 

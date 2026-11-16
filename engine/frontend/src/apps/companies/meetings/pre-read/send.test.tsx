@@ -465,16 +465,23 @@ describe('Check and send', () => {
     expect(screen.queryByText(/^Sent to/)).toBeNull()
   })
 
-  it('with no email set up: says the email can not go yet, and the pre-read stays here', async () => {
+  it('with no email set up: says nothing was sent, the pre-read stays here, and Copy copies it', async () => {
     mockServer({ send: 'not_set_up' })
     const { user } = renderPreRead()
     const dialog = await openDialog(user)
     await user.click(within(dialog).getByRole('button', { name: 'Send to 1 person' }))
     expect(await within(dialog).findByRole('alert')).toHaveTextContent(
-      "Email isn't set up. Nothing was sent. An admin needs to set up email first. The pre-read stays here, so you can send it once email is set up.",
+      "Email isn't set up. Nothing was sent. An admin needs to set up email first. The pre-read stays here: copy it, or send it once email is set up.",
     )
     expect(screen.getByRole('alertdialog')).toBeInTheDocument()
     expect(within(status()).getByText('Draft ready')).toBeInTheDocument()
+    // PLAN-V18 T2-7: the email as it would have gone, to paste into the rep's own.
+    await user.click(within(dialog).getByRole('button', { name: 'Copy the pre-read' }))
+    expect(
+      await within(dialog).findByText('Copied. Paste it into an email to the team.'),
+    ).toBeInTheDocument()
+    const copied = await navigator.clipboard.readText()
+    expect(copied.startsWith('Pre-read:')).toBe(true)
   })
 
   it('can not be stopped or changed while it sends: Cancel, Esc, the ticks and Add wait', async () => {

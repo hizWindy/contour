@@ -28,7 +28,7 @@
  * email it shows holds it. The people the rep added, and their ticks, stay while the page is open.
  * It rises 8px as it fades in, and fades out in 150ms, as Activity's does.
  */
-import { CalendarCheck, CircleAlert, Hourglass, Send, X } from 'lucide-react'
+import { CalendarCheck, CircleAlert, Copy, Hourglass, Send, X } from 'lucide-react'
 import { useEffect, useEffectEvent, useId, useRef, useState, type FormEvent } from 'react'
 import type { ApiProblem } from '@/api/client'
 import {
@@ -81,6 +81,9 @@ import {
   sendProblemWords,
   sendToWords,
   STAYS_HERE,
+  COPY_PRE_READ,
+  COPIED,
+  NOT_COPIED,
   SUBJECT,
   THE_EMAIL,
   TOO_MANY,
@@ -252,6 +255,40 @@ function CheckingRow({
         <X aria-hidden="true" />
       </Button>
     </li>
+  )
+}
+
+/**
+ * Email isn't set up (PLAN-V18 T2-7): the pre-read stays here, and this copies the email as it
+ * would have gone (its subject, then its plain text), so the rep can paste it into their own.
+ */
+function CopyEmail({ email }: { email: FormEmailPreview }) {
+  const [copied, setCopied] = useState<boolean | null>(null)
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pl-6">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="w-fit touch:h-11"
+        onClick={() => {
+          void navigator.clipboard.writeText(`${email.subject}\n\n${email.text}`).then(
+            () => {
+              setCopied(true)
+            },
+            () => {
+              setCopied(false)
+            },
+          )
+        }}
+      >
+        <Copy aria-hidden="true" />
+        {COPY_PRE_READ}
+      </Button>
+      <p role="status" className="text-caption text-muted-foreground">
+        {copied === true ? COPIED : copied === false ? NOT_COPIED : null}
+      </p>
+    </div>
   )
 }
 
@@ -463,11 +500,14 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
             </ul>
           )}
           {sendProblem !== null ? (
-            <div ref={problemRef}>
+            <div ref={problemRef} className="flex flex-col gap-2">
               <Problem
                 error={sendProblem}
                 extra={sendProblem.code === 'email_not_set_up' ? STAYS_HERE : undefined}
               />
+              {sendProblem.code === 'email_not_set_up' && shown ? (
+                <CopyEmail email={shown} />
+              ) : null}
             </div>
           ) : null}
           {checkProblem !== null ? (
@@ -488,7 +528,7 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
             </div>
           ) : null}
           <form noValidate className="flex flex-col gap-1.5" onSubmit={add}>
-            <label htmlFor={inputId} className="text-caption text-muted-foreground">
+            <label htmlFor={inputId} className="text-ui font-semibold text-foreground">
               {ADD_SOMEONE}
             </label>
             <div className="flex gap-2">

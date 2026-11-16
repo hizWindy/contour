@@ -2,22 +2,48 @@
  * The Companies page keeps its state in the address, so a link or Back shows the same list: the
  * filter, the sort, the page and the open company. A filter change goes back to page 1. The
  * prep box is not here: it preps a call and never filters the list (PLAN-V10 B4).
+ *
+ * The list sorts by last activity, the newest first, by default (PLAN-V18 T2-6): the newest of
+ * HubSpot's "Last activity date" and "Last contacted". Companies with neither go last, A to Z (the
+ * server's order). A link with `sort=name` (A to Z, the old default) still works, and now keeps it
+ * in its address.
  */
-import type { DealState, QueryOf } from '@/api/types'
+import type { CompanyRow, DealState, QueryOf } from '@/api/types'
 
 export const PAGE_SIZE = 50
 
-export const SORT_KEYS = ['name', 'staff', 'lease', 'last_talk'] as const
+export const SORT_KEYS = ['last_activity', 'name', 'staff', 'lease', 'last_talk'] as const
 export type SortKey = (typeof SORT_KEYS)[number]
 export type SortOrder = 'asc' | 'desc'
 
-/** How each sort starts: A to Z, the biggest first, the soonest lease end, the latest talk. */
+/** The sort a plain list has: the newest activity first. */
+export const DEFAULT_SORT: SortKey = 'last_activity'
+
+/**
+ * How each sort starts: the newest activity, A to Z, the biggest first, the soonest lease end, the
+ * latest talk.
+ */
 export const FIRST_ORDER: Record<SortKey, SortOrder> = {
+  last_activity: 'desc',
   name: 'asc',
   staff: 'desc',
   lease: 'asc',
   last_talk: 'desc',
 }
+
+// --- Hand written until M1 (PLAN-V18, the contract part 2) ---------------------------------------
+// The generated types don't have `last_activity` yet: Track 1 builds it at the same time. M1 makes
+// the types again: then `listQuery` drops its cast and `lastActivityOf(row)` is `row.last_activity`.
+
+/** The list's query, as the generated contract types it until M1 adds `last_activity` to `sort`. */
+type CompanyQuery = NonNullable<QueryOf<'list_companies'>>
+
+/** A company's last activity (a date), or null when HubSpot has none. */
+export function lastActivityOf(row: CompanyRow): string | null {
+  return (row as CompanyRow & { last_activity?: string | null }).last_activity ?? null
+}
+
+// -------------------------------------------------------------------------------------------------
 
 export const DEALS: readonly DealState[] = ['open', 'customer', 'none']
 export const SOURCES = ['hubspot', 'lead'] as const
@@ -63,7 +89,7 @@ function text(value: string | null): string | null {
 }
 
 export function readCompanies(params: URLSearchParams): CompaniesState {
-  const sort = pick(params.get('sort'), SORT_KEYS) ?? 'name'
+  const sort = pick(params.get('sort'), SORT_KEYS) ?? DEFAULT_SORT
   const order = pick(params.get('order'), ['asc', 'desc'] as const) ?? FIRST_ORDER[sort]
   const page = Number.parseInt(params.get('page') ?? '1', 10)
   return {
@@ -90,18 +116,22 @@ export function writeCompanies(state: CompaniesState): URLSearchParams {
   if (filters.owner) params.set('owner', filters.owner)
   if (filters.deal) params.set('deal', filters.deal)
   if (filters.source) params.set('source', filters.source)
-  if (state.sort !== 'name') params.set('sort', state.sort)
+  if (state.sort !== DEFAULT_SORT) params.set('sort', state.sort)
   if (state.order !== FIRST_ORDER[state.sort]) params.set('order', state.order)
   if (state.page > 0) params.set('page', String(state.page + 1))
   if (state.company) params.set('company', state.company)
   return params
 }
 
-/** What the list asks the backend for. The page and its prefetch build it the same way. */
-export function listQuery(state: CompaniesState): NonNullable<QueryOf<'list_companies'>> {
+/**
+ * What the list asks the backend for. The page, its prefetch and Home's Companies card build it
+ * the same way, so each joins the request the other started.
+ */
+export function listQuery(state: CompaniesState): CompanyQuery {
   const { filters } = state
-  const query: NonNullable<QueryOf<'list_companies'>> = {
-    sort: state.sort,
+  const query: CompanyQuery = {
+    // Until M1 the generated sort has no `last_activity`: it goes as it is.
+    sort: state.sort as CompanyQuery['sort'],
     order: state.order,
     limit: PAGE_SIZE,
     offset: state.page * PAGE_SIZE,

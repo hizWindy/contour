@@ -8,6 +8,7 @@
  * Dates are calendar dates from HubSpot (YYYY-MM-DD), compared with today in Melbourne.
  */
 import {
+  Activity,
   BadgeCheck,
   CircleDashed,
   CalendarClock,
@@ -128,6 +129,44 @@ export function LastTalk({
       attentionWords="No talk in 6 months"
       icon={History}
       quietIcon={MessageSquare}
+      stacked={stacked}
+      className={className}
+    />
+  )
+}
+
+/**
+ * A company's last activity on the list (PLAN-V18 T2-6): the newest call, email, meeting or note,
+ * as HubSpot counts it, with how long ago. Ochre when there has been none in 6 months, or none on
+ * record, as the last talk is.
+ */
+export function LastActivity({
+  date,
+  stacked = true,
+  today = melbourneDate(),
+  className,
+}: {
+  date: string | null | undefined
+  stacked?: boolean
+  today?: string
+  className?: string
+}) {
+  if (!date) {
+    return (
+      <span className={cn('inline-flex items-start gap-1.5', className)}>
+        <History aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-review" />
+        <span className="text-muted-foreground">None on record</span>
+      </span>
+    )
+  }
+  return (
+    <DateMark
+      date={date}
+      words={agoWords(date, today)}
+      attention={talkStale(date, today)}
+      attentionWords="No activity in 6 months"
+      icon={History}
+      quietIcon={Activity}
       stacked={stacked}
       className={className}
     />

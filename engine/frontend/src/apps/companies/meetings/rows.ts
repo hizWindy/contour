@@ -4,7 +4,7 @@
  *
  * - **The groups:** Upcoming is grouped by its Melbourne day, which the server gives each meeting
  *   (`group`): Today, Tomorrow, This week (to Sunday) and Later. Inside a group the server's order
- *   stays: the soonest first, and on the team's list the rep's own first.
+ *   stays: the soonest first.
  * - **One status a row:** a cancelled meeting says so, a past one from HubSpot whether its notes
  *   are logged, and an upcoming one where its pre-read stands. A meeting typed in isn't in HubSpot,
  *   so it has no notes to log: past or not, it says where its pre-read stands.
@@ -13,9 +13,9 @@ import type { MeetingGroup, MeetingItem } from '@/api/types'
 
 export type DayGroup = MeetingGroup
 
-export interface MeetingGroupRows {
+export interface MeetingGroupRows<Item extends MeetingItem = MeetingItem> {
   group: DayGroup
-  items: MeetingItem[]
+  items: Item[]
 }
 
 const ORDER: readonly DayGroup[] = ['today', 'tomorrow', 'this_week', 'later']
@@ -25,7 +25,9 @@ const ORDER: readonly DayGroup[] = ['today', 'tomorrow', 'this_week', 'later']
  * out. An upcoming meeting with no group (the server always gives one) goes under Later, which
  * writes its whole day.
  */
-export function groupUpcoming(items: readonly MeetingItem[]): MeetingGroupRows[] {
+export function groupUpcoming<Item extends MeetingItem>(
+  items: readonly Item[],
+): MeetingGroupRows<Item>[] {
   return ORDER.map((group) => ({
     group,
     items: items.filter((item) => (item.group ?? 'later') === group),

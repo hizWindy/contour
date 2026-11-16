@@ -46,3 +46,8 @@ export { TickIn, type TickInProps } from './tick-in'
 export { PRESS_SCALE, usePress } from './use-press'
 export { useStill, useTransition } from './use-still'
 export { useViewShown } from './view-shown'
+
+// PLAN-V18 Track 2: an icon that turns once for each press (Meetings' Sync), and a row of steps
+// whose dots fill as each state arrives (the pre-read while the AI drafts it).
+export { SpinOnce, type SpinOnceProps } from './spin-once'
+export { StepTrail, type StepTrailProps } from './step-trail'
