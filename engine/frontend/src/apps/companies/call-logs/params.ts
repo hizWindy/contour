@@ -10,12 +10,7 @@
  * The page was called Activity until PLAN-V18 (T3-2). Its old address still works: the route sends
  * it on with its tab and `log=1` (`old-address.ts`), and the old tab `logged` reads as History.
  */
-import type {
-  CallNoteHistoryQuery,
-  CallNoteOutcomeFilter,
-  CallNoteStateV18,
-} from '@/api/hooks/call-notes'
-import type { CallNoteQuery } from '@/api/types'
+import type { CallNoteOutcomeFilter, CallNoteQuery, CallNoteState } from '@/api/types'
 
 export type CallLogsTab = 'to_confirm' | 'history' | 'needs_look'
 
@@ -185,9 +180,9 @@ export function sinceOf(when: HistoryWhen, today: string): string | undefined {
 }
 
 /** History's request: the rep's own notes, with the filters. */
-export function historyQuery(filters: HistoryFilters, today: string): CallNoteHistoryQuery {
-  const state: CallNoteStateV18 = filters.where === 'all' ? 'history' : filters.where
-  const query: CallNoteHistoryQuery = { state, mine: true }
+export function historyQuery(filters: HistoryFilters, today: string): CallNoteQuery {
+  const state: CallNoteState = filters.where === 'all' ? 'history' : filters.where
+  const query: CallNoteQuery = { state, mine: true }
   const q = filters.q.trim()
   if (q) query.q = q.slice(0, SEARCH_MAX)
   if (filters.outcome) query.outcome = filters.outcome

@@ -12,25 +12,15 @@
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { unwrap } from '../client'
 import { queryKeys } from '../query'
-import type { CallNoteOptions, CallNoteSummary } from '@/api/types'
+import type { CallNoteOptions, CallNoteSummary, VoiceToolKind } from '@/api/types'
 import { api } from '@/api/client'
 
-// --- Hand written until M1 (PLAN-V18, the contract parts 3 and 4) ------------------------------
-// `GET /call-notes/options` gains `voice_tool`. M1 makes the generated types again and replaces
-// these with `CallNoteOptions['voice_tool']`.
-
-/** Which voice to text tool the mic uses: Whisper in the browser, the browser's service, or none. */
-export type VoiceToolKind = 'browser_model' | 'browser_service' | 'typing'
-
-/** The setting's default (the contract, part 4). */
+/** The voice tool setting's default (PLAN-V18, the contract part 4): Whisper in the browser. */
 export const DEFAULT_VOICE_TOOL: VoiceToolKind = 'browser_model'
 
-/** The voice tool the options name. An older backend sends none: the default. */
+/** The voice tool the options name, or the default while they aren't known yet. */
 export function voiceToolOf(options: CallNoteOptions | undefined): VoiceToolKind {
-  const value = (options as { voice_tool?: unknown } | undefined)?.voice_tool
-  return value === 'browser_service' || value === 'typing' || value === 'browser_model'
-    ? value
-    : DEFAULT_VOICE_TOOL
+  return options?.voice_tool ?? DEFAULT_VOICE_TOOL
 }
 
 /** The switches change rarely (an Admin, on the Settings page), so a minute of fresh is fine. */

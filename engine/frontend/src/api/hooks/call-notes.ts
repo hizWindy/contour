@@ -224,33 +224,17 @@ export function refreshCallNoteLists(client: QueryClient): Promise<void> {
 }
 
 // --- History (PLAN-V18 T3-6) -------------------------------------------------------------------
-// Hand written until M1 (the contract, part 3): `state` gains `history` (every one of my notes, in
-// any status, newest call first), and the filters `q`, `outcome`, `since` and `until` work for any
-// state. M1 makes the generated types again and replaces these with `CallNoteQuery`.
-
-/** `GET /call-notes`'s `state`, with History. */
-export type CallNoteStateV18 = NonNullable<CallNoteQuery['state']> | 'history'
-
-/** One of the call outcomes, or `none`: a call with no outcome. */
-export type CallNoteOutcomeFilter = NonNullable<CallNoteOut['call']['outcome']> | 'none'
-
-/** What History asks for, without the paging (the hook pages). */
-export interface CallNoteHistoryQuery {
-  state: CallNoteStateV18
-  mine: boolean
-  /** Up to 200 characters. Each word must start a word of the company, person, note or summary. */
-  q?: string
-  outcome?: CallNoteOutcomeFilter
-  /** Dates, as YYYY-MM-DD, in Melbourne time. */
-  since?: string
-  until?: string
-}
+// The contract, part 3: `state` has `history` (every one of my notes, in any status, newest call
+// first), and the filters `q`, `outcome`, `since` and `until` work for any state.
 
 /** "Show older" brings this many more. */
 export const HISTORY_PAGE_SIZE = 50
 
-/** GET /call-notes, History's way: a page of 50 at a time, newest call first. */
-export function callNoteHistoryQueryOptions(query: CallNoteHistoryQuery) {
+/**
+ * GET /call-notes, History's way: a page of 50 at a time, newest call first. `query` is the
+ * filters, without the paging: the hook pages.
+ */
+export function callNoteHistoryQueryOptions(query: CallNoteQuery) {
   return infiniteQueryOptions({
     // Under `callNotes()`, so an edit asks again; not under `callNoteLists()`, whose helpers change
     // single pages, not these pages of pages.
@@ -258,13 +242,7 @@ export function callNoteHistoryQueryOptions(query: CallNoteHistoryQuery) {
     queryFn: async ({ pageParam, signal }): Promise<CallNotePage> =>
       unwrap(
         await api.GET('/companies/call-notes', {
-          params: {
-            query: {
-              ...query,
-              limit: HISTORY_PAGE_SIZE,
-              offset: pageParam,
-            } as unknown as CallNoteQuery,
-          },
+          params: { query: { ...query, limit: HISTORY_PAGE_SIZE, offset: pageParam } },
           signal,
         }),
       ),
@@ -280,7 +258,7 @@ export function callNoteHistoryQueryOptions(query: CallNoteHistoryQuery) {
  * History, with its filters. A change of filter keeps the old list on screen (dimmed) until the
  * new one comes, and a call being sorted or sent asks again by itself until it settles.
  */
-export function useCallNoteHistory(query: CallNoteHistoryQuery, enabled = true) {
+export function useCallNoteHistory(query: CallNoteQuery, enabled = true) {
   return useInfiniteQuery({
     ...callNoteHistoryQueryOptions(query),
     enabled,

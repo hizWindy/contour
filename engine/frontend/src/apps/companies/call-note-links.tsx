@@ -22,13 +22,9 @@
 import { ClipboardCheck, FileText, Mic, NotebookPen, TriangleAlert } from 'lucide-react'
 import { lazy, Suspense, useState } from 'react'
 import { Link } from 'react-router'
-import {
-  useCallNoteCounts,
-  useCallNoteOptions,
-  voiceToolOf,
-  type VoiceToolKind,
-} from '@/api/hooks/call-note-counts'
+import { useCallNoteCounts, useCallNoteOptions, voiceToolOf } from '@/api/hooks/call-note-counts'
 import { useMeetingSummary } from '@/api/hooks/meeting-summary'
+import type { VoiceToolKind } from '@/api/types'
 import { RollingNumber } from '@/components/motion/rolling-number'
 import { Button } from '@/components/ui/button'
 import { CommandItem } from '@/components/ui/command'

@@ -17,7 +17,7 @@
  * the track the card hands it, where the browser can), and only its words come back here.
  */
 
-import type { VoiceToolKind } from '@/api/hooks/call-note-counts'
+import type { VoiceToolKind } from '@/api/types'
 
 export type { VoiceToolKind }
 

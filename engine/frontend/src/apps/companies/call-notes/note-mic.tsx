@@ -16,7 +16,7 @@
  */
 import { Mic } from 'lucide-react'
 import { lazy, Suspense, useRef, useState, type RefObject } from 'react'
-import type { VoiceToolKind } from '@/api/hooks/call-note-counts'
+import type { VoiceToolKind } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'

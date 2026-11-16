@@ -143,9 +143,13 @@ export type QueryOf<Name extends keyof operations> = operations[Name]['parameter
 export type CallNoteSource = CallNoteOut['source']
 export type CallNoteStatus = CallNoteOut['status']
 export type CallNoteState = NonNullable<CallNoteQuery['state']>
+/** History's "how it went" filter: one of the outcomes, or `none` for a call with none (PLAN-V18). */
+export type CallNoteOutcomeFilter = NonNullable<CallNoteQuery['outcome']>
 export type TaskKind = Schemas['CallNoteTask']['kind']
 export type NoteField = Schemas['NoteFieldOption']
 export type CallNoteOptions = Schemas['CallNoteOptions']
+/** Which voice to text tool the mic uses (PLAN-V18, the contract part 4). */
+export type VoiceToolKind = CallNoteOptions['voice_tool']
 export type CallNoteIn = Schemas['CallNoteIn']
 export type CallNotePerson = Schemas['PrepPerson']
 export type CallNoteChange = Schemas['CallNoteChange']
