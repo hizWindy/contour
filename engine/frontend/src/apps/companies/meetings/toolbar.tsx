@@ -1,21 +1,27 @@
 /**
- * Meetings' controls (PLAN-V17 "The screens", part 5): Upcoming or Past (`Segmented`, its
- * highlight slides), the search, and the switch for the team's meetings. Each one changes the
- * address, so Back and a link keep the view.
+ * Meetings' controls (PLAN-V17 "The screens", part 5, and PLAN-V18 T2-3): Upcoming or Past, whose
+ * meetings (All, My meetings, My team), the search, and Sync at the right end. The two choices are
+ * `Segmented`: the highlight slides under the new pick. Each one changes the address, so Back and a
+ * link keep the view.
  *
- * The search finds a meeting by its company, its title or date words ("vitera 26 nov"). The server
- * reads them, in plain code. It goes 250ms after the last key, so one request goes out per pause
- * (DESIGN.md "Speed").
+ * - **Whose meetings:** All is the default, so nobody opens an empty page. "My team" is left out
+ *   when HubSpot has no teams (unless the address asks for it, so the choice in use always shows),
+ *   and the whole choice is left out while sign-in is off, when there is no "me".
+ * - The search finds a meeting by its company, its title or date words ("vitera 26 nov"). The
+ *   server reads them, in plain code. It goes 250ms after the last key, so one request goes out per
+ *   pause (DESIGN.md "Speed").
  */
 import { Search } from 'lucide-react'
-import { useEffect, useEffectEvent, useId, useState } from 'react'
+import { useEffect, useEffectEvent, useState } from 'react'
+import type { MeetingWho } from '@/api/hooks/meetings'
 import type { MeetingWhen } from '@/api/types'
 import { Segmented, type SegmentedOption } from '@/components/motion'
 import { Input } from '@/components/ui/input'
-import { Switch } from '@/components/ui/switch'
 import { useDebounced } from '@/hooks/useDebounced'
 import type { MeetingsView } from './params'
-import { PAST, SEARCH_LABEL, SEARCH_PLACEHOLDER, TEAM_SWITCH, UPCOMING, WHEN_LABEL } from './words'
+import { SyncButton } from './sync'
+import type { MeetingsSync } from './use-sync'
+import { PAST, SEARCH_LABEL, SEARCH_PLACEHOLDER, UPCOMING, WHEN_LABEL, WHO_LABEL } from './words'
 
 /** Typed searches wait this long after the last key (DESIGN.md "Speed"). */
 export const SEARCH_SETTLE_MS = 250
@@ -62,14 +68,16 @@ function MeetingSearch({ value, onSettle }: { value: string; onSettle: (q: strin
   )
 }
 
-export function MeetingsToolbar({
-  view,
-  onChange,
-}: {
+export interface MeetingsToolbarProps {
   view: MeetingsView
   onChange: (changes: Partial<MeetingsView>) => void
-}) {
-  const teamId = useId()
+  /** The choices of whose meetings, or null to leave the choice out (sign-in off). */
+  who: readonly SegmentedOption<MeetingWho>[] | null
+  /** Sync, at the right end. Left out of a toolbar that has none. */
+  sync?: MeetingsSync
+}
+
+export function MeetingsToolbar({ view, onChange, who, sync }: MeetingsToolbarProps) {
   return (
     <div data-slot="meetings-toolbar" className="flex flex-wrap items-center gap-3">
       <Segmented
@@ -80,25 +88,23 @@ export function MeetingsToolbar({
           onChange({ when })
         }}
       />
+      {who ? (
+        <Segmented
+          aria-label={WHO_LABEL}
+          options={who}
+          value={view.who}
+          onChange={(next) => {
+            onChange({ who: next })
+          }}
+        />
+      ) : null}
       <MeetingSearch
         value={view.q}
         onSettle={(q) => {
           onChange({ q })
         }}
       />
-      <label
-        htmlFor={teamId}
-        className="flex items-center gap-2 text-ui text-foreground touch:min-h-11 sm:ml-auto"
-      >
-        <Switch
-          id={teamId}
-          checked={view.team}
-          onCheckedChange={(team) => {
-            onChange({ team })
-          }}
-        />
-        {TEAM_SWITCH}
-      </label>
+      {sync ? <SyncButton sync={sync} className="max-sm:w-full sm:ml-auto" /> : null}
     </div>
   )
 }

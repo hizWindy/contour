@@ -7,10 +7,13 @@
  * - **Past** is one list, newest first, 25 at a time with the pager.
  *
  * A new search or another page keeps the list on screen, dimmed, until the next one comes, as the
- * tables do. The rows themselves never fade in, slide or glide (principles 02 #20).
+ * tables do. The rows themselves never fade in, slide or glide (principles 02 #20), with one
+ * exception (PLAN-V18 T2-3): a meeting that comes with a read of HubSpot (Sync) fades in once, in a
+ * list of 50 rows or fewer.
  */
 import { useId } from 'react'
-import type { MeetingItem, MeetingPage } from '@/api/types'
+import type { MeetingListItem, MeetingListPage } from '@/api/hooks/meetings'
+import type { MeetingItem } from '@/api/types'
 import { Pager } from '@/components/pager'
 import { cn } from '@/lib/utils'
 import { MeetingRow } from './meeting-row'
@@ -18,20 +21,35 @@ import { PAST_PAGE_SIZE, type MeetingsView } from './params'
 import { groupUpcoming, rowKey } from './rows'
 import { firstOfWords, GROUP_LABELS, PAST_LIST, pastWhen, upcomingWhen } from './words'
 
+/** The most rows a list may have for a new one to fade in (DESIGN.md "Speed budget"). */
+const MOST_TO_MOVE = 50
+
 export interface MeetingListProps {
-  page: MeetingPage
+  page: MeetingListPage
   view: MeetingsView
   today: string
   /** The list is the one before, while the next one loads. */
   dimmed: boolean
+  /** The rows on screen when a read of HubSpot started: any other row fades in once. */
+  fadeInAfter?: ReadonlySet<string> | null
   onPage: (page: number) => void
   /** "Log meeting" on a past meeting (T3-11). Left out while call notes are off. */
   onLogMeeting?: (item: MeetingItem) => void
 }
 
-export function MeetingList({ page, view, today, dimmed, onPage, onLogMeeting }: MeetingListProps) {
+export function MeetingList({
+  page,
+  view,
+  today,
+  dimmed,
+  fadeInAfter = null,
+  onPage,
+  onLogMeeting,
+}: MeetingListProps) {
   const id = useId()
   const dim = cn('transition-opacity', dimmed && 'opacity-60')
+  const fresh = (item: MeetingListItem): boolean =>
+    fadeInAfter !== null && page.items.length <= MOST_TO_MOVE && !fadeInAfter.has(rowKey(item))
 
   if (view.when === 'past') {
     return (
@@ -47,7 +65,8 @@ export function MeetingList({ page, view, today, dimmed, onPage, onLogMeeting }:
               item={item}
               when={pastWhen(item.meeting.starts_at, today)}
               past
-              team={view.team}
+              who={view.who}
+              fresh={fresh(item)}
               onLogMeeting={onLogMeeting}
             />
           ))}
@@ -83,7 +102,8 @@ export function MeetingList({ page, view, today, dimmed, onPage, onLogMeeting }:
                   item={item}
                   when={upcomingWhen(item.meeting.starts_at, group, today)}
                   past={false}
-                  team={view.team}
+                  who={view.who}
+                  fresh={fresh(item)}
                 />
               ))}
             </ul>

@@ -49,7 +49,6 @@ function MeetingLine({
     ? preReadHref(item.form.id)
     : meetingsHref({
         when: past ? 'past' : 'upcoming',
-        team: true,
         q: companyMeetingsQuery(companyName),
       })
   // A past meeting's draft opens as any pre-read does: Check and send is for one still to come.

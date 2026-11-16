@@ -9,8 +9,9 @@
  * - **It comes late,** after the counts and then the meetings, so Home places it after every other
  *   card (`HomeCard.late`), and its coming moves none of them. It fades and rises once as it comes.
  *   Its code loads late too (`call-note-parts.ts`), so the first visit doesn't grow.
- * - **The meetings** are the list Meetings shows first (the rep's own, upcoming), so opening
- *   Meetings from here shows it at once. A cancelled meeting needs nothing, so it isn't one of the
+ * - **The meetings** are the rep's own, upcoming: My meetings on Meetings, which shows everyone's
+ *   first (PLAN-V18 T2-3). The card's sentence counts the rep's own, so its rows are the rep's own
+ *   too (TBC at Al-khair's look). A cancelled meeting needs nothing, so it isn't one of the
  *   three.
  * - **Empty:** "No meetings in the next few days." in the serif voice. While HubSpot's meetings
  *   can't be read, or the rep's own can't be picked out, the server's sentence says so under it,
@@ -32,7 +33,7 @@ import { Reveal } from '@/components/motion'
 import { melbourneDate } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { TONE_CLASSES } from '@/shell/tone'
-import { FIRST_VIEW, meetingsQuery, MEETINGS_PATH } from './params'
+import { FIRST_VIEW, meetingsQuery, MEETINGS_PATH, type MeetingsView } from './params'
 import { RowAction, StatusLine } from './row-parts'
 import { isCancelled, rowKey, rowStatus } from './rows'
 import { WaitingLine } from './states'
@@ -86,10 +87,13 @@ function UpcomingRow({ item, today }: { item: MeetingItem; today: string }) {
   )
 }
 
+/** The rep's own upcoming meetings: My meetings, as before PLAN-V18. */
+const HOME_VIEW: MeetingsView = { ...FIRST_VIEW, who: 'mine' }
+
 export function UpcomingMeetings() {
   const summary = useMeetingSummary()
   const on = summary.data !== undefined
-  const list = useMeetings(meetingsQuery(FIRST_VIEW), { enabled: on })
+  const list = useMeetings(meetingsQuery(HOME_VIEW), { enabled: on })
   const today = melbourneDate()
   // Off, unknown, or on its way: nothing, so Home looks as it did before.
   if (!summary.data || list.isPending || isMeetingFormsOff(list.error)) return null
