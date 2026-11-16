@@ -6,7 +6,7 @@ This plan makes the Companies module clearer and nicer to use, from Al-khair's l
 
 - **Built by:** Al-khair Pama. **Signed off by:** Al-khair for the code and every screen. Levi confirms the rules marked **TBC with Levi**.
 - **Last updated:** 16 Nov 2026 (S0 done: `plan-v18` made from `master`; the tracks are starting).
-- **Progress:** S0: 1 of 1. Track 1: 0 of 9. Track 2: 0 of 8. Track 3: 1 of 9. Merge and deploy: 0 of 3.
+- **Progress:** S0: 1 of 1. Track 1: 0 of 9. Track 2: 0 of 8. Track 3: 2 of 9. Merge and deploy: 0 of 3.
 - **Sources:**
   - Al-khair's list of changes (16 Nov, in chat), and the chat about Meetings the same day: the empty Meetings page, the team switch, and the Sync idea;
   - the code on `master` (`c4ebe58`), read on 16 Nov;
@@ -520,11 +520,11 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
 
 ## Track 3: Call logs, the mic, the history and call prep (session 3)
 
-**Progress:** 1 of 9. Every step is `frontend-agent` work. It follows `engine/DESIGN.md` and "How it should look and move", uses the `ui-build` skill, and builds against the contract with `mockApi`.
+**Progress:** 2 of 9. Every step is `frontend-agent` work. It follows `engine/DESIGN.md` and "How it should look and move", uses the `ui-build` skill, and builds against the contract with `mockApi`.
 
 - [x] **T3-1. Own copy and a baseline.** Make the worktree. Run lint, types, the tests and the build once. Note the counts and the first visit size from `node scripts/bundle-report.js`. Done 2026-11-16 on `40d9912` (numbers in the Log).
 
-- [ ] **T3-2. Call logs, the new name.**
+- [x] **T3-2. Call logs, the new name.** Done 2026-11-16: `59ac46d` (the `git mv` alone) and `fb9673a`.
   - First, alone in its own commit: `git mv` the folder `apps/companies/activity/` to `apps/companies/call-logs/`.
   - The address `/companies/call-logs`. `/companies/activity` sends you on, with its tab and `log=1`. `tab=logged` becomes `tab=history`.
   - The menu says "Call logs" (pick a Lucide icon that reads as a list of calls). The crumb, the browser tab ("Call logs - Contour"), and the page title "Call logs" follow. The description: "Every call you logged. Check new ones, send them to HubSpot, and look back at old ones."
@@ -604,6 +604,7 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
 
 - 16 Nov 2026, T3-1: the worktree `../contour-v18-t3` on `plan-v18-track3`, made by the lead session. Baseline on `40d9912`: lint clean, types clean, 116 test files and 1,640 tests passed (vitest, one worker, about 5 minutes), the build passed. First visit: 232 kB of JavaScript gzip (237,792 bytes; 739,690 raw) in 35 files, and 23.3 kB of CSS gzip (23,851 bytes). So T3-9's limit is 238,816 bytes of JavaScript gzip.
 - 16 Nov 2026: the overnight rules from the lead session win where this plan differs. T3-3 waits for Al-khair at the keyboard. No new package and no model download. Steps that need Al-khair's look are built, tested and left unticked with "waiting for a look". No messages to the other sessions: anything they need is written here.
+- 16 Nov 2026, T3-2: `59ac46d` moves the folder alone, `fb9673a` renames the rest. The menu's icon is Lucide's `PhoneLog`. History shows Activity's old Logged list until T3-6. The old address is sent on by `call-logs/old-route.tsx`. The Settings test's fixture now says "Call logs page" (rule 6); Track 1's real help text (T1-8) replaces it on the server. Track 2: `meetings/words.ts` still says "on Activity" (T2-3 changes it).
 
 ## Merge and deploy
 
