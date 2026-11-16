@@ -33,8 +33,9 @@
  * The page has no Navy button of its own: the work is on the rows, and each row's button is
  * quiet, so a list of drafts ready never shows five Navy buttons. New pre-read's dialog has one.
  */
+import { useQueryClient } from '@tanstack/react-query'
 import { CalendarCheck, Info } from 'lucide-react'
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router'
 import { useMe } from '@/api/hooks'
 import { useCallNoteOptions } from '@/api/hooks/call-note-counts'
@@ -51,6 +52,7 @@ import { LogMeetingSheet } from './log-meeting'
 import { MeetingList } from './meeting-list'
 import { NewPreRead } from './new-pre-read'
 import { meetingsQuery, readMeetings, writeMeetings, type MeetingsView } from './params'
+import { warmOtherViews } from './prefetch'
 import { rowKey } from './rows'
 import { MeetingFormsOff, MeetingsPending, WaitingLine } from './states'
 import { SyncLine } from './sync'
@@ -126,9 +128,12 @@ function emptyOf(view: MeetingsView, page: MeetingPage): Empty & { showAll: bool
 }
 
 /** The choices of whose meetings, in order. "My team" only when it can mean something. */
+function whosFor(withTeam: boolean): MeetingWho[] {
+  return withTeam ? ['all', 'mine', 'team'] : ['all', 'mine']
+}
+
 function whoOptions(withTeam: boolean): SegmentedOption<MeetingWho>[] {
-  const all: MeetingWho[] = withTeam ? ['all', 'mine', 'team'] : ['all', 'mine']
-  return all.map((value) => ({ value, label: WHO_WORDS[value] }))
+  return whosFor(withTeam).map((value) => ({ value, label: WHO_WORDS[value] }))
 }
 
 /**
@@ -205,8 +210,21 @@ export default function MeetingsPage() {
     })
   }
 
-  const who = signedIn ? whoOptions(teamState !== 'none_in_hubspot' || view.who === 'team') : null
+  const withTeam = teamState !== 'none_in_hubspot' || view.who === 'team'
+  const who = signedIn ? whoOptions(withTeam) : null
   const why = list.data && view.who !== 'all' ? whoWords(view.who, list.data) : null
+
+  // Once this list is in, the lists a click on the toolbar shows next are asked for quietly
+  // (Improvements 1, #10): the other of Upcoming and Past, and the other choices of whose. So they
+  // open at once, not as grey blocks. Not while a search is typed, and not on one more owner.
+  const client = useQueryClient()
+  const answered = list.data !== undefined && !list.isPlaceholderData
+  const searching = view.q.trim() !== ''
+  useEffect(() => {
+    if (!answered || searching) return undefined
+    const here: MeetingsView = { when: view.when, who: view.who, owner: view.owner, q: '', page: 0 }
+    return warmOtherViews(client, here, signedIn ? whosFor(withTeam) : [])
+  }, [client, answered, searching, signedIn, withTeam, view.when, view.who, view.owner])
 
   let content
   if (list.error && !list.data) {

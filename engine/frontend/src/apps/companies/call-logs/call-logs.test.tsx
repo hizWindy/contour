@@ -1,4 +1,4 @@
-import { QueryClientProvider } from '@tanstack/react-query'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, screen, waitFor, within } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { toast } from 'sonner'
@@ -19,6 +19,7 @@ import { readDueDate } from '@/lib/due-date'
 import { formatDate, melbourneDate } from '@/lib/format'
 import { routes } from '@/router'
 import { prefetchPage } from '@/shell/prefetch'
+import { fakeIdle } from '@/test/fake-idle'
 import { createTestQueryClient, renderWithProviders } from '@/test/render'
 import { asPhone } from '@/test/screen'
 import { dueWords } from '../call-notes/words'
@@ -955,6 +956,9 @@ describe('To confirm', () => {
   // Real time, not a fake clock: a fake clock that stops at the end of a test leaves motion's
   // frame loop waiting for a frame that never comes, and every later test's cards stop leaving.
   it('a note still being sorted shows a still line, then its parts when they come', async () => {
+    // This test waits longer than the quiet warm-up of the other tabs does (3 seconds without an
+    // idle call), and counts the page's own reads, so the browser here is never idle.
+    fakeIdle()
     const server = mockServer({
       notes: [
         note('n1', { status: 'sorting', call: { summary: '', outcome: null, in_hubspot: false } }),
@@ -1306,6 +1310,106 @@ describe('what Call logs asks for first (PLAN-V7 C1)', () => {
     for (const query of client.getQueryCache().getAll()) {
       expect(query.getObserversCount(), JSON.stringify(query.queryKey)).toBeGreaterThan(0)
     }
+  })
+})
+
+describe('warming the other tabs (Improvements 1, #10)', () => {
+  /** The states of the lists asked for, in order. */
+  const asked = (server: Server): string[] =>
+    sent(server, 'GET', NOTES).map((item) => item.search.get('state') ?? '')
+
+  /** A cache that keeps an answer fresh for 15 seconds, as the app's does. */
+  function appCache(): QueryClient {
+    return new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: Infinity, staleTime: 15_000 } },
+    })
+  }
+
+  /** The page is up, its own tab is in, and the browser has an idle moment. */
+  async function afterIdle(browser: ReturnType<typeof fakeIdle>): Promise<void> {
+    await toConfirmList()
+    await waitFor(() => {
+      expect(browser.waiting()).toBeGreaterThan(0)
+    })
+    browser.idle()
+  }
+
+  it('asks for the other two tabs only once this one is in and the browser is idle', async () => {
+    const browser = fakeIdle()
+    const server = mockServer({ notes: threeNotes() })
+    renderCallLogs()
+    await toConfirmList()
+    // While the browser is busy, only the tab on screen is asked for.
+    expect(asked(server)).toEqual(['to_confirm'])
+
+    await afterIdle(browser)
+    await waitFor(() => {
+      expect([...asked(server)].sort()).toEqual(['history', 'needs_look', 'to_confirm'])
+    })
+  })
+
+  it('opens a warmed tab at once, with no grey blocks, and asks the server nothing more', async () => {
+    const browser = fakeIdle()
+    const server = mockServer({ notes: threeNotes() })
+    const queryClient = appCache()
+    const { user } = renderWithProviders(<CallLogsPage />, {
+      route: '/companies/call-logs',
+      queryClient,
+    })
+    await afterIdle(browser)
+    await waitFor(() => {
+      expect(asked(server)).toHaveLength(3)
+      expect(queryClient.isFetching()).toBe(0)
+    })
+
+    await user.click(screen.getByRole('tab', { name: /^History/ }))
+    // The rows are there as the click ends: they were in the cache already.
+    expect(screen.getAllByText('Sample Logistics Pty Ltd').length).toBeGreaterThan(0)
+    expect(document.querySelector('[data-slot=pending]')).toBeNull()
+    await user.click(screen.getByRole('tab', { name: /^Needs a look/ }))
+    await user.click(screen.getByRole('tab', { name: /^To confirm/ }))
+    expect(asked(server)).toHaveLength(3)
+  })
+
+  it("asks for History as the address has it when it is the tab on screen, once, and for the others' first lists", async () => {
+    const browser = fakeIdle()
+    const server = mockServer({ notes: threeNotes() })
+    renderCallLogs('/companies/call-logs?tab=history&q=sample')
+    await screen.findByRole('tab', { name: /^History/ })
+    await waitFor(() => {
+      expect(browser.waiting()).toBeGreaterThan(0)
+    })
+    browser.idle()
+    await waitFor(() => {
+      expect([...asked(server)].sort()).toEqual(['history', 'needs_look', 'to_confirm'])
+    })
+    const history = sent(server, 'GET', NOTES).filter(
+      (item) => item.search.get('state') === 'history',
+    )
+    expect(history).toHaveLength(1)
+    expect(history[0]?.search.get('q')).toBe('sample')
+  })
+
+  it('asks for nothing while call notes are off', async () => {
+    const browser = fakeIdle()
+    const server = mockServer({ options: options({ enabled: false }) })
+    renderCallLogs()
+    await screen.findByText(/off/i)
+    expect(browser.waiting()).toBe(0)
+    expect(asked(server)).toEqual([])
+  })
+
+  it('is stopped by leaving the page', async () => {
+    const browser = fakeIdle()
+    const server = mockServer({ notes: threeNotes() })
+    const { unmount } = renderCallLogs()
+    await toConfirmList()
+    await waitFor(() => {
+      expect(browser.waiting()).toBeGreaterThan(0)
+    })
+    unmount()
+    browser.idle()
+    expect(asked(server)).toEqual(['to_confirm'])
   })
 })
 

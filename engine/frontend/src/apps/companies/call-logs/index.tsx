@@ -18,6 +18,7 @@
  * the tabs says so, in the server's words; everything up to the send still works. With call notes
  * off, the page says so in plain words.
  */
+import { useQueryClient } from '@tanstack/react-query'
 import { Hourglass, PhoneLog } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router'
@@ -31,7 +32,16 @@ import { PHONE, useMediaQuery } from '@/lib/use-media-query'
 import { LogCallPicker, LogCallSheet, type LogTarget } from './log-call'
 import { History } from './history'
 import { NeedsLook } from './needs-look'
-import { CALL_LOGS_TABS, readLog, readTab, withoutLog, writeTab, type CallLogsTab } from './params'
+import {
+  CALL_LOGS_TABS,
+  readHistory,
+  readLog,
+  readTab,
+  withoutLog,
+  writeTab,
+  type CallLogsTab,
+} from './params'
+import { warmOtherTabs } from './prefetch'
 import { CallNotesOff, CardsPending } from './states'
 import { ToConfirm } from './to-confirm'
 import { useBatch } from './use-batch'
@@ -65,6 +75,15 @@ export default function CallLogsPage() {
   const [picking, setPicking] = useState(false)
   const notes = options.data
   const on = notes?.enabled === true
+
+  // Once this tab's list is in, the other two are asked for quietly (Improvements 1, #10), so a
+  // click on a tab shows its rows at once, not grey blocks. It joins this tab's own request.
+  const client = useQueryClient()
+  const search = params.toString()
+  useEffect(
+    () => (on ? warmOtherTabs(client, tab, readHistory(new URLSearchParams(search))) : undefined),
+    [on, client, tab, search],
+  )
 
   // `?log=1` (Ctrl+K's "Log a call"): the picker opens once call notes are known to be on. Set
   // while rendering, not in an effect, so it opens with the page. `answered` stops it opening twice

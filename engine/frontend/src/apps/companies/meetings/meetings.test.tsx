@@ -5,6 +5,7 @@
  * fixed at 9:00 am on Wednesday 18 Nov 2026, Melbourne time. Made-up names only: Sample Logistics
  * Pty Ltd, Jo Sample.
  */
+import { QueryClient } from '@tanstack/react-query'
 import { act, screen, waitFor, within } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider, useParams } from 'react-router'
 import { toast } from 'sonner'
@@ -28,9 +29,11 @@ import { problemHint } from '@/lib/problems'
 import { routes } from '@/router'
 import { prefetchPage } from '@/shell/prefetch'
 import { signedIn, signInOff } from '@/test/fake-auth'
+import { fakeIdle } from '@/test/fake-idle'
 import { createTestQueryClient, renderWithProviders, startManualClock } from '@/test/render'
 import MeetingsPage from './index'
-import { meetingsQuery, readMeetings, writeMeetings } from './params'
+import { meetingsQuery, readMeetings, writeMeetings, type MeetingsView } from './params'
+import { otherViews } from './prefetch'
 import { MeetingsToolbar, SEARCH_SETTLE_MS } from './toolbar'
 
 const API = '/api/v1/companies'
@@ -978,6 +981,9 @@ describe('Sync', () => {
   })
 
   it('started: says Checking HubSpot, asks every 2 seconds until done, then Up to date and the new time', async () => {
+    // This test waits longer than the quiet warm-up of the other views does (3 seconds without an
+    // idle call), and counts the page's own reads, so the browser here is never idle.
+    fakeIdle()
     const found = meeting('m9', {
       meeting: { company_id: '109', title: 'Fit-out walk', starts_at: '2026-11-18T05:00:00Z' },
       company_name: 'Sample Ports Pty Ltd',
@@ -1174,6 +1180,146 @@ describe('the states', () => {
     })
     expect(server.sent.map((one) => `${one.path}?${one.search.toString()}`)).toEqual([
       `${MEETINGS}?when=past&who=team&limit=25&offset=0`,
+    ])
+  })
+})
+
+describe('warming the next views (Improvements 1, #10)', () => {
+  /** The lists asked for so far, as "when/who" and "+owner" when an owner narrows it. */
+  const views = (server: Server): string[] =>
+    lists(server).map(
+      (search) =>
+        `${search.get('when') ?? ''}/${search.get('who') ?? ''}${search.has('owner') ? `+${search.get('owner') ?? ''}` : ''}`,
+    )
+
+  /** A cache that keeps an answer fresh for 15 seconds, as the app's does. */
+  function appCache(): QueryClient {
+    return new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: Infinity, staleTime: 15_000 } },
+    })
+  }
+
+  /** The first list is in, and the browser has an idle moment. */
+  async function afterIdle(browser: ReturnType<typeof fakeIdle>): Promise<void> {
+    await screen.findByRole('list', { name: 'Today' })
+    await waitFor(() => {
+      expect(browser.waiting()).toBeGreaterThan(0)
+    })
+    browser.idle()
+  }
+
+  it('asks for Past and the other choices of whose, once the list is in and the browser is idle', async () => {
+    const browser = fakeIdle()
+    const server = mockServer()
+    renderMeetings()
+    await screen.findByRole('list', { name: 'Today' })
+    // While the browser is busy, only the list on screen is asked for.
+    expect(views(server)).toEqual(['upcoming/all'])
+
+    await afterIdle(browser)
+    await waitFor(() => {
+      expect([...views(server)].sort()).toEqual([
+        'past/all',
+        'upcoming/all',
+        'upcoming/mine',
+        'upcoming/team',
+      ])
+    })
+  })
+
+  it('opens Past and My meetings at once from the cache, and asks the server nothing more', async () => {
+    const browser = fakeIdle()
+    const server = mockServer()
+    const queryClient = appCache()
+    const { user } = renderWithProviders(
+      <RouterProvider
+        router={createMemoryRouter([{ path: '/companies/meetings', element: <MeetingsPage /> }], {
+          initialEntries: ['/companies/meetings'],
+        })}
+      />,
+      { withRouter: false, queryClient },
+    )
+    await afterIdle(browser)
+    await waitFor(() => {
+      expect(views(server)).toHaveLength(4)
+      expect(queryClient.isFetching()).toBe(0)
+    })
+
+    await user.click(screen.getByRole('radio', { name: 'Past' }))
+    // The list is there as the click ends, not grey blocks first.
+    expect(screen.getByRole('list', { name: 'Past meetings' })).toBeInTheDocument()
+    expect(document.querySelector('[data-slot=pending]')).toBeNull()
+    await user.click(screen.getByRole('radio', { name: 'Upcoming' }))
+    expect(screen.getByRole('list', { name: 'Today' })).toBeInTheDocument()
+    await user.click(screen.getByRole('radio', { name: 'My meetings' }))
+    expect(screen.getByText('Sample Logistics Pty Ltd')).toBeInTheDocument()
+    expect(views(server)).toHaveLength(4)
+  })
+
+  it('leaves out My team when HubSpot has no teams, and Whose when sign-in is off', async () => {
+    const browser = fakeIdle()
+    const noTeams = mockServer({ teamState: 'none_in_hubspot' })
+    const first = renderMeetings()
+    await afterIdle(browser)
+    await waitFor(() => {
+      expect([...views(noTeams)].sort()).toEqual(['past/all', 'upcoming/all', 'upcoming/mine'])
+    })
+    first.unmount()
+
+    const signInOffServer = mockServer({ signIn: 'off' })
+    renderMeetings()
+    await afterIdle(browser)
+    await waitFor(() => {
+      expect([...views(signInOffServer)].sort()).toEqual(['past/all', 'upcoming/all'])
+    })
+  })
+
+  it('keeps the owner, and asks for no more of the owners', async () => {
+    const browser = fakeIdle()
+    const server = mockServer()
+    renderMeetings(`/companies/meetings?owner=${MINE}`)
+    await afterIdle(browser)
+    await waitFor(() => {
+      expect([...views(server)].sort()).toEqual([
+        `past/all+${MINE}`,
+        `upcoming/all+${MINE}`,
+        `upcoming/mine+${MINE}`,
+        `upcoming/team+${MINE}`,
+      ])
+    })
+  })
+
+  it('asks for nothing more while a search is typed in the address', async () => {
+    const browser = fakeIdle()
+    const server = mockServer()
+    renderMeetings('/companies/meetings?q=logistics')
+    await screen.findByRole('list', { name: 'Today' })
+    expect(browser.waiting()).toBe(0)
+    expect(views(server)).toEqual(['upcoming/all'])
+  })
+
+  it('is stopped by leaving the page', async () => {
+    const browser = fakeIdle()
+    const server = mockServer()
+    const { unmount } = renderMeetings()
+    await screen.findByRole('list', { name: 'Today' })
+    await waitFor(() => {
+      expect(browser.waiting()).toBeGreaterThan(0)
+    })
+    unmount()
+    browser.idle()
+    expect(views(server)).toEqual(['upcoming/all'])
+  })
+
+  it('names the views a click opens: the other of Upcoming and Past, and each other choice of whose', () => {
+    const view: MeetingsView = { when: 'past', who: 'mine', owner: 'o-9', q: '', page: 3 }
+    expect(otherViews(view, ['all', 'mine', 'team'])).toEqual([
+      { when: 'upcoming', who: 'mine', owner: 'o-9', q: '', page: 0 },
+      { when: 'past', who: 'all', owner: 'o-9', q: '', page: 0 },
+      { when: 'past', who: 'team', owner: 'o-9', q: '', page: 0 },
+    ])
+    expect(otherViews({ ...view, when: 'upcoming', who: 'all' }, [])).toEqual([
+      { when: 'past', who: 'all', owner: 'o-9', q: '', page: 0 },
     ])
   })
 })
