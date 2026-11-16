@@ -10,12 +10,12 @@
 
 /**
  * The most the server takes, counted once a .vtt's times are out, when it doesn't say: the server
- * sends its own (`transcript_max_chars` on the call notes options, 60,000 now), which wins. Its
+ * sends its own (`transcript_max_chars` on the call notes options, 58,000 now: what fits whole in a HubSpot note with its first lines), which wins. Its
  * 422 `transcript_too_long` has the last word either way.
  */
-export const TRANSCRIPT_MAX_CHARS = 60_000
+export const TRANSCRIPT_MAX_CHARS = 58_000
 
-/** The server's limit, or 60,000 when it sends none (or one that can't be a limit). */
+/** The server's limit, or 58,000 when it sends none (or one that can't be a limit). */
 function limitOf(max: number | undefined): number {
   return max !== undefined && Number.isInteger(max) && max > 0 ? max : TRANSCRIPT_MAX_CHARS
 }
@@ -85,7 +85,7 @@ export type TranscriptCheck =
   { kind: 'ok' } | { kind: 'empty' } | { kind: 'too_long'; length: number; max: number }
 
 /**
- * Plain text may hold up to the server's limit (`max`, 60,000 when it sends none). A .vtt's times
+ * Plain text may hold up to the server's limit (`max`, 58,000 when it sends none). A .vtt's times
  * come out on the server, so here only the contract's 200,000 holds for it: the server's 422 says
  * if its words are still too long.
  */

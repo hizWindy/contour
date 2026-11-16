@@ -669,6 +669,47 @@ describe('To confirm', () => {
     ).toHaveValue('Call Jo back about the lease')
   })
 
+  it('with the AI off, Edit starts the summary empty and keeps the rep’s words read-only', async () => {
+    // The AI off: the server sends no summary, and the rep's words are the call's body. Putting
+    // them in the summary box would send them twice, or past the summary's 600 be refused.
+    const words = 'Spoke to the office manager about the lease. Call back in two weeks.'
+    const notes = threeNotes().map((item) =>
+      item.id === 'n2' ? { ...item, text: words, call: { summary: '', outcome: null } } : item,
+    )
+    const server = mockServer({ notes })
+    const { user } = renderActivity()
+    await toConfirmList()
+    const mining = card('Sample Mining Pty Ltd')
+    await user.click(within(mining).getByRole('button', { name: /^Edit/ }))
+    const summary = within(mining).getByRole('textbox', { name: 'Summary: Sample Mining Pty Ltd' })
+    expect(summary).toHaveValue('')
+    expect(summary).toHaveAttribute('maxlength', '600')
+    expect(within(mining).getByText(words)).toBeInTheDocument()
+    await user.type(summary, 'Lease talk; call back in two weeks.')
+    await user.click(within(mining).getByRole('button', { name: 'Done' }))
+    await waitFor(() => {
+      expect(sent(server, 'PATCH', `${NOTES}/n2`)).toHaveLength(1)
+    })
+    expect(sent(server, 'PATCH', `${NOTES}/n2`)[0]?.body).toEqual({
+      summary: 'Lease talk; call back in two weeks.',
+    })
+  })
+
+  it('with the AI off, leaving the empty summary box sends nothing', async () => {
+    const notes = threeNotes().map((item) =>
+      item.id === 'n2'
+        ? { ...item, text: 'No answer.', call: { summary: '', outcome: null } }
+        : item,
+    )
+    const server = mockServer({ notes })
+    const { user } = renderActivity()
+    await toConfirmList()
+    const mining = card('Sample Mining Pty Ltd')
+    await user.click(within(mining).getByRole('button', { name: /^Edit/ }))
+    await user.click(within(mining).getByRole('button', { name: 'Done' }))
+    expect(sent(server, 'PATCH', `${NOTES}/n2`)).toHaveLength(0)
+  })
+
   it('an edit the server refuses goes back, and a toast says why', async () => {
     const server = mockServer({ notes: threeNotes(), patch: 'fail' })
     const { user } = renderCallLogs()

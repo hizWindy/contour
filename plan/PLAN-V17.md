@@ -990,6 +990,12 @@ Newest first.
 
 Newest first.
 
+- 2026-11-16: **Two fixes after "ready to merge"**, from Track 2's message:
+  - `f83b615`: with the AI off (the launch path), Edit started a call's summary from the rep's words. Saving then sent them twice to HubSpot, or past 600 characters was refused. Edit now starts from the stored summary, and the words stay in view read-only. The box takes the server's 600, not 2,000.
+  - `b8ec4e8`: Log meeting's fallback limit is 58,000, matching Track 2's options.
+  - Checks: the affected tests (61) pass, and lint, types and Prettier pass.
+  - **Not on `master` yet:** `master` (`c4ebe58` = `plan-v17`) was joined before these, and before Track 2's `cadba58`. A dry run shows both tracks merge into `plan-v17` with no conflict. Joining them, and moving `master` again, is on Al-khair's word.
+
 - 2026-11-16: **Track 3 ready to merge.** Branch `plan-v17-track3`; the Stage A tag is `v17-notes-t3` (`868d1f4`).
   - **Checks:** lint and types pass; tests 111 files and 1,559 passed; the build passes. The first visit is 34 files, 236,463 bytes gzip.
   - **Stage B's independent review** (a fresh review-agent): one Must fix and seven Should fixes, all fixed (`f8bc44c` to `199446f`):

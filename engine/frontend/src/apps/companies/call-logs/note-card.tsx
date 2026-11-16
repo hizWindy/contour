@@ -268,7 +268,11 @@ export function NoteCard({
   const sorting = note.status === 'sorting'
   const locked = landing !== null || note.status === 'sending'
   const editing = editingWanted && !sorting && !locked
-  const summary = note.call.summary.trim() || note.text
+  // The card shows the summary, or the rep's own words while there is none (the AI off). Edit
+  // starts from the summary alone: the words already go to HubSpot as the call's body, so putting
+  // them in the summary box would send them twice, or be refused past the summary's limit.
+  const storedSummary = note.call.summary.trim()
+  const summary = storedSummary || note.text
   const outcome = note.call.outcome
   const fieldKinds = options.fields
   const client = useQueryClient()
@@ -343,15 +347,21 @@ export function NoteCard({
     node: (
       <div className="flex flex-col gap-3">
         {editing ? (
-          <SummaryField
-            value={summary}
-            label={`${SUMMARY}: ${note.company_name}`}
-            autoFocus
-            onSave={(text) => {
-              edit({ summary: text }, (now) => ({ ...now, call: { ...now.call, summary: text } }))
-            }}
-            onCancel={stop}
-          />
+          <>
+            {storedSummary === '' && note.text.trim() !== '' ? (
+              // The rep's own words stay in view, read-only, while they write a short summary.
+              <CardText text={note.text} className="text-body text-muted-foreground" />
+            ) : null}
+            <SummaryField
+              value={storedSummary}
+              label={`${SUMMARY}: ${note.company_name}`}
+              autoFocus
+              onSave={(text) => {
+                edit({ summary: text }, (now) => ({ ...now, call: { ...now.call, summary: text } }))
+              }}
+              onCancel={stop}
+            />
+          </>
         ) : (
           <CardText text={summary} className="text-body" />
         )}

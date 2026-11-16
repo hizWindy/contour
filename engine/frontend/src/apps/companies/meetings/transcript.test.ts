@@ -44,18 +44,18 @@ describe('how long it is', () => {
 })
 
 describe('whether it can go', () => {
-  it('takes plain text up to 60,000 characters, and says when it is empty', () => {
-    expect(TRANSCRIPT_MAX_CHARS).toBe(60_000)
-    expect(checkTranscript('a'.repeat(60_000), null)).toEqual({ kind: 'ok' })
-    expect(checkTranscript('a'.repeat(60_001), null)).toEqual({
+  it('takes plain text up to 58,000 characters, and says when it is empty', () => {
+    expect(TRANSCRIPT_MAX_CHARS).toBe(58_000)
+    expect(checkTranscript('a'.repeat(58_000), null)).toEqual({ kind: 'ok' })
+    expect(checkTranscript('a'.repeat(58_001), null)).toEqual({
       kind: 'too_long',
-      length: 60_001,
-      max: 60_000,
+      length: 58_001,
+      max: 58_000,
     })
     expect(checkTranscript('   ', null)).toEqual({ kind: 'empty' })
   })
 
-  it("leaves a .vtt's 60,000 to the server, which takes its times out, up to 200,000 in all", () => {
+  it("leaves a .vtt's 58,000 to the server, which takes its times out, up to 200,000 in all", () => {
     const long = `${VTT}\n${'a'.repeat(70_000)}`
     expect(checkTranscript(long, 'meeting.vtt')).toEqual({ kind: 'ok' })
     const tooLong = `${VTT}\n${'a'.repeat(TEXT_MAX_CHARS)}`
@@ -67,13 +67,13 @@ describe('whether it can go', () => {
   })
 
   it('shows the count in the last tenth of the room only', () => {
-    expect(nearCount('a'.repeat(53_999), null)).toBeNull()
-    expect(nearCount('a'.repeat(54_000), null)).toEqual({ length: 54_000, max: 60_000 })
+    expect(nearCount('a'.repeat(52_199), null)).toBeNull()
+    expect(nearCount('a'.repeat(52_200), null)).toEqual({ length: 52_200, max: 58_000 })
     // A .vtt counts against the 200,000 its text may hold, times and all.
     expect(nearCount(`${VTT}\n${'a'.repeat(70_000)}`, 'meeting.vtt')).toBeNull()
   })
 
-  it("takes the server's own limit, and 60,000 when it sends none or one that can't be", () => {
+  it("takes the server's own limit, and 58,000 when it sends none or one that can't be", () => {
     expect(checkTranscript('a'.repeat(1_000), null, 1_000)).toEqual({ kind: 'ok' })
     expect(checkTranscript('a'.repeat(1_001), null, 1_000)).toEqual({
       kind: 'too_long',
@@ -83,7 +83,7 @@ describe('whether it can go', () => {
     expect(nearCount('a'.repeat(899), null, 1_000)).toBeNull()
     expect(nearCount('a'.repeat(900), null, 1_000)).toEqual({ length: 900, max: 1_000 })
     for (const none of [undefined, 0, -5, 1.5]) {
-      expect(checkTranscript('a'.repeat(60_001), null, none)).toMatchObject({ max: 60_000 })
+      expect(checkTranscript('a'.repeat(58_001), null, none)).toMatchObject({ max: 58_000 })
     }
     // A .vtt still counts against the 200,000 its text may hold: its times come out first.
     expect(checkTranscript(`${VTT}\n${'a'.repeat(5_000)}`, 'meeting.vtt', 1_000)).toEqual({
