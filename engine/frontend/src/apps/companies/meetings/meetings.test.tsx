@@ -1056,6 +1056,42 @@ describe('the states', () => {
   })
 })
 
+describe('AI drafts the pre-read', () => {
+  it('New pre-read says so above its buttons: from what, how long, the check, and the cost', async () => {
+    mockServer()
+    const { user } = renderMeetings()
+    await screen.findByRole('list', { name: 'Today' })
+    await user.click(screen.getByRole('button', { name: 'New pre-read' }))
+    const dialog = await screen.findByRole('dialog', { name: 'New pre-read' })
+    const note = dialog.querySelector('[data-slot=ai-note]')
+    expect(note).toHaveTextContent(
+      'AI drafts this pre-read from what we know in HubSpot: the company, its people, calls, meetings and notes. It takes about 20 seconds. You check it before anyone gets it.',
+    )
+    expect(within(note as HTMLElement).getByText('About US$0.03.')).toHaveClass(
+      'text-muted-foreground',
+    )
+    expect(note?.querySelector('svg.lucide-cpu')).toHaveAttribute('aria-hidden', 'true')
+    // Above the buttons, and said once: the description no longer says how it is drafted.
+    const buttons = within(dialog).getByRole('button', { name: 'Draft the pre-read' })
+    expect(note?.compareDocumentPosition(buttons)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(dialog).toHaveAccessibleDescription("For a meeting that isn't in HubSpot.")
+  })
+
+  it('"Draft it" says that AI drafts it and the rep checks it, to the pointer and to a screen reader', async () => {
+    mockServer()
+    const { user } = renderMeetings()
+    await screen.findByRole('list', { name: 'Today' })
+    const draftIt = screen.getByRole('button', {
+      name: 'Draft it: Sample Logistics Pty Ltd, 10:00 am',
+    })
+    expect(draftIt).toHaveAccessibleDescription("AI drafts it. You check it before it's sent.")
+    await user.hover(draftIt)
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(
+      "AI drafts it. You check it before it's sent.",
+    )
+  })
+})
+
 describe('New pre-read', () => {
   it('says what each field needs, and reads the day and the time as typed', async () => {
     const server = mockServer()

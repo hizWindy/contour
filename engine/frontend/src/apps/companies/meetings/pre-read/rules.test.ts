@@ -9,6 +9,8 @@ import { ApiProblem } from '@/api/client'
 import type { FormPerson, FormSummary, MeetingFormOut } from '@/api/types'
 import {
   addressKey,
+  DRAFT_STEP_COUNT,
+  draftReached,
   hasSummaries,
   isTicked,
   readAddresses,
@@ -339,5 +341,21 @@ describe('asking again while it drafts', () => {
       isFormMissing(new ApiProblem({ title: 'Off', status: 409, code: 'meeting_forms_off' })),
     ).toBe(false)
     expect(isFormMissing(new Error('boom'))).toBe(false)
+  })
+})
+
+describe('draftReached (PLAN-V18 T2-4)', () => {
+  const facts = [{ label: 'Staff', value: 'About 300', source: 'HubSpot company' }]
+
+  it('moves on only with what the server says: the facts, then the draft', () => {
+    expect(draftReached({ status: 'drafting', facts: [] })).toBe(1)
+    expect(draftReached({ status: 'drafting', facts })).toBe(2)
+    expect(draftReached({ status: 'draft', facts })).toBe(DRAFT_STEP_COUNT)
+    expect(draftReached({ status: 'sent', facts })).toBe(DRAFT_STEP_COUNT)
+  })
+
+  it('a failure stops at the step it reached', () => {
+    expect(draftReached({ status: 'failed', facts: [] })).toBe(1)
+    expect(draftReached({ status: 'failed', facts })).toBe(2)
   })
 })

@@ -306,6 +306,16 @@ function summaryOf(title: string) {
   return within(block)
 }
 
+/** The draft's steps (PLAN-V18 T2-4), each with its state: done, now, waiting or stopped. */
+function steps(): Record<string, string | undefined> {
+  const list = screen.getByRole('list', { name: 'How the draft is going' })
+  return Object.fromEntries(
+    within(list)
+      .getAllByRole('listitem')
+      .map((item) => [item.textContent.split(',')[0] ?? '', item.dataset.state]),
+  )
+}
+
 /** The page's header: the meeting, its company, and the status. */
 function pageHeader(): HTMLElement {
   const header = document.querySelector('[data-slot=page-header]')
@@ -508,7 +518,9 @@ describe('the pencil', () => {
     expect(await screen.findByText('Drafting')).toBeInTheDocument()
     expect(server.calls.filter((call) => call.path === REDRAFT)).toHaveLength(1)
     expect(stillBlocks()).toBe(2)
-    expect(screen.getByText('Writing the summaries.')).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'AI is drafting this pre-read' }),
+    ).toBeInTheDocument()
     expect(summaryOf('What we know about the project').getByText(words)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^Redraft/ })).toBeDisabled()
 
@@ -696,14 +708,22 @@ describe('a save that fails after the rep has left the page', () => {
 })
 
 describe('while it drafts', () => {
-  it('shows still grey blocks, asks every 2 seconds, and stops once it is ready', async () => {
+  it('fills each step as its real state arrives, asks every 2 seconds, and stops once it is ready', async () => {
     const server = mockServer({
       form: form(),
       next: [drafting(), drafting({ facts: FACTS }), form()],
     })
     const { user } = renderPreRead()
-    expect(await screen.findByText('Writing the summaries.')).toBeInTheDocument()
+    // AI drafts it, and the rep checks it before anyone gets it (PLAN-V18 T2-4).
+    const progress = await screen.findByRole('region', { name: 'AI is drafting this pre-read' })
+    expect(progress).toHaveTextContent('You check it before anyone gets it.')
     expect(screen.getByText('Drafting')).toBeInTheDocument()
+    // No facts yet: HubSpot is being read.
+    expect(steps()).toEqual({
+      'Reading HubSpot': 'now',
+      'Writing the summaries': 'waiting',
+      'Ready for you to check': 'waiting',
+    })
     // The facts come a moment after the start: their place is kept.
     expect(screen.getByText('The facts show in a moment.')).toBeInTheDocument()
     // Each summary is a still block at its real size, and says nothing until it is written.
@@ -724,19 +744,30 @@ describe('while it drafts', () => {
     )
     expect(reads(server)).toBe(1)
 
-    // 2 seconds later: the facts.
+    // 2 seconds later: the facts, so the summaries are being written. Never on a timer: the step
+    // moved with the answer that brought the facts.
     expect(await screen.findByText('About 300', {}, { timeout: 4000 })).toBeInTheDocument()
     expect(reads(server)).toBe(2)
+    expect(steps()).toEqual({
+      'Reading HubSpot': 'done',
+      'Writing the summaries': 'now',
+      'Ready for you to check': 'waiting',
+    })
     expect(stillBlocks()).toBe(3)
 
-    // 2 more: the summaries, and the draft is ready.
+    // 2 more: the summaries, and the draft is ready. The steps stay, full.
     expect(
       await screen.findByText('A freight company with about 300 staff.', {}, { timeout: 4000 }),
     ).toBeInTheDocument()
     expect(reads(server)).toBe(3)
     expect(stillBlocks()).toBe(0)
     expect(await screen.findByText('Draft ready')).toBeInTheDocument()
-    expect(screen.queryByText('Writing the summaries.')).toBeNull()
+    expect(steps()).toEqual({
+      'Reading HubSpot': 'done',
+      'Writing the summaries': 'done',
+      'Ready for you to check': 'done',
+    })
+    expect(screen.getByRole('region', { name: 'AI drafted this pre-read' })).toBeInTheDocument()
 
     // Then it stops asking.
     await act(async () => {
@@ -744,10 +775,17 @@ describe('while it drafts', () => {
     })
     expect(reads(server)).toBe(3)
   }, 15_000)
+
+  it('shows no steps on a pre-read that opens ready: there was nothing to watch', async () => {
+    mockServer()
+    renderPreRead()
+    await screen.findByRole('heading', { level: 1, name: 'Office walk-through' })
+    expect(screen.queryByRole('list', { name: 'How the draft is going' })).toBeNull()
+  })
 })
 
 describe('a failed draft', () => {
-  it('says what went wrong in plain words, with Try again and what it costs', async () => {
+  it('stops the steps where it failed, says why in plain words, with Try again and what it costs', async () => {
     const server = mockServer({
       form: form({
         status: 'failed',
@@ -759,25 +797,51 @@ describe('a failed draft', () => {
     })
     const { user } = renderPreRead()
     const notice = await screen.findByRole('alert')
-    expect(notice).toHaveTextContent("The summaries weren't written")
-    expect(notice).toHaveTextContent('Claude is busy right now. Try again in a minute.')
+    expect(notice).toHaveTextContent(
+      "The summaries weren't written. Claude is busy right now. Try again in a minute.",
+    )
     expect(screen.getByText('Draft failed')).toBeInTheDocument()
-    // The summaries' place is the notice: no empty summaries, and no second Redraft.
-    expect(screen.queryByRole('heading', { level: 3 })).toBeNull()
+    // The facts were read: it stopped while writing the summaries.
+    expect(steps()).toEqual({
+      'Reading HubSpot': 'done',
+      'Writing the summaries': 'stopped',
+      'Ready for you to check': 'waiting',
+    })
+    const progress = screen.getByRole('region', { name: 'The draft stopped' })
+    // The summaries stay, empty, so the rep can write them; Try again is the one redraft.
+    expect(screen.getAllByRole('heading', { level: 3 })).toHaveLength(3)
     expect(screen.queryByRole('button', { name: /^Redraft/ })).toBeNull()
     expect(screen.getByRole('button', { name: 'Check and send' })).toHaveAccessibleDescription(
       "The summaries weren't written. Try again first.",
     )
 
-    const tryAgain = within(notice).getByRole('button', { name: 'Try again (about US$0.03)' })
+    const tryAgain = within(progress).getByRole('button', { name: 'Try again (about US$0.03)' })
     expect(tryAgain).toHaveAccessibleDescription(
       'It writes the three summaries again. Your edits are kept. US$0.03 so far.',
     )
     await user.click(tryAgain)
-    expect(await screen.findByText('Writing the summaries.')).toBeInTheDocument()
+    expect(
+      await screen.findByRole('region', { name: 'AI is drafting this pre-read' }),
+    ).toBeInTheDocument()
     expect(server.calls.filter((call) => call.path === REDRAFT)).toHaveLength(1)
     expect(stillBlocks()).toBe(3)
-    expect(screen.queryByText("The summaries weren't written")).toBeNull()
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it("says the server's own sentence as it is, and stops at Reading HubSpot before the facts", async () => {
+    const limit =
+      "The summaries weren't written: today's AI spending limit is reached. Write them yourself, or draft again tomorrow."
+    mockServer({
+      form: form({ status: 'failed', error: limit, facts: [], summaries: NONE_WRITTEN }),
+    })
+    renderPreRead()
+    expect(await screen.findByRole('alert')).toHaveTextContent(limit)
+    expect(screen.getByRole('alert').textContent).toBe(limit)
+    expect(steps()).toEqual({
+      'Reading HubSpot': 'stopped',
+      'Writing the summaries': 'waiting',
+      'Ready for you to check': 'waiting',
+    })
   })
 })
 

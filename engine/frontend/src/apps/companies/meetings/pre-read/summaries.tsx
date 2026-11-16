@@ -15,10 +15,11 @@
  *   server adds them together, and keeps no cost for each one). While it drafts, each AI summary
  *   is a still grey block at its real size (the rep's own stay as they are), and the page asks
  *   again every 2 seconds (`useMeetingForm`).
- * - **A failed draft** says what went wrong in the server's plain words, with Try again (the
- *   redraft). Summaries an earlier draft wrote stay under it.
+ * - **A failed draft** says what went wrong, with Try again, in the draft's steps at the top of the
+ *   page (`draft-progress.tsx`, PLAN-V18 T2-4). The summaries stay here, so the rep can write them
+ *   by hand, and those an earlier draft wrote stay as they were.
  */
-import { Cpu, Hourglass, PenLine, RefreshCw, TriangleAlert } from 'lucide-react'
+import { Cpu, PenLine, RefreshCw } from 'lucide-react'
 import { useEffect, useId, useRef, useState, type RefObject } from 'react'
 import { toast } from 'sonner'
 import { isStillDrafting, useEditMeetingForm, useRedraftMeetingForm } from '@/api/hooks/meetings'
@@ -29,17 +30,9 @@ import { toastProblem } from '@/lib/problems'
 import { SourceChip } from '../../source-chip'
 import { EditPencil, LineTextBox } from '../../line-box'
 import { FadeSwap } from './fade-swap'
-import {
-  hasSummaries,
-  SUMMARY_MAX_CHARS,
-  SUMMARY_NAMES,
-  withSummary,
-  type SummaryName,
-} from './rules'
+import { SUMMARY_MAX_CHARS, SUMMARY_NAMES, withSummary, type SummaryName } from './rules'
 import {
   EDITED_BY_YOU,
-  FAILED_FALLBACK,
-  FAILED_TITLE,
   LEFT_EMPTY,
   leftNotSavedWords,
   NOTHING_FROM_AI,
@@ -49,9 +42,7 @@ import {
   SUMMARIES,
   SUMMARY_HINT,
   SUMMARY_TITLES,
-  TRY_AGAIN,
   withEstimate,
-  WRITING,
   WRITTEN_BY_AI,
 } from './words'
 
@@ -223,49 +214,6 @@ function SummaryBlock({ form, name }: SummaryBlockProps) {
   )
 }
 
-/** What went wrong with the draft, in the server's plain words, and Try again (the redraft). */
-function FailedNotice({
-  form,
-  busy,
-  onTryAgain,
-}: {
-  form: MeetingFormOut
-  busy: boolean
-  onTryAgain: () => void
-}) {
-  const hintId = useId()
-  return (
-    <div
-      role="alert"
-      data-slot="draft-failed"
-      className="flex items-start gap-3 rounded-lg border border-destructive bg-destructive-soft p-4 text-ui text-destructive-ink"
-    >
-      <TriangleAlert aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <p className="font-semibold">{FAILED_TITLE}</p>
-        <p>{form.error?.trim() || FAILED_FALLBACK}</p>
-        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="touch:h-11"
-            disabled={busy}
-            aria-describedby={hintId}
-            onClick={onTryAgain}
-          >
-            <RefreshCw aria-hidden="true" />
-            {withEstimate(TRY_AGAIN)}
-          </Button>
-          <p id={hintId} className="text-caption">
-            {redraftHint(form.cost_usd)}
-          </p>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 /** Redraft, with what it costs, and the line that says the rep's edits stay. */
 function RedraftRow({
   form,
@@ -308,8 +256,6 @@ export function SummariesSection({ form }: { form: MeetingFormOut }) {
   const title = useRef<HTMLHeadingElement>(null)
   const redraft = useRedraftMeetingForm(form.id)
   const failed = form.status === 'failed'
-  const drafting = form.status === 'drafting'
-  const showBlocks = !failed || hasSummaries(form)
 
   const startRedraft = (): void => {
     // The button greys out (or, in the failed box, goes) while it drafts: the focus stays here.
@@ -332,23 +278,13 @@ export function SummariesSection({ form }: { form: MeetingFormOut }) {
         >
           {SUMMARIES}
         </h2>
-        {drafting ? (
-          <p className="flex items-center gap-1.5 text-caption text-muted-foreground">
-            <Hourglass aria-hidden="true" className="size-3.5 shrink-0" />
-            {WRITING}
-          </p>
-        ) : null}
       </div>
-      {failed ? (
-        <FailedNotice form={form} busy={redraft.isPending} onTryAgain={startRedraft} />
-      ) : null}
-      {showBlocks ? (
-        <div className="flex flex-col divide-y rounded-lg border bg-card">
-          {SUMMARY_NAMES.map((name) => (
-            <SummaryBlock key={name} form={form} name={name} />
-          ))}
-        </div>
-      ) : null}
+      <div className="flex flex-col divide-y rounded-lg border bg-card">
+        {SUMMARY_NAMES.map((name) => (
+          <SummaryBlock key={name} form={form} name={name} />
+        ))}
+      </div>
+      {/* A failed draft's Try again is with its reason, in the draft's steps. */}
       {failed ? null : <RedraftRow form={form} busy={redraft.isPending} onRedraft={startRedraft} />}
     </section>
   )

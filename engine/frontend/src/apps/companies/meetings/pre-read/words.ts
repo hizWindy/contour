@@ -57,6 +57,31 @@ export const SUMMARY_HINT = "Your words take the place of the AI's, and stay thr
 
 export const FAILED_TITLE = "The summaries weren't written"
 export const FAILED_FALLBACK = 'Something went wrong while writing them. Try again.'
+
+// --- While AI drafts it (PLAN-V18 T2-4) ---------------------------------------------------------
+
+/** The draft's steps, each filled when its real state arrives: the facts, the summaries, ready. */
+export const DRAFT_STEPS = [
+  'Reading HubSpot',
+  'Writing the summaries',
+  'Ready for you to check',
+] as const
+export const DRAFT_STEPS_LABEL = 'How the draft is going'
+export const DRAFTING_TITLE = 'AI is drafting this pre-read'
+export const DRAFTED_TITLE = 'AI drafted this pre-read'
+export const DRAFT_STOPPED = 'The draft stopped'
+export const CHECK_BEFORE_SENDING = 'You check it before anyone gets it.'
+
+/**
+ * Why a draft failed, in the server's plain words (PLAN-V18 "Words for when things go wrong"):
+ * "The summaries weren't written: today's AI spending limit is reached. Write them yourself, or
+ * draft again tomorrow." A sentence that doesn't say what wasn't written gets the title first.
+ */
+export function failedReason(error: string | null | undefined): string {
+  const reason = error?.trim() || FAILED_FALLBACK
+  if (reason.toLowerCase().startsWith(FAILED_TITLE.toLowerCase())) return sentence(reason)
+  return `${FAILED_TITLE}. ${sentence(reason)}`
+}
 export const TRY_AGAIN = 'Try again'
 export const REDRAFT = 'Redraft'
 export const EDITS_KEPT = 'Your edits are kept.'

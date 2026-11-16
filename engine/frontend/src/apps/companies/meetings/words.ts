@@ -81,6 +81,8 @@ export const STATUS_WORDS: Readonly<Record<RowStatus, string>> = {
 }
 
 export const DRAFT_IT = 'Draft it'
+/** "Draft it"'s description, for the pointer and for screen readers (PLAN-V18 T2-4). */
+export const DRAFT_IT_NOTE = "AI drafts it. You check it before it's sent."
 export const CHECK_AND_SEND = 'Check and send'
 export const OPEN = 'Open'
 export const LOG_MEETING = 'Log meeting'
@@ -223,8 +225,15 @@ export function firstOfWords(shown: number, total: number): string {
 // --- New pre-read ---------------------------------------------------------------------------
 
 export const NEW_PRE_READ = 'New pre-read'
-export const NEW_DESCRIPTION =
-  "For a meeting that isn't in HubSpot. It is drafted from what we know about the company."
+export const NEW_DESCRIPTION = "For a meeting that isn't in HubSpot."
+/**
+ * Who drafts it, from what, how long it takes, and that the rep checks it first (PLAN-V18 T2-4).
+ * The seconds are TBC: the real draft in T2-8 measures them.
+ */
+export const AI_DRAFTS_NOTE =
+  'AI drafts this pre-read from what we know in HubSpot: the company, its people, calls, meetings and notes. It takes about 20 seconds. You check it before anyone gets it.'
+/** What one draft costs, by the plan's estimate (PLAN-V17 "What it costs"). */
+export const AI_DRAFT_COST = 'About US$0.03.'
 export const COMPANY = 'Company'
 export const PICK_COMPANY = 'Pick a company'
 export const WHICH_MEETING_COMPANY = 'Which company is the meeting with?'

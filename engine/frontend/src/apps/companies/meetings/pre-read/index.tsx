@@ -10,7 +10,9 @@
  *
  * - **While it drafts** (a new pre-read, or a redraft), the page asks again every 2 seconds and
  *   stops once it is ready or failed (`useMeetingForm`). What changes doesn't move: the status
- *   fades from one word to the next, and the summaries take the place of their grey blocks.
+ *   fades from one word to the next, and the summaries take the place of their grey blocks. The
+ *   draft's steps sit under the header (`draft-progress.tsx`, PLAN-V18 T2-4): each fills as its
+ *   real state arrives, and a failed draft stops at its step with why and Try again.
  * - **Every state is drawn:** loading (a still shape of the page after 200ms), not found (a 404,
  *   or an address that can't be a pre-read: plain words and the way back to Meetings), pre-meeting
  *   forms switched off (the words Meetings uses), and any other failure in the error box. Not
@@ -41,6 +43,7 @@ import { PHONE, useMediaQuery } from '@/lib/use-media-query'
 import { cn } from '@/lib/utils'
 import { MEETINGS_PATH } from '../params'
 import { MeetingFormsOff } from '../states'
+import { DraftProgress } from './draft-progress'
 import { FactsRowsPending, FactsSection } from './facts'
 import { PreReadHeader } from './header'
 import { SendDialog } from './send-dialog'
@@ -141,6 +144,13 @@ function PreReadView({ form }: { form: MeetingFormOut }) {
   const client = useQueryClient()
   const onPhone = useMediaQuery(PHONE)
   const [sending, setSending] = useState(false)
+  // Seen drafting on this visit: the draft's steps stay, full, once it is ready (PLAN-V18 T2-4).
+  const [sawDrafting, setSawDrafting] = useState(form.status === 'drafting')
+  if (form.status === 'drafting' && !sawDrafting) setSawDrafting(true)
+  const showSteps =
+    form.status === 'drafting' ||
+    form.status === 'failed' ||
+    (form.status === 'draft' && sawDrafting)
   // Sent from this page just now: "Sent" draws its tick once.
   const [justSent, setJustSent] = useState(false)
   const { id, status } = form
@@ -162,6 +172,7 @@ function PreReadView({ form }: { form: MeetingFormOut }) {
         )}
       >
         <PreReadHeader form={form} justSent={justSent} />
+        {showSteps ? <DraftProgress form={form} className="rounded-lg border bg-card p-4" /> : null}
         <SentNote form={form} />
         <FactsSection form={form} />
         <SummariesSection form={form} />
