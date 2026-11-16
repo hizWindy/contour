@@ -20,7 +20,13 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from core.claude import daily as daily_module
 from core.claude.budget import BudgetSpent
-from core.claude.client import AnthropicClaude, ClaudeError, ClaudeUnavailable, Reply
+from core.claude.client import (
+    AnthropicClaude,
+    ClaudeError,
+    ClaudeRefused,
+    ClaudeUnavailable,
+    Reply,
+)
 from core.claude.daily import (
     NO_ID_SECONDS,
     DailyCap,
@@ -396,14 +402,42 @@ def test_the_wait_claude_asks_for_is_kept_within_limits() -> None:
 async def test_any_other_error_is_never_sent_again(log: Log, clock: Clock) -> None:
     calls: list[httpx2.Request] = []
     bad = httpx2.Response(
-        400, json={"type": "error", "error": {"type": "invalid_request_error", "message": "no"}}
+        500, json={"type": "error", "error": {"type": "api_error", "message": "no"}}
     )
     claude = AnthropicClaude(client=sdk_answering([bad], calls))
     with pytest.raises(ClaudeError) as caught:
         await claude.ask(system="s", prompt="p", form=Answer)
     assert len(calls) == 1  # a retry could be billed again
     assert caught.value.title == "Claude couldn't answer"
+    assert not isinstance(caught.value, ClaudeUnavailable)  # one failure doesn't stop the work
     assert "no" not in (caught.value.detail or "")  # what Claude said goes to the log only
+
+
+async def test_a_request_claude_refuses_says_so_plainly_and_stops_the_work(
+    log: Log, clock: Clock
+) -> None:
+    """16 Nov 2026: Claude answered 400 "The compiled grammar is too large" to every company form,
+    and a run kept paying for the research of company after company. A 400 is our request being
+    wrong: it is never sent again, and it is `ClaudeUnavailable`, which stops a run at once."""
+    calls: list[httpx2.Request] = []
+    bad = httpx2.Response(
+        400,
+        json={
+            "type": "error",
+            "error": {
+                "type": "invalid_request_error",
+                "message": "The compiled grammar is too large",
+            },
+        },
+    )
+    claude = AnthropicClaude(client=sdk_answering([bad], calls))
+    with pytest.raises(ClaudeRefused) as caught:
+        await claude.ask(system="s", prompt="p", form=Answer)
+    assert len(calls) == 1
+    assert isinstance(caught.value, ClaudeUnavailable)
+    assert caught.value.title == "Claude refused the request"
+    assert "trying again will not help" in caught.value.detail
+    assert "grammar" not in caught.value.detail  # what Claude said goes to the log only
 
 
 async def test_a_paused_turn_that_fails_later_still_counts_its_first_part(

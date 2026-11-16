@@ -124,12 +124,13 @@ function RunView({ runId, run }: { runId: string; run: Run }) {
   const canResume = status === 'interrupted' || status === 'failed'
   const byResult = RESULT_ORDER.filter((result) => (counts.by_result[result] ?? 0) > 0)
   // The goal of good leads (PLAN-V16 T3-3): the live results while it runs, then the backend's
-  // own count. Its "ended short" line says why, so the stop reason isn't repeated under it.
-  const goal = goalProgress(
-    { ...final, status },
-    ended ? final.good_leads : goodLeads(counts),
-    ended,
-  )
+  // own count. Its "ended short" line says why, so the stop reason isn't repeated under it. Only an
+  // automatic run has one, to report against its share of the round's goal. A run a person
+  // starts has none, and an old one's goal of 20 is not shown either (PLAN-V20: no goal stops a
+  // run, so a bar that reads 0 of 20 says nothing).
+  const goal = final.schedule_id
+    ? goalProgress({ ...final, status }, ended ? final.good_leads : goodLeads(counts), ended)
+    : null
   const whyShown = goal?.state === 'short'
 
   // A company finished: the list of companies and the cost split read it again.

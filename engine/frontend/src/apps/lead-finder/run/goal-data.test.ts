@@ -83,7 +83,7 @@ describe("a run's leads, as Levi lists them", () => {
     overridden_at: null,
   }
 
-  it('ranks A and B by tier then score, then the excluded, the watch list and a count', () => {
+  it('ranks A and B by tier then score, then the excluded, the watch list and those under 40', () => {
     const groups = groupRunLeads([
       lead('b-61', 'B', 61),
       lead('c-47', 'C', 47),
@@ -96,7 +96,22 @@ describe("a run's leads, as Levi lists them", () => {
     expect(groups.ranked.map((item) => item.id)).toEqual(['a-90', 'a-80', 'b-70', 'b-61'])
     expect(groups.excluded.map((item) => item.id)).toEqual(['x'])
     expect(groups.watch.map((item) => item.id)).toEqual(['c-47'])
-    expect(groups.discarded).toBe(1)
+    // Listed, not just counted (PLAN-V20): every company the run researched is shown
+    expect(groups.discarded.map((item) => item.id)).toEqual(['d-20'])
+  })
+
+  it('lists a lead judged before the tiers, with no tier, by what its result stands for', () => {
+    const groups = groupRunLeads([
+      lead('old-drop', null, 5, { result: 'drop' }),
+      lead('new-b', 'B', 60, { result: 'pass' }),
+      lead('old-pass', null, 76, { result: 'pass' }),
+      lead('old-watch', null, 30, { result: 'watch' }),
+      lead('old-director', null, 55, { result: 'director_review' }),
+    ])
+    // A Pass or a Director review is ranked with Tier A and B, a Watch is Tier C, a Drop is under 40
+    expect(groups.ranked.map((item) => item.id)).toEqual(['old-pass', 'new-b', 'old-director'])
+    expect(groups.watch.map((item) => item.id)).toEqual(['old-watch'])
+    expect(groups.discarded.map((item) => item.id)).toEqual(['old-drop'])
   })
 
   it('treats an overridden exclusion like any lead', () => {

@@ -128,7 +128,7 @@ class CapsOverride:
 
 
 # The company limit of a run a schedule started: the most `run_max_companies` allows. It goes on
-# until its project's own goal, or until no company is left (9 Nov, Al-khair).
+# until no company is left. A project's goal is only reported against (9 Nov, Al-khair; PLAN-V20).
 SCHEDULED_MAX_COMPANIES = 100
 
 

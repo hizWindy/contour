@@ -360,11 +360,30 @@ describe('the run list', () => {
   })
 })
 
-describe('the goal of good leads (PLAN-V16 T3-3)', () => {
-  const DONE = { mode: 'discovery', finished_at: '2026-10-26T04:13:29Z' } as const
+// Only an automatic run, one a schedule started, has a goal to report against (PLAN-V20).
+const AUTOMATIC = { schedule_id: '99999999-aaaa-bbbb-cccc-dddddddddddd' } as const
+
+describe('the goal of good leads, for an automatic run (PLAN-V16 T3-3, PLAN-V20)', () => {
+  const DONE = { ...AUTOMATIC, mode: 'discovery', finished_at: '2026-10-26T04:13:29Z' } as const
+
+  it('a run a person started shows no goal, even one that was asked for 20 before PLAN-V20', async () => {
+    mockApi(() =>
+      run({
+        mode: 'discovery',
+        status: 'done',
+        finished_at: '2026-10-26T04:13:29Z',
+        goal_leads: 20,
+        good_leads: 3,
+      }),
+    )
+    renderRun()
+    expect(await screen.findByText('Progress')).toBeInTheDocument()
+    expect(screen.queryByText('good leads found')).not.toBeInTheDocument()
+    expect(screen.queryByRole('progressbar', { name: 'Good leads found' })).toBeNull()
+  })
 
   it('running: shows how many good leads it has found of its goal, live', async () => {
-    mockApi(() => run({ mode: 'discovery', goal_leads: 20 }))
+    mockApi(() => run({ ...AUTOMATIC, mode: 'discovery', goal_leads: 20 }))
     renderRun()
     await waitFor(() => {
       expect(FakeEventSource.instances.length).toBeGreaterThan(0)
@@ -428,7 +447,13 @@ describe('the goal of good leads (PLAN-V16 T3-3)', () => {
 
   it('no goal: no goal line, the stop reason as before', async () => {
     mockApi(() =>
-      run({ ...DONE, status: 'done', goal_leads: null, stop_reason: 'The run reached its limit' }),
+      run({
+        mode: 'discovery',
+        finished_at: '2026-10-26T04:13:29Z',
+        status: 'done',
+        goal_leads: null,
+        stop_reason: 'The run reached its limit',
+      }),
     )
     renderRun()
     expect(await screen.findByText(/Stopped early: The run reached its limit/)).toBeInTheDocument()
@@ -478,7 +503,7 @@ describe('the run leads, as Levi lists them (PLAN-V16 T3-3)', () => {
     overridden_at: null,
   }
 
-  it('ranks Tier A and B, then lists the excluded with each reason and the watch list', async () => {
+  it('ranks Tier A and B, then lists the excluded, the watch list and those under 40', async () => {
     const finished = run({ mode: 'discovery', status: 'done', finished_at: '2026-10-26T04:13:29Z' })
     mockApi(() => finished, [finished], {
       '/api/v1/lead-finder/leads': {
@@ -519,10 +544,34 @@ describe('the run leads, as Levi lists them (PLAN-V16 T3-3)', () => {
     const watch = screen.getByRole('table', { name: 'Watch' })
     expect(within(watch).getByText('Sample Insurance')).toBeInTheDocument()
 
-    expect(screen.getByText(/1 company scored under 40 and is not listed/)).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'See it in Results' })).toHaveAttribute(
-      'href',
-      `/results?run_id=${RUN_ID}&tier=discard`,
-    )
+    // Every company the run researched is listed, so one that scored under 40 is not hidden
+    // behind a count (PLAN-V20): a run of weak companies used to look empty.
+    const under = screen.getByRole('table', { name: 'Scored under 40' })
+    expect(within(under).getByText('Sample Retail')).toBeInTheDocument()
+    expect(screen.queryByText(/not listed/)).not.toBeInTheDocument()
+  })
+
+  it('lists a run that has only weak companies, none left out', async () => {
+    const finished = run({ mode: 'discovery', status: 'done', finished_at: '2026-10-26T04:13:29Z' })
+    mockApi(() => finished, [finished], {
+      '/api/v1/lead-finder/leads': {
+        total: 3,
+        items: [
+          row('11111111-2222-3333-4444-555555555555', 'Alta', 'discard', 2, { result: 'watch' }),
+          row('22222222-2222-3333-4444-555555555555', 'SEC', 'discard', 0, { result: 'watch' }),
+          row('33333333-2222-3333-4444-555555555555', 'OpenAsset', 'discard', 0),
+        ],
+      },
+    })
+    renderRun()
+
+    const under = await screen.findByRole('table', { name: 'Scored under 40' })
+    expect(
+      within(under)
+        .getAllByRole('row')
+        .slice(1)
+        .map((tableRow) => within(tableRow).getAllByRole('cell')[0]?.textContent),
+    ).toEqual(['Alta', 'SEC', 'OpenAsset'])
+    expect(screen.getByText('Companies from this run')).toBeInTheDocument()
   })
 })

@@ -109,7 +109,7 @@ async def test_picking_two_cities_turns_the_other_two_off(
     )
     assert rows[job_key("Melbourne")].next_run_at is None
     assert all(
-        row.settings["since_days"] == 14
+        row.settings["since_days"] == 30  # the longest a run may look back (PLAN-V20)
         for row in rows.values()
         if row.job != "lead_finder.discovery"
     )

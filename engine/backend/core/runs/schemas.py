@@ -66,11 +66,11 @@ class RunCounts(OutModel):
         default_factory=dict, description="Leads saved, by result (like pass or watch)"
     )
     resumes: int = Field(0, description="How many times this run was resumed")
-    # PLAN-V16 T1-9: how many leads a run aims for, and how many it found
+    # PLAN-V16 T1-9: the goal a run reports against, and how many good leads it found
     goal: int | None = Field(
         None,
-        description="The good leads the run aims for: a person's choice for a run they started, "
-        "or the round's share for an automatic run. Empty: no goal.",
+        description="The good leads the run reports against: the round's share for an automatic "
+        "run. Empty: no goal (a run a person starts has none, PLAN-V20). It never stops a run.",
     )
     good: int = Field(0, description="Good leads saved so far: a Pass or a Director review")
     by_source: dict[str, int] = Field(
@@ -112,7 +112,7 @@ class RunOut(OutModel):
     finished_at: datetime | None
 
     @computed_field(  # type: ignore[prop-decorator]
-        description="The good leads the run aims for (PLAN-V16 T1-9). Empty: no goal."
+        description="The good leads the run reports against (PLAN-V16 T1-9). Empty: no goal."
     )
     @property
     def goal_leads(self) -> int | None:
@@ -195,20 +195,6 @@ class RunEstimate(OutModel):
     )
     basis: str = Field("", description="Where the numbers come from, like past runs or defaults")
     over_cap: bool = Field(False, description="True when the worst case is above the cap")
-    companies_needed: int | None = Field(
-        None,
-        description="The companies the goal needs at the recent pass rate (PLAN-V16 T1-9). Empty "
-        "when the run has no goal of its own.",
-    )
-    goal_note: str | None = Field(
-        None,
-        description="One sentence when the goal needs more companies than this run's limits allow, "
-        "naming the limit that binds. Empty when the goal fits, or there is none.",
-        examples=[
-            "20 leads needs about 50 companies. This run's company limit allows 20. An "
-            "Admin can raise it in Settings."
-        ],
-    )
 
 
 class RunSummaryDay(BaseModel):

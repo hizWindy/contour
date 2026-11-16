@@ -12,6 +12,13 @@ cities after it. Example: the goal is 100 and 4 cities are on. Melbourne aims fo
 Adelaide then aims for 82 / 3 = 28 (rounded up). When the goal is already met, a city still aims
 for its plain share (100 / 4 = 25): more good leads are welcome, it just has nothing to make up.
 
+**A goal is a number to report against, never a reason to stop** (PLAN-V20, Al-khair, 17 Nov). A
+run researches every company it chose, up to its company limit and its money limits, even after it
+has reached its share. The goal never stopped a run anyway: none of the first 7 live runs found
+more than 3 good leads. Before PLAN-V20 a run a person started had a goal of its own (20, T1-9) and
+stopped starting companies when it had them; that is gone, and the run page shows no goal bar for
+such a run.
+
 **The budget.** All of a round's automatic runs together may spend `lead_finder_round_cap_usd`
 (US$150, TBC). Before a run starts, its money limit becomes the smaller of `scheduled_run_cap_usd`
 and what is left of the budget (`run_cap_in_round`). Example: Melbourne spent US$40 of US$150, so
@@ -233,93 +240,3 @@ def too_little_reason(
         f"Only {usd_words(left_usd)} is left of this round's budget ({usd_words(budget_usd)}), "
         f"too little for a run.{nxt}"
     )
-
-
-# --- How many leads a run a person starts aims for (PLAN-V16 T1-9) ------------------------------
-#
-# A run a person starts aims for `goal_leads` good leads (else `manual_run_goal_leads`, 20), and
-# stops starting companies once it has them. Its limits still apply: no limit rises by itself.
-# The estimate says how many companies the goal needs at the recent pass rate, and names the limit
-# that binds when the run's limits allow fewer. A run that ends short says why, in its
-# `stop_reason`: "Found 12 of 20 leads. It stopped at the run limit (US$20)."
-
-DEFAULT_PASS_RATE = Decimal("0.40")  # until there are finished runs (TBC)
-PASS_RATE_FLOOR = Decimal("0.05")  # a run of bad luck mustn't make the estimate endless (TBC)
-PASS_RATE_RUNS = 5  # the pass rate comes from the last this many runs that researched a company
-_RUNS_READ = 50  # done discovery runs read to find them
-
-
-@dataclass(frozen=True)
-class PassRate:
-    rate: Decimal  # good leads out of companies researched
-    runs: int  # how many runs it comes from. 0: the default
-
-
-async def recent_pass_rate(session: AsyncSession) -> PassRate:
-    """Good leads out of companies researched, in the last `PASS_RATE_RUNS` discovery runs that
-    finished and researched a company. `DEFAULT_PASS_RATE` until there are any, and never under
-    `PASS_RATE_FLOOR`. Reads only."""
-    rows = (
-        await session.scalars(
-            select(Run.counts)
-            .where(Run.app == APP, Run.mode == "discovery", Run.status == "done")
-            .order_by(Run.created_at.desc())
-            .limit(_RUNS_READ)
-        )
-    ).all()
-    used = [counts for counts in rows if int((counts or {}).get("researched") or 0) > 0]
-    used = used[:PASS_RATE_RUNS]
-    researched = sum(int(counts["researched"]) for counts in used)
-    if researched == 0:
-        return PassRate(DEFAULT_PASS_RATE, 0)
-    rate = Decimal(sum(good_of(counts) for counts in used)) / Decimal(researched)
-    return PassRate(max(rate, PASS_RATE_FLOOR), len(used))
-
-
-def companies_needed(goal: int, rate: Decimal) -> int:
-    """The companies a goal needs at a pass rate: 20 leads at 40% is 50 companies. Pure."""
-    return math.ceil(Decimal(goal) / max(rate, PASS_RATE_FLOOR))
-
-
-def leads_words(count: int) -> str:
-    return f"{count} lead" if count == 1 else f"{count} leads"
-
-
-def goal_note(
-    goal: int, needed: int, by_companies: int, by_money: int, run_cap_usd: Decimal
-) -> str | None:
-    """One sentence when the goal needs more companies than the run's limits allow, naming the
-    limit that binds: the most companies a run may research, or what its money limit pays for.
-    None when the goal fits. Pure."""
-    if needed <= min(by_companies, by_money):
-        return None
-    start = f"{leads_words(goal)} needs about {needed} companies."
-    if by_companies <= by_money:
-        return (
-            f"{start} This run's company limit allows {by_companies}. "
-            "An Admin can raise it in Settings."
-        )
-    return (
-        f"{start} This run's money limit ({usd_words(run_cap_usd)}) allows about {by_money}. "
-        "An Admin can raise it in Settings."
-    )
-
-
-def stopped_words(kind: str | None, run_cap_usd: Decimal, max_companies: int, over: int) -> str:
-    """Why a run with a goal ended short, after "Found 12 of 20 leads.". `kind` is the cap that
-    stopped it, if one did; `over` is how many companies the company limit left out."""
-    if kind == "run_cost":
-        return f"It stopped at the run limit ({usd_words(run_cap_usd)})."
-    if kind == "daily":
-        return "It stopped at today's limit for Claude."
-    if kind == "searches":
-        return "It used up its searches."
-    if kind == "max_companies" or over > 0:
-        return f"It researched the most companies one run may ({max_companies})."
-    return "Discovery found no more companies to research."
-
-
-def short_of_goal(good: int, goal: int, why: str) -> str:
-    """'Found 12 of 20 leads. It stopped at the run limit (US$20).' Under the 120 characters a
-    run's `stop_reason` holds."""
-    return f"Found {good} of {leads_words(goal)}. {why}"

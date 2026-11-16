@@ -152,10 +152,13 @@ def test_all_4_cities_in_one_run_are_too_large_for_the_default_limits() -> None:
     assert "32 searches is too many (the most that fit is 13)" in str(refused.value.extra)
 
 
-def test_the_look_back_is_the_time_between_two_runs() -> None:
-    assert DEFAULT_CADENCE.step == LOOK_BACK_DAYS == 14
+def test_an_automatic_run_looks_back_the_longest_a_run_may_not_just_the_time_between_runs() -> None:
+    """PLAN-V20: the look-back was 14 days, the time between two runs. A company researched in the
+    last 30 days is skipped anyway, so 30 days costs nothing and finds what 14 days missed."""
+    assert DEFAULT_CADENCE.step == 14
+    assert LOOK_BACK_DAYS == 30
     assert DEFAULT_SETTINGS["since_days"] == LOOK_BACK_DAYS
-    assert DiscoveryParams.model_validate(DEFAULT_SETTINGS).since_days == 14
+    assert DiscoveryParams.model_validate(DEFAULT_SETTINGS).since_days == 30
 
 
 def test_the_default_choices_are_the_schedules_own_copy_of_the_settings() -> None:

@@ -65,7 +65,7 @@ from core.api.errors import Problem
 from core.auth.models import User
 from core.auth.sessions import AuthContext
 from core.claude.budget import Budget, BudgetSpent
-from core.claude.client import Claude, ClaudeError, ClaudeUnavailable, Reply
+from core.claude.client import Claude, ClaudeError, ClaudeRefused, ClaudeUnavailable, Reply
 from core.company_leads import CompanyLeads
 from core.config import Settings
 from core.hubspot.meetings import Meeting
@@ -498,6 +498,8 @@ def claude_words(error: ClaudeError) -> tuple[str, str]:
     """A Claude error as the pre-read says it, and its code. Read from what went wrong, not
     from the error's own words, which may name a setting."""
     cause = error.__cause__
+    if isinstance(error, ClaudeRefused):  # our request, not the key or the connection (PLAN-V20)
+        return "claude_error", CLAUDE_ERROR
     if isinstance(error, ClaudeUnavailable):
         if isinstance(cause, anthropic.APIConnectionError) and not isinstance(
             cause, anthropic.APITimeoutError

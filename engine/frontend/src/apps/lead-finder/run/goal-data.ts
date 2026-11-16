@@ -80,14 +80,24 @@ export function leadSources(run: Run): SourceCount[] {
 
 const TIER_RANK: Record<Tier, number> = { A: 0, B: 1, C: 2, discard: 3 }
 
-/** A lead judged before the tiers has none: it sorts last. */
-function rankOf(tier: LeadRow['tier']): number {
-  return tier ? TIER_RANK[tier] : 4
+/**
+ * The tier a lead is listed under: its own, or for a lead judged before the tiers existed the one
+ * its result stands for (Levi's choice 1: a Pass or a Director review is Tier A or B, a Watch is
+ * Tier C, a Drop is a Discard). So an old run lists its good leads as ranked, not as under 40.
+ */
+export function listedTier(lead: LeadRow): Tier {
+  if (lead.tier) {
+    return lead.tier
+  }
+  if (lead.result === 'pass' || lead.result === 'director_review') {
+    return 'B'
+  }
+  return lead.result === 'watch' ? 'C' : 'discard'
 }
 
-/** Best first: by tier, then by score. */
+/** Best first: by the tier a lead is listed under, then by score. */
 export function byTierThenScore(a: LeadRow, b: LeadRow): number {
-  return rankOf(a.tier) - rankOf(b.tier) || b.score - a.score
+  return TIER_RANK[listedTier(a)] - TIER_RANK[listedTier(b)] || b.score - a.score
 }
 
 /** An exclusion a person overrode no longer leaves the company out. */
@@ -102,22 +112,30 @@ export interface RunLeadGroups {
   excluded: LeadRow[]
   /** Tier C: watch for a new sign. */
   watch: LeadRow[]
-  /** Scored under 40. Saved, and hidden here (the plan's choice 3). */
-  discarded: number
+  /**
+   * Scored under 40 (a Discard), or a Drop judged before the tiers had any. They are listed too:
+   * every company the run researched is shown (PLAN-V20). They were only counted, and hidden,
+   * before (the plan's choice 3), so a run of weak companies looked empty.
+   */
+  discarded: LeadRow[]
 }
 
-/** The run's leads as Levi's section 9 lists them: ranked, then excluded, then watch. */
+/**
+ * The run's companies as Levi's section 9 lists them: ranked, then excluded, then watch, and then
+ * the ones that scored under 40, so none is left out.
+ */
 export function groupRunLeads(leads: readonly LeadRow[]): RunLeadGroups {
-  const groups: RunLeadGroups = { ranked: [], excluded: [], watch: [], discarded: 0 }
+  const groups: RunLeadGroups = { ranked: [], excluded: [], watch: [], discarded: [] }
   for (const lead of [...leads].sort(byTierThenScore)) {
+    const tier = listedTier(lead)
     if (isExcluded(lead)) {
       groups.excluded.push(lead)
-    } else if (lead.tier === 'A' || lead.tier === 'B') {
+    } else if (tier === 'A' || tier === 'B') {
       groups.ranked.push(lead)
-    } else if (lead.tier === 'C') {
+    } else if (tier === 'C') {
       groups.watch.push(lead)
     } else {
-      groups.discarded += 1
+      groups.discarded.push(lead)
     }
   }
   return groups

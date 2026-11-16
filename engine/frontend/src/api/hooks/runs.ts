@@ -89,7 +89,6 @@ export function useEstimateRun(body: RunCreate | null) {
   return useQuery({
     queryKey: queryKeys.runs.estimate(body),
     queryFn: async ({ signal }) =>
-      // Until PLAN-V16 M1: `companies_needed` and `goal_note` are in `v16.ts`.
       unwrap(await api.POST('/runs/estimate', { body: body as RunCreate, signal })),
     enabled: body !== null,
     placeholderData: keepPreviousData,

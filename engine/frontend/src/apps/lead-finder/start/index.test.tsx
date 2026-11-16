@@ -23,8 +23,6 @@ function estimate(changes: Partial<RunEstimate> = {}): RunEstimate {
     daily_left_usd: '50.00',
     basis: 'Defaults: no past runs yet',
     over_cap: true,
-    companies_needed: null,
-    goal_note: null,
     ...changes,
   }
 }
@@ -87,7 +85,6 @@ describe('the Start page', () => {
           triggers: ['lease_ending'],
           since_days: 30,
           area: {},
-          goal_leads: 20,
         },
       },
     ])
@@ -380,43 +377,18 @@ describe('Find new leads across Australia (PLAN-V16 T3-2)', () => {
     })
   })
 
-  it('fills How many leads with the default and shows what the goal needs', async () => {
-    mockApi(() => estimate({ companies_needed: 50, cost_usd_low: '18.70' }))
-    renderStart()
-
-    expect(await screen.findByLabelText('How many leads')).toHaveValue('20')
-    expect(await screen.findByText('About 50 companies, about US$19.')).toBeInTheDocument()
-  })
-
-  it('names the limit that binds when the goal does not fit', async () => {
-    const note =
-      "20 leads needs about 50 companies. This run's limits allow 20. An Admin can raise them in Settings."
-    mockApi(() => estimate({ companies_needed: 50, goal_note: note }))
-    renderStart()
-
-    expect(await screen.findByText(note)).toBeInTheDocument()
-    expect(screen.queryByText(/^About 50 companies/)).toBeNull()
-  })
-
-  it('sends the typed goal, and keeps Start off for one it cannot read', async () => {
+  it('does not ask how many leads: a run researches every company it chooses', async () => {
     const seen = mockApi(() => estimate())
-    const { user } = renderStart()
-    const goal = await screen.findByLabelText('How many leads')
+    renderStart()
 
-    await user.clear(goal)
-    await user.type(goal, '35 leads')
+    await screen.findByRole('group', { name: 'Where to look' })
+    expect(screen.queryByLabelText('How many leads')).toBeNull()
+    expect(screen.queryByText(/Tier A or B\. The run stops/)).toBeNull()
     await waitFor(() => {
-      expect(seen.estimates.at(-1)).toMatchObject({ params: { goal_leads: 35 } })
+      expect(seen.estimates.length).toBeGreaterThan(0)
     })
-
-    await user.clear(goal)
-    await user.type(goal, '500')
-    expect(await screen.findByText('Type a whole number from 1 to 100.')).toBeInTheDocument()
-    expect(goal).toHaveAttribute('aria-invalid', 'true')
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Start run' })).toBeDisabled()
-    })
-    expect(screen.getByText('Fix the choices marked in red first.')).toBeInTheDocument()
+    const sent = seen.estimates.at(-1) as { params: Record<string, unknown> }
+    expect(sent.params).not.toHaveProperty('goal_leads')
   })
 
   it('greys out a tool that is not ready and says why', async () => {

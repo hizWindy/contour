@@ -328,7 +328,7 @@ describe('the Sources settings (PLAN-V16 T3-6)', () => {
     ...changes,
   })
 
-  it('puts the property tools in a Sources group, and the default goal under Runs', async () => {
+  it('puts the property tools in a Sources group, and the round goal under Runs', async () => {
     const fields = [
       ...settingsOut().fields,
       field('property_daily_enabled', 'Property Daily is switched on', {
@@ -341,9 +341,9 @@ describe('the Sources settings (PLAN-V16 T3-6)', () => {
       field('source_pages_per_day', 'Most pages a day, for each tool'),
       field('source_pages_per_run', 'Most live lookup pages one run may use', { value: 60 }),
       field('property_lookup_days', 'Days a lookup is reused', { value: 30 }),
-      field('manual_run_goal_leads', 'How many leads a run finds, unless a person says', {
-        value: 20,
-        max: 100,
+      field('lead_finder_goal_good_leads', 'Good leads to aim for every 2 weeks', {
+        value: 100,
+        max: 1000,
       }),
       field('arealytics_to_claude_ok', 'Arealytics facts may go to Claude', {
         type: 'bool',
@@ -368,11 +368,11 @@ describe('the Sources settings (PLAN-V16 T3-6)', () => {
     ]) {
       expect(sources).toHaveTextContent(label)
     }
-    expect(sources).not.toHaveTextContent('How many leads')
+    expect(sources).not.toHaveTextContent('Good leads to aim for')
 
     await user.click(screen.getByRole('radio', { name: 'Runs' }))
     expect(screen.getByRole('list', { name: 'Runs' })).toHaveTextContent(
-      'How many leads a run finds, unless a person says',
+      'Good leads to aim for every 2 weeks',
     )
     // An approval set on the server is read only, with the others.
     expect(screen.getByText('Arealytics facts may go to Claude')).toBeInTheDocument()

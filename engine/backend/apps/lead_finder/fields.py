@@ -4,6 +4,8 @@ PARAMETERS.md section 2 lists what we record for each company. Every fact has a 
 link, a date and a label. A fact with no source is unknown.
 """
 
+from collections.abc import Iterable
+from copy import copy
 from typing import Annotated, Any, Literal, get_args
 
 from pydantic import (
@@ -12,6 +14,7 @@ from pydantic import (
     Field,
     ValidationInfo,
     WithJsonSchema,
+    create_model,
     field_validator,
     model_validator,
 )
@@ -349,6 +352,44 @@ class CompanyFacts(BaseModel):
         for name in NEWER_TEXTS:
             filled.setdefault(name, None)
         return filled
+
+
+# --- The company form in two requests ---------------------------------------------------------
+# PLAN-V16 added 5 facts to the company form, from 7,687 to 10,357 characters. From 16 Nov 2026
+# Claude refused every request for it with "The compiled grammar is too large", and every company
+# came out with no facts. So Claude fills the facts in two smaller forms, one request each, and
+# `join_facts` puts the two answers into one `CompanyFacts`: the saved card, the API and the
+# scoring see the same facts as before. A fact that is not in `EXTRA_FACTS` is in the first form,
+# which has the same questions as the form that worked live until 15 Nov. The size is kept by
+# tests/lead_finder/test_forms.py (`core.claude.forms.CHARACTERS_LIMIT`).
+EXTRA_FACTS = ("staff_projected", "tender_only", "dampeners", "contact_roles", "contour_angle")
+
+
+def _part_of_facts(name: str, fields: Iterable[str]) -> type[BaseModel]:
+    """A form with only some of `CompanyFacts`'s fields, each exactly as it is there: its type,
+    what Claude is asked, and how an empty answer is read."""
+    chosen: dict[str, Any] = {
+        field: (CompanyFacts.model_fields[field].annotation, copy(CompanyFacts.model_fields[field]))
+        for field in fields
+    }
+    return create_model(name, **chosen)
+
+
+CompanyCoreForm = _part_of_facts(
+    "CompanyFactsCore", [name for name in CompanyFacts.model_fields if name not in EXTRA_FACTS]
+)
+CompanyExtrasForm = _part_of_facts("CompanyFactsExtras", EXTRA_FACTS)
+COMPANY_FORMS = (CompanyCoreForm, CompanyExtrasForm)
+
+
+def join_facts(core: BaseModel, extras: BaseModel | None = None) -> CompanyFacts:
+    """The two answers as one `CompanyFacts`, checked again as a whole (the cuts after parsing
+    happen here). Without the second answer its facts are unknown, as they are on a card saved
+    before they existed."""
+    data = core.model_dump()
+    if extras is not None:
+        data.update(extras.model_dump())
+    return CompanyFacts.model_validate(data)
 
 
 # --- Discovery: one slice's list of companies -----------------------------------------------

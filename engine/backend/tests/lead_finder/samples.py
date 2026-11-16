@@ -6,7 +6,8 @@
 three kinds of request the Lead Finder makes:
 
 - a search angle of one company (form `AngleNotes`): notes with links;
-- the answer form of one company (form `CompanyFacts`);
+- the answer form of one company, in two requests (PLAN-V20): `CompanyCoreForm` (step `extract`)
+  and `CompanyExtrasForm` (step `extract:extras`), each answered from the same `CompanyFacts`;
 - discovery of one slice (form `Candidates`): the companies of a `(trigger_id, city)` scenario;
 - the Why now of one lead (form `WhyNowAnswer`, PLAN-V12): `why_answer`, or a sample.
 
@@ -19,7 +20,7 @@ What each request costs (fixed, so a test can add the numbers up):
     search angle   US$0.10 + US$0.01 for each web search it makes (2 searches, so US$0.12).
                    A company has four angles since PLAN-V16 T1-5: property, people, money and the
                    dampener check, so its searches cost US$0.48.
-    extract        US$0.04
+    extract        US$0.04, and US$0.01 more for the second form (`extract:extras`)
     discover       US$0.08 + US$0.01 for each web search it makes (3 searches, so US$0.11)
     why            US$0.03, no web search
 
@@ -44,6 +45,7 @@ from apps.lead_finder.fields import (
     BoosterFound,
     Candidate,
     Candidates,
+    CompanyExtrasForm,
     CompanyFacts,
     DampenerCheck,
     DampenerFinding,
@@ -74,6 +76,7 @@ SITE = "https://acme.com.au/about"
 DEFAULT_MODEL = "claude-opus-5-5"  # `Reply.model` when the request names no model
 SEARCH_COST = Decimal("0.10")  # a search angle, before its web searches
 EXTRACT_COST = Decimal("0.04")
+EXTRAS_COST = Decimal("0.01")  # the second answer form (PLAN-V20): five facts, a short answer
 DISCOVER_COST = Decimal("0.08")  # a discovery request, before its web searches
 WEB_SEARCH_COST = Decimal("0.01")  # each web search
 WHY_COST = Decimal("0.03")  # a Why now (PLAN-V12): no web search
@@ -383,7 +386,8 @@ class FakeClaude:
     - `off_form`: the answer doesn't fit the form (`parsed` is None);
     - `unavailable`: every request raises `ClaudeUnavailable` (no key);
     - `error`: every request raises this `ClaudeError`;
-    - `extract_error`: only the answer form raises this `ClaudeError` (the searches work);
+    - `extract_error`: only the main answer form raises this `ClaudeError` (the searches work);
+    - `extras_error`: only the second answer form (`extract:extras`) raises this `ClaudeError`;
     - `delay_seconds`: each request waits this long first (for cancel tests);
     - `hold(company)` / `hold_nth(n)`: a company's requests wait until the returned event is
       set. `reached(company)` is set when a request of that company arrives, so a test waits for
@@ -408,12 +412,14 @@ class FakeClaude:
     off_form: bool = False
     unavailable: bool = False
     error: ClaudeError | None = None
-    extract_error: ClaudeError | None = None  # only the answer form fails (PLAN-V4 B4)
+    extract_error: ClaudeError | None = None  # only the main answer form fails (PLAN-V4 B4)
+    extras_error: ClaudeError | None = None  # only the second answer form fails (PLAN-V20)
     delay_seconds: float = 0
     crash_on: set[str] = field(default_factory=set)
     crash_after_extracts: int | None = None
     search_cost: Decimal = SEARCH_COST
     extract_cost: Decimal = EXTRACT_COST
+    extras_cost: Decimal = EXTRAS_COST
     discover_cost: Decimal = DISCOVER_COST
     why_answer: WhyNowAnswer | None = None  # PLAN-V12: else `sample_why` for the company
     why_off_form: int = 0  # this many Why now answers miss the form before one fits
@@ -481,6 +487,8 @@ class FakeClaude:
             raise self.error
         if self.extract_error is not None and step == "extract":
             raise self.extract_error
+        if self.extras_error is not None and step == "extract:extras":
+            raise self.extras_error
         if self.why_error is not None and step == "why":
             raise self.why_error
         gate = self._holds.get(key) or self._holds_nth.get(index)
@@ -504,8 +512,11 @@ class FakeClaude:
             self._whys += 1
             missed = self._whys <= self.why_off_form
         else:
-            parsed, sources, queries, usage, cost = self._extract(company)
-            self._extracts += 1
+            parsed, sources, queries, usage, cost = self._extract(company, form)
+            if form is CompanyExtrasForm or form is CompanyFacts:
+                # An answer form is counted when its last request is answered: the second of the
+                # two forms, or the whole `CompanyFacts` a test asks for in one request.
+                self._extracts += 1
         if self.off_form or missed:
             parsed, text = None, "this is not the form"
         else:
@@ -531,6 +542,8 @@ class FakeClaude:
             return f"search:{FakeClaude._angle_name(prompt)}"
         if form is WhyNowAnswer:
             return "why"
+        if form is CompanyExtrasForm:
+            return "extract:extras"
         return "extract"
 
     @staticmethod
@@ -557,15 +570,19 @@ class FakeClaude:
         return AngleNotes(notes=notes), sources, (f"acme {angle}",), usage, cost
 
     def _extract(
-        self, company: str | None
+        self, company: str | None, form: type[BaseModel]
     ) -> tuple[Any, tuple[Source, ...], tuple[str, ...], Usage, Decimal]:
+        """The company's facts, as the part of them the asked form has (PLAN-V20: two forms)."""
         named = {name.casefold(): facts for name, facts in self.company_facts.items()}
         facts = named.get((company or "").casefold(), self.facts)
         if facts is None:
             facts = make_facts()
             if company is not None and "acme" not in company.casefold():
                 facts = _for_company(facts, company).model_copy(update={"name": company})
-        return facts, (), (), Usage(input_tokens=5_000, output_tokens=1_000), self.extract_cost
+        answer = form.model_validate(facts.model_dump(include=set(form.model_fields)))
+        if form is CompanyExtrasForm:
+            return answer, (), (), Usage(input_tokens=5_000, output_tokens=200), self.extras_cost
+        return answer, (), (), Usage(input_tokens=5_000, output_tokens=1_000), self.extract_cost
 
     def _rivals(
         self, company: str | None

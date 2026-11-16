@@ -4089,22 +4089,6 @@ export interface components {
             text: string;
         };
         /**
-         * GoalLeadsOption
-         * @description "How many leads" on the Start page (PLAN-V16 T1-9).
-         */
-        GoalLeadsOption: {
-            /**
-             * Default
-             * @description `manual_run_goal_leads` from the settings
-             * @example 20
-             */
-            default: number;
-            /** Max */
-            max: number;
-            /** Min */
-            min: number;
-        };
-        /**
          * GuidedQuestion
          * @description A question to ask on the call, with what to ask next for each likely answer.
          */
@@ -4868,7 +4852,7 @@ export interface components {
             companies: components["schemas"]["CompanyIn"][];
             /**
              * Goal Leads
-             * @description Used by mode discovery only. How many good leads (a Pass or a Director review) a run a person starts aims for, 1 to 100: it stops starting companies once it has them. Left out, `manual_run_goal_leads` from the settings (see `goal_leads` in the run options). An automatic run aims for its share of the round's goal instead. The run's limits still apply: no limit rises by itself (PLAN-V16 T1-9).
+             * @description Used by mode discovery only, and no longer used (PLAN-V20). It is still accepted so a page that was open before the change can start a run, and then ignored: no run stops for a goal of good leads. A run researches every company it chooses, up to its company limit and its money limits.
              * @example 20
              */
             goal_leads: number | null;
@@ -7221,7 +7205,7 @@ export interface components {
             failed: number;
             /**
              * Goal
-             * @description The good leads the run aims for: a person's choice for a run they started, or the round's share for an automatic run. Empty: no goal.
+             * @description The good leads the run reports against: the round's share for an automatic run. Empty: no goal (a run a person starts has none, PLAN-V20). It never stops a run.
              */
             goal: number | null;
             /**
@@ -7329,11 +7313,6 @@ export interface components {
              */
             companies_expected: number;
             /**
-             * Companies Needed
-             * @description The companies the goal needs at the recent pass rate (PLAN-V16 T1-9). Empty when the run has no goal of its own.
-             */
-            companies_needed: number | null;
-            /**
              * Cost Usd High
              * @description The worst case: every request in flight costs its full reserve
              * @default 0
@@ -7352,12 +7331,6 @@ export interface components {
             daily_left_usd: string;
             /** Errors */
             errors: components["schemas"]["FieldError"][];
-            /**
-             * Goal Note
-             * @description One sentence when the goal needs more companies than this run's limits allow, naming the limit that binds. Empty when the goal fits, or there is none.
-             * @example 20 leads needs about 50 companies. This run's company limit allows 20. An Admin can raise it in Settings.
-             */
-            goal_note: string | null;
             /**
              * Over Cap
              * @description True when the worst case is above the cap
@@ -7457,8 +7430,6 @@ export interface components {
             companies_limit: components["schemas"]["CompaniesLimit"];
             /** @description The starting values for every part of a run's `params`. The Start page must send only the parts of its mode in `POST /runs`: a part another mode owns is refused (422). Each part's description says which mode uses it. `caps` is used by every mode. */
             defaults: components["schemas"]["LeadFinderRunParams"];
-            /** @description How many good leads a run a person starts may aim for, and the default (PLAN-V16 T1-9) */
-            goal_leads: components["schemas"]["GoalLeadsOption"];
             /** Modes */
             modes: components["schemas"]["ModeOption"][];
             since_days: components["schemas"]["SinceDaysOption"];
@@ -7517,7 +7488,7 @@ export interface components {
             finished_at: string | null;
             /**
              * Goal Leads
-             * @description The good leads the run aims for (PLAN-V16 T1-9). Empty: no goal.
+             * @description The good leads the run reports against (PLAN-V16 T1-9). Empty: no goal.
              */
             readonly goal_leads: number | null;
             /**

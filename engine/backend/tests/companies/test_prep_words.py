@@ -21,7 +21,7 @@ from apps.companies import api_preps, prep, script_notes
 from apps.companies.prep import PrepRunner, claude_words
 from apps.companies.tables import Prep
 from core.api.deps import settings_dependency
-from core.claude.client import ClaudeError, ClaudeUnavailable, Reply, WebTools
+from core.claude.client import ClaudeError, ClaudeRefused, ClaudeUnavailable, Reply, WebTools
 from core.claude.daily import DailyLimitReached
 from core.hubspot.models import HubSpotSync
 from tests.companies.helpers import API, add, signed_in_as
@@ -87,6 +87,15 @@ CASES = [
         "claude_setup",
     ),
     (claude_error(ClaudeUnavailable("No key", "Add it to engine/.env."), None), "claude_setup"),
+    # A request Claude refuses (PLAN-V20) stops a Lead Finder run like an unavailable Claude, but in
+    # call prep it keeps its old words: the key and the connection are fine, so not "claude_setup".
+    (
+        claude_error(
+            ClaudeRefused("Claude refused the request", "Something we send is not accepted."),
+            _cause(anthropic.BadRequestError),
+        ),
+        "claude_error",
+    ),
 ]
 
 

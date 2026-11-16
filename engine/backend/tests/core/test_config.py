@@ -817,7 +817,6 @@ def test_the_tools_start_off_and_only_property_daily_may_reach_claude() -> None:
     assert (s.property_daily_to_claude_ok, s.arealytics_to_claude_ok) == (True, False)
     assert s.source_page_wait_seconds == (4.0, 9.0)
     assert (s.source_pages_per_day, s.source_pages_per_run, s.property_lookup_days) == (300, 60, 30)
-    assert s.manual_run_goal_leads == 20
     assert all(getattr(s, login) is None for login in TOOL_LOGINS)
 
 

@@ -16,8 +16,10 @@ Thursday. The first round is the next first day still to come.
   time of day), so the first time of each city is set here: the first day, then one day later for
   each city after it. `calc.next_after` keeps them one day apart from then on.
 - **A round must end before the next starts:** 4 cities take 4 days, so every 4 days or more.
-- **The look-back** (`since_days`) follows how often: 7 days for a round every week or less, 14
-  for up to every 2 weeks, else 30 (the longest a run may look back).
+- **The look-back** (`since_days`) is always 30 days, the longest a run may look back (PLAN-V20;
+  it followed how often a round came before: 14 days for every 2 weeks). A company researched in
+  the last 30 days is skipped anyway, so news two rounds both see costs nothing, and a company a
+  shorter window missed is found.
 
 **When the plan is kept.** A save that changes only the budget, or saves the same plan again, keeps
 each schedule's next time. Any other change (cities, how often, the day or the time, or switching
@@ -208,9 +210,10 @@ def in_order(cities: Sequence[str]) -> tuple[str, ...]:
     return tuple(city for city in CITIES if city in cities)
 
 
-def look_back(step_days: int) -> int:
-    """How far back a run looks: the shortest look-back that covers the time between rounds."""
-    return next((days for days in LOOK_BACKS if step_days <= days), LOOK_BACKS[-1])
+def look_back() -> int:
+    """How far back an automatic run looks: always the longest a run may, whatever the time between
+    rounds (PLAN-V20)."""
+    return LOOK_BACKS[-1]
 
 
 def round_times(plan: Plan, now: datetime) -> dict[str, CityTime]:
@@ -465,7 +468,7 @@ def apply_plan(rows: dict[str, Schedule], old: Plan, new: Plan, now: datetime) -
     """Puts the plan on the four schedules (the caller commits). Pure apart from the rows."""
     replan = new.enabled and not (old.enabled and old.same_times(new))
     times = round_times(new, now)
-    since = look_back(new.step)
+    since = look_back()
     for index, city in enumerate(CITIES):
         row = rows[job_key(city)]
         picked = city in new.cities

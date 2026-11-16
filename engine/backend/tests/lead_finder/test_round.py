@@ -122,11 +122,11 @@ def test_cities_in_days_are_one_day_apart_and_stay_so() -> None:
     assert nexts[3] - nexts[0] == timedelta(days=3)
 
 
-@pytest.mark.parametrize(
-    ("step", "days"), [(1, 7), (7, 7), (8, 14), (14, 14), (21, 30), (30, 30), (60, 30)]
-)
-def test_the_look_back_covers_the_time_between_rounds(step: int, days: int) -> None:
-    assert look_back(step) == days
+def test_the_look_back_is_always_the_longest_a_run_may_look_back() -> None:
+    """PLAN-V20: it was 7, 14 or 30 days by how often a round came. Now a round that comes every
+    week, every 2 weeks or every month looks back 30 days: a company researched in the last 30
+    days is skipped anyway."""
+    assert look_back() == 30
 
 
 # --- Saving a plan --------------------------------------------------------------------------------
@@ -189,7 +189,7 @@ def test_picking_two_cities_turns_the_other_two_off() -> None:
     assert (by_city["Perth"].weekday, by_city["Sydney"].weekday) == (2, 3)
     assert by_city["Perth"].next_run_at == melbourne(date(2026, 11, 18))
     assert by_city["Sydney"].next_run_at == melbourne(date(2026, 11, 19))
-    assert all(row.settings["since_days"] == 14 for row in by_city.values())
+    assert all(row.settings["since_days"] == 30 for row in by_city.values())  # PLAN-V20
     assert by_city["Perth"].settings["cities"] == ["Perth"]  # its other choices stay
 
 
