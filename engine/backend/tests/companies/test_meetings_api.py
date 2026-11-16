@@ -9,11 +9,14 @@
 - the search: company, title and date words, in any case;
 - HubSpot's meetings not read yet: an empty list that says so, and zero counts;
 - a rep whose account isn't linked to a HubSpot owner; sign-in off;
-- the counts for Home; one meeting with its pre-read; a company's next three and last three.
+- the counts for Home; one meeting with its pre-read; a company's next three and last three;
+- Sync (PLAN-V18 T1-5): started, running and fresh, no HubSpot, and what the list says about the
+  last read: when it was, whether one runs, and a failed or waiting one in plain words.
 
 Made-up companies and people only (Sample Logistics Pty Ltd, Jo Sample).
 """
 
+import asyncio
 import uuid
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -31,17 +34,22 @@ from apps.companies.meeting_store import (
     NO_TEAMS_IN_HUBSPOT,
     NOT_LINKED,
     NOT_LINKED_TEAM,
+    SYNC_FAILED_FIRST,
+    SYNC_WAITING,
     MeetingSource,
+    clock_words,
 )
 from apps.companies.tables import MeetingForm
 from core.api.deps import settings_dependency
 from core.auth.models import User
-from core.hubspot.meetings import NOT_READ_YET, Meeting, MeetingsStatus
+from core.hubspot import meetings as core_meetings
+from core.hubspot.meetings import NOT_READ_YET, Meeting, MeetingsRefresher, MeetingsStatus
 from core.hubspot.models import HubSpotOwnerTeam
 from core.hubspot.owners import TeamsOf
 from tests.companies.helpers import API, add, signed_in_as
 from tests.companies.test_call_notes_api import a_company, log_call, notes_settings, set_note
 from tests.core.auth_world import START, World
+from tests.core.test_hubspot_meetings_sync import Held
 
 pytestmark = pytest.mark.integration
 MEETINGS = f"{API}/meetings"
@@ -347,6 +355,9 @@ async def test_before_hubspots_meetings_are_read_the_list_says_so(
         "linked": True,
         "team_state": "ready",
         "team_names": ["Sample Sales"],
+        "checked_at": None,
+        "syncing": False,
+        "sync_problem": None,
     }
     assert counts == {"need_pre_read": 0, "draft_ready": 0}
     assert record["meetings"] == []
@@ -620,3 +631,104 @@ async def test_meetings_and_home_ask_hubspot_for_changed_meetings(
         assert (await client.get(MEETINGS)).status_code == 200
         assert (await client.get(f"{MEETINGS}/summary")).status_code == 200
     assert refresher.asked == 2
+
+
+# --- Sync (PLAN-V18 T1-5) -------------------------------------------------------------------------
+
+SYNC = f"{MEETINGS}/sync"
+
+
+@pytest.fixture
+def no_read_left_over() -> Iterator[None]:
+    """A test that fails half way never leaves a read "running" for the next one."""
+    yield
+    core_meetings._running.clear()
+
+
+class SyncClock:
+    """The refresher's clock, which a test moves by hand."""
+
+    def __init__(self) -> None:
+        self.now = START
+
+    def __call__(self) -> datetime:
+        return self.now
+
+
+async def test_sync_answers_at_once_started_running_then_fresh(
+    world: World, settings: dict[str, Any], fake: FakeMeetings, no_read_left_over: None
+) -> None:
+    hubspot = Held()
+    clock = SyncClock()
+    refresher = MeetingsRefresher(sessions=world.factory, hubspot=lambda: hubspot, clock=clock)
+    world.app.state.hubspot_provider = lambda: hubspot
+    world.app.state.meetings_refresher = refresher
+    async with signed_in_as(world, "mia", ["companies"]) as client:
+        started = await client.post(SYNC)
+        await asyncio.wait_for(hubspot.searching.wait(), timeout=10)
+        again = await client.post(SYNC)
+        hubspot.go.set()
+        await refresher.wait()
+        clock.now = START + timedelta(seconds=30)
+        fresh = await client.post(SYNC)
+    assert (started.status_code, started.json()) == (202, {"state": "started", "checked_at": None})
+    assert (again.status_code, again.json()["state"]) == (202, "running")
+    assert (fresh.status_code, fresh.json()) == (
+        202,
+        {"state": "fresh", "checked_at": "2026-11-04T09:00:00Z"},
+    )
+    assert hubspot.calls.count("search_meetings") == 1  # fresh asked HubSpot nothing
+
+
+async def test_sync_without_hubspot_is_a_plain_503_and_off_is_a_409(
+    world: World, settings: dict[str, Any], fake: FakeMeetings
+) -> None:
+    async with signed_in_as(world, "mia", ["companies"]) as client:
+        no_hubspot = await client.post(SYNC)
+        settings.update(meeting_forms_enabled=False)
+        off = await client.post(SYNC)
+    assert (no_hubspot.status_code, no_hubspot.json()["code"]) == (503, "hubspot_not_connected")
+    assert no_hubspot.headers["retry-after"]
+    assert no_hubspot.json()["title"] == "HubSpot isn't connected"
+    assert no_hubspot.json()["detail"] == (
+        "HubSpot isn't connected, so meetings can't be read from it. An admin can connect it on "
+        "the HubSpot page in Admin."
+    )
+    assert (off.status_code, off.json()["code"]) == (409, "meeting_forms_off")
+
+
+async def test_the_list_says_when_hubspot_was_last_read_and_what_went_wrong(
+    world: World, settings: dict[str, Any], fake: FakeMeetings
+) -> None:
+    await a_company(world)
+    checked = START - timedelta(hours=2)  # 6 pm in Melbourne, the same day
+    async with signed_in_as(world, "mia", ["companies"]) as client:
+        fake.state = MeetingsStatus(state="ready", checked_at=checked, syncing=True)
+        running = await page(client)
+        fake.state = MeetingsStatus(state="ready", checked_at=checked, last_read="failed")
+        failed = await page(client)
+        fake.state = MeetingsStatus(state="waiting", sentence=NOT_READ_YET, last_read="failed")
+        failed_first = await page(client)
+        fake.state = MeetingsStatus(state="ready", checked_at=checked, last_read="waiting")
+        waiting = await page(client)
+    assert (running["checked_at"], running["syncing"], running["sync_problem"]) == (
+        "2026-11-04T07:00:00Z",
+        True,
+        None,
+    )
+    assert running["total"] == 7  # the list as the last good read left it
+    assert failed["sync_problem"] == (
+        "HubSpot didn't answer, so this list is from 6:00 pm. Try Sync again in a minute."
+    )
+    assert failed["total"] == 7 and failed["sentence"] is None
+    assert failed_first["sync_problem"] == SYNC_FAILED_FIRST
+    assert waiting["sync_problem"] == SYNC_WAITING
+
+
+def test_the_time_of_the_last_read_is_said_the_way_a_person_says_it() -> None:
+    now = datetime(2026, 11, 16, 3, 0, tzinfo=UTC)  # 2 pm on Monday 16 Nov in Melbourne
+    assert clock_words(datetime(2026, 11, 15, 22, 2, tzinfo=UTC), now) == "9:02 am"
+    assert clock_words(datetime(2026, 11, 16, 1, 0, tzinfo=UTC), now) == "12:00 pm"
+    assert clock_words(datetime(2026, 11, 15, 13, 5, tzinfo=UTC), now) == "12:05 am"
+    assert clock_words(datetime(2026, 11, 15, 2, 14, tzinfo=UTC), now) == "1:14 pm yesterday"
+    assert clock_words(datetime(2026, 11, 13, 22, 0, tzinfo=UTC), now) == "9:00 am on 14 Nov"

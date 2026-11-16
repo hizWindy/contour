@@ -29,6 +29,7 @@ from apps.companies.schemas import (
     MeetingFormPatch,
     MeetingFormStart,
     MeetingPage,
+    MeetingsSyncOut,
     MeetingSummary,
     MeetingTranscriptIn,
     MeetingWhen,
@@ -165,6 +166,27 @@ async def meeting_summary(
 ) -> MeetingSummary:
     refresh_meetings_soon(request.app)  # in the background, at most every 15 minutes
     return await meeting_store.summary(session, auth, source=source, now=now)
+
+
+@router.post(
+    "/meetings/sync",
+    response_model=MeetingsSyncOut,
+    status_code=202,
+    summary="Read HubSpot's meetings now",
+    description=(
+        "Sync on Meetings: a full read of HubSpot's meetings in our window (90 days back to 60 "
+        "days ahead, TBC), so it also finds meetings that moved or were deleted. It answers at "
+        "once: `started` (the read runs in the background, and the list's `syncing` is true "
+        "until it ends), `running` (a read was going already: nothing new starts) or `fresh` "
+        "(a good read finished under a minute ago: HubSpot isn't asked). One read at a time "
+        "for the whole site. It only reads HubSpot, and costs nothing. A HubSpot failure "
+        "doesn't fail this request: the list's `sync_problem` says it, and the list stays as "
+        "it was. 503 `hubspot_not_connected` when HubSpot isn't connected. 409 "
+        "`meeting_forms_off`."
+    ),
+)
+async def sync_meetings(request: Request, settings: MeetingsOnDep) -> MeetingsSyncOut:
+    return await meeting_store.sync_now(request.app)
 
 
 @router.post(

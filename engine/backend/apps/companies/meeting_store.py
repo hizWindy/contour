@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Final, Protocol
 
+from fastapi import FastAPI
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -40,6 +41,7 @@ from apps.companies.schemas import (
     MeetingGroup,
     MeetingItem,
     MeetingPage,
+    MeetingsSyncOut,
     MeetingSummary,
     MeetingWhen,
     MeetingWho,
@@ -50,7 +52,7 @@ from core.api.errors import Problem
 from core.auth.models import User
 from core.auth.sessions import AuthContext
 from core.config import Settings
-from core.hubspot import activities
+from core.hubspot import activities, connection
 from core.hubspot import meetings as hubspot_meetings
 from core.hubspot import owners as hubspot_owners
 from core.hubspot.meetings import Meeting, MeetingsStatus
@@ -78,6 +80,13 @@ NO_TEAMS_IN_HUBSPOT = "HubSpot has no teams yet, so My team is empty. All shows 
 NO_ACCOUNT = (
     "Nobody is signed in, so there are no meetings of your own to pick out. All shows everyone's."
 )
+SYNC_WAITING = (
+    "Waiting for HubSpot access to meetings. An admin adds it in HubSpot. You can still start a "
+    "new pre-read."
+)
+SYNC_FAILED_FIRST = (
+    "HubSpot didn't answer, so no meetings could be read yet. Try Sync again in a minute."
+)
 
 
 def meeting_forms_off() -> Problem:
@@ -86,6 +95,15 @@ def meeting_forms_off() -> Problem:
         "Meetings are off",
         "Meetings and pre-reads are switched off. An admin can switch them on in Settings.",
         code="meeting_forms_off",
+    )
+
+
+def hubspot_not_connected() -> Problem:
+    return Problem(
+        503,
+        "HubSpot isn't connected",
+        f"{hubspot_meetings.NO_HUBSPOT} An admin can connect it on the HubSpot page in Admin.",
+        code="hubspot_not_connected",
     )
 
 
@@ -172,6 +190,33 @@ MONTHS: Final = (
 )
 WORD: Final = re.compile(r"[\w']+")
 EDGES: Final = ".,;:!?()[]\"'"
+
+
+def clock_words(moment: datetime, now: datetime) -> str:
+    """A time as the page says it, in Melbourne time: "9:02 am" today, "9:02 am yesterday", or
+    "9:02 am on 14 Nov"."""
+    local, today = moment.astimezone(MELBOURNE), now.astimezone(MELBOURNE).date()
+    words = f"{local.hour % 12 or 12}:{local.minute:02d} {'am' if local.hour < 12 else 'pm'}"
+    if local.date() == today:
+        return words
+    if local.date() == today - timedelta(days=1):
+        return f"{words} yesterday"
+    return f"{words} on {local.day} {MONTHS[local.month - 1][:3].title()}"
+
+
+def sync_problem(status: MeetingsStatus, now: datetime) -> str | None:
+    """What went wrong with the newest read of HubSpot's meetings, in plain words, or None. The
+    list stays as the last good read left it."""
+    if status.last_read == "waiting":
+        return SYNC_WAITING
+    if status.last_read != "failed":
+        return None
+    if status.checked_at is None:
+        return SYNC_FAILED_FIRST
+    return (
+        f"HubSpot didn't answer, so this list is from {clock_words(status.checked_at, now)}. "
+        "Try Sync again in a minute."
+    )
 
 
 def group_of(starts_at: datetime, now: datetime) -> MeetingGroup:
@@ -482,7 +527,21 @@ async def list_meetings(
         linked=me is not None,
         team_state=team,
         team_names=list(teams.names),
+        checked_at=status.checked_at,
+        syncing=status.syncing,
+        sync_problem=sync_problem(status, now),
     )
+
+
+async def sync_now(app: FastAPI) -> MeetingsSyncOut:
+    """Sync on Meetings (PLAN-V18 T1-5): core reads HubSpot's meetings in the background, and
+    this answers at once. 503 `hubspot_not_connected` when HubSpot isn't set up. A HubSpot
+    failure doesn't fail this: the list's `sync_problem` says it."""
+    try:
+        answer = await connection.sync_meetings_now(app)
+    except LookupError:
+        raise hubspot_not_connected() from None
+    return MeetingsSyncOut(state=answer.state, checked_at=answer.checked_at)
 
 
 async def summary(

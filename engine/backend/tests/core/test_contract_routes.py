@@ -86,6 +86,7 @@ ROUTES = [
     ("POST", f"{API}/companies/call-notes/{{note_id}}/resolve"),
     ("GET", f"{API}/companies/meetings"),
     ("GET", f"{API}/companies/meetings/summary"),
+    ("POST", f"{API}/companies/meetings/sync"),
     ("POST", f"{API}/companies/meetings/forms"),
     ("GET", f"{API}/companies/meetings/forms/{{form_id}}"),
     ("PATCH", f"{API}/companies/meetings/forms/{{form_id}}"),

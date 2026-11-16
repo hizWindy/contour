@@ -815,6 +815,8 @@ MeetingWhen = Literal["upcoming", "past"]
 MeetingWho = Literal["all", "mine", "team"]
 # Whether "My team" can pick anything out (PLAN-V18 T1-4).
 TeamState = Literal["ready", "not_linked", "no_team", "none_in_hubspot"]
+# What Sync on Meetings did (PLAN-V18 T1-5).
+MeetingsSyncState = Literal["started", "running", "fresh"]
 # By the Melbourne date: today, tomorrow, the rest of this week (to Sunday), or later.
 MeetingGroup = Literal["today", "tomorrow", "this_week", "later"]
 FormStatus = Literal["drafting", "draft", "sent", "failed"]
@@ -864,7 +866,9 @@ class MeetingItem(Out):
 class MeetingPage(Out):
     # Added in PLAN-V18: the API always sends them, and the website's types leave them optional.
     model_config = ConfigDict(
-        json_schema_extra=optional_in_types("who", "linked", "team_state", "team_names")
+        json_schema_extra=optional_in_types(
+            "who", "linked", "team_state", "team_names", "checked_at", "syncing", "sync_problem"
+        )
     )
 
     items: list[MeetingItem]
@@ -891,6 +895,32 @@ class MeetingPage(Out):
     )
     team_names: list[str] = Field(
         default_factory=list, description="My HubSpot teams' names, by name, or an empty list"
+    )
+    checked_at: datetime | None = Field(
+        None, description="When the last good read of HubSpot's meetings finished, or none"
+    )
+    syncing: bool = Field(
+        False,
+        description="True while a read of HubSpot's meetings is running (a Sync, the daily one, "
+        "or a refresh). The website asks again until it is false",
+    )
+    sync_problem: str | None = Field(
+        None,
+        description="One plain sentence when the newest read of HubSpot's meetings failed or is "
+        "waiting for a permission, or none. The list stays as the last good read left it",
+    )
+
+
+class MeetingsSyncOut(Out):
+    """What Sync on Meetings did (PLAN-V18 T1-5)."""
+
+    state: MeetingsSyncState = Field(
+        description="started (a read of HubSpot's meetings began now, in the background), "
+        "running (one was going already: nothing new started) or fresh (a good read finished "
+        "under a minute ago, so HubSpot isn't asked again)"
+    )
+    checked_at: datetime | None = Field(
+        description="When the last good read of HubSpot's meetings finished, or none"
     )
 
 
