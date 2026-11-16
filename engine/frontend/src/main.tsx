@@ -16,11 +16,13 @@ import { App } from './App'
 import { MotionRoot } from './components/motion/motion-root'
 import { watchInstall } from './pwa/install'
 import { registerServiceWorker } from './pwa/register'
+import { MODULES } from './modules'
 import { createAppRouter, routes } from './router'
 import { preloadOnIntent } from './shell/intent'
 import { prefetchOnNavigation } from './shell/prefetch'
 import { preloadNextPages } from './shell/preload'
 import { applyTheme, readThemeChoice, watchBrowserBar } from './shell/theme'
+import { warmModulePages } from './shell/warm-module'
 
 // A light or dark choice made in the command menu, kept from the last visit.
 applyTheme(readThemeChoice())
@@ -58,3 +60,6 @@ registerServiceWorker()
 preloadNextPages(routes)
 // And a page's code and data as soon as someone points at its link (PLAN-V7 C2).
 preloadOnIntent(routes, queryClient)
+// And, in a project that opts in, the other pages of the project someone is working in, so a
+// switch between them has nothing left to wait for (Improvements 1, #10).
+warmModulePages(router, queryClient, MODULES)

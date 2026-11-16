@@ -95,6 +95,13 @@ export interface AppModule {
   /** Its pages, in menu order. On Home each shows with its `purpose`. */
   pages: readonly NavItem[]
   /**
+   * Opts in to warming (Improvements 1, #10, `warm-module.ts`): while someone is on one of its
+   * pages, the code and the first reads of its other pages are fetched quietly, so a switch between
+   * them finds both. Only for a project whose pages' first reads are cheap: a page's first reads
+   * run on the server whether or not the person ever opens it. Optional, off by default.
+   */
+  warm?: boolean
+  /**
    * Its own actions in Ctrl+K, after its pages, like "Log a call" (PLAN-V17 T3-7). The component
    * draws `CommandItem`s, or nothing, and asks for its own data. It is drawn only while Ctrl+K is
    * open, inside a `Suspense`, so it may be a `lazy` component. Optional.

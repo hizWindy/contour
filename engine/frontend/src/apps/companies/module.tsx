@@ -79,6 +79,9 @@ export const COMPANIES: AppModule = {
     { id: 'meetings', component: UpcomingMeetings, late: true },
   ],
   prefetchSummary: prefetchCompaniesHome,
+  // Its pages' first reads are cheap, so while someone is on one, the code and first reads of the
+  // others are fetched quietly (Improvements 1, #10): a switch between them finds both.
+  warm: true,
   description:
     'Every client and prospect in HubSpot, a call script before you ring, your client meetings and the calls you logged.',
   pages: [
