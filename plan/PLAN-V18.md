@@ -6,7 +6,7 @@ This plan makes the Companies module clearer and nicer to use, from Al-khair's l
 
 - **Built by:** Al-khair Pama. **Signed off by:** Al-khair for the code and every screen. Levi confirms the rules marked **TBC with Levi**.
 - **Last updated:** 16 Nov 2026 (S0 done: `plan-v18` made from `master`; the tracks are starting).
-- **Progress:** S0: 1 of 1. Track 1: 6 of 9. Track 2: 0 of 8. Track 3: 0 of 9. Merge and deploy: 0 of 3.
+- **Progress:** S0: 1 of 1. Track 1: 7 of 9. Track 2: 0 of 8. Track 3: 0 of 9. Merge and deploy: 0 of 3.
 - **Sources:**
   - Al-khair's list of changes (16 Nov, in chat), and the chat about Meetings the same day: the empty Meetings page, the team switch, and the Sync idea;
   - the code on `master` (`c4ebe58`), read on 16 Nov;
@@ -381,7 +381,7 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
 
 ## Track 1: the backend (session 1)
 
-**Progress:** 6 of 9. Every step is `backend-agent` work.
+**Progress:** 7 of 9. Every step is `backend-agent` work.
 
 - [x] **T1-1. Own copy and a baseline.** Done 2026-11-16, on `40d9912` (see the Log). Make the worktree and the database. Run the backend tests once and note the counts. Note `test_companies_speed`'s time too: it was about 560ms against its 300ms limit on this laptop before this plan.
 
@@ -425,7 +425,7 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
   - `test_companies_speed` must pass. If the new sort is slower, find why (the list is sorted over a joined subquery) and fix it before moving on.
   - **Done when:** tests cover the order, empty values, ties and old links, and the Log has the speed before and after.
 
-- [ ] **T1-7. Call notes: History** (the contract, part 3).
+- [x] **T1-7. Call notes: History** (the contract, part 3). Done 2026-11-16 (`4a7e821`).
   - `state=history`, and the filters `q`, `outcome`, `since` and `until`.
   - Only my own notes, as today. Another rep's notes never show.
   - **Done when:** tests cover each filter, the order, paging, and someone else's notes, and a speed check with 2,000 notes stays under 300ms.
@@ -456,6 +456,7 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
 - 16 Nov 2026, T1-5 (`854c94e`): `POST /companies/meetings/sync` and the list's `checked_at`, `syncing` and `sync_problem`. "One read at a time" is kept in the backend's memory (one backend runs for a database): while any read of HubSpot's meetings runs (the daily one, a refresh or a Sync), Sync answers `running` and a refresh skips itself. `fresh` needs the newest read to be a good one under a minute old, so after a failed read a press reads again at once. A HubSpot failure never fails the press: the list's `sync_problem` says "HubSpot didn't answer, so this list is from 6:00 pm. Try Sync again in a minute." (the time in Melbourne, with "yesterday" or the date when it isn't today), or the waiting words when a permission is missing. The 503 detail is the contract's sentence plus one next step: "An admin can connect it on the HubSpot page in Admin."
 - 16 Nov 2026, **T1-5's measure** (the real key in the process only, read only, the full read Sync runs, on `leadfinder_v18a`): one press is **15 requests** (3 search pages and 12 link reads, 6 for companies and 6 for people) and took **10.2, 12.5 and 13.2 seconds** in three presses. The first press of the day took 64 s and 17 requests: 2 search pages were asked again after HubSpot was slow (which answer it gave is not confirmed). The copy went from 599 to 597 meetings (6 changed, 2 left the window). **For Track 2's words:** "Already checking HubSpot. It takes about 15 seconds." The time goes on the link reads, one after another; reading companies and people side by side would save about 3 seconds (not done: not in this plan).
 - 16 Nov 2026, T1-6 (`57fc0e2`): `last_activity` is the default sort, newest first, as a Melbourne day; an empty one goes last, then A to Z by name, then by key; `order=asc` starts with the oldest and keeps the empty ones last. Lead Finder rows have none. **Speed, `test_companies_speed`, best of 3:** before (the baseline's full run) the default list by name took 39 ms and `city=Perth&deal=open` 543 ms; after (the test alone) the new default takes 37 to 40 ms, `sort=last_activity&offset=5000` 45 to 48 ms, `sort=name` 39 ms and `city=Perth&deal=open` 65 ms. The new sort isn't slower. The slow one was the city filter, not the sort: "city = x OR EXISTS (an office there)" made Postgres guess a cost of 116,000 (30 times too high), so it compiled the query (JIT) on every page, which took about 75 ms alone and 543 ms while the laptop was busy. The city filter is now one list of ids (`IN (... UNION ...)`), with a cost near 2,000 and no compiling. The full run at T1-9 checks it again.
+- 16 Nov 2026, T1-7 (`4a7e821`): `state=history` and the filters `q`, `outcome`, `since` and `until`, for any state. History is always the caller's own notes, even for an Admin who asks for everyone's (`mine=false`); with sign in switched off every note shows, as everything else does then. `q` uses the same words rule as Meetings: each word must start a word of the company's name, the person's name, the note or the summary (a mark inside a word counts, like O'Brien; marks around it don't). `outcome=none` is a note with no outcome picked. `since` after `until` answers 422 `dates_out_of_order` ("Pick a start day on or before the end day."), a word the contract didn't name. **Speed** with 2,000 of my notes and 1,000 of another rep's (best of 3): History 19 ms, its page 31 (offset 1,500) 20 ms, a search for two words 34 ms, an outcome since a day 21 ms. The limit is 300 ms.
 
 ## Track 2: Meetings, the pre-read and the Companies list (session 2)
 
