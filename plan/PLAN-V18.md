@@ -6,7 +6,7 @@ This plan makes the Companies module clearer and nicer to use, from Al-khair's l
 
 - **Built by:** Al-khair Pama. **Signed off by:** Al-khair for the code and every screen. Levi confirms the rules marked **TBC with Levi**.
 - **Last updated:** 16 Nov 2026 (S0 done: `plan-v18` made from `master`; the tracks are starting).
-- **Progress:** S0: 1 of 1. Track 1: 7 of 9. Track 2: 0 of 8. Track 3: 0 of 9. Merge and deploy: 0 of 3.
+- **Progress:** S0: 1 of 1. Track 1: 8 of 9. Track 2: 0 of 8. Track 3: 0 of 9. Merge and deploy: 0 of 3.
 - **Sources:**
   - Al-khair's list of changes (16 Nov, in chat), and the chat about Meetings the same day: the empty Meetings page, the team switch, and the Sync idea;
   - the code on `master` (`c4ebe58`), read on 16 Nov;
@@ -381,7 +381,7 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
 
 ## Track 1: the backend (session 1)
 
-**Progress:** 7 of 9. Every step is `backend-agent` work.
+**Progress:** 8 of 9. Every step is `backend-agent` work.
 
 - [x] **T1-1. Own copy and a baseline.** Done 2026-11-16, on `40d9912` (see the Log). Make the worktree and the database. Run the backend tests once and note the counts. Note `test_companies_speed`'s time too: it was about 560ms against its 300ms limit on this laptop before this plan.
 
@@ -430,7 +430,7 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
   - Only my own notes, as today. Another rep's notes never show.
   - **Done when:** tests cover each filter, the order, paging, and someone else's notes, and a speed check with 2,000 notes stays under 300ms.
 
-- [ ] **T1-8. The words, and the voice setting.**
+- [x] **T1-8. The words, and the voice setting.** Done 2026-11-16 (`503dd9c`, `bdcdcde`).
   - "Activity" becomes "Call logs" in the Settings help (`core/prefs/service.py:242`) and in `schemas.py:570`.
   - The new sentences in "Words for when things go wrong": Sync, no team, the two draft failures.
   - Each route's description lists every error code it can answer. Some are missing today: `meeting_time_missing` on `POST /meetings/forms`, and `no_one` and `form_sending` on the send route.
@@ -457,6 +457,7 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
 - 16 Nov 2026, **T1-5's measure** (the real key in the process only, read only, the full read Sync runs, on `leadfinder_v18a`): one press is **15 requests** (3 search pages and 12 link reads, 6 for companies and 6 for people) and took **10.2, 12.5 and 13.2 seconds** in three presses. The first press of the day took 64 s and 17 requests: 2 search pages were asked again after HubSpot was slow (which answer it gave is not confirmed). The copy went from 599 to 597 meetings (6 changed, 2 left the window). **For Track 2's words:** "Already checking HubSpot. It takes about 15 seconds." The time goes on the link reads, one after another; reading companies and people side by side would save about 3 seconds (not done: not in this plan).
 - 16 Nov 2026, T1-6 (`57fc0e2`): `last_activity` is the default sort, newest first, as a Melbourne day; an empty one goes last, then A to Z by name, then by key; `order=asc` starts with the oldest and keeps the empty ones last. Lead Finder rows have none. **Speed, `test_companies_speed`, best of 3:** before (the baseline's full run) the default list by name took 39 ms and `city=Perth&deal=open` 543 ms; after (the test alone) the new default takes 37 to 40 ms, `sort=last_activity&offset=5000` 45 to 48 ms, `sort=name` 39 ms and `city=Perth&deal=open` 65 ms. The new sort isn't slower. The slow one was the city filter, not the sort: "city = x OR EXISTS (an office there)" made Postgres guess a cost of 116,000 (30 times too high), so it compiled the query (JIT) on every page, which took about 75 ms alone and 543 ms while the laptop was busy. The city filter is now one list of ids (`IN (... UNION ...)`), with a cost near 2,000 and no compiling. The full run at T1-9 checks it again.
 - 16 Nov 2026, T1-7 (`4a7e821`): `state=history` and the filters `q`, `outcome`, `since` and `until`, for any state. History is always the caller's own notes, even for an Admin who asks for everyone's (`mine=false`); with sign in switched off every note shows, as everything else does then. `q` uses the same words rule as Meetings: each word must start a word of the company's name, the person's name, the note or the summary (a mark inside a word counts, like O'Brien; marks around it don't). `outcome=none` is a note with no outcome picked. `since` after `until` answers 422 `dates_out_of_order` ("Pick a start day on or before the end day."), a word the contract didn't name. **Speed** with 2,000 of my notes and 1,000 of another rep's (best of 3): History 19 ms, its page 31 (offset 1,500) 20 ms, a search for two words 34 ms, an outcome since a day 21 ms. The limit is 300 ms.
+- 16 Nov 2026, T1-8 (`503dd9c`, `bdcdcde`): "Call logs" in the Settings help and in `CallNoteOptions.enabled`. The `voice_tool` setting (`browser_model` by default, `browser_service`, `typing`) is on the Settings page and in `GET /call-notes/options`. The sentences Track 2 shows: "Meetings can't be read from HubSpot yet. You can still start a new pre-read.", the waiting one, the two draft failures (the AI limit, and the AI service, with "is busy", "took too long" and "isn't set up" in the same pattern), and "Email isn't set up yet, so nothing was sent. The pre-read stays here: copy it, or send it once email is set up.". `POST /meetings/forms` now names `meeting_time_missing`, and the send route `no_one` and `form_sending`. **A next step on every problem:** a new test (`tests/companies/test_problem_words.py`) reads every `Problem`, `refused` and `HubSpotError` in `apps/companies/` and `core/hubspot/meetings.py`; 22 details had none and now end with one, like "Go back to the list and pick it again." (company, note, call prep and pre-read not found), "Change it in HubSpot instead." (a note already sent), "Press Sync, then look for it again." (a meeting not found) and "Ask an Admin." The admin's sync warning keeps the permission's name; the Meetings page gets the plain one. **Asked by Track 2, through the lead** (`bdcdcde`): a failed pre-read whose three summaries the rep has written is a draft again (its error goes), so "write them yourself" leads to a send; with one or two written it stays failed. No new field.
 
 ## Track 2: Meetings, the pre-read and the Companies list (session 2)
 
