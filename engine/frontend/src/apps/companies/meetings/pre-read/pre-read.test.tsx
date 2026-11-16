@@ -1,8 +1,8 @@
 /**
- * The pre-read's page (PLAN-V17 T3-10), against Track 2's real contract (generated) and a fake
- * server that keeps its pre-read between requests and answers as Track 2's does: a summary the rep
- * changes is theirs (`by: person`) and a redraft keeps it, a blank is tidied, and a change to a
- * sent pre-read makes it a draft again.
+ * The pre-read's page (PLAN-V17 T3-10, and the centered form of PLAN-V18 T2-5), against the
+ * contract and a fake server that keeps its pre-read between requests and answers as Track 2's
+ * does: a summary the rep changes is theirs (`by: person`) and a redraft keeps it, a blank is
+ * tidied, and a change to a sent pre-read makes it a draft again.
  *
  * Real time, not a fake clock: the status fades with motion, and a fake clock that stops leaves
  * motion's frame loop waiting for a frame (found in Activity's tests). Dates are matched with or
@@ -28,6 +28,7 @@ import { REDUCED_MOTION } from '@/lib/use-media-query'
 import { routes } from '@/router'
 import { prefetchPage } from '@/shell/prefetch'
 import { createTestQueryClient, renderWithProviders } from '@/test/render'
+import { asPhone } from '@/test/screen'
 import { FadeSwap } from './fade-swap'
 import PreReadPage from './index'
 
@@ -297,13 +298,18 @@ function renderPreRead(path = `/companies/meetings/${FORM_ID}`) {
   return { ...result, router }
 }
 
-/** One summary, found by its title. */
+/** One summary, found by its box's label. */
 function summaryOf(title: string) {
-  const block = screen
-    .getByRole('heading', { level: 3, name: title })
-    .closest('[data-slot=summary]')
+  const block = screen.getByLabelText(title).closest('[data-slot=summary]')
   if (!(block instanceof HTMLElement)) throw new Error(`No summary called ${title}`)
   return within(block)
+}
+
+/** The form's footer: the status, and Check and send. */
+function footerOf(): HTMLElement {
+  const footer = document.querySelector('[data-slot=send-bar]')
+  if (!(footer instanceof HTMLElement)) throw new Error('No footer')
+  return footer
 }
 
 /** The draft's steps (PLAN-V18 T2-4), each with its state: done, now, waiting or stopped. */
@@ -346,22 +352,63 @@ afterEach(() => {
   toast.dismiss()
 })
 
-describe('a draft', () => {
-  it('shows the meeting, the facts with their sources, and three summaries written by AI', async () => {
+describe('the form', () => {
+  it('is one centered card in four numbered sections, with its footer at the end', async () => {
     mockServer()
     renderPreRead()
+    await screen.findByRole('heading', { level: 1, name: 'Office walk-through' })
+    const card = screen.getByRole('article', { name: 'Pre-read' })
+    // About 840px wide, in the middle of the page (TBC after Al-khair's look).
+    expect(card.parentElement).toHaveClass('mx-auto', 'max-w-[52.5rem]')
+    expect(card).toHaveClass('rounded-lg', 'border', 'bg-card')
+    // The four sections, each a heading for a screen reader, its number for the eye only.
+    const sections = within(card).getAllByRole('region')
+    expect(sections.map((section) => section.getAttribute('aria-labelledby') !== null)).toEqual([
+      true,
+      true,
+      true,
+      true,
+    ])
     expect(
-      await screen.findByRole('heading', { level: 1, name: 'Office walk-through' }),
-    ).toBeInTheDocument()
+      within(card)
+        .getAllByRole('heading', { level: 2 })
+        .map((heading) => heading.textContent),
+    ).toEqual(['1The meeting', '2The company', '3The summaries', '4Your part'])
+    expect(
+      within(card)
+        .getAllByRole('heading', { level: 2 })
+        .map((heading) => heading.querySelector('[aria-hidden=true]')?.textContent),
+    ).toEqual(['1', '2', '3', '4'])
+    expect(screen.getByRole('region', { name: 'The meeting' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Your part' })).toBeInTheDocument()
+    // The footer is the card's last part, with the status on the left and the one Navy button.
+    const footer = footerOf()
+    expect(card.lastElementChild).toBe(footer)
+    expect(footer).toHaveClass('sticky', 'bottom-0')
+    expect(within(footer).getByText('Draft ready')).toBeInTheDocument()
+    expect(within(footer).getByRole('button', { name: 'Check and send' })).toHaveAttribute(
+      'data-variant',
+      'default',
+    )
+    expect(
+      [...document.querySelectorAll('[data-slot=button][data-variant=default]')].map(
+        (button) => button.textContent,
+      ),
+    ).toEqual(['Check and send'])
+  })
+
+  it('shows the meeting and the company as quiet fields, each with its label above and its source', async () => {
+    mockServer()
+    renderPreRead()
+    await screen.findByRole('heading', { level: 1, name: 'Office walk-through' })
     // The header: the company (a link to its record), and the status on a line of its own, so a
-    // new word moves nothing. When and where are the facts' to say, once.
+    // new word moves nothing. When and where are the form's to say, once.
     const header = within(pageHeader())
     expect(header.getByRole('link', { name: 'Sample Logistics Pty Ltd' })).toHaveAttribute(
       'href',
       '/companies/101',
     )
     expect(header.queryByText(WHEN)).toBeNull()
-    expect(header.queryByText('Teams')).toBeNull()
     expect(pageHeader()).toHaveClass('flex-col')
     const statusLine = pageHeader().querySelector('[data-slot=pre-read-status-line]')
     expect(statusLine).toHaveTextContent('Draft ready')
@@ -371,42 +418,60 @@ describe('a draft', () => {
     expect(hubspot).toHaveAttribute('href', HUBSPOT_URL)
     expect(hubspot).toHaveAttribute('target', '_blank')
 
-    // The facts, as the server sends them, each with where it came from in quiet text.
-    const facts = within(screen.getByRole('region', { name: 'The facts' }))
-    expect(facts.getByText('From HubSpot and our notes, with no AI.')).toBeInTheDocument()
-    expect(facts.getAllByRole('term').map((term) => term.textContent)).toEqual(
-      FACTS.map((fact) => fact.label),
-    )
-    expect(facts.getByText('Fri 27 Nov 2026, 10:00 am to 11:00 am')).toBeInTheDocument()
-    expect(facts.getByText('Sam Sample (Office Manager)')).toBeInTheDocument()
-    expect(facts.getByText('About 300')).toBeInTheDocument()
-    expect(facts.getByText('HubSpot company')).toHaveClass('text-muted-foreground')
+    // 1 The meeting: the date and the time apart, where, who we meet and the Contour people.
+    const meeting = within(screen.getByRole('region', { name: 'The meeting' }))
+    expect(meeting.getAllByRole('term').map((term) => term.textContent)).toEqual([
+      'Date',
+      'Time',
+      'Teams or in person',
+      'Who we meet',
+      'Contour people',
+    ])
+    expect(meeting.getByText(/^Fri 27 Nov( 2026)?$/)).toBeInTheDocument()
+    expect(meeting.getByText('10:00 am to 11:00 am')).toBeInTheDocument()
+    expect(meeting.getByText('Online')).toBeInTheDocument()
+    expect(meeting.getByText('Sam Sample (Office Manager)')).toBeInTheDocument()
+    expect(meeting.getAllByText('HubSpot meeting')[0]).toHaveClass('text-muted-foreground')
 
-    // Three summaries, each marked, each with its sources as call prep's chips, each with a pencil.
-    const written: [string, string, string, string][] = [
-      ['What they do', 'A freight company with about 300 staff.', 'F1', 'Edit what they do'],
-      [
-        'What we know about the project',
-        'Their Perth lease ends in June 2028.',
-        'F2',
-        'Edit what we know about the project',
-      ],
-      [
-        'The talks so far',
-        'Jo called Sam in October about the Perth move.',
-        'F3',
-        'Edit the talks so far',
-      ],
+    // 2 The company: the company, then the server's facts, in its order.
+    const company = within(screen.getByRole('region', { name: 'The company' }))
+    expect(company.getByText('From HubSpot and our notes, with no AI.')).toBeInTheDocument()
+    expect(company.getAllByRole('term').map((term) => term.textContent)).toEqual([
+      'Company',
+      'Staff',
+      'Offices',
+      'Lease end',
+      'Deal stage',
+    ])
+    expect(company.getByRole('link', { name: 'Sample Logistics Pty Ltd' })).toHaveAttribute(
+      'href',
+      '/companies/101',
+    )
+    expect(company.getByText('About 300')).toBeInTheDocument()
+    expect(company.getByText('HubSpot company')).toHaveClass('text-muted-foreground')
+    // Fields that can be read are never boxes to type into.
+    expect(meeting.queryByRole('textbox')).toBeNull()
+    expect(company.queryByRole('textbox')).toBeNull()
+  })
+
+  it("has three summaries to type into, each marked as the AI's, with its sources, and Redraft", async () => {
+    mockServer()
+    renderPreRead()
+    await screen.findByRole('heading', { level: 1, name: 'Office walk-through' })
+    const written: [string, string, string][] = [
+      ['What they do', 'A freight company with about 300 staff.', 'F1'],
+      ['What we know about the project', 'Their Perth lease ends in June 2028.', 'F2'],
+      ['The talks so far', 'Jo called Sam in October about the Perth move.', 'F3'],
     ]
-    for (const [title, words, chip, pencil] of written) {
+    for (const [title, words, chip] of written) {
       const one = summaryOf(title)
-      expect(one.getByText(words)).toBeInTheDocument()
+      // A box with its label above it, typed into directly: no pencil.
+      expect(one.getByRole('textbox', { name: title })).toHaveValue(words)
       expect(one.getByText('Written by AI')).toBeInTheDocument()
       expect(one.getByText(chip)).toBeInTheDocument()
-      expect(one.getByRole('button', { name: pencil })).toBeInTheDocument()
+      expect(one.queryByRole('button', { name: /^Edit / })).toBeNull()
     }
     expect(screen.getByText('Source: Call with Sam Sample, 20 Oct 2026')).toBeInTheDocument()
-
     // Redraft says what one draft costs by the plan's estimate, that edits stay, and what the
     // drafts have cost so far (the server's total).
     const redraft = screen.getByRole('button', { name: 'Redraft (about US$0.03)' })
@@ -414,10 +479,23 @@ describe('a draft', () => {
     expect(redraft).toHaveAccessibleDescription(
       'It writes the three summaries again. Your edits are kept. US$0.03 so far.',
     )
+  })
 
-    // The two blanks, empty, with clear labels; Check and send waits for them.
-    expect(screen.getByRole('textbox', { name: 'Ideal next step' })).toHaveValue('')
-    expect(screen.getByRole('textbox', { name: 'Who is going' })).toHaveValue('')
+  it('has two required blanks, starred, and Check and send waits for them', async () => {
+    mockServer()
+    renderPreRead()
+    await screen.findByRole('heading', { level: 1, name: 'Office walk-through' })
+    for (const name of ['Ideal next step', 'Who is going']) {
+      const blank = screen.getByRole('textbox', { name })
+      expect(blank).toHaveValue('')
+      // A screen reader hears "required"; the eye sees the star, which a screen reader skips.
+      expect(blank).toBeRequired()
+      const label = document.querySelector(`label[for="${blank.id}"]`)
+      expect(label?.querySelector('[data-slot=required-star]')).toHaveAttribute(
+        'aria-hidden',
+        'true',
+      )
+    }
     const send = screen.getByRole('button', { name: 'Check and send' })
     expect(send).toBeDisabled()
     expect(send).toHaveAccessibleDescription('Fill in the ideal next step and who is going first.')
@@ -432,96 +510,128 @@ describe('a draft', () => {
           company_key: 'lead:7',
           where: 'in_person',
         },
+        facts: [],
       }),
     })
     renderPreRead()
     await screen.findByRole('heading', { level: 1, name: 'Office walk-through' })
-    expect(screen.getByRole('link', { name: 'Sample Logistics Pty Ltd' })).toHaveAttribute(
-      'href',
-      '/companies/lead%3A7',
-    )
+    for (const link of screen.getAllByRole('link', { name: 'Sample Logistics Pty Ltd' })) {
+      expect(link).toHaveAttribute('href', '/companies/lead%3A7')
+    }
     expect(screen.queryByRole('link', { name: /Open in HubSpot/ })).toBeNull()
     expect(server.calls.map((call) => call.path)).toEqual([FORM])
+    // Its own copy says when and where, typed in.
+    const meeting = within(screen.getByRole('region', { name: 'The meeting' }))
+    expect(meeting.getByText('In person')).toBeInTheDocument()
+    expect(meeting.getAllByText('Typed in')).toHaveLength(3)
   })
 
-  it('an empty summary says so, and its pencil can write it', async () => {
+  it('an empty summary says so in its box, with no mark', async () => {
     mockServer({ form: form({ summaries: { ...WRITTEN, talks_so_far: EMPTY } }) })
     renderPreRead()
     await screen.findByRole('heading', { level: 1, name: 'Office walk-through' })
     const talks = summaryOf('The talks so far')
-    expect(
-      talks.getByText('Nothing in the facts for this yet. Write it with the pencil.'),
-    ).toBeInTheDocument()
+    expect(talks.getByRole('textbox', { name: 'The talks so far' })).toHaveAttribute(
+      'placeholder',
+      'Nothing in the facts for this yet. Write it here.',
+    )
     // The AI wrote nothing here, so nothing is marked as its own.
     expect(talks.queryByText('Written by AI')).toBeNull()
-    expect(talks.getByRole('button', { name: 'Edit the talks so far' })).toBeInTheDocument()
+  })
+
+  it('Ctrl+Enter opens Check and send, or goes to the first blank still to fill', async () => {
+    mockServer()
+    const { user } = renderPreRead()
+    await screen.findByRole('heading', { level: 1, name: 'Office walk-through' })
+    const what = screen.getByRole('textbox', { name: 'What they do' })
+    what.focus()
+    await user.keyboard('{Control>}{Enter}{/Control}')
+    expect(screen.getByRole('textbox', { name: 'Ideal next step' })).toHaveFocus()
+    await user.type(screen.getByRole('textbox', { name: 'Ideal next step' }), 'Site visit.')
+    await user.keyboard('{Control>}{Enter}{/Control}')
+    expect(screen.getByRole('textbox', { name: 'Who is going' })).toHaveFocus()
+    await user.type(screen.getByRole('textbox', { name: 'Who is going' }), 'Jo Sample')
+    await user.keyboard('{Control>}{Enter}{/Control}')
+    expect(
+      await screen.findByRole('alertdialog', { name: 'Send the pre-read?' }),
+    ).toBeInTheDocument()
+  })
+
+  it('on a phone: one column, and the footer fixed above the safe area', async () => {
+    asPhone()
+    mockServer()
+    renderPreRead()
+    await screen.findByRole('heading', { level: 1, name: 'Office walk-through' })
+    const footer = footerOf()
+    expect(footer).toHaveClass('fixed', 'bottom-0', 'pb-[max(0.75rem,env(safe-area-inset-bottom))]')
+    expect(footer).not.toHaveClass('sticky')
+    // The page ends above the footer, so its last field is never under it.
+    expect(screen.getByRole('article', { name: 'Pre-read' }).parentElement).toHaveClass('pb-36')
+    // One column: the grids have two only from the small screen up.
+    for (const grid of document.querySelectorAll('[data-slot=pre-read-form] dl')) {
+      expect(grid).toHaveClass('grid', 'sm:grid-cols-2')
+      expect(grid.className).not.toMatch(/(?<!:)grid-cols-2/)
+    }
+  })
+
+  it('opens once: the four sections rise and fade in one after another, and the footer stays still', async () => {
+    mockServer()
+    renderPreRead()
+    await screen.findByRole('heading', { level: 1, name: 'Office walk-through' })
+    const card = screen.getByRole('article', { name: 'Pre-read' })
+    const reveals = [...card.querySelectorAll('[data-slot=reveal]')]
+    expect(reveals).toHaveLength(4)
+    expect(footerOf().closest('[data-slot=reveal]')).toBeNull()
+  })
+
+  it('is simply there with reduced motion', async () => {
+    askForReducedMotion()
+    mockServer()
+    renderPreRead()
+    await screen.findByRole('heading', { level: 1, name: 'Office walk-through' })
+    for (const reveal of document.querySelectorAll('[data-slot=reveal]')) {
+      expect(reveal).not.toHaveStyle({ opacity: '0' })
+    }
   })
 })
 
-describe('the pencil', () => {
-  it('shows the new words and "Edited by you" at once, and a redraft keeps them', async () => {
+describe('a summary typed into', () => {
+  it('is "Edited by you" as soon as it changes, saves when it is left, and a redraft keeps it', async () => {
     const server = mockServer({ patch: 'wait' })
     const { user } = renderPreRead()
     await screen.findByRole('heading', { level: 1, name: 'Office walk-through' })
     const words = 'The Perth lease ends 30 June 2028, and they want to move early.'
-
-    await user.click(
-      summaryOf('What we know about the project').getByRole('button', {
-        name: 'Edit what we know about the project',
-      }),
-    )
     const box = summaryOf('What we know about the project').getByRole('textbox', {
-      name: 'What we know about the project, your wording',
+      name: 'What we know about the project',
     })
-    expect(box).toHaveFocus()
-    expect(box).toHaveValue('Their Perth lease ends in June 2028.')
-    // The open box's Save is quiet: the page keeps one Navy button, "Check and send". Save and
-    // Cancel are 44px tall on a touch screen.
-    const save = summaryOf('What we know about the project').getByRole('button', { name: 'Save' })
-    const cancel = summaryOf('What we know about the project').getByRole('button', {
-      name: 'Cancel',
-    })
-    expect(save).toHaveAttribute('data-variant', 'outline')
-    expect(save).toHaveClass('touch:h-11')
-    expect(cancel).toHaveClass('touch:h-11')
-    expect(
-      [...document.querySelectorAll('[data-slot=button][data-variant=default]')].map(
-        (button) => button.textContent,
-      ),
-    ).toEqual(['Check and send'])
     await user.clear(box)
     await user.type(box, words)
-    await user.click(save)
-
-    // At once, before the server answers: the new words, and the mark turns.
-    expect(summaryOf('What we know about the project').getByText(words)).toBeInTheDocument()
+    // At once, before it is saved: the mark turns.
     expect(
       await summaryOf('What we know about the project').findByText('Edited by you'),
     ).toBeInTheDocument()
-    expect(summaryOf('What we know about the project').queryByText('Written by AI')).toBeNull()
+    expect(patches(server)).toEqual([])
+    // Left: it saves.
+    await user.tab()
     await waitFor(() => {
       expect(patches(server)).toEqual([{ summaries: { what_we_know: words } }])
     })
+    expect(summaryOf('What we know about the project').getByText('Saving.')).toBeInTheDocument()
     server.release()
-    // The focus is back on the pencil, so the keyboard carries on from there.
-    await waitFor(() => {
-      expect(
-        summaryOf('What we know about the project').getByRole('button', {
-          name: 'Edit what we know about the project',
-        }),
-      ).toHaveFocus()
-    })
+    expect(await summaryOf('What we know about the project').findByText('Saved.')).toBeVisible()
+    // The footer says when it was last saved.
+    expect(within(footerOf()).getByText(/^Draft ready, saved \d{1,2}:\d{2} [ap]m$/)).toBeVisible()
 
-    // Redraft: the AI's two go still and grey while they are written; the rep's stays as it is.
+    // Redraft: the AI's two go still and grey while they are written; the rep's stays a box.
     server.patch = 'ok'
     await user.click(screen.getByRole('button', { name: 'Redraft (about US$0.03)' }))
-    expect(await screen.findByText('Drafting')).toBeInTheDocument()
+    expect(await within(pageHeader()).findByText('Drafting')).toBeInTheDocument()
     expect(server.calls.filter((call) => call.path === REDRAFT)).toHaveLength(1)
     expect(stillBlocks()).toBe(2)
     expect(
       screen.getByRole('heading', { name: 'AI is drafting this pre-read' }),
     ).toBeInTheDocument()
-    expect(summaryOf('What we know about the project').getByText(words)).toBeInTheDocument()
+    expect(box).toHaveValue(words)
     expect(screen.getByRole('button', { name: /^Redraft/ })).toBeDisabled()
 
     // The server writes the other two again, keeps the rep's, and the page asks again in 2s.
@@ -535,15 +645,15 @@ describe('the pencil', () => {
       '0.062400',
     )
     expect(
-      await screen.findByText('A freight and storage company.', {}, { timeout: 4000 }),
+      await screen.findByDisplayValue('A freight and storage company.', {}, { timeout: 4000 }),
     ).toBeInTheDocument()
-    expect(screen.getByText('Sam asked for a proposal by December.')).toBeInTheDocument()
-    expect(summaryOf('What we know about the project').getByText(words)).toBeInTheDocument()
+    expect(screen.getByDisplayValue('Sam asked for a proposal by December.')).toBeInTheDocument()
+    expect(box).toHaveValue(words)
     expect(
       summaryOf('What we know about the project').getByText('Edited by you'),
     ).toBeInTheDocument()
     expect(stillBlocks()).toBe(0)
-    expect(await screen.findByText('Draft ready')).toBeInTheDocument()
+    expect(await within(pageHeader()).findByText('Draft ready')).toBeInTheDocument()
     // Two drafts so far: the button still says one draft's cost, the line what both cost.
     expect(
       screen.getByRole('button', { name: 'Redraft (about US$0.03)' }),
@@ -552,34 +662,34 @@ describe('the pencil', () => {
     )
   }, 15_000)
 
-  it('a refused save puts the summary back, and opens the box again with the words and why', async () => {
+  it('left as it was, sends nothing', async () => {
+    const server = mockServer()
+    const { user } = renderPreRead()
+    await screen.findByRole('heading', { level: 1, name: 'Office walk-through' })
+    await user.click(screen.getByRole('textbox', { name: 'What they do' }))
+    await user.tab()
+    expect(patches(server)).toEqual([])
+    expect(summaryOf('What they do').getByText('Written by AI')).toBeInTheDocument()
+  })
+
+  it('a refused save keeps the words, says why, and Try again sends them again', async () => {
     const server = mockServer({ patch: 'fail-once' })
     const { user } = renderPreRead()
     await screen.findByRole('heading', { level: 1, name: 'Office walk-through' })
-    await user.click(summaryOf('What they do').getByRole('button', { name: 'Edit what they do' }))
-    const box = summaryOf('What they do').getByRole('textbox', {
-      name: 'What they do, your wording',
-    })
-    await user.clear(box)
-    await user.type(box, 'A freight company in Perth.')
-    await user.click(summaryOf('What they do').getByRole('button', { name: 'Save' }))
-
-    // The box comes back with the rep's words, and says why in plain words.
-    const again = await summaryOf('What they do').findByRole('textbox', {
-      name: 'What they do, your wording',
-    })
-    expect(again).toHaveValue('A freight company in Perth.')
-    expect(summaryOf('What they do').getByRole('alert')).toHaveTextContent(
-      'Something went wrong on our side. Not saved yet. Try again.',
-    )
-    // What the server holds: the AI's summary, so its mark again.
-    expect(await summaryOf('What they do').findByText('Written by AI')).toBeInTheDocument()
-
-    // Saved again, it goes.
-    await user.click(summaryOf('What they do').getByRole('button', { name: 'Save' }))
-    expect(await summaryOf('What they do').findByText('Edited by you')).toBeInTheDocument()
-    expect(summaryOf('What they do').getByText('A freight company in Perth.')).toBeInTheDocument()
+    const box = screen.getByRole('textbox', { name: 'What they do' })
+    await user.type(box, ' Mostly freight.')
+    await user.tab()
+    const why = await summaryOf('What they do').findByRole('alert')
+    expect(why).toHaveTextContent('Something went wrong on our side. Not saved yet. Try again.')
+    expect(box).toHaveValue('A freight company with about 300 staff. Mostly freight.')
+    expect(box).toHaveAttribute('aria-invalid', 'true')
+    await user.click(summaryOf('What they do').getByRole('button', { name: 'Try again' }))
+    expect(await summaryOf('What they do').findByText('Saved.')).toBeInTheDocument()
     expect(patches(server)).toHaveLength(2)
+    expect(server.form.summaries.what_they_do).toMatchObject({
+      text: 'A freight company with about 300 staff. Mostly freight.',
+      by: 'person',
+    })
   })
 })
 
@@ -688,12 +798,8 @@ describe('a save that fails after the rep has left the page', () => {
     const server = mockServer({ patch: 'wait-then-fail' })
     const { user, router } = renderPreRead()
     await screen.findByRole('heading', { level: 1, name: 'Office walk-through' })
-    await user.click(summaryOf('What they do').getByRole('button', { name: 'Edit what they do' }))
-    await user.type(
-      summaryOf('What they do').getByRole('textbox', { name: 'What they do, your wording' }),
-      ' Mostly freight.',
-    )
-    await user.click(summaryOf('What they do').getByRole('button', { name: 'Save' }))
+    await user.type(screen.getByRole('textbox', { name: 'What they do' }), ' Mostly freight.')
+    await user.tab()
     await waitFor(() => {
       expect(patches(server)).toHaveLength(1)
     })
@@ -717,7 +823,7 @@ describe('while it drafts', () => {
     // AI drafts it, and the rep checks it before anyone gets it (PLAN-V18 T2-4).
     const progress = await screen.findByRole('region', { name: 'AI is drafting this pre-read' })
     expect(progress).toHaveTextContent('You check it before anyone gets it.')
-    expect(screen.getByText('Drafting')).toBeInTheDocument()
+    expect(within(pageHeader()).getByText('Drafting')).toBeInTheDocument()
     // No facts yet: HubSpot is being read.
     expect(steps()).toEqual({
       'Reading HubSpot': 'now',
@@ -757,11 +863,15 @@ describe('while it drafts', () => {
 
     // 2 more: the summaries, and the draft is ready. The steps stay, full.
     expect(
-      await screen.findByText('A freight company with about 300 staff.', {}, { timeout: 4000 }),
+      await screen.findByDisplayValue(
+        'A freight company with about 300 staff.',
+        {},
+        { timeout: 4000 },
+      ),
     ).toBeInTheDocument()
     expect(reads(server)).toBe(3)
     expect(stillBlocks()).toBe(0)
-    expect(await screen.findByText('Draft ready')).toBeInTheDocument()
+    expect(await within(pageHeader()).findByText('Draft ready')).toBeInTheDocument()
     expect(steps()).toEqual({
       'Reading HubSpot': 'done',
       'Writing the summaries': 'done',
@@ -800,7 +910,7 @@ describe('a failed draft', () => {
     expect(notice).toHaveTextContent(
       "The summaries weren't written. Claude is busy right now. Try again in a minute.",
     )
-    expect(screen.getByText('Draft failed')).toBeInTheDocument()
+    expect(within(pageHeader()).getByText('Draft failed')).toBeInTheDocument()
     // The facts were read: it stopped while writing the summaries.
     expect(steps()).toEqual({
       'Reading HubSpot': 'done',
@@ -809,7 +919,9 @@ describe('a failed draft', () => {
     })
     const progress = screen.getByRole('region', { name: 'The draft stopped' })
     // The summaries stay, empty, so the rep can write them; Try again is the one redraft.
-    expect(screen.getAllByRole('heading', { level: 3 })).toHaveLength(3)
+    for (const title of ['What they do', 'What we know about the project', 'The talks so far']) {
+      expect(screen.getByRole('textbox', { name: title })).toHaveValue('')
+    }
     expect(screen.queryByRole('button', { name: /^Redraft/ })).toBeNull()
     expect(screen.getByRole('button', { name: 'Check and send' })).toHaveAccessibleDescription(
       "The summaries weren't written. Try again first.",
@@ -870,7 +982,7 @@ describe('sent', () => {
         'Sent to Jo Sample and mia.sample@example.com on 26 Nov 2026 at 9:12 am, by Al Sample.',
       ),
     ).toBeInTheDocument()
-    expect(screen.getByText('Sent')).toBeInTheDocument()
+    expect(within(pageHeader()).getByText('Sent')).toBeInTheDocument()
     expect(
       screen.getByText("Writing to HubSpot isn't on yet, so the copy waits."),
     ).toBeInTheDocument()
@@ -883,7 +995,7 @@ describe('sent', () => {
     // A change: the server makes it a draft again, and the page says when it was last sent.
     await user.type(screen.getByRole('textbox', { name: 'Ideal next step' }), ' Bring the plans.')
     await user.tab()
-    expect(await screen.findByText('Draft ready')).toBeInTheDocument()
+    expect(await within(pageHeader()).findByText('Draft ready')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Check and send' })).toBeEnabled()
     expect(
       screen.getByText(/^Last sent to Jo Sample and mia\.sample@example\.com/),

@@ -1,284 +1,198 @@
 /**
- * The rep's part of the pre-read (PLAN-V17 "The screens", part 6): two blanks with clear labels,
- * "Ideal next step" and "Who is going". The AI never fills them (Levi asked for blanks), so they
- * start empty.
+ * The rep's part of the pre-read (PLAN-V17 "The screens", part 6), and the form's footer
+ * (PLAN-V18 T2-5).
  *
- * - **Each saves when it is left** (a PATCH with `next_step` or `going`), and only if it changed,
- *   so leaving a sent pre-read untouched never makes it a draft again (the server does that on a
- *   change). After a save the field shows what the server keeps, unless the rep has typed on.
- * - **A failed save keeps the text**, says why and "Not saved yet. Try again.", with Try again.
- *   One that fails after the rep has left the page says so in a toast, as Log meeting does.
- * - **"Check and send"** is the page's one Navy button. It stays greyed until both blanks are
- *   filled, with the reason beside it in plain words (`sendBlock`), and while the summaries are
- *   written or after a draft failed, since the server sends only a written pre-read. On a phone
- *   it sits at the bottom of the screen, where a thumb reaches it. It opens the send dialog
- *   (`send-dialog.tsx`, T3-11). While the pre-read is sent and unchanged it isn't offered: the
- *   page says who got it. An edit makes it a draft again, and the button comes back.
- *
- * The blanks are the rep's own while the page is open: a new answer from the server (the page
- * asks every 2 seconds while the summaries are written) doesn't touch them.
+ * - **Two required blanks,** "Ideal next step" and "Who is going", each with its label above and a
+ *   star, which a screen reader hears as "required" (`aria-required`). The AI never fills them (Levi asked for blanks), so
+ *   they start empty. Each saves when it is left (`use-blank.ts`): "Saved." fades in under it, and
+ *   a failed save keeps the words and says why, with Try again.
+ * - **The footer** stays at the bottom of the form while it scrolls: the status on the left
+ *   ("Draft ready, saved 2:14 pm"), with the reason under it while "Check and send" can't be
+ *   pressed, and "Check and send", the page's one Navy button, on the right. It opens the send
+ *   dialog (`send-dialog.tsx`, T3-11). While the pre-read is sent and unchanged the footer isn't
+ *   there: the page says who got it. An edit makes it a draft again, and the footer comes back. On a
+ *   phone the footer is fixed at the bottom of the screen, above the safe area, where a thumb
+ *   reaches it.
  */
 import { Send } from 'lucide-react'
-import { useEffect, useId, useRef, useState } from 'react'
-import { toast } from 'sonner'
-import { useEditMeetingForm } from '@/api/hooks/meetings'
-import type { MeetingFormOut, MeetingFormPatch } from '@/api/types'
+import { useId, type Ref } from 'react'
+import type { MeetingFormOut } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
-import { useBarRoom } from '@/lib/use-bar-room'
-import { PHONE, useMediaQuery } from '@/lib/use-media-query'
 import { cn } from '@/lib/utils'
-import { BLANK_MAX_CHARS, sendBlock } from './rules'
+import { STATUS_WORDS } from '../words'
+import type { SendBlock } from './rules'
+import type { Blank, SaveState } from './use-blank'
 import {
   CHECK_AND_SEND,
-  GOING,
-  GOING_PLACEHOLDER,
-  leftNotSavedWords,
-  NEXT_STEP,
-  NEXT_STEP_PLACEHOLDER,
-  notSavedWords,
+  formStatusWords,
   SAVED,
   SAVING,
   SEND_REASONS,
   tooLongWords,
   TRY_AGAIN,
-  YOUR_PART,
-  YOUR_PART_NOTE,
 } from './words'
 
-type BlankName = 'next_step' | 'going'
-type SaveState = 'idle' | 'saving' | 'saved' | 'failed'
-
-interface Blank {
-  text: string
-  change: (text: string) => void
-  state: SaveState
-  /** Why the last save didn't go, in plain words. */
-  problem: string | null
-  tooLong: boolean
-  /** The field was left: save it if it changed. */
-  commit: () => void
-  /** Save it again after a failure. */
-  retry: () => void
-}
-
 /**
- * One blank: the text as the rep sees it, and its save to the server. `label` names it in the
- * toast of a save that fails once the rep has left the page.
+ * The line under a field that saves when it is left: what went wrong with Try again, too long,
+ * saving, or saved. A new word fades in (150ms). It keeps its height, so nothing under it moves.
  */
-function useBlank(form: MeetingFormOut, name: BlankName, label: string): Blank {
-  const edit = useEditMeetingForm(form.id)
-  const [text, setText] = useState(form[name] ?? '')
-  // What the server holds, as far as the page knows: a field the same as it has nothing to save.
-  const [saved, setSaved] = useState(form[name] ?? '')
-  const [state, setState] = useState<SaveState>('idle')
-  const [problem, setProblem] = useState<string | null>(null)
-  const tooLong = text.trim().length > BLANK_MAX_CHARS
-  // Only the newest save's answer counts, as one left on its way may answer after it.
-  const newest = useRef(0)
-  // Still on screen: a save that fails after the rep left the page says so in a toast instead.
-  const shownNow = useRef(true)
-  useEffect(() => {
-    shownNow.current = true
-    return () => {
-      shownNow.current = false
-    }
-  }, [])
-
-  const save = (value: string): void => {
-    const next = value.trim()
-    if (next.length > BLANK_MAX_CHARS) return
-    setState('saving')
-    setProblem(null)
-    const patch: MeetingFormPatch = {}
-    patch[name] = next
-    newest.current += 1
-    const mine = newest.current
-    // Its promise answers even once the page is gone, which a callback given to `mutate` doesn't.
-    void edit.mutateAsync({ patch }).then(
-      (answer) => {
-        if (mine !== newest.current) return
-        const kept = answer[name] ?? ''
-        setSaved(kept)
-        // Show what the server keeps (it tidies spaces), unless the rep has typed on since.
-        setText((now) => (now === value ? kept : now))
-        setState('saved')
-      },
-      (error: unknown) => {
-        if (mine !== newest.current) return
-        if (!shownNow.current) {
-          const words = leftNotSavedWords(label, form.meeting.company_name, error)
-          toast.error(words.title, { description: words.description })
-          return
-        }
-        setState('failed')
-        setProblem(notSavedWords(error))
-      },
-    )
-  }
-
-  return {
-    text,
-    change: (next) => {
-      setText(next)
-      if (state === 'saved') setState('idle')
-    },
-    state,
-    problem,
-    tooLong,
-    commit: () => {
-      if (text.trim() === saved.trim()) {
-        // Back to what the server has: nothing is waiting to be saved.
-        if (state === 'failed') {
-          setState('idle')
-          setProblem(null)
-        }
-        return
-      }
-      save(text)
-    },
-    retry: () => {
-      save(text)
-    },
-  }
-}
-
-/** The line under a blank: what went wrong with Try again, too long, saving, or saved. */
-function BlankNote({ id, blank }: { id: string; blank: Blank }) {
-  if (blank.state === 'failed' && blank.problem) {
+export function SaveNote({
+  id,
+  state,
+  problem,
+  tooLong,
+  onRetry,
+}: {
+  id: string
+  state: SaveState
+  problem: string | null
+  /** "Too long: 1,050 of 1,000 characters.", or null. */
+  tooLong: string | null
+  onRetry: () => void
+}) {
+  if (state === 'failed' && problem) {
     // The field's description is the words only, never the button beside them.
     return (
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <p id={id} role="alert" className="text-caption text-destructive-ink">
-          {blank.problem}
+          {problem}
         </p>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="touch:h-11"
-          onClick={blank.retry}
-        >
+        <Button type="button" variant="outline" size="sm" className="touch:h-11" onClick={onRetry}>
           {TRY_AGAIN}
         </Button>
       </div>
     )
   }
-  if (blank.tooLong) {
+  if (tooLong) {
     return (
       <p id={id} className="text-caption text-destructive-ink tabular-nums">
-        {tooLongWords(blank.text.trim().length, BLANK_MAX_CHARS)}
+        {tooLong}
       </p>
     )
   }
+  const words = state === 'saving' ? SAVING : state === 'saved' ? SAVED : null
   return (
     <p id={id} role="status" className="min-h-5 text-caption text-muted-foreground">
-      {blank.state === 'saving' ? SAVING : blank.state === 'saved' ? SAVED : null}
+      {words ? (
+        <span key={words} className="animate-in duration-150 fade-in-0">
+          {words}
+        </span>
+      ) : null}
     </p>
   )
 }
 
-function BlankField({
+export function BlankField({
   label,
   placeholder,
   blank,
+  max,
+  ref,
 }: {
   label: string
   placeholder: string
   blank: Blank
+  /** The most it may hold. */
+  max: number
+  ref?: Ref<HTMLTextAreaElement>
 }) {
   const id = useId()
   const noteId = useId()
   const wrong = blank.tooLong || blank.state === 'failed'
   return (
     <Field data-invalid={wrong || undefined} className="gap-2">
-      <FieldLabel htmlFor={id} className="text-ui font-semibold text-foreground">
+      <FieldLabel htmlFor={id} className="gap-1 text-ui font-semibold text-foreground">
         {label}
+        <span aria-hidden="true" data-slot="required-star" className="text-foreground">
+          *
+        </span>
       </FieldLabel>
       <Textarea
+        ref={ref}
         id={id}
         value={blank.text}
         rows={2}
         placeholder={placeholder}
+        aria-required="true"
         aria-invalid={wrong || undefined}
         aria-describedby={noteId}
-        // 16px text on a touch screen, so an iPhone doesn't zoom in on focus.
-        className="text-body touch:text-body"
+        // 16px text, so it reads like the summaries, and an iPhone doesn't zoom in on focus.
+        className="text-body"
         onChange={(event) => {
           blank.change(event.target.value)
         }}
         onBlur={blank.commit}
       />
-      <BlankNote id={noteId} blank={blank} />
+      <SaveNote
+        id={noteId}
+        state={blank.state}
+        problem={blank.problem}
+        tooLong={blank.tooLong ? tooLongWords(blank.text.trim().length, max) : null}
+        onRetry={blank.retry}
+      />
     </Field>
   )
 }
 
-export function YourPart({
-  form,
-  onCheckAndSend,
-}: {
+export interface FormFooterProps {
   form: MeetingFormOut
-  /** Opens the send dialog (T3-11). */
+  /** Why "Check and send" can't be pressed yet, or null. */
+  block: SendBlock | null
+  /** When the form was last saved on this visit, or null. */
+  savedAt: string | null
+  onPhone: boolean
+  /** The room the page keeps above the footer, so a field the keyboard lands on isn't under it. */
+  barRoom: Ref<HTMLElement>
   onCheckAndSend: () => void
-}) {
-  const headingId = useId()
-  const reasonId = useId()
-  const onPhone = useMediaQuery(PHONE)
-  // On a phone the bar is fixed at the bottom: a field the keyboard lands on scrolls above it.
-  const barRoom = useBarRoom(onPhone)
-  const nextStep = useBlank(form, 'next_step', NEXT_STEP)
-  const going = useBlank(form, 'going', GOING)
-  const block = sendBlock({
-    status: form.status,
-    nextStep: nextStep.text,
-    going: going.text,
-    unsaved: nextStep.state === 'failed' || going.state === 'failed',
-  })
-  const reason = block ? SEND_REASONS[block] : null
+}
 
+export function FormFooter({
+  form,
+  block,
+  savedAt,
+  onPhone,
+  barRoom,
+  onCheckAndSend,
+}: FormFooterProps) {
+  const reasonId = useId()
+  const reason = block ? SEND_REASONS[block] : null
+  // Sent and unchanged: nothing to send, and the page says who got it. An edit makes it a draft
+  // again, and the footer comes back.
+  if (form.status === 'sent') return null
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-3">
-      <div className="flex flex-col gap-0.5">
-        <h2 id={headingId} className="text-section font-semibold text-foreground">
-          {YOUR_PART}
-        </h2>
-        <p className="text-caption text-muted-foreground">{YOUR_PART_NOTE}</p>
-      </div>
-      <div className="flex flex-col gap-4 rounded-lg border bg-card p-4">
-        <BlankField label={NEXT_STEP} placeholder={NEXT_STEP_PLACEHOLDER} blank={nextStep} />
-        <BlankField label={GOING} placeholder={GOING_PLACEHOLDER} blank={going} />
-      </div>
-      {/* Sent and unchanged: nothing to send. An edit makes it a draft, and this comes back. */}
-      {form.status === 'sent' ? null : (
-        <div
-          ref={barRoom}
-          data-slot="send-bar"
-          className={cn(
-            'flex flex-wrap items-center justify-end gap-x-4 gap-y-2',
-            onPhone &&
-              'fixed inset-x-0 bottom-0 z-20 flex-col items-stretch border-t bg-popover p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]',
-          )}
-        >
-          {reason ? (
-            <p id={reasonId} className="min-w-0 flex-1 text-ui text-pretty text-muted-foreground">
-              {reason}
-            </p>
-          ) : null}
-          <Button
-            type="button"
-            size={onPhone ? 'lg' : 'default'}
-            className={onPhone ? 'w-full' : undefined}
-            disabled={block !== null}
-            aria-describedby={reason ? reasonId : undefined}
-            onClick={onCheckAndSend}
-          >
-            <Send aria-hidden="true" />
-            {CHECK_AND_SEND}
-          </Button>
-        </div>
+    <footer
+      ref={barRoom}
+      data-slot="send-bar"
+      className={cn(
+        'flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t bg-card',
+        onPhone
+          ? 'fixed inset-x-0 bottom-0 z-20 flex-col items-stretch p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]'
+          : 'sticky bottom-0 z-10 rounded-b-lg px-6 py-3',
       )}
-    </section>
+    >
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <p data-slot="form-status" className="text-ui text-foreground">
+          {formStatusWords(STATUS_WORDS[form.status], savedAt)}
+        </p>
+        {reason ? (
+          <p id={reasonId} className="text-caption text-pretty text-muted-foreground">
+            {reason}
+          </p>
+        ) : null}
+      </div>
+      <Button
+        type="button"
+        size={onPhone ? 'lg' : 'default'}
+        className={onPhone ? 'w-full' : undefined}
+        disabled={block !== null}
+        aria-describedby={reason ? reasonId : undefined}
+        onClick={onCheckAndSend}
+      >
+        <Send aria-hidden="true" />
+        {CHECK_AND_SEND}
+      </Button>
+    </footer>
   )
 }

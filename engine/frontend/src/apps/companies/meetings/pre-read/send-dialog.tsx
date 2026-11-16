@@ -488,7 +488,7 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
             </div>
           ) : null}
           <form noValidate className="flex flex-col gap-1.5" onSubmit={add}>
-            <label htmlFor={inputId} className="text-caption text-muted-foreground">
+            <label htmlFor={inputId} className="text-ui font-semibold text-foreground">
               {ADD_SOMEONE}
             </label>
             <div className="flex gap-2">

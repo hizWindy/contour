@@ -1,23 +1,25 @@
 /**
  * The pre-read's three summaries (PLAN-V17 "The screens", part 6): What they do, What we know
  * about the project, and The talks so far. The AI writes these three and nothing else (choice 11).
+ * They are the form's third section (PLAN-V18 T2-5).
  *
- * - **Each says who wrote it:** "Written by AI", or "Edited by you" once the rep has changed it.
- *   The mark fades from one to the other (`FadeSwap`). Each shows its sources as call prep's chips
- *   (a fact's id, with where it came from in a tooltip).
- * - **The pencil** (the line editor's, `line-box.tsx`) turns a summary into a text box. Save
- *   shows the new words and "Edited by you" at once, then tells the server (a PATCH with that
- *   summary's text). If the server says no, the summary goes back, and the box opens again with
- *   the rep's words and why; if the rep has left the page by then, a toast says so. A summary the
- *   rep changed stays as it is through a redraft: the server keeps it.
+ * - **Boxes the rep types into directly,** with no pencil step: each has its title as its label
+ *   above it, and saves when it is left (a PATCH with that summary's text), only if it changed.
+ *   "Saving." then "Saved." fade in under it. A failed save keeps the rep's words and says why,
+ *   with Try again; one that fails after the rep has left the page says so in a toast.
+ * - **Each says who wrote it:** "Written by AI" until the rep changes it, then "Edited by you",
+ *   as soon as the words differ. The mark fades from one to the other (`FadeSwap`). Each shows
+ *   its sources under it as call prep's chips (a fact's id, with where it came from in a tooltip).
+ * - **The box follows the server** while the rep has nothing unsaved in it: a draft or a redraft
+ *   writes the AI's words in, and a save shows what the server keeps. A summary the rep changed
+ *   stays as it is through a redraft: the server keeps it.
  * - **Redraft** writes the three again, which costs money, so the button says what one draft
  *   costs by the plan's estimate, and the line beside it what the drafts have cost so far (the
  *   server adds them together, and keeps no cost for each one). While it drafts, each AI summary
- *   is a still grey block at its real size (the rep's own stay as they are), and the page asks
- *   again every 2 seconds (`useMeetingForm`).
+ *   is a still grey block at its real size (the rep's own stay as they are, and can be typed
+ *   into), and the page asks again every 2 seconds (`useMeetingForm`).
  * - **A failed draft** says what went wrong, with Try again, in the draft's steps at the top of the
- *   page (`draft-progress.tsx`, PLAN-V18 T2-4). The summaries stay here, so the rep can write them
- *   by hand, and those an earlier draft wrote stay as they were.
+ *   form (`draft-progress.tsx`, PLAN-V18 T2-4). The boxes stay, so the rep can write them by hand.
  */
 import { Cpu, PenLine, RefreshCw } from 'lucide-react'
 import { useEffect, useId, useRef, useState, type RefObject } from 'react'
@@ -25,12 +27,15 @@ import { toast } from 'sonner'
 import { isStillDrafting, useEditMeetingForm, useRedraftMeetingForm } from '@/api/hooks/meetings'
 import type { FormSummariesPatch, MeetingFormOut, SummaryBy } from '@/api/types'
 import { Button } from '@/components/ui/button'
+import { Field, FieldLabel } from '@/components/ui/field'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Textarea } from '@/components/ui/textarea'
 import { toastProblem } from '@/lib/problems'
 import { SourceChip } from '../../source-chip'
-import { EditPencil, LineTextBox } from '../../line-box'
 import { FadeSwap } from './fade-swap'
-import { SUMMARY_MAX_CHARS, SUMMARY_NAMES, withSummary, type SummaryName } from './rules'
+import { FormSection } from './form-section'
+import { SUMMARY_MAX_CHARS, SUMMARY_NAMES, type SummaryName } from './rules'
+import type { SaveState } from './use-blank'
 import {
   EDITED_BY_YOU,
   LEFT_EMPTY,
@@ -39,12 +44,14 @@ import {
   notSavedWords,
   REDRAFT,
   redraftHint,
-  SUMMARIES,
-  SUMMARY_HINT,
+  SUMMARIES_NOTE,
   SUMMARY_TITLES,
+  THE_SUMMARIES,
+  tooLongWords,
   withEstimate,
   WRITTEN_BY_AI,
 } from './words'
+import { SaveNote } from './your-part'
 
 /** "Written by AI" or "Edited by you": an icon and a word, in quiet text. */
 function SummaryMark({ by }: { by: SummaryBy }) {
@@ -62,13 +69,13 @@ function SummaryMark({ by }: { by: SummaryBy }) {
   )
 }
 
-/** A summary being written: still grey lines, as tall as a summary of three or four sentences. */
+/** A summary being written: still grey lines, as tall as a box of three or four sentences. */
 function SummaryPending() {
   return (
     <div
       aria-hidden="true"
       data-slot="summary-pending"
-      className="flex max-w-prose flex-col gap-2 py-0.5"
+      className="flex flex-col gap-2 rounded-lg border px-3 py-2.5"
     >
       <Skeleton className="h-5 w-full" />
       <Skeleton className="h-5 w-11/12" />
@@ -77,20 +84,24 @@ function SummaryPending() {
   )
 }
 
-interface SummaryBlockProps {
+interface SummaryFieldProps {
   form: MeetingFormOut
   name: SummaryName
+  /** Each save the server keeps, for the footer's "saved 2:14 pm". */
+  onSaved: () => void
 }
 
-function SummaryBlock({ form, name }: SummaryBlockProps) {
+function SummaryField({ form, name, onSaved }: SummaryFieldProps) {
   const summary = form.summaries[name]
   const title = SUMMARY_TITLES[name]
-  const titleId = useId()
+  const id = useId()
+  const noteId = useId()
   const edit = useEditMeetingForm(form.id)
-  const pencil = useRef<HTMLButtonElement>(null)
-  const [editing, setEditing] = useState(false)
-  // A save the server refused: the rep's words, to open the box with again, and why.
-  const [kept, setKept] = useState<{ text: string; problem: string } | null>(null)
+  const [text, setText] = useState(summary.text)
+  // What the server holds, as far as the box knows: the same words have nothing to save.
+  const [held, setHeld] = useState(summary.text)
+  const [state, setState] = useState<SaveState>('idle')
+  const [problem, setProblem] = useState<string | null>(null)
   // Only the newest save's answer counts, as one left on its way may answer after it.
   const newest = useRef(0)
   // Still on screen: a save that fails after the rep left the page says so in a toast instead.
@@ -101,116 +112,116 @@ function SummaryBlock({ form, name }: SummaryBlockProps) {
       shownNow.current = false
     }
   }, [])
-  const writing = form.status === 'drafting' && summary.by === 'ai'
-  const text = summary.text.trim()
 
-  const close = (): void => {
-    setEditing(false)
-    setKept(null)
-    // Back to the pencil, so the keyboard carries on from the summary.
-    requestAnimationFrame(() => pencil.current?.focus())
+  // The server's words changed (a draft wrote them): the box follows, unless the rep has words
+  // in it that aren't saved yet. A save on its way sets both itself.
+  if (summary.text !== held && state !== 'saving') {
+    if (text === held) setText(summary.text)
+    setHeld(summary.text)
   }
 
-  const save = (next: string): void => {
-    if (next === text) {
-      close()
-      return
-    }
-    // It answers at once: the new words and "Edited by you" show while the server is told.
-    close()
+  const writing = form.status === 'drafting' && summary.by === 'ai'
+  const changed = text.trim() !== held.trim()
+  const by: SummaryBy = summary.by === 'person' || changed ? 'person' : 'ai'
+  const tooLong = text.trim().length > SUMMARY_MAX_CHARS
+
+  const save = (value: string): void => {
+    if (value.trim().length > SUMMARY_MAX_CHARS) return
+    setState('saving')
+    setProblem(null)
     const patch: FormSummariesPatch = {}
-    patch[name] = next
+    patch[name] = value
     newest.current += 1
     const mine = newest.current
     // Its promise answers even once the page is gone, which a callback given to `mutate` doesn't.
-    void edit
-      .mutateAsync({
-        patch: { summaries: patch },
-        apply: (current) => withSummary(current, name, next),
-      })
-      .catch((error: unknown) => {
+    void edit.mutateAsync({ patch: { summaries: patch } }).then(
+      (answer) => {
+        if (mine !== newest.current) return
+        const kept = answer.summaries[name].text
+        setHeld(kept)
+        // Show what the server keeps (it tidies spaces), unless the rep has typed on since.
+        setText((now) => (now === value ? kept : now))
+        setState('saved')
+        onSaved()
+      },
+      (error: unknown) => {
         if (mine !== newest.current) return
         if (!shownNow.current) {
           const words = leftNotSavedWords(title, form.meeting.company_name, error)
           toast.error(words.title, { description: words.description })
           return
         }
-        setKept({ text: next, problem: notSavedWords(error) })
-        setEditing(true)
-      })
-  }
-
-  let body
-  if (writing) {
-    body = <SummaryPending />
-  } else if (editing) {
-    body = (
-      <LineTextBox
-        initial={kept?.text ?? summary.text}
-        label={title}
-        maxChars={SUMMARY_MAX_CHARS}
-        hint={SUMMARY_HINT}
-        rows={4}
-        // The page's one Navy button is "Check and send": an open box's Save stays quiet.
-        quietSave
-        problem={kept?.problem ?? null}
-        onCancel={close}
-        onSubmit={save}
-      />
-    )
-  } else {
-    body = (
-      <div className="flex min-w-0 items-start gap-1">
-        <div className="min-w-0 flex-1 animate-in duration-150 fade-in-0">
-          {text ? (
-            <p className="max-w-prose text-body text-pretty text-foreground">
-              {summary.text}
-              {summary.sources.length > 0 ? (
-                <>
-                  {' '}
-                  <span className="inline-flex flex-wrap gap-1 align-middle">
-                    {summary.sources.map((source) => (
-                      <SourceChip key={source.id} id={source.id} source={source} />
-                    ))}
-                  </span>
-                </>
-              ) : null}
-            </p>
-          ) : (
-            <p className="max-w-prose text-ui text-muted-foreground">
-              {summary.by === 'ai' ? NOTHING_FROM_AI : LEFT_EMPTY}
-            </p>
-          )}
-        </div>
-        <EditPencil
-          ref={pencil}
-          label={title}
-          className="touch:size-11"
-          onClick={() => {
-            setEditing(true)
-          }}
-        />
-      </div>
+        setState('failed')
+        setProblem(notSavedWords(error))
+      },
     )
   }
 
+  const commit = (): void => {
+    if (!changed) {
+      // Back to what the server has: nothing is waiting to be saved.
+      if (state === 'failed') {
+        setState('idle')
+        setProblem(null)
+      }
+      return
+    }
+    save(text)
+  }
+
+  const wrong = tooLong || state === 'failed'
   return (
-    <div
-      role="group"
-      aria-labelledby={titleId}
+    <Field
       data-slot="summary"
       data-summary={name}
-      className="flex flex-col gap-2 p-4"
+      data-invalid={wrong || undefined}
+      className="gap-2"
     >
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-        <h3 id={titleId} className="text-ui font-semibold text-foreground">
+        <FieldLabel htmlFor={id} className="text-ui font-semibold text-foreground">
           {title}
-        </h3>
+        </FieldLabel>
         {/* Nothing written yet has no mark: the AI wrote nothing to own. */}
-        {writing || (summary.by === 'ai' && !text) ? null : <SummaryMark by={summary.by} />}
+        {writing || (by === 'ai' && !text.trim()) ? null : <SummaryMark by={by} />}
       </div>
-      {body}
-    </div>
+      {writing ? (
+        <SummaryPending />
+      ) : (
+        <Textarea
+          id={id}
+          value={text}
+          rows={3}
+          placeholder={summary.by === 'ai' ? NOTHING_FROM_AI : LEFT_EMPTY}
+          aria-invalid={wrong || undefined}
+          aria-describedby={noteId}
+          // Reading text: 16px, and an iPhone doesn't zoom in on focus.
+          className="max-w-full text-body text-pretty"
+          onChange={(event) => {
+            setText(event.target.value)
+            if (state === 'saved') setState('idle')
+          }}
+          onBlur={commit}
+        />
+      )}
+      {summary.sources.length > 0 && !writing ? (
+        <div data-slot="summary-sources" className="flex flex-wrap gap-1">
+          {summary.sources.map((source) => (
+            <SourceChip key={source.id} id={source.id} source={source} />
+          ))}
+        </div>
+      ) : null}
+      {writing ? null : (
+        <SaveNote
+          id={noteId}
+          state={state}
+          problem={problem}
+          tooLong={tooLong ? tooLongWords(text.trim().length, SUMMARY_MAX_CHARS) : null}
+          onRetry={() => {
+            save(text)
+          }}
+        />
+      )}
+    </Field>
   )
 }
 
@@ -251,14 +262,22 @@ function focusTitle(title: RefObject<HTMLHeadingElement | null>): void {
   requestAnimationFrame(() => title.current?.focus())
 }
 
-export function SummariesSection({ form }: { form: MeetingFormOut }) {
-  const headingId = useId()
+export function SummariesSection({
+  form,
+  number,
+  onSaved,
+}: {
+  form: MeetingFormOut
+  /** The section's place in the form. */
+  number: number
+  onSaved: () => void
+}) {
   const title = useRef<HTMLHeadingElement>(null)
   const redraft = useRedraftMeetingForm(form.id)
   const failed = form.status === 'failed'
 
   const startRedraft = (): void => {
-    // The button greys out (or, in the failed box, goes) while it drafts: the focus stays here.
+    // The button greys out while it drafts: the focus stays in the section.
     focusTitle(title)
     redraft.mutate(undefined, {
       onError: (error) => {
@@ -268,24 +287,14 @@ export function SummariesSection({ form }: { form: MeetingFormOut }) {
   }
 
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h2
-          id={headingId}
-          ref={title}
-          tabIndex={-1}
-          className="rounded-sm text-section font-semibold text-foreground"
-        >
-          {SUMMARIES}
-        </h2>
-      </div>
-      <div className="flex flex-col divide-y rounded-lg border bg-card">
+    <FormSection number={number} title={THE_SUMMARIES} note={SUMMARIES_NOTE} headingRef={title}>
+      <div className="flex flex-col gap-5">
         {SUMMARY_NAMES.map((name) => (
-          <SummaryBlock key={name} form={form} name={name} />
+          <SummaryField key={name} form={form} name={name} onSaved={onSaved} />
         ))}
       </div>
       {/* A failed draft's Try again is with its reason, in the draft's steps. */}
       {failed ? null : <RedraftRow form={form} busy={redraft.isPending} onRedraft={startRedraft} />}
-    </section>
+    </FormSection>
   )
 }
