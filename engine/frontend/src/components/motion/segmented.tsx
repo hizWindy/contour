@@ -55,11 +55,23 @@ export function Segmented<T extends string = string>({
   const group = useRef<HTMLDivElement>(null)
   const disabled = options.map((option) => Boolean(option.disabled))
 
-  // The chosen segment stays in view when the row scrolls sideways.
+  // The chosen segment stays in view when the row scrolls sideways (a phone). It is done on the
+  // next frame, and only along the row, when the row overflows. `scrollIntoView` in the effect also
+  // scrolled the page, and made the browser lay the whole page out in the middle of the click,
+  // before the new view had been drawn once (Improvements 1, #10: 108ms at 4x CPU on History).
   useEffect(() => {
-    group.current
-      ?.querySelector('[aria-checked=true]')
-      ?.scrollIntoView({ inline: 'nearest', block: 'nearest' })
+    const frame = requestAnimationFrame(() => {
+      const row = group.current
+      const picked = row?.querySelector<HTMLElement>('[aria-checked=true]')
+      if (!row || !picked || row.scrollWidth <= row.clientWidth) return
+      const box = row.getBoundingClientRect()
+      const chosen = picked.getBoundingClientRect()
+      if (chosen.left < box.left) row.scrollLeft -= box.left - chosen.left
+      else if (chosen.right > box.right) row.scrollLeft += chosen.right - box.right
+    })
+    return () => {
+      cancelAnimationFrame(frame)
+    }
   }, [value])
 
   return (

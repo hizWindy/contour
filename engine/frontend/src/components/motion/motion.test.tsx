@@ -207,6 +207,71 @@ describe('Segmented', () => {
       screen.getByRole('radio', { name: 'Custom' }).querySelector('.bg-accent-soft'),
     ).toBeNull()
   })
+
+  describe('on a row that scrolls sideways (Improvements 1, #10)', () => {
+    /**
+     * jsdom has no layout: the row is 100px wide inside 300px of segments, and the chosen segment
+     * is at `at` along the row (moving as the row scrolls, as it would).
+     */
+    function layOut(at: { left: number; right: number }) {
+      const group = screen.getByRole('radiogroup', { name: 'How often' })
+      Object.defineProperty(group, 'scrollWidth', { value: 300, configurable: true })
+      Object.defineProperty(group, 'clientWidth', { value: 100, configurable: true })
+      const along = (left: number, right: number) =>
+        ({ left: left - group.scrollLeft, right: right - group.scrollLeft }) as DOMRect
+      group.getBoundingClientRect = () => ({ left: 0, right: 100 }) as DOMRect
+      for (const radio of screen.getAllByRole('radio')) {
+        radio.getBoundingClientRect = () =>
+          radio.getAttribute('aria-checked') === 'true' ? along(at.left, at.right) : along(0, 40)
+      }
+      return group
+    }
+
+    /** The next frame: what was waiting for it runs. */
+    async function nextFrame() {
+      await act(async () => {
+        await new Promise((resolve) => requestAnimationFrame(resolve))
+      })
+    }
+
+    it('brings a chosen segment that is past the right edge into view, along the row only', async () => {
+      const user = userEvent.setup()
+      const scrolled = vi.spyOn(Element.prototype, 'scrollIntoView')
+      wrap(<SegmentedHarness />)
+      await nextFrame() // the frame after it was drawn, before there is anything to scroll
+      const group = layOut({ left: 130, right: 190 })
+      await user.click(screen.getByRole('radio', { name: 'Custom' }))
+      await nextFrame()
+      // 90px more of the row shows: the chosen segment ends at the edge.
+      expect(group.scrollLeft).toBe(90)
+      // It never asks the browser to scroll the page to it.
+      expect(scrolled).not.toHaveBeenCalled()
+    })
+
+    it('brings one that is past the left edge into view', async () => {
+      const user = userEvent.setup()
+      wrap(<SegmentedHarness />)
+      await nextFrame()
+      // The segment is 10px to 60px along the row, which is scrolled 80px: it is off to the left.
+      const group = layOut({ left: 10, right: 60 })
+      group.scrollLeft = 80
+      await user.click(screen.getByRole('radio', { name: 'Every 30 days' }))
+      await nextFrame()
+      // Scrolled back until its left edge is at the row's.
+      expect(group.scrollLeft).toBe(10)
+    })
+
+    it('leaves a row that fits alone', async () => {
+      const user = userEvent.setup()
+      wrap(<SegmentedHarness />)
+      await nextFrame()
+      const group = layOut({ left: 130, right: 190 })
+      Object.defineProperty(group, 'scrollWidth', { value: 100, configurable: true })
+      await user.click(screen.getByRole('radio', { name: 'Custom' }))
+      await nextFrame()
+      expect(group.scrollLeft).toBe(0)
+    })
+  })
 })
 
 const CITIES = [

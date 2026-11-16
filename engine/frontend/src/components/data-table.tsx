@@ -29,7 +29,7 @@ import {
   type SortingState,
 } from '@tanstack/react-table'
 import { ArrowDown, ArrowUp, ArrowUpDown, Rows4 } from 'lucide-react'
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
 import { Pager, type PagerPage } from '@/components/pager'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -141,10 +141,13 @@ const RESERVE_PX = 48
  * less room for the page buttons. It is worked out from the box's place on the page (not on the
  * screen), so scrolling the page doesn't change it, and again when the window or the page above it
  * changes size.
+ *
+ * The height is written straight onto the box, before the browser draws, and not kept in React's
+ * state. As state it made the whole table (every row and cell) render a second time just to carry
+ * one number (Improvements 1, #10: a large part of opening Companies on a slow computer).
  */
 function useFillHeight(enabled: boolean, reserve: number) {
   const ref = useRef<HTMLDivElement>(null)
-  const [maxHeight, setMaxHeight] = useState<number | null>(null)
   useLayoutEffect(() => {
     const box = ref.current
     if (!enabled || !box) {
@@ -152,7 +155,8 @@ function useFillHeight(enabled: boolean, reserve: number) {
     }
     const measure = (): void => {
       const top = box.getBoundingClientRect().top + window.scrollY
-      setMaxHeight(Math.max(FILL_MIN_PX, Math.round(window.innerHeight - top - reserve)))
+      const height = Math.max(FILL_MIN_PX, Math.round(window.innerHeight - top - reserve))
+      box.style.maxHeight = `${String(height)}px`
     }
     measure()
     window.addEventListener('resize', measure)
@@ -161,9 +165,10 @@ function useFillHeight(enabled: boolean, reserve: number) {
     return () => {
       window.removeEventListener('resize', measure)
       observer.disconnect()
+      box.style.maxHeight = ''
     }
   }, [enabled, reserve])
-  return { ref, maxHeight: enabled ? maxHeight : null }
+  return ref
 }
 
 /** The classes that hide a column below a screen width (see `meta.hideBelow`). */
@@ -246,10 +251,7 @@ export function DataTable<TData>({
   fill = true,
   className,
 }: DataTableProps<TData>) {
-  const { ref: boxRef, maxHeight } = useFillHeight(
-    fill,
-    page && onPageChange ? RESERVE_WITH_PAGER_PX : RESERVE_PX,
-  )
+  const boxRef = useFillHeight(fill, page && onPageChange ? RESERVE_WITH_PAGER_PX : RESERVE_PX)
   const table = useReactTable({
     data: data as TData[],
     columns,
@@ -293,12 +295,7 @@ export function DataTable<TData>({
     <div data-slot="data-table" className={cn('flex flex-col gap-3', className)}>
       {toolbar ? <div className="flex flex-wrap items-center gap-2">{toolbar}</div> : null}
       <div className="overflow-hidden rounded-lg border bg-card">
-        <Table
-          compact={compact}
-          aria-busy={loading || undefined}
-          containerRef={boxRef}
-          containerStyle={maxHeight === null ? undefined : { maxHeight }}
-        >
+        <Table compact={compact} aria-busy={loading || undefined} containerRef={boxRef}>
           <TableCaption className="sr-only">{label}</TableCaption>
           <TableHeader>
             {table.getHeaderGroups().map((group) => (
