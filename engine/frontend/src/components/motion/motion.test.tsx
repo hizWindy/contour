@@ -311,11 +311,26 @@ describe('ChipGroup', () => {
     expect(chips[2]).toHaveAttribute('aria-pressed', 'false')
   })
 
-  it('keeps the tick in the layout when a chip is not picked, so no chip changes width', () => {
+  it('centres the label of a chip that is not picked, and makes room for the tick only when it is', async () => {
+    const user = userEvent.setup()
     wrap(<ChipHarness />)
-    for (const chip of screen.getAllByRole('button')) {
-      expect(chip.querySelector('svg.lucide-check')).not.toBeNull()
-    }
+    const group = screen.getByRole('group', { name: 'Cities' })
+    const [melbourne, adelaide] = within(group).getAllByRole('button')
+    // Picked: the tick, with a little less room on its left.
+    expect(melbourne.querySelector('svg.lucide-check')).not.toBeNull()
+    expect(melbourne).toHaveClass('pl-2.5')
+    // Not picked: no tick and no blank gap where it goes, so the label sits in the middle (the
+    // same room on both sides), as in Al-khair's phone screenshots.
+    expect(adelaide.querySelector('svg.lucide-check')).toBeNull()
+    expect(adelaide).toHaveClass('px-3', 'justify-center')
+    expect(adelaide).not.toHaveClass('pl-2.5')
+    // Picking it brings the tick in, and letting go of it takes the tick away again.
+    await user.click(adelaide)
+    expect(adelaide.querySelector('svg.lucide-check')).not.toBeNull()
+    await user.click(adelaide)
+    await waitFor(() => {
+      expect(adelaide.querySelector('svg.lucide-check')).toBeNull()
+    })
   })
 
   it('works with reduced motion', async () => {

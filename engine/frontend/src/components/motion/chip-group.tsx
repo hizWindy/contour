@@ -3,6 +3,12 @@
  * its ink and a tick that grows in on the `soft` spring (the one place with a very small bounce).
  * A chip shrinks to 0.98 while it is held (`usePress`). Unpicking fades the tick in 150ms.
  *
+ * **Room for the tick is made when it comes** (17 Nov 2026, Al-khair's phone screenshots): a chip
+ * that isn't picked has the same space on both sides of its label, so the label sits in the middle
+ * (it used to keep a blank gap where the tick goes, which pushed every label to the right). A
+ * picked chip grows by the tick's width, and the chips beside it glide to their new places (a
+ * transform, `layout="position"`), so nothing jumps.
+ *
  * Three modes. `many` (the default) picks any number: each chip is a button with `aria-pressed`,
  * and Tab moves between them. `one` picks exactly one, like radio buttons: the arrows move the
  * choice, and only the chosen chip is in the Tab order. `one-or-none` picks one or none, like a
@@ -14,7 +20,7 @@
  * With reduced motion the tick simply appears, and nothing presses.
  */
 import { Check, type LucideIcon } from 'lucide-react'
-import { m } from 'motion/react'
+import { AnimatePresence, m } from 'motion/react'
 import { useRef } from 'react'
 import { cn } from '@/lib/utils'
 import { focusRadio, handleRovingKey } from './roving'
@@ -116,25 +122,32 @@ export function ChipGroup<T extends string = string>({
                     })
                 : undefined
             }
+            // A chip that moves because another one grew glides there (a transform).
+            layout={still ? false : 'position'}
             {...press}
+            transition={still ? undefined : { ...press.transition, layout: springs.snappy }}
             className={cn(
-              'inline-flex min-h-8 items-center gap-1.5 rounded-md border pr-3 pl-2.5 text-ui whitespace-nowrap transition-colors touch:min-h-11',
+              'inline-flex min-h-8 items-center justify-center gap-1.5 rounded-md border px-3 text-ui whitespace-nowrap transition-colors touch:min-h-11',
               picked
-                ? 'border-accent-strong bg-accent-soft font-semibold text-accent-ink'
+                ? 'border-accent-strong bg-accent-soft pl-2.5 font-semibold text-accent-ink'
                 : 'border-input bg-card text-foreground hover:bg-muted',
               'disabled:pointer-events-none disabled:opacity-50',
             )}
           >
-            {/* The tick keeps its room when hidden, so a chip never changes width. */}
-            <m.span
-              aria-hidden="true"
-              initial={false}
-              animate={{ scale: picked ? 1 : 0, opacity: picked ? 1 : 0 }}
-              transition={still ? INSTANT : picked ? springs.soft : springs.exit}
-              className="grid size-3.5 shrink-0 place-items-center"
-            >
-              <Check className="size-3.5 stroke-2" />
-            </m.span>
+            <AnimatePresence initial={false}>
+              {picked ? (
+                <m.span
+                  key="tick"
+                  aria-hidden="true"
+                  initial={{ scale: 0, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1, transition: still ? INSTANT : springs.soft }}
+                  exit={{ scale: 0, opacity: 0, transition: still ? INSTANT : springs.exit }}
+                  className="grid size-3.5 shrink-0 place-items-center"
+                >
+                  <Check className="size-3.5 stroke-2" />
+                </m.span>
+              ) : null}
+            </AnimatePresence>
             {Icon ? <Icon aria-hidden="true" className="size-4" /> : null}
             {option.label}
           </m.button>
