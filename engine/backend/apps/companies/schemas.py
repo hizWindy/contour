@@ -4,9 +4,9 @@ import uuid
 from collections.abc import Callable
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Annotated, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StringConstraints, model_validator
 from pydantic.config import JsonDict
 
 from apps.companies.deals import DealState, StageKind
@@ -856,6 +856,18 @@ class MeetingFormState(Out):
     status: FormStatus = Field(
         description="drafting (being written), draft (ready to check), sent, or failed"
     )
+    sent_at: datetime | None = None
+    sent_count: int = 0
+    sent_names: list[str] = Field(default_factory=list)
+
+
+class TeamMember(Out):
+    """One active HubSpot owner selectable on the pre-read send list (never exposes emails)."""
+
+    owner_id: str = Field(description="Active HubSpot owner id")
+    name: str = Field(description="Display name from HubSpot, never an email")
+    has_account: bool = Field(description="True when linked to an active Contour account")
+    is_me: bool = Field(description="True when linked to the signed-in user")
 
 
 class MeetingItem(Out):
@@ -1010,9 +1022,41 @@ class FormSummaries(Out):
     talks_so_far: FormSummary
 
 
+TaskSendState = Literal["none", "sent", "waiting", "failed"]
+
+
 class FormRecipient(Out):
-    name: str | None = Field(description="Their name, when they have an account here")
-    email: str = Field(description="A Contour address")
+    owner_id: str | None = Field(None, description="The HubSpot owner id, if linked to an owner")
+    name: str | None = Field(None, description="Their name, when known")
+    address: str | None = Field(None, description="A Contour email address, if emailed")
+    at: datetime | None = Field(None, description="When this person got it")
+    task: TaskSendState = Field(
+        "none", description="HubSpot task outcome: none, sent, waiting, or failed"
+    )
+    email: bool = Field(False, description="True when an email was sent to them")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _legacy_email_row(cls, data: Any) -> Any:
+        if isinstance(data, dict) and isinstance(data.get("email"), str):
+            row = dict(data)
+            addr = row.pop("email")
+            row.setdefault("address", addr)
+            row["email"] = True
+            row.setdefault("task", "none")
+            return row
+        return data
+
+
+def recipient_display_name(recipient: FormRecipient) -> str:
+    """Short name shown in UI chips/rows, falling back cleanly if name is absent."""
+    if recipient.name:
+        return recipient.name
+    if recipient.address:
+        return recipient.address
+    if recipient.owner_id:
+        return f"HubSpot owner {recipient.owner_id}"
+    return "Someone"
 
 
 class HubSpotCopy(Out):
@@ -1100,41 +1144,76 @@ MAX_RECIPIENTS = 20  # the email service's limit for one email
 Address = Annotated[SafeText, Field(max_length=ADDRESS_MAX_CHARS)]
 
 
-class FormPreviewIn(BaseModel):
-    """The addresses the rep added, to see the email with them. Empty: only the people on the
-    meeting."""
+OwnerId = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True, min_length=1, max_length=32, pattern=r"^[A-Za-z0-9_-]+$"
+    ),
+]
 
-    to: list[Address] = Field(
+
+class FormPreviewIn(BaseModel):
+    """Who the rep picked (or null on first open to start from the people on the meeting)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    owner_ids: list[OwnerId] | None = Field(
+        None,
+        max_length=MAX_RECIPIENTS,
+        description="Selected HubSpot owner ids, or null to start from the meeting attendees",
+    )
+    emails: list[Address] = Field(
         default_factory=list,
         max_length=MAX_RECIPIENTS,
-        description="Addresses the rep added, each checked against Contour's own domains",
+        description="Extra email addresses added by hand, checked against Contour's own domains",
+    )
+    email_them: bool = Field(
+        False, description="True to also email selected HubSpot owners who have a Contour account"
     )
 
 
 class FormSendIn(BaseModel):
-    to: list[Address] = Field(
-        min_length=1,
+    model_config = ConfigDict(extra="forbid")
+
+    owner_ids: list[OwnerId] = Field(
+        default_factory=list,
         max_length=MAX_RECIPIENTS,
-        description="Who gets it: Contour addresses only. One that isn't refuses the whole send",
+        description="Selected HubSpot owner ids for HubSpot tasks (and email when email_them)",
+    )
+    emails: list[Address] = Field(
+        default_factory=list,
+        max_length=MAX_RECIPIENTS,
+        description="Extra Contour email addresses added by hand (always emailed)",
+    )
+    email_them: bool = Field(
+        False, description="True to also email selected HubSpot owners who have a Contour account"
     )
 
 
 class FormPerson(Out):
     """Someone the pre-read would go to."""
 
-    name: str | None = Field(description="Their name, when they have an account here")
-    email: str
-    why: str = Field(description="Like 'on the meeting', or 'added by you'")
-    ticked: bool = Field(description="Ticked to get it. Never ticked when it isn't allowed")
-    allowed: bool = Field(description="False for an address that isn't Contour's: it can't")
+    owner_id: str | None = None
+    name: str | None = Field(None, description="Their name, when known")
+    address: str | None = Field(None, description="Their Contour email, if emailed or added")
+    task: bool = Field(False, description="True if sending creates a HubSpot task for them")
+    email: bool = Field(False, description="True if sending emails them")
+    why: str = Field(description="Like 'on the meeting', 'picked by you', or 'added by you'")
+    already: datetime | None = Field(None, description="When they already got this pre-read")
+    ticked: bool = Field(
+        description="Ticked to get it. Never ticked when disallowed or already sent"
+    )
+    allowed: bool = Field(description="False for an outside address that cannot receive it")
 
 
 class FormEmailPreview(Out):
-    """The email as it would arrive, and the people it would go to."""
+    """The email and HubSpot task as they would arrive, and who would get them."""
 
     subject: str
     text: str = Field(description="The plain text version")
     html: str = Field(description="The HTML version, with every value escaped")
+    task_subject: str = Field(description="Subject line of the HubSpot task created per owner")
+    task_due: date = Field(description="Due date (Melbourne working day) for HubSpot tasks")
     people: list[FormPerson]
     meeting_note: str | None = Field(
         None,

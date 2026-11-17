@@ -285,7 +285,7 @@ class ActivityRequest(BaseModel):
     deal_id: str | None = None
     owner_id: str | None = Field(None, description="The rep's HubSpot owner id")
     call: CallIn | None = None
-    tasks: list[TaskIn] = Field(default_factory=list, max_length=10)
+    tasks: list[TaskIn] = Field(default_factory=list, max_length=20)
     fields: list[FieldSet] = Field(default_factory=list, max_length=20)
     note: NoteIn | None = None
     meeting_id: str | None = Field(

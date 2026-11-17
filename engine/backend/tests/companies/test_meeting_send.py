@@ -15,6 +15,7 @@ import dataclasses
 import uuid
 from collections.abc import Iterator
 from dataclasses import dataclass, field
+from datetime import UTC, date, datetime
 from typing import Any
 
 import httpx
@@ -34,15 +35,15 @@ from apps.companies.tables import MeetingForm
 from core.api.deps import settings_dependency
 from core.config import Settings
 from core.email.sender import Email, Provider, Sent
-from core.hubspot.activities import ActivityRequest
+from core.hubspot.activities import BODY_MAX_CHARS, ActivityRequest
 from core.hubspot.client import HubSpot
-from core.hubspot.models import HubSpotWrite
+from core.hubspot.models import HubSpotOwner, HubSpotWrite
 from core.hubspot.writer import WriteOut
-from tests.companies.helpers import API, add, deal, signed_in_as
+from tests.companies.helpers import API, add, deal, person, signed_in_as
 from tests.companies.test_call_notes_api import a_company, notes_settings
-from tests.companies.test_call_notes_batch import out_of, plan_of, step
+from tests.companies.test_call_notes_batch import out_of, plan_of, status_of, step
 from tests.companies.test_meeting_form import WALK_THROUGH, Meetings, melbourne
-from tests.core.auth_world import World
+from tests.core.auth_world import World, sign_in
 
 pytestmark = pytest.mark.integration
 FORMS = f"{API}/meetings/forms"
@@ -80,7 +81,10 @@ class CopyWriter:
     outcome: str = "done"
     breaks: bool = False
     steps: list[tuple[str, str]] = field(default_factory=list)  # (name, status), if set
+    fail_owners: set[str] = field(default_factory=set)
     requests: list[ActivityRequest] = field(default_factory=list)
+    applies: list[uuid.UUID] = field(default_factory=list)
+    _plans: dict[uuid.UUID, list[str]] = field(default_factory=dict)
 
     def writer(self) -> ActivityWriter:
         return ActivityWriter(
@@ -94,12 +98,17 @@ class CopyWriter:
         self, session: AsyncSession, hubspot: HubSpot, request: ActivityRequest
     ) -> WriteOut:
         self.requests.append(request)
+        row_id = uuid.uuid4()
+        self._plans[row_id] = [t.owner_id for t in request.tasks if t.owner_id]
         row = HubSpotWrite(
-            id=uuid.uuid4(),
+            id=row_id,
             app=request.app,
             subject=request.subject,
             status="previewed",
-            plan=plan_of(request.company_id, []),
+            plan={
+                **plan_of(request.company_id, []),
+                "request": request.model_dump(mode="json"),
+            },
             result={},
             hubspot_company_id=request.company_id,
             hubspot_url=None,
@@ -112,14 +121,28 @@ class CopyWriter:
     async def apply(self, session: AsyncSession, hubspot: HubSpot, write_id: uuid.UUID) -> WriteOut:
         if self.breaks:
             raise RuntimeError("a made-up break")
+        self.applies.append(write_id)
         row = await session.get(HubSpotWrite, write_id)
         assert row is not None
-        row.status = self.outcome
-        row.result = {
-            "steps": [step(name, status) for name, status in self.steps]
-            if self.steps
-            else [step("note", self.outcome if self.outcome != "partial" else "failed")]
-        }
+        if self.steps:
+            steps_out = [step(name, status) for name, status in self.steps]
+            row.status = self.outcome
+        elif self.fail_owners:
+            owners = self._plans.get(write_id, [])
+            steps_out = [
+                step(f"task:{idx}", "failed" if oid in self.fail_owners else "done")
+                for idx, oid in enumerate(owners, start=1)
+            ]
+            steps_out.append(step("note", "done"))
+            row.status = status_of(steps_out)
+        else:
+            owners = self._plans.get(write_id, [])
+            task_status = "done" if self.outcome in ("done", "partial") else self.outcome
+            steps_out = [step(f"task:{idx}", task_status) for idx, _ in enumerate(owners, start=1)]
+            note_status = self.outcome if self.outcome != "partial" else "failed"
+            steps_out.append(step("note", note_status))
+            row.status = self.outcome
+        row.result = {"steps": steps_out}
         await session.commit()
         return out_of(row)
 
@@ -206,8 +229,17 @@ async def a_saved_draft(world: World, **more: Any) -> MeetingForm:
     return form
 
 
-async def send(client: httpx.AsyncClient, form: MeetingForm, *to: str) -> httpx.Response:
-    return await client.post(f"{FORMS}/{form.id}/send", json={"to": list(to)})
+async def send(
+    client: httpx.AsyncClient,
+    form: MeetingForm,
+    *to: str,
+    owner_ids: list[str] | None = None,
+    email_them: bool = False,
+) -> httpx.Response:
+    body: dict[str, Any] = {"emails": list(to), "email_them": email_them}
+    if owner_ids is not None:
+        body["owner_ids"] = owner_ids
+    return await client.post(f"{FORMS}/{form.id}/send", json=body)
 
 
 # --- The preview ----------------------------------------------------------------------------------
@@ -219,33 +251,50 @@ async def test_the_preview_shows_the_email_and_who_would_get_it(
     form = await a_saved_draft(world)
     async with signed_in_as(world, "mia", ["companies"]) as client:
         added = ["sam@contour.example", "jo@sample.example", "LEE@contour.example"]
-        response = await client.post(f"{FORMS}/{form.id}/preview", json={"to": added})
+        response = await client.post(f"{FORMS}/{form.id}/preview", json={"emails": added})
     assert response.status_code == 200, response.text
     found = response.json()
     assert found["people"] == [
         {
+            "owner_id": "o1",
             "name": "Lee Sample",
-            "email": LEE,
+            "address": LEE,
+            "task": True,
+            "email": True,
             "why": "on the meeting",
+            "already": None,
             "ticked": True,
             "allowed": True,
         },
         {
+            "owner_id": None,
             "name": None,
-            "email": "sam@contour.example",
+            "address": "sam@contour.example",
+            "task": False,
+            "email": True,
             "why": "added by you",
+            "already": None,
             "ticked": True,
             "allowed": True,
         },
         {
+            "owner_id": None,
             "name": None,
-            "email": "jo@sample.example",
+            "address": "jo@sample.example",
+            "task": False,
+            "email": False,
             "why": "added by you",
+            "already": None,
             "ticked": False,  # it can't get it, so it isn't ticked
             "allowed": False,
         },
     ]
     assert found["subject"] == "Pre-read: Sample Logistics Pty Ltd, Thu 5 Nov 2026, 10:00 am"
+    assert (
+        found["task_subject"]
+        == "Pre-read: Fit-out walk-through with Sample Logistics Pty Ltd, Thu 5 Nov"
+    )
+    assert found["task_due"] == "2026-11-04"
     text = found["text"]
     assert "What they do (Written by AI)\nThey move freight." in text
     assert "What we know about the project\nThe Perth lease ends in 2028." in text  # the rep's
@@ -283,7 +332,7 @@ async def test_an_address_longer_than_any_email_is_refused(world: World, sending
     form = await a_saved_draft(world)
     long = "a" * 250 + "@contour.example"
     async with signed_in_as(world, "mia", ["companies"]) as client:
-        previewed = await client.post(f"{FORMS}/{form.id}/preview", json={"to": [long]})
+        previewed = await client.post(f"{FORMS}/{form.id}/preview", json={"emails": [long]})
         refused = await send(client, form, LEE, long)
     assert (previewed.status_code, refused.status_code) == (422, 422)
     assert sending.emails.sent == []
@@ -313,10 +362,19 @@ async def test_a_send_and_its_retry_email_once_and_new_words_go_once_more(
     assert first.status_code == retry.status_code == again.status_code == 200, first.text
     sent = first.json()
     assert sent["status"] == "sent" and sent["sent_by"] == "Mia" and sent["sent_at"] is not None
-    assert sent["sent_to"] == [
-        {"name": None, "email": LEE},
-        {"name": None, "email": "sam@contour.example"},
+    assert [
+        {k: r[k] for k in ("owner_id", "name", "address", "task", "email")} for r in sent["sent_to"]
+    ] == [
+        {"owner_id": None, "name": None, "address": LEE, "task": "none", "email": True},
+        {
+            "owner_id": None,
+            "name": None,
+            "address": "sam@contour.example",
+            "task": "none",
+            "email": True,
+        },
     ]
+    assert all(r["at"] is not None for r in sent["sent_to"])
     assert sent["hubspot_copy"] == {"state": "saved", "sentence": None}
     assert retry.json() == sent  # the same words went already: nobody is emailed again
     assert edited.json()["status"] == "draft"  # new words: a draft again
@@ -429,8 +487,8 @@ async def test_a_draft_that_isnt_ready_cant_be_sent(world: World, sending: Sendi
 async def test_the_preview_ticks_every_contour_person_on_the_meeting(
     world: World, sending: Sending
 ) -> None:
-    """The meeting's owner and the other Contour people HubSpot lists on it, each once, each
-    through the account linked to that owner. One with no account here is left out."""
+    """The meeting's owner and the other people HubSpot lists on it (when in HubSpot's owners or
+    Contour), each once. One with no account gets task only (no email even if switched on)."""
     meetings = Meetings()
     meetings.meetings[0] = WALK_THROUGH.model_copy(
         update={"attendee_owner_ids": ["o2", "o1", "o3"]}
@@ -439,15 +497,26 @@ async def test_the_preview_ticks_every_contour_person_on_the_meeting(
     async def reps(session: AsyncSession, owner_id: str) -> tuple[str, str] | None:
         return {"o1": ("Lee Sample", LEE), "o2": ("Sam Sample", SAM)}.get(owner_id)
 
+    await add(
+        world,
+        HubSpotOwner(owner_id="o2", name="Sam Sample", archived=False),
+        HubSpotOwner(owner_id="o3", name="Jo Outside", archived=False),
+    )
     world.app.state.meeting_source = dataclasses.replace(meetings.source(), rep_of_owner=reps)
     form = await a_saved_draft(world)
     async with signed_in_as(world, "mia", ["companies"]) as client:
-        response = await client.post(f"{FORMS}/{form.id}/preview", json={"to": [SAM]})
+        response = await client.post(
+            f"{FORMS}/{form.id}/preview", json={"emails": [SAM], "email_them": False}
+        )
     assert response.status_code == 200, response.text
-    people = [(p["name"], p["email"], p["why"], p["ticked"]) for p in response.json()["people"]]
+    people = [
+        (p["owner_id"], p["name"], p["address"], p["task"], p["email"], p["why"], p["ticked"])
+        for p in response.json()["people"]
+    ]
     assert people == [
-        ("Lee Sample", LEE, "on the meeting", True),
-        ("Sam Sample", SAM, "on the meeting", True),  # added too, but shown once
+        ("o1", "Lee Sample", None, True, False, "on the meeting", True),
+        ("o2", "Sam Sample", SAM, True, True, "on the meeting", True),
+        ("o3", "Jo Outside", None, True, False, "on the meeting", True),
     ]
 
 
@@ -469,7 +538,7 @@ async def test_the_preview_says_when_the_copy_also_goes_on_the_meeting(
     settings["meeting_note_on_meeting"] = switch
     form = await a_saved_draft(world, **({"meeting_id": None} if typed else {}))
     async with signed_in_as(world, "mia", ["companies"]) as client:
-        response = await client.post(f"{FORMS}/{form.id}/preview", json={"to": [LEE]})
+        response = await client.post(f"{FORMS}/{form.id}/preview", json={"emails": [LEE]})
     assert response.status_code == 200, response.text
     assert response.json()["meeting_note"] == note
 
@@ -524,3 +593,308 @@ async def test_the_copy_is_saved_once_the_note_on_the_company_is(
     async with signed_in_as(world, "mia", ["companies"]) as client:
         sent = (await send(client, form, LEE)).json()
     assert sent["hubspot_copy"] == {"state": state, "sentence": sentence}
+
+
+# --- PLAN-V19 T1-7 & T1-8: team, HubSpot tasks, email_them, retry and send to more ----------------
+
+
+async def _seed_team(world: World) -> tuple[Any, Any]:
+    async with world.factory() as db:
+        await db.merge(HubSpotOwner(owner_id="o2", name="Sam Sample", archived=False))
+        await db.merge(HubSpotOwner(owner_id="o1", name="Lee Sample", archived=False))
+        await db.merge(HubSpotOwner(owner_id="o3", name="Jo Sample", archived=False))
+        await db.merge(HubSpotOwner(owner_id="o9", name="Archived Rep", archived=True))
+        await db.commit()
+    lee = await person(world, "lee", apps=["companies"])
+    sam = await person(world, "sam", apps=["companies"])
+    async with world.factory() as db:
+        lee_row = await db.get(type(lee), lee.id)
+        sam_row = await db.get(type(sam), sam.id)
+        assert lee_row is not None and sam_row is not None
+        lee_row.name = "Lee Sample"
+        lee_row.hubspot_owner_id = "o1"
+        lee_row.hubspot_owner_matched_by = "person"
+        sam_row.name = "Sam Sample"
+        sam_row.hubspot_owner_id = "o2"
+        sam_row.hubspot_owner_matched_by = "person"
+        await db.commit()
+    return lee, sam
+
+
+async def test_team_list_returns_active_owners_sorted_without_emails(
+    world: World, sending: Sending
+) -> None:
+    await _seed_team(world)
+    async with world.browser() as client:
+        assert (await sign_in(client, login="lee")).status_code == 200
+        response = await client.get(f"{API}/team")
+    assert response.status_code == 200, response.text
+    rows = response.json()
+    assert rows == [
+        {"owner_id": "o3", "name": "Jo Sample", "has_account": False, "is_me": False},
+        {"owner_id": "o1", "name": "Lee Sample", "has_account": True, "is_me": True},
+        {"owner_id": "o2", "name": "Sam Sample", "has_account": True, "is_me": False},
+    ]
+    assert "@" not in response.text
+
+
+async def test_team_list_returns_503_when_database_fails(
+    world: World, sending: Sending, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from core.hubspot import owners as hubspot_owners
+
+    async def boom(*args: object, **kwargs: object) -> list[Any]:
+        raise RuntimeError("db dropped")
+
+    async with signed_in_as(world, "mia", ["companies"]) as client:
+        monkeypatch.setattr(hubspot_owners, "active_owners", boom)
+        response = await client.get(f"{API}/team")
+    assert (response.status_code, response.json()["code"]) == (503, "team_unavailable")
+
+
+async def test_retry_saves_partial_success_before_raising_502(
+    world: World, sending: Sending
+) -> None:
+    form = await a_saved_draft(world)
+    await _seed_team(world)
+
+    async def reps(session: AsyncSession, owner_id: str) -> tuple[str, str] | None:
+        return {"o1": ("Lee Sample", LEE), "o2": ("Sam Sample", SAM)}.get(owner_id)
+
+    world.app.state.meeting_source = dataclasses.replace(Meetings().source(), rep_of_owner=reps)
+    sending.copies.fail_owners = {"o2", "o3"}
+    async with signed_in_as(world, "mia", ["companies"]) as client:
+        sent = (await send(client, form, owner_ids=["o1", "o2", "o3"], email_them=False)).json()
+        assert [(r["owner_id"], r["task"]) for r in sent["sent_to"]] == [
+            ("o1", "sent"),
+            ("o2", "failed"),
+            ("o3", "failed"),
+        ]
+        # Force retry onto a partial failure (o2 succeeds, o3 still fails)
+        sending.copies.fail_owners = {"o3"}
+        retry = await client.post(f"{FORMS}/{form.id}/tasks/retry")
+        assert (retry.status_code, retry.json()["code"]) == (502, "task_failed")
+        assert retry.json()["detail"] == "Jo Sample's HubSpot task didn't go."
+        after = (await client.get(f"{FORMS}/{form.id}")).json()
+        assert [(r["owner_id"], r["task"]) for r in after["sent_to"]] == [
+            ("o1", "sent"),
+            ("o2", "sent"),
+            ("o3", "failed"),
+        ]
+
+
+async def test_task_only_send_skips_email_and_batches_one_request(
+    world: World, sending: Sending
+) -> None:
+    form = await a_saved_draft(world)
+    await _seed_team(world)
+
+    async def reps(session: AsyncSession, owner_id: str) -> tuple[str, str] | None:
+        return {"o1": ("Lee Sample", LEE), "o2": ("Sam Sample", SAM)}.get(owner_id)
+
+    world.app.state.meeting_source = dataclasses.replace(Meetings().source(), rep_of_owner=reps)
+    async with signed_in_as(world, "mia", ["companies"]) as client:
+        response = await send(client, form, owner_ids=["o1", "o2", "o3"], email_them=False)
+    assert response.status_code == 200, response.text
+    sent = response.json()
+    assert sending.emails.sent == []  # default email_them=False sends no emails
+    assert [
+        (r["owner_id"], r["name"], r["task"], r["email"], r["address"]) for r in sent["sent_to"]
+    ] == [
+        ("o1", "Lee Sample", "sent", False, None),
+        ("o2", "Sam Sample", "sent", False, None),
+        ("o3", "Jo Sample", "sent", False, None),
+    ]
+    assert len(sending.copies.requests) == 1  # single HubSpot write (1 company + 3 tasks + 1 note)
+    req = sending.copies.requests[0]
+    assert len(req.tasks) == 3
+    assert [t.owner_id for t in req.tasks] == ["o1", "o2", "o3"]
+    assert all(
+        t.subject == "Pre-read: Fit-out walk-through with Sample Logistics Pty Ltd, Thu 5 Nov"
+        for t in req.tasks
+    )
+    assert all(t.due == date(2026, 11, 4) for t in req.tasks)
+    assert req.note is not None
+
+
+async def test_send_with_tasks_and_email_emails_only_accounts(
+    world: World, sending: Sending
+) -> None:
+    form = await a_saved_draft(world)
+    await _seed_team(world)
+
+    async def reps(session: AsyncSession, owner_id: str) -> tuple[str, str] | None:
+        return {"o1": ("Lee Sample", LEE), "o2": ("Sam Sample", SAM)}.get(owner_id)
+
+    world.app.state.meeting_source = dataclasses.replace(Meetings().source(), rep_of_owner=reps)
+    async with signed_in_as(world, "mia", ["companies"]) as client:
+        response = await send(client, form, owner_ids=["o1", "o2", "o3"], email_them=True)
+    assert response.status_code == 200, response.text
+    sent = response.json()
+    assert len(sending.emails.sent) == 1
+    assert sending.emails.sent[0][0].to == [LEE, SAM]  # o3 has no account -> task only
+    assert [(r["owner_id"], r["task"], r["email"], r["address"]) for r in sent["sent_to"]] == [
+        ("o1", "sent", True, LEE),
+        ("o2", "sent", True, SAM),
+        ("o3", "sent", False, None),
+    ]
+
+
+async def test_task_only_refuses_when_hubspot_writing_is_off(
+    world: World, settings: dict[str, Any], sending: Sending
+) -> None:
+    form = await a_saved_draft(world)
+    await _seed_team(world)
+    settings["hubspot_write_enabled"] = False
+    async with signed_in_as(world, "mia", ["companies"]) as client:
+        refused = await send(client, form, owner_ids=["o1"], email_them=False)
+    assert (refused.status_code, refused.json()["code"]) == (409, "hubspot_writes_off")
+
+
+async def test_partial_task_failure_and_retry_tasks_without_email(
+    world: World, sending: Sending
+) -> None:
+    form = await a_saved_draft(world)
+    await _seed_team(world)
+
+    async def reps(session: AsyncSession, owner_id: str) -> tuple[str, str] | None:
+        return {"o1": ("Lee Sample", LEE), "o2": ("Sam Sample", SAM)}.get(owner_id)
+
+    world.app.state.meeting_source = dataclasses.replace(Meetings().source(), rep_of_owner=reps)
+    sending.copies.fail_owners = {"o3"}
+    async with signed_in_as(world, "mia", ["companies"]) as client:
+        sent_resp = await send(client, form, owner_ids=["o1", "o3"], email_them=True)
+        assert sent_resp.status_code == 200, sent_resp.text
+        sent = sent_resp.json()
+        assert len(sending.emails.sent) == 1
+        assert [(r["owner_id"], r["task"], r["email"]) for r in sent["sent_to"]] == [
+            ("o1", "sent", True),
+            ("o3", "failed", False),
+        ]
+
+        # First retry fails too -> 502 task_failed naming Jo Sample; zero emails sent
+        still_bad = await client.post(f"{FORMS}/{form.id}/tasks/retry")
+        assert (still_bad.status_code, still_bad.json()["code"]) == (502, "task_failed")
+        assert "Jo Sample's HubSpot task didn't go." in still_bad.json()["detail"]
+        assert len(sending.emails.sent) == 1
+
+        # Second retry succeeds -> existing write finishes and task flips to sent
+        sending.copies.fail_owners = set()
+        fixed = await client.post(f"{FORMS}/{form.id}/tasks/retry")
+        assert fixed.status_code == 200, fixed.text
+        assert [(r["owner_id"], r["task"], r["email"]) for r in fixed.json()["sent_to"]] == [
+            ("o1", "sent", True),
+            ("o3", "sent", False),
+        ]
+        assert len(sending.emails.sent) == 1  # zero emails on retry
+        assert len(sending.copies.requests) == 1  # re-applied the same HubSpotWrite!
+
+
+async def test_send_to_more_only_reaches_new_people_and_updates_list_row(
+    world: World, sending: Sending
+) -> None:
+    form = await a_saved_draft(world)
+    await _seed_team(world)
+
+    async def reps(session: AsyncSession, owner_id: str) -> tuple[str, str] | None:
+        return {"o1": ("Lee Sample", LEE), "o2": ("Sam Sample", SAM)}.get(owner_id)
+
+    world.app.state.meeting_source = dataclasses.replace(Meetings().source(), rep_of_owner=reps)
+    async with signed_in_as(world, "mia", ["companies"]) as client:
+        first = await send(client, form, owner_ids=["o1"], email_them=True)
+        assert first.status_code == 200, first.text
+        first_at = first.json()["sent_to"][0]["at"]
+
+        world.clock.advance(minutes=30)
+        preview_more = await client.post(
+            f"{FORMS}/{form.id}/preview",
+            json={
+                "owner_ids": ["o1", "o2"],
+                "emails": ["alex@contour.example"],
+                "email_them": True,
+            },
+        )
+        assert preview_more.status_code == 200, preview_more.text
+        by_name = {p["name"] or p["address"]: p for p in preview_more.json()["people"]}
+        assert by_name["Lee Sample"]["already"] == first_at
+        assert by_name["Lee Sample"]["ticked"] is False
+        assert by_name["Sam Sample"]["already"] is None
+        assert by_name["Sam Sample"]["ticked"] is True
+
+        second = await send(
+            client, form, "alex@contour.example", owner_ids=["o1", "o2"], email_them=True
+        )
+        assert second.status_code == 200, second.text
+        sent2 = second.json()
+        assert sent2["sent_to"][0]["at"] == first_at  # Lee kept original timestamp
+        assert [(r["owner_id"], r["task"], r["email"], r["address"]) for r in sent2["sent_to"]] == [
+            ("o1", "sent", True, LEE),
+            ("o2", "sent", True, SAM),
+            (None, "none", True, "alex@contour.example"),
+        ]
+        assert len(sending.emails.sent) == 2
+        assert sending.emails.sent[1][0].to == [SAM, "alex@contour.example"]  # Lee skipped!
+        assert f"meeting-form:{form.id}:1:more:" in sending.emails.sent[1][1]
+        assert len(sending.copies.requests[1].tasks) == 1
+        assert sending.copies.requests[1].tasks[0].owner_id == "o2"
+
+        rows = (await client.get(f"{API}/meetings")).json()
+        state = rows["items"][0]["form"]
+        assert state["sent_count"] == 3
+        assert state["sent_names"] == ["Lee Sample", "Sam Sample"]  # capped at 2
+        assert state["sent_at"] is not None
+
+
+async def test_send_validation_refusals(world: World, sending: Sending) -> None:
+    form = await a_saved_draft(world)
+    await _seed_team(world)
+    async with signed_in_as(world, "mia", ["companies"]) as client:
+        empty = await client.post(f"{FORMS}/{form.id}/send", json={"owner_ids": [], "emails": []})
+        archived = await send(client, form, owner_ids=["o9"])
+        too_many = await client.post(
+            f"{FORMS}/{form.id}/send",
+            json={"emails": [f"u{i}@contour.example" for i in range(20)], "owner_ids": ["o1"]},
+        )
+    assert (empty.status_code, empty.json()["code"]) == (422, "no_one")
+    assert (archived.status_code, archived.json()["code"]) == (422, "owner_not_found")
+    assert (too_many.status_code, too_many.json()["code"]) == (422, "too_many_recipients")
+
+
+def test_task_due_skips_weekends_and_never_past() -> None:
+    now = datetime(2026, 11, 2, 12, 0, tzinfo=UTC)  # Mon 2 Nov in Melbourne
+    monday_meeting = a_draft(starts_at=datetime(2026, 11, 9, 0, 0, tzinfo=UTC))  # Mon 9 Nov Melb
+    assert meeting_send.task_due(monday_meeting, now) == date(2026, 11, 6)  # Fri 6 Nov
+
+    past_meeting = a_draft(starts_at=datetime(2026, 11, 1, 0, 0, tzinfo=UTC))
+    assert meeting_send.task_due(past_meeting, now) == date(2026, 11, 2)  # clamped to today
+
+
+def test_task_body_keeps_contour_links_when_truncated() -> None:
+    long_summary = "Freight freight freight. " * 4000
+    form = a_draft(
+        summaries={
+            "what_they_do": {"text": long_summary, "by": "ai", "sources": []},
+            "what_we_know": {"text": "Warehouse move.", "by": "person", "sources": []},
+            "talks_so_far": {"text": "Called last week.", "by": "ai", "sources": []},
+        }
+    )
+    settings = Settings(_env_file=None, app_url=SITE)
+    body = meeting_send.task_body(form, settings)
+    assert len(body) <= BODY_MAX_CHARS
+    assert f"Pre-read in Contour: {SITE}/meetings?form={form.id}" in body
+    assert f"Sample Logistics Pty Ltd in Contour: {SITE}/companies/201" in body
+    assert "What they do (Written by AI)" in body
+
+
+async def test_team_and_retry_require_meetings_write_permission(
+    world: World, sending: Sending
+) -> None:
+    form = await a_saved_draft(world)
+    await _seed_team(world)
+    await person(world, "viewer", apps=["companies"], role="viewer")
+    async with world.browser() as viewer_client:
+        assert (await sign_in(viewer_client, login="viewer")).status_code == 200
+        team_resp = await viewer_client.get(f"{API}/team")
+        retry_resp = await viewer_client.post(f"{FORMS}/{form.id}/tasks/retry")
+    assert team_resp.status_code == 200  # viewer can view read routes
+    assert (retry_resp.status_code, retry_resp.json()["code"]) == (403, "viewer_read_only")

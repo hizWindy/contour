@@ -34,6 +34,7 @@ from apps.companies.schemas import (
     MeetingTranscriptIn,
     MeetingWhen,
     MeetingWho,
+    TeamMember,
 )
 from core.api.access import SignedInDep, need
 from core.api.deps import SessionDep, SettingsDep
@@ -93,6 +94,21 @@ MeetingId = Annotated[
     Path(min_length=1, max_length=32, pattern=r"^[0-9]+$", description="HubSpot's meeting id"),
 ]
 FormId = Annotated[uuid.UUID, Path(description="The pre-read's id")]
+
+
+@router.get(
+    "/team",
+    response_model=list[TeamMember],
+    dependencies=[Depends(need("companies.meetings"))],
+    summary="Contour team owners for pre-read sending",
+    description=(
+        "Active HubSpot owners ordered by name, with whether each has an active Contour account "
+        "and whether they are the signed-in user. Never exposes email addresses. 503 "
+        "`team_unavailable` if loading fails."
+    ),
+)
+async def list_team(session: SessionDep, auth: SignedInDep) -> list[TeamMember]:
+    return await meeting_store.list_team(session, auth)
 
 
 @router.get(
@@ -322,13 +338,11 @@ async def redraft_form(
     "/meetings/forms/{form_id}/preview",
     response_model=FormEmailPreview,
     dependencies=[Depends(need("companies.meetings", write=True))],
-    summary="See the pre-read's email",
+    summary="See the pre-read's HubSpot tasks and email",
     description=(
-        "The email as it would arrive (a subject, plain text, and HTML with every value "
-        "escaped), and the people it would go to, each with why: the Contour people on the "
-        "meeting who have an account here, then the addresses I add (`to`). Each says whether "
-        "it may get it: only Contour addresses can, and only they are ticked. Nothing is sent. "
-        "404 `form_not_found`. 409 `meeting_forms_off`."
+        "What Send will do: the HubSpot task subject and working-day due date, email preview, "
+        "and each person with whether they get a task and/or email (and if they already got it). "
+        "Nothing is sent. 404 `form_not_found`. 409 `meeting_forms_off`."
     ),
 )
 async def preview_form(
@@ -343,7 +357,14 @@ async def preview_form(
 ) -> FormEmailPreview:
     form = await meeting_form.read_form(session, form_id, leads=leads, runner=runner, now=now)
     return await meeting_send.preview(
-        session, form, source=source, settings=settings, added=body.to
+        session,
+        form,
+        source=source,
+        settings=settings,
+        owner_ids=body.owner_ids,
+        emails=body.emails,
+        email_them=body.email_them,
+        now=now,
     )
 
 
@@ -353,17 +374,11 @@ async def preview_form(
     dependencies=[Depends(need("companies.meetings", write=True))],
     summary="Send the pre-read",
     description=(
-        "Emails the pre-read to these addresses (in the body, never an attachment), then saves "
-        "its copy in HubSpot: a note on the company, and on its deal when it has exactly one "
-        "open deal. Every address must be Contour's: one that isn't refuses the whole send (422 "
-        "`outside_address`, naming it). The ideal next step and who is going must be filled in "
-        "(422 `blanks_empty`). Sent already: nobody is emailed again, and a copy that is "
-        "waiting or failed is tried again. `hubspot_copy` says how the copy went: saved, "
-        "waiting (writing to HubSpot isn't on: the email still went), off (the company isn't in "
-        "HubSpot), or failed. 422 `no_one` when there is nobody to send it to. 409 "
-        "`form_not_ready` while it is drafting or failed, `form_sending` while it is being sent, "
-        "`email_not_set_up`. 502 `email_failed`: nothing was sent. 404 `form_not_found`. 409 "
-        "`meeting_forms_off`."
+        "Creates HubSpot follow-up tasks for picked team members and optionally emails them (and "
+        "any added Contour addresses), once per new recipient unless the pre-read text changed. "
+        "Saves the company/meeting copy in HubSpot. 422 `blanks_empty`, `outside_address`, "
+        "`no_one`. 409 `hubspot_writes_off`, `form_not_ready`, `form_sending`, `email_not_set_up`. "
+        "502 `email_failed`. 404 `form_not_found`. 409 `meeting_forms_off`."
     ),
 )
 async def send_form(
@@ -380,9 +395,46 @@ async def send_form(
 ) -> MeetingFormOut:
     form = await meeting_form.read_form(session, form_id, leads=leads, runner=runner, now=now)
     sent = await meeting_send.send_form(
-        session, form, body.to, auth, app=request.app, settings=settings, writer=writer, now=now
+        session,
+        form,
+        owner_ids=body.owner_ids,
+        emails=body.emails,
+        email_them=body.email_them,
+        auth=auth,
+        app=request.app,
+        settings=settings,
+        writer=writer,
+        now=now,
     )
     return await meeting_store.form_out(session, sent)
+
+
+@router.post(
+    "/meetings/forms/{form_id}/tasks/retry",
+    response_model=MeetingFormOut,
+    dependencies=[Depends(need("companies.meetings", write=True))],
+    summary="Retry failed HubSpot tasks for a sent pre-read",
+    description=(
+        "Retries HubSpot task creation only for people whose task previously failed, without "
+        "sending any email. Partial successes are saved. Raises 502 `task_failed` if any "
+        "task still fails. 409 `hubspot_writes_off`, `form_not_ready`. 404 `form_not_found`."
+    ),
+)
+async def retry_form_tasks(
+    form_id: FormId,
+    request: Request,
+    session: SessionDep,
+    settings: MeetingsOnDep,
+    leads: LeadsDep,
+    runner: RunnerDep,
+    writer: WriterDep,
+    now: NowDep,
+) -> MeetingFormOut:
+    form = await meeting_form.read_form(session, form_id, leads=leads, runner=runner, now=now)
+    updated = await meeting_send.retry_tasks(
+        session, form, app=request.app, settings=settings, writer=writer, now=now
+    )
+    return await meeting_store.form_out(session, updated)
 
 
 @router.get(

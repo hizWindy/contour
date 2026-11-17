@@ -16,6 +16,7 @@ routes are in api_meetings.py.
   the date in words (Melbourne time). So "sample 26 nov", "thu" and "26/11" all work.
 """
 
+import logging
 import re
 import uuid
 from collections.abc import Iterable, Sequence
@@ -46,10 +47,13 @@ from apps.companies.schemas import (
     MeetingSummary,
     MeetingWhen,
     MeetingWho,
+    TeamMember,
     TeamState,
+    recipient_display_name,
 )
 from apps.companies.tables import CallNote, MeetingForm
 from core.api.errors import Problem
+from core.auth.features import feature_app, is_admin
 from core.auth.models import User
 from core.auth.sessions import AuthContext
 from core.config import Settings
@@ -59,6 +63,8 @@ from core.hubspot import owners as hubspot_owners
 from core.hubspot.meetings import Meeting, MeetingsStatus
 from core.hubspot.models import HubSpotCompany, HubSpotOwner
 from core.hubspot.owners import TeamsOf
+
+log = logging.getLogger(__name__)
 
 UPCOMING_DAYS: Final = 7  # Upcoming is the next 7 days
 PAST_DAYS: Final = 30  # how far back Past looks (TBC)
@@ -103,6 +109,15 @@ def hubspot_not_connected() -> Problem:
         "HubSpot isn't connected",
         f"{hubspot_meetings.NO_HUBSPOT} An admin can connect it on the HubSpot page in Admin.",
         code="hubspot_not_connected",
+    )
+
+
+def team_unavailable() -> Problem:
+    return Problem(
+        503,
+        "Team list unavailable",
+        "The team list couldn't be loaded right now. Try again in a moment.",
+        code="team_unavailable",
     )
 
 
@@ -307,19 +322,41 @@ async def client_meetings(
     ]
 
 
+def _form_state(
+    form_id: uuid.UUID,
+    status: str,
+    sent_at: datetime | None,
+    sent_to: list[object] | None,
+) -> MeetingFormState:
+    recipients = [
+        FormRecipient.model_validate(item) for item in (sent_to or []) if isinstance(item, dict)
+    ]
+    return MeetingFormState(
+        id=form_id,
+        status=status,
+        sent_at=sent_at,
+        sent_count=len(recipients),
+        sent_names=[recipient_display_name(r) for r in recipients[:2]],
+    )
+
+
 async def forms_of(
     session: AsyncSession, meeting_ids: Sequence[str]
 ) -> dict[str, MeetingFormState]:
     if not meeting_ids:
         return {}
     rows = await session.execute(
-        select(MeetingForm.meeting_id, MeetingForm.id, MeetingForm.status).where(
-            MeetingForm.meeting_id.in_(meeting_ids)
-        )
+        select(
+            MeetingForm.meeting_id,
+            MeetingForm.id,
+            MeetingForm.status,
+            MeetingForm.sent_at,
+            MeetingForm.sent_to,
+        ).where(MeetingForm.meeting_id.in_(meeting_ids))
     )
     return {
-        meeting_id: MeetingFormState(id=form_id, status=status)
-        for meeting_id, form_id, status in rows.all()
+        meeting_id: _form_state(form_id, status, sent_at, sent_to)
+        for meeting_id, form_id, status, sent_at, sent_to in rows.all()
         if meeting_id is not None
     }
 
@@ -438,7 +475,7 @@ async def typed_meetings(
                 where=form.where,  # the table's check keeps it to the list
             ),
             company_name=form.company_name,
-            typed=MeetingFormState(id=form.id, status=form.status),
+            typed=_form_state(form.id, form.status, form.sent_at, form.sent_to),
         )
         for form in forms
     ]
@@ -556,6 +593,49 @@ async def list_meetings(
         syncing=status.syncing,
         sync_problem=sync_problem(status, now),
     )
+
+
+async def list_team(session: AsyncSession, auth: AuthContext | None) -> list[TeamMember]:
+    """Active HubSpot owners ordered by name, marked with Contour account status (PLAN-V19 T1-7).
+
+    Never returns email addresses. Raises 503 `team_unavailable` if the database read fails.
+    """
+    try:
+        active = await hubspot_owners.active_owners(session, limit=hubspot_owners.OWNERS_CAP)
+        user_rows = await session.execute(
+            select(
+                User.id,
+                User.hubspot_owner_id,
+                User.role,
+                User.features,
+                User.apps,
+            ).where(User.active.is_(True), User.hubspot_owner_id.is_not(None))
+        )
+        my_owner = (
+            await hubspot_owners.owner_id_of(session, auth.user.id) if auth is not None else None
+        )
+    except Exception as error:
+        log.warning("team_list_failed", extra={"error": type(error).__name__})
+        raise team_unavailable() from None
+
+    linked_owners: set[str] = set()
+    for _, owner_id, role, features, apps in user_rows.all():
+        if owner_id is None:
+            continue
+        has_co = any(feature_app(f) == "companies" for f in (features or []))
+        if is_admin(role) or has_co or "companies" in (apps or []):
+            linked_owners.add(owner_id)
+
+    me_id = my_owner.strip() if my_owner else None
+    return [
+        TeamMember(
+            owner_id=owner.id,
+            name=owner.name,
+            has_account=owner.id in linked_owners,
+            is_me=me_id is not None and owner.id == me_id,
+        )
+        for owner in active
+    ]
 
 
 async def sync_now(app: FastAPI) -> MeetingsSyncOut:
