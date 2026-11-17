@@ -5,8 +5,8 @@ This plan makes the Lead Finder find, research and show many more companies, wit
 **TBC** means to be confirmed.
 
 - **Built by:** Al-khair Pama, with Claude. **Signed off by:** Al-khair, for the code and every screen. Levi confirms the rule numbers marked **TBC with Levi**.
-- **Last updated:** 18 Nov 2026 (Parts 1 and 2 built; the full backend run waits; Part 3 next).
-- **Progress:** S0: 1 of 1. Part 1: 8 of 9. Part 2: 4 of 6. Part 3: 0 of 6. M1 to M4: 0 of 4. W1 and W2: 0 of 2.
+- **Last updated:** 18 Nov 2026 (Parts 1 to 3 built; waiting on Al-khair: the full backend run, the test set ranges, a look at the screens).
+- **Progress:** S0: 1 of 1. Part 1: 8 of 9. Part 2: 4 of 6. Part 3: 5 of 6. M1 to M4: 0 of 4. W1 and W2: 0 of 2.
 - **Sources:**
   - Al-khair's asks in chat (18 Nov), with 3 screenshots of the Start page;
   - the audit in the same chat: the live site's runs, leads, settings, schedules and sources, read through Chrome (GET only);
@@ -261,22 +261,31 @@ One session builds every step, in order: Part 1, then Part 2, then Part 3. The b
 
 ## Part 3: the website
 
-- [ ] **T3-1. "What to do" as cards.** Four option cards in a radio group, each with its title and its one line. Two columns from 640px, one below. Arrow keys move and Space picks. No sideways scroll. `Segmented` stays for 2 or 3 short choices, as `engine/DESIGN.md` says.
+- [x] **T3-1. "What to do" as cards.** Built 18 Nov 2026 (`b7223c3`), waiting for a look. Four option cards in a radio group, each with its title and its one line. Two columns from 640px, one below. Arrow keys move and Space picks. No sideways scroll. `Segmented` stays for 2 or 3 short choices, as `engine/DESIGN.md` says.
   - **Done when:** tests check the radio group and the arrow keys, and the screenshots at 1440, 1280, 768 and 390px, light and dark, show no label cut.
-- [ ] **T3-2. "How far back".** 7 days, 30 days, 90 days and 6 months, from the run options. The control hugs its labels (find out why `w-fit` doesn't hold today) and fits on one line at 390px.
+- [x] **T3-2. "How far back".** Built 18 Nov 2026 (`c2113a1`), waiting for a look. 7 days, 30 days, 90 days and 6 months, from the run options. The control hugs its labels (find out why `w-fit` doesn't hold today) and fits on one line at 390px.
   - **Done when:** tests pass, and the screenshots show it.
-- [ ] **T3-3. "How many companies".** Under the signs: 25, 50 and 100, a number field, and the cost range from the estimate. A "Top up from the HubSpot watchlist" switch with one line on what it does, greyed with the reason when it isn't allowed. "Most companies to research" stays in Limits, as the ceiling.
+- [x] **T3-3. "How many companies".** Built 18 Nov 2026 (`7e23dff`, `c5f9e2a`, `1ae209a`), waiting for a look. Under the signs: 25, 50 and 100, a number field, and the cost range from the estimate. A "Top up from the HubSpot watchlist" switch with one line on what it does, greyed with the reason when it isn't allowed. "Most companies to research" stays in Limits, as the ceiling.
   - **Done when:** the form sends `target_companies` and `top_up`, the tests pass, and the screenshots show it.
-- [ ] **T3-4. The run page shows the sweeps.** "Sweep 2 of 4: 31 of 50 companies", with a bar. Companies from the top up are marked "From HubSpot". "Companies after merging" updates after each sweep.
+- [x] **T3-4. The run page shows the sweeps.** Built 18 Nov 2026 (`c28ada3`), waiting for a look. "Sweep 2 of 4: 31 of 50 companies", with a bar. Companies from the top up are marked "From HubSpot". "Companies after merging" updates after each sweep.
   - **Done when:** tests with fake events pass, and a screenshot shows a run in the middle of a sweep.
-- [ ] **T3-5. Results shows every lead.** The default view is A, B, C and "No tier yet". The Tier filter offers "No tier yet". A lead with no tier shows its result instead.
+- [x] **T3-5. Results shows every lead.** Built 18 Nov 2026 (`8949888`, `bbd87b2`, `0b63fee`, `b7d1ff1`), waiting for a look. The default view is A, B, C and "No tier yet". The Tier filter offers "No tier yet". A lead with no tier shows its result instead.
   - **Done when:** the tests pass, and a screenshot shows old and new leads together.
-- [ ] **T3-6. The phone pass and the check.** Start, the run page and Results at 390px: no sideways scroll, 44px controls and nothing cut, in light and dark. Then the website's lint, types, tests and build.
+- [ ] **T3-6. The phone pass and the check.** Built and checked 18 Nov 2026 (`1ae209a`, `bbd87b2`, `b7d1ff1`); waiting for Al-khair's look. Start, the run page and Results at 390px: no sideways scroll, 44px controls and nothing cut, in light and dark. Then the website's lint, types, tests and build.
   - **Done when:** the screenshots are in `plan/shots/v21/`, the website checks pass, and Al-khair has looked.
 
 ### Part 3 Log
 
-- (none yet)
+- 18 Nov: built by a website session (the `frontend-agent`) from one brief, in the same worktree. Its T3-1 files landed in `b7223c3` (the tier facet fix), because both sessions committed from one staging area at the same moment; nothing was lost, and the history wasn't rewritten. From T3-2 on, each commit holds only its own files.
+- 18 Nov, T3-1: `OptionCards` in the motion kit (four cards, the picked one tinted with a tick; Tab lands on the picked card, the arrows move the focus, Space or Enter picks, as the plan says; most radio groups pick on the arrows, TBC with Al-khair). Two columns from 640px when the cards' own box is 480px or wider, so they stay in one column beside the cost card at 1024 to 1279px. A DESIGN.md line for `OptionCards` is proposed, not added.
+- 18 Nov, T3-2: why `w-fit` didn't hold: the vertical `Field` gives every direct child `w-full`. The control now sits in its own wrapper and hugs its labels (296px, one line in the 308px a phone gives it). The run page says "Last 6 months".
+- 18 Nov, T3-3 (choices for Al-khair): when "Most companies to research" is lowered under the target, the run aims for the lower number and a line says so (the typed target is kept, and the server never gets one it would refuse). A single preset (the laptop's limit of 20 leaves only [20]) is hidden. The switch is the app's on/off `Switch`, laid out like People's "Can sign in"; its whole row is the tap target.
+- 18 Nov, T3-4: the bar reads "Sweep 2 of 4: 31 of 50 companies", from `sweep_done` (the backend sets `chosen` last). Topped-up companies read "Researching ABC Logistics, from HubSpot" and carry "From HubSpot" in a discovery run. The setup card shows "How many companies" and "Top up from HubSpot".
+- 18 Nov, T3-5: "No tier yet" everywhere (it was "Not ranked yet"). On wide screens a row with no tier says "No tier yet" and keeps its result in the Result column (say it once); on a phone, where the Result column hides, the Tier column shows the result.
+- 18 Nov, the parts left by Parts 1 and 2: the card says "From the search, not checked by the research" beside such a sign (Signs tab, quick view, profile); the Rules page explains half points and the estimated 30 to 49 band, and its Size note now says only HubSpot's own count can stop a company before research; the Test set page shows each company's range, its newest tier and whether it is inside.
+- 18 Nov, T3-6: at 390px nothing scrolls sideways on Start, Results or the run page. Still under 44px on a phone, all older shared parts: the top bar's two buttons and small buttons (40px), "Show every tier" (32px), checkboxes (16px with a 40px tap area). Whether the shared sizes should grow is TBC. Checks on `b7d1ff1`: lint 0, typecheck 0 (there were 22), 2,022 tests in 139 files, build passes (first visit 241 kB gzip JS in 39 files, plus 24 kB CSS; 236 kB on 17 Nov before PLAN-V19 to V21). Rechecked by the main session: lint and typecheck clean, and the 14 test files of the changed parts pass (211 tests).
+- 18 Nov, screenshots in `plan/shots/v21/` (git ignores it; Results shows real company names): Start at 1440, 1280, 768 and 390px in light and dark, close-ups of How far back and How many companies, the run page mid-sweep, Results with old and new leads, and `checks.txt`. Not confirmed yet: the run page shots use a made-up run served to the page (the page code is real); the top-up feed line and the "From HubSpot" marks were checked by tests only; keyboard by hand, motion (shots with reduced motion), Safari and a real phone weren't tried.
+- 18 Nov: the app runs for Al-khair from this worktree: backend on 8081 with the Claude key (from the Windows setting) and `HUBSPOT_NAMES_TO_CLAUDE_OK=true`, website on http://localhost:5251. No HubSpot or Signal Hire key and no Property Daily login in this copy, and every schedule is off, so nothing spends money until a run is started by hand.
 
 ## Merge, checks and going live
 
