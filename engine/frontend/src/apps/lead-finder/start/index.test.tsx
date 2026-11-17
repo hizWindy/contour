@@ -620,3 +620,22 @@ describe('a company limit that leaves one preset (PLAN-V21 T3-3)', () => {
     expect(screen.getByText(/From 5 to 20\./)).toBeInTheDocument()
   })
 })
+
+describe('the top up on a phone (PLAN-V21 T3-6)', () => {
+  it('toggles from anywhere on its row, which is its label, and keeps the title as its name', async () => {
+    asPhone()
+    const seen = mockApi(() => estimate())
+    const { user } = renderStart()
+    const topUp = await screen.findByRole('switch', { name: 'Top up from the HubSpot watchlist' })
+    const row = topUp.closest('[data-slot=top-up]') as HTMLElement
+    expect(row.tagName).toBe('LABEL')
+    expect(row).toHaveClass('min-h-11')
+    expect(topUp).toBeChecked()
+    // A tap on the line under the title turns it off.
+    await user.click(within(row).getByText(/If the searches come up short/))
+    expect(topUp).not.toBeChecked()
+    await waitFor(() => {
+      expect(seen.estimates.at(-1)).toMatchObject({ params: { top_up: false } })
+    })
+  })
+})

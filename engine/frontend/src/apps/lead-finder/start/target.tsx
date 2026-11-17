@@ -17,17 +17,12 @@
 import { TriangleAlert } from 'lucide-react'
 import type { RunEstimate, RunOptions } from '@/api/types'
 import { Segmented } from '@/components/motion'
-import {
-  Field,
-  FieldContent,
-  FieldDescription,
-  FieldError,
-  FieldLabel,
-} from '@/components/ui/field'
+import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { pluralise } from '@/lib/format'
 import { formatMoney } from '@/lib/money'
+import { cn } from '@/lib/utils'
 import { errorFor, targetChoice, wholeNumberOf, type StartForm } from './form'
 
 interface TargetProps {
@@ -105,19 +100,29 @@ export function TargetChoices({ options, form, update, errors, estimate }: Targe
           {estimate.target_note}
         </p>
       ) : null}
-      <Field
-        orientation="horizontal"
-        data-disabled={allowed ? undefined : 'true'}
-        className="border-t pt-4"
+      {/* The whole row is the switch's label, so a finger can tap anywhere on it: the switch
+          itself is 24px tall, like every switch in the app. Its name is the title alone. */}
+      <label
+        htmlFor="top-up"
+        data-slot="top-up"
+        className={cn(
+          'flex min-h-11 items-start justify-between gap-3 border-t pt-4',
+          allowed ? 'cursor-pointer' : 'cursor-not-allowed',
+        )}
       >
-        <FieldContent>
-          <FieldLabel htmlFor="top-up">Top up from the HubSpot watchlist</FieldLabel>
-          <FieldDescription id="top-up-about">
+        <span className="flex min-w-0 flex-col gap-1">
+          <span
+            id="top-up-title"
+            className={cn('text-caption leading-snug text-foreground', !allowed && 'opacity-50')}
+          >
+            Top up from the HubSpot watchlist
+          </span>
+          <span id="top-up-about" className="text-caption text-pretty text-muted-foreground">
             {allowed
               ? 'If the searches come up short of the number, the run adds companies from the HubSpot watchlist in the same places, most likely first.'
               : (options.top_up.message ?? TOP_UP_OFF)}
-          </FieldDescription>
-        </FieldContent>
+          </span>
+        </span>
         <Switch
           id="top-up"
           checked={allowed && form.topUp}
@@ -125,9 +130,10 @@ export function TargetChoices({ options, form, update, errors, estimate }: Targe
           onCheckedChange={(on) => {
             update({ topUp: on })
           }}
+          aria-labelledby="top-up-title"
           aria-describedby="top-up-about"
         />
-      </Field>
+      </label>
     </>
   )
 }
