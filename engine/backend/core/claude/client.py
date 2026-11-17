@@ -215,7 +215,10 @@ class AnthropicClaude:
             if web.blocked_domains:
                 search["blocked_domains"] = list(web.blocked_domains)
                 fetch["blocked_domains"] = list(web.blocked_domains)
-            tools = [search, fetch]
+            # A request that may read no page (the rivals search) sends no page tool: the API
+            # refuses a limit of 0 (a 400, "max_uses: Input should be greater than 0", 18 Nov), and
+            # since PLAN-V20 a refusal stops the whole run.
+            tools = [search, fetch] if web.max_fetches > 0 else [search]
         messages: list[Any] = [{"role": "user", "content": prompt}]
         chosen = model or self._model
         params: dict[str, Any] = {
@@ -251,7 +254,8 @@ class AnthropicClaude:
                             # The API wants at least 1, so the last round may search once more.
                             used = sum((_usage(r) for r in responses), Usage())
                             search["max_uses"] = max(1, web.max_searches - used.web_searches)
-                            fetch["max_uses"] = max(1, web.max_fetches - used.web_fetches)
+                            if web.max_fetches > 0:
+                                fetch["max_uses"] = max(1, web.max_fetches - used.web_fetches)
                     response = await self._send(messages=messages, **params)
                     responses.append(response)
                     if response.stop_reason != "pause_turn":

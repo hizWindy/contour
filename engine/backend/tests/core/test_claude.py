@@ -219,6 +219,17 @@ async def test_blocked_domains_go_to_both_web_tools_and_a_fetch_is_capped() -> N
     assert "max_content_tokens" not in search
 
 
+async def test_a_request_that_may_read_no_page_sends_no_page_tool() -> None:
+    """The rivals search allows 0 page reads. The API refuses a page tool with a limit of 0 (a 400
+    that stopped a run on 18 Nov), so only the search tool is sent."""
+    sent: list[httpx2.Request] = []
+    web = WebTools(2, 0, blocked_domains=("propertydaily.com.au",))
+    await claude_that_answers(sent, FINAL).ask(system="s", prompt="p", form=Answer, web=web)
+
+    (search,) = json.loads(sent[0].content)["tools"]
+    assert (search["name"], search["max_uses"]) == ("web_search", 2)
+
+
 async def test_no_blocked_domains_means_no_key_at_all() -> None:
     sent: list[httpx2.Request] = []
     await claude_that_answers(sent, FINAL).ask(
