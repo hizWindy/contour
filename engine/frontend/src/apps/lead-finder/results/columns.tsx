@@ -30,8 +30,9 @@ const help = createColumnHelper<LeadRow>()
 function companyColumn(tick?: Tick) {
   return help.accessor('company', {
     header: 'Company',
-    // The name stays in view while the other columns scroll sideways.
-    meta: { sticky: true, className: 'max-w-64 sm:min-w-44' },
+    // The name stays in view while the other columns scroll sideways. On a phone it gives up some
+    // width, so a long result like "Director review" fits beside it (PLAN-V21 T3-6).
+    meta: { sticky: true, className: 'max-w-52 sm:max-w-64 sm:min-w-44' },
     cell: (info) => {
       const { id, score, score_checked: checked, city, is_test: isTest, origin } = info.row.original
       const points = formatScore(score, checked)
