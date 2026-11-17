@@ -25,6 +25,7 @@ import { Link } from 'react-router'
 import { useCallNoteCounts, useCallNoteOptions, voiceToolOf } from '@/api/hooks/call-note-counts'
 import { useMeetingSummary } from '@/api/hooks/meeting-summary'
 import type { VoiceToolKind } from '@/api/types'
+import { useCanWrite, useIsViewer } from '@/auth/can'
 import { RollingNumber } from '@/components/motion/rolling-number'
 import { Button } from '@/components/ui/button'
 import { CommandItem } from '@/components/ui/command'
@@ -95,19 +96,23 @@ export function CallNoteButtons() {
  */
 function CallNoteCommands({ go }: CommandsProps) {
   const options = useCallNoteOptions()
+  const viewer = useIsViewer()
+  const canCallLogs = useCanWrite('companies.call_logs')
   if (options.data?.enabled !== true) return null
   return (
     <>
-      <CommandItem
-        value={LOG_A_CALL}
-        keywords={['call notes', 'note', 'call logs', 'activity', 'dictate']}
-        onSelect={() => {
-          go(callLogsHref('to_confirm', { log: true }))
-        }}
-      >
-        <NotebookPen aria-hidden="true" />
-        <span>{LOG_A_CALL}</span>
-      </CommandItem>
+      {!viewer && canCallLogs ? (
+        <CommandItem
+          value={LOG_A_CALL}
+          keywords={['call notes', 'note', 'call logs', 'activity', 'dictate']}
+          onSelect={() => {
+            go(callLogsHref('to_confirm', { log: true }))
+          }}
+        >
+          <NotebookPen aria-hidden="true" />
+          <span>{LOG_A_CALL}</span>
+        </CommandItem>
+      ) : null}
       <CommandItem
         value={CALLS_TO_CONFIRM}
         keywords={['call notes', 'call logs', 'activity', 'send', 'hubspot']}

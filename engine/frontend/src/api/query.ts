@@ -200,6 +200,8 @@ export const queryKeys = {
     callNotePreview: (ids: readonly string[]) => ['companies', 'call-note-preview', ids] as const,
     /** Meetings and the pre-meeting form (PLAN-V17 Stage B): every query about them. */
     meetings: () => ['companies', 'meetings'] as const,
+    /** Contour team HubSpot owners for pre-read sending (PLAN-V19 T2-3). */
+    team: () => ['companies', 'team'] as const,
     /** Every page of meetings (Upcoming and Past, mine and the team's), and one by its filters. */
     meetingLists: () => ['companies', 'meetings', 'list'] as const,
     meetingList: (query: MeetingQuery) => ['companies', 'meetings', 'list', query] as const,

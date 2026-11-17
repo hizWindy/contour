@@ -16,7 +16,7 @@
  */
 import { useId } from 'react'
 import { Link } from 'react-router'
-import type { MeetingItem } from '@/api/types'
+import type { MeetingFormState, MeetingItem } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
@@ -24,15 +24,30 @@ import { preReadHref } from './params'
 import type { RowStatus } from './rows'
 import { STATUS_LOOK } from './status-look'
 import type { DraftIt } from './use-draft-it'
-import { CHECK_AND_SEND, DRAFT_IT, DRAFT_IT_NOTE, LOG_MEETING, OPEN, STATUS_WORDS } from './words'
+import {
+  CHECK_AND_SEND,
+  DRAFT_IT,
+  DRAFT_IT_NOTE,
+  LOG_MEETING,
+  OPEN,
+  sentRowWords,
+  STATUS_WORDS,
+} from './words'
 
 /** A row's one status: an icon and a word, never colour alone. */
-export function StatusLine({ status }: { status: RowStatus }) {
+export function StatusLine({
+  status,
+  form,
+}: {
+  status: RowStatus
+  form?: Pick<MeetingFormState, 'sent_at' | 'sent_count' | 'sent_names'> | null
+}) {
   const { icon: Icon, ink } = STATUS_LOOK[status]
+  const label = status === 'sent' ? sentRowWords(form) : STATUS_WORDS[status]
   return (
-    <p className={cn('flex items-center gap-1.5 text-caption', ink)}>
+    <p className={cn('flex min-w-0 items-center gap-1.5 text-caption leading-snug', ink)}>
       <Icon aria-hidden="true" className="size-3.5 shrink-0" />
-      {STATUS_WORDS[status]}
+      <span className="break-words">{label}</span>
     </p>
   )
 }

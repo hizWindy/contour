@@ -117,6 +117,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change your own password
+         * @description Checks current password, checks rules on the new one, and signs out other sessions.
+         */
+        post: operations["change_own_password"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/sessions": {
         parameters: {
             query?: never;
@@ -423,8 +443,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * See the pre-read's email
-         * @description The email as it would arrive (a subject, plain text, and HTML with every value escaped), and the people it would go to, each with why: the Contour people on the meeting who have an account here, then the addresses I add (`to`). Each says whether it may get it: only Contour addresses can, and only they are ticked. Nothing is sent. 404 `form_not_found`. 409 `meeting_forms_off`.
+         * See the pre-read's HubSpot tasks and email
+         * @description What Send will do: the HubSpot task subject and working-day due date, email preview, and each person with whether they get a task and/or email (and if they already got it). Nothing is sent. 404 `form_not_found`. 409 `meeting_forms_off`.
          */
         post: operations["preview_form"];
         delete?: never;
@@ -464,9 +484,29 @@ export interface paths {
         put?: never;
         /**
          * Send the pre-read
-         * @description Emails the pre-read to these addresses (in the body, never an attachment), then saves its copy in HubSpot: a note on the company, and on its deal when it has exactly one open deal. Every address must be Contour's: one that isn't refuses the whole send (422 `outside_address`, naming it). The ideal next step and who is going must be filled in (422 `blanks_empty`). Sent already: nobody is emailed again, and a copy that is waiting or failed is tried again. `hubspot_copy` says how the copy went: saved, waiting (writing to HubSpot isn't on: the email still went), off (the company isn't in HubSpot), or failed. 422 `no_one` when there is nobody to send it to. 409 `form_not_ready` while it is drafting or failed, `form_sending` while it is being sent, `email_not_set_up`. 502 `email_failed`: nothing was sent. 404 `form_not_found`. 409 `meeting_forms_off`.
+         * @description Creates HubSpot follow-up tasks for picked team members and optionally emails them (and any added Contour addresses), once per new recipient unless the pre-read text changed. Saves the company/meeting copy in HubSpot. 422 `blanks_empty`, `outside_address`, `no_one`. 409 `hubspot_writes_off`, `form_not_ready`, `form_sending`, `email_not_set_up`. 502 `email_failed`. 404 `form_not_found`. 409 `meeting_forms_off`.
          */
         post: operations["send_form"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/meetings/forms/{form_id}/tasks/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry failed HubSpot tasks for a sent pre-read
+         * @description Retries HubSpot task creation only for people whose task previously failed, without sending any email. Partial successes are saved. Raises 502 `task_failed` if any task still fails. 409 `hubspot_writes_off`, `form_not_ready`. 404 `form_not_found`.
+         */
+        post: operations["retry_form_tasks"];
         delete?: never;
         options?: never;
         head?: never;
@@ -821,6 +861,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/team": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Contour team owners for pre-read sending
+         * @description Active HubSpot owners ordered by name, with whether each has an active Contour account and whether they are the signed-in user. Never exposes email addresses. 503 `team_unavailable` if loading fails.
+         */
+        get: operations["list_team"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{key}": {
         parameters: {
             query?: never;
@@ -927,7 +987,7 @@ export interface paths {
         };
         /**
          * The active HubSpot owners, to pick who a person is in HubSpot
-         * @description Each active owner's id and name from our copy of HubSpot, which the sync keeps, sorted by name. An owner with no name in HubSpot shows as 'HubSpot owner 301'. Never an email. At most 500: Contour has a few dozen. Admins only.
+         * @description Each active owner's id and name from our copy of HubSpot, which the sync keeps, sorted by name. An owner with no name in HubSpot shows as 'HubSpot owner 301'. Never an email. At most 500: Contour has a few dozen. Platform admin only.
          */
         get: operations["list_hubspot_owners"];
         put?: never;
@@ -1083,7 +1143,7 @@ export interface paths {
         put?: never;
         /**
          * Write a previewed change to HubSpot
-         * @description Writes once only: applying a finished write returns its result. A Lead Finder send and a call note's activity (a call, field changes, tasks, a note) each go through their own writer. Admins only: each project sends its own writes through its own routes. Needs the write scopes and HUBSPOT_WRITE_ENABLED=true; until then it answers 409 hubspot_write_off.
+         * @description Writes once only: applying a finished write returns its result. A Lead Finder send and a call note's activity (a call, field changes, tasks, a note) each go through their own writer. Platform admin only: each project sends its own writes through its own routes. Needs the write scopes and HUBSPOT_WRITE_ENABLED=true; until then it answers 409 hubspot_write_off.
          */
         post: operations["apply_hubspot_write"];
         delete?: never;
@@ -1504,7 +1564,7 @@ export interface paths {
         put?: never;
         /**
          * Run the test set
-         * @description A short way to start a `testset` run. Returns the run.
+         * @description A short way to start a `testset` run. Returns the run. Platform admin only.
          */
         post: operations["start_test_run"];
         delete?: never;
@@ -1602,7 +1662,7 @@ export interface paths {
         put?: never;
         /**
          * Add a person
-         * @description A new account with a starting password under today's rules (the same rules as create-admin). `apps` is the projects it may use, like ["lead_finder"]. Admins only.
+         * @description A new account with a generated starting password shown once in this answer. Platform admin only.
          */
         post: operations["add_person"];
         delete?: never;
@@ -1624,7 +1684,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Change a person's projects, role or whether they can sign in */
+        /** Change a person's ticks, position, role or whether they can sign in */
         patch: operations["change_person"];
         trace?: never;
     };
@@ -1638,10 +1698,30 @@ export interface paths {
         get?: never;
         /**
          * Set or clear who a person is in HubSpot
-         * @description Links the account to a HubSpot owner by hand, so the calls, tasks and notes this person logs land under that owner in HubSpot. `owner_id` is an active owner from GET /hubspot/owners. The HubSpot sync never changes a link set by hand. `{"owner_id": null}` clears the link, and the next sync may then match the person by email again. Admins only.
+         * @description Links the account to a HubSpot owner by hand, so the calls, tasks and notes this person logs land under that owner in HubSpot. `owner_id` is an active owner from GET /hubspot/owners. The HubSpot sync never changes a link set by hand. `{"owner_id": null}` clears the link, and the next sync may then match the person by email again. Platform admin only.
          */
         put: operations["set_hubspot_owner"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/people/{user_id}/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset a person's password and sign them out
+         * @description Generates a new starting password, ends all open sessions for that person, and returns the password once. Platform admin only.
+         */
+        post: operations["reset_person_password"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1837,7 +1917,7 @@ export interface paths {
         get: operations["get_lead_finder_round"];
         /**
          * Save the city schedules as one plan, and the round's budget
-         * @description Changes the four city schedules in one transaction. Picked cities are on, one day apart in the order Melbourne, Adelaide, Perth, Sydney, from the first day (`weekday`, 0 Monday to 6 Sunday) at `at` (24-hour, Melbourne time). The others are off. A round must end before the next starts, so `every` in days is at least the number of cities. `budget_usd` is the most a whole round may spend (the setting `lead_finder_round_cap_usd`). Saving the same times again keeps each schedule's next run. Switching it on spends money, so it needs the Admin role.
+         * @description Changes the four city schedules in one transaction. Picked cities are on, one day apart in the order Melbourne, Adelaide, Perth, Sydney, from the first day (`weekday`, 0 Monday to 6 Sunday) at `at` (24-hour, Melbourne time). The others are off. A round must end before the next starts, so `every` in days is at least the number of cities. `budget_usd` is the most a whole round may spend (the setting `lead_finder_round_cap_usd`). Saving the same times again keeps each schedule's next run. Switching it on spends money, so it needs Platform admin.
          */
         put: operations["put_lead_finder_round"];
         post?: never;
@@ -1996,7 +2076,7 @@ export interface paths {
         put?: never;
         /**
          * Lift a pause
-         * @description Reading may go on now, before the 24 hours are up. Admins only.
+         * @description Reading may go on now, before the 24 hours are up. Platform admin only.
          */
         post: operations["resume_source"];
         delete?: never;
@@ -2613,6 +2693,13 @@ export interface components {
              * @enum {string}
              */
             type: "cap_reached";
+        };
+        /** ChangePasswordIn */
+        ChangePasswordIn: {
+            /** Current */
+            current: string;
+            /** New */
+            new: string;
         };
         /**
          * Cities
@@ -3917,7 +4004,7 @@ export interface components {
         };
         /**
          * FormEmailPreview
-         * @description The email as it would arrive, and the people it would go to.
+         * @description The email and HubSpot task as they would arrive, and who would get them.
          */
         FormEmailPreview: {
             /**
@@ -3934,6 +4021,17 @@ export interface components {
             people: components["schemas"]["FormPerson"][];
             /** Subject */
             subject: string;
+            /**
+             * Task Due
+             * Format: date
+             * @description Due date (Melbourne working day) for HubSpot tasks
+             */
+            task_due: string;
+            /**
+             * Task Subject
+             * @description Subject line of the HubSpot task created per owner
+             */
+            task_subject: string;
             /**
              * Text
              * @description The plain text version
@@ -3995,60 +4093,126 @@ export interface components {
          */
         FormPerson: {
             /**
+             * Address
+             * @description Their Contour email, if emailed or added
+             */
+            address: string | null;
+            /**
              * Allowed
-             * @description False for an address that isn't Contour's: it can't
+             * @description False for an outside address that cannot receive it
              */
             allowed: boolean;
-            /** Email */
-            email: string;
+            /**
+             * Already
+             * @description When they already got this pre-read
+             */
+            already: string | null;
+            /**
+             * Email
+             * @description True if sending emails them
+             * @default false
+             */
+            email: boolean;
             /**
              * Name
-             * @description Their name, when they have an account here
+             * @description Their name, when known
              */
             name: string | null;
+            /** Owner Id */
+            owner_id: string | null;
+            /**
+             * Task
+             * @description True if sending creates a HubSpot task for them
+             * @default false
+             */
+            task: boolean;
             /**
              * Ticked
-             * @description Ticked to get it. Never ticked when it isn't allowed
+             * @description Ticked to get it. Never ticked when disallowed or already sent
              */
             ticked: boolean;
             /**
              * Why
-             * @description Like 'on the meeting', or 'added by you'
+             * @description Like 'on the meeting', 'picked by you', or 'added by you'
              */
             why: string;
         };
         /**
          * FormPreviewIn
-         * @description The addresses the rep added, to see the email with them. Empty: only the people on the
-         *     meeting.
+         * @description Who the rep picked (or null on first open to start from the people on the meeting).
          */
         FormPreviewIn: {
             /**
-             * To
-             * @description Addresses the rep added, each checked against Contour's own domains
+             * Email Them
+             * @description True to also email selected HubSpot owners who have a Contour account
+             * @default false
              */
-            to?: string[];
+            email_them: boolean;
+            /**
+             * Emails
+             * @description Extra email addresses added by hand, checked against Contour's own domains
+             */
+            emails?: string[];
+            /**
+             * Owner Ids
+             * @description Selected HubSpot owner ids, or null to start from the meeting attendees
+             */
+            owner_ids?: string[] | null;
         };
         /** FormRecipient */
         FormRecipient: {
             /**
-             * Email
-             * @description A Contour address
+             * Address
+             * @description A Contour email address, if emailed
              */
-            email: string;
+            address: string | null;
+            /**
+             * At
+             * @description When this person got it
+             */
+            at: string | null;
+            /**
+             * Email
+             * @description True when an email was sent to them
+             * @default false
+             */
+            email: boolean;
             /**
              * Name
-             * @description Their name, when they have an account here
+             * @description Their name, when known
              */
             name: string | null;
+            /**
+             * Owner Id
+             * @description The HubSpot owner id, if linked to an owner
+             */
+            owner_id: string | null;
+            /**
+             * Task
+             * @description HubSpot task outcome: none, sent, waiting, or failed
+             * @default none
+             * @enum {string}
+             */
+            task: "none" | "sent" | "waiting" | "failed";
         };
         /** FormSendIn */
         FormSendIn: {
             /**
-             * To
-             * @description Who gets it: Contour addresses only. One that isn't refuses the whole send
+             * Email Them
+             * @description True to also email selected HubSpot owners who have a Contour account
+             * @default false
              */
-            to: string[];
+            email_them: boolean;
+            /**
+             * Emails
+             * @description Extra Contour email addresses added by hand (always emailed)
+             */
+            emails?: string[];
+            /**
+             * Owner Ids
+             * @description Selected HubSpot owner ids for HubSpot tasks (and email when email_them)
+             */
+            owner_ids?: string[];
         };
         /** FormSummaries */
         FormSummaries: {
@@ -5189,6 +5353,17 @@ export interface components {
         };
         /** LoginOut */
         LoginOut: {
+            /**
+             * First Sign In
+             * @description True on a person's first sign-in before changing their password
+             * @default false
+             */
+            first_sign_in: boolean;
+            /**
+             * Platform Admin Name
+             * @description The Platform admin's name, for access messages
+             */
+            platform_admin_name: string | null;
             session: components["schemas"]["SessionOut"];
             user: components["schemas"]["UserOut"];
         };
@@ -5287,6 +5462,17 @@ export interface components {
              * @description False: sign-in is off on this backend and nothing needs a session
              */
             auth_required: boolean;
+            /**
+             * First Sign In
+             * @description True on a person's first sign-in before changing their password
+             * @default false
+             */
+            first_sign_in: boolean;
+            /**
+             * Platform Admin Name
+             * @description The Platform admin's name, for Ask <name> access messages
+             */
+            platform_admin_name: string | null;
             session: components["schemas"]["SessionOut"] | null;
             user: components["schemas"]["UserOut"] | null;
         };
@@ -5474,6 +5660,15 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Sent At */
+            sent_at: string | null;
+            /**
+             * Sent Count
+             * @default 0
+             */
+            sent_count: number;
+            /** Sent Names */
+            sent_names: string[];
             /**
              * Status
              * @description drafting (being written), draft (ready to check), sent, or failed
@@ -6012,6 +6207,59 @@ export interface components {
             /** Points */
             points: number;
         };
+        /** PersonCreatedOut */
+        PersonCreatedOut: {
+            /**
+             * Active
+             * @description false: this account can't sign in
+             */
+            active: boolean;
+            /**
+             * Apps
+             * @description The projects this person may use, filled from features
+             */
+            apps: string[];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Email */
+            email: string;
+            /**
+             * Features
+             * @description The feature ticks enabled on this account
+             */
+            features: string[];
+            /** @description Who this person is in HubSpot: the calls they log land under this owner. null: no link, so HubSpot shows their calls as unassigned */
+            hubspot_owner: components["schemas"]["HubSpotOwnerLink"] | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Last Signed In At */
+            last_signed_in_at: string | null;
+            /** Name */
+            name: string;
+            /**
+             * Position
+             * @description Optional job title, like Sales Director
+             */
+            position: string | null;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "platform_admin" | "admin" | "staff" | "viewer";
+            /**
+             * Starting Password
+             * @description The generated starting password, returned once here and never kept.
+             */
+            starting_password: string;
+            /** Username */
+            username: string | null;
+        };
         /** PersonHit */
         PersonHit: {
             /** Company Key */
@@ -6028,27 +6276,22 @@ export interface components {
         /** PersonIn */
         PersonIn: {
             /**
-             * Apps
-             * @example [
-             *       "lead_finder"
-             *     ]
-             */
-            apps?: string[];
-            /**
              * Email
              * @example marcus@contourinteriors.com.au
              */
             email: string;
             /**
+             * Features
+             * @description Ticks for this account. Left out: the role's starting ticks.
+             */
+            features?: ("lead_finder.start_run" | "lead_finder.results" | "lead_finder.rules" | "lead_finder.send_to_hubspot" | "companies.companies" | "companies.call_logs" | "companies.meetings" | "companies.call_prep")[] | null;
+            /**
              * Name
              * @example Marcus Lee
              */
             name: string;
-            /**
-             * Password
-             * @description The starting password, under today's rules. Never shown again.
-             */
-            password: string;
+            /** Position */
+            position?: string | null;
             /**
              * Role
              * @default staff
@@ -6067,7 +6310,7 @@ export interface components {
             active: boolean;
             /**
              * Apps
-             * @description The projects this person may use. An Admin may use all
+             * @description The projects this person may use, filled from features
              */
             apps: string[];
             /**
@@ -6077,6 +6320,11 @@ export interface components {
             created_at: string;
             /** Email */
             email: string;
+            /**
+             * Features
+             * @description The feature ticks enabled on this account
+             */
+            features: string[];
             /** @description Who this person is in HubSpot: the calls they log land under this owner. null: no link, so HubSpot shows their calls as unassigned */
             hubspot_owner: components["schemas"]["HubSpotOwnerLink"] | null;
             /**
@@ -6089,10 +6337,15 @@ export interface components {
             /** Name */
             name: string;
             /**
+             * Position
+             * @description Optional job title, like Sales Director
+             */
+            position: string | null;
+            /**
              * Role
              * @enum {string}
              */
-            role: "admin" | "staff" | "viewer";
+            role: "platform_admin" | "admin" | "staff" | "viewer";
             /** Username */
             username: string | null;
         };
@@ -6103,8 +6356,10 @@ export interface components {
         PersonPatch: {
             /** Active */
             active?: boolean | null;
-            /** Apps */
-            apps?: string[] | null;
+            /** Features */
+            features?: ("lead_finder.start_run" | "lead_finder.results" | "lead_finder.rules" | "lead_finder.send_to_hubspot" | "companies.companies" | "companies.call_logs" | "companies.meetings" | "companies.call_prep")[] | null;
+            /** Position */
+            position?: string | null;
             /** Role */
             role?: ("admin" | "staff" | "viewer") | null;
         };
@@ -6774,6 +7029,14 @@ export interface components {
              * @example cultureamp.com
              */
             website?: string | null;
+        };
+        /** ResetPasswordOut */
+        ResetPasswordOut: {
+            /**
+             * Starting Password
+             * @description The new generated password, returned once here and never kept.
+             */
+            starting_password: string;
         };
         /** ReviewItem */
         ReviewItem: {
@@ -8956,6 +9219,32 @@ export interface components {
             /** Note */
             note: string;
         };
+        /**
+         * TeamMember
+         * @description One active HubSpot owner selectable on the pre-read send list (never exposes emails).
+         */
+        TeamMember: {
+            /**
+             * Has Account
+             * @description True when linked to an active Contour account
+             */
+            has_account: boolean;
+            /**
+             * Is Me
+             * @description True when linked to the signed-in user
+             */
+            is_me: boolean;
+            /**
+             * Name
+             * @description Display name from HubSpot, never an email
+             */
+            name: string;
+            /**
+             * Owner Id
+             * @description Active HubSpot owner id
+             */
+            owner_id: string;
+        };
         /** TeamToneIn */
         TeamToneIn: {
             /**
@@ -9291,11 +9580,16 @@ export interface components {
         UserOut: {
             /**
              * Apps
-             * @description The projects this person may use, like lead_finder. An Admin may use all.
+             * @description The projects this person may use, filled from features
              */
             apps: string[];
             /** Email */
             email: string;
+            /**
+             * Features
+             * @description The ticks this account may use across Lead Finder and Relationships
+             */
+            features: string[];
             /**
              * Id
              * Format: uuid
@@ -9307,11 +9601,16 @@ export interface components {
              */
             name: string;
             /**
+             * Position
+             * @description Optional job title, like Sales Director
+             */
+            position: string | null;
+            /**
              * Role
-             * @description admin, staff or viewer
+             * @description platform_admin, admin, staff or viewer
              * @enum {string}
              */
-            role: "admin" | "staff" | "viewer";
+            role: "platform_admin" | "admin" | "staff" | "viewer";
             /**
              * Username
              * @description The second way to sign in, if the account has one
@@ -10360,6 +10659,127 @@ export interface operations {
                 };
             };
             /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    change_own_password: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangePasswordIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description `wrong_password` when current is wrong, or password rule errors on body.new */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description `too_many_attempts` after too many wrong current tries */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -13011,6 +13431,128 @@ export interface operations {
             };
         };
     };
+    retry_form_tasks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The pre-read's id */
+                form_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeetingFormOut"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     meeting_summary: {
         parameters: {
             query?: never;
@@ -15232,6 +15774,125 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CompanySearch"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_team: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamMember"][];
                 };
             };
             /** @description The request can't be understood */
@@ -20516,7 +21177,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PersonOut"];
+                    "application/json": components["schemas"]["PersonCreatedOut"];
                 };
             };
             /** @description The request can't be understood */
@@ -20767,6 +21428,127 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PersonOut"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    reset_person_password: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResetPasswordOut"];
                 };
             };
             /** @description The request can't be understood */

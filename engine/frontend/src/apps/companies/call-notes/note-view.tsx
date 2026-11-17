@@ -72,13 +72,17 @@ export interface NoteViewProps {
   /** The company's record, for "Who was the call with?". Undefined while it loads. */
   company: CompanyDetail | undefined
   companyFailed: boolean
+  /** True when the account has Call logs without the Companies tick. */
+  peopleHidden?: boolean
   /** The call prep the panel has open, or null. */
   prepId: string | null
   options: CallNoteOptions
   onPhone: boolean
+  /** Accessible name and tooltip for the back arrow (defaults to "Back to the script"). */
+  backLabel?: string
   /**
-   * Back to the script. A host with no script (Call logs' Log call, T3-6) leaves it out: there is
-   * no back arrow, and Esc or the panel's own Close shuts it.
+   * Back to the previous screen (the script or the Log call company list). Left out when opened
+   * directly on a company from History.
    */
   onBack?: () => void
   /** Saved: the panel closes. */
@@ -100,9 +104,11 @@ export function NoteView({
   person,
   company,
   companyFailed,
+  peopleHidden = false,
   prepId,
   options,
   onPhone,
+  backLabel,
   onBack,
   onSaved,
 }: NoteViewProps) {
@@ -240,6 +246,7 @@ export function NoteView({
     <WhoWith
       company={company}
       failed={companyFailed}
+      peopleHidden={peopleHidden}
       value={draft.contactId}
       kept={
         draft.contactId !== null && draft.contactName !== null
@@ -282,15 +289,19 @@ export function NoteView({
                 variant="ghost"
                 size="icon"
                 className="-mt-1.5 -ml-2"
-                aria-label={BACK_TO_SCRIPT}
-                aria-keyshortcuts="Escape"
+                aria-label={backLabel ?? BACK_TO_SCRIPT}
+                aria-keyshortcuts={backLabel ? undefined : 'Escape'}
                 onClick={onBack}
               >
                 <ArrowLeft aria-hidden="true" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>
-              {BACK_TO_SCRIPT} <Kbd>Esc</Kbd>
+              {backLabel ? backLabel : (
+                <>
+                  {BACK_TO_SCRIPT} <Kbd>Esc</Kbd>
+                </>
+              )}
             </TooltipContent>
           </Tooltip>
         ) : null}

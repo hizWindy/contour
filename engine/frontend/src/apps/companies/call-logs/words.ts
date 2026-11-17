@@ -467,6 +467,13 @@ export function loggedWhen(at: string | null, today: string = melbourneDate()): 
     : `Logged ${formatDateTime(at)}`
 }
 
-// --- Log call (the picker's own words are in ../words.ts) ------------------------------------
+// --- Log call (choice 15; the picker's shared words are in ../words.ts) ---------------------
 
 export const WHICH_COMPANY = 'Which company was the call with?'
+export const BACK_TO_COMPANIES = 'Back to companies'
+export const COMPANIES_LOAD_FAILED = "The companies couldn't be loaded."
+export const NO_COMPANIES_YET = 'No companies yet.'
+export const LOADING_COMPANIES = 'Loading companies.'
+export const LOADING_MORE_COMPANIES = 'Loading more companies.'
+export const SHOW_MORE_COMPANIES = 'Show more'
+export const LOG_CALL_KEYS = 'Arrow keys move, Enter picks, Esc closes.'

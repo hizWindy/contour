@@ -61,7 +61,7 @@ function upcoming(): MeetingItem[] {
       meeting: { company_id: '103', title: 'Fit-out budget', starts_at: '2026-11-19T00:00:00Z' },
       company_name: 'Sample Freight Pty Ltd',
       group: 'tomorrow',
-      form: { id: 'f3', status: 'draft' },
+      form: { id: 'f3', status: 'draft', sent_at: null, sent_count: 0, sent_names: [] },
     }),
     item('m4', {
       meeting: {
@@ -71,7 +71,7 @@ function upcoming(): MeetingItem[] {
       },
       company_name: 'Sample Health Pty Ltd',
       group: 'this_week',
-      form: { id: 'f4', status: 'sent' },
+      form: { id: 'f4', status: 'sent', sent_at: null, sent_count: 0, sent_names: [] },
     }),
     item('m5', {
       meeting: { company_id: '105', title: 'Site visit', starts_at: '2026-11-24T04:00:00Z' },
@@ -444,7 +444,7 @@ describe("a company's record", () => {
     const next = item('m3', {
       meeting: { title: 'Fit-out budget', starts_at: '2026-11-19T00:00:00Z' },
       group: 'tomorrow',
-      form: { id: 'f3', status: 'draft' },
+      form: { id: 'f3', status: 'draft', sent_at: null, sent_count: 0, sent_names: [] },
       owner_name: 'Mia Sample',
     })
     const later = item('m5', {

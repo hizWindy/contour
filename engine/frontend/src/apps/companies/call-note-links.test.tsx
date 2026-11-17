@@ -45,7 +45,7 @@ interface Backend {
   /** The counts, or 'off' for the 409 the server answers while call notes are off. */
   summary?: CallNoteSummary | 'off'
   /** Who is signed in. Left out: sign-in is off, so everyone sees every project. */
-  user?: { role: 'admin' | 'staff'; apps: string[] }
+  user?: { role: 'admin' | 'staff' | 'viewer'; apps: string[]; features?: string[] }
   /** The voice tool the options name (PLAN-V18 T3-4). Left out: the setting's default. */
   voiceTool?: CallNoteOptions['voice_tool']
 }
@@ -75,6 +75,8 @@ function stubBackend({
                     email: 'jo@example.test',
                     username: 'jo',
                     name: 'Jo Sample',
+                    position: null,
+                    features: user.features ?? [],
                     ...user,
                   },
                   session: null,
@@ -102,6 +104,9 @@ function stubBackend({
         )
       }
       if (path === NOTES) return Promise.resolve(Response.json({ total: 0, items: [] }))
+      if (path === '/api/v1/companies') {
+        return Promise.resolve(Response.json({ items: [], total: 0, leads_shown: false }))
+      }
       return Promise.resolve(Response.json({ title: 'Not found', status: 404 }, { status: 404 }))
     }),
   )

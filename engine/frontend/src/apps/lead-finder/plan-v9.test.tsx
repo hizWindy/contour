@@ -284,10 +284,21 @@ describe('the review page (PLAN-V9 C3)', () => {
 const ADMIN = {
   id: 'aaaaaaaa-2222-3333-4444-555555555555',
   name: 'Al Khair',
+  position: null,
   email: 'al@example.test',
   username: 'alkhair',
   role: 'admin',
   apps: [],
+  features: [
+    'lead_finder.start_run',
+    'lead_finder.results',
+    'lead_finder.rules',
+    'lead_finder.send_to_hubspot',
+    'companies.companies',
+    'companies.call_logs',
+    'companies.meetings',
+    'companies.call_prep',
+  ],
   active: true,
   created_at: '2026-11-05T00:00:00Z',
   last_signed_in_at: '2026-11-08T00:00:00Z',
@@ -300,6 +311,7 @@ const MARCUS = {
   username: null,
   role: 'staff',
   apps: [],
+  features: [],
   last_signed_in_at: null,
 }
 
@@ -308,7 +320,16 @@ describe('the People tab (PLAN-V9 E1)', () => {
     const calls = mockApi({
       '/api/v1/auth/me': { auth_required: false, user: null, session: null },
       'GET /api/v1/people': [ADMIN, MARCUS],
-      [`PATCH /api/v1/people/${MARCUS.id}`]: { ...MARCUS, apps: ['lead_finder'] },
+      [`PATCH /api/v1/people/${MARCUS.id}`]: {
+        ...MARCUS,
+        apps: ['lead_finder'],
+        features: [
+          'lead_finder.start_run',
+          'lead_finder.results',
+          'lead_finder.rules',
+          'lead_finder.send_to_hubspot',
+        ],
+      },
     })
     const { user } = renderWithProviders(<AdminPeopleTab />)
     await screen.findByRole('table', { name: 'People' })
@@ -324,7 +345,14 @@ describe('the People tab (PLAN-V9 E1)', () => {
       within(await screen.findByRole('dialog')).getByRole('checkbox', { name: /Lead Finder/ }),
     )
     await waitFor(() => {
-      expect(calls.find((call) => call.method === 'PATCH')?.body).toEqual({ apps: ['lead_finder'] })
+      expect(calls.find((call) => call.method === 'PATCH')?.body).toEqual({
+        features: [
+          'lead_finder.start_run',
+          'lead_finder.results',
+          'lead_finder.rules',
+          'lead_finder.send_to_hubspot',
+        ],
+      })
     })
   })
 
@@ -349,16 +377,25 @@ describe('the People tab (PLAN-V9 E1)', () => {
     )
     await waitFor(() => {
       expect(calls.find((call) => call.method === 'PATCH')?.body).toEqual({
-        apps: ['lead_finder', 'companies'],
+        features: [
+          'lead_finder.start_run',
+          'lead_finder.results',
+          'lead_finder.rules',
+          'lead_finder.send_to_hubspot',
+          'companies.companies',
+          'companies.call_logs',
+          'companies.meetings',
+          'companies.call_prep',
+        ],
       })
     })
   })
 
-  it('adds a person with the tick and a starting password', async () => {
+  it('adds a person with the tick', async () => {
     const calls = mockApi({
       '/api/v1/auth/me': { auth_required: false, user: null, session: null },
       'GET /api/v1/people': [ADMIN],
-      'POST /api/v1/people': { ...MARCUS, apps: ['lead_finder'] },
+      'POST /api/v1/people': { ...MARCUS, apps: ['lead_finder'], starting_password: 'one-two-three-45' },
     })
     const { user } = renderWithProviders(<AdminPeopleTab />)
     await screen.findByRole('table', { name: 'People' })
@@ -366,15 +403,18 @@ describe('the People tab (PLAN-V9 E1)', () => {
     await screen.findByRole('dialog')
     await user.type(screen.getByLabelText('Name'), 'Marcus Lee')
     await user.type(screen.getByLabelText('Email'), 'marcus@example.test')
-    await user.type(screen.getByLabelText('Starting password'), 'tulip harbour bicycle moonlight')
     await user.click(screen.getByRole('button', { name: 'Add the person' }))
     await waitFor(() => {
       expect(calls.find((call) => call.method === 'POST')?.body).toEqual({
         name: 'Marcus Lee',
         email: 'marcus@example.test',
         role: 'staff',
-        apps: ['lead_finder'],
-        password: 'tulip harbour bicycle moonlight',
+        features: [
+          'lead_finder.start_run',
+          'lead_finder.results',
+          'lead_finder.rules',
+          'lead_finder.send_to_hubspot',
+        ],
       })
     })
   })
@@ -383,7 +423,7 @@ describe('the People tab (PLAN-V9 E1)', () => {
 describe('the menu for a person without the tick (PLAN-V9 E1)', () => {
   const signedIn = (role: 'admin' | 'staff', apps: string[]): SignIn => ({
     state: 'signed_in',
-    user: { id: 'x', email: 'x@example.test', username: null, name: 'X', role, apps },
+    user: { id: 'x', email: 'x@example.test', username: null, name: 'X', position: null, role, apps, features: [] },
   })
 
   it('hides the Lead Finder from staff without the tick only', () => {

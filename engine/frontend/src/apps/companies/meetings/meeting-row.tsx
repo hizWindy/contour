@@ -153,8 +153,8 @@ export function MeetingRow({
           </p>
         ) : null}
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 sm:w-72 sm:flex-nowrap">
-        <StatusLine status={status} />
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 sm:w-80 sm:shrink-0 sm:flex-nowrap">
+        <StatusLine status={status} form={item.form} />
         <RowAction
           item={item}
           status={status}

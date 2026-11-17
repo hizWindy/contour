@@ -83,7 +83,7 @@ function UpcomingRow({ item, today }: { item: MeetingItem; today: string }) {
         ) : null}
       </div>
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-        <StatusLine status={status} />
+        <StatusLine status={status} form={item.form} />
         <RowAction
           item={item}
           status={status}

@@ -28,7 +28,12 @@ export type SignedInUser = Schemas['UserOut']
 export type SignIn =
   /** Sign-in is off on this backend: everyone may use it, and there is nothing to sign out of. */
   | { state: 'off' }
-  | { state: 'signed_in'; user: SignedInUser }
+  | {
+      state: 'signed_in'
+      user: SignedInUser
+      platformAdminName?: string | null
+      firstSignIn?: boolean
+    }
   /** No session. `reason` and `detail` say why one ended, when one did. */
   | { state: 'signed_out'; reason: string | null; detail: string | null }
 
@@ -55,7 +60,12 @@ export function meQueryOptions() {
         const me = unwrap(await api.GET('/auth/me', { signal }))
         if (!me.auth_required) return { state: 'off' }
         return me.user
-          ? { state: 'signed_in', user: me.user }
+          ? {
+              state: 'signed_in',
+              user: me.user,
+              ...(me.platform_admin_name ? { platformAdminName: me.platform_admin_name } : {}),
+              ...(me.first_sign_in ? { firstSignIn: me.first_sign_in } : {}),
+            }
           : { state: 'signed_out', reason: null, detail: null }
       } catch (error) {
         if (isSignInNeeded(error)) return signedOutBy(error)
@@ -119,9 +129,15 @@ function runSignOutSteps(userId: string): void {
 export function useLogin() {
   const queryClient = useQueryClient()
   return useMutation<SignedInUser, ApiProblem, LoginBody>({
-    mutationFn: async (body) => unwrap(await api.POST('/auth/login', { body })).user,
-    onSuccess: (user) => {
-      startOver(queryClient, { state: 'signed_in', user })
+    mutationFn: async (body) => {
+      const answer = unwrap(await api.POST('/auth/login', { body }))
+      startOver(queryClient, {
+        state: 'signed_in',
+        user: answer.user,
+        ...(answer.platform_admin_name ? { platformAdminName: answer.platform_admin_name } : {}),
+        ...(answer.first_sign_in ? { firstSignIn: answer.first_sign_in } : {}),
+      })
+      return answer.user
     },
   })
 }

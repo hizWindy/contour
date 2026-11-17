@@ -1,32 +1,18 @@
 /**
- * "Check and send" (PLAN-V17 "The screens", part 6; T3-11): an Alert Dialog with the email as it
- * will arrive and who gets it, then one Navy button, "Send to 4 people". The pre-read leaves
- * Contour here, so this is a real confirmation (DESIGN.md "A real confirmation"), built as
- * Activity's batch send is: it asks for a fresh preview each time it opens.
+ * "Check and send" and "Send to more people" (PLAN-V17 T3-11; PLAN-V19 T2-3 to T2-5):
+ * an Alert Dialog showing the HubSpot task preview, the email preview, the team list from
+ * `GET /companies/team`, the "Also email them" tick (off by default), and "Add someone" for
+ * extra Contour addresses.
  *
- * - **The email:** the subject and the plain text part, in a quiet box that scrolls, by keyboard
- *   too (it takes the focus). The server's HTML never goes into the page.
- * - **The people,** each with a tick and why they are there, in the server's words. The Contour
- *   people on the meeting come ticked. "Add someone" takes an address, or a pasted list ("Jo
- *   Sample <jo@x.com>; Mia <mia@x.com>", DESIGN.md "Fields forgive"), and asks for the preview
- *   again with it, so the server says whether it is Contour's. One that isn't can't be ticked, and
- *   says why beside it, before anything is sent. An address the rep added can be taken out again.
- * - **The meeting's notes:** one line, in the server's words, when Send also adds the pre-read to
- *   the meeting's notes in HubSpot.
- * - **A refused send** keeps the dialog open and says why in the server's words, under the people
- *   (scrolled into view): an address that isn't Contour's is named there, nothing is sent, and the
- *   preview is asked again, so its row says so too. With no email set up, it says the pre-read
- *   stays here.
- * - **While it sends** nothing can stop it or change who gets it: Cancel, Esc, the ticks, Add and
- *   the X buttons wait until the server answers.
- * - **Sent:** the dialog closes, the page shows who got it and when, and the focus goes there.
- * - **The title and the buttons stay put;** only the middle (the email and the people) scrolls, so
- *   Send is always in view, on a laptop and on a phone, where the dialog keeps clear of the safe
- *   area at the bottom. The email box scrolls on its own, and hands the wheel on at its end.
- *
- * It waits for a blank the rep has just left to be saved before it asks for the preview, so the
- * email it shows holds it. The people the rep added, and their ticks, stay while the page is open.
- * It rises 8px as it fades in, and fades out in 150ms, as Activity's does.
+ * - On open, asks for a preview (`owner_ids: null`) so the meeting's Contour HubSpot owners come
+ *   ticked. Anyone who already received this pre-read shows greyed with "Got it 17 Nov".
+ * - Ticking team members, toggling "Also email them" or adding an email updates the preview from
+ *   the server so each row shows what that person gets in the server's words ("HubSpot task",
+ *   "Email" or both) and why.
+ * - If the team list doesn't load (`team_unavailable`), "Add someone" and email sending still work
+ *   and Try again reloads the team list.
+ * - If HubSpot writing is off and nobody would be emailed (`hubspot_writes_off`), the alert tells
+ *   the rep to tick "Also email them" to send by email instead.
  */
 import { CalendarCheck, CircleAlert, Copy, Hourglass, Send, X } from 'lucide-react'
 import { useEffect, useEffectEvent, useId, useRef, useState, type FormEvent } from 'react'
@@ -36,8 +22,15 @@ import {
   useFormEditing,
   useMeetingFormPreview,
   useSendMeetingForm,
+  useTeam,
 } from '@/api/hooks/meetings'
-import type { FormEmailPreview, FormPerson, MeetingFormOut } from '@/api/types'
+import type {
+  FormEmailPreview,
+  FormPerson,
+  FormRecipient,
+  MeetingFormOut,
+  TeamMember,
+} from '@/api/types'
 import { ErrorState } from '@/components/error-state'
 import { Pending } from '@/components/skeletons'
 import {
@@ -49,29 +42,49 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
+import { formatDate } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import { addressKey, isTicked, MOST_PEOPLE, readAddresses, sendTo } from './rules'
+import {
+  addressKey,
+  countSendRecipients,
+  isTicked,
+  MOST_PEOPLE,
+  personKey,
+  readAddresses,
+  sendEmailAddresses,
+} from './rules'
 import {
   ADD,
   ADD_SOMEONE,
   ADDRESS_PLACEHOLDER,
   ADDRESS_UNREADABLE,
+  ALREADY_GOT_IT,
   ALREADY_LISTED,
+  ALSO_EMAIL_HINT,
+  ALSO_EMAIL_THEM,
   CANCEL,
   CHECKING,
+  COPIED,
+  COPY_PRE_READ,
+  deliveryWords,
+  DUE_LABEL,
   EMAIL_BOX,
   GETTING_READY,
+  gotItWords,
   NOBODY_LISTED,
   NOBODY_TICKED,
+  NO_CONTOUR_ACCOUNT,
   NOT_CHECKED,
   NOT_CONTOUR,
-  ONLY_CONTOUR,
+  NOT_COPIED,
   OVER_THE_MOST,
   PREVIEW_FAILED,
+  recipientLabel,
   removeWords,
   SAVING_FIRST,
   SEND,
@@ -80,15 +93,17 @@ import {
   SENDING,
   sendProblemWords,
   sendToWords,
-  COPY_PRE_READ,
-  COPIED,
-  NOT_COPIED,
   SUBJECT,
+  TASK_BOX,
+  TEAM_UNAVAILABLE,
   THE_EMAIL,
+  THE_TASK,
   TOO_MANY,
   TRY_AGAIN,
+  WHO_GETS_HINT,
   WHO_GETS_IT,
   whyLine,
+  YOU_TAG,
 } from './words'
 
 export interface SendDialogProps {
@@ -99,14 +114,21 @@ export interface SendDialogProps {
   onSent: () => void
 }
 
-/** The still shape of the email and two people, at their size, while the preview comes. */
+/** The still shape of the task, email and people while the preview comes. */
 function PreviewPending({ label }: { label: string }) {
   return (
     <Pending label={label}>
       <div className="flex flex-col gap-6">
         <div className="flex flex-col gap-2">
+          <Skeleton className="h-5 w-32" />
+          <div className="flex flex-col gap-2 rounded-md border p-3">
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-4 w-1/3" />
+          </div>
+        </div>
+        <div className="flex flex-col gap-2">
           <Skeleton className="h-5 w-24" />
-          <div className="flex h-48 flex-col gap-2 rounded-md border p-3">
+          <div className="flex h-40 flex-col gap-2 rounded-md border p-3">
             <Skeleton className="h-4 w-2/3" />
             <Skeleton className="h-4 w-full" />
             <Skeleton className="h-4 w-11/12" />
@@ -120,6 +142,32 @@ function PreviewPending({ label }: { label: string }) {
         </div>
       </div>
     </Pending>
+  )
+}
+
+/** The HubSpot task subject and due day as they will appear for picked team members. */
+function TaskBox({ preview }: { preview: FormEmailPreview }) {
+  const titleId = useId()
+  return (
+    <section aria-labelledby={titleId} className="flex flex-col gap-2">
+      <h3 id={titleId} className="text-ui font-semibold text-foreground">
+        {THE_TASK}
+      </h3>
+      <div
+        aria-label={TASK_BOX}
+        data-slot="task-box"
+        className="flex flex-col gap-1 rounded-md border bg-background p-3 text-ui text-foreground"
+      >
+        <p className="break-words">
+          <span className="text-muted-foreground">{SUBJECT} </span>
+          <span className="font-semibold">{preview.task_subject}</span>
+        </p>
+        <p className="text-caption text-muted-foreground tabular-nums">
+          <span>{DUE_LABEL} </span>
+          <span className="text-foreground">{formatDate(preview.task_due)}</span>
+        </p>
+      </div>
+    </section>
   )
 }
 
@@ -150,7 +198,92 @@ function EmailBox({ preview }: { preview: FormEmailPreview }) {
   )
 }
 
-function PersonRow({
+/** One HubSpot owner from the team list (with "You" on the signed-in rep, and "Got it" when sent). */
+function TeamMemberRow({
+  member,
+  ticked,
+  prior,
+  previewPerson,
+  emailThem,
+  locked,
+  onTick,
+}: {
+  member: TeamMember
+  ticked: boolean
+  prior: FormRecipient | undefined
+  previewPerson: FormPerson | undefined
+  emailThem: boolean
+  locked: boolean
+  onTick: (ticked: boolean) => void
+}) {
+  const boxId = useId()
+  const noteId = useId()
+  const alreadyAt = prior?.at ?? previewPerson?.already ?? null
+  const alreadySent = alreadyAt !== null
+
+  let note: string | null = null
+  if (alreadySent) {
+    const how = prior ? deliveryWords({ task: prior.task !== 'none', email: prior.email }) : null
+    note = [gotItWords(alreadyAt), how].filter(Boolean).join(' · ')
+  } else if (ticked) {
+    const delivery = previewPerson
+      ? deliveryWords(previewPerson)
+      : deliveryWords({ task: true, email: emailThem && member.has_account })
+    const why = previewPerson?.why ? whyLine(previewPerson.why) : null
+    const noAccountNote = !member.has_account && emailThem ? NO_CONTOUR_ACCOUNT : null
+    note = [delivery, previewPerson?.address, why, noAccountNote].filter(Boolean).join(' · ')
+  } else if (!member.has_account) {
+    note = NO_CONTOUR_ACCOUNT
+  }
+
+  return (
+    <li
+      data-slot="send-person"
+      data-already={alreadySent ? 'true' : undefined}
+      className={cn('flex items-start gap-3 px-3 py-2.5', alreadySent && 'bg-muted/35')}
+    >
+      <Checkbox
+        id={boxId}
+        checked={alreadySent ? false : ticked}
+        disabled={alreadySent || locked}
+        aria-describedby={note ? noteId : undefined}
+        className="mt-0.5"
+        onCheckedChange={(value) => {
+          onTick(value === true)
+        }}
+      />
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <label
+            htmlFor={boxId}
+            className={cn(
+              'font-semibold break-words',
+              alreadySent ? 'text-muted-foreground' : 'text-foreground',
+            )}
+          >
+            {member.name}
+          </label>
+          {member.is_me ? (
+            <Badge variant="outline" className="text-caption font-normal">
+              {YOU_TAG}
+            </Badge>
+          ) : null}
+        </div>
+        {note ? (
+          <p id={noteId} className="text-caption break-words text-muted-foreground">
+            {note}
+          </p>
+        ) : null}
+      </div>
+    </li>
+  )
+}
+
+/**
+ * One person added by email (or typed meeting author fallback with no HubSpot owner), or a
+ * prior recipient not shown in the team list.
+ */
+function EmailPersonRow({
   person,
   ticked,
   removable,
@@ -161,7 +294,6 @@ function PersonRow({
   person: FormPerson
   ticked: boolean
   removable: boolean
-  /** The send is on its way: who gets it can't change now. */
   locked: boolean
   onTick: (ticked: boolean) => void
   onRemove: () => void
@@ -170,12 +302,22 @@ function PersonRow({
   const whyId = useId()
   const refusedId = useId()
   const name = person.name?.trim()
+  const address = person.address ?? ''
+  const alreadySent = person.already !== null
+  const delivery = alreadySent ? null : person.allowed ? deliveryWords(person) : null
+  const why = alreadySent ? gotItWords(person.already) : whyLine(person.why)
+  const line = [delivery, name ? address : null, why].filter(Boolean).join(' · ')
+
   return (
-    <li data-slot="send-person" className="flex items-start gap-3 px-3 py-2.5">
+    <li
+      data-slot="send-person"
+      data-already={alreadySent ? 'true' : undefined}
+      className={cn('flex items-start gap-3 px-3 py-2.5', alreadySent && 'bg-muted/35')}
+    >
       <Checkbox
         id={boxId}
-        checked={ticked}
-        disabled={!person.allowed || locked}
+        checked={alreadySent ? false : ticked}
+        disabled={!person.allowed || alreadySent || locked}
         aria-describedby={person.allowed ? whyId : `${whyId} ${refusedId}`}
         className="mt-0.5"
         onCheckedChange={(value) => {
@@ -187,13 +329,13 @@ function PersonRow({
           htmlFor={boxId}
           className={cn(
             'font-semibold break-words',
-            person.allowed ? 'text-foreground' : 'text-muted-foreground',
+            person.allowed && !alreadySent ? 'text-foreground' : 'text-muted-foreground',
           )}
         >
-          {name || person.email}
+          {name || address}
         </label>
         <p id={whyId} className="text-caption break-words text-muted-foreground">
-          {name ? `${person.email} · ${person.why}` : whyLine(person.why)}
+          {line}
         </p>
         {person.allowed ? null : (
           <p id={refusedId} className="flex items-start gap-1.5 text-caption text-destructive-ink">
@@ -209,7 +351,7 @@ function PersonRow({
           size="icon"
           className="-my-1.5"
           disabled={locked}
-          aria-label={removeWords(person.email)}
+          aria-label={removeWords(address)}
           onClick={onRemove}
         >
           <X aria-hidden="true" />
@@ -257,10 +399,7 @@ function CheckingRow({
   )
 }
 
-/**
- * Email isn't set up (PLAN-V18 T2-7): the pre-read stays here, and this copies the email as it
- * would have gone (its subject, then its plain text), so the rep can paste it into their own.
- */
+/** Email isn't set up (409 `email_not_set_up`): copies the email so the rep can paste it. */
 function CopyEmail({ email }: { email: FormEmailPreview }) {
   const [copied, setCopied] = useState<boolean | null>(null)
   return (
@@ -291,10 +430,7 @@ function CopyEmail({ email }: { email: FormEmailPreview }) {
   )
 }
 
-/**
- * What went wrong, in the server's words: its title, then what to do. A detail that starts with
- * the title is said alone (`sendProblemWords`).
- */
+/** What went wrong, in the server's words (never duplicating a title inside detail). */
 function Problem({ error }: { error: unknown }) {
   const { title, detail } = sendProblemWords(error)
   return (
@@ -309,40 +445,76 @@ function Problem({ error }: { error: unknown }) {
 }
 
 export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps) {
+  const team = useTeam({ enabled: open })
   const preview = useMeetingFormPreview(form.id)
   const send = useSendMeetingForm(form.id)
   // A blank the rep has just left is still being saved.
   const saving = useFormEditing(form.id)
+
   const [shown, setShown] = useState<FormEmailPreview | null>(null)
+  // Null until initial open preview tells us which HubSpot owners on the meeting start ticked.
+  const [selectedOwnerIds, setSelectedOwnerIds] = useState<readonly string[] | null>(null)
   const [added, setAdded] = useState<readonly string[]>([])
   const [picks, setPicks] = useState<Readonly<Record<string, boolean>>>({})
+  const [emailThem, setEmailThem] = useState(false)
   const [typed, setTyped] = useState('')
   const [addProblem, setAddProblem] = useState<string | null>(null)
   const [sendProblem, setSendProblem] = useState<ApiProblem | null>(null)
   const [checkProblem, setCheckProblem] = useState<ApiProblem | null>(null)
+
   const asked = useRef(false)
   const sent = useRef(false)
+  const requestSeq = useRef(0)
   const problemRef = useRef<HTMLDivElement>(null)
   const inputId = useId()
   const addNoteId = useId()
   const blockId = useId()
   const peopleId = useId()
+  const emailThemId = useId()
+  const emailHintId = useId()
 
-  const ask = (to: readonly string[]): void => {
-    setCheckProblem(null)
-    preview.mutate(to, {
-      onSuccess: (answer) => {
-        setShown(answer)
-      },
-      onError: (error) => {
-        setCheckProblem(error)
-      },
-    })
+  const sentByOwner = new Map<string, FormRecipient>()
+  const sentByAddr = new Map<string, FormRecipient>()
+  for (const r of form.sent_to) {
+    if (r.owner_id) sentByOwner.set(r.owner_id, r)
+    if (r.address) sentByAddr.set(addressKey(r.address), r)
   }
 
-  // Each time it opens, once the rep's last edit has saved: the email as it is now.
+  const ask = (
+    ownerIds: readonly string[] | null,
+    emails: readonly string[],
+    alsoEmail: boolean,
+  ): void => {
+    const seq = ++requestSeq.current
+    setCheckProblem(null)
+    preview.mutate(
+      { ownerIds, emails, emailThem: alsoEmail },
+      {
+        onSuccess: (answer) => {
+          if (seq !== requestSeq.current) return
+          setShown(answer)
+          if (ownerIds === null) {
+            setSelectedOwnerIds(
+              answer.people
+                .filter((p) => p.owner_id !== null && p.ticked && p.already === null)
+                .map((p) => p.owner_id as string),
+            )
+          }
+        },
+        onError: (error) => {
+          if (seq !== requestSeq.current) return
+          setCheckProblem(error)
+        },
+      },
+    )
+  }
+
+  // Each time it opens, once the rep's last edit has saved: ask the server for who starts ticked
+  // and the task + email preview.
   const askNow = useEffectEvent(() => {
-    ask(added)
+    const unsentAdded = added.filter((addr) => !sentByAddr.has(addr))
+    if (unsentAdded.length !== added.length) setAdded(unsentAdded)
+    ask(null, unsentAdded, emailThem)
   })
   useEffect(() => {
     if (!open) {
@@ -365,20 +537,101 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
     setAddProblem(null)
     setSendProblem(null)
     setCheckProblem(null)
+    if (sent.current) {
+      setSelectedOwnerIds(null)
+      setAdded([])
+      setPicks({})
+      setEmailThem(false)
+    }
     preview.reset()
     onOpenChange(false)
   }
 
-  const people = shown?.people ?? []
-  const listed = new Set(people.map((person) => addressKey(person.email)))
-  // Added, and not answered for yet: being checked, or the check failed.
-  const unlisted = added.filter((address) => !listed.has(address))
-  const to = sendTo(people, picks)
-  const block = to.length === 0 ? NOBODY_TICKED : to.length > MOST_PEOPLE ? OVER_THE_MOST : null
-  // On its way: nothing may stop it or change who gets it until the server answers.
+  const previewPeople = shown?.people ?? []
+  const previewByOwner = new Map<string, FormPerson>()
+  for (const person of previewPeople) {
+    if (person.owner_id) previewByOwner.set(person.owner_id, person)
+  }
+
+  const activeOwnerIds = (selectedOwnerIds ?? []).filter((id) => !sentByOwner.has(id))
+
+  // Team rows: active HubSpot owners from GET /companies/team; if the team list failed or omits a
+  // previously-sent / previewed owner, include them so no one on the pre-read vanishes.
+  const teamMembers: TeamMember[] = [...(team.data ?? [])]
+  const teamOwnerIds = new Set(teamMembers.map((m) => m.owner_id))
+  for (const person of previewPeople) {
+    if (person.owner_id && !teamOwnerIds.has(person.owner_id)) {
+      teamOwnerIds.add(person.owner_id)
+      teamMembers.push({
+        owner_id: person.owner_id,
+        name: recipientLabel(person),
+        has_account: Boolean(person.address),
+        is_me: false,
+      })
+    }
+  }
+  for (const prior of form.sent_to) {
+    if (prior.owner_id && !teamOwnerIds.has(prior.owner_id)) {
+      teamOwnerIds.add(prior.owner_id)
+      teamMembers.push({
+        owner_id: prior.owner_id,
+        name: recipientLabel(prior),
+        has_account: Boolean(prior.address),
+        is_me: false,
+      })
+    }
+  }
+
+  const emailOnlyPeople: FormPerson[] = previewPeople.filter((p) => p.owner_id === null)
+  const listedAddrs = new Set<string>([
+    ...previewPeople.map((p) => (p.address ? addressKey(p.address) : '')).filter(Boolean),
+    ...sentByAddr.keys(),
+  ])
+  for (const prior of form.sent_to) {
+    if (prior.owner_id === null && prior.address) {
+      const addr = addressKey(prior.address)
+      if (!emailOnlyPeople.some((p) => p.address && addressKey(p.address) === addr)) {
+        emailOnlyPeople.push({
+          owner_id: null,
+          name: prior.name,
+          address: addr,
+          task: false,
+          email: false,
+          why: '',
+          already: prior.at ?? form.sent_at ?? '',
+          ticked: false,
+          allowed: true,
+        })
+      }
+    }
+  }
+
+  const unlisted = added.filter((addr) => !listedAddrs.has(addr))
+  const extraEmails = sendEmailAddresses(emailOnlyPeople, picks)
+  const totalCount = countSendRecipients(activeOwnerIds, previewPeople, picks)
+  const block =
+    totalCount === 0 ? NOBODY_TICKED : totalCount > MOST_PEOPLE ? OVER_THE_MOST : null
+
   const locked = send.isPending
   const busy = preview.isPending || locked || saving
   const canSend = shown !== null && !busy && block === null
+
+  const toggleOwner = (ownerId: string, nextTicked: boolean): void => {
+    if (locked || sentByOwner.has(ownerId)) return
+    const nextOwners = nextTicked
+      ? [...activeOwnerIds, ownerId]
+      : activeOwnerIds.filter((id) => id !== ownerId)
+    setSelectedOwnerIds(nextOwners)
+    setSendProblem(null)
+    ask(nextOwners, added, emailThem)
+  }
+
+  const toggleEmailThem = (nextEmailThem: boolean): void => {
+    if (locked) return
+    setEmailThem(nextEmailThem)
+    setSendProblem(null)
+    ask(selectedOwnerIds, added, nextEmailThem)
+  }
 
   const add = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault()
@@ -388,20 +641,27 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
       setAddProblem(ADDRESS_UNREADABLE)
       return
     }
-    const fresh = found.filter((address) => !listed.has(address) && !added.includes(address))
+    const alreadyGot = found.filter((address) => sentByAddr.has(address))
+    if (alreadyGot.length === found.length) {
+      setAddProblem(ALREADY_GOT_IT)
+      return
+    }
+    const fresh = found.filter(
+      (address) => !listedAddrs.has(address) && !added.includes(address) && !sentByAddr.has(address),
+    )
     if (fresh.length === 0) {
       setAddProblem(ALREADY_LISTED)
       return
     }
     const next = [...added, ...fresh]
-    if (next.length > MOST_PEOPLE) {
+    if (next.length + activeOwnerIds.length > MOST_PEOPLE) {
       setAddProblem(TOO_MANY)
       return
     }
     setAdded(next)
     setTyped('')
     setAddProblem(null)
-    ask(next)
+    ask(selectedOwnerIds, next, emailThem)
   }
 
   const remove = (address: string): void => {
@@ -409,31 +669,46 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
     const key = addressKey(address)
     const next = added.filter((one) => one !== key)
     setAdded(next)
-    setPicks((now) => Object.fromEntries(Object.entries(now).filter(([one]) => one !== key)))
-    // Gone at once; the next answer says the rest.
+    setPicks((now) =>
+      Object.fromEntries(
+        Object.entries(now).filter(([k]) => k !== key && k !== `email:${key}`),
+      ),
+    )
     setShown((now) =>
       now
-        ? { ...now, people: now.people.filter((person) => addressKey(person.email) !== key) }
+        ? {
+            ...now,
+            people: now.people.filter(
+              (person) => !(person.owner_id === null && addressKey(person.address ?? '') === key),
+            ),
+          }
         : now,
     )
-    ask(next)
+    ask(selectedOwnerIds, next, emailThem)
   }
 
   const confirm = (): void => {
     if (!canSend) return
     setSendProblem(null)
-    send.mutate(to, {
-      onSuccess: () => {
-        sent.current = true
-        onSent()
-        close()
+    send.mutate(
+      {
+        ownerIds: activeOwnerIds,
+        emails: extraEmails,
+        emailThem,
       },
-      onError: (error) => {
-        setSendProblem(error)
-        // The server names the address it refused; the rows say so too once it is asked again.
-        if (isOutsideAddress(error)) ask(added)
+      {
+        onSuccess: () => {
+          sent.current = true
+          onSent()
+          close()
+        },
+        onError: (error) => {
+          setSendProblem(error)
+          // The server names the address it refused; the rows say so too once it is asked again.
+          if (isOutsideAddress(error)) ask(selectedOwnerIds, added, emailThem)
+        },
       },
-    })
+    )
   }
 
   let body
@@ -444,7 +719,7 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
           error={checkProblem}
           context={PREVIEW_FAILED}
           onRetry={() => {
-            ask(added)
+            ask(selectedOwnerIds, added, emailThem)
           }}
         />
       ) : (
@@ -453,15 +728,59 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
   } else {
     body = (
       <>
+        <TaskBox preview={shown} />
         <EmailBox preview={shown} />
         <section aria-labelledby={peopleId} className="flex flex-col gap-3">
           <div className="flex flex-col gap-0.5">
             <h3 id={peopleId} className="text-ui font-semibold text-foreground">
               {WHO_GETS_IT}
             </h3>
-            <p className="text-caption text-muted-foreground">{ONLY_CONTOUR}</p>
+            <p className="text-caption text-muted-foreground">{WHO_GETS_HINT}</p>
           </div>
-          {people.length === 0 && unlisted.length === 0 ? (
+
+          <div className="flex items-start gap-3 rounded-md border bg-background px-3 py-2.5">
+            <Checkbox
+              id={emailThemId}
+              checked={emailThem}
+              disabled={locked}
+              aria-describedby={emailHintId}
+              className="mt-0.5"
+              onCheckedChange={(value) => {
+                toggleEmailThem(value === true)
+              }}
+            />
+            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <label htmlFor={emailThemId} className="text-ui font-semibold text-foreground">
+                {ALSO_EMAIL_THEM}
+              </label>
+              <p id={emailHintId} className="text-caption text-muted-foreground">
+                {ALSO_EMAIL_HINT}
+              </p>
+            </div>
+          </div>
+
+          {team.isError ? (
+            <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2.5 text-ui text-destructive-ink">
+              <p className="flex min-w-0 items-start gap-2">
+                <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+                <span>{TEAM_UNAVAILABLE}</span>
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="touch:h-11"
+                disabled={locked || team.isFetching}
+                onClick={() => {
+                  void team.refetch()
+                }}
+              >
+                {TRY_AGAIN}
+              </Button>
+            </div>
+          ) : null}
+
+          {teamMembers.length === 0 && emailOnlyPeople.length === 0 && unlisted.length === 0 ? (
             <p className="text-ui text-muted-foreground">{NOBODY_LISTED}</p>
           ) : (
             <ul
@@ -469,27 +788,42 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
               aria-busy={preview.isPending || undefined}
               className="flex flex-col divide-y rounded-md border text-ui"
             >
-              {people.map((person) => {
-                const key = addressKey(person.email)
+              {teamMembers.map((member) => (
+                <TeamMemberRow
+                  key={`owner:${member.owner_id}`}
+                  member={member}
+                  ticked={activeOwnerIds.includes(member.owner_id)}
+                  prior={sentByOwner.get(member.owner_id)}
+                  previewPerson={previewByOwner.get(member.owner_id)}
+                  emailThem={emailThem}
+                  locked={locked}
+                  onTick={(nextTicked) => {
+                    toggleOwner(member.owner_id, nextTicked)
+                  }}
+                />
+              ))}
+              {emailOnlyPeople.map((person) => {
+                const key = personKey(person)
+                const addrKey = addressKey(person.address ?? '')
                 return (
-                  <PersonRow
+                  <EmailPersonRow
                     key={key}
                     person={person}
                     ticked={isTicked(person, picks)}
-                    removable={added.includes(key)}
+                    removable={added.includes(addrKey) && person.already === null}
                     locked={locked}
-                    onTick={(ticked) => {
-                      setPicks((now) => ({ ...now, [key]: ticked }))
+                    onTick={(nextTicked) => {
+                      setPicks((now) => ({ ...now, [key]: nextTicked }))
                     }}
                     onRemove={() => {
-                      remove(person.email)
+                      if (person.address) remove(person.address)
                     }}
                   />
                 )
               })}
               {unlisted.map((address) => (
                 <CheckingRow
-                  key={address}
+                  key={`checking:${address}`}
                   address={address}
                   checking={preview.isPending}
                   locked={locked}
@@ -500,9 +834,9 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
               ))}
             </ul>
           )}
+
           {sendProblem !== null ? (
             <div ref={problemRef} className="flex flex-col gap-2">
-              {/* With no email set up, the server's words say the pre-read stays here already. */}
               <Problem error={sendProblem} />
               {sendProblem.code === 'email_not_set_up' && shown ? (
                 <CopyEmail email={shown} />
@@ -519,7 +853,7 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
                 className="touch:h-11"
                 disabled={locked}
                 onClick={() => {
-                  ask(added)
+                  ask(selectedOwnerIds, added, emailThem)
                 }}
               >
                 {TRY_AGAIN}
@@ -548,7 +882,7 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
                   setAddProblem(null)
                 }}
               />
-              <Button type="submit" variant="outline" disabled={locked}>
+              <Button type="submit" variant="outline" className="touch:h-11" disabled={locked}>
                 {ADD}
               </Button>
             </div>
@@ -575,7 +909,6 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
       onOpenChange={(next) => {
         // While it sends, nothing closes it: it goes, or says why it didn't.
         if (!next && locked) return
-        // Cancel or Esc: nothing was sent, so the focus goes back to Check and send.
         if (!next) {
           sent.current = false
           close()
@@ -584,14 +917,11 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
     >
       <AlertDialogContent
         data-slot="send-dialog"
-        // A column whose middle scrolls: the title and the buttons stay in view. Twice the safe
-        // area comes off its height, so centred on a phone it ends above the safe area.
         className="flex max-h-[calc(100dvh-2rem-2*env(safe-area-inset-bottom))] flex-col data-open:slide-in-from-bottom-2 sm:max-w-2xl"
         onEscapeKeyDown={(event) => {
           if (locked) event.preventDefault()
         }}
         onCloseAutoFocus={(event) => {
-          // Sent: the button that opened it is gone, so the focus goes to who got it.
           if (!sent.current) return
           const note = document.querySelector<HTMLElement>('[data-slot="sent-note"]')
           if (note) {
@@ -604,7 +934,6 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
           <AlertDialogTitle>{SEND_TITLE}</AlertDialogTitle>
           <AlertDialogDescription>{SEND_DESCRIPTION}</AlertDialogDescription>
         </AlertDialogHeader>
-        {/* The middle scrolls. Its edge room (-mx-6 px-6, -my-1 py-1) keeps focus rings whole. */}
         <div
           data-slot="send-dialog-body"
           className="-mx-6 -my-1 flex min-h-0 flex-col gap-6 overflow-y-auto overscroll-contain px-6 py-1"
@@ -625,7 +954,7 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
             onClick={confirm}
           >
             <Send aria-hidden="true" />
-            {send.isPending ? SENDING : to.length > 0 ? sendToWords(to.length) : SEND}
+            {send.isPending ? SENDING : totalCount > 0 ? sendToWords(totalCount) : SEND}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>

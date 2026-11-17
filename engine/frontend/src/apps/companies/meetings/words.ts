@@ -3,9 +3,15 @@
  * setting or file name (the screen-words test reads them). The wording is Al-khair's to change.
  */
 import { toApiProblem } from '@/api/client'
-import type { Meeting, MeetingWhen, MeetingWhere, MeetingWho } from '@/api/types'
+import type {
+  Meeting,
+  MeetingFormState,
+  MeetingWhen,
+  MeetingWhere,
+  MeetingWho,
+} from '@/api/types'
 import { addDays } from '@/lib/due-date'
-import { formatNumber, formatTime, melbourneDate } from '@/lib/format'
+import { formatNumber, formatTime, melbourneDate, pluralise, TIME_ZONE } from '@/lib/format'
 import { changeDetail, problemHint } from '@/lib/problems'
 import type { DayGroup, RowStatus } from './rows'
 
@@ -82,6 +88,58 @@ export const STATUS_WORDS: Readonly<Record<RowStatus, string>> = {
   notes_logged: 'Notes logged',
   no_notes: 'No notes yet',
   cancelled: 'Cancelled',
+}
+
+const sentDayParts = new Intl.DateTimeFormat('en-AU', {
+  timeZone: TIME_ZONE,
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+})
+
+function sentDayLabel(at: string, today: string): string {
+  const date = new Date(at)
+  if (Number.isNaN(date.getTime())) return ''
+  const parts = sentDayParts.formatToParts(date)
+  const part = (type: Intl.DateTimeFormatPartTypes): string =>
+    parts.find((item) => item.type === type)?.value ?? ''
+  const dayMonth = `${part('day')} ${part('month')}`.trim()
+  if (!dayMonth) return ''
+  const isoDay = melbourneDate(date)
+  return isoDay.slice(0, 4) === today.slice(0, 4) ? dayMonth : `${dayMonth} ${part('year')}`.trim()
+}
+
+/**
+ * The row's words for a sent pre-read (PLAN-V19 choice 14, T2-4):
+ * "Sent to Jo Sample, 17 Nov", "Sent to Jo Sample and Mia Sample, 17 Nov", or
+ * "Sent to Jo Sample and 2 more, 17 Nov".
+ */
+export function sentRowWords(
+  form: Pick<MeetingFormState, 'sent_at' | 'sent_count' | 'sent_names'> | null | undefined,
+  today: string = melbourneDate(new Date()),
+): string {
+  if (!form) return STATUS_WORDS.sent
+  const count = form.sent_count
+  const names = form.sent_names.map((name) => name.trim()).filter(Boolean)
+  const day = form.sent_at ? sentDayLabel(form.sent_at, today) : ''
+
+  let target = ''
+  if (count === 1 && names[0]) {
+    target = `to ${names[0]}`
+  } else if (count === 2 && names.length >= 2) {
+    target = `to ${names[0]} and ${names[1]}`
+  } else if (count > 1 && names[0]) {
+    target = `to ${names[0]} and ${formatNumber(count - 1)} more`
+  } else if (count > 0) {
+    target = `to ${pluralise(count, 'person', 'people')}`
+  } else if (names.length === 1) {
+    target = `to ${names[0]}`
+  } else if (names.length >= 2) {
+    target = `to ${names[0]} and ${names[1]}`
+  }
+
+  const head = target ? `${STATUS_WORDS.sent} ${target}` : STATUS_WORDS.sent
+  return day ? `${head}, ${day}` : head
 }
 
 export const DRAFT_IT = 'Draft it'

@@ -49,10 +49,12 @@ const staff = (apps: string[]): SignIn => ({
   user: {
     id: 'aaaaaaaa-2222-3333-4444-555555555555',
     name: 'Sample Person',
+    position: null,
     email: 'sample@example.test',
     username: 'sample',
     role: 'staff',
     apps,
+    features: [],
   },
 })
 

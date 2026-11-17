@@ -204,11 +204,11 @@ function PreReadView({ form }: { form: MeetingFormOut }) {
     form.status === 'drafting' ||
     form.status === 'failed' ||
     (form.status === 'draft' && sawDrafting)
-  const { id, status } = form
+  const { status } = form
   const meetingId = form.meeting.meeting_id
   useEffect(() => {
-    putFormOnRows(client, { id, status }, meetingId)
-  }, [client, id, status, meetingId])
+    putFormOnRows(client, form, meetingId)
+  }, [client, form, meetingId])
 
   /** Ctrl+Enter: Check and send, or the first blank still to fill. */
   const onKeyDown = (event: KeyboardEvent<HTMLElement>): void => {
@@ -226,7 +226,12 @@ function PreReadView({ form }: { form: MeetingFormOut }) {
     <Column className={cn(onPhone && status !== 'sent' && 'pb-36')}>
       <Back />
       <PreReadHeader form={form} justSent={justSent} />
-      <SentNote form={form} />
+      <SentNote
+        form={form}
+        onSendToMore={() => {
+          setSending(true)
+        }}
+      />
       <article
         data-slot="pre-read-form"
         aria-label={PRE_READ}

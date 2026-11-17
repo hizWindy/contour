@@ -45,6 +45,7 @@ import type {
   MeetingQuery,
   MeetingsSyncOut,
   MeetingTranscriptIn,
+  TeamMember,
 } from '@/api/types'
 import { api } from '@/api/client'
 import { markMeetingSummaryOld } from './meeting-summary'
@@ -143,6 +144,33 @@ function isRowOf(item: MeetingItem, form: MeetingFormState, meetingId: string | 
   return item.form?.id === form.id || (meetingId !== null && item.meeting.id === meetingId)
 }
 
+function recipientLabel(person: MeetingFormOut['sent_to'][number]): string {
+  return (
+    person.name?.trim() ||
+    person.address?.trim() ||
+    (person.owner_id ? `HubSpot owner ${person.owner_id}` : 'Someone')
+  )
+}
+
+function formStateOf(form: MeetingFormOut | MeetingFormState): MeetingFormState {
+  if ('sent_to' in form) {
+    return {
+      id: form.id,
+      status: form.status,
+      sent_at: form.sent_at ?? null,
+      sent_count: form.sent_to.length,
+      sent_names: form.sent_to.slice(0, 2).map(recipientLabel),
+    }
+  }
+  return {
+    id: form.id,
+    status: form.status,
+    sent_at: form.sent_at ?? null,
+    sent_count: form.sent_count ?? 0,
+    sent_names: form.sent_names ?? [],
+  }
+}
+
 /**
  * Puts a form, in short, on its meeting's row, in every page of meetings in the cache that holds
  * it: the row of the same pre-read, or of the HubSpot meeting it was just started for. Every page
@@ -151,17 +179,16 @@ function isRowOf(item: MeetingItem, form: MeetingFormState, meetingId: string | 
  */
 export function putFormOnRows(
   client: QueryClient,
-  form: MeetingFormState,
+  form: MeetingFormOut | MeetingFormState,
   meetingId: string | null,
 ): void {
+  const short = formStateOf(form)
   client.setQueriesData<MeetingPage>({ queryKey: queryKeys.companies.meetingLists() }, (page) =>
-    page?.items.some((item) => isRowOf(item, form, meetingId))
+    page?.items.some((item) => isRowOf(item, short, meetingId))
       ? {
           ...page,
           items: page.items.map((item) =>
-            isRowOf(item, form, meetingId)
-              ? { ...item, form: { id: form.id, status: form.status } }
-              : item,
+            isRowOf(item, short, meetingId) ? { ...item, form: short } : item,
           ),
         }
       : page,
@@ -380,22 +407,50 @@ export function useRedraftMeetingForm(formId: string) {
   })
 }
 
-// --- Sending the pre-read (T3-11) ----------------------------------------------------------------
+// --- Sending the pre-read (T3-11 & PLAN-V19 T2-3/T2-4) ------------------------------------------
+
+/** GET /companies/team: active HubSpot owners ordered by name, with Contour status (never emails). */
+export function teamQueryOptions() {
+  return queryOptions({
+    queryKey: queryKeys.companies.team(),
+    queryFn: async ({ signal }): Promise<TeamMember[]> =>
+      unwrap(await api.GET('/companies/team', { signal })),
+    staleTime: 60_000,
+  })
+}
+
+export function useTeam({ enabled = true }: { enabled?: boolean } = {}) {
+  return useQuery({ ...teamQueryOptions(), enabled })
+}
+
+export interface PreviewFormVariables {
+  ownerIds?: readonly string[] | null
+  emails?: readonly string[]
+  emailThem?: boolean
+}
+
+export interface SendFormVariables {
+  ownerIds?: readonly string[]
+  emails?: readonly string[]
+  emailThem?: boolean
+}
 
 /**
- * POST /companies/meetings/forms/{form_id}/preview: the email as it would arrive, and the people it
- * would go to, each with why and whether it may get it. `to` is the addresses the rep added.
- * Nothing is sent. A mutation, not a read: the dialog asks again each time the rep adds or removes
- * someone, and only the newest answer counts.
+ * POST /companies/meetings/forms/{form_id}/preview: the task and email as they would arrive, and
+ * who would get what. Nothing is sent.
  */
 export function useMeetingFormPreview(formId: string) {
-  return useMutation<FormEmailPreview, ApiProblem, readonly string[]>({
+  return useMutation<FormEmailPreview, ApiProblem, PreviewFormVariables>({
     mutationKey: [...queryKeys.companies.meetings(), 'preview', formId],
-    mutationFn: async (to) =>
+    mutationFn: async ({ ownerIds = null, emails = [], emailThem = false }) =>
       unwrap(
         await api.POST('/companies/meetings/forms/{form_id}/preview', {
           params: { path: { form_id: formId } },
-          body: { to: [...to] },
+          body: {
+            owner_ids: ownerIds === null ? null : [...ownerIds],
+            emails: [...emails],
+            email_them: emailThem,
+          },
         }),
       ),
   })
@@ -411,23 +466,30 @@ export function isFormSending(error: unknown): boolean {
   return isApiProblem(error) && error.status === 409 && error.code === 'form_sending'
 }
 
+/** HubSpot writing is off or disconnected when trying to create tasks (409 `hubspot_writes_off`). */
+export function isHubSpotWritesOff(error: unknown): boolean {
+  return isApiProblem(error) && error.status === 409 && error.code === 'hubspot_writes_off'
+}
+
 /**
- * POST /companies/meetings/forms/{form_id}/send: emails the pre-read to `to` (Contour addresses
- * only, 1 to 20), then saves its copy in HubSpot. Its answer, the sent pre-read, goes on its page
- * and its row at once. On a pre-read that was sent and hasn't changed since, it emails nobody, and
- * tries a copy that waits or failed again ("Try the HubSpot copy again"). A second press while it
- * sends answers 409 `form_sending`: the page then reads the pre-read again.
+ * POST /companies/meetings/forms/{form_id}/send: creates HubSpot tasks (and emails when
+ * `emailThem` or manual addresses are included), then saves the HubSpot copy. On a sent pre-read,
+ * only new recipients receive anything.
  */
 export function useSendMeetingForm(formId: string) {
   const client = useQueryClient()
   const key = queryKeys.companies.meetingForm(formId)
-  return useMutation<MeetingFormOut, ApiProblem, readonly string[]>({
+  return useMutation<MeetingFormOut, ApiProblem, SendFormVariables>({
     mutationKey: [...queryKeys.companies.meetings(), 'send', formId],
-    mutationFn: async (to) =>
+    mutationFn: async ({ ownerIds = [], emails = [], emailThem = false }) =>
       unwrap(
         await api.POST('/companies/meetings/forms/{form_id}/send', {
           params: { path: { form_id: formId } },
-          body: { to: [...to] },
+          body: {
+            owner_ids: [...ownerIds],
+            emails: [...emails],
+            email_them: emailThem,
+          },
         }),
       ),
     onMutate: async () => {
@@ -440,6 +502,35 @@ export function useSendMeetingForm(formId: string) {
     },
     onError: (error) => {
       if (isFormSending(error)) void client.invalidateQueries({ queryKey: key })
+    },
+  })
+}
+
+/**
+ * POST /companies/meetings/forms/{form_id}/tasks/retry: retries failed HubSpot tasks on a sent
+ * pre-read without sending emails. Partial successes stay saved even when raising 502 `task_failed`.
+ */
+export function useRetryMeetingTasks(formId: string) {
+  const client = useQueryClient()
+  const key = queryKeys.companies.meetingForm(formId)
+  return useMutation<MeetingFormOut, ApiProblem, undefined>({
+    mutationKey: [...queryKeys.companies.meetings(), 'retry-tasks', formId],
+    mutationFn: async () =>
+      unwrap(
+        await api.POST('/companies/meetings/forms/{form_id}/tasks/retry', {
+          params: { path: { form_id: formId } },
+        }),
+      ),
+    onMutate: async () => {
+      await client.cancelQueries({ queryKey: key })
+    },
+    onSuccess: (form) => {
+      client.setQueryData(key, form)
+      putFormOnRows(client, form, form.meeting.meeting_id)
+    },
+    onError: () => {
+      void client.invalidateQueries({ queryKey: key })
+      void client.invalidateQueries({ queryKey: queryKeys.companies.meetingLists(), refetchType: 'none' })
     },
   })
 }

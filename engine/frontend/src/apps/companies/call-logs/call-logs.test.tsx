@@ -178,6 +178,9 @@ interface Server {
   options: CallNoteOptions | null
   summary: CallNoteSummary
   notes: CallNoteOut[]
+  user?: { role: 'platform_admin' | 'admin' | 'staff' | 'viewer'; features: string[] }
+  /** Companies returned by GET /companies. Defaults to two rows in newest-activity order. */
+  companies?: Array<{ key: string; name: string; city: string | null; industry: string | null; staff: number | null }>
   /** How a sent note lands, by id. Not named: logged. */
   lands: Record<string, Partial<CallNoteOut>>
   /** What PATCH does: answer, refuse, or wait until `release()`. */
@@ -283,6 +286,22 @@ function mockServer(changes: Partial<Omit<Server, 'sent' | 'release'>> = {}): Se
     const text = method === 'GET' ? '' : await request.clone().text()
     const body: unknown = text ? JSON.parse(text) : null
     server.sent.push({ method, path, search: url.searchParams, body })
+    if (path === '/api/v1/auth/me') {
+      if (!server.user) return json({ auth_required: false, user: null, session: null })
+      return json({
+        auth_required: true,
+        user: {
+          id: '11111111-2222-3333-4444-555555555555',
+          email: 'jo@example.test',
+          username: 'jo',
+          name: 'Jo Sample',
+          position: null,
+          apps: ['companies'],
+          ...server.user,
+        },
+        session: null,
+      })
+    }
     if (path === `${NOTES}/options`) {
       return server.options ? json(server.options) : problem(404, 'Not found', 'Not here.')
     }
@@ -404,21 +423,67 @@ function mockServer(changes: Partial<Omit<Server, 'sent' | 'release'>> = {}): Se
         return new Response(null, { status: 204 })
       }
     }
-    if (path === `${API}/search`) {
+    const DEFAULT_COMPANIES = [
+      {
+        key: '101',
+        name: 'Sample Logistics Pty Ltd',
+        city: 'Perth',
+        industry: 'Logistics and Supply Chain',
+        staff: 300,
+      },
+      {
+        key: '102',
+        name: 'Sample Freight Co',
+        city: 'Melbourne',
+        industry: 'Freight',
+        staff: 120,
+      },
+    ]
+    if (path === API) {
+      const limit = Number(url.searchParams.get('limit') ?? '50')
+      const offset = Number(url.searchParams.get('offset') ?? '0')
+      const all = server.companies ?? DEFAULT_COMPANIES
       return json({
-        people: [],
-        companies: [
-          {
-            key: '101',
-            name: 'Sample Logistics Pty Ltd',
-            city: 'Perth',
-            industry: 'Logistics',
-            source: 'hubspot',
-          },
-        ],
+        items: all.slice(offset, offset + limit).map((item) => ({
+          ...item,
+          source: 'hubspot',
+          domain: null,
+          website: null,
+          state: null,
+          owner: null,
+          last_talk: null,
+          deal: null,
+          lead: null,
+        })),
+        total: all.length,
+        leads_shown: false,
       })
     }
-    if (path === `${API}/101`) return json(detail())
+    if (path === `${API}/search`) {
+      const q = (url.searchParams.get('q') ?? '').trim().toLowerCase()
+      const pool = server.companies ?? DEFAULT_COMPANIES
+      return json({
+        people: [],
+        companies: pool
+          .filter((c) => c.name.toLowerCase().includes(q))
+          .slice(0, 4)
+          .map((c) => ({
+            key: c.key,
+            name: c.name,
+            city: c.city,
+            industry: c.industry,
+            source: 'hubspot',
+          })),
+      })
+    }
+    if (path === `${API}/101` || path === `${API}/102`) {
+      const id = path.endsWith('/102') ? '102' : '101'
+      return json({
+        ...detail(),
+        key: id,
+        name: id === '102' ? 'Sample Freight Co' : 'Sample Logistics Pty Ltd',
+      })
+    }
     return problem(404, 'Not found', 'Not here.')
   }
   vi.stubGlobal(
@@ -1149,40 +1214,109 @@ describe('every state', () => {
 })
 
 describe('Log call', () => {
-  it('asks for the company, then the note view asks who the call was with', async () => {
+  it('opens a panel straight on the company list, filters from 2 letters, supports arrow keys + Back keeping search, and saves a note', async () => {
     const server = mockServer({ options: options({ ai_enabled: true }) })
     const { user } = renderCallLogs()
     await screen.findByText('Nothing to confirm.')
     await user.click(screen.getByRole('button', { name: 'Log call' }))
-    const box = await screen.findByRole('combobox', { name: 'Which company was the call with?' })
-    expect(screen.getByText('Type 2 letters or more.')).toBeInTheDocument()
-    await user.type(box, 'sample')
-    await user.click(await screen.findByRole('option', { name: /Sample Logistics Pty Ltd/ }))
 
     const panel = await screen.findByRole('dialog', { name: 'Log call' })
-    // No script here, so no way back to one.
-    expect(within(panel).queryByRole('button', { name: 'Back to the script' })).toBeNull()
+    const box = await within(panel).findByRole('combobox', {
+      name: 'Which company was the call with?',
+    })
+    await waitFor(() => {
+      expect(box).toHaveFocus()
+    })
+    // Lists newest companies right away with fewer than 2 letters.
     expect(
-      await within(panel).findByRole('radiogroup', { name: 'Who was the call with?' }),
+      await within(panel).findByRole('option', { name: /Sample Logistics Pty Ltd/ }),
     ).toBeInTheDocument()
-    const text = within(panel).getByRole('textbox', { name: 'Call note' })
+    expect(within(panel).getByRole('option', { name: /Sample Freight Co/ })).toBeInTheDocument()
+
+    // 2+ letters filter via /companies/search.
+    await user.type(box, 'fre')
+    await waitFor(() => {
+      expect(
+        within(panel).queryByRole('option', { name: /Sample Logistics Pty Ltd/ }),
+      ).toBeNull()
+    })
+    const freightOption = await within(panel).findByRole('option', { name: /Sample Freight Co/ })
+    expect(freightOption).toHaveAttribute('aria-selected', 'true')
+
+    // Arrow key + Enter picks the company and pushes NoteView.
+    await user.keyboard('{ArrowDown}{Enter}')
+
+    const backButton = await within(panel).findByRole('button', { name: 'Back to companies' })
+    const text = await within(panel).findByRole('textbox', { name: 'Call note' })
     await waitFor(() => {
       expect(text).toHaveFocus()
     })
-    await user.type(text, 'Booked a visit for next week.')
+
+    // Back returns to the company list, keeping the typed search and refocusing it.
+    await user.click(backButton)
+    const boxAgain = await within(panel).findByRole('combobox', {
+      name: 'Which company was the call with?',
+    })
+    expect(boxAgain).toHaveValue('fre')
+    await waitFor(() => {
+      expect(boxAgain).toHaveFocus()
+    })
+
+    // Pick again via click and save.
+    await user.click(await within(panel).findByRole('option', { name: /Sample Freight Co/ }))
+    const noteAgain = await within(panel).findByRole('textbox', { name: 'Call note' })
+    await user.type(noteAgain, 'Booked a visit for next week.')
     await user.click(within(panel).getByRole('button', { name: 'Save and next' }))
     await waitFor(() => {
       expect(sent(server, 'POST', NOTES)).toHaveLength(1)
     })
     expect(sent(server, 'POST', NOTES)[0]?.body).toMatchObject({
-      company_key: '101',
+      company_key: '102',
       contact_id: null,
       prep_id: null,
       text: 'Booked a visit for next week.',
     })
-    // The saved note joins To confirm.
     const list = await toConfirmList()
     expect(await within(list).findByText('Sample Logistics Pty Ltd')).toBeInTheDocument()
+  })
+
+  it('pages through 50 companies at a time, closes on Esc, and hides Log call for a Viewer', async () => {
+    const many = Array.from({ length: 55 }, (_, i) => ({
+      key: String(200 + i),
+      name: `Company ${String(i + 1).padStart(2, '0')} Pty Ltd`,
+      city: 'Perth',
+      industry: 'Logistics',
+      staff: 50,
+    }))
+    mockServer({ options: options({ ai_enabled: true }), companies: many })
+    const { user } = renderCallLogs()
+    await screen.findByText('Nothing to confirm.')
+    await user.click(screen.getByRole('button', { name: 'Log call' }))
+    const panel = await screen.findByRole('dialog', { name: 'Log call' })
+    expect(
+      await within(panel).findByRole('option', { name: /Company 01 Pty Ltd/ }),
+    ).toBeInTheDocument()
+    expect(within(panel).queryByRole('option', { name: /Company 55 Pty Ltd/ })).toBeNull()
+    await user.click(within(panel).getByRole('button', { name: 'Show more' }))
+    expect(
+      await within(panel).findByRole('option', { name: /Company 55 Pty Ltd/ }),
+    ).toBeInTheDocument()
+
+    await user.keyboard('{Escape}')
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Log call' })).toBeNull()
+    })
+  })
+
+  it('hides Log call and ignores ?log=1 for a Viewer', async () => {
+    mockServer({
+      options: options({ ai_enabled: true }),
+      user: { role: 'viewer', features: ['companies.call_logs'] },
+    })
+    renderCallLogs('/companies/call-logs?log=1')
+    await screen.findByText('Nothing to confirm.')
+    expect(screen.queryByRole('button', { name: 'Log call' })).toBeNull()
+    expect(screen.queryByRole('dialog', { name: 'Log call' })).toBeNull()
   })
 })
 

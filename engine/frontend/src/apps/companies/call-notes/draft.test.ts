@@ -25,8 +25,10 @@ const MIA: SignedInUser = {
   ...SAMPLE_USER,
   id: 'aaaaaaaa-0000-0000-0000-00000000000a',
   name: 'Mia Sample',
+  position: null,
   role: 'staff',
   apps: ['companies'],
+  features: ['companies.companies', 'companies.call_logs', 'companies.meetings', 'companies.call_prep'],
 }
 const SAM: SignedInUser = { ...MIA, id: 'bbbbbbbb-0000-0000-0000-00000000000b', name: 'Sam Sample' }
 

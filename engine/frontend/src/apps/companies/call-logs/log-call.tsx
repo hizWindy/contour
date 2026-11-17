@@ -1,92 +1,109 @@
 /**
- * "Log call" on Call logs, for a call that wasn't prepped (PLAN-V17 "The screens", part 1). It
- * asks for the company first, in the company picker (`company-search.tsx`, which New pre-read on
- * Meetings shares). Then it opens Log call's own note view (`call-notes/note-view.tsx`) in a panel
- * from the right, which asks who the call was with. The panel has no script, so the note view
- * shows no back arrow: Esc or Close shuts it. "Save and next" saves at once and closes it; the
- * note joins "To confirm" while it sorts.
+ * "Log call" on Call logs (PLAN-V19 T2-2, choice 15):
+ *
+ * - "Log call" (or Ctrl+K's "Log a call") opens a 576px Sheet from the right (full screen at
+ *   390px, sliding in over 400ms on `smooth`).
+ * - Opened from the header / Ctrl+K, the panel starts on the company list (`company-list.tsx`)
+ *   with the search box focused, the newest companies listed 50 at a time, and live search from 2
+ *   letters. Arrow keys and Enter pick a company.
+ * - Picking a company slides `NoteView` (`call-notes/note-view.tsx`) in via `PushView`, with a
+ *   back arrow to return to the list while keeping the typed search and returning focus to it.
+ * - Opened directly for a company from History ("Log another call with ..."), it opens straight
+ *   on `NoteView` with no back arrow.
+ * - Esc closes the panel cleanly in either view.
  */
 import { NotebookPen } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { useCompany } from '@/api/hooks'
 import type { CallNoteOptions } from '@/api/types'
+import { useCan } from '@/auth/can'
+import { PushView } from '@/components/motion'
 import { Button } from '@/components/ui/button'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { NoteView } from '../call-notes/note-view'
 import { LOG_CALL } from '../call-notes/words'
-import { CompanySearch } from '../company-search'
-import { WHICH_COMPANY } from './words'
+import { CompanyList } from './company-list'
+import { BACK_TO_COMPANIES } from './words'
 
 export interface LogTarget {
   companyKey: string
   companyName: string
 }
 
-export interface LogCallPickerProps {
-  /** The picker is open. The page holds it, so Ctrl+K's "Log a call" (`?log=1`) can open it. */
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  onPick: (target: LogTarget) => void
-}
+export type LogCallState =
+  | { from: 'picker'; picked: LogTarget | null }
+  | { from: 'direct'; target: LogTarget }
 
-/** The button, and the company picker it opens. */
-export function LogCallPicker({ open, onOpenChange: setOpen, onPick }: LogCallPickerProps) {
-  // A company was picked: the note view takes the focus, so it doesn't go back to the button.
-  const picked = useRef(false)
+export function LogCallButton({ onOpen }: { onOpen: () => void }) {
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button type="button" variant="outline" data-slot="log-call">
-          <NotebookPen aria-hidden="true" />
-          {LOG_CALL}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent
-        align="end"
-        className="w-80 gap-0 p-0"
-        onCloseAutoFocus={(event) => {
-          if (picked.current) {
-            picked.current = false
-            event.preventDefault()
-          }
-        }}
-      >
-        <CompanySearch
-          label={WHICH_COMPANY}
-          onPick={(company) => {
-            picked.current = true
-            setOpen(false)
-            onPick({ companyKey: company.key, companyName: company.name })
-          }}
-        />
-      </PopoverContent>
-    </Popover>
+    <Button type="button" variant="outline" data-slot="log-call" onClick={onOpen}>
+      <NotebookPen aria-hidden="true" />
+      {LOG_CALL}
+    </Button>
   )
 }
 
-/** The note view in a panel from the right, 576px wide, or the whole screen on a phone. */
+/** The Log call panel from the right, 576px wide, or the whole screen on a phone. */
 export function LogCallSheet({
-  target,
+  state,
   options,
   onPhone,
+  onPickCompany,
+  onBackToList,
   onClose,
 }: {
-  target: LogTarget | null
+  state: LogCallState | null
   options: CallNoteOptions | undefined
   onPhone: boolean
+  onPickCompany: (target: LogTarget) => void
+  onBackToList: () => void
   onClose: () => void
 }) {
   // While the panel slides shut, it keeps showing what it had.
-  const [shown, setShown] = useState(target)
-  if (target !== null && target !== shown) {
-    setShown(target)
+  const [shown, setShown] = useState(state)
+  if (state !== null && state !== shown) {
+    setShown(state)
   }
-  const company = useCompany(shown?.companyKey)
+
+  const activeTarget = shown?.from === 'direct' ? shown.target : (shown?.picked ?? null)
+  // Staff with only the Call logs tick cannot call GET /companies/{key}; skip fetching so no 403
+  // fires and WhoWith offers "No one in particular".
+  const canSeeCompany = useCan('companies.companies')
+  const company = useCompany(canSeeCompany ? activeTarget?.companyKey : undefined)
   const panel = useRef<HTMLDivElement>(null)
+  const searchInput = useRef<HTMLInputElement>(null)
+
+  const noteView =
+    activeTarget && options ? (
+      <NoteView
+        key={activeTarget.companyKey}
+        companyKey={activeTarget.companyKey}
+        companyName={activeTarget.companyName}
+        person={null}
+        company={company.data}
+        companyFailed={canSeeCompany && Boolean(company.error)}
+        peopleHidden={!canSeeCompany}
+        prepId={null}
+        options={options}
+        onPhone={onPhone}
+        backLabel={shown?.from === 'picker' ? BACK_TO_COMPANIES : undefined}
+        onBack={
+          shown?.from === 'picker'
+            ? () => {
+                onBackToList()
+                requestAnimationFrame(() => {
+                  searchInput.current?.focus()
+                })
+              }
+            : undefined
+        }
+        onSaved={onClose}
+      />
+    ) : null
+
   return (
     <Sheet
-      open={target !== null}
+      open={state !== null}
       // On a laptop the list stays usable beside the panel; on a phone the panel is the screen.
       modal={onPhone}
       onOpenChange={(open) => {
@@ -96,17 +113,19 @@ export function LogCallSheet({
       <SheetContent
         ref={panel}
         side="right"
-        className="w-full gap-0 p-0 outline-none data-[side=right]:w-full data-[side=right]:sm:max-w-xl"
+        className="w-full max-w-full gap-0 p-0 outline-none data-[side=right]:w-full data-[side=right]:sm:max-w-xl data-open:duration-(--duration-smooth) data-open:ease-(--spring-smooth) data-closed:duration-(--duration-exit)"
         onInteractOutside={(event) => {
           event.preventDefault()
         }}
         onOpenAutoFocus={(event) => {
-          // The note's text box takes the focus as it mounts.
           event.preventDefault()
+          if (shown?.from === 'picker' && shown.picked === null) {
+            searchInput.current?.focus()
+            return
+          }
           panel.current?.querySelector('textarea')?.focus()
         }}
         onCloseAutoFocus={(event) => {
-          // Back to Log call, so the next call is one more press away.
           const button = document.querySelector<HTMLElement>('[data-slot="log-call"]')
           if (button) {
             event.preventDefault()
@@ -114,20 +133,19 @@ export function LogCallSheet({
           }
         }}
       >
-        {shown && options ? (
-          <NoteView
-            key={shown.companyKey}
-            companyKey={shown.companyKey}
-            companyName={shown.companyName}
-            person={null}
-            company={company.data}
-            companyFailed={Boolean(company.error)}
-            prepId={null}
-            options={options}
-            onPhone={onPhone}
-            onSaved={onClose}
-          />
-        ) : null}
+        {shown?.from === 'picker' ? (
+          <PushView pushed={noteView} className="min-h-0 flex-1">
+            <CompanyList
+              active={shown.picked === null}
+              inputRef={searchInput}
+              onPick={(picked) => {
+                onPickCompany({ companyKey: picked.key, companyName: picked.name })
+              }}
+            />
+          </PushView>
+        ) : (
+          noteView
+        )}
       </SheetContent>
     </Sheet>
   )

@@ -17,6 +17,7 @@
 import { Send } from 'lucide-react'
 import { useId, type Ref } from 'react'
 import type { MeetingFormOut } from '@/api/types'
+import { useCanWrite } from '@/auth/can'
 import { Button } from '@/components/ui/button'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
@@ -158,6 +159,7 @@ export function FormFooter({
   onCheckAndSend,
 }: FormFooterProps) {
   const reasonId = useId()
+  const canWrite = useCanWrite('companies.meetings')
   const reason = block ? SEND_REASONS[block] : null
   const { icon: StatusIcon, ink: statusInk } = STATUS_LOOK[form.status]
   // Sent and unchanged: nothing to send, and the page says who got it. An edit makes it a draft
@@ -180,23 +182,25 @@ export function FormFooter({
           <StatusIcon aria-hidden="true" className={cn('size-4 shrink-0', statusInk)} />
           {formStatusWords(STATUS_WORDS[form.status], savedAt)}
         </p>
-        {reason ? (
+        {canWrite && reason ? (
           <p id={reasonId} className="text-caption text-pretty text-muted-foreground">
             {reason}
           </p>
         ) : null}
       </div>
-      <Button
-        type="button"
-        size={onPhone ? 'lg' : 'default'}
-        className={onPhone ? 'w-full' : undefined}
-        disabled={block !== null}
-        aria-describedby={reason ? reasonId : undefined}
-        onClick={onCheckAndSend}
-      >
-        <Send aria-hidden="true" />
-        {CHECK_AND_SEND}
-      </Button>
+      {canWrite ? (
+        <Button
+          type="button"
+          size={onPhone ? 'lg' : 'default'}
+          className={onPhone ? 'w-full' : undefined}
+          disabled={block !== null}
+          aria-describedby={reason ? reasonId : undefined}
+          onClick={onCheckAndSend}
+        >
+          <Send aria-hidden="true" />
+          {CHECK_AND_SEND}
+        </Button>
+      ) : null}
     </footer>
   )
 }

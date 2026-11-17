@@ -64,7 +64,7 @@ function pastMeetings(): MeetingItem[] {
       meeting: { company_id: 'lead:7', title: 'Coffee', starts_at: '2026-11-11T22:00:00Z' },
       company_name: 'Sample Health Pty Ltd',
       typed: true,
-      form: { id: 'f-typed', status: 'sent' },
+      form: { id: 'f-typed', status: 'sent', sent_at: null, sent_count: 0, sent_names: [] },
     }),
   ]
 }

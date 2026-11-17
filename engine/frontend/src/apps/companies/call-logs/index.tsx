@@ -23,13 +23,14 @@ import { Hourglass, PhoneLog } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { useCallNoteOptions, useCallNoteSummary } from '@/api/hooks/call-notes'
+import { useCanWrite } from '@/auth/can'
 import { ErrorState } from '@/components/error-state'
 import { RollingNumber, TabIndicator } from '@/components/motion'
 import { PageHeader } from '@/components/page-header'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { melbourneDate } from '@/lib/format'
 import { PHONE, useMediaQuery } from '@/lib/use-media-query'
-import { LogCallPicker, LogCallSheet, type LogTarget } from './log-call'
+import { LogCallButton, LogCallSheet, type LogCallState, type LogTarget } from './log-call'
 import { History } from './history'
 import { NeedsLook } from './needs-look'
 import {
@@ -69,10 +70,10 @@ export default function CallLogsPage() {
   // Here, not in the tab: a batch carries on, and still says how it went, while another tab is
   // open (a tab that isn't shown is taken off the page).
   const batch = useBatch()
+  const canLog = useCanWrite('companies.call_logs')
   const onPhone = useMediaQuery(PHONE)
   const today = melbourneDate()
-  const [logging, setLogging] = useState<LogTarget | null>(null)
-  const [picking, setPicking] = useState(false)
+  const [logPanel, setLogPanel] = useState<LogCallState | null>(null)
   const notes = options.data
   const on = notes?.enabled === true
 
@@ -85,14 +86,14 @@ export default function CallLogsPage() {
     [on, client, tab, search],
   )
 
-  // `?log=1` (Ctrl+K's "Log a call"): the picker opens once call notes are known to be on. Set
-  // while rendering, not in an effect, so it opens with the page. `answered` stops it opening twice
-  // for the same ask, and resets once the address has dropped `log`.
+  // `?log=1` (Ctrl+K's "Log a call"): the panel opens once call notes and access are known (not
+  // for a Viewer). Set while rendering, not in an effect, so it opens with the page. `answered`
+  // stops it opening twice for the same ask, and resets once the address has dropped `log`.
   const asked = readLog(params)
   const [answered, setAnswered] = useState(false)
-  if (asked && on && !answered) {
+  if (asked && on && canLog && !answered) {
     setAnswered(true)
-    setPicking(true)
+    setLogPanel({ from: 'picker', picked: null })
   }
   if (!asked && answered) {
     setAnswered(false)
@@ -173,7 +174,13 @@ export default function CallLogsPage() {
             <ToConfirm options={notes} today={today} onPhone={onPhone} batch={batch} />
           </TabsContent>
           <TabsContent value="history">
-            <History options={notes} today={today} onLogCall={setLogging} />
+            <History
+              options={notes}
+              today={today}
+              onLogCall={(target: LogTarget) => {
+                if (canLog) setLogPanel({ from: 'direct', target })
+              }}
+            />
           </TabsContent>
           <TabsContent value="needs_look">
             <NeedsLook ready={notes.sending_ready} today={today} />
@@ -191,18 +198,30 @@ export default function CallLogsPage() {
         title={CALL_LOGS_TITLE}
         description={onPhone ? undefined : CALL_LOGS_DESCRIPTION}
         actions={
-          on ? (
-            <LogCallPicker open={picking} onOpenChange={setPicking} onPick={setLogging} />
+          on && canLog ? (
+            <LogCallButton
+              onOpen={() => {
+                setLogPanel({ from: 'picker', picked: null })
+              }}
+            />
           ) : undefined
         }
       />
       {body}
       <LogCallSheet
-        target={logging}
+        state={logPanel}
         options={notes}
         onPhone={onPhone}
+        onPickCompany={(picked) => {
+          setLogPanel({ from: 'picker', picked })
+        }}
+        onBackToList={() => {
+          setLogPanel((current) =>
+            current?.from === 'picker' ? { from: 'picker', picked: null } : current,
+          )
+        }}
         onClose={() => {
-          setLogging(null)
+          setLogPanel(null)
         }}
       />
     </>

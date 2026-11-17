@@ -8,6 +8,7 @@ import type { SignedInUser } from '@/api/hooks'
 export type Role = SignedInUser['role']
 
 export const ROLE_NAMES: Record<Role, string> = {
+  platform_admin: 'Platform admin',
   admin: 'System admin',
   staff: 'Staff',
   viewer: 'Viewer',

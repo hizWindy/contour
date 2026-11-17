@@ -3,7 +3,13 @@
  * each can be tested on its own: the three summaries, a rep's edit to one, when "Check and send"
  * may be pressed, and who the send dialog sends it to (T3-11).
  */
-import type { FormPerson, FormSummaries, MeetingFormOut, MeetingFormStatus } from '@/api/types'
+import type {
+  FormPerson,
+  FormRecipient,
+  FormSummaries,
+  MeetingFormOut,
+  MeetingFormStatus,
+} from '@/api/types'
 
 export type SummaryName = keyof FormSummaries
 
@@ -145,20 +151,68 @@ export function readAddresses(text: string): ReadAddresses {
   return { found, unreadable }
 }
 
-/**
- * Whether a person gets it: the server's tick, unless the rep changed it (`picks`, by address).
- * An address the server refuses (`allowed` false) is never ticked, whatever was picked.
- */
-export function isTicked(person: FormPerson, picks: Readonly<Record<string, boolean>>): boolean {
-  return person.allowed && (picks[addressKey(person.email)] ?? person.ticked)
+/** Stable key for one recipient row in the send dialog. */
+export function personKey(person: Pick<FormPerson, 'owner_id' | 'address'>): string {
+  if (person.owner_id) return `owner:${person.owner_id}`
+  return `email:${addressKey(person.address ?? '')}`
 }
 
-/** The addresses to send it to: the ticked people, in the order the server listed them. */
-export function sendTo(
+/** Stable key for one saved recipient in `sent_to`. */
+export function recipientKey(recipient: Pick<FormRecipient, 'owner_id' | 'address'>): string {
+  if (recipient.owner_id) return `owner:${recipient.owner_id}`
+  return `email:${addressKey(recipient.address ?? '')}`
+}
+
+/**
+ * Whether a person gets it: allowed, not already sent, and ticked by the server or changed in
+ * `picks`. An address the server refuses (`allowed` false) or someone already sent (`already` set)
+ * is never ticked.
+ */
+export function isTicked(person: FormPerson, picks: Readonly<Record<string, boolean>>): boolean {
+  if (!person.allowed || person.already !== null) return false
+  const key = personKey(person)
+  if (key in picks) return picks[key] ?? false
+  if (person.address) {
+    const addr = addressKey(person.address)
+    if (addr in picks) return picks[addr] ?? false
+  }
+  return person.ticked
+}
+
+/** Extra Contour email addresses (added or typed-author fallback, no HubSpot owner) to send to. */
+export function sendEmailAddresses(
   people: readonly FormPerson[],
   picks: Readonly<Record<string, boolean>>,
 ): string[] {
-  return people.filter((person) => isTicked(person, picks)).map((person) => person.email)
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const person of people) {
+    if (person.owner_id !== null || !person.address || !isTicked(person, picks)) continue
+    const key = addressKey(person.address)
+    if (key === '' || seen.has(key)) continue
+    seen.add(key)
+    out.push(key)
+  }
+  return out
+}
+
+/**
+ * How many new people will get this send: selected HubSpot owners plus active extra email
+ * addresses (not double counting an address attached to an already-selected owner).
+ */
+export function countSendRecipients(
+  selectedOwnerIds: readonly string[],
+  people: readonly FormPerson[],
+  picks: Readonly<Record<string, boolean>>,
+): number {
+  const ownerAddrs = new Set<string>()
+  for (const person of people) {
+    if (person.owner_id && selectedOwnerIds.includes(person.owner_id) && person.address) {
+      ownerAddrs.add(addressKey(person.address))
+    }
+  }
+  const extra = sendEmailAddresses(people, picks).filter((addr) => !ownerAddrs.has(addr))
+  return selectedOwnerIds.length + extra.length
 }
 
 /** The draft's steps: reading HubSpot, writing the summaries, ready for the rep (PLAN-V18 T2-4). */

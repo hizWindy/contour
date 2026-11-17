@@ -25,6 +25,8 @@ export interface WhoWithProps {
   company: CompanyDetail | undefined
   /** The record couldn't be loaded. */
   failed: boolean
+  /** True when the account only has Call logs (not Companies), so contacts aren't fetched. */
+  peopleHidden?: boolean
   /** The person picked, or null for no one in particular. */
   value: string | null
   /** The person a kept draft names, shown even if they aren't on the company's list. */
@@ -32,7 +34,14 @@ export interface WhoWithProps {
   onChange: (person: WhoPerson | null) => void
 }
 
-export function WhoWith({ company, failed, value, kept, onChange }: WhoWithProps) {
+export function WhoWith({
+  company,
+  failed,
+  peopleHidden = false,
+  value,
+  kept,
+  onChange,
+}: WhoWithProps) {
   const titleId = useId()
   const people: WhoPerson[] = [...(company?.people ?? [])]
   if (kept && !people.some((person) => person.id === kept.id)) people.unshift(kept)
@@ -55,7 +64,7 @@ export function WhoWith({ company, failed, value, kept, onChange }: WhoWithProps
       <h3 id={titleId} className="text-ui font-semibold text-foreground">
         {WHO_WITH}
       </h3>
-      {company === undefined && !failed && kept === null ? (
+      {company === undefined && !failed && !peopleHidden && kept === null ? (
         <Pending label="Loading the people.">
           <div className="flex flex-wrap gap-2">
             {['w-40', 'w-28', 'w-32'].map((width) => (

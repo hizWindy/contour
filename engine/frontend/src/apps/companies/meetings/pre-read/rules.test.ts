@@ -6,29 +6,37 @@
 import { describe, expect, it } from 'vitest'
 import { FORM_POLL_MS, formPollMs, isFormMissing } from '@/api/hooks/meetings'
 import { ApiProblem } from '@/api/client'
-import type { FormPerson, FormSummary, MeetingFormOut } from '@/api/types'
+import type { FormPerson, FormRecipient, FormSummary, MeetingFormOut } from '@/api/types'
 import {
   addressKey,
+  countSendRecipients,
   DRAFT_STEP_COUNT,
   draftReached,
   hasSummaries,
   isTicked,
+  personKey,
   readAddresses,
+  recipientKey,
   sendBlock,
-  sendTo,
+  sendEmailAddresses,
   withSummary,
 } from './rules'
 import {
   copyNotTriedWords,
   costSoFar,
+  deliveryWords,
   DRAFT_ESTIMATE,
+  gotItWords,
   hubspotCopyWords,
   notSavedWords,
+  recipientStatusWords,
   recipientsWords,
   redraftHint,
   sendProblemWords,
   sendToWords,
   sentWords,
+  tasksFailedWords,
+  tasksNotTriedWords,
   whyLine,
   withEstimate,
 } from './words'
@@ -154,14 +162,28 @@ describe('what a redraft costs', () => {
 })
 
 describe('the words', () => {
+  function recipient(changes: Partial<FormRecipient> = {}): FormRecipient {
+    return {
+      owner_id: null,
+      name: null,
+      address: null,
+      at: null,
+      task: 'none',
+      email: true,
+      ...changes,
+    }
+  }
+
   it('names who got it, by name or else by address', () => {
     expect(recipientsWords([])).toBe('')
-    expect(recipientsWords([{ name: 'Jo Sample', email: 'jo@example.com' }])).toBe('Jo Sample')
+    expect(
+      recipientsWords([recipient({ name: 'Jo Sample', address: 'jo@example.com' })]),
+    ).toBe('Jo Sample')
     expect(
       recipientsWords([
-        { name: 'Jo Sample', email: 'jo@example.com' },
-        { name: ' ', email: 'mia@example.com' },
-        { name: 'Al Sample', email: 'al@example.com' },
+        recipient({ name: 'Jo Sample', address: 'jo@example.com' }),
+        recipient({ name: ' ', address: 'mia@example.com' }),
+        recipient({ name: 'Al Sample', address: 'al@example.com' }),
       ]),
     ).toBe('Jo Sample, mia@example.com and Al Sample')
   })
@@ -169,8 +191,8 @@ describe('the words', () => {
   it('says who got it, when and who sent it, or when it was last sent', () => {
     const sent = {
       sent_to: [
-        { name: 'Jo Sample', email: 'jo@example.com' },
-        { name: 'Mia Sample', email: 'mia@example.com' },
+        recipient({ name: 'Jo Sample', address: 'jo@example.com' }),
+        recipient({ name: 'Mia Sample', address: 'mia@example.com' }),
       ],
       sent_at: '2026-11-25T22:12:00Z',
       sent_by: 'Al Sample',
@@ -182,6 +204,47 @@ describe('the words', () => {
       'Last sent to Jo Sample and Mia Sample on 26 Nov 2026 at 9:12 am, by Al Sample.',
     )
     expect(sentWords({ sent_to: [], sent_at: null, sent_by: null })).toBe('Sent.')
+  })
+
+  it('says what each person gets and when, and why tasks failed (V19 T2-3 to T2-5)', () => {
+    expect(deliveryWords({ task: true, email: false })).toBe('HubSpot task')
+    expect(deliveryWords({ task: false, email: true })).toBe('Email')
+    expect(deliveryWords({ task: true, email: true })).toBe('HubSpot task · Email')
+    expect(deliveryWords({ task: false, email: false })).toBeNull()
+    expect(gotItWords('2026-11-17T03:00:00Z')).toMatch(/^Got it 17 Nov/)
+    expect(gotItWords(null)).toBe('Got it')
+    expect(
+      recipientStatusWords(
+        recipient({
+          owner_id: '1',
+          name: 'Jo Sample',
+          at: '2026-11-17T03:00:00Z',
+          task: 'sent',
+          email: true,
+        }),
+      ),
+    ).toMatch(/^HubSpot task · Email · Got it 17 Nov/)
+    expect(
+      tasksFailedWords(
+        [recipient({ owner_id: '1', name: 'Jo Sample', task: 'failed', email: true })],
+        true,
+      ),
+    ).toBe("Jo Sample's HubSpot task didn't go. The email still went.")
+    expect(
+      tasksFailedWords(
+        [recipient({ owner_id: '1', name: 'Jo Sample', task: 'failed', email: false })],
+        false,
+      ),
+    ).toBe("Jo Sample's HubSpot task didn't go.")
+    expect(
+      tasksNotTriedWords(
+        new ApiProblem({
+          title: 'HubSpot writing is off',
+          status: 409,
+          code: 'hubspot_writes_off',
+        }),
+      ),
+    ).toBe("The HubSpot task wasn't tried again. HubSpot isn't connected.")
   })
 
   it("says where the copy in HubSpot stands: the server's sentence, else plain words", () => {
@@ -212,9 +275,20 @@ describe('the words', () => {
   })
 })
 
-describe('who the send goes to (T3-11)', () => {
-  function person(email: string, changes: Partial<FormPerson> = {}): FormPerson {
-    return { email, name: null, why: 'added by you', ticked: true, allowed: true, ...changes }
+describe('who the send goes to (T3-11, V19 T2-3)', () => {
+  function person(address: string, changes: Partial<FormPerson> = {}): FormPerson {
+    return {
+      owner_id: null,
+      name: null,
+      address,
+      task: false,
+      email: true,
+      why: 'added by you',
+      already: null,
+      ticked: true,
+      allowed: true,
+      ...changes,
+    }
   }
 
   it('reads one address, a pasted list, or Outlook names, in lower case, once each', () => {
@@ -285,16 +359,35 @@ describe('who the send goes to (T3-11)', () => {
     const jo = person('Jo@example.com', { name: 'Jo Sample', why: 'on the meeting' })
     const outside = person('mia@elsewhere.com', { allowed: false })
     const al = person('al@example.com', { ticked: false })
-    expect(addressKey(jo.email)).toBe('jo@example.com')
+    const owner = person('owner@example.com', {
+      owner_id: 'owner-1',
+      name: 'Owner Sample',
+      task: true,
+      email: false,
+      why: 'picked by you',
+    })
+    const already = person('sent@example.com', { already: '2026-11-17T03:00:00Z' })
+
+    expect(addressKey(jo.address ?? '')).toBe('jo@example.com')
+    expect(personKey(jo)).toBe('email:jo@example.com')
+    expect(recipientKey({ owner_id: 'owner-1', address: null })).toBe('owner:owner-1')
     expect(isTicked(jo, {})).toBe(true)
-    expect(isTicked(jo, { 'jo@example.com': false })).toBe(false)
-    // The server ticks an address it refuses too: it still can't be ticked.
+    expect(isTicked(jo, { 'email:jo@example.com': false })).toBe(false)
+    // The server ticks an address it refuses too, or someone already sent: never ticked.
     expect(isTicked(outside, {})).toBe(false)
-    expect(isTicked(outside, { 'mia@elsewhere.com': true })).toBe(false)
-    expect(sendTo([jo, outside, al], { 'al@example.com': true })).toEqual([
-      'Jo@example.com',
+    expect(isTicked(outside, { 'email:mia@elsewhere.com': true })).toBe(false)
+    expect(isTicked(already, { 'email:sent@example.com': true })).toBe(false)
+
+    const people = [jo, outside, al, owner, already]
+    expect(sendEmailAddresses(people, { 'email:al@example.com': true })).toEqual([
+      'jo@example.com',
       'al@example.com',
     ])
+    // Counts active owners + non-overlapping added emails without double counting.
+    expect(countSendRecipients(['owner-1'], people, { 'email:al@example.com': true })).toBe(3)
+    expect(
+      countSendRecipients(['owner-1'], [owner, { ...jo, address: 'owner@example.com' }], {}),
+    ).toBe(1)
   })
 
   it('says the count on the button, the why as a line, and a refusal in its own words', () => {
@@ -315,6 +408,20 @@ describe('who the send goes to (T3-11)', () => {
       title: 'Only Contour addresses.',
       detail:
         'A pre-read goes to Contour addresses only, so nothing was sent. Take out: mia@elsewhere.com.',
+    })
+    expect(
+      sendProblemWords(
+        new ApiProblem({
+          title: 'HubSpot writing is off',
+          detail: 'Turn on HubSpot writing.',
+          status: 409,
+          code: 'hubspot_writes_off',
+        }),
+      ),
+    ).toEqual({
+      title: null,
+      detail:
+        "HubSpot isn't connected, so no tasks can go. Tick 'Also email them' to send it by email.",
     })
     // Track 1's words (`meeting_send.py`): the detail starts with the title, so it is said alone.
     const notSetUp =

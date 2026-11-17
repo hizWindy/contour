@@ -91,6 +91,14 @@ function meeting(id: string, { meeting: changes, ...rest }: ItemChanges = {}): M
   }
 }
 
+function formState(
+  id: string,
+  status: MeetingFormState['status'],
+  extra: Partial<MeetingFormState> = {},
+): MeetingFormState {
+  return { id, status, sent_at: null, sent_count: 0, sent_names: [], ...extra }
+}
+
 /** The days ahead: one meeting for each status, across the four groups. */
 function upcoming(): MeetingItem[] {
   return [
@@ -103,7 +111,7 @@ function upcoming(): MeetingItem[] {
         where: 'in_person',
       },
       company_name: 'Sample Mining Pty Ltd',
-      form: { id: 'f2', status: 'drafting' },
+      form: formState('f2', 'drafting'),
     }),
     meeting('m3', {
       meeting: {
@@ -115,7 +123,7 @@ function upcoming(): MeetingItem[] {
       },
       company_name: 'Sample Freight Pty Ltd',
       group: 'tomorrow',
-      form: { id: 'f3', status: 'draft' },
+      form: formState('f3', 'draft'),
     }),
     meeting('m6', {
       meeting: {
@@ -136,7 +144,7 @@ function upcoming(): MeetingItem[] {
       },
       company_name: 'Sample Health Pty Ltd',
       group: 'this_week',
-      form: { id: 'f4', status: 'sent' },
+      form: formState('f4', 'sent'),
     }),
     meeting('m5', {
       meeting: {
@@ -148,7 +156,7 @@ function upcoming(): MeetingItem[] {
       },
       company_name: 'Sample Energy Pty Ltd',
       group: 'later',
-      form: { id: 'f5', status: 'failed' },
+      form: formState('f5', 'failed'),
     }),
   ]
 }
@@ -159,7 +167,7 @@ function past(): MeetingItem[] {
       meeting: { title: 'Intro meeting', starts_at: '2026-11-17T03:00:00Z' },
       group: null,
       notes_logged: true,
-      form: { id: 'fp1', status: 'sent' },
+      form: formState('fp1', 'sent'),
     }),
     meeting('p2', {
       meeting: { company_id: '102', title: 'Lease review', starts_at: '2026-11-12T23:00:00Z' },
@@ -422,7 +430,7 @@ function mockServer(changes: Partial<Omit<Server, 'sent' | 'release'>> = {}): Se
       const start = body as { meeting_id?: string; title?: string }
       const meetingId = start.meeting_id
       if (meetingId !== undefined) {
-        const state: MeetingFormState = { id: `f-${meetingId}`, status: 'drafting' }
+        const state: MeetingFormState = formState(`f-${meetingId}`, 'drafting')
         server.upcoming = server.upcoming.map((item) =>
           item.meeting.id === meetingId ? { ...item, form: state } : item,
         )
@@ -1124,7 +1132,7 @@ describe('the states', () => {
     const typed = meeting('', {
       meeting: { company_id: 'lead:7', owner_id: null, title: 'Office walk-through' },
       typed: true,
-      form: { id: 'f-typed', status: 'draft' },
+      form: formState('f-typed', 'draft'),
     })
     // Track 1's sentence when no key is set and nothing was read yet.
     mockServer({ meetingsState: 'off', sentence: NOT_CONNECTED, upcoming: [typed] })
@@ -1606,5 +1614,24 @@ describe('New pre-read', () => {
       starts_at: '2026-11-19T14:30:00+11:00',
       where: 'unknown',
     })
+  })
+
+  it('shows who got a sent pre-read and when on the meeting row (V19 T2-4)', async () => {
+    mockServer({
+      upcoming: [
+        meeting('m-sent', {
+          company_name: 'Sample Health Pty Ltd',
+          group: 'this_week',
+          form: formState('f-sent', 'sent', {
+            sent_at: '2026-11-17T03:00:00Z',
+            sent_count: 3,
+            sent_names: ['Jo Sample', 'Mia Sample'],
+          }),
+        }),
+      ],
+    })
+    renderMeetings()
+    await screen.findByText('Sent to Jo Sample and 2 more, 17 Nov')
+    expect(screen.getByText('Sent to Jo Sample and 2 more, 17 Nov')).toBeInTheDocument()
   })
 })

@@ -5,8 +5,8 @@ This plan builds Al-khair's Improvements 2 list of 17 Nov. Log call opens one pa
 **TBC** means to be confirmed.
 
 - **Built by:** Al-khair Pama. **Signed off by:** Al-khair, for the code, the roles and every screen.
-- **Last updated:** 17 Nov 2026 (one session instead of three tracks; nothing built).
-- **Progress:** S0: 1 of 1. Part 1: 1 of 9. Part 2: 0 of 6. Part 3: 0 of 7. Merge and deploy: 0 of 3.
+- **Last updated:** 17 Nov 2026 (Part 1 built except T1-2; Part 2 built and checked, waiting for looks on T2-2..T2-4).
+- **Progress:** S0: 1 of 1. Part 1: 8 of 9 (T1-2 blocked on HubSpot write OK). Part 2: 3 of 6 (T2-2, T2-3, T2-4 built, waiting for a look). Part 3: 0 of 7. Merge and deploy: 0 of 3.
 - **Sources:**
   - Al-khair's Improvements 2 list (17 Nov, in chat) and his answers the same day;
   - the code on `master` (`0c9b68f`), read on 17 Nov;
@@ -322,36 +322,36 @@ Read first: `.claude/skills/api-change/SKILL.md` and `.claude/skills/db-migratio
 
 Read first: `.claude/skills/ui-build/SKILL.md` and `engine/DESIGN.md`.
 
-- [ ] **T2-1. The website's types.** Run `uv run engine openapi` and `npm run types`, so the website gets Part 1's contract.
+- [x] **T2-1. The website's types.** (17 Nov 2026) Run `uv run engine openapi` and `npm run types`, so the website gets Part 1's contract.
   - **Done when:** `src/api/contract.test.ts` passes.
 
-- [ ] **T2-2. Log call: one panel with every company** (choice 15).
+- [ ] **T2-2. Log call: one panel with every company** (choice 15). **Built, waiting for a look.** (17 Nov 2026)
   - In `call-logs/log-call.tsx`, the popover goes. A new `call-logs/company-list.tsx` reads `GET /companies` page by page and `GET /companies/search` from 2 letters.
   - `NoteView` gets a back arrow when it is opened from the list.
   - Hidden for a Viewer.
   - **Done when:** Log call opens the panel with the search focused and the newest companies listed; 2 letters filter; the arrow keys and Enter pick; Back returns to the list with the search kept; Esc closes; it is the whole screen at 390px; Ctrl+K's "Log a call" opens it. Screenshots at 1440px and 390px, light and dark. No dropped frames at 4x CPU. Built, waiting for a look.
 
-- [ ] **T2-3. The send dialog: the team, tasks and the email tick** (choices 9 to 11).
+- [ ] **T2-3. The send dialog: the team, tasks and the email tick** (choices 9 to 11). **Built, waiting for a look.** (17 Nov 2026)
   - The people come from `GET /companies/team`, the meeting's Contour people ticked. "Add someone" stays.
   - Each row says what that person gets: "HubSpot task", "Email" or both, in the server's words.
   - The "Also email them" tick, off. The button counts the people: "Send to 3 people".
   - The preview shows the task's subject and due day, and the email.
   - **Done when:** tests cover each kind of person in choice 11, and the screens at 1440px and 390px. Built, waiting for a look.
 
-- [ ] **T2-4. Who got it, and send to more** (choices 13 and 14).
+- [ ] **T2-4. Who got it, and send to more** (choices 13 and 14). **Built, waiting for a look.** (17 Nov 2026)
   - The Meetings row: "Sent to Jo Sample and 2 more, 17 Nov".
   - The pre-read page: each person, with their task and email, and Try again for a failed task.
   - "Send to more people" opens the dialog, with those who got it greyed and "Got it 17 Nov".
   - **Done when:** tests cover a second send to new people only, and a task retry. Built, waiting for a look.
 
-- [ ] **T2-5. Errors on these screens.** The lines in "Words for when things go wrong" that touch Log call, the team list and the send, each with a test.
+- [x] **T2-5. Errors on these screens.** (17 Nov 2026) The lines in "Words for when things go wrong" that touch Log call, the team list and the send, each with a test.
 
-- [ ] **T2-6. Part 2 check.** Lint, types, every test, the build and the first visit size (within 1,024 B of T1-1, **TBC** if the list needs more). Go through `.claude/skills/design-review/SKILL.md` for Part 2's screens.
+- [x] **T2-6. Part 2 check.** (17 Nov 2026) Lint, types, every test, the build and the first visit size (within 1,024 B of T1-1, **TBC** if the list needs more). Go through `.claude/skills/design-review/SKILL.md` for Part 2's screens.
   - **Done when:** each passes, and the design pass has nothing open.
 
 ### Part 2 Log
 
-- (none yet)
+- 17 Nov 2026 (T2-1..T2-6): Regenerated `src/api/schema.d.ts` (`npm run types`; `contract.test.ts` 7/7 passed). Replaced Log call popover with `LogCallSheet` + `CompanyList` (`50`/page infinite list, 250ms search at `>=2` chars, Arrow/Enter/Esc, Back preserving search, hidden for Viewer, `peopleHidden` when Staff lacks `companies.companies`), added `src/auth/can.ts` permission helpers, updated `SendDialog` (`GET /companies/team`, `You` badge, Choice 11 `"Also email them"` default off, HubSpot task + email preview, `Send to N people`), `SentNote` (per-recipient task/email/`Got it` status, `Try again` via `POST .../tasks/retry`, `Send to more people` with greyed prior recipients), `StatusLine` (`Sent to Jo Sample and 2 more, 17 Nov`), and error handling (`team_unavailable`, `hubspot_writes_off`, `outside_address`, `email_not_set_up`). Verified: `tsc -b` clean, `eslint . --max-warnings 0` clean, `vitest run` `137 files / 1963 tests passed` (including `design-lint`, `contrast`, `screen-words`, `icons`, `fonts`), `vite build` + `bundle-report.js` first visit `236 kB gzip (733 kB raw) JS in 37 files, 24 kB gzip CSS` (+0 kB gzip vs T1-1). Playwright check against compiled preview (`5242`) captured `plan/shots/v19/t2-2..t2-4*.png` across 1440px & 390px light & dark with 0 console/page errors and 4x CPU `Log call` transition checked (`109` frames, max `66.7ms` on initial lazy-chunk load).
 
 ## Part 3: people, access, motion and glass
 

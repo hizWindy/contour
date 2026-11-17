@@ -20,6 +20,7 @@ import { useAddPerson, useChangePerson, useMe, usePeople, type Person } from '@/
 import { isApiProblem } from '@/api/client'
 import { ownerOf, useHubSpotOwners, useSetHubSpotOwner } from '@/api/hooks/hubspot-owners'
 import type { HubSpotOwnerLink, HubSpotOwnerOption } from '@/api/types'
+import { ALL_FEATURES, appOf, type Feature } from '@/auth/can'
 import { ErrorState } from '@/components/error-state'
 import { PendingCards } from '@/components/skeletons'
 import { Badge } from '@/components/ui/badge'
@@ -103,10 +104,14 @@ const ROLES = [
 ] as const
 type Role = (typeof ROLES)[number]['id']
 
+function featuresForApps(apps: readonly string[]): Feature[] {
+  return ALL_FEATURES.filter((feature) => apps.includes(appOf(feature)))
+}
+
 function ProjectTick({ person, project }: { person: Person; project: Project }) {
   const change = useChangePerson()
   const id = useId()
-  const admin = person.role === 'admin'
+  const admin = person.role === 'admin' || person.role === 'platform_admin'
   const ticked = admin || person.apps.includes(project.app)
   return (
     <label htmlFor={id} className="flex items-center gap-2 text-ui">
@@ -119,7 +124,7 @@ function ProjectTick({ person, project }: { person: Person; project: Project }) 
             ? [...person.apps.filter((app) => app !== project.app), project.app]
             : person.apps.filter((app) => app !== project.app)
           change.mutate(
-            { userId: person.id, patch: { apps } },
+            { userId: person.id, patch: { features: featuresForApps(apps) } },
             {
               onSuccess: () => {
                 toast(
@@ -466,33 +471,29 @@ function AddPerson() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<Role>('staff')
-  // The Lead Finder starts ticked, as before. Who gets the Companies tick is TBC with Levi.
+  // The Lead Finder starts ticked, as before.
   const [picked, setPicked] = useState<ReadonlySet<string>>(() => new Set([LEAD_FINDER]))
-  const [password, setPassword] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   const submit = (): void => {
     const missing: Record<string, string> = {}
     if (name.trim() === '') missing.name = 'Give a name.'
     if (email.trim() === '') missing.email = 'Give an email.'
-    if (password === '') missing.password = 'Give a starting password.'
     setErrors(missing)
     if (Object.keys(missing).length > 0) return
+    const apps = role === 'admin' ? [] : PROJECTS.map((item) => item.app).filter((app) => picked.has(app))
     add.mutate(
       {
         name: name.trim(),
         email: email.trim(),
         role,
-        apps:
-          role === 'admin' ? [] : PROJECTS.map((item) => item.app).filter((app) => picked.has(app)),
-        password,
+        features: role === 'admin' ? [...ALL_FEATURES] : featuresForApps(apps),
       },
       {
         onSuccess: (person) => {
           toast(`${person.name} can sign in now. Give them the password in person.`)
           setName('')
           setEmail('')
-          setPassword('')
           setErrors({})
         },
         onError: (error) => {
@@ -579,20 +580,6 @@ function AddPerson() {
                 ))}
               </SelectContent>
             </Select>
-          </Field>
-          <Field>
-            <FieldLabel htmlFor={`${id}-password`}>Starting password</FieldLabel>
-            <Input
-              id={`${id}-password`}
-              type="password"
-              value={password}
-              autoComplete="new-password"
-              aria-invalid={errors.password ? true : undefined}
-              onChange={(event) => {
-                setPassword(event.target.value)
-              }}
-            />
-            {errors.password ? <FieldError>{errors.password}</FieldError> : null}
           </Field>
           <div className="flex flex-col gap-2">
             {PROJECTS.map((project) => (

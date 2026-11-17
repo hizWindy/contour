@@ -14,6 +14,7 @@ import type { ReactNode } from 'react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { toast } from 'sonner'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { queryKeys } from '@/api/query'
 import type {
   FormFact,
   FormMeeting,
@@ -295,7 +296,12 @@ function renderPreRead(path = `/companies/meetings/${FORM_ID}`) {
     ],
     { initialEntries: [path] },
   )
-  const result = renderWithProviders(<RouterProvider router={router} />, { withRouter: false })
+  const queryClient = createTestQueryClient()
+  queryClient.setQueryData(queryKeys.auth.me(), { state: 'off' })
+  const result = renderWithProviders(<RouterProvider router={router} />, {
+    withRouter: false,
+    queryClient,
+  })
   return { ...result, router }
 }
 
@@ -994,8 +1000,22 @@ describe('sent', () => {
         next_step: 'Book a site visit.',
         going: 'Jo Sample',
         sent_to: [
-          { name: 'Jo Sample', email: 'jo.sample@example.com' },
-          { name: null, email: 'mia.sample@example.com' },
+          {
+            owner_id: null,
+            name: 'Jo Sample',
+            address: 'jo.sample@example.com',
+            at: '2026-11-25T22:12:00Z',
+            task: 'sent',
+            email: true,
+          },
+          {
+            owner_id: null,
+            name: null,
+            address: 'mia.sample@example.com',
+            at: '2026-11-25T22:12:00Z',
+            task: 'none',
+            email: true,
+          },
         ],
         sent_at: '2026-11-25T22:12:00Z',
         sent_by: 'Al Sample',

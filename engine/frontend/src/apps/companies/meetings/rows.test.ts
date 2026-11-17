@@ -4,10 +4,10 @@
  */
 import { describe, expect, it } from 'vitest'
 import { DRAFTING_POLL_MS, listPollMs, meetingsPollMs, SYNC_POLL_MS } from '@/api/hooks/meetings'
-import type { Meeting, MeetingItem, MeetingPage } from '@/api/types'
+import type { Meeting, MeetingFormState, MeetingItem, MeetingPage } from '@/api/types'
 import { meetingsHref, meetingsQuery, preReadHref, readMeetings, writeMeetings } from './params'
 import { groupUpcoming, isCancelled, rowKey, rowStatus } from './rows'
-import { dayText, pastWhen, upcomingWhen, waitingLine, whereWords } from './words'
+import { dayText, pastWhen, sentRowWords, upcomingWhen, waitingLine, whereWords } from './words'
 
 // Weeks run Monday to Sunday.
 const WEDNESDAY = '2026-11-18'
@@ -64,11 +64,19 @@ describe('the day groups', () => {
   })
 })
 
+function formState(
+  id: string,
+  status: MeetingFormState['status'],
+  extra: Partial<MeetingFormState> = {},
+): MeetingFormState {
+  return { id, status, sent_at: null, sent_count: 0, sent_names: [], ...extra }
+}
+
 describe('one status a row', () => {
   it('says where an upcoming pre-read stands', () => {
     expect(rowStatus(item(), false)).toBe('needs')
     for (const status of ['drafting', 'draft', 'sent', 'failed'] as const) {
-      expect(rowStatus(item({ form: { id: 'f1', status } }), false)).toBe(status)
+      expect(rowStatus(item({ form: formState('f1', status) }), false)).toBe(status)
     }
   })
 
@@ -77,7 +85,7 @@ describe('one status a row', () => {
     expect(rowStatus(item(), true)).toBe('no_notes')
     const cancelled = item({
       meeting: { outcome: 'CANCELED' },
-      form: { id: 'f1', status: 'draft' },
+      form: formState('f1', 'draft'),
     })
     expect(isCancelled(cancelled)).toBe(true)
     expect(rowStatus(cancelled, false)).toBe('cancelled')
@@ -91,7 +99,7 @@ describe('one status a row', () => {
 
   it('says where the pre-read of a past meeting typed in stands: it has no notes to log', () => {
     const typed = (status: 'draft' | 'sent') =>
-      item({ typed: true, meeting: { id: '' }, form: { id: 'f9', status } })
+      item({ typed: true, meeting: { id: '' }, form: formState('f9', status) })
     expect(rowStatus(typed('sent'), true)).toBe('sent')
     expect(rowStatus(typed('draft'), true)).toBe('draft')
     expect(rowStatus(typed('sent'), false)).toBe('sent')
@@ -115,15 +123,13 @@ describe('one status a row', () => {
   it('keys a meeting typed in (its HubSpot id is empty) by its form', () => {
     expect(rowKey(item())).toBe('m1')
     expect(
-      rowKey(item({ typed: true, meeting: { id: '' }, form: { id: 'f9', status: 'draft' } })),
+      rowKey(item({ typed: true, meeting: { id: '' }, form: formState('f9', 'draft') })),
     ).toBe('f9')
   })
 
   it('asks again every 3 seconds while a form is drafting, and stops after', () => {
-    expect(meetingsPollMs([item({ form: { id: 'f1', status: 'drafting' } })])).toBe(
-      DRAFTING_POLL_MS,
-    )
-    expect(meetingsPollMs([item({ form: { id: 'f1', status: 'draft' } })])).toBe(false)
+    expect(meetingsPollMs([item({ form: formState('f1', 'drafting') })])).toBe(DRAFTING_POLL_MS)
+    expect(meetingsPollMs([item({ form: formState('f1', 'draft') })])).toBe(false)
     expect(meetingsPollMs(undefined)).toBe(false)
   })
 
@@ -144,15 +150,36 @@ describe('one status a row', () => {
     expect(SYNC_POLL_MS).toBe(2000)
     expect(listPollMs(page(true))).toBe(SYNC_POLL_MS)
     // Reading wins over a draft on its way: the quicker of the two.
-    expect(listPollMs(page(true, [item({ form: { id: 'f1', status: 'drafting' } })]))).toBe(
-      SYNC_POLL_MS,
-    )
+    expect(listPollMs(page(true, [item({ form: formState('f1', 'drafting') })]))).toBe(SYNC_POLL_MS)
     // Done: only a draft on its way keeps it asking, and nothing else does.
-    expect(listPollMs(page(false, [item({ form: { id: 'f1', status: 'drafting' } })]))).toBe(
+    expect(listPollMs(page(false, [item({ form: formState('f1', 'drafting') })]))).toBe(
       DRAFTING_POLL_MS,
     )
     expect(listPollMs(page(false))).toBe(false)
     expect(listPollMs(undefined)).toBe(false)
+  })
+
+  it('writes who got a sent pre-read and when (V19 choice 14, T2-4)', () => {
+    const at = '2026-11-17T03:00:00Z'
+    expect(
+      sentRowWords(
+        { sent_at: at, sent_count: 1, sent_names: ['Jo Sample'] },
+        WEDNESDAY,
+      ),
+    ).toBe('Sent to Jo Sample, 17 Nov')
+    expect(
+      sentRowWords(
+        { sent_at: at, sent_count: 2, sent_names: ['Jo Sample', 'Mia Sample'] },
+        WEDNESDAY,
+      ),
+    ).toBe('Sent to Jo Sample and Mia Sample, 17 Nov')
+    expect(
+      sentRowWords(
+        { sent_at: at, sent_count: 3, sent_names: ['Jo Sample', 'Mia Sample'] },
+        WEDNESDAY,
+      ),
+    ).toBe('Sent to Jo Sample and 2 more, 17 Nov')
+    expect(sentRowWords({ sent_at: null, sent_count: 0, sent_names: [] }, WEDNESDAY)).toBe('Sent')
   })
 })
 

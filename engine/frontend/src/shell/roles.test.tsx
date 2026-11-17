@@ -34,8 +34,14 @@ afterEach(() => {
 
 describe('the role words', () => {
   it('names each role in plain words', () => {
-    expect(ROLE_NAMES).toEqual({ admin: 'System admin', staff: 'Staff', viewer: 'Viewer' })
+    expect(ROLE_NAMES).toEqual({
+      platform_admin: 'Platform admin',
+      admin: 'System admin',
+      staff: 'Staff',
+      viewer: 'Viewer',
+    })
     expect(roleName('admin')).toBe('System admin')
+    expect(roleName('platform_admin')).toBe('Platform admin')
     expect(roleName('auditor')).toBe('auditor') // a role the website doesn't know yet
   })
 

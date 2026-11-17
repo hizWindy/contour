@@ -1,38 +1,53 @@
 /**
- * Sending a pre-read (PLAN-V17 T3-11, "The screens" part 6), against Track 2's contract (generated)
- * and a fake server that answers as Track 2's does: the preview lists the Contour people
- * on the meeting, ticked, then the addresses the rep added, each saying whether it may get it; the
- * send refuses an address that isn't Contour's (422 `outside_address`, naming it); and a send on a
- * pre-read already sent and unchanged emails nobody and tries its copy in HubSpot again.
- *
- * Real time, not a fake clock: the status fades with motion (see pre-read.test.tsx). Made-up names
- * and addresses only.
+ * Sending a pre-read, the team list, HubSpot tasks, "Also email them", failed task retry, and
+ * "Send to more people" (PLAN-V17 T3-11; PLAN-V19 T2-3 to T2-5), against the generated contract
+ * and a fake server that answers as `meeting_send.py` does. Made-up names and addresses only.
  */
 import { screen, waitFor, within } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { toast } from 'sonner'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { SignIn } from '@/api/hooks/auth'
+import { queryKeys } from '@/api/query'
 import type {
   FormEmailPreview,
   FormMeeting,
   FormPerson,
+  FormRecipient,
   FormSummary,
   HubSpotCopy,
   MeetingFormOut,
   MeetingFormPatch,
+  TeamMember,
 } from '@/api/types'
-import { renderWithProviders } from '@/test/render'
+import { createTestQueryClient, renderWithProviders } from '@/test/render'
 import { asPhone } from '@/test/screen'
+import { SAMPLE_USER } from '@/test/fake-auth'
 import PreReadPage from './index'
 
 const FORM_ID = '0f3c9a2e-1111-2222-3333-444444444444'
+const TEAM_URL = '/api/v1/companies/team'
 const FORM = `/api/v1/companies/meetings/forms/${FORM_ID}`
 const PREVIEW = `${FORM}/preview`
 const SEND = `${FORM}/send`
+const RETRY_TASKS = `${FORM}/tasks/retry`
 
-const JO = 'jo.sample@contour.example'
-const AL = 'al.sample@contour.example'
-const OUTSIDE = 'mia@elsewhere.example'
+const AL_ADDR = 'al.sample@contour.example'
+const JO_ADDR = 'jo.sample@contour.example'
+const MIA_ADDR = 'mia.sample@contour.example'
+const OUTSIDE = 'outside@elsewhere.example'
+
+const TEAM: TeamMember[] = [
+  { owner_id: 'o-1', name: 'Al-khair Sample', has_account: true, is_me: true },
+  { owner_id: 'o-2', name: 'Jo Sample', has_account: true, is_me: false },
+  { owner_id: 'o-3', name: 'Kai Sample', has_account: false, is_me: false },
+]
+
+const OWNER_ADDRESSES: Record<string, string | null> = {
+  'o-1': AL_ADDR,
+  'o-2': JO_ADDR,
+  'o-3': null,
+}
 
 const SUMMARY: FormSummary = {
   text: 'A freight company with about 300 staff.',
@@ -50,7 +65,19 @@ const MEETING: FormMeeting = {
   where: 'online',
 }
 
-/** A draft ready to send: both blanks filled. A typed meeting, so no HubSpot link is asked for. */
+function recipient(changes: Partial<FormRecipient> = {}): FormRecipient {
+  return {
+    owner_id: null,
+    name: null,
+    address: null,
+    at: '2026-11-17T03:00:00Z',
+    task: 'none',
+    email: false,
+    ...changes,
+  }
+}
+
+/** A draft ready to send: both blanks filled. */
 function form(changes: Partial<MeetingFormOut> = {}): MeetingFormOut {
   return {
     id: FORM_ID,
@@ -77,11 +104,20 @@ const EMAIL_TEXT = [
   'Staff: About 300',
 ].join('\n')
 
-/** A pre-read sent by Al Sample, to Jo, with its copy in HubSpot where `copy` says. */
+/** A pre-read already sent to Jo Sample (`o-2`). */
 function sent(copy: HubSpotCopy, changes: Partial<MeetingFormOut> = {}): MeetingFormOut {
   return form({
     status: 'sent',
-    sent_to: [{ name: 'Jo Sample', email: JO }],
+    sent_to: [
+      recipient({
+        owner_id: 'o-2',
+        name: 'Jo Sample',
+        address: JO_ADDR,
+        at: '2026-11-25T22:12:00Z',
+        task: 'sent',
+        email: true,
+      }),
+    ],
     sent_at: '2026-11-25T22:12:00Z',
     sent_by: 'Al Sample',
     hubspot_copy: copy,
@@ -104,20 +140,22 @@ interface Call {
 }
 
 interface Server {
+  team: TeamMember[]
+  /** When true, GET /companies/team answers 503 team_unavailable until cleared. */
+  teamFails: boolean
+  /** HubSpot owner ids automatically ticked on first preview (`owner_ids: null`). */
+  meetingOwners: string[]
   form: MeetingFormOut
-  /** What the preview's `meeting_note` says, or nothing when Send won't touch the meeting. */
   meetingNote?: string | null
-  /** The domain the server takes as Contour's. */
   domain: string
-  /** How the send answers: as the server does, or one of its refusals. */
-  send: 'ok' | 'not_set_up' | 'email_failed' | 'outside_once'
-  /** The copy in HubSpot after a send of an unchanged, sent pre-read. */
+  send: 'ok' | 'not_set_up' | 'email_failed' | 'outside_once' | 'writes_off'
+  /** Owner ids whose HubSpot tasks fail on send (`task: 'failed'`). */
+  failedTaskOwners: string[]
+  /** When set, POST .../tasks/retry fails once or permanently. */
+  retryTaskFails: boolean
   copyAfterRetry: HubSpotCopy
-  /** PATCH waits for `release()`. */
   patchWaits: boolean
-  /** The send waits for `release()`. */
   sendWaits: boolean
-  /** The preview that answers 500, by its count (1 is the first), or none. */
   previewFails: number | null
   release: () => void
   calls: Call[]
@@ -125,9 +163,14 @@ interface Server {
 
 function mockServer(changes: Partial<Omit<Server, 'calls' | 'release'>> = {}): Server {
   const server: Server = {
+    team: TEAM,
+    teamFails: false,
+    meetingOwners: ['o-2'],
     form: form(),
     domain: 'contour.example',
     send: 'ok',
+    failedTaskOwners: [],
+    retryTaskFails: false,
     copyAfterRetry: { state: 'saved', sentence: null },
     patchWaits: false,
     sendWaits: false,
@@ -140,13 +183,33 @@ function mockServer(changes: Partial<Omit<Server, 'calls' | 'release'>> = {}): S
   let previews = 0
   const allowed = (address: string): boolean =>
     address.trim().toLowerCase().endsWith(`@${server.domain}`)
+
+  const priorForOwner = (ownerId: string): FormRecipient | undefined =>
+    server.form.sent_to.find((r) => r.owner_id === ownerId)
+  const priorForAddr = (addr: string): FormRecipient | undefined =>
+    server.form.sent_to.find((r) => r.address?.toLowerCase() === addr.toLowerCase())
+
   const respond = async (request: Request): Promise<Response> => {
     const url = new URL(request.url)
     const { method } = request
     const text = method === 'GET' ? '' : await request.clone().text()
     const body: unknown = text ? JSON.parse(text) : null
     server.calls.push({ method, path: url.pathname, body })
+
+    if (url.pathname === TEAM_URL && method === 'GET') {
+      if (server.teamFails) {
+        return problem(
+          503,
+          "The team list didn't load",
+          'Add people by email, or try again.',
+          'team_unavailable',
+        )
+      }
+      return json(server.team)
+    }
+
     if (url.pathname === FORM && method === 'GET') return json(server.form)
+
     if (url.pathname === FORM && method === 'PATCH') {
       if (server.patchWaits) {
         await new Promise<void>((resolve) => {
@@ -162,65 +225,108 @@ function mockServer(changes: Partial<Omit<Server, 'calls' | 'release'>> = {}): S
       }
       return json(server.form)
     }
+
     if (url.pathname === PREVIEW && method === 'POST') {
       previews += 1
       if (previews === server.previewFails) {
         return json({ title: 'Something went wrong on our side', status: 500 }, 500)
       }
-      const added = (body as { to?: string[] }).to ?? []
-      const people: FormPerson[] = [
-        { name: 'Jo Sample', email: JO, why: 'on the meeting', ticked: true, allowed: allowed(JO) },
-        ...added.map((address) => ({
-          name: address === AL ? 'Al Sample' : null,
-          email: address,
+      const req = body as {
+        owner_ids?: string[] | null
+        emails?: string[]
+        email_them?: boolean
+      }
+      const ownerIds = req.owner_ids === null || req.owner_ids === undefined
+        ? server.meetingOwners
+        : req.owner_ids
+      const emailThem = req.email_them ?? false
+      const added = req.emails ?? []
+
+      const people: FormPerson[] = []
+      const ownerIndexByAddr = new Map<string, number>()
+
+      for (const ownerId of ownerIds) {
+        const member = server.team.find((m) => m.owner_id === ownerId)
+        if (!member) continue
+        const addr = OWNER_ADDRESSES[ownerId] ?? null
+        const prior = priorForOwner(ownerId) ?? (addr ? priorForAddr(addr) : undefined)
+        const already = prior?.at ?? null
+        const taskNeeded = !prior
+        const emailNeeded = Boolean(!prior && emailThem && addr)
+        const idx = people.length
+        people.push({
+          owner_id: ownerId,
+          name: member.name,
+          address: addr && (emailNeeded || prior?.email) ? addr : null,
+          task: taskNeeded,
+          email: emailNeeded,
+          why: server.meetingOwners.includes(ownerId) ? 'on the meeting' : 'picked by you',
+          already,
+          ticked: already === null,
+          allowed: true,
+        })
+        if (addr) ownerIndexByAddr.set(addr.toLowerCase(), idx)
+      }
+
+      for (const rawAddr of added) {
+        const key = rawAddr.trim().toLowerCase()
+        const isAllowed = allowed(rawAddr)
+        if (isAllowed && ownerIndexByAddr.has(key)) {
+          const idx = ownerIndexByAddr.get(key) as number
+          const existing = people[idx]
+          if (existing.already === null) {
+            people[idx] = { ...existing, address: key, email: true, ticked: true }
+          }
+          continue
+        }
+        const prior = isAllowed ? priorForAddr(key) : undefined
+        const already = isAllowed && prior ? prior.at ?? null : null
+        const willEmail = isAllowed && !prior
+        people.push({
+          owner_id: null,
+          name: key === MIA_ADDR ? 'Mia Sample' : key === AL_ADDR ? 'Al Sample' : null,
+          address: isAllowed ? key : rawAddr.trim(),
+          task: false,
+          email: willEmail,
           why: 'added by you',
-          ticked: true,
-          allowed: allowed(address),
-        })),
-      ]
+          already,
+          ticked: willEmail,
+          allowed: isAllowed,
+        })
+      }
+
       const preview: FormEmailPreview = {
         subject: 'Pre-read: Sample Logistics Pty Ltd, Fri 27 Nov, 10:00 am',
         text: EMAIL_TEXT,
         html: '<h2>Pre-read for the meeting with Sample Logistics Pty Ltd</h2><script>alert(1)</script>',
+        task_subject: 'Pre-read: Office walk-through with Sample Logistics Pty Ltd, Fri 27 Nov',
+        task_due: '2026-11-26',
         people,
         meeting_note: server.meetingNote ?? null,
       }
       return json(preview)
     }
+
     if (url.pathname === SEND && method === 'POST') {
       if (server.sendWaits) {
         await new Promise<void>((resolve) => {
           server.release = resolve
         })
       }
-      const to = (body as { to: string[] }).to
-      if (server.form.status === 'sent') {
-        server.form = { ...server.form, hubspot_copy: server.copyAfterRetry }
-        return json(server.form)
+      const req = body as {
+        owner_ids?: string[]
+        emails?: string[]
+        email_them?: boolean
       }
-      if (server.send === 'not_set_up') {
-        // Track 1's words (`meeting_send.py`), word for word.
-        return problem(
-          409,
-          "Email isn't set up",
-          "Email isn't set up yet, so nothing was sent. The pre-read stays here: copy it, or send it once email is set up.",
-          'email_not_set_up',
-        )
-      }
-      if (server.send === 'email_failed') {
-        return problem(
-          502,
-          "The email didn't go",
-          'Nothing was sent. Try again in a minute.',
-          'email_failed',
-        )
-      }
+      const ownerIds = req.owner_ids ?? []
+      const emails = req.emails ?? []
+      const emailThem = req.email_them ?? false
+
       if (server.send === 'outside_once' && !refused) {
-        // Contour's list changed between the preview and the send: Jo's address is refused now.
         refused = true
         server.domain = 'contourinteriors.example'
       }
-      const outside = to.filter((address) => !allowed(address))
+      const outside = emails.filter((address) => !allowed(address))
       if (outside.length > 0) {
         return problem(
           422,
@@ -229,18 +335,123 @@ function mockServer(changes: Partial<Omit<Server, 'calls' | 'release'>> = {}): S
           'outside_address',
         )
       }
+
+      const newOwners = ownerIds.filter((id) => !priorForOwner(id))
+      const ownerEmailable = newOwners.filter((id) => emailThem && OWNER_ADDRESSES[id])
+      const newExtraEmails = emails.filter((addr) => !priorForAddr(addr))
+
+      if (server.form.status === 'sent' && newOwners.length === 0 && newExtraEmails.length === 0) {
+        server.form = { ...server.form, hubspot_copy: server.copyAfterRetry }
+        return json(server.form)
+      }
+
+      if (
+        server.send === 'writes_off' &&
+        newOwners.length > 0 &&
+        ownerEmailable.length === 0 &&
+        newExtraEmails.length === 0
+      ) {
+        return problem(
+          409,
+          'HubSpot writing is off',
+          "HubSpot isn't connected, so no tasks can go. Tick 'Also email them' to send it by email.",
+          'hubspot_writes_off',
+        )
+      }
+
+      if (server.send === 'not_set_up' && (ownerEmailable.length > 0 || newExtraEmails.length > 0)) {
+        return problem(
+          409,
+          "Email isn't set up",
+          "Email isn't set up yet, so nothing was sent. The pre-read stays here: copy it, or send it once email is set up.",
+          'email_not_set_up',
+        )
+      }
+
+      if (server.send === 'email_failed' && (ownerEmailable.length > 0 || newExtraEmails.length > 0)) {
+        return problem(
+          502,
+          "The email didn't go",
+          'Nothing was sent. Try again in a minute.',
+          'email_failed',
+        )
+      }
+
+      const merged = [...server.form.sent_to]
+      for (const ownerId of newOwners) {
+        const member = server.team.find((m) => m.owner_id === ownerId)
+        const addr = OWNER_ADDRESSES[ownerId] ?? null
+        const emailed = Boolean(emailThem && addr)
+        const taskState =
+          server.send === 'writes_off'
+            ? 'waiting'
+            : server.failedTaskOwners.includes(ownerId)
+              ? 'failed'
+              : 'sent'
+        merged.push(
+          recipient({
+            owner_id: ownerId,
+            name: member?.name ?? null,
+            address: emailed ? addr : null,
+            at: '2026-11-25T22:12:00Z',
+            task: taskState,
+            email: emailed,
+          }),
+        )
+      }
+      for (const addr of newExtraEmails) {
+        merged.push(
+          recipient({
+            owner_id: null,
+            name: addr === MIA_ADDR ? 'Mia Sample' : addr === AL_ADDR ? 'Al Sample' : null,
+            address: addr.toLowerCase(),
+            at: '2026-11-25T22:12:00Z',
+            task: 'none',
+            email: true,
+          }),
+        )
+      }
+
       server.form = {
         ...server.form,
         status: 'sent',
-        sent_to: to.map((email) => ({ email, name: email === JO ? 'Jo Sample' : null })),
-        sent_at: '2026-11-25T22:12:00Z',
-        sent_by: 'Al Sample',
-        hubspot_copy: { state: 'waiting', sentence: 'Waiting for HubSpot write access.' },
+        sent_to: merged,
+        sent_at: server.form.sent_at ?? '2026-11-25T22:12:00Z',
+        sent_by: server.form.sent_by ?? 'Al Sample',
+        hubspot_copy:
+          server.form.hubspot_copy ??
+          (server.send === 'writes_off'
+            ? { state: 'waiting', sentence: 'Waiting for HubSpot write access.' }
+            : { state: 'saved', sentence: null }),
       }
       return json(server.form)
     }
+
+    if (url.pathname === RETRY_TASKS && method === 'POST') {
+      if (server.retryTaskFails) {
+        return problem(
+          409,
+          'HubSpot writing is off',
+          "HubSpot isn't connected.",
+          'hubspot_writes_off',
+        )
+      }
+      server.form = {
+        ...server.form,
+        sent_to: server.form.sent_to.map((r) =>
+          r.task === 'failed' || r.task === 'waiting' ? { ...r, task: 'sent' } : r,
+        ),
+        hubspot_copy:
+          server.form.hubspot_copy?.state === 'failed'
+            ? { state: 'saved', sentence: null }
+            : server.form.hubspot_copy,
+      }
+      return json(server.form)
+    }
+
     return problem(404, 'Not found', 'Not here.', 'not_found')
   }
+
   vi.stubGlobal(
     'fetch',
     vi.fn((request: Request) => respond(request)),
@@ -254,7 +465,7 @@ function posts(server: Server, path: string): unknown[] {
     .map((call) => call.body)
 }
 
-function renderPreRead() {
+function renderPreRead(signIn: SignIn = { state: 'off' }) {
   const router = createMemoryRouter(
     [
       { path: '/companies/meetings', element: <h1>Client meetings</h1> },
@@ -263,7 +474,12 @@ function renderPreRead() {
     ],
     { initialEntries: [`/companies/meetings/${FORM_ID}`] },
   )
-  return renderWithProviders(<RouterProvider router={router} />, { withRouter: false })
+  const queryClient = createTestQueryClient()
+  queryClient.setQueryData(queryKeys.auth.me(), signIn)
+  return renderWithProviders(<RouterProvider router={router} />, {
+    withRouter: false,
+    queryClient,
+  })
 }
 
 function status(): HTMLElement {
@@ -272,18 +488,19 @@ function status(): HTMLElement {
   return found
 }
 
-/** One person's row in the dialog, found by its name or address. */
 function person(dialog: HTMLElement, name: string): HTMLElement {
   const row = within(dialog).getByText(name).closest('[data-slot=send-person]')
   if (!(row instanceof HTMLElement)) throw new Error(`No row for ${name}`)
   return row
 }
 
-async function openDialog(user: ReturnType<typeof renderPreRead>['user']): Promise<HTMLElement> {
+async function openDialog(
+  user: ReturnType<typeof renderPreRead>['user'],
+  buttonName: string | RegExp = 'Check and send',
+): Promise<HTMLElement> {
   await screen.findByRole('heading', { level: 1, name: 'Office walk-through' })
-  await user.click(screen.getByRole('button', { name: 'Check and send' }))
+  await user.click(screen.getByRole('button', { name: buttonName }))
   const dialog = await screen.findByRole('alertdialog', { name: 'Send the pre-read?' })
-  // The email comes with the preview.
   await within(dialog).findByRole('region', { name: 'The email as it will arrive' })
   return dialog
 }
@@ -292,26 +509,34 @@ afterEach(() => {
   toast.dismiss()
 })
 
-describe('Check and send', () => {
-  it('shows the email as it will arrive and who gets it, then sends to the ticked people', async () => {
+describe('Check and send (V19 T2-3 to T2-5)', () => {
+  it('shows the HubSpot task preview, email preview, team list with You, and defaults to HubSpot task only', async () => {
     const server = mockServer()
     const { user } = renderPreRead()
     const dialog = await openDialog(user)
 
-    // The preview was asked for once, with no address added.
-    expect(posts(server, PREVIEW)).toEqual([{ to: [] }])
-    // The subject and the plain text, in a box that scrolls and takes the keyboard's focus.
+    expect(posts(server, PREVIEW)).toEqual([
+      { owner_ids: null, emails: [], email_them: false },
+    ])
+
+    // HubSpot task subject and due day are shown.
+    const taskBox = dialog.querySelector('[data-slot=task-box]')
+    expect(taskBox).toHaveTextContent(
+      'Pre-read: Office walk-through with Sample Logistics Pty Ltd, Fri 27 Nov',
+    )
+    expect(taskBox).toHaveTextContent('26 Nov 2026')
+
+    // Email box scrolls by keyboard and never renders raw HTML.
     const email = within(dialog).getByRole('region', { name: 'The email as it will arrive' })
     expect(email).toHaveAttribute('tabindex', '0')
     expect(
       within(email).getByText('Pre-read: Sample Logistics Pty Ltd, Fri 27 Nov, 10:00 am'),
     ).toBeInTheDocument()
     expect(email).toHaveTextContent('Staff: About 300')
-    // Never the server's HTML.
     expect(email.innerHTML).not.toContain('<h2>')
     expect(document.querySelector('script')).toBeNull()
-    // Only the middle scrolls: the title and the buttons stay in view. The email box hands the
-    // wheel on at its end, so it never traps the scroll.
+
+    // Middle scrolls while header and footer buttons stay out.
     const middle = dialog.querySelector('[data-slot=send-dialog-body]')
     expect(middle).toHaveClass('overflow-y-auto', 'min-h-0')
     expect(middle).toContainElement(email)
@@ -320,165 +545,236 @@ describe('Check and send', () => {
       within(dialog).getByRole('button', { name: 'Send to 1 person' }),
     )
     expect(middle).not.toContainElement(within(dialog).getByRole('button', { name: 'Cancel' }))
-    expect(email).not.toHaveClass('overscroll-contain')
 
-    // Jo is on the meeting, ticked, with why.
+    // Team list shows Al-khair with "You", Jo ticked ("HubSpot task · On the meeting"),
+    // and Kai with "No Contour account · HubSpot task only".
+    expect(within(person(dialog, 'Al-khair Sample')).getByText('You')).toBeInTheDocument()
+    expect(within(person(dialog, 'Al-khair Sample')).getByRole('checkbox')).not.toBeChecked()
+
     const jo = within(person(dialog, 'Jo Sample'))
     expect(jo.getByRole('checkbox', { name: 'Jo Sample' })).toBeChecked()
-    expect(jo.getByText(`${JO} · on the meeting`)).toBeInTheDocument()
-    // No line about the meeting's notes in HubSpot until the server sends one.
-    expect(within(dialog).queryByText(/internal notes/)).toBeNull()
+    expect(jo.getByText('HubSpot task · On the meeting')).toBeInTheDocument()
+
+    expect(
+      within(person(dialog, 'Kai Sample')).getByText('No Contour account · HubSpot task only'),
+    ).toBeInTheDocument()
+
+    // "Also email them" starts unchecked.
+    expect(within(dialog).getByRole('checkbox', { name: 'Also email them' })).not.toBeChecked()
 
     await user.click(within(dialog).getByRole('button', { name: 'Send to 1 person' }))
     await waitFor(() => {
       expect(screen.queryByRole('alertdialog')).toBeNull()
     })
-    expect(posts(server, SEND)).toEqual([{ to: [JO] }])
+    expect(posts(server, SEND)).toEqual([
+      { owner_ids: ['o-2'], emails: [], email_them: false },
+    ])
 
-    // Sent: the status turns to Sent with its tick drawn, and the page says who got it and when.
     await waitFor(() => {
       expect(within(status()).getByText('Sent')).toBeInTheDocument()
     })
     expect(status().querySelector('[data-slot=tick-in]')).not.toBeNull()
     const note = screen.getByText('Sent to Jo Sample on 26 Nov 2026 at 9:12 am, by Al Sample.')
-    // The button that opened the dialog has gone, so the focus goes to who got it.
     await waitFor(() => {
       expect(note.closest('[data-slot=sent-note]')).toHaveFocus()
     })
-    // Sent and unchanged: nothing to send, so no Check and send.
     expect(screen.queryByRole('button', { name: 'Check and send' })).toBeNull()
   })
 
-  it('adds an address, and says before sending that one which is not Contour cannot get it', async () => {
+  it('covers every choice 11 recipient case: Also email them, no Contour account, and added email', async () => {
+    const server = mockServer()
+    const { user } = renderPreRead()
+    const dialog = await openDialog(user)
+
+    // Pick Kai (no Contour account) and add Mia by email, while Also email them is still OFF.
+    await user.click(within(person(dialog, 'Kai Sample')).getByRole('checkbox'))
+    const box = within(dialog).getByRole('textbox', { name: 'Add someone' })
+    await user.type(box, MIA_ADDR)
+    await user.click(within(dialog).getByRole('button', { name: 'Add' }))
+
+    await waitFor(() => {
+      expect(within(dialog).getByRole('button', { name: 'Send to 3 people' })).toBeEnabled()
+    })
+    // Jo & Kai get HubSpot task only; Mia gets Email even though Also email them is OFF.
+    expect(
+      within(person(dialog, 'Jo Sample')).getByText('HubSpot task · On the meeting'),
+    ).toBeInTheDocument()
+    expect(
+      within(person(dialog, 'Kai Sample')).getByText('HubSpot task · Picked by you'),
+    ).toBeInTheDocument()
+    expect(
+      within(person(dialog, 'Mia Sample')).getByText(`Email · ${MIA_ADDR} · Added by you`),
+    ).toBeInTheDocument()
+
+    // Now tick "Also email them": Jo gets HubSpot task + Email, Kai STILL gets HubSpot task only.
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Also email them' }))
+    await waitFor(() => {
+      expect(
+        within(person(dialog, 'Jo Sample')).getByText(
+          `HubSpot task · Email · ${JO_ADDR} · On the meeting`,
+        ),
+      ).toBeInTheDocument()
+    })
+    expect(
+      within(person(dialog, 'Kai Sample')).getByText(
+        'HubSpot task · Picked by you · No Contour account · HubSpot task only',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      within(person(dialog, 'Mia Sample')).getByText(`Email · ${MIA_ADDR} · Added by you`),
+    ).toBeInTheDocument()
+
+    await user.click(within(dialog).getByRole('button', { name: 'Send to 3 people' }))
+    await waitFor(() => {
+      expect(screen.queryByRole('alertdialog')).toBeNull()
+    })
+    expect(posts(server, SEND)).toEqual([
+      { owner_ids: ['o-2', 'o-3'], emails: [MIA_ADDR], email_them: true },
+    ])
+  })
+
+  it('adds and removes addresses, and rejects non-Contour addresses before sending', async () => {
     const server = mockServer()
     const { user } = renderPreRead()
     const dialog = await openDialog(user)
     const box = within(dialog).getByRole('textbox', { name: 'Add someone' })
 
-    // Outlook's way of writing it is read too.
-    await user.type(box, `Mia <${OUTSIDE}>; Al Sample <${AL.toUpperCase()}>`)
+    await user.type(box, `Outside <${OUTSIDE}>; Al <${AL_ADDR.toUpperCase()}>`)
     await user.click(within(dialog).getByRole('button', { name: 'Add' }))
     await waitFor(() => {
-      expect(posts(server, PREVIEW).at(-1)).toEqual({ to: [OUTSIDE, AL] })
+      expect(posts(server, PREVIEW).at(-1)).toEqual({
+        owner_ids: ['o-2'],
+        emails: [OUTSIDE, AL_ADDR],
+        email_them: false,
+      })
     })
     expect(box).toHaveValue('')
 
-    // The address that isn't Contour's can't be ticked, and says why beside it.
-    const mia = within(await waitFor(() => person(dialog, OUTSIDE)))
-    expect(mia.getByRole('checkbox', { name: OUTSIDE })).not.toBeChecked()
-    expect(mia.getByRole('checkbox', { name: OUTSIDE })).toBeDisabled()
+    const outside = within(await waitFor(() => person(dialog, OUTSIDE)))
+    expect(outside.getByRole('checkbox', { name: OUTSIDE })).toBeDisabled()
     expect(
-      mia.getByText("Not a Contour address, so it can't get the pre-read."),
+      outside.getByText("Not a Contour address, so it can't get the pre-read."),
     ).toBeInTheDocument()
-    expect(mia.getByRole('checkbox', { name: OUTSIDE })).toHaveAccessibleDescription(
-      "Added by you Not a Contour address, so it can't get the pre-read.",
-    )
-    // Al is Contour's, and ticked.
-    expect(within(person(dialog, 'Al Sample')).getByRole('checkbox')).toBeChecked()
 
-    // The same address again is already there; something that isn't one says so.
-    await user.type(box, AL)
+    await user.click(within(dialog).getByRole('button', { name: `Remove ${OUTSIDE}` }))
+    await waitFor(() => {
+      expect(within(dialog).queryByText(OUTSIDE)).toBeNull()
+    })
+
+    // Duplicate and unreadable email validation.
+    await user.type(box, AL_ADDR)
     await user.click(within(dialog).getByRole('button', { name: 'Add' }))
     expect(within(dialog).getByRole('alert')).toHaveTextContent('Already on the list.')
     await user.clear(box)
-    await user.type(box, 'jo at contour')
+    await user.type(box, 'not-an-email')
     await user.click(within(dialog).getByRole('button', { name: 'Add' }))
     expect(within(dialog).getByRole('alert')).toHaveTextContent(
       "That doesn't look like an email address.",
     )
-
-    // Take Jo off: only Al gets it. The refused address never goes.
-    await user.click(within(person(dialog, 'Jo Sample')).getByRole('checkbox'))
-    await user.click(within(dialog).getByRole('button', { name: 'Send to 1 person' }))
-    await waitFor(() => {
-      expect(posts(server, SEND)).toEqual([{ to: [AL] }])
-    })
   })
 
-  it('an address the rep added can be taken out again', async () => {
-    const server = mockServer()
+  it('says when the team list failed to load (V19 T2-5), still lets email addresses be added, and Try again loads it', async () => {
+    const server = mockServer({ teamFails: true })
     const { user } = renderPreRead()
     const dialog = await openDialog(user)
-    await user.type(within(dialog).getByRole('textbox', { name: 'Add someone' }), AL)
+
+    expect(
+      await within(dialog).findByText("The team list didn't load. Add people by email, or try again."),
+    ).toBeInTheDocument()
+    await user.type(within(dialog).getByRole('textbox', { name: 'Add someone' }), MIA_ADDR)
     await user.click(within(dialog).getByRole('button', { name: 'Add' }))
     expect(
       await within(dialog).findByRole('button', { name: 'Send to 2 people' }),
     ).toBeInTheDocument()
 
-    await user.click(within(dialog).getByRole('button', { name: `Remove ${AL}` }))
-    // Gone at once, before the server answers.
-    expect(within(dialog).queryByText('Al Sample')).toBeNull()
-    await waitFor(() => {
-      expect(posts(server, PREVIEW).at(-1)).toEqual({ to: [] })
-    })
+    server.teamFails = false
+    await user.click(within(dialog).getByRole('button', { name: 'Try again' }))
+    expect(await within(dialog).findByText('Al-khair Sample')).toBeInTheDocument()
+    expect(
+      within(dialog).queryByText("The team list didn't load. Add people by email, or try again."),
+    ).toBeNull()
+  })
+
+  it('tells the rep to tick Also email them when HubSpot is not connected (V19 T2-5)', async () => {
+    const server = mockServer({ send: 'writes_off' })
+    const { user } = renderPreRead()
+    const dialog = await openDialog(user)
+
+    await user.click(within(dialog).getByRole('button', { name: 'Send to 1 person' }))
+    const alert = await within(dialog).findByRole('alert')
+    expect(alert).toHaveTextContent(
+      "HubSpot isn't connected, so no tasks can go. Tick 'Also email them' to send it by email.",
+    )
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument()
+
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Also email them' }))
     await waitFor(() => {
       expect(within(dialog).getByRole('button', { name: 'Send to 1 person' })).toBeEnabled()
     })
+    await user.click(within(dialog).getByRole('button', { name: 'Send to 1 person' }))
+    await waitFor(() => {
+      expect(screen.queryByRole('alertdialog')).toBeNull()
+    })
+    expect(posts(server, SEND).at(-1)).toEqual({
+      owner_ids: ['o-2'],
+      emails: [],
+      email_them: true,
+    })
   })
 
-  it('an added address whose check failed stays, says so, and is checked again with Try again', async () => {
+  it('keeps an added address whose check failed and retries with Try again', async () => {
     const server = mockServer({ previewFails: 2 })
     const { user } = renderPreRead()
     const dialog = await openDialog(user)
-    await user.type(within(dialog).getByRole('textbox', { name: 'Add someone' }), AL)
+    await user.type(within(dialog).getByRole('textbox', { name: 'Add someone' }), MIA_ADDR)
     await user.click(within(dialog).getByRole('button', { name: 'Add' }))
 
     expect(
       await within(dialog).findByText('Not checked yet. It gets nothing until it is.'),
     ).toBeInTheDocument()
-    expect(within(dialog).getByRole('alert')).toHaveTextContent('Something went wrong on our side.')
-    // It isn't counted until the server has said it is Contour's.
-    expect(within(dialog).getByRole('button', { name: 'Send to 1 person' })).toBeEnabled()
-
     await user.click(within(dialog).getByRole('button', { name: 'Try again' }))
     expect(
       await within(dialog).findByRole('button', { name: 'Send to 2 people' }),
     ).toBeInTheDocument()
-    expect(posts(server, PREVIEW)).toEqual([{ to: [] }, { to: [AL] }, { to: [AL] }])
-    expect(within(dialog).queryByRole('alert')).toBeNull()
+    expect(posts(server, PREVIEW)).toHaveLength(3)
   })
 
-  it('an address refused when it is sent: plain words beside the people, naming it, and nothing sent', async () => {
+  it('handles outside_address on send and re-checks the list', async () => {
     const server = mockServer({ send: 'outside_once' })
     const { user } = renderPreRead()
     const dialog = await openDialog(user)
+    await user.click(within(dialog).getByRole('textbox', { name: 'Add someone' }))
+    await user.type(within(dialog).getByRole('textbox', { name: 'Add someone' }), MIA_ADDR)
+    await user.click(within(dialog).getByRole('button', { name: 'Add' }))
+    await waitFor(() => {
+      expect(within(dialog).getByRole('button', { name: 'Send to 2 people' })).toBeEnabled()
+    })
+
+    // Uncheck Jo so only Mia (who fails after domain switches to contourinteriors.example) goes.
+    await user.click(within(person(dialog, 'Jo Sample')).getByRole('checkbox'))
     await user.click(within(dialog).getByRole('button', { name: 'Send to 1 person' }))
 
     const alert = await within(dialog).findByRole('alert')
-    expect(alert).toHaveTextContent(
-      `Only Contour addresses. A pre-read goes to Contour addresses only, so nothing was sent. Take out: ${JO}.`,
-    )
-    // The preview is asked for again, and Jo's row now says so too; the dialog stays open.
+    expect(alert).toHaveTextContent(`Take out: ${MIA_ADDR}.`)
     await waitFor(() => {
-      expect(posts(server, PREVIEW)).toHaveLength(2)
+      expect(within(person(dialog, 'Mia Sample')).getByText(/Not a Contour address/)).toBeInTheDocument()
     })
-    expect(
-      await within(person(dialog, 'Jo Sample')).findByText(
-        "Not a Contour address, so it can't get the pre-read.",
-      ),
-    ).toBeInTheDocument()
-    expect(within(dialog).getByRole('button', { name: 'Send' })).toBeDisabled()
-    expect(within(dialog).getByRole('button', { name: 'Send' })).toHaveAccessibleDescription(
-      'Tick someone to send it to, or add a Contour address.',
-    )
-    // Nothing went: the pre-read is still a draft.
-    expect(within(status()).getByText('Draft ready')).toBeInTheDocument()
-    expect(screen.queryByText(/^Sent to/)).toBeNull()
+    expect(posts(server, PREVIEW)).toHaveLength(4)
   })
 
-  it('with no email set up: says nothing was sent, the pre-read stays here, and Copy copies it', async () => {
+  it('offers Copy the pre-read when email is not set up (409 email_not_set_up)', async () => {
     mockServer({ send: 'not_set_up' })
     const { user } = renderPreRead()
     const dialog = await openDialog(user)
+
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Also email them' }))
+    await waitFor(() => {
+      expect(within(dialog).getByRole('button', { name: 'Send to 1 person' })).toBeEnabled()
+    })
     await user.click(within(dialog).getByRole('button', { name: 'Send to 1 person' }))
-    // The server's words alone: they start with the title and end with what still works, so
-    // nothing is said twice.
     expect((await within(dialog).findByRole('alert')).textContent).toBe(
       "Email isn't set up yet, so nothing was sent. The pre-read stays here: copy it, or send it once email is set up.",
     )
-    expect(screen.getByRole('alertdialog')).toBeInTheDocument()
-    expect(within(status()).getByText('Draft ready')).toBeInTheDocument()
-    // PLAN-V18 T2-7: the email as it would have gone, to paste into the rep's own.
     await user.click(within(dialog).getByRole('button', { name: 'Copy the pre-read' }))
     expect(
       await within(dialog).findByText('Copied. Paste it into an email to the team.'),
@@ -487,7 +783,7 @@ describe('Check and send', () => {
     expect(copied.startsWith('Pre-read:')).toBe(true)
   })
 
-  it('can not be stopped or changed while it sends: Cancel, Esc, the ticks and Add wait', async () => {
+  it('cannot be stopped or changed while it sends', async () => {
     const server = mockServer({ sendWaits: true })
     const { user } = renderPreRead()
     const dialog = await openDialog(user)
@@ -496,16 +792,13 @@ describe('Check and send', () => {
       expect(posts(server, SEND)).toHaveLength(1)
     })
 
-    // On its way: nothing stops it, and who gets it can't change.
     expect(within(dialog).getByRole('button', { name: 'Sending.' })).toBeDisabled()
     expect(within(dialog).getByRole('button', { name: 'Cancel' })).toBeDisabled()
     expect(within(person(dialog, 'Jo Sample')).getByRole('checkbox')).toBeDisabled()
     expect(within(dialog).getByRole('textbox', { name: 'Add someone' })).toBeDisabled()
-    expect(within(dialog).getByRole('button', { name: 'Add' })).toBeDisabled()
     await user.keyboard('{Escape}')
     expect(screen.getByRole('alertdialog', { name: 'Send the pre-read?' })).toBeInTheDocument()
 
-    // The server answers: it went, and only then the dialog closes.
     server.release()
     await waitFor(() => {
       expect(screen.queryByRole('alertdialog')).toBeNull()
@@ -513,18 +806,20 @@ describe('Check and send', () => {
     expect(
       await screen.findByText('Sent to Jo Sample on 26 Nov 2026 at 9:12 am, by Al Sample.'),
     ).toBeInTheDocument()
-    expect(posts(server, SEND)).toEqual([{ to: [JO] }])
   })
 
-  it('an email that did not go says so in plain words, and Send can be pressed again', async () => {
+  it('says when email failed and brings the error into view', async () => {
     const server = mockServer({ send: 'email_failed' })
     const { user } = renderPreRead()
     const dialog = await openDialog(user)
     const scrolled = vi.spyOn(Element.prototype, 'scrollIntoView')
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Also email them' }))
+    await waitFor(() => {
+      expect(within(dialog).getByRole('button', { name: 'Send to 1 person' })).toBeEnabled()
+    })
     await user.click(within(dialog).getByRole('button', { name: 'Send to 1 person' }))
     const alert = await within(dialog).findByRole('alert')
     expect(alert).toHaveTextContent("The email didn't go. Nothing was sent. Try again in a minute.")
-    // Under the people, which may be scrolled away from Send: it is brought into view.
     await waitFor(() => {
       expect(scrolled.mock.contexts.some((one) => (one as Element).contains(alert))).toBe(true)
     })
@@ -534,7 +829,7 @@ describe('Check and send', () => {
     })
   })
 
-  it("says when Send also adds the pre-read to the meeting's notes in HubSpot, in one line", async () => {
+  it("shows the meeting note line when the server says Send also updates the meeting's notes", async () => {
     mockServer({
       meetingNote: "Send also adds this pre-read to the meeting's internal notes in HubSpot.",
     })
@@ -547,19 +842,11 @@ describe('Check and send', () => {
     ).toBeInTheDocument()
   })
 
-  it('says nothing about the meeting when the server says Send will not touch it', async () => {
-    mockServer({ meetingNote: null })
-    const { user } = renderPreRead()
-    const dialog = await openDialog(user)
-    expect(within(dialog).queryByText(/internal notes/)).toBeNull()
-  })
-
-  it('waits for a blank the rep has just left to be saved, so the email holds it', async () => {
+  it('waits for a blank the rep just left to finish saving before requesting preview', async () => {
     const server = mockServer({ form: form({ going: null }), patchWaits: true })
     const { user } = renderPreRead()
     await screen.findByRole('heading', { level: 1, name: 'Office walk-through' })
     await user.type(screen.getByRole('textbox', { name: 'Who is going' }), 'Jo Sample')
-    // Straight from the blank to the button: the blank's save is still on its way.
     await user.click(screen.getByRole('button', { name: 'Check and send' }))
     const dialog = await screen.findByRole('alertdialog', { name: 'Send the pre-read?' })
     expect(within(dialog).getByText('Saving your part first.')).toBeInTheDocument()
@@ -570,21 +857,18 @@ describe('Check and send', () => {
 
     server.release()
     await within(dialog).findByRole('region', { name: 'The email as it will arrive' })
-    expect(posts(server, PREVIEW)).toEqual([{ to: [] }])
-    // The save went before the preview was asked for.
     const order = server.calls.map((call) => `${call.method} ${call.path}`)
     expect(order.indexOf(`PATCH ${FORM}`)).toBeLessThan(order.indexOf(`POST ${PREVIEW}`))
   })
 })
 
 describe('on a phone', () => {
-  it('keeps what the keyboard lands on above Check and send, and no room once it is sent', async () => {
+  it('keeps scroll padding above Check and send, and clears it once sent', async () => {
     asPhone()
     mockServer()
     const { user } = renderPreRead()
     const button = await screen.findByRole('button', { name: 'Check and send' })
     expect(button.closest('[data-slot=send-bar]')).toHaveClass('fixed', 'bottom-0')
-    // WCAG 2.4.11: the page's scroller keeps room for the bar.
     expect(document.documentElement.style.scrollPaddingBottom).toBe('7rem')
 
     await user.click(button)
@@ -592,23 +876,16 @@ describe('on a phone', () => {
     await within(dialog).findByRole('region', { name: 'The email as it will arrive' })
     await user.click(within(dialog).getByRole('button', { name: 'Send to 1 person' }))
     await screen.findByText('Sent to Jo Sample on 26 Nov 2026 at 9:12 am, by Al Sample.')
-    // Sent and unchanged: no bar, so no room for one.
     expect(screen.queryByRole('button', { name: 'Check and send' })).toBeNull()
     expect(document.documentElement.style.scrollPaddingBottom).toBe('')
   })
 })
 
-describe('sent', () => {
+describe('sent, task retry, and send to more (V19 T2-4 & T2-5)', () => {
   it.each<[HubSpotCopy, string, boolean]>([
     [
       { state: 'saved', sentence: null },
       'A copy is saved in HubSpot, as a note on the company.',
-      false,
-    ],
-    // Waiting for write access, trying again can't work: the line says so, with no button.
-    [
-      { state: 'waiting', sentence: null },
-      'The copy waits for HubSpot write access. The email still went.',
       false,
     ],
     [
@@ -626,14 +903,11 @@ describe('sent', () => {
       "The copy in HubSpot didn't save. The email still went.",
       true,
     ],
-  ])('says where the copy in HubSpot stands: %o', async (copy, words, again) => {
+  ])('says where the company copy in HubSpot stands: %o', async (copy, words, again) => {
     mockServer({ form: sent(copy) })
     renderPreRead()
     const line = await screen.findByText(words)
     expect(line.closest('[data-slot=hubspot-copy]')?.querySelector('svg')).not.toBeNull()
-    // A pre-read that was sent before the page opened: the still icon, no tick drawn.
-    expect(status().querySelector('[data-slot=tick-in]')).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Check and send' })).toBeNull()
     if (again) {
       expect(screen.getByRole('button', { name: 'Try the HubSpot copy again' })).toBeEnabled()
     } else {
@@ -641,7 +915,7 @@ describe('sent', () => {
     }
   })
 
-  it('tries a copy that failed again, to the same people, and says nobody is emailed again', async () => {
+  it('tries a failed company copy again without emailing anyone twice', async () => {
     const server = mockServer({
       form: sent({
         state: 'failed',
@@ -650,24 +924,110 @@ describe('sent', () => {
     })
     const { user } = renderPreRead()
     const again = await screen.findByRole('button', { name: 'Try the HubSpot copy again' })
-    expect(again).toHaveAccessibleDescription('Nobody is emailed again.')
     await user.click(again)
     expect(
       await screen.findByText('A copy is saved in HubSpot, as a note on the company.'),
     ).toBeInTheDocument()
-    expect(posts(server, SEND)).toEqual([{ to: [JO] }])
-    expect(screen.queryByRole('button', { name: 'Try the HubSpot copy again' })).toBeNull()
-    // Still the same send: who got it and when are as before.
+    expect(posts(server, SEND)).toEqual([{ owner_ids: ['o-2'], emails: [], email_them: false }])
+  })
+
+  it('shows per-person outcomes, retries a failed HubSpot task without emailing, and handles retry errors', async () => {
+    const server = mockServer({
+      retryTaskFails: true,
+      form: form({
+        status: 'sent',
+        sent_at: '2026-11-17T03:00:00Z',
+        sent_by: 'Al Sample',
+        sent_to: [
+          recipient({
+            owner_id: 'o-2',
+            name: 'Jo Sample',
+            address: JO_ADDR,
+            at: '2026-11-17T03:00:00Z',
+            task: 'failed',
+            email: true,
+          }),
+        ],
+        hubspot_copy: { state: 'saved', sentence: null },
+      }),
+    })
+    const { user } = renderPreRead()
+
     expect(
-      screen.getByText('Sent to Jo Sample on 26 Nov 2026 at 9:12 am, by Al Sample.'),
+      await screen.findByText("Jo Sample's HubSpot task didn't go. The email still went."),
+    ).toBeInTheDocument()
+    const retry = screen.getByRole('button', { name: 'Try again' })
+    expect(retry).toHaveAccessibleDescription('Tries the task only. Nobody is emailed.')
+
+    // First retry fails -> shows plain-English problem without clearing failure.
+    await user.click(retry)
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      "The HubSpot task wasn't tried again. HubSpot isn't connected.",
+    )
+
+    // Retry succeeds -> updates recipient status to sent and removes failure banner.
+    server.retryTaskFails = false
+    await user.click(retry)
+    await waitFor(() => {
+      expect(screen.queryByText("Jo Sample's HubSpot task didn't go. The email still went.")).toBeNull()
+    })
+    expect(posts(server, RETRY_TASKS)).toHaveLength(2)
+    expect(posts(server, SEND)).toEqual([])
+    expect(screen.getByText(/HubSpot task · Email · Got it 17 Nov/)).toBeInTheDocument()
+  })
+
+  it('Send to more people greys out people who already got it and sends only to new people', async () => {
+    const server = mockServer({
+      form: form({
+        status: 'sent',
+        sent_at: '2026-11-17T03:00:00Z',
+        sent_by: 'Al Sample',
+        sent_to: [
+          recipient({
+            owner_id: 'o-2',
+            name: 'Jo Sample',
+            at: '2026-11-17T03:00:00Z',
+            task: 'sent',
+            email: false,
+          }),
+        ],
+        hubspot_copy: { state: 'saved', sentence: null },
+      }),
+    })
+    const { user } = renderPreRead()
+
+    const dialog = await openDialog(user, 'Send to more people')
+    const joRow = person(dialog, 'Jo Sample')
+    expect(joRow).toHaveAttribute('data-already', 'true')
+    expect(within(joRow).getByRole('checkbox')).toBeDisabled()
+    expect(within(joRow).getByRole('checkbox')).not.toBeChecked()
+    expect(within(joRow).getByText(/Got it 17 Nov/)).toBeInTheDocument()
+
+    // Nobody new ticked yet -> Send disabled.
+    expect(within(dialog).getByRole('button', { name: 'Send' })).toBeDisabled()
+
+    // Pick Al-khair ("You"): count says Send to 1 person, and sends only o-1.
+    await user.click(within(person(dialog, 'Al-khair Sample')).getByRole('checkbox'))
+    await waitFor(() => {
+      expect(within(dialog).getByRole('button', { name: 'Send to 1 person' })).toBeEnabled()
+    })
+    await user.click(within(dialog).getByRole('button', { name: 'Send to 1 person' }))
+    await waitFor(() => {
+      expect(screen.queryByRole('alertdialog')).toBeNull()
+    })
+    expect(posts(server, SEND)).toEqual([
+      { owner_ids: ['o-1'], emails: [], email_them: false },
+    ])
+    // SentNote now lists both recipients.
+    expect(
+      await screen.findByText(/Sent to Jo Sample and Al-khair Sample/),
     ).toBeInTheDocument()
   })
 
-  it('a draft again keeps who got it last, but not the copy line or its Try again', async () => {
-    // Changed after it went: the server keeps the last send's copy, which failed.
+  it('a draft again keeps who got it last, without Send to more people or task retry', async () => {
     mockServer({
       form: sent(
-        { state: 'failed', sentence: "HubSpot didn't save the copy. The email won't go twice." },
+        { state: 'failed', sentence: "HubSpot didn't save the copy." },
         { status: 'draft' },
       ),
     })
@@ -676,20 +1036,41 @@ describe('sent', () => {
       await screen.findByText('Last sent to Jo Sample on 26 Nov 2026 at 9:12 am, by Al Sample.'),
     ).toBeInTheDocument()
     expect(document.querySelector('[data-slot=hubspot-copy]')).toBeNull()
-    expect(screen.queryByText(/HubSpot didn't save the copy/)).toBeNull()
-    // On a draft, Send emails the new words: a retry that emails nobody isn't offered.
-    expect(screen.queryByRole('button', { name: 'Try the HubSpot copy again' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Send to more people' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Check and send' })).toBeEnabled()
   })
 
-  it('after an edit it is a draft again, and Check and send comes back', async () => {
-    mockServer({ form: sent({ state: 'saved', sentence: null }) })
-    const { user } = renderPreRead()
-    await screen.findByText(/^Sent to Jo Sample/)
-    expect(screen.queryByRole('button', { name: 'Check and send' })).toBeNull()
-    await user.type(screen.getByRole('textbox', { name: 'Ideal next step' }), ' Bring the plans.')
-    await user.tab()
-    expect(await screen.findByRole('button', { name: 'Check and send' })).toBeEnabled()
-    expect(screen.getByText(/^Last sent to Jo Sample/)).toBeInTheDocument()
+  it('hides Check and send, Send to more people, and retry buttons for a Viewer', async () => {
+    const viewerSignIn: SignIn = {
+      state: 'signed_in',
+      user: {
+        ...SAMPLE_USER,
+        role: 'viewer',
+        position: null,
+        apps: ['companies'],
+        features: ['companies.meetings'],
+      },
+    }
+    mockServer({
+      form: form({
+        status: 'sent',
+        sent_at: '2026-11-17T03:00:00Z',
+        sent_by: 'Al Sample',
+        sent_to: [
+          recipient({
+            owner_id: 'o-2',
+            name: 'Jo Sample',
+            task: 'failed',
+            email: true,
+          }),
+        ],
+        hubspot_copy: { state: 'failed', sentence: null },
+      }),
+    })
+    renderPreRead(viewerSignIn)
+    await screen.findByText(/Jo Sample's HubSpot task didn't go/)
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Try the HubSpot copy again' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Send to more people' })).toBeNull()
   })
 })

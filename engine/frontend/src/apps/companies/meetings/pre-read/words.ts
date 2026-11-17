@@ -5,7 +5,7 @@
  */
 import { toApiProblem } from '@/api/client'
 import type { FormRecipient, HubSpotCopy, MeetingFormOut } from '@/api/types'
-import { formatDate, formatNumber, formatTime, pluralise } from '@/lib/format'
+import { formatDate, formatNumber, formatTime, melbourneDate, pluralise, TIME_ZONE } from '@/lib/format'
 import { formatMoney, parseMoney } from '@/lib/money'
 import { changeDetail } from '@/lib/problems'
 import { MOST_PEOPLE, type SendBlock } from './rules'
@@ -217,20 +217,35 @@ export const SEND_REASONS: Readonly<Record<SendBlock, string>> = {
   failed: "The summaries weren't written. Try again first.",
 }
 
-// --- The send dialog (T3-11) ------------------------------------------------------------------
+// --- The send dialog (T3-11, V19 T2-3..T2-5) ----------------------------------------------------
 
 export const SEND_TITLE = 'Send the pre-read?'
 export const SEND_DESCRIPTION =
-  'Check the email and who gets it. Nothing is sent until you press Send.'
-export const GETTING_READY = 'Getting the email ready.'
+  'Check the HubSpot task, the email and who gets it. Nothing is sent until you press Send.'
+export const GETTING_READY = 'Getting the pre-read ready.'
 export const SAVING_FIRST = 'Saving your part first.'
-export const PREVIEW_FAILED = "The email couldn't be made ready, so nothing was sent."
+export const PREVIEW_FAILED = "The pre-read couldn't be made ready, so nothing was sent."
+export const THE_TASK = 'The HubSpot task'
+export const TASK_BOX = 'The HubSpot task as it will arrive'
+export const DUE_LABEL = 'Due:'
 export const THE_EMAIL = 'The email'
 export const EMAIL_BOX = 'The email as it will arrive'
 export const SUBJECT = 'Subject:'
 export const WHO_GETS_IT = 'Who gets it'
+export const WHO_GETS_HINT =
+  'Pick who gets a HubSpot task. Anyone added by email gets an email (Contour addresses only).'
 export const ONLY_CONTOUR = 'Only Contour addresses can get it.'
-export const NOBODY_LISTED = 'Nobody yet. Add a Contour address below.'
+export const TEAM_LOADING = 'Loading the team list.'
+export const TEAM_UNAVAILABLE = "The team list didn't load. Add people by email, or try again."
+export const YOU_TAG = 'You'
+export const ALSO_EMAIL_THEM = 'Also email them'
+export const ALSO_EMAIL_HINT =
+  'Also emails picked team members who have a Contour account. Added email addresses always get the email.'
+export const GETS_TASK = 'HubSpot task'
+export const GETS_EMAIL = 'Email'
+export const GETS_BOTH = 'HubSpot task · Email'
+export const NO_CONTOUR_ACCOUNT = 'No Contour account · HubSpot task only'
+export const NOBODY_LISTED = 'Nobody yet. Pick someone from the team or add a Contour email below.'
 export const NOT_CONTOUR = "Not a Contour address, so it can't get the pre-read."
 export const NOT_CHECKED = 'Not checked yet. It gets nothing until it is.'
 export const CHECKING = 'Checking it is a Contour address.'
@@ -239,16 +254,63 @@ export const ADDRESS_PLACEHOLDER = 'Their email address'
 export const ADD = 'Add'
 export const ADDRESS_UNREADABLE = "That doesn't look like an email address."
 export const ALREADY_LISTED = 'Already on the list.'
+export const ALREADY_GOT_IT = 'They already got this pre-read.'
 export const TOO_MANY = `Up to ${String(MOST_PEOPLE)} people can get it.`
-export const NOBODY_TICKED = 'Tick someone to send it to, or add a Contour address.'
+export const NOBODY_TICKED = 'Tick someone from the team, or add a Contour address.'
 export const OVER_THE_MOST = `Send it to ${String(MOST_PEOPLE)} people or fewer.`
 export const SEND = 'Send'
 export const SENDING = 'Sending.'
 export const CANCEL = 'Cancel'
+export const HUBSPOT_NOT_CONNECTED_SEND =
+  "HubSpot isn't connected, so no tasks can go. Tick 'Also email them' to send it by email."
 /** With no sender set up (409 `email_not_set_up`): the email can be copied instead. */
 export const COPY_PRE_READ = 'Copy the pre-read'
 export const COPIED = 'Copied. Paste it into an email to the team.'
 export const NOT_COPIED = "It couldn't be copied. Select the email above and copy it."
+
+const shortDayParts = new Intl.DateTimeFormat('en-AU', {
+  timeZone: TIME_ZONE,
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+})
+
+/** "17 Nov", or "17 Nov 2027" in another year, in Melbourne time. */
+export function dayShortWords(at: string, today: string = melbourneDate(new Date())): string {
+  const date = new Date(at)
+  if (Number.isNaN(date.getTime())) return ''
+  const parts = shortDayParts.formatToParts(date)
+  const part = (type: Intl.DateTimeFormatPartTypes): string =>
+    parts.find((item) => item.type === type)?.value ?? ''
+  const dayMonth = `${part('day')} ${part('month')}`.trim()
+  if (!dayMonth) return ''
+  const dayIso = melbourneDate(date)
+  return dayIso.slice(0, 4) === today.slice(0, 4) ? dayMonth : `${dayMonth} ${part('year')}`.trim()
+}
+
+/** "Got it 17 Nov" or "Got it". */
+export function gotItWords(at: string | null | undefined): string {
+  if (!at) return 'Got it'
+  const day = dayShortWords(at)
+  return day ? `Got it ${day}` : 'Got it'
+}
+
+/** What one person gets in a send: "HubSpot task · Email", "HubSpot task", "Email", or null. */
+export function deliveryWords(what: { task: boolean; email: boolean }): string | null {
+  if (what.task && what.email) return GETS_BOTH
+  if (what.task) return GETS_TASK
+  if (what.email) return GETS_EMAIL
+  return null
+}
+
+/** A person's best label when showing recipients: name, then address, then fallback. */
+export function recipientLabel(person: {
+  name?: string | null
+  address?: string | null
+  owner_id?: string | null
+}): string {
+  return person.name?.trim() || person.address?.trim() || (person.owner_id ? 'Team member' : 'Someone')
+}
 
 /** "Remove mia@example.com" */
 export function removeWords(address: string): string {
@@ -275,24 +337,30 @@ export function whyLine(why: string): string {
  */
 export function sendProblemWords(error: unknown): { title: string | null; detail: string | null } {
   const problem = toApiProblem(error)
+  if (problem.code === 'hubspot_writes_off') {
+    return { title: null, detail: HUBSPOT_NOT_CONNECTED_SEND }
+  }
   const detail = changeDetail(problem)
   const title = problem.title.trim()
   if (detail?.trim().toLowerCase().startsWith(title.toLowerCase())) return { title: null, detail }
   return { title: sentence(title), detail }
 }
 
-// --- Sent ------------------------------------------------------------------------------------------
+// --- Sent (T3-11, V19 T2-4) ---------------------------------------------------------------------
 
 export const CHANGED_AFTER_SENT = 'A change makes it a draft again, so you can send the new words.'
 export const CHANGED_SINCE_SENT =
   "It changed after it was sent, so it's a draft again. Send it again to share the new words."
+export const SEND_TO_MORE = 'Send to more people'
 export const TRY_COPY_AGAIN = 'Try the HubSpot copy again'
 export const NOBODY_EMAILED_AGAIN = 'Nobody is emailed again.'
 export const TRYING_COPY = 'Trying the copy again. Nobody is emailed again.'
+export const TASK_RETRY_HINT = 'Tries the task only. Nobody is emailed.'
+export const TRYING_TASKS = 'Trying the HubSpot task again. Nobody is emailed.'
 
 /** "Jo Sample", or "Jo Sample, Mia Sample and Al Sample": each by name, else by address. */
 export function recipientsWords(people: readonly FormRecipient[]): string {
-  const names = people.map((person) => person.name?.trim() || person.email)
+  const names = people.map((person) => recipientLabel(person))
   if (names.length <= 1) return names[0] ?? ''
   return `${names.slice(0, -1).join(', ')} and ${names.at(-1) ?? ''}`
 }
@@ -310,6 +378,54 @@ export function sentWords(
   const by = form.sent_by?.trim() ? `, by ${form.sent_by.trim()}` : ''
   const sent = last ? 'Last sent' : 'Sent'
   return `${to ? `${sent} to ${to}` : sent}${when}${by}.`
+}
+
+/** What one recipient got: "HubSpot task · Email · Got it 17 Nov", etc. */
+export function recipientStatusWords(recipient: FormRecipient): string {
+  const parts: string[] = []
+  if (recipient.task === 'sent') parts.push(GETS_TASK)
+  else if (recipient.task === 'waiting') parts.push('HubSpot task waiting')
+  else if (recipient.task === 'failed') parts.push("HubSpot task didn't go")
+  if (recipient.email) parts.push(GETS_EMAIL)
+  if (recipient.at) parts.push(gotItWords(recipient.at))
+  return parts.join(' · ')
+}
+
+/**
+ * "Jo Sample's HubSpot task didn't go. The email still went.", or plural / without email note
+ * when no one was emailed.
+ */
+export function tasksFailedWords(
+  failed: readonly FormRecipient[],
+  emailedAny: boolean,
+): string {
+  const who = recipientsWords(failed)
+  const head =
+    failed.length === 1
+      ? `${who}'s HubSpot task didn't go.`
+      : `${who}'s HubSpot tasks didn't go.`
+  return emailedAny ? `${head} The email still went.` : head
+}
+
+/** "Jo Sample's HubSpot task waits for HubSpot write access." */
+export function tasksWaitingWords(waiting: readonly FormRecipient[]): string {
+  const who = recipientsWords(waiting)
+  return waiting.length === 1
+    ? `${who}'s HubSpot task waits for HubSpot write access.`
+    : `${who}'s HubSpot tasks wait for HubSpot write access.`
+}
+
+/** "The HubSpot task wasn't tried again. ..." */
+export function tasksNotTriedWords(error: unknown): string {
+  const problem = toApiProblem(error)
+  if (problem.code === 'hubspot_writes_off') {
+    return "The HubSpot task wasn't tried again. HubSpot isn't connected."
+  }
+  const detail = changeDetail(problem)
+  const title = problem.title.trim()
+  const titleText =
+    detail?.trim().toLowerCase().startsWith(title.toLowerCase()) || !title ? null : sentence(title)
+  return ["The HubSpot task wasn't tried again.", titleText, detail].filter(Boolean).join(' ')
 }
 
 /**
