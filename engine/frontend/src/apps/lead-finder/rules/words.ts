@@ -227,6 +227,45 @@ export function tbcByKey(rules: Rules): Map<string, TbcNote> {
   return map
 }
 
+/**
+ * What a check that is "not known yet" earns (PLAN-V21 T2-2): its share of the points, rounded
+ * down. At 0.5 it is half, the lead card's "half points: not known yet".
+ */
+export function unknownShareWords(share: number): string {
+  if (share <= 0) return 'no points'
+  if (share >= 1) return 'all its points'
+  if (share === 0.5) return 'half its points, rounded down'
+  return `${String(Math.round(share * 100))}% of its points, rounded down`
+}
+
+/** The same, short, beside a check the tool can't judge: "half points". */
+export function unknownShareShort(share: number): string {
+  if (share <= 0) return 'no points'
+  if (share >= 1) return 'full points'
+  if (share === 0.5) return 'half points'
+  return `${String(Math.round(share * 100))}% of the points`
+}
+
+/** The Score section's note on a check the tool can't judge (PLAN-V21 T2-2). */
+export function unknownNote(share: number): string {
+  return `A check the tool can't judge for a lead, like a warm path in, earns ${unknownShareWords(share)}. The lead card says "${unknownShareShort(share)}: not known yet" beside it. A check that fails earns nothing.`
+}
+
+/**
+ * The Size section's note (PLAN-V21 T1-7 and T2-3): a known count under the floor is a Drop, an
+ * estimate from the estimated floor up to it is a Watch, and only HubSpot's own count stops a
+ * company before any paid search.
+ */
+export function sizeNote(staffFloor: number, estimatedFloor: number): string {
+  const floor = String(staffFloor)
+  const low = String(estimatedFloor)
+  const band =
+    estimatedFloor < staffFloor
+      ? ` An estimate of ${low} to ${String(staffFloor - 1)} staff (LinkedIn doubled, Signal Hire or the research's guess) is a Watch with "check the size".`
+      : ''
+  return `An overseas company that announces an office here big enough fits too. A known count under ${floor} is a Drop, unless the company is growing.${band} Only HubSpot's own count, for a sure match, stops a company before any paid search: under ${low} staff with no growth sign, unless Signal Hire counts ${low} or more. Signal Hire's count alone never stops one.`
+}
+
 /** "Melbourne, Adelaide and Perth". */
 export function list(items: readonly string[]): string {
   if (items.length <= 1) return items.join('')

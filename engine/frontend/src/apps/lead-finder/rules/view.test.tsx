@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { mockApi } from '@/test/mock-api'
 import { renderWithProviders } from '@/test/render'
 import RulesView from './view'
-import { list, partChecks, SECTIONS } from './words'
+import { list, partChecks, SECTIONS, sizeNote, unknownShareWords } from './words'
 
 /**
  * The rules as the API gives them (11 Nov), with PLAN-V16's parts as Track 1 built them (T1-2 to
@@ -87,6 +87,7 @@ const RULES = {
       staff_min: 50,
       staff_hint_min: 50,
       staff_floor: 50,
+      estimated_floor: 30,
       growth_signs: ['fast_growth', 'new_to_australia'],
       staff_max: 600,
       staff_counted_in: 'city',
@@ -210,6 +211,7 @@ const RULES = {
       procurement: 6,
       warm_path: 4,
       unseen: ['warm_path'],
+      unknown_share: 0.5,
       dampeners: { strong: 20, moderate: 10 },
       tiers: { a: 75, b: 55, c: 40 },
     },
@@ -383,7 +385,7 @@ describe('Rules', () => {
     await user.hover(within(bar).getByRole('tab', { name: 'Access: 20 points' }))
     const panel = screen.getByRole('tabpanel')
     expect(panel).toHaveTextContent('Access: 20 points')
-    expect(panel).toHaveTextContent("A warm path in (can't be judged yet)")
+    expect(panel).toHaveTextContent("A warm path in (can't be judged yet: half points)")
     // Keyboard: focus the bar, move with the arrows
     tabs[0]?.focus()
     await user.keyboard('{ArrowRight}')
@@ -447,5 +449,40 @@ describe('Rules for PLAN-V16 (T3-6)', () => {
       'Strong for a formal tender portal and offshore or central global buying; moderate for lowest-price tenders and design and build bought apart',
     )
     expect(card).toHaveTextContent('Strong, unless it comes with Restructure')
+  })
+})
+
+describe('Rules for PLAN-V21 (half points and the estimated staff band)', () => {
+  it('says a check that is not known yet earns half its points', async () => {
+    mockApi({ '/api/v1/lead-finder/rules': RULES })
+    renderWithProviders(<RulesView />)
+    await screen.findByRole('tablist', { name: "The score's parts" })
+    expect(row('score.unknown_share')).toHaveTextContent(
+      'A check that is not known yet earnshalf its points, rounded down',
+    )
+    const score = document.getElementById('rules-score') as HTMLElement
+    expect(score).toHaveTextContent(
+      'The lead card says "half points: not known yet" beside it. A check that fails earns nothing.',
+    )
+  })
+
+  it('shows the estimated staff floor: 30 to 49 estimated staff is a Watch, "check the size"', async () => {
+    mockApi({ '/api/v1/lead-finder/rules': RULES })
+    renderWithProviders(<RulesView />)
+    await screen.findByText('Size', { selector: '[data-slot=card-title]' })
+    expect(row('size.estimated_floor')).toHaveTextContent(
+      'An estimated count, a Watch with "check the size"30 to 49',
+    )
+    const size = document.getElementById('rules-size') as HTMLElement
+    expect(size).toHaveTextContent(
+      `An estimate of 30 to 49 staff (LinkedIn doubled, Signal Hire or the research's guess) is a Watch with "check the size".`,
+    )
+    expect(size).toHaveTextContent("Signal Hire's count alone never stops one.")
+  })
+
+  it('words a share that is not one half', () => {
+    expect(unknownShareWords(0.25)).toBe('25% of its points, rounded down')
+    expect(unknownShareWords(0)).toBe('no points')
+    expect(sizeNote(50, 50)).not.toContain('An estimate of')
   })
 })

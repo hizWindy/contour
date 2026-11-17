@@ -30,7 +30,10 @@ import {
   SECTIONS,
   SIGN_STRENGTHS,
   sources,
+  sizeNote,
   tbcByKey,
+  unknownNote,
+  unknownShareWords,
   type Rules,
   type SectionId,
   type TbcNote,
@@ -364,6 +367,15 @@ function RulesLoaded({ rules }: { rules: Rules }) {
             <Row label="Too small, dropped" rule="size.staff_floor" tbc={tbc}>
               under {c.size.staff_floor}
             </Row>
+            {c.size.estimated_floor < c.size.staff_floor ? (
+              <Row
+                label='An estimated count, a Watch with "check the size"'
+                rule="size.estimated_floor"
+                tbc={tbc}
+              >
+                {c.size.estimated_floor} to {c.size.staff_floor - 1}
+              </Row>
+            ) : null}
             <Row label="Over this, a Director decides" tbc={tbc}>
               {formatNumber(c.size.staff_max)} staff
             </Row>
@@ -407,9 +419,7 @@ function RulesLoaded({ rules }: { rules: Rules }) {
               </span>
             </Row>
             <p className="pt-3 text-caption text-muted-foreground">
-              An overseas company that announces an office here big enough fits too. A company that
-              HubSpot and Signal Hire both say has under {c.size.staff_floor} staff, with no growth
-              sign, is dropped before any paid search.
+              {sizeNote(c.size.staff_floor, c.size.estimated_floor)}
             </p>
           </Section>
 
@@ -544,6 +554,9 @@ function RulesLoaded({ rules }: { rules: Rules }) {
             <Row label="Discard: not listed" tbc={tbc}>
               under {c.score.tiers.c}
             </Row>
+            <Row label="A check that is not known yet earns" rule="score.unknown_share" tbc={tbc}>
+              {unknownShareWords(c.score.unknown_share)}
+            </Row>
             <Row label="A strong dampener takes off" rule="score.dampeners" tbc={tbc}>
               {c.score.dampeners.strong} points
             </Row>
@@ -555,6 +568,9 @@ function RulesLoaded({ rules }: { rules: Rules }) {
                 {stage}
               </Row>
             ))}
+            <p className="pt-3 text-caption text-muted-foreground">
+              {unknownNote(c.score.unknown_share)}
+            </p>
           </Section>
 
           <Section

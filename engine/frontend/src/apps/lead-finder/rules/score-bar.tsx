@@ -10,7 +10,7 @@ import { m } from 'motion/react'
 import { useId, useState } from 'react'
 import { handleRovingKey, INSTANT, springs, useStill } from '@/components/motion'
 import { cn } from '@/lib/utils'
-import { partChecks, type Criteria } from './words'
+import { partChecks, unknownShareShort, type Criteria } from './words'
 
 export function ScoreBar({ score }: { score: Criteria['score'] }) {
   const still = useStill()
@@ -101,7 +101,7 @@ export function ScoreBar({ score }: { score: Criteria['score'] }) {
                 {check.unseen ? (
                   <span className="text-caption text-muted-foreground">
                     {' '}
-                    (can&apos;t be judged yet)
+                    (can&apos;t be judged yet: {unknownShareShort(score.unknown_share)})
                   </span>
                 ) : null}
               </span>
