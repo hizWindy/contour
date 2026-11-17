@@ -8,7 +8,7 @@
  */
 import type { Run, SearchOut } from '@/api/types'
 import { formatDateTime, formatDuration, pluralise } from '@/lib/format'
-import { RUN_MODE_LABELS, RUN_SOURCE_LABELS, RUN_SOURCE_ORDER } from '@/lib/labels'
+import { RUN_MODE_LABELS, RUN_SOURCE_LABELS, RUN_SOURCE_ORDER, sinceDaysLabel } from '@/lib/labels'
 import { addMoney, formatMoney, moneyToString, parseMoney } from '@/lib/money'
 
 export interface DetailLine {
@@ -70,7 +70,7 @@ export function setupLines(run: Run, names: DetailNames): DetailLine[] {
   }
 
   if (typeof params.since_days === 'number') {
-    lines.push({ label: 'How far back', value: `Last ${String(params.since_days)} days` })
+    lines.push({ label: 'How far back', value: `Last ${sinceDaysLabel(params.since_days)}` })
   }
 
   // PLAN-V16: where it looked, when a person chose. (A run no longer has a goal of good leads that

@@ -70,7 +70,7 @@ export const OPTIONS: RunOptions = {
     { id: 'fast_growth', label: 'Fast growth', group: 'main', default: false },
     { id: 'new_ceo', label: 'New CEO or culture change', group: 'weak', default: false },
   ],
-  since_days: { choices: [7, 30], default: 30 },
+  since_days: { choices: [7, 30, 90, 180], default: 90 },
   modes: [
     { mode: 'discovery', title: 'Find new leads', needs_approval: false, approved: true },
     {
@@ -99,7 +99,7 @@ export const OPTIONS: RunOptions = {
     cities: ['Melbourne'],
     area: {},
     triggers: ['lease_ending'],
-    since_days: 30,
+    since_days: 90,
     sources: null,
     goal_leads: null,
     caps: { run_cap_usd: null, max_companies: null },

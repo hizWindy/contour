@@ -14,7 +14,7 @@ import type {
   RunStatus,
   Tier,
 } from '@/api/types'
-import { humanise } from './format'
+import { humanise, pluralise } from './format'
 
 /**
  * A lead's tier (PLAN-V16 T1-6, Levi's section 6), best first. The tier is the headline; the four
@@ -98,6 +98,14 @@ export const RUN_STATUS_LABELS: Record<RunStatus, string> = {
   failed: 'Failed',
   cancelled: 'Stopped',
   interrupted: 'Interrupted',
+}
+
+/**
+ * How far back a run looks, in words (PLAN-V21 T1-2): "7 days", "30 days", "90 days" and
+ * "6 months". Six months or more, in whole months, reads in months, the way people say it.
+ */
+export function sinceDaysLabel(days: number): string {
+  return days >= 180 && days % 30 === 0 ? pluralise(days / 30, 'month') : pluralise(days, 'day')
 }
 
 /** The kinds of run, as the run pages name them. */

@@ -71,7 +71,7 @@ describe('the Start form', () => {
     expect(form.mode).toBe('discovery')
     expect(form.cities).toEqual(['Melbourne'])
     expect(form.triggers).toEqual(['lease_ending'])
-    expect(form.sinceDays).toBe(30)
+    expect(form.sinceDays).toBe(90)
   })
 
   it('sends only the parts of discovery, and an area only when it narrows a picked city', () => {
@@ -86,7 +86,7 @@ describe('the Start form', () => {
       params: {
         cities: ['Melbourne'],
         triggers: ['lease_ending'],
-        since_days: 30,
+        since_days: 90,
         area: { Melbourne: 'cbd' },
       },
     })

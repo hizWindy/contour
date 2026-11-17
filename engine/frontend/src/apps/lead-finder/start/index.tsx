@@ -37,6 +37,7 @@ import { Money } from '@/components/money'
 import { PageHeader } from '@/components/page-header'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { sinceDaysLabel } from '@/lib/labels'
 import { formatMoney } from '@/lib/money'
 import { useBarRoom } from '@/lib/use-bar-room'
 import { useMediaQuery } from '@/lib/use-media-query'
@@ -251,19 +252,23 @@ function StartFormView({ options }: { options: RunOptions }) {
               ) : null}
               <Field>
                 <FieldLabel id="since-label">How far back</FieldLabel>
-                <Segmented
-                  size="sm"
-                  value={String(form.sinceDays)}
-                  options={options.since_days.choices.map((days) => ({
-                    value: String(days),
-                    label: `Last ${days} days`,
-                  }))}
-                  onChange={(value) => {
-                    update({ sinceDays: Number(value) })
-                  }}
-                  aria-labelledby="since-label"
-                  className="w-fit"
-                />
+                {/* The vertical Field stretches each direct child (`*:w-full`), which beat the
+                    control's own `w-fit` and spread its track across the card. The wrapper takes
+                    the stretch, and the control hugs its labels (PLAN-V21 T3-2). */}
+                <div data-slot="since-days">
+                  <Segmented
+                    size="sm"
+                    value={String(form.sinceDays)}
+                    options={options.since_days.choices.map((days) => ({
+                      value: String(days),
+                      label: sinceDaysLabel(days),
+                    }))}
+                    onChange={(value) => {
+                      update({ sinceDays: Number(value) })
+                    }}
+                    aria-labelledby="since-label"
+                  />
+                </div>
               </Field>
             </Section>
 

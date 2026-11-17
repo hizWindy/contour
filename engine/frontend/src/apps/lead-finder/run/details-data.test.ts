@@ -17,6 +17,10 @@ const COUNTS = {
   goal: null,
   good: 0,
   by_source: {},
+  target: null,
+  sweeps: 0,
+  sweeps_done: 0,
+  topped_up: 0,
 }
 
 function run(changes: Partial<Run> = {}): Run {
@@ -87,6 +91,17 @@ describe('what a run was asked to do', () => {
     expect(value(lines, 'Limits')).toBe(
       'run US$20.00, each company US$2.50, finding companies US$8.00, up to 20 companies',
     )
+  })
+
+  it('says 6 months for a run that looked 180 days back (PLAN-V21 T3-2)', () => {
+    const back = (days: number) =>
+      value(
+        setupLines(run({ params: { since_days: days } }), { triggers: TRIGGERS }),
+        'How far back',
+      )
+    expect(back(180)).toBe('Last 6 months')
+    expect(back(90)).toBe('Last 90 days')
+    expect(back(7)).toBe('Last 7 days')
   })
 
   it('lists the companies of a typed run, and says when it was a re-check', () => {

@@ -83,12 +83,34 @@ describe('the Start page', () => {
         params: {
           cities: ['Melbourne'],
           triggers: ['lease_ending'],
-          since_days: 30,
+          since_days: 90,
           area: {},
         },
       },
     ])
     expect(screen.getByRole('button', { name: 'Start run' })).toBeEnabled()
+  })
+
+  it('offers 7 days, 30 days, 90 days and 6 months, in a control that hugs its labels (PLAN-V21 T3-2)', async () => {
+    const seen = mockApi(() => estimate())
+    const { user } = renderStart()
+    const since = await screen.findByRole('radiogroup', { name: 'How far back' })
+    expect(
+      within(since)
+        .getAllByRole('radio')
+        .map((radio) => radio.textContent),
+    ).toEqual(['7 days', '30 days', '90 days', '6 months'])
+    expect(within(since).getByRole('radio', { name: '90 days' })).toBeChecked()
+    // The vertical Field stretches each direct child, so the control sits in a wrapper of its own
+    // and keeps its own width (it once spread across the card).
+    expect(since.parentElement).toHaveAttribute('data-slot', 'since-days')
+    expect(since.parentElement?.parentElement).toHaveAttribute('data-slot', 'field')
+    expect(since).not.toHaveClass('w-full')
+
+    await user.click(within(since).getByRole('radio', { name: '6 months' }))
+    await waitFor(() => {
+      expect(seen.estimates.at(-1)).toMatchObject({ params: { since_days: 180 } })
+    })
   })
 
   it('shows "What to do" as four cards, each with its line, and the arrows only move the focus (PLAN-V21 T3-1)', async () => {
