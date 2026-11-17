@@ -1,7 +1,7 @@
 /**
  * A small `RunOptions` for the Start page tests: "All of Australia" and a city in each of the four
- * groups (PLAN-V16), three triggers, four modes, the goal, and the three sources with Property
- * Daily switched off.
+ * groups (PLAN-V16), three triggers, four modes, the three sources with Property Daily switched
+ * off, and how many companies with the top up (PLAN-V21).
  */
 import type { RunOptions } from '@/api/types'
 
@@ -86,10 +86,13 @@ export const OPTIONS: RunOptions = {
   companies_limit: { min: 1, max: 25 },
   caps: {
     run_cap_usd: '20.00',
-    max_companies: 20,
+    max_companies: 70,
     company_cap_usd: '2.50',
     daily_left_usd: '50.00',
   },
+  // PLAN-V21: the presets come cut to the run's company limit (70), and the top up is allowed.
+  target_companies: { default: 50, min: 5, max: 70, presets: [25, 50, 70] },
+  top_up: { default: true, allowed: true, message: null },
   sources: {
     web: { on: true, ready: true, message: null },
     property_daily: { on: false, ready: false, message: PROPERTY_DAILY_OFF },
@@ -113,5 +116,7 @@ export const OPTIONS: RunOptions = {
     },
     companies: [],
     recheck: false,
+    target_companies: null,
+    top_up: true,
   },
 }

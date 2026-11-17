@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import { Route, Routes } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
-import type { RunEstimate } from '@/api/types'
+import type { RunEstimate, RunOptions } from '@/api/types'
 import { renderWithProviders } from '@/test/render'
 import { asPhone } from '@/test/screen'
 import StartPage from './index'
@@ -23,6 +23,10 @@ function estimate(changes: Partial<RunEstimate> = {}): RunEstimate {
     daily_left_usd: '50.00',
     basis: 'Defaults: no past runs yet',
     over_cap: true,
+    target_companies: null,
+    target_cost_usd_low: null,
+    target_cost_usd_high: null,
+    target_note: null,
     ...changes,
   }
 }
@@ -33,12 +37,15 @@ interface Api {
 }
 
 /** The API the page talks to. `answer` decides the estimate for a body. */
-function mockApi(answer: (body: { mode: string; params: Record<string, unknown> }) => RunEstimate) {
+function mockApi(
+  answer: (body: { mode: string; params: Record<string, unknown> }) => RunEstimate,
+  options: RunOptions = OPTIONS,
+) {
   const seen: Api = { estimates: [], starts: [] }
   const fetchMock = vi.fn(async (request: Request) => {
     const path = new URL(request.url).pathname
     if (path === '/api/v1/lead-finder/run-options') {
-      return Response.json(OPTIONS)
+      return Response.json(options)
     }
     if (path === '/api/v1/runs/estimate') {
       const body = (await request.json()) as { mode: string; params: Record<string, unknown> }
@@ -85,6 +92,8 @@ describe('the Start page', () => {
           triggers: ['lease_ending'],
           since_days: 90,
           area: {},
+          target_companies: 50,
+          top_up: true,
         },
       },
     ])
@@ -464,5 +473,136 @@ describe('Find new leads across Australia (PLAN-V16 T3-2)', () => {
     await waitFor(() => {
       expect(seen.estimates.at(-1)).toMatchObject({ params: { sources: ['web'] } })
     })
+  })
+})
+
+describe('How many companies and the top up (PLAN-V21 T3-3)', () => {
+  /** A discovery estimate with the cost of its target, as the backend gives it. */
+  function withTarget(body: { params: Record<string, unknown> }): RunEstimate {
+    const target =
+      typeof body.params.target_companies === 'number' ? body.params.target_companies : 50
+    return estimate({
+      companies_expected: target,
+      target_companies: target,
+      target_cost_usd_low: '22.40',
+      target_cost_usd_high: '27.10',
+    })
+  }
+
+  it('sits under the signs, with the presets, a number field and the cost of that many', async () => {
+    const seen = mockApi(withTarget)
+    const { user } = renderStart()
+    const presets = await screen.findByRole('radiogroup', { name: 'Suggested numbers' })
+    expect(
+      within(presets)
+        .getAllByRole('radio')
+        .map((radio) => radio.textContent),
+    ).toEqual(['25', '50', '70'])
+    expect(within(presets).getByRole('radio', { name: '50' })).toBeChecked()
+    const field = screen.getByLabelText('Companies to research')
+    expect(field).toHaveValue('50')
+    expect(
+      await screen.findByText('About US$22.40 to US$27.10 for 50 companies.'),
+    ).toBeInTheDocument()
+    const signs = screen.getByText('Signs of an office change')
+    const many = screen.getByText('How many companies')
+    const sources = screen.getByText('Sources')
+    expect(signs.compareDocumentPosition(many) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(many.compareDocumentPosition(sources) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+
+    await user.click(within(presets).getByRole('radio', { name: '25' }))
+    expect(field).toHaveValue('25')
+    await waitFor(() => {
+      expect(seen.estimates.at(-1)).toMatchObject({ params: { target_companies: 25 } })
+    })
+
+    await user.clear(field)
+    await user.type(field, '40 companies')
+    await waitFor(() => {
+      expect(seen.estimates.at(-1)).toMatchObject({ params: { target_companies: 40 } })
+    })
+    expect(within(presets).queryByRole('radio', { checked: true })).toBeNull()
+  })
+
+  it("shows the estimate's sentence when the target does not fit the money limits", async () => {
+    const note = 'At about US$0.40 a company, 70 companies may cost more than the run limit.'
+    mockApi((body) => ({ ...withTarget(body), target_note: note }))
+    renderStart()
+    expect(await screen.findByText(note)).toBeInTheDocument()
+  })
+
+  it('starts the run with the target and the top up', async () => {
+    const seen = mockApi(withTarget)
+    const { user } = renderStart()
+    const presets = await screen.findByRole('radiogroup', { name: 'Suggested numbers' })
+    await user.click(within(presets).getByRole('radio', { name: '70' }))
+    const topUp = screen.getByRole('switch', { name: 'Top up from the HubSpot watchlist' })
+    expect(topUp).toBeChecked()
+    expect(topUp).toHaveAccessibleDescription(
+      'If the searches come up short of the number, the run adds companies from the HubSpot watchlist in the same places, most likely first.',
+    )
+    await user.click(topUp)
+    expect(topUp).not.toBeChecked()
+
+    const start = screen.getByRole('button', { name: 'Start run' })
+    await waitFor(() => {
+      expect(seen.estimates.at(-1)).toMatchObject({
+        params: { target_companies: 70, top_up: false },
+      })
+      expect(start).toBeEnabled()
+    })
+    await user.click(start)
+    expect(await screen.findByText('The run page')).toBeInTheDocument()
+    const sent = (await seen.starts[0]?.json()) as { params: Record<string, unknown> }
+    expect(sent.params).toMatchObject({ target_companies: 70, top_up: false })
+  })
+
+  it('greys the top up with the reason while HubSpot names may not go to Claude', async () => {
+    const message = "Waits for Levi's OK to send HubSpot names to Claude."
+    const seen = mockApi(withTarget, {
+      ...OPTIONS,
+      top_up: { default: true, allowed: false, message },
+    })
+    renderStart()
+    const topUp = await screen.findByRole('switch', { name: 'Top up from the HubSpot watchlist' })
+    expect(topUp).toBeDisabled()
+    expect(topUp).not.toBeChecked()
+    expect(topUp).toHaveAccessibleDescription(message)
+    await waitFor(() => {
+      expect(seen.estimates.at(-1)).toMatchObject({ params: { top_up: false } })
+    })
+  })
+
+  it('aims for a lower "Most companies to research" and says so, keeping the form valid', async () => {
+    const seen = mockApi(withTarget)
+    const { user } = renderStart()
+    await screen.findByLabelText('Companies to research')
+    await user.click(screen.getByRole('button', { name: 'Lower the limits for this run' }))
+    await user.type(screen.getByLabelText('Most companies to research'), '30')
+
+    expect(
+      await screen.findByText('The run aims for 30, the most companies its limits below allow.'),
+    ).toBeInTheDocument()
+    // The typed target stays, so raising the limit again brings it back.
+    expect(screen.getByLabelText('Companies to research')).toHaveValue('50')
+    await waitFor(() => {
+      expect(seen.estimates.at(-1)).toMatchObject({
+        params: { target_companies: 30, caps: { max_companies: 30 } },
+      })
+    })
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('says why beside the field and keeps Start off when the number cannot be read', async () => {
+    mockApi(withTarget)
+    const { user } = renderStart()
+    const field = await screen.findByLabelText('Companies to research')
+    await user.clear(field)
+    await user.type(field, 'lots')
+
+    expect(await screen.findByText('Type a whole number, like 50.')).toBeInTheDocument()
+    expect(field).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByText('Fix the choices marked in red first.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Start run' })).toBeDisabled()
   })
 })

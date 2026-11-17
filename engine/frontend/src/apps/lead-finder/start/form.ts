@@ -44,6 +44,10 @@ export interface StartForm {
   tenureLimit: string
   runCap: string
   maxCompanies: string
+  /** How many companies a discovery run tries to research, as typed (PLAN-V21 T3-3). */
+  targetCompanies: string
+  /** Fill a short discovery run from the HubSpot watchlist (PLAN-V21 T3-3). */
+  topUp: boolean
 }
 
 export const EMPTY_ROW: CompanyRow = { name: '', city: '', website: '' }
@@ -71,6 +75,8 @@ export function initialForm(options: RunOptions): StartForm {
     tenureLimit: TENURE_LIMIT,
     runCap: '',
     maxCompanies: '',
+    targetCompanies: String(options.target_companies.default),
+    topUp: options.top_up.default,
   }
 }
 
@@ -108,12 +114,78 @@ function sameSources(a: readonly RunSourceId[], b: readonly RunSourceId[]): bool
 }
 
 /**
+ * A whole number as people type it: "50", " 50 ", "1,000" and "50 companies" all read as numbers
+ * (DESIGN.md "Fields forgive"). Null for anything else, like "fifty" or "5.5".
+ */
+export function wholeNumberOf(text: string): number | null {
+  const cleaned = text
+    .trim()
+    .replace(/,/g, '')
+    .replace(/\s*compan(?:y|ies)$/i, '')
+  return /^\d{1,6}$/.test(cleaned) ? Number(cleaned) : null
+}
+
+/**
+ * The most companies this run may research: the run's company limit, or the lower number typed
+ * in "Most companies to research" (the Limits fold). It is the target's ceiling.
+ */
+export function companyCeiling(form: StartForm, options: RunOptions): number {
+  const lowered = wholeNumberOf(form.maxCompanies)
+  const limit = options.target_companies.max
+  return lowered !== null && lowered > 0 ? Math.min(limit, lowered) : limit
+}
+
+/** What the form does with the typed target (PLAN-V21 T3-3). */
+export interface TargetChoice {
+  /** What the body sends. Null leaves it out, and the run aims for the default. */
+  value: number | null
+  /** Why the typed number can't be used, in plain words. */
+  error: string | null
+  /**
+   * The lower number the run aims for when "Most companies to research" is under the target. The
+   * typed target stays as it is, so raising the limit again brings it back.
+   */
+  pulledTo: number | null
+}
+
+/** The target to send, read from the field and kept under the run's ceiling. */
+export function targetChoice(form: StartForm, options: RunOptions): TargetChoice {
+  const { min, max } = options.target_companies
+  if (form.targetCompanies.trim() === '') {
+    return { value: null, error: null, pulledTo: null }
+  }
+  const asked = wholeNumberOf(form.targetCompanies)
+  if (asked === null) {
+    return { value: null, error: 'Type a whole number, like 50.', pulledTo: null }
+  }
+  if (asked < min) {
+    return { value: null, error: `Pick ${String(min)} or more.`, pulledTo: null }
+  }
+  if (asked > max) {
+    return {
+      value: null,
+      error: `Pick at most ${String(max)}: the run's company limit.`,
+      pulledTo: null,
+    }
+  }
+  const ceiling = companyCeiling(form, options)
+  if (asked <= ceiling) {
+    return { value: asked, error: null, pulledTo: null }
+  }
+  // Under the smallest target the server takes, the target is left out and the server pulls its
+  // default down to the limit too.
+  return { value: ceiling >= min ? ceiling : null, error: null, pulledTo: ceiling }
+}
+
+/**
  * The body of `POST /runs` for the form: only the parts of the chosen mode (others are refused).
  * Discovery sends the sources only when they differ from the `ready` ones (the server's own
  * default when they are missing). It sends no goal: a run researches every company it chooses
- * (PLAN-V20).
+ * (PLAN-V20). It sends how many companies to research and the top up (PLAN-V21), which only
+ * discovery takes: the top up is off when the backend doesn't allow it.
  */
-export function bodyOf(form: StartForm, ready: readonly RunSourceId[]): RunCreate {
+export function bodyOf(form: StartForm, options: RunOptions): RunCreate {
+  const ready = readySources(options)
   const caps: Record<string, string | number> = {}
   const runCap = clean(form.runCap)
   const maxCompanies = clean(form.maxCompanies)
@@ -132,6 +204,11 @@ export function bodyOf(form: StartForm, ready: readonly RunSourceId[]): RunCreat
     if (!sameSources(form.sources, ready)) {
       params.sources = RUN_SOURCE_ORDER.filter((id) => form.sources.includes(id))
     }
+    const target = targetChoice(form, options).value
+    if (target !== null) {
+      params.target_companies = target
+    }
+    params.top_up = form.topUp && options.top_up.allowed
   } else if (form.mode === 'watchlist') {
     const limit = clean(form.watchLimit)
     params.watchlist = {

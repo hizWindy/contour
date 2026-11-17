@@ -9,9 +9,9 @@
  *   what is left of today's limit. A choice the server refuses is shown beside its field.
  * - Start is safe to double-click: the same choices send the same Idempotency-Key, so a second
  *   click returns the first run instead of starting another.
- * - Finding new leads (PLAN-V16 T3-2) searches all of Australia or cities in four groups, says how
- *   many good leads to find, and where to look (the web and the two property tools). Those parts
- *   are in `discovery.tsx`.
+ * - Finding new leads (PLAN-V16 T3-2) searches all of Australia or cities in four groups, and where
+ *   to look (the web and the two property tools). Those parts are in `discovery.tsx`. How many
+ *   companies to research and the HubSpot top up (PLAN-V21 T3-3) are in `target.tsx`.
  */
 import { CircleAlert, MapPinned, Play } from 'lucide-react'
 import { useMemo, useRef, useState, type ReactNode } from 'react'
@@ -61,13 +61,14 @@ import {
   errorFor,
   estimateErrors,
   initialForm,
-  readySources,
   serverMode,
+  targetChoice,
   tenureSummary,
   type CompanyRow,
   type Mode,
   type StartForm,
 } from './form'
+import { TargetChoices } from './target'
 import { TenureChoices } from './tenure'
 
 const MODE_WORDS: Record<Mode, { title: string; about: string }> = {
@@ -135,8 +136,7 @@ function StartFormView({ options }: { options: RunOptions }) {
     setForm((current) => ({ ...current, ...changes }))
   }
 
-  const ready = useMemo(() => readySources(options), [options])
-  const body = useMemo(() => bodyOf(form, ready), [form, ready])
+  const body = useMemo(() => bodyOf(form, options), [form, options])
   const bodyKey = JSON.stringify(body)
   const settledKey = useDebounced(bodyKey, 300)
   const settledBody = useMemo(() => JSON.parse(settledKey) as RunCreate, [settledKey])
@@ -147,7 +147,10 @@ function StartFormView({ options }: { options: RunOptions }) {
 
   const result = estimate.data
   const fromServer = createRun.error ? fieldErrorMap(toApiProblem(createRun.error)) : {}
-  const errors = { ...estimateErrors(result), ...fromServer }
+  // A target the page can't read never reaches the server: it says why, beside the field.
+  const targetError = form.mode === 'discovery' ? targetChoice(form, options).error : null
+  const fromPage: Record<string, string> = targetError ? { target_companies: targetError } : {}
+  const errors = { ...estimateErrors(result), ...fromServer, ...fromPage }
   const mode = options.modes.find((item) => item.mode === serverMode(form.mode))
   const settling = canWrite && (settledKey !== bodyKey || estimate.isFetching)
   // An old offices run asks once more before it spends (PLAN-V11 C3).
@@ -159,7 +162,7 @@ function StartFormView({ options }: { options: RunOptions }) {
       ? (result?.blocked?.message ?? "This kind of run waits for Levi's OK.")
       : result?.blocked
         ? result.blocked.message
-        : result && !result.valid
+        : targetError || (result && !result.valid)
           ? 'Fix the choices marked in red first.'
           : !result
             ? 'Working out what it would cost.'
@@ -270,6 +273,16 @@ function StartFormView({ options }: { options: RunOptions }) {
                   />
                 </div>
               </Field>
+            </Section>
+
+            <Section title="How many companies">
+              <TargetChoices
+                options={options}
+                form={form}
+                update={update}
+                errors={errors}
+                estimate={result}
+              />
             </Section>
 
             <Section title="Sources">

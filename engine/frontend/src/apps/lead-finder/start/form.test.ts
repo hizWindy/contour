@@ -7,14 +7,13 @@ import {
   estimateErrors,
   initialForm,
   pickPlaces,
-  readySources,
   serverMode,
+  targetChoice,
   tenureSummary,
+  wholeNumberOf,
+  type StartForm,
 } from './form'
 import { OPTIONS } from './test-options'
-
-/** The test options switch Property Daily off, so the web and Arealytics are ready. */
-const READY = readySources(OPTIONS)
 
 function estimate(changes: Partial<RunEstimate> = {}): RunEstimate {
   return {
@@ -30,6 +29,10 @@ function estimate(changes: Partial<RunEstimate> = {}): RunEstimate {
     daily_left_usd: '50.00',
     basis: '',
     over_cap: false,
+    target_companies: null,
+    target_cost_usd_low: null,
+    target_cost_usd_high: null,
+    target_note: null,
     ...changes,
   }
 }
@@ -41,7 +44,7 @@ describe('the old offices run (PLAN-V11 C3)', () => {
     expect(form.tenureCity).toBe('Melbourne')
     expect(serverMode('tenure')).toBe('watchlist')
     expect(serverMode('discovery')).toBe('discovery')
-    expect(bodyOf(form, READY)).toEqual({
+    expect(bodyOf(form, OPTIONS)).toEqual({
       app: 'lead_finder',
       mode: 'watchlist',
       params: { watchlist: { focus: 'tenure', city: 'Melbourne', limit: 10 } },
@@ -56,7 +59,7 @@ describe('the old offices run (PLAN-V11 C3)', () => {
       tenureLimit: ' ',
       tenureIndustries: ['Construction'],
     }
-    expect(bodyOf(form, READY).params).toEqual({
+    expect(bodyOf(form, OPTIONS).params).toEqual({
       watchlist: { focus: 'tenure', city: 'Perth', industries: ['Construction'] },
     })
     expect(tenureSummary(form, 1)).toBe(
@@ -80,7 +83,7 @@ describe('the Start form', () => {
       cities: ['Melbourne'],
       area: { Melbourne: 'cbd', Sydney: 'inner', Perth: 'all' } as const,
     }
-    expect(bodyOf(form, READY)).toEqual({
+    expect(bodyOf(form, OPTIONS)).toEqual({
       app: 'lead_finder',
       mode: 'discovery',
       params: {
@@ -88,16 +91,18 @@ describe('the Start form', () => {
         triggers: ['lease_ending'],
         since_days: 90,
         area: { Melbourne: 'cbd' },
+        target_companies: 50,
+        top_up: true,
       },
     })
   })
 
   it('sends the watchlist options, and a limit only when one is typed', () => {
     const form = { ...initialForm(OPTIONS), mode: 'watchlist' as const }
-    expect(bodyOf(form, READY).params).toEqual({
+    expect(bodyOf(form, OPTIONS).params).toEqual({
       watchlist: { include_unlikely: true, include_director: false },
     })
-    expect(bodyOf({ ...form, watchLimit: ' 15 ' }, READY).params).toEqual({
+    expect(bodyOf({ ...form, watchLimit: ' 15 ' }, OPTIONS).params).toEqual({
       watchlist: { include_unlikely: true, include_director: false, limit: 15 },
     })
   })
@@ -112,7 +117,7 @@ describe('the Start form', () => {
         { name: 'Canva', city: '', website: 'canva.com' },
       ],
     }
-    expect(bodyOf(form, READY).params).toEqual({
+    expect(bodyOf(form, OPTIONS).params).toEqual({
       companies: [
         { name: 'Culture Amp', city: 'Melbourne' },
         { name: 'Canva', website: 'canva.com' },
@@ -122,8 +127,8 @@ describe('the Start form', () => {
 
   it('adds the lower limits only when they are typed', () => {
     const form = { ...initialForm(OPTIONS), runCap: '5.00', maxCompanies: '3' }
-    expect(bodyOf(form, READY).params?.caps).toEqual({ run_cap_usd: '5.00', max_companies: 3 })
-    expect(bodyOf(initialForm(OPTIONS), READY).params?.caps).toBeUndefined()
+    expect(bodyOf(form, OPTIONS).params?.caps).toEqual({ run_cap_usd: '5.00', max_companies: 3 })
+    expect(bodyOf(initialForm(OPTIONS), OPTIONS).params?.caps).toBeUndefined()
   })
 
   it('reads the estimate errors by field, and finds a field from its parts', () => {
@@ -155,7 +160,7 @@ describe('where to search (PLAN-V16 T3-2)', () => {
     const cities = pickPlaces(OPTIONS, ['Melbourne', 'Sydney'], [AUSTRALIA], [AUSTRALIA])
     expect(cities).toEqual([AUSTRALIA])
     const form = { ...initialForm(OPTIONS), cities, area: { Melbourne: 'cbd' } as const }
-    expect(bodyOf(form, READY).params).toMatchObject({ cities: ['Australia'], area: {} })
+    expect(bodyOf(form, OPTIONS).params).toMatchObject({ cities: ['Australia'], area: {} })
   })
 
   it('clears "All of Australia" when a city is picked, and keeps the options order', () => {
@@ -174,7 +179,7 @@ describe('where to search (PLAN-V16 T3-2)', () => {
 
 describe('no goal of good leads (PLAN-V20)', () => {
   it('sends no goal: a run researches every company it chooses', () => {
-    const body = bodyOf(initialForm(OPTIONS), READY)
+    const body = bodyOf(initialForm(OPTIONS), OPTIONS)
     expect(body.params).not.toHaveProperty('goal_leads')
     expect(initialForm(OPTIONS)).not.toHaveProperty('goalLeads')
   })
@@ -184,11 +189,92 @@ describe('where to look (PLAN-V16 T3-2)', () => {
   it('ticks every ready source and leaves them out of the body: the server default', () => {
     const form = initialForm(OPTIONS)
     expect(form.sources).toEqual(['web', 'arealytics'])
-    expect(bodyOf(form, READY).params).not.toHaveProperty('sources')
+    expect(bodyOf(form, OPTIONS).params).not.toHaveProperty('sources')
   })
 
   it('sends the sources when a person changes them', () => {
     const form = { ...initialForm(OPTIONS), sources: ['web' as const] }
-    expect(bodyOf(form, READY).params).toMatchObject({ sources: ['web'] })
+    expect(bodyOf(form, OPTIONS).params).toMatchObject({ sources: ['web'] })
+  })
+})
+
+describe('how many companies and the top up (PLAN-V21 T3-3)', () => {
+  const form = (changes: Partial<StartForm> = {}): StartForm => ({
+    ...initialForm(OPTIONS),
+    ...changes,
+  })
+
+  it('starts at the backend default, 50, with the top up on', () => {
+    expect(form().targetCompanies).toBe('50')
+    expect(form().topUp).toBe(true)
+  })
+
+  it('reads a number the way people type it', () => {
+    expect(wholeNumberOf(' 40 ')).toBe(40)
+    expect(wholeNumberOf('1,000')).toBe(1000)
+    expect(wholeNumberOf('30 companies')).toBe(30)
+    expect(wholeNumberOf('1 company')).toBe(1)
+    expect(wholeNumberOf('fifty')).toBeNull()
+    expect(wholeNumberOf('5.5')).toBeNull()
+    expect(wholeNumberOf('')).toBeNull()
+  })
+
+  it('sends the target and the top up for discovery only', () => {
+    expect(bodyOf(form({ targetCompanies: '25', topUp: false }), OPTIONS).params).toMatchObject({
+      target_companies: 25,
+      top_up: false,
+    })
+    for (const mode of ['watchlist', 'tenure', 'company'] as const) {
+      const params = bodyOf(form({ mode }), OPTIONS).params
+      expect(params).not.toHaveProperty('target_companies')
+      expect(params).not.toHaveProperty('top_up')
+    }
+  })
+
+  it('leaves the target out when the field is empty: the run aims for the default', () => {
+    const params = bodyOf(form({ targetCompanies: '  ' }), OPTIONS).params
+    expect(params).not.toHaveProperty('target_companies')
+    expect(params).toMatchObject({ top_up: true })
+  })
+
+  it('says why in plain words when the number cannot be used, and sends no target', () => {
+    expect(targetChoice(form({ targetCompanies: 'lots' }), OPTIONS).error).toBe(
+      'Type a whole number, like 50.',
+    )
+    expect(targetChoice(form({ targetCompanies: '3' }), OPTIONS).error).toBe('Pick 5 or more.')
+    expect(targetChoice(form({ targetCompanies: '100' }), OPTIONS).error).toBe(
+      "Pick at most 70: the run's company limit.",
+    )
+    expect(bodyOf(form({ targetCompanies: '100' }), OPTIONS).params).not.toHaveProperty(
+      'target_companies',
+    )
+  })
+
+  it('aims for the lower limit when "Most companies to research" is under the target', () => {
+    const lowered = form({ targetCompanies: '50', maxCompanies: '30' })
+    expect(targetChoice(lowered, OPTIONS)).toEqual({ value: 30, error: null, pulledTo: 30 })
+    expect(bodyOf(lowered, OPTIONS).params).toMatchObject({
+      target_companies: 30,
+      caps: { max_companies: 30 },
+    })
+    // Under the smallest target the server takes, it is left out: the server pulls its own default
+    // down to the limit.
+    const tiny = form({ targetCompanies: '50', maxCompanies: '3' })
+    expect(targetChoice(tiny, OPTIONS)).toEqual({ value: null, error: null, pulledTo: 3 })
+    expect(bodyOf(tiny, OPTIONS).params).not.toHaveProperty('target_companies')
+    // A limit at or above the target changes nothing.
+    expect(targetChoice(form({ targetCompanies: '25', maxCompanies: '30' }), OPTIONS)).toEqual({
+      value: 25,
+      error: null,
+      pulledTo: null,
+    })
+  })
+
+  it('sends no top up while HubSpot names may not go to Claude', () => {
+    const closed = {
+      ...OPTIONS,
+      top_up: { default: true, allowed: false, message: "Waits for Levi's OK." },
+    }
+    expect(bodyOf(initialForm(closed), closed).params).toMatchObject({ top_up: false })
   })
 })
