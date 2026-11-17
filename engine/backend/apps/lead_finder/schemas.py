@@ -139,14 +139,6 @@ class SourceOption(BaseModel):
     )
 
 
-class GoalLeadsOption(BaseModel):
-    """ "How many leads" on the Start page (PLAN-V16 T1-9)."""
-
-    default: int = Field(description="`manual_run_goal_leads` from the settings", examples=[20])
-    min: int
-    max: int
-
-
 class RunOptions(BaseModel):
     """Everything the Start page needs to draw itself."""
 
@@ -168,10 +160,6 @@ class RunOptions(BaseModel):
             "Where discovery can look, by id: `web`, `property_daily` and `arealytics` (PLAN-V16 "
             "T1-8). A run's `sources` left out uses every one that is ready."
         ),
-    )
-    goal_leads: GoalLeadsOption = Field(
-        description="How many good leads a run a person starts may aim for, and the default "
-        "(PLAN-V16 T1-9)"
     )
     defaults: LeadFinderRunParams = Field(
         description=(

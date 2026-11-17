@@ -116,7 +116,7 @@ async def test_the_default_choices_start_a_run_that_says_a_schedule_started_it(
     assert run.schedule_id == schedule.id
     assert (run.app, run.mode) == ("lead_finder", "discovery")
     assert run.params["cities"] == ["Melbourne"]
-    assert run.params["since_days"] == 14
+    assert run.params["since_days"] == 30  # the longest a run may look back (PLAN-V20)
     assert run.params["triggers"] == default_triggers()
     assert run.params["area"] == {}
     await asyncio.wait_for(gate.entered.wait(), 10)

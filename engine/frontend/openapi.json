@@ -5051,34 +5051,6 @@
         "title": "FormSummary",
         "type": "object"
       },
-      "GoalLeadsOption": {
-        "description": "\"How many leads\" on the Start page (PLAN-V16 T1-9).",
-        "properties": {
-          "default": {
-            "description": "`manual_run_goal_leads` from the settings",
-            "examples": [
-              20
-            ],
-            "title": "Default",
-            "type": "integer"
-          },
-          "max": {
-            "title": "Max",
-            "type": "integer"
-          },
-          "min": {
-            "title": "Min",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "default",
-          "min",
-          "max"
-        ],
-        "title": "GoalLeadsOption",
-        "type": "object"
-      },
       "GuidedQuestion": {
         "description": "A question to ask on the call, with what to ask next for each likely answer.",
         "properties": {
@@ -7092,15 +7064,13 @@
           "goal_leads": {
             "anyOf": [
               {
-                "maximum": 100.0,
-                "minimum": 1.0,
                 "type": "integer"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "Used by mode discovery only. How many good leads (a Pass or a Director review) a run a person starts aims for, 1 to 100: it stops starting companies once it has them. Left out, `manual_run_goal_leads` from the settings (see `goal_leads` in the run options). An automatic run aims for its share of the round's goal instead. The run's limits still apply: no limit rises by itself (PLAN-V16 T1-9).",
+            "description": "Used by mode discovery only, and no longer used (PLAN-V20). It is still accepted so a page that was open before the change can start a run, and then ignored: no run stops for a goal of good leads. A run researches every company it chooses, up to its company limit and its money limits.",
             "examples": [
               20
             ],
@@ -12971,7 +12941,7 @@
                 "type": "null"
               }
             ],
-            "description": "The good leads the run aims for: a person's choice for a run they started, or the round's share for an automatic run. Empty: no goal.",
+            "description": "The good leads the run reports against: the round's share for an automatic run. Empty: no goal (a run a person starts has none, PLAN-V20). It never stops a run.",
             "title": "Goal"
           },
           "good": {
@@ -13121,18 +13091,6 @@
             "title": "Companies Expected",
             "type": "integer"
           },
-          "companies_needed": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "The companies the goal needs at the recent pass rate (PLAN-V16 T1-9). Empty when the run has no goal of its own.",
-            "title": "Companies Needed"
-          },
           "cost_usd_high": {
             "default": "0",
             "description": "The worst case: every request in flight costs its full reserve",
@@ -13156,21 +13114,6 @@
             },
             "title": "Errors",
             "type": "array"
-          },
-          "goal_note": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "One sentence when the goal needs more companies than this run's limits allow, naming the limit that binds. Empty when the goal fits, or there is none.",
-            "examples": [
-              "20 leads needs about 50 companies. This run's company limit allows 20. An Admin can raise it in Settings."
-            ],
-            "title": "Goal Note"
           },
           "over_cap": {
             "default": false,
@@ -13208,9 +13151,7 @@
           "cap_usd",
           "daily_left_usd",
           "basis",
-          "over_cap",
-          "companies_needed",
-          "goal_note"
+          "over_cap"
         ],
         "title": "RunEstimate",
         "type": "object"
@@ -13452,10 +13393,6 @@
             "$ref": "#/components/schemas/LeadFinderRunParams",
             "description": "The starting values for every part of a run's `params`. The Start page must send only the parts of its mode in `POST /runs`: a part another mode owns is refused (422). Each part's description says which mode uses it. `caps` is used by every mode."
           },
-          "goal_leads": {
-            "$ref": "#/components/schemas/GoalLeadsOption",
-            "description": "How many good leads a run a person starts may aim for, and the default (PLAN-V16 T1-9)"
-          },
           "modes": {
             "items": {
               "$ref": "#/components/schemas/ModeOption"
@@ -13505,7 +13442,6 @@
           "companies_limit",
           "caps",
           "sources",
-          "goal_leads",
           "defaults"
         ],
         "title": "RunOptions",
@@ -13598,7 +13534,7 @@
                 "type": "null"
               }
             ],
-            "description": "The good leads the run aims for (PLAN-V16 T1-9). Empty: no goal.",
+            "description": "The good leads the run reports against (PLAN-V16 T1-9). Empty: no goal.",
             "readOnly": true,
             "title": "Goal Leads"
           },

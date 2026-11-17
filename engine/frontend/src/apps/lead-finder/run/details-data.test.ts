@@ -184,7 +184,7 @@ describe('where the money went', () => {
 })
 
 describe('what a run across Australia was asked to do (PLAN-V16 T3-3)', () => {
-  it('says all of Australia, how many leads, and where it looked', () => {
+  it('says all of Australia and where it looked, and no longer how many leads (PLAN-V20)', () => {
     const lines = setupLines(
       run({
         mode: 'discovery',
@@ -199,11 +199,11 @@ describe('what a run across Australia was asked to do (PLAN-V16 T3-3)', () => {
     )
     expect(value(lines, 'Where')).toBe('All of Australia')
     expect(value(lines, 'Cities')).toBeUndefined()
-    expect(value(lines, 'How many leads')).toBe('20 good leads')
+    expect(value(lines, 'How many leads')).toBeUndefined() // an old run's goal is not shown
     expect(value(lines, 'Where to look')).toBe('The web, Arealytics')
   })
 
-  it('leaves out the goal and the sources when the run had none', () => {
+  it('leaves out the sources when the run had none', () => {
     const lines = setupLines(run({ params: { cities: ['Perth'] } }), { triggers: TRIGGERS })
     expect(value(lines, 'How many leads')).toBeUndefined()
     expect(value(lines, 'Where to look')).toBeUndefined()

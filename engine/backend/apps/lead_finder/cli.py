@@ -21,7 +21,7 @@ the daily quota). It needs SIGNALHIRE_API_KEY in engine/.env, and uses no databa
 `forms` checks that every answer form Claude gets is under Anthropic's limits for strict forms
 (free). With `--live --yes` it also sends each form to Claude once, at low effort (a few cents).
 `refill` fills the answer form again for the leads whose form failed, from the notes memory
-keeps: no web search, about US$0.25 a lead (PLAN-V4 B5).
+keeps: no web search, about US$0.35 a lead, two requests (PLAN-V4 B5, PLAN-V20).
 """
 
 import argparse
@@ -38,7 +38,7 @@ from zoneinfo import ZoneInfo
 from pydantic import BaseModel
 from sqlalchemy.exc import OperationalError
 
-from apps.lead_finder.fields import AngleNotes, Candidates, CompanyFacts
+from apps.lead_finder.fields import AngleNotes, Candidates, CompanyCoreForm, CompanyExtrasForm
 from apps.lead_finder.headcount import HeadcountReading, describe_reading, read_headcount
 from apps.lead_finder.property import hidden_sources
 from apps.lead_finder.rejudge import Rejudged, rejudge, save_rejudged, table
@@ -223,7 +223,8 @@ def _headcount(args: argparse.Namespace) -> int:
 # The answer forms Claude gets, with the kind of step that sends each one.
 FORMS: dict[str, tuple[Literal["search", "extract", "discover", "why"], type[BaseModel]]] = {
     "search notes": ("search", AngleNotes),
-    "company facts": ("extract", CompanyFacts),
+    "company facts": ("extract", CompanyCoreForm),
+    "company extras": ("extract", CompanyExtrasForm),
     "discovery": ("discover", Candidates),
     "why now": ("why", WhyNowAnswer),
 }
@@ -277,7 +278,10 @@ async def _forms_live() -> int:
     return 1 if refused else 0
 
 
-REFILL_COST_USD = Decimal("0.25")  # one form fill, measured on 2 Nov 2026 (PLAN-V4 B1)
+# One form fill was US$0.25 (measured on 2 Nov 2026, PLAN-V4 B1). It is two requests now (PLAN-V20):
+# the main form as before and a second one for 5 facts, whose answer is short. Our guess is US$0.35
+# until the first refill on live data shows the real figure (TBC).
+REFILL_COST_USD = Decimal("0.35")
 
 
 async def _failed_leads() -> list[tuple[uuid.UUID, str]]:
@@ -521,7 +525,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     refill = commands.add_parser(
         "refill",
         help="Fill the answer form again for the leads whose form failed, from saved notes "
-        "(about US$0.25 a lead, no web search).",
+        "(about US$0.35 a lead, no web search).",
     )
     refill.add_argument("--yes", action="store_true", help="Confirm the spend.")
     relabel_cmd = commands.add_parser(

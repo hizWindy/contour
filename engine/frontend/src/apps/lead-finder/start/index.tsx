@@ -52,13 +52,12 @@ import {
 import { Input } from '@/components/ui/input'
 import { Segmented } from '@/components/motion'
 import { useDebounced } from '@/hooks/useDebounced'
-import { GoalChoice, SourceChoices, WhereChoices } from './discovery'
+import { SourceChoices, WhereChoices } from './discovery'
 import {
   bodyOf,
   EMPTY_ROW,
   errorFor,
   estimateErrors,
-  goalError,
   initialForm,
   readySources,
   serverMode,
@@ -151,8 +150,6 @@ function StartFormView({ options }: { options: RunOptions }) {
   const settling = canWrite && (settledKey !== bodyKey || estimate.isFetching)
   // An old offices run asks once more before it spends (PLAN-V11 C3).
   const [confirming, setConfirming] = useState(false)
-  // "How many leads" is checked here, before the server sees it (PLAN-V16 T3-2).
-  const goalProblem = goalError(form, options)
 
   const reason: string | null = !canWrite
     ? null
@@ -160,7 +157,7 @@ function StartFormView({ options }: { options: RunOptions }) {
       ? (result?.blocked?.message ?? "This kind of run waits for Levi's OK.")
       : result?.blocked
         ? result.blocked.message
-        : (result && !result.valid) || goalProblem
+        : result && !result.valid
           ? 'Fix the choices marked in red first.'
           : !result
             ? 'Working out what it would cost.'
@@ -268,14 +265,7 @@ function StartFormView({ options }: { options: RunOptions }) {
               </Field>
             </Section>
 
-            <Section title="Leads to find">
-              <GoalChoice
-                form={form}
-                update={update}
-                errors={errors}
-                estimate={result}
-                goalProblem={goalProblem}
-              />
+            <Section title="Sources">
               <SourceChoices options={options} form={form} update={update} errors={errors} />
             </Section>
           </>

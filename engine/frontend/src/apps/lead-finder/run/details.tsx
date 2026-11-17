@@ -5,14 +5,15 @@
  *   limits), when it ran and for how long, and the rules and prompt versions it used.
  * - `RunCostSplit`: where the money went: finding companies vs researching them, and the average
  *   per company researched. Read from the run's search log.
- * - `RunLeads`: the companies the run researched, as Levi's section 9 lists them (PLAN-V16
+ * - `RunLeads`: every company the run researched, as Levi's section 9 lists them (PLAN-V16
  *   T3-3): the ranked leads (Tier A and B, best first), then the excluded ones with each reason,
- *   then the watch list (Tier C). Each opens its lead card. Discarded leads (under 40) are counted,
- *   with a link to them in Results.
+ *   then the watch list (Tier C), and then the ones that scored under 40. Each opens its lead
+ *   card. None is hidden: before PLAN-V20 the last group was only counted, so a run of weak
+ *   companies looked empty.
  * - `FunnelLine`: searches, finds, companies after merging, chosen, researched, in one line.
  */
 import { createColumnHelper } from '@tanstack/react-table'
-import { Link, useNavigate } from 'react-router'
+import { useNavigate } from 'react-router'
 import { useLeads, useRunOptions, useSearches } from '@/api/hooks'
 import type { LeadRow, Run, RunCounts } from '@/api/types'
 import { DataTable, type DataTableProps } from '@/components/data-table'
@@ -133,6 +134,14 @@ const scoreColumn = () =>
 
 type Columns = DataTableProps<LeadRow>['columns']
 
+const resultColumn = () =>
+  help.accessor('result', {
+    header: 'Result',
+    enableSorting: false,
+    meta: { hideBelow: 'sm' },
+    cell: (info) => <ResultBadge result={info.getValue()} />,
+  })
+
 const RANKED = [
   companyColumn(),
   help.accessor('tier', {
@@ -141,12 +150,7 @@ const RANKED = [
     cell: (info) => <TierMark tier={info.getValue()} />,
   }),
   scoreColumn(),
-  help.accessor('result', {
-    header: 'Result',
-    enableSorting: false,
-    meta: { hideBelow: 'sm' },
-    cell: (info) => <ResultBadge result={info.getValue()} />,
-  }),
+  resultColumn(),
   cityColumn(),
   help.accessor('cost_usd', {
     header: 'Cost',
@@ -169,6 +173,8 @@ const EXCLUDED = [
 ]
 
 const WATCH = [companyColumn(), scoreColumn(), cityColumn()]
+
+const UNDER_FORTY = [companyColumn(), scoreColumn(), resultColumn(), cityColumn()]
 
 function LeadGroup({
   id,
@@ -220,12 +226,12 @@ export function RunLeads({ runId, className }: { runId: string; className?: stri
   return (
     <Card className={className}>
       <CardHeader>
-        <CardTitle className="text-section font-semibold">Leads from this run</CardTitle>
+        <CardTitle className="text-section font-semibold">Companies from this run</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-6">
         {items.length === 0 ? (
           <DataTable
-            label="Leads from this run"
+            label="Companies from this run"
             columns={RANKED}
             data={items}
             getRowId={(row) => row.id}
@@ -263,17 +269,15 @@ export function RunLeads({ runId, className }: { runId: string; className?: stri
                 onOpen={open}
               />
             ) : null}
-            {groups.discarded > 0 ? (
-              <p className="text-caption text-muted-foreground">
-                {pluralise(groups.discarded, 'company', 'companies')} scored under 40 and{' '}
-                {groups.discarded === 1 ? 'is' : 'are'} not listed.{' '}
-                <Link
-                  className="text-link underline-offset-4 hover:underline"
-                  to={`/results?run_id=${encodeURIComponent(runId)}&tier=discard`}
-                >
-                  See {groups.discarded === 1 ? 'it' : 'them'} in Results
-                </Link>
-              </p>
+            {groups.discarded.length > 0 ? (
+              <LeadGroup
+                id="run-discarded"
+                title="Scored under 40"
+                about="Not a fit for now, or too little is known. They are listed so every company the run researched is here."
+                rows={groups.discarded}
+                columns={UNDER_FORTY}
+                onOpen={open}
+              />
             ) : null}
           </>
         )}

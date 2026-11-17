@@ -69,7 +69,14 @@ from apps.companies.script_notes import StyleNotes, notes_for_prompt
 from apps.companies.tables import Prep
 from apps.companies.tones import TONE_DEFAULT, TONE_PRESETS, tone_for, tone_words
 from core.claude.budget import Budget, BudgetSpent
-from core.claude.client import Claude, ClaudeError, ClaudeUnavailable, Reply, WebTools
+from core.claude.client import (
+    Claude,
+    ClaudeError,
+    ClaudeRefused,
+    ClaudeUnavailable,
+    Reply,
+    WebTools,
+)
 from core.company_leads import CompanyLeads
 from core.memory.embedder import Embedder
 from core.memory.service import Note, remember_many
@@ -849,6 +856,8 @@ def claude_words(error: ClaudeError) -> tuple[str, str]:
     """A Claude error as call prep says it (PLAN-V15 "Words for errors"), and its code. Read from
     what went wrong, not from the error's own words, which may name a setting or a file."""
     cause = error.__cause__
+    if isinstance(error, ClaudeRefused):  # our request, not the key or the connection (PLAN-V20)
+        return "claude_error", CLAUDE_ERROR
     if isinstance(error, ClaudeUnavailable):
         if isinstance(cause, anthropic.APIConnectionError) and not isinstance(
             cause, anthropic.APITimeoutError

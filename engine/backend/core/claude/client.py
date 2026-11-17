@@ -57,6 +57,14 @@ class ClaudeUnavailable(ClaudeError):
     """No key, a bad key, or no connection. Retrying won't help until someone fixes it."""
 
 
+class ClaudeRefused(ClaudeUnavailable):
+    """Claude says our request itself is wrong (HTTP 400): an answer form it can't compile, a
+    setting it doesn't accept, an account with no credit. Asking again changes nothing, and the
+    next request of that kind fails the same way, so work that meets it stops at once, as it does
+    when Claude is unavailable. (16 Nov 2026: every company answer form was refused, and a run
+    kept paying for the research of company after company.)"""
+
+
 @dataclass(frozen=True)
 class WebTools:
     """Turns on web search and web fetch. The caps are enforced by the API itself.
@@ -336,6 +344,12 @@ def plain_error(error: anthropic.APIError) -> ClaudeError:
         return ClaudeError("Claude took too long to answer", "Nothing was lost. Try again.")
     if isinstance(error, anthropic.APIConnectionError):
         return ClaudeUnavailable("Our server can't reach Claude", "Try again in a few minutes.")
+    if isinstance(error, anthropic.BadRequestError):
+        return ClaudeRefused(
+            "Claude refused the request",
+            "Something we send is not accepted, so trying again will not help. "
+            "An admin needs to check the server log.",
+        )
     return ClaudeError("Claude couldn't answer", "Try again in a minute.")
 
 

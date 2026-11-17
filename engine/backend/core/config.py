@@ -63,7 +63,6 @@ EDITABLE_KEYS: Final[list[str]] = [
     "request_reserve_usd",
     "run_cap_usd",
     "run_max_companies",
-    "manual_run_goal_leads",  # PLAN-V16 T1-9
     "scheduled_run_cap_usd",
     "lead_finder_round_cap_usd",
     "daily_cap_usd",
@@ -409,14 +408,11 @@ class Settings(BaseSettings):
     # --- Caps for one run --------------------------------------------------------------
     run_cap_usd: Decimal = Field(Decimal("20.00"), ge=Decimal("1"), le=Decimal("50"))
     run_max_companies: int = Field(20, ge=1, le=100)
-    # The default "How many leads" when a person starts a run (PLAN-V16 T1-9, TBC). The run stops
-    # starting companies once it has this many good leads, or at the limits above.
-    manual_run_goal_leads: int = Field(20, ge=1, le=100)
     # --- Automatic runs: the ones a schedule starts (9 Nov, Al-khair) ----------------------
-    # They have no company limit of their own: they go on until their share of the goal below, or
-    # until no company is left. This is their money limit, a brake against a fault: a normal city
-    # run costs about US$25 to US$30 (TBC). A run a person starts keeps run_cap_usd and
-    # run_max_companies above.
+    # They have no company limit of their own: they go on until no company is left (their share of
+    # the goal below is a number to report against, never a stop: PLAN-V20). This is their money
+    # limit, a brake against a fault: a normal city run costs about US$25 to US$30 (TBC). A run a
+    # person starts keeps run_cap_usd and run_max_companies above.
     scheduled_run_cap_usd: Decimal = Field(Decimal("150.00"), ge=Decimal("1"), le=Decimal("200"))
     # The round budget (PLAN-V13 T1-3): the most all of one round's city runs may spend together.
     # Before an automatic run starts, its money limit becomes the smaller of scheduled_run_cap_usd

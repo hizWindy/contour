@@ -110,7 +110,7 @@ async def test_the_page_reads_the_default_schedule_with_its_estimate(
     assert item["name"] == "Find new leads: Melbourne"
     assert item["when"] == "Every 2 weeks on Monday at 7:00 am"
     assert item["enabled"] is False and item["next_run_at"] is None
-    assert item["summary"] == ("Searches Melbourne for the 8 main signs, looking back 14 days.")
+    assert item["summary"] == ("Searches Melbourne for the 8 main signs, looking back 30 days.")
     assert item["estimate"] == {
         "valid": True,
         "problem": None,

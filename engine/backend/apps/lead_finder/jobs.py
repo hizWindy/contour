@@ -105,7 +105,7 @@ SCHEDULED_SIGNS = (
     "capital_raise",
     "tenant_advisor",
 )
-LOOK_BACK_DAYS = 14
+LOOK_BACK_DAYS = 30  # the longest a run may look back (PLAN-V20; it was 14, the time between runs)
 AT = time(7, 0)
 LEGACY_DISCOVERY = "lead_finder.discovery"  # the one schedule before PLAN-V9 C4
 

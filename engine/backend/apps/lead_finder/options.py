@@ -7,8 +7,6 @@ from apps.lead_finder.geo import CITY_CENTRES, NATIONAL_CENTRE
 from apps.lead_finder.params import (
     COMPANIES_MAX,
     COMPANIES_MIN,
-    GOAL_LEADS_MAX,
-    GOAL_LEADS_MIN,
     LeadFinderRunParams,
     RunSource,
 )
@@ -19,7 +17,6 @@ from apps.lead_finder.schemas import (
     AreaOption,
     CityOption,
     CompaniesLimit,
-    GoalLeadsOption,
     ModeOption,
     OptionCaps,
     RunOptions,
@@ -119,8 +116,5 @@ def build_run_options(
             daily_left_usd=daily_left_usd,
         ),
         sources=sources if sources is not None else source_options(settings),
-        goal_leads=GoalLeadsOption(
-            default=settings.manual_run_goal_leads, min=GOAL_LEADS_MIN, max=GOAL_LEADS_MAX
-        ),
         defaults=defaults,
     )

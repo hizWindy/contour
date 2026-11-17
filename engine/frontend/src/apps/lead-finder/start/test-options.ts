@@ -90,7 +90,6 @@ export const OPTIONS: RunOptions = {
     company_cap_usd: '2.50',
     daily_left_usd: '50.00',
   },
-  goal_leads: { default: 20, min: 1, max: 100 },
   sources: {
     web: { on: true, ready: true, message: null },
     property_daily: { on: false, ready: false, message: PROPERTY_DAILY_OFF },

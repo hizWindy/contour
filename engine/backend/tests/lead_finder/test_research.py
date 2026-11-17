@@ -24,7 +24,7 @@ from apps.lead_finder.research import LeadCard, ResearchRequest, refill_lead, re
 from apps.lead_finder.rules import MAX_DAMPENER_SEARCHES, LeadFinderRules, load_rules
 from apps.lead_finder.tables import Lead
 from core.api.app import create_app
-from core.claude.client import ClaudeError
+from core.claude.client import ClaudeError, ClaudeRefused
 from core.config import Settings, get_settings
 from core.db.engine import get_session
 from core.hubspot.models import HubSpotCompany, HubSpotDeal, HubSpotOffice
@@ -100,6 +100,7 @@ async def test_research_searches_four_angles_and_saves_everything(session: Async
 
     assert sorted(claude.calls) == [
         "extract",
+        "extract:extras",  # the answer form is asked in two requests (PLAN-V20)
         "search:dampeners",
         "search:money",
         "search:people",
@@ -111,13 +112,14 @@ async def test_research_searches_four_angles_and_saves_everything(session: Async
     assert card.confidence_why.startswith("High:")  # type: ignore[union-attr]
     assert (card.score_checked, card.band) == (None, None)  # the six-part score's fields
     assert [part.id for part in card.score_parts] == ["fit", "change", "access"]
-    # 4 searches x $0.12 + $0.04. The dampener check adds one search request, $0.12 here (it was
-    # $0.40 with three angles): the extra cost PLAN-V16 T1-5 asked to be measured on the fake
-    assert card.research.cost_usd == Decimal("0.520000")
+    # 4 searches x $0.12 + $0.04 + $0.01. The dampener check adds one search request, $0.12 here (it
+    # was $0.40 with three angles): the extra cost PLAN-V16 T1-5 asked to be measured on the fake.
+    # The second answer form (PLAN-V20) adds one short request, $0.01 here.
+    assert card.research.cost_usd == Decimal("0.530000")
     assert card.research.web_searches == 8
     assert card.hubspot.status == "new"
     assert card.dropped == []
-    assert await count(session, SearchLog, job_id=card.id) == 5
+    assert await count(session, SearchLog, job_id=card.id) == 6
     assert await count(session, Lead) == 1
     lead = await session.scalar(select(Lead))
     assert lead is not None and (lead.tier, lead.confidence) == ("B", "high")  # the columns
@@ -289,7 +291,7 @@ async def test_researching_again_uses_memory_and_costs_less(session: AsyncSessio
     claude = FakeClaude()
     second = await research(session, claude, ACME.model_copy(update={"company": "acme software"}))
 
-    assert claude.calls == ["extract"]
+    assert claude.calls == ["extract", "extract:extras"]
     assert second.research.angles_from_memory == ["dampeners", "money", "people", "property"]
     assert second.research.cost_usd < first.research.cost_usd
     assert second.result == first.result
@@ -300,7 +302,7 @@ async def test_use_memory_false_searches_again(session: AsyncSession) -> None:
     await research(session, FakeClaude())
     claude = FakeClaude()
     await research(session, claude, ACME.model_copy(update={"use_memory": False}))
-    assert len(claude.calls) == 5
+    assert len(claude.calls) == 6  # four angles and the two answer forms
 
 
 async def test_the_gap_check_runs_one_more_search_then_stops(session: AsyncSession) -> None:
@@ -308,6 +310,7 @@ async def test_the_gap_check_runs_one_more_search_then_stops(session: AsyncSessi
     card = await research(session, claude)
     assert claude.calls.count("search:gaps") == 1
     assert claude.calls.count("extract") == 2
+    assert claude.calls.count("extract:extras") == 2  # both forms are asked again with the notes
     assert card.result == "watch"  # still no size, so a person checks it
 
 
@@ -419,7 +422,7 @@ async def test_the_details_reach_claude_as_hints_and_not_as_instructions(
     await research(session, claude, rules=SIGNALHIRE_RULES, signalhire=acme_on_signalhire())
 
     prompts = [call.prompt for call in claude.requests]
-    assert len(prompts) == 5  # four angles and the form
+    assert len(prompts) == 6  # four angles and the two answer forms
     for prompt in prompts:
         assert "Signal Hire's record of this company (data from a database" in prompt
         assert '- Checked name: "Acme Software"' in prompt
@@ -801,7 +804,7 @@ async def test_the_research_endpoint_returns_a_card_and_lists_it(client: httpx.A
     one = await client.get(f"/api/v1/lead-finder/leads/{card['id']}")
     assert one.json()["facts"]["office_m2"]["value"] == 2500
     log = (await client.get("/api/v1/searches", params={"job_id": card["id"]})).json()
-    assert log["total"] == 5
+    assert log["total"] == 6
 
     missing = await client.get("/api/v1/lead-finder/leads/00000000-0000-0000-0000-000000000000")
     assert missing.status_code == 404
@@ -832,8 +835,8 @@ async def test_decision_makers_from_pages_read_reach_the_saved_card(session: Asy
     assert saved is not None
     assert [p["name"] for p in saved["facts"]["decision_makers"]] == ["Jane Citizen"]
     # The names stay on the card: the search costs and the search log don't change.
-    assert card.research.cost_usd == Decimal("0.520000")
-    assert await count(session, SearchLog, job_id=card.id) == 5
+    assert card.research.cost_usd == Decimal("0.530000")  # 0.52 and the second form's 0.01
+    assert await count(session, SearchLog, job_id=card.id) == 6
 
 
 # --- A failed answer form is shown, not hidden (PLAN-V4 B4) --------------------------------------
@@ -859,6 +862,61 @@ async def test_a_filled_form_is_not_marked(session: AsyncSession) -> None:
     assert not card.form_failed
 
 
+# --- The answer form is asked in two requests (PLAN-V20) ----------------------------------------
+
+
+async def test_the_second_form_failing_keeps_the_facts_of_the_first(
+    session: AsyncSession,
+) -> None:
+    """Only the dampener checks and four more facts are unknown. The card is not a failed form."""
+    busy = ClaudeError("Claude is busy right now", "Try again in a minute.")
+    claude = FakeClaude(extras_error=busy)
+    card = await research(session, claude)
+
+    assert not card.form_failed
+    assert card.facts.city.value == "Melbourne"
+    assert card.summary != research_module.FORM_FAILED_SUMMARY
+    assert card.facts.dampeners == [] and card.facts.contact_roles == []
+    assert "Filling the dampener checks: Claude is busy right now. Try again in a minute." in (
+        card.problems
+    )
+    assert (
+        "The dampener checks and four more facts couldn't be filled, so they are unknown."
+        in card.problems
+    )
+    assert "The form couldn't be filled. Every fact is unknown." not in card.problems
+    assert card.research.claude_requests == 4 + 1  # four angles and the first form
+
+
+async def test_the_first_form_failing_leaves_every_fact_unknown_even_if_the_second_answered(
+    session: AsyncSession,
+) -> None:
+    refused = ClaudeError("Claude returned an error (500)", "Something broke.")
+    card = await research(session, FakeClaude(extract_error=refused))
+
+    assert card.form_failed
+    assert card.facts.dampeners == [] and card.facts.contact_roles == []
+    assert "Filling the form: Claude returned an error (500). Something broke." in card.problems
+    # The second form's answers were paid for and are in the log, so the money adds up: four
+    # angles, then the second form, the gap search, and the second form again.
+    assert card.research.claude_requests == 4 + 1 + 1 + 1
+
+
+async def test_a_refusal_of_the_form_stops_the_research_and_keeps_what_was_paid_for(
+    session: AsyncSession,
+) -> None:
+    """16 Nov 2026: a 400 means every company will fail the same way. The research stops, the run
+    above it stops (it is `ClaudeUnavailable`), and the searches already paid for are logged and
+    their notes kept, so a resume after the fix doesn't pay for them again."""
+    refused = ClaudeRefused("Claude refused the request", "Something we send is not accepted.")
+    with pytest.raises(ClaudeRefused):
+        await research(session, FakeClaude(extract_error=refused))
+
+    assert await count(session, SearchLog) == 5  # four angles and the second form
+    assert await count(session, MemoryItem, kind="source_note") > 0
+    assert await count(session, Lead) == 0  # nothing was saved as a lead
+
+
 # --- Refilling a lead whose form failed (PLAN-V4 B5) ---------------------------------------------
 
 
@@ -873,12 +931,12 @@ async def test_a_failed_lead_is_filled_again_from_its_saved_notes(session: Async
     )
 
     assert card is not None and not card.form_failed
-    assert claude.calls == ["extract"]  # the saved notes, and no new web search
+    assert claude.calls == ["extract", "extract:extras"]  # the saved notes, and no new web search
     assert card.id == failed.id
     assert (card.facts.city.value, card.result) == ("Melbourne", "pass")
     assert card.problems == []  # the old "form couldn't be filled" line is gone
     assert card.created_at == failed.created_at
-    assert card.research.claude_requests == failed.research.claude_requests + 1
+    assert card.research.claude_requests == failed.research.claude_requests + 2
     assert card.research.web_searches == failed.research.web_searches
     lead = await session.scalar(select(Lead))
     assert lead is not None and (lead.result, lead.card["form_failed"]) == ("pass", False)

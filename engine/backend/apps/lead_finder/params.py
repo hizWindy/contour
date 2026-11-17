@@ -38,9 +38,6 @@ SinceDays = Literal[7, 14, 30]
 # Where discovery looks for companies (PLAN-V16 T1-8, the contract part 2)
 RunSource = Literal["web", "property_daily", "arealytics"]
 RUN_SOURCES: tuple[RunSource, ...] = ("web", "property_daily", "arealytics")
-# How many good leads a person may ask a run for (PLAN-V16 T1-9, the contract part 2)
-GOAL_LEADS_MIN = 1
-GOAL_LEADS_MAX = 100
 COMPANIES_MIN = 1
 COMPANIES_MAX = 25
 # The most places one run may name. The rules list 20, so this only stops a long list of repeats;
@@ -334,14 +331,11 @@ class _Discovery(Strict):
     )
     goal_leads: int | None = Field(
         None,
-        ge=GOAL_LEADS_MIN,
-        le=GOAL_LEADS_MAX,
         description=(
-            "Used by mode discovery only. How many good leads (a Pass or a Director review) a run "
-            "a person starts aims for, 1 to 100: it stops starting companies once it has them. "
-            "Left out, `manual_run_goal_leads` from the settings (see `goal_leads` in the run "
-            "options). An automatic run aims for its share of the round's goal instead. The "
-            "run's limits still apply: no limit rises by itself (PLAN-V16 T1-9)."
+            "Used by mode discovery only, and no longer used (PLAN-V20). It is still accepted so a "
+            "page that was open before the change can start a run, and then ignored: no run "
+            "stops for a goal of good leads. A run researches every company it chooses, up to "
+            "its company limit and its money limits."
         ),
         examples=[20],
     )

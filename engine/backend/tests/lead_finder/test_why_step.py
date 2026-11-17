@@ -198,8 +198,8 @@ async def test_a_recheck_writes_it_again(session: AsyncSession) -> None:
         session, get_embedder(), claude, load_rules(), why_on(), failed.id, TODAY
     )
     assert card is not None and card.why_now is not None
-    assert claude.calls == ["extract", "why"]
-    assert card.research.cost_usd == failed.research.cost_usd + Decimal("0.04") + WHY_COST
+    assert claude.calls == ["extract", "extract:extras", "why"]  # the answer form is two requests
+    assert card.research.cost_usd == failed.research.cost_usd + Decimal("0.05") + WHY_COST
 
 
 # --- C3: Why now for a saved lead -----------------------------------------------------------

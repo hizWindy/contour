@@ -32,10 +32,6 @@ class CompanyTask(TypedDict):
     recheck: bool  # search again even when memory is fresh
     signals: list[dict[str, Any]]  # `Signal` fields, from discovery
     today: str  # the run's day, YYYY-MM-DD
-    # The run's goal in good leads (`goal.py`): research stops once the run has this many. An
-    # automatic run's share of the round, or a person's `goal_leads` (PLAN-V16 T1-9). Missing or
-    # None: no goal.
-    goal: NotRequired[int | None]
     # What the research asks first (PLAN-V11 C2). Missing: growth, today's research.
     focus: NotRequired[Focus]
 
@@ -55,8 +51,7 @@ class State(TypedDict):
     candidates: NotRequired[Annotated[list[dict[str, Any]], operator.add]]  # from every slice
     merged: NotRequired[list[dict[str, Any]]]
     chosen: NotRequired[list[CompanyTask]]
-    goal: NotRequired[int | None]  # the run's goal, worked out once in `plan`
-    over_limit: NotRequired[int]  # companies the company limit left out, in `choose` (T1-9)
+    goal: NotRequired[int | None]  # an automatic run's share of the round's goal, from `plan`
     outcomes: NotRequired[Annotated[list[dict[str, Any]], operator.add]]  # one per company
 
 
@@ -77,14 +72,12 @@ class RunCtx:
     # The Signal Hire company credits the run may spend, shared by its companies (PLAN-V4 C1)
     signalhire_credits: CreditMeter = field(default_factory=lambda: CreditMeter(0))
     stop_reason: str | None = None  # set when a cap stops the run; later work is skipped
-    stop_kind: CapKind | None = None  # the cap that set `stop_reason` (PLAN-V16 T1-9)
     _caps_reported: set[str] = field(default_factory=set)
 
     async def stop(self, kind: CapKind, detail: str) -> None:
         """A cap is reached: say so once (`cap_reached`), and skip the work that is left."""
         if self.stop_reason is None:
             self.stop_reason = detail
-            self.stop_kind = kind
         if kind not in self._caps_reported:
             self._caps_reported.add(kind)
             await self.run.emit_event(CapReachedData(kind=kind, detail=detail))

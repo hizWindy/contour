@@ -105,11 +105,6 @@ TEXT: dict[str, tuple[str, str]] = {
         "Held back while a request runs, because its cost is known only afterwards. "
         "TBC: to be measured from Phase 1 runs.",
     ),
-    "manual_run_goal_leads": (
-        "Leads to aim for in a run you start",
-        "The number filled in for How many leads when a person starts a run. The run stops "
-        "starting companies once it has this many good leads, or at its limits. TBC.",
-    ),
     "property_daily_enabled": (
         "Property Daily is on",
         "Lets the Lead Finder read Property Daily: the daily feed, and a lookup when a company "
@@ -147,8 +142,8 @@ TEXT: dict[str, tuple[str, str]] = {
     ),
     "scheduled_run_cap_usd": (
         "Cap for one automatic run (US$)",
-        "The most a run that a schedule started may cost. It has no company limit: it stops at "
-        "its share of the goal, or when no company is left. A city run usually costs far less.",
+        "The most a run that a schedule started may cost. It has no company limit: it goes on "
+        "until no company is left, or this money is spent. A city run usually costs far less.",
     ),
     "lead_finder_round_cap_usd": (
         "Budget for one round (US$)",
@@ -162,8 +157,8 @@ TEXT: dict[str, tuple[str, str]] = {
     ),
     "lead_finder_goal_good_leads": (
         "Good leads to aim for every 2 weeks",
-        "The automatic runs aim for this many Pass and Director review leads between them, in "
-        "one round of the city schedules. A city that falls short leaves more for the next.",
+        "The number of Pass and Director review leads the automatic runs are measured against "
+        "between them, in one round of the city schedules. It never stops a run.",
     ),
     "slice_reserve_usd": (
         "Money held for each discovery request (US$)",

@@ -73,10 +73,8 @@ export function setupLines(run: Run, names: DetailNames): DetailLine[] {
     lines.push({ label: 'How far back', value: `Last ${String(params.since_days)} days` })
   }
 
-  // PLAN-V16: how many good leads it aimed for, and where it looked when a person chose.
-  if (typeof params.goal_leads === 'number') {
-    lines.push({ label: 'How many leads', value: pluralise(params.goal_leads, 'good lead') })
-  }
+  // PLAN-V16: where it looked, when a person chose. (A run no longer has a goal of good leads that
+  // stops it, so the number an old run was asked for is not shown: PLAN-V20.)
   const sources = strings(params.sources)
   if (sources.length > 0) {
     lines.push({

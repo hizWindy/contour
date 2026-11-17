@@ -8,7 +8,8 @@ The steps, in order:
 2. Search: one Claude request per angle (property, people, money) that memory didn't cover. A
    lease and tenure run (`ResearchContext.focus`, PLAN-V11 C2) asks the tenure angle's office
    questions in place of property, and a missing move-in date is one of its gaps in step 4.
-3. Fill the answer form from the notes, then check every fact's source.
+3. Fill the answer form from the notes, then check every fact's source. The form is asked in two
+   smaller requests side by side (`fields.EXTRA_FACTS`): Claude refuses one big form.
    Before any Claude request, the staff numbers HubSpot and Signal Hire already have are read
    (PLAN-V9 B2). When every one of them is under `size.staff_floor` and the company wasn't found
    with a growth sign, the research stops there: a short Drop, "too small", with no Claude request.
@@ -57,7 +58,14 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.lead_finder.context import CreditMeter, Origin, ResearchContext
-from apps.lead_finder.fields import AngleNotes, CompanyFacts, Fact
+from apps.lead_finder.fields import (
+    AngleNotes,
+    CompanyCoreForm,
+    CompanyExtrasForm,
+    CompanyFacts,
+    Fact,
+    join_facts,
+)
 from apps.lead_finder.headcount import (
     Resolved,
     SignalHirePerson,
@@ -1262,22 +1270,63 @@ async def _resolved(client: SignalHire, job: Job, website: str | None) -> Resolv
     return await resolve(client, job.company, website)
 
 
+FORM_PART_LINE = (
+    "\n\nThis form has only some of the questions. Fill in exactly the fields it has: the other "
+    "facts in the instructions are asked in another request."
+)
+
+
 async def _fill_form(job: Job, claude: Claude, prompt: Prompt) -> tuple[CompanyFacts, list[str]]:
-    """Turns the notes into the answer form, then removes facts without a good source."""
+    """Turns the notes into the answer form, then removes facts without a good source.
+
+    Claude fills the facts in two smaller forms, one request each, side by side (`fields.py`
+    says why). The first form failing leaves every fact unknown. The second failing leaves only
+    its facts unknown (the dampener checks, the contact roles and three more) and says so in the
+    problems: the rest of the card is still worth saving."""
     if not job.notes:
         return empty_facts(job.company), []
-    facts: CompanyFacts | None = None
-    for attempt in range(2):  # a failed check is retried once, then facts stay unknown
+    core, extras = await asyncio.gather(
+        _ask_form(job, claude, prompt, CompanyCoreForm, "extract", "Filling the form"),
+        _ask_form(
+            job, claude, prompt, CompanyExtrasForm, "extract:extras", "Filling the dampener checks"
+        ),
+        return_exceptions=True,
+    )
+    # Claude down or refusing, the daily limit, a cancel: the whole research stops, as before
+    if isinstance(core, BaseException):
+        raise core
+    if isinstance(extras, BaseException):
+        raise extras
+    if core is None:
+        job.problems.append("The form couldn't be filled. Every fact is unknown.")
+        job.form_failed = True
+        return empty_facts(job.company, FORM_FAILED_SUMMARY), []
+    if extras is None:
+        job.problems.append(
+            "The dampener checks and four more facts couldn't be filled, so they are unknown."
+        )
+    job.form_failed = False
+    facts = join_facts(core, extras)
+    checked = check_sources(facts, [note.url for note in job.notes], job.rules.criteria)
+    return checked.facts, checked.dropped
+
+
+async def _ask_form(
+    job: Job, claude: Claude, prompt: Prompt, form: type[BaseModel], step: str, what: str
+) -> BaseModel | None:
+    """One request for one of the two forms. A failed check is retried once. None when it could
+    not be filled, with the reason in the problems under `what`."""
+    for attempt in range(2):
         try:
             job.budget.check()
         except BudgetSpent as stop:
-            job.problems.append(f"Filling the form: skipped. {stop}.")
-            break
+            job.problems.append(f"{what}: skipped. {stop}.")
+            return None
         try:
             reply = await claude.ask(
                 system=prompt.text,
-                prompt=_notes_prompt(job),
-                form=CompanyFacts,
+                prompt=_notes_prompt(job) + FORM_PART_LINE,
+                form=form,
                 model=job.model("extract"),
             )
         except ClaudeUnavailable:
@@ -1285,20 +1334,13 @@ async def _fill_form(job: Job, claude: Claude, prompt: Prompt) -> tuple[CompanyF
         except ClaudeError as error:
             if isinstance(error, BudgetSpent):  # the daily limit (see _search)
                 raise
-            job.problems.append(f"Filling the form: {error.title}. {error.detail}")
-            break
+            job.problems.append(f"{what}: {error.title}. {error.detail}")
+            return None
         job.budget.record(reply, on_spend=job.context.on_reply)
-        job.replies.append(("extract" if attempt == 0 else "extract:retry", reply))
-        facts = reply.parsed
-        if facts is not None:
-            break
-    if facts is None:
-        job.problems.append("The form couldn't be filled. Every fact is unknown.")
-        job.form_failed = True
-        return empty_facts(job.company, FORM_FAILED_SUMMARY), []
-    job.form_failed = False
-    checked = check_sources(facts, [note.url for note in job.notes], job.rules.criteria)
-    return checked.facts, checked.dropped
+        job.replies.append((step if attempt == 0 else f"{step}:retry", reply))
+        if reply.parsed is not None:
+            return reply.parsed
+    return None
 
 
 # --- Prompts ---------------------------------------------------------------------------------

@@ -6,11 +6,11 @@
  *   each picked city can narrow to its CBD or its inner suburbs.
  * - **Where to look:** the web, Property Daily and Arealytics. A tool that isn't ready is greyed
  *   out, with the backend's one sentence on why.
- * - **How many leads:** 1 to 100, filled with the default. Under it, the estimate's sentence: the
- *   companies the goal needs and their cost, or the limit that binds.
+ *
+ * "How many leads" was here too (PLAN-V16 T3-2). PLAN-V20 took it out: a run researches every
+ * company it chooses, and no goal of good leads stops it.
  */
-import { TriangleAlert } from 'lucide-react'
-import type { CityOption, RunEstimate, RunOptions } from '@/api/types'
+import type { CityOption, RunOptions } from '@/api/types'
 import { CityMap } from '@/components/city-map'
 import { ChipGroup, Segmented } from '@/components/motion'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -23,22 +23,13 @@ import {
   FieldLegend,
   FieldSet,
 } from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
 import {
   CITY_GROUP_LABELS,
   CITY_GROUP_ORDER,
   RUN_SOURCE_LABELS,
   RUN_SOURCE_ORDER,
 } from '@/lib/labels'
-import { cn } from '@/lib/utils'
-import {
-  AUSTRALIA,
-  errorFor,
-  goalLine,
-  pickPlaces,
-  readGoal,
-  type StartForm,
-} from './form'
+import { AUSTRALIA, errorFor, pickPlaces, type StartForm } from './form'
 
 type Update = (changes: Partial<StartForm>) => void
 
@@ -179,50 +170,5 @@ export function SourceChoices({ options, form, update, errors }: PartProps) {
       </div>
       {error ? <FieldError>{error}</FieldError> : null}
     </FieldSet>
-  )
-}
-
-/** How many good leads the run should find, with the estimate's sentence under it. */
-export function GoalChoice({
-  form,
-  update,
-  errors,
-  estimate,
-  goalProblem,
-}: Omit<PartProps, 'options'> & { estimate: RunEstimate | undefined; goalProblem?: string }) {
-  const error = goalProblem ?? errorFor(errors, 'goal_leads')
-  const line = goalLine(estimate, readGoal(form.goalLeads))
-  const binds = line !== null && Boolean(estimate?.goal_note)
-  return (
-    <Field>
-      <FieldLabel htmlFor="goal-leads">How many leads</FieldLabel>
-      <Input
-        id="goal-leads"
-        inputMode="numeric"
-        autoComplete="off"
-        className="max-w-32"
-        value={form.goalLeads}
-        onChange={(event) => {
-          update({ goalLeads: event.target.value })
-        }}
-        aria-invalid={error ? true : undefined}
-        aria-describedby="goal-leads-about"
-      />
-      <FieldDescription id="goal-leads-about">
-        Good leads, Tier A or B. The run stops once it has found them. Leave it empty for no goal.
-      </FieldDescription>
-      {error ? <FieldError>{error}</FieldError> : null}
-      {line && !error ? (
-        <p
-          className={cn(
-            'flex items-start gap-2 text-ui',
-            binds ? 'text-review-ink' : 'text-muted-foreground',
-          )}
-        >
-          {binds ? <TriangleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" /> : null}
-          {line}
-        </p>
-      ) : null}
-    </Field>
   )
 }

@@ -1,7 +1,8 @@
-"""The automatic runs' goal and limits (9 Nov, Al-khair): a run a schedule starts aims for its share
-of the round's good leads, has the automatic run's money limit (US$150) and no company limit of its
-own; a run a person starts keeps its own limits. The scheduler loop is the real one; Claude is the
-saved sample answers, so nothing is spent."""
+"""The automatic runs' goal and limits (9 Nov, Al-khair): a run a schedule starts reports against
+its share of the round's good leads, has the automatic run's money limit (US$150) and no company
+limit of its own; a run a person starts keeps its own limits. The goal never stops a run
+(PLAN-V20). The scheduler loop is the real one; Claude is the saved sample answers, so nothing is
+spent."""
 
 import uuid
 from datetime import UTC, datetime
@@ -116,9 +117,10 @@ def one_at_a_time(**values: Any) -> Any:
 
 
 @pytest.mark.integration
-async def test_an_automatic_run_stops_at_its_goal(
+async def test_an_automatic_run_reports_against_its_goal_and_never_stops_for_it(
     make_lf_manager: MakeLeadFinderManager, session_factory: Factory
 ) -> None:
+    """Before PLAN-V20 a goal of 2 left 3 of the 5 companies unresearched."""
     await add_past_prices(session_factory)
     schedule = await schedule_of(session_factory, "Melbourne")
     manager = make_lf_manager(
@@ -128,12 +130,11 @@ async def test_an_automatic_run_stops_at_its_goal(
     started = await start_discovery(context(manager, schedule))
     run = await finished_run(manager, session_factory, uuid.UUID(started.ref or ""))
 
-    assert run.status == "done" and run.stop_reason is None  # reaching the goal is not a stop
-    assert good_of(run.counts) == 2
-    assert run.counts["researched"] == 2  # 5 found, 2 were enough
-    assert (await skips_of(session_factory, run.id)).count(
-        "the run reached its goal of 2 good leads"
-    ) == 3
+    assert run.status == "done" and run.stop_reason is None
+    assert run.counts["goal"] == 2  # its share of the round's goal, to report against
+    assert good_of(run.counts) > 2  # it had its goal after 2 companies, and went on
+    assert run.counts["researched"] == 5  # every company it found
+    assert not any("goal" in reason for reason in await skips_of(session_factory, run.id))
     assert (D(run.caps["run_cap_usd"]), run.caps["max_companies"]) == (D("150.00"), 100)
 
 
@@ -205,7 +206,8 @@ async def test_the_scheduler_loop_starts_an_automatic_run_with_the_automatic_lim
     make_lf_manager: MakeLeadFinderManager, session_factory: Factory
 ) -> None:
     """The real loop: a city schedule that is on and due starts a run, with US$150, up to 100
-    companies and its share of the goal; the loop then waits for the next time, 2 weeks on."""
+    companies and its share of the goal to report against; the loop then waits for the next time,
+    2 weeks on."""
     await add_past_prices(session_factory)
     schedule = await schedule_of(session_factory, "Melbourne", on=True)
     manager = make_lf_manager(
@@ -223,7 +225,8 @@ async def test_the_scheduler_loop_starts_an_automatic_run_with_the_automatic_lim
     run = await finished_run(manager, session_factory, uuid.UUID(fired.ref or ""))
     assert run.schedule_id == schedule.id
     assert (D(run.caps["run_cap_usd"]), run.caps["max_companies"]) == (D("150.00"), 100)
-    assert good_of(run.counts) == 3  # one city on: its share is the whole goal of 3
+    assert run.counts["goal"] == 3  # one city on: its share is the whole goal of 3
+    assert good_of(run.counts) == 5  # and it researched all 5 it found, not 3
     async with session_factory() as db:
         row = await db.get(Schedule, schedule.id, populate_existing=True)
         assert row is not None
@@ -232,4 +235,4 @@ async def test_the_scheduler_loop_starts_an_automatic_run_with_the_automatic_lim
     assert await loop.tick() == []  # nothing is due again until then
     async with session_factory() as db:
         leads = list(await db.scalars(select(Lead).where(Lead.run_id == run.id)))
-    assert len(leads) == 3
+    assert len(leads) == 5

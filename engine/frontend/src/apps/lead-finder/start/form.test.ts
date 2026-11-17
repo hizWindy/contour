@@ -5,11 +5,8 @@ import {
   bodyOf,
   errorFor,
   estimateErrors,
-  goalError,
-  goalLine,
   initialForm,
   pickPlaces,
-  readGoal,
   readySources,
   serverMode,
   tenureSummary,
@@ -33,8 +30,6 @@ function estimate(changes: Partial<RunEstimate> = {}): RunEstimate {
     daily_left_usd: '50.00',
     basis: '',
     over_cap: false,
-    companies_needed: 50,
-    goal_note: null,
     ...changes,
   }
 }
@@ -93,7 +88,6 @@ describe('the Start form', () => {
         triggers: ['lease_ending'],
         since_days: 30,
         area: { Melbourne: 'cbd' },
-        goal_leads: 20,
       },
     })
   })
@@ -178,41 +172,11 @@ describe('where to search (PLAN-V16 T3-2)', () => {
   })
 })
 
-describe('how many leads (PLAN-V16 T3-2)', () => {
-  it('starts at the default and sends it', () => {
-    const form = initialForm(OPTIONS)
-    expect(form.goalLeads).toBe('20')
-    expect(bodyOf(form, READY).params).toMatchObject({ goal_leads: 20 })
-  })
-
-  it('reads "20 leads" as 20, and leaves an empty goal out', () => {
-    expect(readGoal(' 20 leads ')).toBe(20)
-    expect(readGoal('1 lead')).toBe(1)
-    expect(readGoal('twenty')).toBeNull()
-    const form = { ...initialForm(OPTIONS), goalLeads: '' }
-    expect(bodyOf(form, READY).params).not.toHaveProperty('goal_leads')
-    expect(goalError(form, OPTIONS)).toBeUndefined()
-  })
-
-  it('says what to type when the goal is outside 1 to 100 or not a number', () => {
-    const words = 'Type a whole number from 1 to 100.'
-    for (const typed of ['0', '101', 'lots', '2.5']) {
-      expect(goalError({ ...initialForm(OPTIONS), goalLeads: typed }, OPTIONS)).toBe(words)
-    }
-    expect(goalError({ ...initialForm(OPTIONS), goalLeads: '100' }, OPTIONS)).toBeUndefined()
-    // Only "Find new leads" has a goal.
-    expect(
-      goalError({ ...initialForm(OPTIONS), mode: 'company', goalLeads: '0' }, OPTIONS),
-    ).toBeUndefined()
-  })
-
-  it('says how many companies the goal needs and their cost, or the limit that binds', () => {
-    expect(goalLine(estimate(), 20)).toBe('About 50 companies, about US$19.')
-    const binds = "20 leads needs about 50 companies. This run's limits allow 20."
-    expect(goalLine(estimate({ goal_note: binds }), 20)).toBe(binds)
-    expect(goalLine(estimate(), null)).toBeNull()
-    expect(goalLine(estimate({ valid: false }), 20)).toBeNull()
-    expect(goalLine(estimate({ companies_needed: null }), 20)).toBeNull()
+describe('no goal of good leads (PLAN-V20)', () => {
+  it('sends no goal: a run researches every company it chooses', () => {
+    const body = bodyOf(initialForm(OPTIONS), READY)
+    expect(body.params).not.toHaveProperty('goal_leads')
+    expect(initialForm(OPTIONS)).not.toHaveProperty('goalLeads')
   })
 })
 
