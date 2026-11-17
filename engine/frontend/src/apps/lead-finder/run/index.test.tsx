@@ -23,6 +23,10 @@ const COUNTS = {
   goal: null,
   good: 0,
   by_source: {},
+  target: null,
+  sweeps: 0,
+  sweeps_done: 0,
+  topped_up: 0,
 }
 
 function run(changes: Partial<Run> = {}): Run {
@@ -573,5 +577,139 @@ describe('the run leads, as Levi lists them (PLAN-V16 T3-3)', () => {
         .map((tableRow) => within(tableRow).getAllByRole('cell')[0]?.textContent),
     ).toEqual(['Alta', 'SEC', 'OpenAsset'])
     expect(screen.getByText('Companies from this run')).toBeInTheDocument()
+  })
+})
+
+describe('the sweeps and the top up (PLAN-V21 T3-4)', () => {
+  const CAPS = {
+    run_cap_usd: '30.00',
+    max_companies: 70,
+    company_cap_usd: '2.50',
+    discovery_cap_usd: '8.00',
+  }
+  const started = event(1, 'run_started', { mode: 'discovery', caps: CAPS, rules_version: 'r1' })
+
+  async function liveSource() {
+    await waitFor(() => {
+      expect(FakeEventSource.instances.length).toBeGreaterThan(0)
+    })
+    return FakeEventSource.last()
+  }
+
+  it('shows "Sweep 2 of 4: 31 of 50 companies" with a bar while the run searches', async () => {
+    mockApi(() => run({ mode: 'discovery' }))
+    renderRun()
+    const source = await liveSource()
+    act(() => {
+      source.emitOpen()
+      source.emitMessage(started)
+      source.emitMessage(event(2, 'plan_ready', { slices: 8, companies: 0, labels: [] }))
+      source.emitMessage(
+        event(3, 'sweep_started', { sweep: 1, of: 4, label: "The signs' own searches" }),
+      )
+      source.emitMessage(event(4, 'merged', { candidates: 40, unique: 31 }))
+      source.emitMessage(event(5, 'sweep_done', { sweep: 1, found: 40, companies: 31, target: 50 }))
+      source.emitMessage(
+        event(6, 'sweep_started', { sweep: 2, of: 4, label: "Levi's source groups" }),
+      )
+    })
+
+    expect(await screen.findByText('Sweep 2 of 4: 31 of 50 companies')).toBeInTheDocument()
+    expect(screen.getByRole('progressbar', { name: 'Progress' })).toHaveAttribute(
+      'aria-valuenow',
+      '62',
+    )
+    const feed = screen.getByRole('list', { name: 'Run events' })
+    expect(
+      within(feed).getByText('Sweep 1 done: 40 finds, 31 of 50 companies so far.'),
+    ).toBeInTheDocument()
+    expect(
+      within(feed).getByText("Sweep 2 of 4 started: Levi's source groups."),
+    ).toBeInTheDocument()
+    // The run merges after every sweep, so the companies after merging grow with each one.
+    expect(screen.getByText(/1 of 4 sweeps, .*31 companies after merging/)).toBeInTheDocument()
+
+    act(() => {
+      source.emitMessage(event(7, 'merged', { candidates: 52, unique: 44 }))
+      source.emitMessage(event(8, 'sweep_done', { sweep: 2, found: 12, companies: 44, target: 50 }))
+    })
+    expect(await screen.findByText('Sweep 2 of 4: 44 of 50 companies')).toBeInTheDocument()
+    expect(screen.getByText(/2 of 4 sweeps, .*44 companies after merging/)).toBeInTheDocument()
+  })
+
+  it('marks the companies the top up added "From HubSpot", in the feed and in its tables', async () => {
+    const lead = (id: string, company: string, origin: string) => ({
+      id,
+      company,
+      origin,
+      tier: 'B',
+      score: 60,
+      result: 'pass',
+      confidence: 'medium',
+      excluded: null,
+      has_property: false,
+      city: 'Perth',
+      cost_usd: '0.40',
+    })
+    mockApi(() => run({ mode: 'discovery' }), undefined, {
+      '/api/v1/lead-finder/leads': {
+        total: 2,
+        items: [
+          lead('11111111-2222-3333-4444-555555555555', 'ABC Logistics', 'hubspot'),
+          lead('22222222-2222-3333-4444-555555555555', 'Sample Software', 'web'),
+        ],
+      },
+    })
+    renderRun()
+    const source = await liveSource()
+    act(() => {
+      source.emitOpen()
+      source.emitMessage(started)
+      source.emitMessage(event(2, 'sweep_started', { sweep: 4, of: 4, label: 'By area' }))
+      source.emitMessage(event(3, 'sweep_done', { sweep: 4, found: 2, companies: 1, target: 2 }))
+      source.emitMessage(event(4, 'topped_up', { count: 1, names: ['ABC Logistics'] }))
+      source.emitMessage(event(5, 'company_started', { name: 'Sample Software', origin: 'web' }))
+      source.emitMessage(event(6, 'company_started', { name: 'ABC Logistics', origin: 'hubspot' }))
+      source.emitMessage(
+        event(7, 'progress', {
+          cost_usd: '1.00',
+          web_searches: 32,
+          claude_requests: 34,
+          counts: {
+            ...COUNTS,
+            slices: 32,
+            slices_done: 32,
+            candidates: 2,
+            unique: 1,
+            chosen: 2,
+            target: 2,
+            sweeps: 4,
+            sweeps_done: 4,
+            topped_up: 1,
+          },
+        }),
+      )
+    })
+
+    const feed = await screen.findByRole('list', { name: 'Run events' })
+    expect(
+      await within(feed).findByText(
+        'Added 1 company from the HubSpot watchlist, as the searches came up short.',
+      ),
+    ).toBeInTheDocument()
+    expect(within(feed).getByText('Researching ABC Logistics, from HubSpot')).toBeInTheDocument()
+    expect(within(feed).getByText('Researching Sample Software')).toBeInTheDocument()
+    // Once it has chosen its companies, the bar is the ones researched.
+    expect(screen.getByText('0 of 2 companies')).toBeInTheDocument()
+    expect(
+      screen.getByText(/2 chosen to research, 1 of them from the HubSpot watchlist\./),
+    ).toBeInTheDocument()
+
+    const ranked = await screen.findByRole('table', { name: 'Ranked leads' })
+    const rows = within(ranked).getAllByRole('row').slice(1)
+    const marked = rows.find((tableRow) => within(tableRow).queryByText('ABC Logistics'))
+    const plain = rows.find((tableRow) => within(tableRow).queryByText('Sample Software'))
+    expect(marked && within(marked).getByText('From HubSpot')).toBeInTheDocument()
+    expect(plain && within(plain).queryByText('From HubSpot')).toBeNull()
   })
 })

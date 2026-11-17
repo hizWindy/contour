@@ -26,6 +26,10 @@ const COUNTS = {
   goal: null,
   good: 0,
   by_source: {},
+  target: null,
+  sweeps: 0,
+  sweeps_done: 0,
+  topped_up: 0,
 }
 
 function run(status: RunStatus): Run {

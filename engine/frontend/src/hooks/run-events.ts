@@ -8,12 +8,15 @@
  *  - Counts and cost come from `progress` and `run_finished`, which carry the backend's own
  *    totals. Nothing is guessed between them, so the numbers never run ahead of the truth.
  *  - `plan_ready` and `merged` set the plan and the merge counts at once. They are plain facts.
+ *  - `sweep_started` and `sweep_done` keep the sweep a discovery run is on, with the companies it
+ *    has so far and its target, and `topped_up` the companies the HubSpot watchlist added
+ *    (PLAN-V21). The run merges after every sweep, so "companies after merging" grows with them.
  *  - The feed holds every event except `progress` (a counter update, not news), as one plain line.
  *  - The text in an event (company names, reasons) is only ever stored. A page shows it as text.
  */
 import type { RunCaps, RunCounts, RunEvent, RunEventType, RunStatus } from '@/api/types'
 import { formatMoney } from '@/lib/money'
-import { pluralise } from '@/lib/format'
+import { formatNumber, pluralise } from '@/lib/format'
 import { resultLabel } from '@/lib/labels'
 
 export const RUN_EVENT_TYPES: readonly RunEventType[] = [
@@ -24,6 +27,10 @@ export const RUN_EVENT_TYPES: readonly RunEventType[] = [
   'slice_done',
   'slice_failed',
   'merged',
+  // PLAN-V21: a discovery run a person starts searches in up to four sweeps, then tops up.
+  'sweep_started',
+  'sweep_done',
+  'topped_up',
   'company_skipped',
   'company_started',
   'company_done',
@@ -101,6 +108,31 @@ export interface SliceState {
   reason: string | null
 }
 
+/**
+ * The search sweep a discovery run is on (PLAN-V21 T3-4). A run with one sweep (an automatic run)
+ * sends no sweep events, so it has none.
+ */
+export interface SweepState {
+  /** The sweep running now, or the last one that ran. 1 is the signs' own searches. */
+  sweep: number
+  /** The most sweeps the run may make. */
+  of: number
+  /** What the sweep searches, in plain words, like "By area". */
+  label: string
+  /** True from its `sweep_started` until its `sweep_done`. */
+  running: boolean
+  /** Companies the run has chosen so far, after merging, from the last `sweep_done`. */
+  companies: number
+  /** How many companies the run tries to research. Empty: no target. */
+  target: number | null
+}
+
+/** The companies the HubSpot watchlist added after the sweeps came up short (PLAN-V21 T1-6). */
+export interface ToppedUp {
+  count: number
+  names: string[]
+}
+
 export interface RunEventsState {
   /** The highest `seq` seen. The next connection asks for events after it. */
   lastSeq: number
@@ -116,6 +148,8 @@ export interface RunEventsState {
   claudeRequests: number
   counts: RunCounts
   plan: { slices: number; companies: number; labels: string[] } | null
+  sweep: SweepState | null
+  toppedUp: ToppedUp | null
   slices: SliceState[]
   /** Names of companies being researched right now. */
   inFlight: string[]
@@ -141,6 +175,10 @@ export const EMPTY_COUNTS: RunCounts = {
   goal: null,
   good: 0,
   by_source: {},
+  target: null,
+  sweeps: 0,
+  sweeps_done: 0,
+  topped_up: 0,
 }
 
 export const initialRunEventsState: RunEventsState = {
@@ -155,6 +193,8 @@ export const initialRunEventsState: RunEventsState = {
   claudeRequests: 0,
   counts: EMPTY_COUNTS,
   plan: null,
+  sweep: null,
+  toppedUp: null,
   slices: [],
   inFlight: [],
   capReached: null,
@@ -208,6 +248,11 @@ function readCounts(value: unknown, base: RunCounts): RunCounts {
     by_source: isRecord(value.by_source)
       ? (value.by_source as Record<string, number>)
       : base.by_source,
+    // PLAN-V21: the target, the sweeps and the top up
+    target: typeof value.target === 'number' ? Math.trunc(value.target) : base.target,
+    sweeps: whole(value.sweeps, base.sweeps),
+    sweeps_done: whole(value.sweeps_done, base.sweeps_done),
+    topped_up: whole(value.topped_up, base.topped_up),
   }
 }
 
@@ -227,8 +272,33 @@ function readCaps(value: unknown): RunCaps | null {
   }
 }
 
+/** What the feed knows about the run when it words an event. */
+export interface FeedContext {
+  /** The run's mode, from `run_started`. */
+  mode?: string | null
+  /** The names the HubSpot top up added, for an event of an older run that carries no origin. */
+  toppedUp?: readonly string[]
+}
+
+/**
+ * A company the HubSpot top up added to a discovery run (PLAN-V21 T3-4). In a watchlist run every
+ * company is from HubSpot, so saying it there would add nothing.
+ */
+function fromTopUp(data: Record<string, unknown>, context: FeedContext): boolean {
+  if (context.mode !== 'discovery') {
+    return false
+  }
+  const origin = text(data.origin)
+  return (
+    origin === 'hubspot' || (origin === '' && (context.toppedUp ?? []).includes(text(data.name)))
+  )
+}
+
 /** One plain line for an event, and how it should look (info, success, warning, error). */
-export function describeEvent(event: RunEvent): { tone: FeedTone; message: string } {
+export function describeEvent(
+  event: RunEvent,
+  context: FeedContext = {},
+): { tone: FeedTone; message: string } {
   const data: Record<string, unknown> = isRecord(event.data) ? event.data : {}
   switch (event.type) {
     case 'run_started':
@@ -261,6 +331,31 @@ export function describeEvent(event: RunEvent): { tone: FeedTone; message: strin
         tone: 'info',
         message: `${pluralise(whole(data.candidates), 'find', 'finds')} merged into ${pluralise(whole(data.unique), 'company', 'companies')}.`,
       }
+    case 'sweep_started': {
+      const sweep = whole(data.sweep, 1)
+      const label = text(data.label)
+      return {
+        tone: 'info',
+        message: `Sweep ${String(sweep)} of ${String(whole(data.of, sweep))} started${label ? `: ${label}` : ''}.`,
+      }
+    }
+    case 'sweep_done': {
+      const companies = whole(data.companies)
+      const target = typeof data.target === 'number' ? Math.trunc(data.target) : null
+      const soFar =
+        target !== null
+          ? `${formatNumber(companies)} of ${pluralise(target, 'company', 'companies')} so far`
+          : `${pluralise(companies, 'company', 'companies')} so far`
+      return {
+        tone: 'success',
+        message: `Sweep ${String(whole(data.sweep, 1))} done: ${pluralise(whole(data.found), 'find')}, ${soFar}.`,
+      }
+    }
+    case 'topped_up':
+      return {
+        tone: 'info',
+        message: `Added ${pluralise(whole(data.count), 'company', 'companies')} from the HubSpot watchlist, as the searches came up short.`,
+      }
     case 'company_skipped': {
       const count = whole(data.count)
       const reason = text(data.reason, 'no reason given')
@@ -273,7 +368,12 @@ export function describeEvent(event: RunEvent): { tone: FeedTone; message: strin
       }
     }
     case 'company_started':
-      return { tone: 'info', message: `Researching ${text(data.name)}` }
+      return {
+        tone: 'info',
+        message: fromTopUp(data, context)
+          ? `Researching ${text(data.name)}, from HubSpot`
+          : `Researching ${text(data.name)}`,
+      }
     case 'company_done':
       return {
         tone: 'success',
@@ -411,6 +511,59 @@ function applyEvent(state: RunEventsState, event: RunEvent): RunEventsState {
         },
       }
       break
+    case 'sweep_started': {
+      const sweep = Math.max(1, whole(data.sweep, (state.sweep?.sweep ?? 0) + 1))
+      const of = Math.max(sweep, whole(data.of, state.counts.sweeps))
+      next = {
+        ...next,
+        sweep: {
+          sweep,
+          of,
+          label: text(data.label),
+          running: true,
+          companies: state.sweep?.companies ?? 0,
+          target: state.sweep?.target ?? state.counts.target,
+        },
+        counts: { ...state.counts, sweeps: Math.max(state.counts.sweeps, of) },
+      }
+      break
+    }
+    case 'sweep_done': {
+      const sweep = Math.max(1, whole(data.sweep, state.sweep?.sweep ?? 1))
+      const target =
+        typeof data.target === 'number'
+          ? Math.trunc(data.target)
+          : (state.sweep?.target ?? state.counts.target)
+      next = {
+        ...next,
+        sweep: {
+          sweep,
+          of: Math.max(sweep, state.sweep?.of ?? state.counts.sweeps),
+          label: state.sweep?.sweep === sweep ? state.sweep.label : '',
+          running: false,
+          companies: whole(data.companies, state.sweep?.companies ?? 0),
+          target,
+        },
+        counts: {
+          ...state.counts,
+          sweeps_done: Math.max(state.counts.sweeps_done, sweep),
+          target,
+        },
+      }
+      break
+    }
+    case 'topped_up': {
+      const names = Array.isArray(data.names)
+        ? data.names.filter((name): name is string => typeof name === 'string')
+        : []
+      const count = whole(data.count, names.length)
+      next = {
+        ...next,
+        toppedUp: { count, names },
+        counts: { ...state.counts, topped_up: count },
+      }
+      break
+    }
     case 'company_started': {
       const name = text(data.name)
       next = { ...next, inFlight: [...without(state.inFlight, name), name] }
@@ -455,7 +608,10 @@ function applyEvent(state: RunEventsState, event: RunEvent): RunEventsState {
   }
 
   if (event.type !== 'progress') {
-    const { tone, message } = describeEvent(event)
+    const { tone, message } = describeEvent(event, {
+      mode: next.mode,
+      toppedUp: next.toppedUp?.names,
+    })
     const item: FeedItem = {
       seq: event.seq,
       type: event.type,

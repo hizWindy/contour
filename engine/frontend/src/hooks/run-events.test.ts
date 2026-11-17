@@ -35,6 +35,10 @@ const COUNTS = {
   goal: null,
   good: 0,
   by_source: {},
+  target: null,
+  sweeps: 0,
+  sweeps_done: 0,
+  topped_up: 0,
 }
 
 const CAPS = {
@@ -59,7 +63,8 @@ describe('parseRunEvent', () => {
     for (const type of RUN_EVENT_TYPES) {
       expect(parseRunEvent(JSON.stringify(event(1, type))), type).not.toBeNull()
     }
-    expect(RUN_EVENT_TYPES).toHaveLength(15)
+    // The contract's 18 (PLAN-V21 added the two sweep events and the top up).
+    expect(RUN_EVENT_TYPES).toHaveLength(18)
   })
 
   it.each([
@@ -496,5 +501,116 @@ describe('describeEvent', () => {
     for (const type of RUN_EVENT_TYPES) {
       expect(describeEvent(event(1, type)).message).not.toContain('—')
     }
+  })
+})
+
+describe('the sweeps and the top up (PLAN-V21 T3-4)', () => {
+  const start = event(1, 'run_started', { mode: 'discovery', caps: CAPS, rules_version: 'r' })
+
+  it('reads the three new events, which a build that did not know them would drop', () => {
+    for (const type of ['sweep_started', 'sweep_done', 'topped_up'] as const) {
+      expect(RUN_EVENT_TYPES).toContain(type)
+      expect(parseRunEvent(JSON.stringify(event(1, type, { sweep: 1 }))), type).not.toBeNull()
+    }
+  })
+
+  it('keeps the sweep the run is on, with its companies so far and its target', () => {
+    const swept = fold([
+      start,
+      event(2, 'plan_ready', { slices: 8, companies: 0, labels: [] }),
+      event(3, 'sweep_started', { sweep: 1, of: 4, label: "The signs' own searches" }),
+      event(4, 'merged', { candidates: 17, unique: 13 }),
+      event(5, 'sweep_done', { sweep: 1, found: 17, companies: 13, target: 50 }),
+      event(6, 'sweep_started', { sweep: 2, of: 4, label: "Levi's source groups" }),
+    ])
+    expect(swept.sweep).toEqual({
+      sweep: 2,
+      of: 4,
+      label: "Levi's source groups",
+      running: true,
+      companies: 13,
+      target: 50,
+    })
+    expect(swept.counts).toMatchObject({ sweeps: 4, sweeps_done: 1, target: 50, unique: 13 })
+
+    // After every sweep the run merges again, so the companies after merging grow.
+    const next = fold([
+      start,
+      event(2, 'sweep_started', { sweep: 1, of: 4, label: 'a' }),
+      event(3, 'sweep_done', { sweep: 1, found: 17, companies: 13, target: 50 }),
+      event(4, 'sweep_started', { sweep: 2, of: 4, label: 'b' }),
+      event(5, 'merged', { candidates: 40, unique: 31 }),
+      event(6, 'sweep_done', { sweep: 2, found: 23, companies: 31, target: 50 }),
+    ])
+    expect(next.sweep).toMatchObject({ sweep: 2, running: false, companies: 31, label: 'b' })
+    expect(next.counts).toMatchObject({ unique: 31, sweeps_done: 2 })
+  })
+
+  it('counts the top up and keeps its names', () => {
+    const state = fold([
+      start,
+      event(2, 'topped_up', { count: 2, names: ['ABC Logistics', 'Acme'] }),
+    ])
+    expect(state.toppedUp).toEqual({ count: 2, names: ['ABC Logistics', 'Acme'] })
+    expect(state.counts.topped_up).toBe(2)
+  })
+
+  it('reads the new counts from progress, and keeps them when a field is missing', () => {
+    const state = fold([
+      start,
+      event(2, 'progress', {
+        cost_usd: '1.00',
+        counts: { ...COUNTS, target: 50, sweeps: 4, sweeps_done: 3, topped_up: 12 },
+      }),
+      event(3, 'progress', { cost_usd: '1.20', counts: { researched: 2 } }),
+    ])
+    expect(state.counts).toMatchObject({ target: 50, sweeps: 4, sweeps_done: 3, topped_up: 12 })
+    expect(EMPTY_COUNTS).toMatchObject({ target: null, sweeps: 0, sweeps_done: 0, topped_up: 0 })
+  })
+
+  it('writes one plain line for each new event', () => {
+    expect(describeEvent(event(1, 'sweep_started', { sweep: 2, of: 4, label: 'By area' }))).toEqual(
+      {
+        tone: 'info',
+        message: 'Sweep 2 of 4 started: By area.',
+      },
+    )
+    expect(
+      describeEvent(event(1, 'sweep_done', { sweep: 1, found: 17, companies: 13, target: 50 })),
+    ).toEqual({ tone: 'success', message: 'Sweep 1 done: 17 finds, 13 of 50 companies so far.' })
+    expect(
+      describeEvent(event(1, 'sweep_done', { sweep: 3, found: 1, companies: 1, target: null }))
+        .message,
+    ).toBe('Sweep 3 done: 1 find, 1 company so far.')
+    expect(describeEvent(event(1, 'topped_up', { count: 12, names: [] })).message).toBe(
+      'Added 12 companies from the HubSpot watchlist, as the searches came up short.',
+    )
+  })
+
+  it('marks a company the top up added "from HubSpot", in a discovery run only', () => {
+    const fromHubSpot = fold([
+      start,
+      event(2, 'company_started', { name: 'ABC Logistics', origin: 'hubspot' }),
+      event(3, 'company_started', { name: 'Sample Studio', origin: 'web' }),
+    ])
+    expect(fromHubSpot.feed.map((item) => item.message)).toContain(
+      'Researching ABC Logistics, from HubSpot',
+    )
+    expect(fromHubSpot.feed.map((item) => item.message)).toContain('Researching Sample Studio')
+
+    // An older event with no origin: the top up's names say it.
+    const named = fold([
+      start,
+      event(2, 'topped_up', { count: 1, names: ['ABC Logistics'] }),
+      event(3, 'company_started', { name: 'ABC Logistics' }),
+    ])
+    expect(named.feed.at(-1)?.message).toBe('Researching ABC Logistics, from HubSpot')
+
+    // In a watchlist run every company is from HubSpot, so the line says nothing more.
+    const watchlist = fold([
+      event(1, 'run_started', { mode: 'watchlist', caps: CAPS, rules_version: 'r' }),
+      event(2, 'company_started', { name: 'ABC Logistics', origin: 'hubspot' }),
+    ])
+    expect(watchlist.feed.at(-1)?.message).toBe('Researching ABC Logistics')
   })
 })

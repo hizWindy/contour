@@ -40,11 +40,14 @@ export {
   initialRunEventsState,
   parseRunEvent,
   runEventsReducer,
+  type FeedContext,
   type FeedItem,
   type FeedTone,
   type RunEventsAction,
   type RunEventsState,
   type SliceState,
+  type SweepState,
+  type ToppedUp,
 } from './run-events'
 
 export type RunConnection = 'live' | 'reconnecting' | 'closed'

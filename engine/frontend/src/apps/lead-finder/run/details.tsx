@@ -10,7 +10,9 @@
  *   then the watch list (Tier C), and then the ones that scored under 40. Each opens its lead
  *   card. None is hidden: before PLAN-V20 the last group was only counted, so a run of weak
  *   companies looked empty.
- * - `FunnelLine`: searches, finds, companies after merging, chosen, researched, in one line.
+ * - `FunnelLine`: sweeps, searches, finds, companies after merging, chosen, and how many the HubSpot
+ *   top up added, in one line. In a discovery run, a company the top up added says "From HubSpot"
+ *   under its name in the tables (PLAN-V21 T3-4).
  */
 import { createColumnHelper } from '@tanstack/react-table'
 import { useNavigate } from 'react-router'
@@ -19,6 +21,7 @@ import type { LeadRow, Run, RunCounts } from '@/api/types'
 import { DataTable, type DataTableProps } from '@/components/data-table'
 import { Money } from '@/components/money'
 import { ResultBadge } from '@/components/result-badge'
+import { SourceMark } from '@/components/source-mark'
 import { TierMark } from '@/components/tier-mark'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatNumber, pluralise } from '@/lib/format'
@@ -103,17 +106,27 @@ export function RunCostSplit({ runId, researched }: { runId: string; researched:
 
 const help = createColumnHelper<LeadRow>()
 
-const companyColumn = () =>
+/**
+ * The company's name, which opens its card. In a discovery run, a company the HubSpot top up added
+ * says "From HubSpot" under its name (PLAN-V21 T3-4). In a watchlist run every company is from
+ * HubSpot, so the mark would say nothing there.
+ */
+const companyColumn = (markTopUp: boolean) =>
   help.accessor('company', {
     header: 'Company',
     enableSorting: false,
     cell: (info) => (
-      <button
-        type="button"
-        className="rounded-sm text-left font-semibold underline-offset-4 hover:underline"
-      >
-        {info.getValue()}
-      </button>
+      <span className="flex min-w-0 flex-col items-start">
+        <button
+          type="button"
+          className="rounded-sm text-left font-semibold underline-offset-4 hover:underline"
+        >
+          {info.getValue()}
+        </button>
+        {markTopUp && info.row.original.origin === 'hubspot' ? (
+          <SourceMark origin="hubspot" />
+        ) : null}
+      </span>
     ),
   })
 
@@ -142,39 +155,50 @@ const resultColumn = () =>
     cell: (info) => <ResultBadge result={info.getValue()} />,
   })
 
-const RANKED = [
-  companyColumn(),
+const tierColumn = () =>
   help.accessor('tier', {
     header: 'Tier',
     enableSorting: false,
     cell: (info) => <TierMark tier={info.getValue()} />,
-  }),
-  scoreColumn(),
-  resultColumn(),
-  cityColumn(),
+  })
+
+const costColumn = () =>
   help.accessor('cost_usd', {
     header: 'Cost',
     enableSorting: false,
     meta: { align: 'right', hideBelow: 'sm' },
     cell: (info) => <Money value={info.getValue()} />,
-  }),
-]
+  })
 
-const EXCLUDED = [
-  companyColumn(),
+const reasonColumn = () =>
   help.accessor((row) => row.excluded?.label ?? '', {
     id: 'reason',
     header: 'Why it was left out',
     enableSorting: false,
     // A reason can be long: it wraps instead of widening the table on a phone.
     meta: { className: 'min-w-40 whitespace-normal' },
-  }),
-  cityColumn(),
-]
+  })
 
-const WATCH = [companyColumn(), scoreColumn(), cityColumn()]
+interface ColumnSets {
+  ranked: Columns
+  excluded: Columns
+  watch: Columns
+  underForty: Columns
+}
 
-const UNDER_FORTY = [companyColumn(), scoreColumn(), resultColumn(), cityColumn()]
+/** The four tables' columns, with or without the top up's "From HubSpot" mark. */
+function columnSets(markTopUp: boolean): ColumnSets {
+  const company = companyColumn(markTopUp)
+  return {
+    ranked: [company, tierColumn(), scoreColumn(), resultColumn(), cityColumn(), costColumn()],
+    excluded: [company, reasonColumn(), cityColumn()],
+    watch: [company, scoreColumn(), cityColumn()],
+    underForty: [company, scoreColumn(), resultColumn(), cityColumn()],
+  }
+}
+
+const PLAIN_COLUMNS = columnSets(false)
+const MARKED_COLUMNS = columnSets(true)
 
 function LeadGroup({
   id,
@@ -215,11 +239,21 @@ function LeadGroup({
   )
 }
 
-export function RunLeads({ runId, className }: { runId: string; className?: string }) {
+export function RunLeads({
+  runId,
+  markTopUp = false,
+  className,
+}: {
+  runId: string
+  /** A discovery run: a company the HubSpot top up added says "From HubSpot". */
+  markTopUp?: boolean
+  className?: string
+}) {
   const navigate = useNavigate()
   const leads = useLeads({ run_id: runId, sort: 'score', order: 'desc', limit: 100 })
   const items = leads.data?.items ?? []
   const groups = groupRunLeads(items)
+  const columns = markTopUp ? MARKED_COLUMNS : PLAIN_COLUMNS
   const open = (leadId: string): void => {
     void navigate(`/leads/${leadId}`)
   }
@@ -232,7 +266,7 @@ export function RunLeads({ runId, className }: { runId: string; className?: stri
         {items.length === 0 ? (
           <DataTable
             label="Companies from this run"
-            columns={RANKED}
+            columns={columns.ranked}
             data={items}
             getRowId={(row) => row.id}
             compact
@@ -246,7 +280,7 @@ export function RunLeads({ runId, className }: { runId: string; className?: stri
               title="Ranked leads"
               about="Tier A and B, best first: the good leads."
               rows={groups.ranked}
-              columns={RANKED}
+              columns={columns.ranked}
               onOpen={open}
             />
             {groups.excluded.length > 0 ? (
@@ -255,7 +289,7 @@ export function RunLeads({ runId, className }: { runId: string; className?: stri
                 title="Excluded"
                 about="Left out by the rules, each with its reason. Open one to override it."
                 rows={groups.excluded}
-                columns={EXCLUDED}
+                columns={columns.excluded}
                 onOpen={open}
               />
             ) : null}
@@ -265,7 +299,7 @@ export function RunLeads({ runId, className }: { runId: string; className?: stri
                 title="Watch"
                 about="Tier C: watch for a new sign."
                 rows={groups.watch}
-                columns={WATCH}
+                columns={columns.watch}
                 onOpen={open}
               />
             ) : null}
@@ -275,7 +309,7 @@ export function RunLeads({ runId, className }: { runId: string; className?: stri
                 title="Scored under 40"
                 about="Not a fit for now, or too little is known. They are listed so every company the run researched is here."
                 rows={groups.discarded}
-                columns={UNDER_FORTY}
+                columns={columns.underForty}
                 onOpen={open}
               />
             ) : null}
@@ -286,9 +320,16 @@ export function RunLeads({ runId, className }: { runId: string; className?: stri
   )
 }
 
-/** "12 searches, 14 finds, 13 companies after merging, 13 chosen." Only what the run did. */
+/**
+ * "2 of 4 sweeps, 16 searches of 16, 17 finds, 13 companies after merging, 25 chosen to research,
+ * 12 of them from the HubSpot watchlist." Only what the run did: the sweeps and the top up show
+ * only for a run that had them (PLAN-V21).
+ */
 export function FunnelLine({ counts }: { counts: RunCounts }) {
   const parts: string[] = []
+  if (counts.sweeps > 1) {
+    parts.push(`${formatNumber(counts.sweeps_done)} of ${pluralise(counts.sweeps, 'sweep')}`)
+  }
   if (counts.slices > 0) {
     parts.push(
       pluralise(counts.slices_done, 'search', 'searches') + ` of ${formatNumber(counts.slices)}`,
@@ -301,6 +342,9 @@ export function FunnelLine({ counts }: { counts: RunCounts }) {
   }
   if (counts.chosen > 0) {
     parts.push(`${formatNumber(counts.chosen)} chosen to research`)
+  }
+  if (counts.topped_up > 0) {
+    parts.push(`${formatNumber(counts.topped_up)} of them from the HubSpot watchlist`)
   }
   if (parts.length === 0) {
     return null

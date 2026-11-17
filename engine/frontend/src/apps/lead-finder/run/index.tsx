@@ -38,7 +38,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { useRunEvents, type RunConnection } from '@/hooks/useRunEvents'
 import type { FeedTone, RunEventsState } from '@/hooks/run-events'
-import { formatDateTime, formatNumber, formatTime, shortId } from '@/lib/format'
+import { formatDateTime, formatNumber, formatTime, pluralise, shortId } from '@/lib/format'
 import { isTerminalRunStatus, RESULT_ORDER, RUN_MODE_LABELS } from '@/lib/labels'
 import { cn } from '@/lib/utils'
 import { GoodLeadsLine } from '../good-leads'
@@ -81,11 +81,37 @@ function Stat({ label, value }: { label: string; value: string }) {
   )
 }
 
+/**
+ * How far along the run is: the bar and its words. While a discovery run sweeps (PLAN-V21 T3-4),
+ * the bar is its companies so far against its target, "Sweep 2 of 4: 31 of 50 companies". Once
+ * it has chosen its companies, the bar is the ones researched.
+ */
 function progressOf(state: RunEventsState): { value: number; words: string } | null {
-  const { counts } = state
-  const total = counts.chosen || state.plan?.companies || 0
+  const { counts, sweep } = state
+  const done = counts.researched + counts.failed
+  if (counts.chosen > 0) {
+    return {
+      value: Math.min(100, (done / counts.chosen) * 100),
+      words: `${done} of ${counts.chosen} companies`,
+    }
+  }
+  if (sweep && sweep.of > 1) {
+    const head = `Sweep ${String(sweep.sweep)} of ${String(sweep.of)}`
+    const target = sweep.target ?? counts.target
+    if (target !== null && target > 0) {
+      return {
+        value: Math.min(100, (sweep.companies / target) * 100),
+        words: `${head}: ${String(sweep.companies)} of ${String(target)} companies`,
+      }
+    }
+    const swept = sweep.running ? sweep.sweep - 1 : sweep.sweep
+    return {
+      value: Math.min(100, (swept / sweep.of) * 100),
+      words: `${head}: ${pluralise(sweep.companies, 'company', 'companies')}`,
+    }
+  }
+  const total = state.plan?.companies ?? 0
   if (total > 0) {
-    const done = counts.researched + counts.failed
     return { value: Math.min(100, (done / total) * 100), words: `${done} of ${total} companies` }
   }
   if (counts.slices > 0) {
@@ -255,7 +281,13 @@ function RunView({ runId, run }: { runId: string; run: Run }) {
             </CardContent>
           </Card>
 
-          {canResults ? <RunLeads runId={runId} className="max-lg:order-4" /> : null}
+          {canResults ? (
+            <RunLeads
+              runId={runId}
+              markTopUp={final.mode === 'discovery'}
+              className="max-lg:order-4"
+            />
+          ) : null}
 
           <Card className="max-lg:order-5">
             <CardHeader>
