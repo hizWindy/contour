@@ -6,7 +6,7 @@ This plan fixes the Lead Finder after the live run of 17 Nov, and takes out the 
 
 - **Built by:** Al-khair Pama, with Claude. **Signed off by:** Al-khair. Levi confirms the numbers marked **TBC with Levi**.
 - **Last updated:** 17 Nov 2026 (built on branch `plan-v20`, checks run, merged into `master` by fast-forward; not pushed, not deployed).
-- **Progress:** S1 to S6: 6 of 6. Merge and deploy: 1 of 4 (M0 merge done). The live form test (M1), the deploy (M2) and the refill of the 9 failed leads (M3) wait on Al-khair's word.
+- **Progress:** S1 to S6: 6 of 6. Merge and deploy: 2 of 4 (M0 merge, M1 live form test). The deploy (M2) and the refill of the 9 failed leads (M3) wait on Al-khair's word.
 - **Sources:**
   - the live run `f4d799ee` (17 Nov, stopped by Al-khair at US$8.52, 3 of 3 researched companies with a failed form) and the 7 live runs before it;
   - the live server log, `claude_error`: HTTP 400, "The compiled grammar is too large";
@@ -36,9 +36,10 @@ Merge and deploy:
 
 - [x] **M0. Merge** (17 Nov): `master` moved from `0c9b68f` to `plan-v20` by fast-forward, after the checks above. Not pushed.
 
-Waiting on Al-khair's word (paid, or on the live site):
+- [x] **M1. The live form test** (17 Nov, on Al-khair's word in chat): `lead-finder forms --live --yes` sent each form to Claude once at low effort. **All five were accepted by `claude-opus-5-5`, US$0.0611 in all:** search notes US$0.0032, company facts (the main form, 7,697 characters) US$0.0308, company extras (4,393) US$0.0168, discovery US$0.0066, why now US$0.0037. This is the real API accepting the two new forms. The key was loaded into that one process from the main `engine/.env` and not written anywhere.
 
-- [ ] **M1. The live form test.** `uv run lead-finder forms --live --yes`: a few cents, sends each form to Claude once at low effort. It is the only proof that Claude accepts the two new forms. The free checks say they are the size of the form that worked up to V15, but only Claude can say. Not run on 17 Nov: the permission check for paid calls asked for Al-khair's own word. Run it before the deploy.
+Waiting on Al-khair's word (on the live site, or paid):
+
 - [ ] **M2. Push and deploy** (`deploy v20`). App Platform has `deploy_on_push` off.
 - [ ] **M3. Refill the 9 failed leads** from their saved notes: `lead-finder refill --yes` in the DigitalOcean console, about US$0.35 a lead (TBC, it was US$0.25 for one request), 2 requests, no web search. Without it, a new run skips those companies for 30 days (their notes are fresh).
 
@@ -53,4 +54,5 @@ Waiting on Al-khair's word (paid, or on the live site):
 - 2026-11-17: S1 to S6 built on `plan-v20` (from `master` at `0c9b68f`). The two forms are 7,697 and 4,393 characters, and the first has the same questions, in the same order, as the form that worked up to V15. The fake Claude answers both forms; a research is now 6 requests and US$0.01 more on the fake.
 - 2026-11-17: **Two things worth knowing.** (1) The two forms are asked at the same time, so a company that is just under its cap can pass it by one more form request (about US$0.1 to 0.3). Before, it was one request. (2) A lead judged before the tiers existed has no tier, so the run page lists it by its result: a Pass or a Director review with the ranked leads, a Watch with Tier C, a Drop under 40. A company researched in the last 30 days is still skipped by a new run unless it has a new sign, so the 9 failed leads need M3.
 - 2026-11-17: **Merged** into `master` by fast-forward (the commit of this line). Not pushed, not deployed.
+- 2026-11-17: **M1 done.** The live form test passed: all five forms accepted, US$0.0611 (see M1). The first try in this shell had no Claude key in its environment, so Claude was never asked and nothing was spent. The second try loaded the key from the main `engine/.env` into that one process.
 - 2026-11-17: **The number.** This plan was written as PLAN-V19. The Improvements 2 plan took V19 in the main folder that same morning (uncommitted, written before this one), so this plan is V20 and nothing of the other plan was touched. `CLAUDE.md` has no pointer to this plan yet: the main folder's own `CLAUDE.md` edit was uncommitted, so it was left alone. Add one line when that edit lands: "PLAN-V20 is the Lead Finder fix of 17 Nov, built and merged into `master`, not deployed; its open steps are M1 (the live form test), M2 (`deploy v20`) and M3 (refill the 9 failed leads)."
