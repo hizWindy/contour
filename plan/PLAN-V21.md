@@ -5,8 +5,8 @@ This plan makes the Lead Finder find, research and show many more companies, wit
 **TBC** means to be confirmed.
 
 - **Built by:** Al-khair Pama, with Claude. **Signed off by:** Al-khair, for the code and every screen. Levi confirms the rule numbers marked **TBC with Levi**.
-- **Last updated:** 18 Nov 2026 (S0 done; Part 1 under way).
-- **Progress:** S0: 1 of 1. Part 1: 5 of 9. Part 2: 0 of 6. Part 3: 0 of 6. M1 to M4: 0 of 4. W1 and W2: 0 of 2.
+- **Last updated:** 18 Nov 2026 (Parts 1 and 2 built; the full backend run waits; Part 3 next).
+- **Progress:** S0: 1 of 1. Part 1: 8 of 9. Part 2: 4 of 6. Part 3: 0 of 6. M1 to M4: 0 of 4. W1 and W2: 0 of 2.
 - **Sources:**
   - Al-khair's asks in chat (18 Nov), with 3 screenshots of the Start page;
   - the audit in the same chat: the live site's runs, leads, settings, schedules and sources, read through Chrome (GET only);
@@ -203,15 +203,15 @@ One session builds every step, in order: Part 1, then Part 2, then Part 3. The b
   - **Done when:** `make_slices` tests pass for each sweep, and the backend refuses to start when a sign that is searched has no sweep 2 wording.
 - [x] **T1-4. The target and the sweeps.** Done 18 Nov 2026 (`8df4be3`). `target_companies` goes into the params and the estimate. After each sweep the run merges and chooses. If it has fewer companies than its target, sweeps are left, and discovery's share of the money isn't used up, it starts the next sweep. Then comes the top up (T1-6), then the research. `check_discovery_size` counts sweep 1 only: later sweeps run only while money is left. A resume never repeats a sweep that was paid for.
   - **Done when:** FakeClaude tests show that a run that meets its target in sweep 1 makes no sweep 2; a thin run goes on to sweep 4 and stops; a run at its discovery money stops sweeping and says so in the feed; and a resume in the middle of sweep 3 starts at sweep 3.
-- [ ] **T1-5. Property Daily first.** Before sweep 1, the run's plan turns Property Daily's new items for its places and how far back into companies. That part is built (PLAN-V16 T1-8). New here: when Property Daily is ready and picked on Start, and our copy's last email is older than today, the plan reads the new emails first (about 1 page a day, free). So a run doesn't depend on the job, which is switched off.
+- [x] **T1-5. Property Daily first.** Done 18 Nov 2026 (`26cd507`). Before sweep 1, the run's plan turns Property Daily's new items for its places and how far back into companies. That part is built (PLAN-V16 T1-8). New here: when Property Daily is ready and picked on Start, and our copy's last email is older than today, the plan reads the new emails first (about 1 page a day, free). So a run doesn't depend on the job, which is switched off.
   - **Done when:** with a fake reader, a run's plan reads the email once, saves its records, and its items with a sign become companies before sweep 1. With Property Daily off, paused or not picked, the run works as today.
 - [x] **T1-6. The HubSpot top up.** Done 18 Nov 2026 (`8df4be3`). When the sweeps are done and the run is still short of its target, `choose` adds watchlist companies in the run's places, in the watchlist's own order (most likely first). It skips what `decide` skips. Each is researched like a HubSpot watchlist run. It is off when `top_up` is false or `hubspot_names_to_claude_ok` is off.
   - **Done when:** tests show that a run 12 short adds 12, that a run with `top_up` false adds none, and that `RunCounts.topped_up` and the row's origin (`hubspot`) say so.
-- [ ] **T1-7. No early drop on a guess.** `research._too_small` stops a company before research only on HubSpot's own count, for a sure match. A Signal Hire count alone never stops it. The count still goes on the card.
+- [x] **T1-7. No early drop on a guess.** Done 18 Nov 2026 (`a222bff`; the floor moved to 30 in T2-3, `734a3ea`). `research._too_small` stops a company before research only on HubSpot's own count, for a sure match. A Signal Hire count alone never stops it. The count still goes on the card.
   - **Done when:** tests show that a company with only Signal Hire's 48 is researched, and that one with HubSpot's 20 staff (a sure match) is still stopped at no cost.
-- [ ] **T1-8. Every card keeps its sign.** The signs discovery found go on the card and the row whatever happens next: a failed form, a failed second form, the early size stop or a research error. Each is marked "from the search, not checked by the research".
+- [x] **T1-8. Every card keeps its sign.** Done 18 Nov 2026 (`a222bff`). The signs discovery found go on the card and the row whatever happens next: a failed form, a failed second form, the early size stop or a research error. Each is marked "from the search, not checked by the research".
   - **Done when:** a test for each of the four paths passes, the row's `trigger_id` is set, and the card's "Why it fits" names the sign.
-- [ ] **T1-9. Check.** ruff, ruff format, mypy, the fast tests and the full backend run (`RUN_GATES=1`). The numbers go in the Log.
+- [ ] **T1-9. Check.** Done except the full backend run, which was stopped for low memory (see the Log). It waits for Al-khair's word. ruff, ruff format, mypy, the fast tests and the full backend run (`RUN_GATES=1`). The numbers go in the Log.
 
 ### Part 1 Log
 
@@ -223,24 +223,41 @@ One session builds every step, in order: Part 1, then Part 2, then Part 3. The b
 - 18 Nov, T1-4 (choices made while building, Al-khair can change them): sweeps, the target and the top up apply only to a run a person starts; an automatic run makes one sweep, as the plan says. A target above the run's company limit is a 422 (`target_above_limit`) on `target_companies`, so Start must keep the two together; a run with no target of its own gets `target_companies_default` pulled down to the limit. Discovery's share is a budget of its own in the run (`RunCtx.discovery_budget`, rebuilt from the search log on a resume): a slice of any sweep needs room in it, and the run sweeps again only while one more slice's hold (`slice_reserve_usd`) fits. A run with no web search has no sweeps, and its estimate is as before.
 - 18 Nov, T1-6: the top up skips names the research would refuse: the export's watchlist has "The Conversation Australia + NZ", whose "+" fails the name check, so its research failed. A watchlist run would fail on it the same way today (not changed here).
 - 18 Nov, tests after T1-6: the Lead Finder folder, `tests/e2e`, the run manager and the contract: 2,197 passed, 25 skipped. Old tests that count one sweep now pass `target_companies: 5`, and the default run's test expects 4 sweeps (32 searches) and still ends under its limit.
+- 18 Nov, T1-5: the run's plan reads the new emails through `get_sources().feed` only when Property Daily is picked, ready (on, a login, not paused) and our copy's last email is older than today in Melbourne. Every Lead Finder test now has a quiet reader (`tests/lead_finder/conftest.py`), so no test opens a browser for it. Found, not changed: a research lookup in a test with Property Daily switched on still asks the real reader (`core.sources.reader._live`), which may try to open Chrome. TBC: give those tests a fake too.
+- 18 Nov, T1-7: Signal Hire is asked before the search only to check a HubSpot count under the floor, so a research makes one Signal Hire client fewer when HubSpot has no number.
+- 18 Nov, T1-8 (a choice Al-khair can change): a sign from the search counts in the score like any sign, labelled "estimated", because its link was among the pages discovery read and it passed the date check. It is added only when the research didn't find the same sign itself. A research error now still saves the lead (summary "The research failed, so only the sign the search found is known") and the run still reports the failure. The mark is `TriggerScore.from_search`, kept by a judge again (rejudge, override).
+- 18 Nov, T1-9: ruff, ruff format and mypy pass; the fast tests pass in the pre-commit hook of every commit; the Lead Finder folder and `tests/e2e` passed (2,073) after T1-8, and the contract gate passed after the contract was made again. The full backend run with `RUN_GATES=1` was stopped by Claude Code at about 01:10 because the laptop was low on memory (1.4 GB free of 15.6 GB afterwards). It isn't run again without Al-khair's word (see T2-6).
 
 ## Part 2: the score and the lists
 
-- [ ] **T2-1. No hidden leads.** `tier` takes `none`. When `tier` is left out, it means A, B, C and none. The facets count `none`.
+- [x] **T2-1. No hidden leads.** Done 18 Nov 2026 (`734a3ea`). `tier` takes `none`. When `tier` is left out, it means A, B, C and none. The facets count `none`.
   - **Done when:** store and API tests with 21 untiered leads out of 31 show the untiered ones in the default view, and `tier=discard` alone shows only Discard.
-- [ ] **T2-2. Not known yet counts half.** `score.unknown_share` is 0.5: a check that is "not known yet" earns half its points, rounded down. A failed check earns 0. The card and the Rules page say "half points: not known yet". The confidence is unchanged.
+- [x] **T2-2. Not known yet counts half.** Done 18 Nov 2026 (`734a3ea`). `score.unknown_share` is 0.5: a check that is "not known yet" earns half its points, rounded down. A failed check earns 0. The card and the Rules page say "half points: not known yet". The confidence is unchanged.
   - **Done when:** the scoring tests pass, and the rejudge tables (the dev leads and the test set) before and after, by tier, are in the Log.
-- [ ] **T2-3. The size band.** After research, a size worked out from an estimated staff number between `size.estimated_floor` (30) and `staff_floor` (50) is a Watch with "check the size". A known count under 50 stays a Drop unless the company is growing.
+- [x] **T2-3. The size band.** Done 18 Nov 2026 (`734a3ea`). After research, a size worked out from an estimated staff number between `size.estimated_floor` (30) and `staff_floor` (50) is a Watch with "check the size". A known count under 50 stays a Drop unless the company is growing.
   - **Done when:** the scoring tests pass, and the rejudge counts are in the Log.
-- [ ] **T2-4. Results' default view.** The API's default is Tier A, B and C plus no tier. Discard and the excluded leads stay one filter away. Home's and the run page's counts of good leads stay A and B.
+- [x] **T2-4. Results' default view.** Done 18 Nov 2026 (`734a3ea`). The API's default is Tier A, B and C plus no tier. Discard and the excluded leads stay one filter away. Home's and the run page's counts of good leads stay A and B.
   - **Done when:** an API test checks the default.
-- [ ] **T2-5. The quality bar.** The test set has no expected results today (since PLAN-V16 T1-2). Propose a tier range for each test set company from its last saved result, like "C or better" or "Discard or C". Al-khair confirms them before M2. The test set report shows each company's tier, and whether it is inside its range.
+- [ ] **T2-5. The quality bar.** Built (`734a3ea`), waiting for Al-khair's yes to the ranges. The test set has no expected results today (since PLAN-V16 T1-2). Propose a tier range for each test set company from its last saved result, like "C or better" or "Discard or C". Al-khair confirms them before M2. The test set report shows each company's tier, and whether it is inside its range.
   - **Done when:** the ranges are in `testset.yaml`, Al-khair has said yes in chat, and a free report on the saved results shows them.
-- [ ] **T2-6. Check.** ruff, mypy, the fast tests and the full backend run. Make the API contract and the website's types again for Part 3. The rejudge tables go in the Log.
+- [ ] **T2-6. Check.** The contract and the types are made again (`305c78c`); the full backend run waits, as in T1-9. ruff, mypy, the fast tests and the full backend run. Make the API contract and the website's types again for Part 3. The rejudge tables go in the Log.
 
 ### Part 2 Log
 
-- (none yet)
+- 18 Nov, T2-1 and T2-4: `tier=none` is a lead with no tier yet. With no tier asked, the list, facets, map and CSV show A, B, C and none. `excluded=true` alone shows every excluded lead (they are Discards), so they stay one filter away too. The facets gain a `tier` count that leaves its own filter out. The store's own default (no tier: every lead) is unchanged, so the run email and the good-lead counts (Tier A and B) are untouched.
+- 18 Nov, T2-2: `score.unknown_share: 0.5` in criteria.yaml. A "not known yet" check earns half its points, rounded down (warm path 2 of 4, local staff 6 of 12, the office's state 4 of 9, no lock-in 5 of 10). The sample lead in the tests goes from 72 to 74; a lead with no sign and a middling fit goes from 38 (Discard) to 44 (Tier C, a Watch).
+- 18 Nov, T2-3: `size.estimated_floor: 30`. HubSpot's count before research is its LinkedIn count doubled, an estimate, so the early stop of T1-7 is now under 30, not 50: a company HubSpot puts at 30 to 49 is researched, as it would be a Watch after. A known count (confirmed, not LinkedIn) under 50 stays a Drop.
+- 18 Nov, the rejudge tables (free; the rules with `0`/`50`, then `0.5`/`50`, then `0.5`/`30`), on the 52 dev leads in `leadfinder_v21`:
+
+  | Rules | A | B | C | Discard | Results |
+  |---|---|---|---|---|---|
+  | Before Part 2 | 0 | 0 | 3 | 49 | Drop 22, Watch 30 |
+  | Half points (T2-2) | 0 | 6 | 8 | 38 | Drop 22, Pass 1, Watch 29 |
+  | And the size band (T2-3) | 0 | 6 | 8 | 38 | Drop 22, Pass 1, Watch 29 |
+
+  The size band moved none of these 52 (none has an estimated 30 to 49 staff). The test set has no saved leads in any database on this laptop, so its table is empty: it needs the live site, or the M2 test set run.
+- 18 Nov, T2-5: since there is no saved test set result here, the ranges in `testset.yaml` are proposed from what each company is: Culture Amp, Seek, Beach Energy, Mineral Resources and Canva "C or better" (C to A); Kogan.com, Elders, Maptek and Perenti "no better than B" (Discard to B); Bankwest "no better than C" (a bank: premium banks are left out). The report (`GET /lead-finder/testset/runs/{id}`) shows each company's tier, its range and whether it is inside; the summary counts them. Waiting for Al-khair's yes before M2.
+- 18 Nov, T2-6: the contract (`openapi.json`) and the website's types (`schema.d.ts`) are made again (`305c78c`); the gates pass (3). Every Lead Finder test passes, run in batches to spare the memory: the fast ones (1,680) and every integration file, and `tests/e2e` with the contract routes (115). The full backend run is not done, for the reason in the Part 1 Log.
 
 ## Part 3: the website
 
