@@ -5,7 +5,8 @@
  * The table shows what tells leads apart at a glance (PLAN-V6, E1): the company and where it came
  * from, the tier (PLAN-V16 T3-5), the result, the score, the best sign and its date, the city, the
  * HubSpot label with its owner, and when it was researched. Everything else is one click away, on
- * the lead card.
+ * the lead card. On a phone the rows show the company and the tier, or the result for a lead with
+ * no tier yet (PLAN-V21 T3-5).
  *
  * The company name is a button: a click or Enter opens the lead card, through the row's own click.
  *
@@ -19,6 +20,7 @@ import { HubSpotBadge } from '@/components/hubspot-badge'
 import { ResultBadge } from '@/components/result-badge'
 import { TierMark } from '@/components/tier-mark'
 import { formatDate, formatScore, UNKNOWN } from '@/lib/format'
+import { isTier } from '@/lib/labels'
 import { CompanyName, RowTick, type Tick } from './company-cell'
 
 export type { Tick }
@@ -46,15 +48,34 @@ function companyColumn(tick?: Tick) {
 
 const company = companyColumn()
 
-/** The tier, in words: the headline since PLAN-V16. The list is sorted by tier, then score. */
+/**
+ * The tier, in words: the headline since PLAN-V16. The list is sorted by tier, then score. A lead
+ * with no tier yet says so, and its result shows in the Result column. On a phone the Result
+ * column is hidden (only the columns that tell rows apart), so there a lead with no tier shows its
+ * result in this column instead (PLAN-V21 T3-5): each row still says it once.
+ */
 const tier = help.accessor('tier', {
   header: 'Tier',
   enableSorting: false,
-  cell: (info) => <TierMark tier={info.getValue()} />,
+  cell: (info) => {
+    const value = info.getValue()
+    if (isTier(value)) {
+      return <TierMark tier={value} />
+    }
+    return (
+      <>
+        <span data-slot="phone-result" className="sm:hidden">
+          <ResultBadge result={info.row.original.result} />
+        </span>
+        <TierMark tier={value} className="max-sm:hidden" />
+      </>
+    )
+  },
 })
 
 const result = help.accessor('result', {
   header: 'Result',
+  meta: { hideBelow: 'sm' },
   cell: (info) => <ResultBadge result={info.getValue()} />,
 })
 

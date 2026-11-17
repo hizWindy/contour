@@ -744,8 +744,15 @@ describe('Results by tier (PLAN-V16 T3-5)', () => {
     const { user } = renderResults()
     const table = await screen.findByRole('table', { name: 'Leads' })
     const row = (await within(table).findByText('Older Lead Co')).closest('tr') as HTMLElement
-    expect(within(row).getByText('No tier yet')).toBeInTheDocument()
-    expect(within(row).getByText('Watch')).toBeInTheDocument()
+    const [, tierCell, resultCell] = within(row).getAllByRole('cell')
+    // Wider than a phone: "No tier yet", and its result in the Result column.
+    expect(within(tierCell as HTMLElement).getByText('No tier yet')).toHaveClass('max-sm:hidden')
+    expect(resultCell).toHaveTextContent('Watch')
+    expect(resultCell).toHaveClass('max-sm:hidden')
+    // On a phone the Result column is hidden, so the Tier column shows the result instead.
+    const phone = (tierCell as HTMLElement).querySelector('[data-slot=phone-result]')
+    expect(phone).toHaveClass('sm:hidden')
+    expect(phone).toHaveTextContent('Watch')
 
     await user.click(screen.getByRole('button', { name: /Filter by Tier/ }))
     const none = await screen.findByRole('option', { name: /^No tier yet/ })
