@@ -48,6 +48,9 @@ DISCOVERY = {
     "cities": ["Melbourne", "Adelaide", "Perth"],
     "triggers": ["lease_ending", "merger_or_takeover", "fast_growth"],
     "since_days": 30,
+    # The sample world has 5 companies, so a target of 5 is met in the first sweep: these tests
+    # make one search for each sign, as before PLAN-V21. test_sweeps.py has the sweeps.
+    "target_companies": 5,
 }
 FOUND = [
     "Boxhill Software",
@@ -183,6 +186,28 @@ async def test_the_step_models_from_the_settings_reach_claude_and_the_log(
     assert logged == models
 
 
+async def test_discovery_and_research_each_ask_with_their_own_effort(
+    make_lf_manager: MakeLeadFinderManager, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    """PLAN-V21 T1-1: discovery at its own effort (medium by default), the research's searches,
+    two forms and Why now at the research's, and `claude_effort` left for every other project."""
+    claude = FakeClaude(scenario=sample_scenario())
+    settings = lf_settings(claude_effort="max", claude_effort_research="high", why_now_enabled=True)
+    assert settings.claude_effort_discover == "medium"  # the default
+    manager = make_lf_manager(claude, settings=settings)
+    run_id = await start(manager, "discovery", {**DISCOVERY, "target_companies": 5})
+    row = await finished(manager, session_factory, run_id)
+
+    assert row.status == "done"
+    efforts = {(call.step.split(":")[0], call.effort) for call in claude.requests}
+    assert efforts == {
+        ("discover", "medium"),
+        ("search", "high"),
+        ("extract", "high"),
+        ("why", "high"),
+    }
+
+
 async def test_the_choose_rules_skip_open_deals_and_fresh_leads(
     make_lf_manager: MakeLeadFinderManager,
     session_factory: async_sessionmaker[AsyncSession],
@@ -234,7 +259,10 @@ async def test_the_default_start_choice_fits_the_default_caps_and_ends_under_the
     run_id = await start(manager, "discovery", {})
     row = await finished(manager, session_factory, run_id)
     assert row.status == "done"
-    assert row.counts["slices"] == 8
+    # Melbourne's 2 sample companies are short of the target (20, the company limit), so the run
+    # searches the 8 signs in all four ways (PLAN-V21 T1-4), and still ends under its limit.
+    assert row.counts["slices"] == 8 * 4
+    assert (row.counts["target"], row.counts["sweeps_done"]) == (20, 4)
     await assert_totals_match_log(session_factory, run_id)
     assert row.cost_usd <= D("20")
 
@@ -680,7 +708,9 @@ async def test_a_run_that_reaches_the_company_limit_ends_with_no_goal_sentence(
     make_lf_manager: MakeLeadFinderManager, session_factory: async_sessionmaker[AsyncSession]
 ) -> None:
     manager = make_lf_manager(FakeClaude(scenario=sample_scenario()))
+    # No target of its own: the default is pulled down to the limit of 2 (PLAN-V21 T1-4)
     params = {**DISCOVERY, "caps": {"max_companies": 2}}
+    del params["target_companies"]
     run_id = await start(manager, "discovery", params)
     row = await finished(manager, session_factory, run_id)
 

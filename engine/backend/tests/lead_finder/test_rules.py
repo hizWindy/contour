@@ -919,3 +919,56 @@ def test_the_extract_prompt_lists_the_new_signs_and_reads_an_announced_office() 
     assert "- new_to_australia:" in text
     assert "- hot_industry_growth:" in text
     assert "overseas company announces its first" in text
+
+
+# --- Sweeps (PLAN-V21 T1-3) ----------------------------------------------------------------------
+
+
+def test_every_sign_a_run_can_search_has_wording_for_every_sweep() -> None:
+    rules = load_rules()
+    sweeps = rules.queries.sweeps
+    assert list(sweeps.labels) == ["signs", "sources", "sectors", "areas"]
+    for trigger in rules.criteria.searchable_triggers:
+        groups = rules.queries.groups_for_sign(trigger.id)
+        assert sweeps.sources.get(trigger.id) or any(g.discovery for g in groups), trigger.id
+        assert sweeps.terms[trigger.id].strip(), trigger.id
+    grouped = [sector for group in sweeps.sector_groups for sector in group.sectors]
+    assert sorted(grouped) == sorted(rules.criteria.industries.priority_sectors)
+    assert len(sweeps.sector_groups) == 3
+
+
+def test_a_sign_with_no_sweep_2_search_stops_start_up(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    edit(
+        rules_dir / "queries.yaml",
+        '    culture_change:\n      - "{city} company workplace transformation program trade press '
+        '{year}"\n',
+        "",
+    )
+    with pytest.raises(ValidationError, match=r"No sweep 2 searches .* for: culture_change"):
+        read_rules(rules_dir)
+
+
+def test_a_sign_with_no_words_for_sweeps_3_and_4_stops_start_up(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    edit(rules_dir / "queries.yaml", "    hiring_push: hiring push\n", "")
+    with pytest.raises(ValidationError, match=r"No sweeps.terms for: hiring_push"):
+        read_rules(rules_dir)
+
+
+def test_a_sector_left_out_of_the_groups_stops_start_up(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    edit(rules_dir / "queries.yaml", "        - Mining and resources\n", "        - Hospitality\n")
+    with pytest.raises(ValidationError, match="sector_groups must hold each"):
+        read_rules(rules_dir)
+
+
+def test_a_sweep_search_that_names_a_company_stops_start_up(tmp_path: Path) -> None:
+    rules_dir = copy_rules(tmp_path)
+    edit(
+        rules_dir / "queries.yaml",
+        '    - "{area} company {terms} {year}"',
+        '    - "{area} {company} {terms} {year}"',
+    )
+    with pytest.raises(ValidationError, match="Unknown placeholder"):
+        read_rules(rules_dir)

@@ -245,3 +245,90 @@ source_groups:
       - "{company} annual report {year}"
       - "{company} ASIC company record"
       - "{company} WGEA Workplace Gender Equality Agency headcount"
+
+# The sweeps (PLAN-V21 T1-3). A run a person starts may search its signs up to four times, each time
+# in a new way, while it has fewer companies than its target (`target_companies`): 1 the signs' own
+# searches (`discovery` above), 2 Levi's source groups for each sign, 3 each sign by sector group, and
+# 4 each sign by area. One request for each sign and city in every sweep. Nothing one sweep finds goes
+# into another sweep's request, so a page can't steer another search. The backend won't start when a
+# sign a run can search has no sweep 2 search or no `terms`. The wording is a first draft (TBC).
+sweeps:
+  labels:
+    signs: The signs' own searches
+    sources: Levi's source groups
+    sectors: By sector
+    areas: By area
+  # Sweep 2 for the signs no source group covers. A sign in a group (source_groups above) uses that
+  # group's discovery searches, and its line here too. The sites are the kinds Levi's section 7 names.
+  sources:
+    big_new_contract:
+      - "AusTender {city} contract awarded company {year}"
+      - "ASX announcement {city} company major contract win {year}"
+    new_to_australia:
+      - "Austrade {city} international company opens Australian office {year}"
+      - "state government {city} global company new headquarters jobs announcement {year}"
+    growth_list:
+      - "SmartCompany Smart50 {year} {city}"
+      - "AFR Most Innovative Companies {year} {city}"
+    office_consolidation:
+      - "AFR Commercial Real Estate {city} company consolidating offices one headquarters {year}"
+      - "The Urban Developer {city} tenant consolidates into one building {year}"
+    return_to_office:
+      - "AFR {city} company return to office mandate more desks {year}"
+    restructure:
+      - "ASX announcement {city} company restructure new operating model {year}"
+    new_business_unit:
+      - "ASX announcement {city} company new division launch {year}"
+    new_facility:
+      - "{city} development application approved company facility with offices {year}"
+      - "state planning approval {city} new campus headquarters {year}"
+    underperforming_workplace:
+      - "AFR Commercial Real Estate {city} company subleasing surplus office space {year}"
+    culture_change:
+      - "{city} company workplace transformation program trade press {year}"
+  # Each sign in a few words, for {terms} in sweeps 3 and 4. Every sign a run can search needs one.
+  terms:
+    lease_ending: office lease expiry or relocation
+    merger_or_takeover: merger or takeover
+    big_new_contract: wins a major contract
+    fast_growth: expansion and hiring
+    new_to_australia: opens its first Australian office
+    hot_industry_growth: expansion and new office
+    capital_raise: raises growth funding
+    tenant_advisor: looking for new office space
+    growth_list: on a fastest growing list
+    office_consolidation: consolidating its offices
+    return_to_office: return to office
+    restructure: restructure
+    new_ceo: appoints a new CEO
+    new_business_unit: launches a new business unit
+    new_facility: plans a new facility with offices
+    underperforming_workplace: office review or downturn
+    culture_change: culture change program
+    hiring_push: hiring push
+  # Sweep 3: Levi's seven priority sectors (industries.priority_sectors) in three groups. Each holds
+  # its sectors once. {sector} is a group's words, one search for each group.
+  sector_groups:
+    - label: Energy, defence and engineering
+      sectors:
+        - Energy and infrastructure
+        - Defence and advanced manufacturing
+        - Engineering and technical services
+      words: energy, renewables, defence or engineering
+    - label: Technology, finance and professional services
+      sectors:
+        - Technology and telecommunications
+        - Selected financial and corporate services
+        - Other corporate professional services
+      words: technology, insurance, financial or professional services
+    - label: Resources
+      sectors:
+        - Mining and resources
+      words: mining or resources head office
+  sectors:
+    - "{city} {sector} company {terms} {year}"
+  # Sweep 4: each place, the CBD first, then the inner suburbs ({area}, as the city's area allows).
+  # For all of Australia, {area} is each priority city by name.
+  areas:
+    - "{area} company {terms} {year}"
+    - "{area} office {terms} {month_year}"

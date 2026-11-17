@@ -198,11 +198,17 @@ def _refusal(problem: Problem) -> str:
     return problem.detail or problem.title
 
 
+def scheduled_params(settings: dict[str, Any]) -> dict[str, Any]:
+    """A schedule's saved choices as a run's params. A schedule with no look-back of its own looks
+    back 30 days, not the 90 a run a person starts gets (PLAN-V21 T1-2)."""
+    return {"since_days": LOOK_BACK_DAYS, **settings}
+
+
 async def _estimate(context: JobContext) -> RunEstimate:
     """The run's estimate for the saved choices: the one the Start page shows."""
     manager = _manager(context.app)
     return await manager.estimate(
-        RunCreate(app=APP, mode=MODE, params=context.settings), scheduled=True
+        RunCreate(app=APP, mode=MODE, params=scheduled_params(context.settings)), scheduled=True
     )
 
 
@@ -223,12 +229,13 @@ async def within_round_budget(manager: RunManager, context: JobContext) -> dict[
     cap = run_cap_in_round(settings.scheduled_run_cap_usd, budget, state.spent_usd)
     if cap <= 0:
         raise JobSkipped(spent_reason(budget, state.next_round_at, ZONE))
+    params = scheduled_params(context.settings)
     if cap >= settings.scheduled_run_cap_usd:
-        return context.settings
-    caps = dict(context.settings.get("caps") or {})
+        return params
+    caps = dict(params.get("caps") or {})
     own = caps.get("run_cap_usd")
     caps["run_cap_usd"] = str(cap if own is None else min(cap, Decimal(str(own))))
-    return {**context.settings, "caps": caps}
+    return {**params, "caps": caps}
 
 
 async def start_discovery(context: JobContext) -> JobResult:
@@ -242,7 +249,8 @@ async def start_discovery(context: JobContext) -> JobResult:
     try:
         run = await manager.start(APP, MODE, params, schedule_id=context.schedule_id)
     except Problem as problem:
-        if problem.code == "discovery_too_large" and params is not context.settings:
+        lowered = (params.get("caps") or {}) != (context.settings.get("caps") or {})
+        if problem.code == "discovery_too_large" and lowered:
             raise JobSkipped(await _too_little(manager, context)) from None
         if problem.status in (409, 422):  # not a fault: the choices or the slot, said plainly
             raise JobSkipped(_refusal(problem)) from None
@@ -292,7 +300,7 @@ def _and_list(words: list[str]) -> str:
 def describe_discovery(settings: dict[str, Any]) -> str:
     """The saved choices in a sentence, for the Schedules page."""
     try:
-        params = DiscoveryParams.model_validate(settings)
+        params = DiscoveryParams.model_validate(scheduled_params(settings))
     except ValidationError:
         return "The saved choices can't be read."
     if params.triggers == default_triggers():

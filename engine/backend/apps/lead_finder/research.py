@@ -474,6 +474,12 @@ class Job:
         chosen = {"search": models.search, "extract": models.extract, "why": models.why}[step]
         return chosen or self.settings.model_for(step)
 
+    @property
+    def effort(self) -> str:
+        """The effort of every request of the research: the searches, the two answer forms and
+        Why now (PLAN-V21 T1-1). Other projects keep `claude_effort`."""
+        return self.settings.claude_effort_research
+
 
 def run_lead_id(run_id: uuid.UUID, key: str) -> uuid.UUID:
     """The id of a run's lead for one company: the same every time, so a resume finds it."""
@@ -737,6 +743,7 @@ async def why_now_for_lead(
             request_reserve_usd=settings.request_reserve_usd,
         ),
         model=settings.model_for("why"),
+        effort=settings.claude_effort_research,  # PLAN-V21 T1-1
         rules=rules,
         today=today or now.date(),
         now=now,
@@ -953,6 +960,7 @@ async def _why_now(session: AsyncSession, job: Job, claude: Claude, card: LeadCa
         claude=claude,
         budget=job.budget,
         model=job.model("why"),
+        effort=job.effort,
         rules=job.rules,
         today=job.today,
         now=datetime.now(UTC),
@@ -1009,6 +1017,7 @@ async def _search(job: Job, claude: Claude, prompts: list[tuple[str, str]]) -> N
                     blocked_domains=job.blocked,
                 ),
                 model=job.model("search"),
+                effort=job.effort,
             )
         except BaseException as error:  # the hold goes back whatever happens, even a cancel
             job.budget.release(granted)
@@ -1328,6 +1337,7 @@ async def _ask_form(
                 prompt=_notes_prompt(job) + FORM_PART_LINE,
                 form=form,
                 model=job.model("extract"),
+                effort=job.effort,
             )
         except ClaudeUnavailable:
             raise

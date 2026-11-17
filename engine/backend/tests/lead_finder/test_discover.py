@@ -52,9 +52,11 @@ SETTINGS = Settings(_env_file=None)
 MELBOURNE = ("lease_ending", "Melbourne")
 
 
-def a_slice(city: str = "Melbourne", trigger: str = "lease_ending", area: AreaId = "all") -> Slice:
+def a_slice(
+    city: str = "Melbourne", trigger: str = "lease_ending", area: AreaId = "all", sweep: int = 1
+) -> Slice:
     params = DiscoveryParams(cities=[city], triggers=[trigger], area={city: area})
-    return make_slices(params, RULES)[0]
+    return make_slices(params, RULES, sweep)[0]
 
 
 async def discover(
@@ -102,40 +104,43 @@ async def test_the_request_is_the_templates_the_city_the_trigger_the_places_and_
         "Searches you could start with:\n"
         "- Melbourne office lease expiry 2026 tenant\n"
         "- Melbourne company relocating head office\n"
-        "- Melbourne office lease renewal refurbishment\n"
-        # then Levi's source group for this sign (PLAN-V16 T1-7): leases, moves and tenure
-        "- The Urban Developer Melbourne office lease signed or expiring 2026\n"
-        "- AFR Commercial Real Estate Melbourne tenant relocating 2026\n"
-        "- Melbourne building redevelopment approval office tenants 2026\n"
-        "- Melbourne landlord leasing announcement office tenant 2026"
+        "- Melbourne office lease renewal refurbishment"
     )
 
 
 SIGNS_WITH_A_SOURCE_GROUP = sorted(
     {sign for group in RULES.queries.source_groups.values() for sign in group.signs}
 )
+VALUES = {"city": "Perth", "area": "Perth", "year": 2026, "month_year": "October 2026"}
 
 
 @pytest.mark.parametrize("sign", SIGNS_WITH_A_SOURCE_GROUP)
-def test_each_sign_also_asks_the_source_groups_levi_names_for_it(sign: str) -> None:
-    """His section 7 (PLAN-V16 T1-7): the sign's own searches, then its groups' searches."""
-    text = discover_request(RULES, a_slice("Perth", sign), 30, TODAY)
-    values = {
-        "city": "Perth",
-        "area": "Perth",
-        "year": 2026,
-        "month_year": "October 2026",
-        "company": "",
-    }
+def test_each_sign_asks_the_source_groups_levi_names_for_it_in_sweep_2(sign: str) -> None:
+    """His section 7 (PLAN-V16 T1-7). Since PLAN-V21 T1-3 the groups' searches are sweep 2's, so
+    sweep 1's request is the sign's own searches only, and short."""
+    first = discover_request(RULES, a_slice("Perth", sign), 30, TODAY)
+    second = discover_request(RULES, a_slice("Perth", sign, sweep=2), 30, TODAY)
     groups = RULES.queries.groups_for_sign(sign)
     assert groups
     for group in groups:
         for template in group.discovery:
-            assert f"- {template.format(**values)}" in text
-    for template in RULES.queries.discovery[sign]:  # its own come first
-        assert text.index(template.format(**values)) < text.index(
-            groups[0].discovery[0].format(**values)
-        )
+            assert f"- {template.format(**VALUES)}" in second
+            assert template.format(**VALUES) not in first
+    for template in RULES.queries.discovery[sign]:
+        assert f"- {template.format(**VALUES, company='')}" in first
+    assert "Sweep: 2 (Levi's source groups)" in second
+    assert "Sweep:" not in first
+
+
+def test_sweep_3_asks_each_sector_group_and_sweep_4_each_area_in_turn() -> None:
+    sector = discover_request(RULES, a_slice("Melbourne", "fast_growth", sweep=3), 30, TODAY)
+    assert sector.count("\n- ") == 3  # one search for each of the three sector groups
+    assert "- Melbourne energy, renewables, defence or engineering company expansion and " in sector
+    area = discover_request(RULES, a_slice("Melbourne", "fast_growth", sweep=4), 30, TODAY)
+    cbd = area.index("- Melbourne CBD, Docklands, Southbank company expansion and hiring 2026")
+    inner = area.index("- St Kilda Road, Richmond, Cremorne, Collingwood, South Melbourne company")
+    assert cbd < inner  # the CBD first, then the inner suburbs
+    assert "Sweep: 4 (By area)" in area
 
 
 async def test_the_area_and_the_days_change_the_focus_and_the_dates() -> None:
@@ -149,11 +154,7 @@ async def test_the_area_and_the_days_change_the_focus_and_the_dates() -> None:
         "\n"
         "Searches you could start with:\n"
         "- Adelaide company merger announced October 2026\n"
-        "- ASX takeover Adelaide headquartered company\n"
-        # then Levi's source group for this sign: mergers and acquisitions
-        "- ACCC acquisitions register notified acquisition Adelaide 2026\n"
-        "- AFR Street Talk Adelaide company merger or takeover 2026\n"
-        "- ASX announcement scheme of arrangement Adelaide 2026"
+        "- ASX takeover Adelaide headquartered company"
     )
 
 
@@ -203,7 +204,7 @@ def test_a_template_that_asks_for_a_company_gets_an_empty_text_and_does_not_cras
     )
     rules = RULES.model_copy(update={"queries": queries})
     text = discover_request(rules, a_slice("Perth", "new_ceo"), 30, TODAY)
-    assert "\n- Perth Perth\n" in text  # empty company, then the city, then {area} = city
+    assert text.endswith("\n- Perth Perth")  # empty company, then the city, then {area} = city
 
 
 async def test_the_request_has_one_ask_with_the_web_tools_the_model_and_one_continue() -> None:
@@ -263,12 +264,15 @@ def test_nothing_from_hubspot_or_memory_can_reach_the_request() -> None:
     allowed = (
         "City: ",
         "Trigger: ",
+        "Sweep: ",
         "Focus on: ",
         "Only events from the last ",
         "Searches you could start with:",
         "- ",
     )
-    assert all(line.startswith(allowed) for line in text.splitlines() if line)
+    for sweep in (1, 2, 3, 4):  # every sweep's request, too (PLAN-V21 T1-3)
+        text = discover_request(RULES, a_slice(sweep=sweep), 30, TODAY)
+        assert all(line.startswith(allowed) for line in text.splitlines() if line), sweep
 
 
 async def test_a_hubspot_name_and_a_memory_note_never_appear_in_the_request() -> None:
@@ -495,6 +499,13 @@ DATES = [
     (7, "2026-10-19", None, True),
     (7, "2026-10-18", None, False),
     (7, None, "2026-10-12", False),
+    # PLAN-V21 T1-2: a 60 day old event (27 August) is kept at 90 days and dropped at 30. 180
+    # days back is 2026-04-29.
+    (90, "2026-08-27", None, True),
+    (30, "2026-08-27", None, False),
+    (90, "2026-07-27", None, False),  # 91 days
+    (180, "2026-04-29", None, True),
+    (180, "2026-04-28", None, False),
 ]
 
 
@@ -871,7 +882,7 @@ async def test_the_call_log_records_company_step_model_effort_and_continues() ->
     assert [call.key for call in claude.requests] == [
         ("Sample Alpha", "search:money", "claude-sonnet-5-5", "low", None),
         ("Sample Alpha", "extract", "claude-haiku-5-5", None, 1),
-        (None, "discover", "claude-opus-5-5", None, 1),
+        (None, "discover", "claude-opus-5-5", "medium", 1),  # PLAN-V21 T1-1
     ]
     assert claude.calls == ["search:money", "extract", "discover"]
     assert [c.step for c in claude.requests_for("sample ALPHA")] == ["search:money", "extract"]

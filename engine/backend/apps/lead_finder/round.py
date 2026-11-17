@@ -16,8 +16,9 @@ Thursday. The first round is the next first day still to come.
   time of day), so the first time of each city is set here: the first day, then one day later for
   each city after it. `calc.next_after` keeps them one day apart from then on.
 - **A round must end before the next starts:** 4 cities take 4 days, so every 4 days or more.
-- **The look-back** (`since_days`) is always 30 days, the longest a run may look back (PLAN-V20;
-  it followed how often a round came before: 14 days for every 2 weeks). A company researched in
+- **The look-back** (`since_days`) is always 30 days (PLAN-V20; it followed how often a round came
+  before: 14 days for every 2 weeks). A run a person starts may look back 90 days or 6 months
+  (PLAN-V21 T1-2), but the automatic runs keep 30. A company researched in
   the last 30 days is skipped anyway, so news two rounds both see costs nothing, and a company a
   shorter window missed is found.
 
@@ -72,7 +73,9 @@ CITIES = SCHEDULED_CITIES  # the fixed order
 # off until picked.
 DEFAULT_CITIES = CITIES[:4]
 ZONE = ZoneInfo(DEFAULT_ZONE)
-LOOK_BACKS = (7, 14, 30)  # what a discovery run may look back (params.SinceDays)
+# How far back an automatic run looks: 30 days (PLAN-V20). A run a person starts may look back 90
+# days or 6 months (PLAN-V21 T1-2); the automatic runs keep 30 unless Al-khair says so after M2.
+AUTOMATIC_LOOK_BACK = 30
 DEFAULT_WEEKDAY = 0  # Monday, as the four default schedules
 
 # PLAN-V16 T1-11: Brisbane and Australia ("Rest of Australia", the national search) joined
@@ -211,9 +214,9 @@ def in_order(cities: Sequence[str]) -> tuple[str, ...]:
 
 
 def look_back() -> int:
-    """How far back an automatic run looks: always the longest a run may, whatever the time between
-    rounds (PLAN-V20)."""
-    return LOOK_BACKS[-1]
+    """How far back an automatic run looks: 30 days, whatever the time between rounds (PLAN-V20). A
+    run a person starts may look back further (PLAN-V21 T1-2)."""
+    return AUTOMATIC_LOOK_BACK
 
 
 def round_times(plan: Plan, now: datetime) -> dict[str, CityTime]:

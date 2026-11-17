@@ -73,3 +73,8 @@ def test_the_top_up_waits_for_the_ok_on_hubspot_names() -> None:
         RULES, Settings(_env_file=None, hubspot_names_to_claude_ok=True), Decimal("50")
     ).top_up
     assert (on.allowed, on.message) == (True, None)
+
+
+def test_how_far_back_offers_7_30_90_and_180_days_with_90_first() -> None:
+    since = options().since_days  # PLAN-V21 T1-2
+    assert (since.choices, since.default) == ([7, 30, 90, 180], 90)

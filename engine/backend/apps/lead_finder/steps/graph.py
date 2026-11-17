@@ -1,8 +1,9 @@
 """The Lead Finder run as a LangGraph graph, so a run saves its progress after every step and a
 resume continues where it stopped instead of paying twice.
 
-    plan -> (discover, one per slice | merge | choose) -> merge -> choose -> (research, one per
-    company | finish) -> finish
+    plan -> (discover, one per slice | merge | choose) -> merge -> choose
+    choose -> next_sweep -> (discover, one per slice) -> merge -> choose ...   (PLAN-V21 T1-4)
+    choose -> settle -> (research, one per company | finish) -> finish
 
 - `plan`: an automatic discovery run (one a schedule started) works out its share of the round's
   goal in good leads first (`goal.py`), to report against. A run a person started has no goal
@@ -16,10 +17,18 @@ resume continues where it stopped instead of paying twice.
 - `discover`: one Claude request per slice, side by side (the run's discover gate). It holds the
   slice reserve in the run budget. Only the search log is written; what it finds travels in the
   state.
-- `merge`: the same company found twice becomes one (pure).
+- `merge`: the same company found twice becomes one (pure). A discovery run merges after every
+  sweep, so "companies after merging" grows as the searches go.
 - `choose`: the rules that skip a company (HubSpot deals, fresh or decided leads), then the best
   first, up to the run's company limit. The watchlist keeps its own order. Typed companies and
-  the test set are researched as asked, up to the limit.
+  the test set are researched as asked, up to the limit. It only decides: `settle` says who was
+  left out, once.
+- `next_sweep` (PLAN-V21 T1-4): a discovery run a person started that has fewer companies than its
+  target searches its signs again in a new way (`plan.sweep_searches`), up to
+  `discovery_max_sweeps`, while discovery's share of the money lasts. The target never ends a run
+  early: a run that meets it in sweep 1 researches everything it chose, up to its limit.
+- `settle`: says who was left out and why, marks the rivals, and tops a short discovery run up from
+  the HubSpot watchlist in its places (PLAN-V21 T1-6), most likely first.
 - `research`: one company (steps/company.py), side by side (the run's research gate). Every
   company the run chose is researched, up to its limits: a goal never stops a run.
 - `finish`: nothing. The run's outcome is worked out after the graph, from the database: its
@@ -51,6 +60,7 @@ from sqlalchemy import func, select  # noqa: E402
 
 from apps.lead_finder.context import CreditMeter  # noqa: E402
 from apps.lead_finder.goal import goal_for_run, good_of  # noqa: E402
+from apps.lead_finder.params import DiscoveryParams  # noqa: E402
 from apps.lead_finder.prompts import discover_prompt  # noqa: E402
 from apps.lead_finder.rivals import (  # noqa: E402
     mark_rivals,
@@ -73,6 +83,9 @@ from apps.lead_finder.steps.plan import (  # noqa: E402
     make_slices,
     run_cities,
     slice_job_id,
+    sweep_label,
+    sweeps_for,
+    web_picked,
 )
 from apps.lead_finder.steps.state import (  # noqa: E402
     CompanyTask,
@@ -81,6 +94,7 @@ from apps.lead_finder.steps.state import (  # noqa: E402
     State,
     day_of,
 )
+from apps.lead_finder.steps.top_up import top_up_tasks  # noqa: E402
 from apps.lead_finder.tables import Lead, company_key  # noqa: E402
 from core.claude.budget import BudgetSpent  # noqa: E402
 from core.hubspot.matching import HubSpotMatch, match_company  # noqa: E402
@@ -94,6 +108,9 @@ from core.runs.schemas import (  # noqa: E402
     SliceDoneData,
     SliceFailedData,
     SliceStartedData,
+    SweepDoneData,
+    SweepStartedData,
+    ToppedUpData,
 )
 from core.runs.types import RunContext, RunOutcome  # noqa: E402
 from core.searches.service import log_reply  # noqa: E402
@@ -114,6 +131,30 @@ def _ctx(runtime: Runtime[RunCtx]) -> RunCtx:
     return runtime.context
 
 
+def person_discovery(ctx: RunContext[Any]) -> bool:
+    """A discovery run a person started. Only these get a target, the sweeps and the top up: an
+    automatic run keeps one search for each sign, until Al-khair says otherwise after M2."""
+    return ctx.mode == "discovery" and ctx.schedule_id is None
+
+
+def target_of(ctx: RunContext[Any]) -> int | None:
+    """How many companies the run tries to research (PLAN-V21 T1-4): what the person picked, else
+    `target_companies_default`, never above the company limit. None for every other run."""
+    if not person_discovery(ctx) or not isinstance(ctx.params, DiscoveryParams):
+        return None
+    asked = ctx.params.target_companies
+    wanted = asked if asked is not None else ctx.settings.target_companies_default
+    return max(1, min(wanted, ctx.caps.max_companies))
+
+
+def sweeps_of(ctx: RunContext[Any]) -> int:
+    """The most sweeps the run may make: the setting for a discovery run a person started that
+    searches the web, else 1."""
+    if not person_discovery(ctx) or not web_picked(ctx.params):
+        return 1
+    return sweeps_for(ctx.settings.discovery_max_sweeps)
+
+
 # --- plan ------------------------------------------------------------------------------------
 
 
@@ -124,7 +165,10 @@ async def plan(state: State, runtime: Runtime[RunCtx]) -> dict[str, Any]:
         await ctx.emit_event(PlanReadyData(slices=0, companies=len(state["known"]), labels=[]))
         return {}
     slices = make_slices(ctx.params, run.rules)
-    ctx.totals.counts.slices = len(slices)
+    counts = ctx.totals.counts
+    counts.slices = len(slices)
+    counts.target = target_of(ctx)
+    counts.sweeps = sweeps_of(ctx) if slices else 0
     setup = run.rules.criteria.rivals
     rivals = []
     if setup.enabled and setup.per_run > 0:
@@ -143,7 +187,11 @@ async def plan(state: State, runtime: Runtime[RunCtx]) -> dict[str, Any]:
     await ctx.emit_event(
         PlanReadyData(slices=len(slices), companies=len(extra), labels=[s.label for s in slices])
     )
-    found: dict[str, Any] = {"slices": [s.model_dump(mode="json") for s in slices]}
+    if counts.sweeps > 1:
+        await ctx.emit_event(
+            SweepStartedData(sweep=1, of=counts.sweeps, label=sweep_label(run.rules, 1))
+        )
+    found: dict[str, Any] = {"slices": [s.model_dump(mode="json") for s in slices], "sweep": 1}
     if extra:
         found["candidates"] = [company.model_dump(mode="json") for company in extra]
     if ctx.schedule_id is not None:  # an automatic run reports against its round's share
@@ -185,8 +233,18 @@ async def discover(task: SliceTask, runtime: Runtime[RunCtx]) -> dict[str, Any]:
                 SliceFailedData(slice_id=slice_.id, label=slice_.label, reason=run.stop_reason)
             )
             return nothing
+        # Discovery's share first (PLAN-V21 T1-4): a later sweep stops at it and leaves the rest
+        # of the run's money for the research. The size check at the start makes sweep 1 fit.
+        share = await (await run.discovery_budget()).acquire(ctx.settings.slice_reserve_usd)
+        if not share:
+            counts.slices_failed += 1
+            await ctx.emit_event(
+                SliceFailedData(slice_id=slice_.id, label=slice_.label, reason=SLICE_CAP_REACHED)
+            )
+            return nothing
         hold = await ctx.budget.acquire(ctx.settings.slice_reserve_usd)
         if not hold:
+            share.release()
             await run.stop(
                 "run_cost", f"The run reached its limit of US${ctx.caps.run_cap_usd:.2f}"
             )
@@ -260,6 +318,7 @@ async def discover(task: SliceTask, runtime: Runtime[RunCtx]) -> dict[str, Any]:
             return {"candidates": [found.model_dump(mode="json") for found in result.candidates]}
         finally:
             hold.release()
+            share.release(hold.actual)
 
 
 # --- merge -----------------------------------------------------------------------------------
@@ -357,6 +416,8 @@ async def _matches_and_leads(
 
 
 async def choose(state: State, runtime: Runtime[RunCtx]) -> dict[str, Any]:
+    """Decides who is researched. A discovery run then says how its sweep went, and whether it
+    searches again (`more`). Who was left out is said once, in `settle`."""
     run = _ctx(runtime)
     ctx = run.run
     mode = state["mode"]
@@ -364,6 +425,7 @@ async def choose(state: State, runtime: Runtime[RunCtx]) -> dict[str, Any]:
     limit = ctx.caps.max_companies
     recheck = bool(getattr(ctx.params, "recheck", False))
     skipped: list[tuple[str, str]] = []
+    chosen_keys: list[str] = []
     if mode in ("company", "testset"):  # researched as asked, up to the limit
         chosen = list(state["known"][:limit])
         over = max(0, len(state["known"]) - limit)
@@ -388,33 +450,186 @@ async def choose(state: State, runtime: Runtime[RunCtx]) -> dict[str, Any]:
         )
         skipped = decision.skipped
         over = decision.over_limit_count
+        chosen_keys = [company.key for company in decision.chosen]
         chosen = [
             tasks[company.key] if company.key in tasks else _task_of_merged(company, today, recheck)
             for company in decision.chosen
         ]
-        if mode == "discovery":
-            await _mark_rivals(
-                ctx,
-                run.rules.criteria.rivals.sign,
-                merged,
-                decision,
-                run_cities(ctx.params, run.rules),
-            )
     counts = ctx.totals.counts
-    counts.chosen = len(chosen)
-    for name, reason in skipped:
+    counts.chosen = len(chosen)  # so far: `settle` has the last word, after any top up
+    found: dict[str, Any] = {
+        "chosen": chosen,
+        "decision": {
+            "skipped": [[name, reason] for name, reason in skipped],
+            "over": over,
+            "chosen_keys": chosen_keys,
+        },
+        "more": False,
+    }
+    if mode == "discovery":
+        found["more"] = await _end_of_sweep(run, state, len(chosen))
+    return found
+
+
+async def _end_of_sweep(run: RunCtx, state: State, companies: int) -> bool:
+    """Says how the sweep went (`sweep_done`), and whether the run searches again: it has fewer
+    companies than its target, a sweep is left, nothing stopped it, and discovery's share of the
+    money still holds one more search. Out of money, it says so in the feed (PLAN-V21 T1-4)."""
+    ctx = run.run
+    counts = ctx.totals.counts
+    if counts.sweeps <= 1 or not state.get("slices"):
+        return False
+    sweep = state.get("sweep", 1)
+    ids = {Slice.model_validate(item).id for item in state.get("slices") or []}
+    found = sum(1 for item in state.get("candidates") or [] if item.get("slice_id") in ids)
+    counts.sweeps_done = max(counts.sweeps_done, sweep)
+    target = counts.target
+    await ctx.emit_event(
+        SweepDoneData(sweep=sweep, found=found, companies=companies, target=target)
+    )
+    if target is None or companies >= target or sweep >= counts.sweeps:
+        return False
+    if run.stop_reason is not None or ctx.cancelled.is_set():
+        return False
+    share = await run.discovery_budget()
+    if not share.fits(ctx.settings.slice_reserve_usd):
+        await ctx.emit_event(
+            RunProblemData(
+                message=(
+                    f"Discovery's share of the money (US${ctx.caps.discovery_cap_usd:.2f}) is "
+                    f"used up, so the run stops searching after sweep {sweep}, with {companies} "
+                    f"of its {target} companies."
+                )
+            )
+        )
+        return False
+    return True
+
+
+def after_choose(state: State) -> str:
+    return "next_sweep" if state.get("more") else "settle"
+
+
+async def next_sweep(state: State, runtime: Runtime[RunCtx]) -> dict[str, Any]:
+    """The next sweep's slices: the same cities and signs, searched in a new way (T1-3)."""
+    run = _ctx(runtime)
+    ctx = run.run
+    sweep = state.get("sweep", 1) + 1
+    slices = make_slices(ctx.params, run.rules, sweep)
+    counts = ctx.totals.counts
+    counts.slices += len(slices)
+    await ctx.emit_event(
+        SweepStartedData(sweep=sweep, of=counts.sweeps, label=sweep_label(run.rules, sweep))
+    )
+    return {"sweep": sweep, "slices": [s.model_dump(mode="json") for s in slices], "more": False}
+
+
+def after_next_sweep(state: State) -> list[Send] | str:
+    sends = [
+        Send("discover", SliceTask(slice=slice_, today=state["today"]))
+        for slice_ in state.get("slices") or []
+    ]
+    return sends or "settle"
+
+
+async def settle(state: State, runtime: Runtime[RunCtx]) -> dict[str, Any]:
+    """Says once who was left out and why, marks the rivals, and tops a short discovery run up from
+    the HubSpot watchlist (PLAN-V21 T1-6). Then the research starts."""
+    run = _ctx(runtime)
+    ctx = run.run
+    counts = ctx.totals.counts
+    chosen = list(state.get("chosen") or [])
+    decision = state.get("decision") or {}
+    for name, reason in decision.get("skipped") or []:
         counts.skipped += 1
         await ctx.emit_event(CompanySkippedData(name=name, reason=reason))
+    over = int(decision.get("over") or 0)
     if over:
         counts.skipped += over
         await ctx.emit_event(
             CompanySkippedData(name=f"{over} more", reason=OVER_LIMIT_REASON, count=over)
         )
+    if state["mode"] == "discovery":
+        merged = [Merged.model_validate(item) for item in state.get("merged") or []]
+        await _mark_rivals(
+            ctx,
+            run.rules.criteria.rivals.sign,
+            merged,
+            list(decision.get("chosen_keys") or []),
+            [str(pair[0]) for pair in decision.get("skipped") or []],
+            run_cities(ctx.params, run.rules),
+        )
+        added = await _top_up(run, state, chosen)
+        if added:
+            chosen = [*chosen, *added]
+            counts.topped_up = len(added)
+            await ctx.emit_event(
+                ToppedUpData(count=len(added), names=[task["name"] for task in added])
+            )
+    counts.chosen = len(chosen)
     return {"chosen": chosen}
 
 
+async def _top_up(run: RunCtx, state: State, chosen: list[CompanyTask]) -> list[CompanyTask]:
+    """The watchlist companies that fill a short run (PLAN-V21 T1-6): only for a discovery run a
+    person started that asked for it (`top_up`), while HubSpot names may go to Claude, and only up
+    to its target and its company limit."""
+    ctx = run.run
+    target = ctx.totals.counts.target
+    params = ctx.params
+    if (
+        target is None
+        or not person_discovery(ctx)
+        or not getattr(params, "top_up", False)
+        or not ctx.settings.hubspot_names_to_claude_ok
+        or run.stop_reason is not None
+        or ctx.cancelled.is_set()
+    ):
+        return []
+    need = min(target, ctx.caps.max_companies) - len(chosen)
+    if need <= 0:
+        return []
+    return await top_up_tasks(
+        ctx,
+        run.rules,
+        need,
+        cities=run_cities(params, run.rules),
+        national=run.rules.criteria.cities.national in params.cities,
+        taken={company_key(task["name"]) for task in chosen},
+        today=state["today"],
+        decide_batch=_decide_watchlist,
+    )
+
+
+async def _decide_watchlist(
+    ctx: RunContext[Any], rules: LeadFinderRules, tasks: list[CompanyTask], today: str
+) -> list[CompanyTask]:
+    """The rules a watchlist run applies, for a batch of watchlist companies, in their order:
+    the ones `decide` keeps."""
+    by_key = {_merged_of_task(task).key: task for task in tasks}
+    merged = [_merged_of_task(task) for task in tasks]
+    matches, leads = await _matches_and_leads(ctx, merged, by_key)
+    decision = decide(
+        merged,
+        matches,
+        leads,
+        rules,
+        ctx.params,
+        day_of(today),
+        len(merged),
+        ctx.settings,
+        ranked=False,
+    )
+    return [by_key[company.key] for company in decision.chosen]
+
+
 async def _mark_rivals(
-    ctx: RunContext[Any], sign: str, merged: list[Merged], decision: Any, cities: list[str]
+    ctx: RunContext[Any],
+    sign: str,
+    merged: list[Merged],
+    chosen_keys: list[str],
+    skipped_names: list[str],
+    cities: list[str],
 ) -> None:
     """The rivals this run chose are used; the ones a rule skipped are skipped. The ones the company
     limit left out stay pending for the next run (PLAN-V9 B5). `cities` are the run's places."""
@@ -423,8 +638,8 @@ async def _mark_rivals(
     }
     if not rivals:
         return
-    used = [company.key for company in decision.chosen if company.key in rivals]
-    skipped = [key for name, _ in decision.skipped if (key := company_key(name)) in rivals]
+    used = [key for key in chosen_keys if key in rivals]
+    skipped = [key for name in skipped_names if (key := company_key(name)) in rivals]
     async with ctx.session() as session:
         await mark_rivals(
             session,
@@ -436,7 +651,7 @@ async def _mark_rivals(
         await session.commit()
 
 
-def after_choose(state: State) -> list[Send] | str:
+def after_settle(state: State) -> list[Send] | str:
     sends = [Send("research", task) for task in state.get("chosen") or []]
     return sends or "finish"
 
@@ -460,13 +675,17 @@ def build_graph() -> Any:
     builder.add_node("discover", discover, input_schema=SliceTask)
     builder.add_node("merge", merge_step)
     builder.add_node("choose", choose)
+    builder.add_node("next_sweep", next_sweep)
+    builder.add_node("settle", settle)
     builder.add_node("research", research, input_schema=CompanyTask)
     builder.add_node("finish", finish)
     builder.add_edge(START, "plan")
     builder.add_conditional_edges("plan", after_plan, ["discover", "merge", "choose"])
     builder.add_edge("discover", "merge")
     builder.add_edge("merge", "choose")
-    builder.add_conditional_edges("choose", after_choose, ["research", "finish"])
+    builder.add_conditional_edges("choose", after_choose, ["next_sweep", "settle"])
+    builder.add_conditional_edges("next_sweep", after_next_sweep, ["discover", "settle"])
+    builder.add_conditional_edges("settle", after_settle, ["research", "finish"])
     builder.add_edge("research", "finish")
     builder.add_edge("finish", END)
     return builder

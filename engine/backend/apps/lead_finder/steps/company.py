@@ -204,7 +204,7 @@ async def research_one(run: RunCtx, task: CompanyTask) -> dict[str, Any]:
 
         try:
             await save_signals(run, task)
-            await ctx.emit_event(CompanyStartedData(name=name))
+            await ctx.emit_event(CompanyStartedData(name=name, origin=task["origin"]))
             settings = ctx.settings
             context = ResearchContext(
                 run_id=ctx.run_id,
@@ -278,6 +278,7 @@ async def research_one(run: RunCtx, task: CompanyTask) -> dict[str, Any]:
                 score=card.score,
                 cost_usd=card.research.cost_usd,
                 hubspot_status=card.hubspot.status,
+                origin=task["origin"],
             )
         )
         return outcome(task, "done", lead_id=str(card.id), result=card.result)

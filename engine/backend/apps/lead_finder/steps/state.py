@@ -6,16 +6,24 @@ step gets alongside (LangGraph's run context): the engine's `RunContext` and the
 never saved; a resume makes a new one.
 """
 
+import asyncio
 import logging
 import operator
 from dataclasses import dataclass, field
 from datetime import date
+from decimal import Decimal
 from typing import Annotated, Any, NotRequired, TypedDict
+
+from sqlalchemy import func, select
 
 from apps.lead_finder.context import CreditMeter, Focus, Origin, Signal
 from apps.lead_finder.rules import LeadFinderRules
+from core.runs.budget import RunBudget
 from core.runs.schemas import CapKind, CapReachedData
 from core.runs.types import RunContext
+from core.searches.models import SearchLog
+
+DISCOVER_STEP = "discover"  # the step every discovery request is logged under
 
 log = logging.getLogger(__name__)
 
@@ -47,12 +55,18 @@ class State(TypedDict):
     mode: str
     today: str  # fixed for the whole run, so a resume judges dates the same way
     known: list[CompanyTask]  # the companies of a watchlist, company or testset run
-    slices: NotRequired[list[dict[str, Any]]]
+    slices: NotRequired[list[dict[str, Any]]]  # the slices of the sweep running now
     candidates: NotRequired[Annotated[list[dict[str, Any]], operator.add]]  # from every slice
     merged: NotRequired[list[dict[str, Any]]]
     chosen: NotRequired[list[CompanyTask]]
     goal: NotRequired[int | None]  # an automatic run's share of the round's goal, from `plan`
     outcomes: NotRequired[Annotated[list[dict[str, Any]], operator.add]]  # one per company
+    # PLAN-V21 T1-4: the sweep running now (1 to 4), whether `choose` found the run short of its
+    # target with a sweep and money left, and what `choose` left out, for `settle` to say once:
+    # {"skipped": [[name, reason], ...], "over": count, "chosen_keys": [key, ...]}
+    sweep: NotRequired[int]
+    more: NotRequired[bool]
+    decision: NotRequired[dict[str, Any]]
 
 
 def signals_of(task: CompanyTask) -> tuple[Signal, ...]:
@@ -73,6 +87,27 @@ class RunCtx:
     signalhire_credits: CreditMeter = field(default_factory=lambda: CreditMeter(0))
     stop_reason: str | None = None  # set when a cap stops the run; later work is skipped
     _caps_reported: set[str] = field(default_factory=set)
+    # Discovery's share of the run's money (PLAN-V21 T1-4): a budget of its own, so a later sweep
+    # stops at the share and never takes the research's money. Built on first use from what the
+    # run's discovery requests already cost (the search log), so a resume starts from the truth.
+    _discovery: RunBudget | None = None
+    _discovery_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+
+    async def discovery_budget(self) -> RunBudget:
+        async with self._discovery_lock:
+            if self._discovery is None:
+                ctx = self.run
+                async with ctx.session() as session:
+                    spent = await session.scalar(
+                        select(func.coalesce(func.sum(SearchLog.cost_usd), 0)).where(
+                            SearchLog.run_id == ctx.run_id,
+                            SearchLog.step.startswith(DISCOVER_STEP, autoescape=True),
+                        )
+                    )
+                self._discovery = RunBudget(
+                    ctx.caps.discovery_cap_usd, 0, spent=Decimal(spent or 0)
+                )
+            return self._discovery
 
     async def stop(self, kind: CapKind, detail: str) -> None:
         """A cap is reached: say so once (`cap_reached`), and skip the work that is left."""

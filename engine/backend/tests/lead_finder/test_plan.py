@@ -19,6 +19,9 @@ from apps.lead_finder.steps.plan import (
     make_slices,
     run_cities,
     slice_job_id,
+    sweep_places,
+    sweep_searches,
+    sweeps_for,
     watchlist_batches,
 )
 from core.api.errors import Problem
@@ -381,3 +384,93 @@ def test_the_check_fits_the_run_kind_hook() -> None:
     base = settings()
     hook = check_discovery_size
     hook(params_of(1, 1), base, caps_of(base))
+
+
+# --- Sweeps (PLAN-V21 T1-3) ----------------------------------------------------------------------
+
+VALUES: dict[str, object] = {
+    "city": "Melbourne",
+    "area": "Melbourne",
+    "year": 2026,
+    "month_year": "November 2026",
+    "company": "",
+}
+
+
+@pytest.mark.parametrize("sweep", [1, 2, 3, 4])
+def test_every_sweep_has_one_slice_for_each_city_and_sign(sweep: int) -> None:
+    params = DiscoveryParams(cities=["Melbourne", "Perth"], triggers=["fast_growth", "new_ceo"])
+    slices = make_slices(params, RULES, sweep)
+    assert [(s.city, s.trigger_id) for s in slices] == [
+        ("Melbourne", "fast_growth"),
+        ("Melbourne", "new_ceo"),
+        ("Perth", "fast_growth"),
+        ("Perth", "new_ceo"),
+    ]
+    assert {s.sweep for s in slices} == {sweep}
+    suffix = "" if sweep == 1 else f":sweep{sweep}"
+    assert slices[0].id == f"melbourne:fast_growth{suffix}"  # never the same as another sweep's
+    words = {1: "", 2: " (levi's source groups)", 3: " (by sector)", 4: " (by area)"}[sweep]
+    assert slices[0].label == f"Melbourne: fast growth{words}"
+
+
+def test_no_sweep_but_1_to_4() -> None:
+    with pytest.raises(ValueError, match="sweeps 1 to 4"):
+        make_slices(DiscoveryParams(), RULES, 5)
+    assert [sweeps_for(most) for most in (0, 1, 3, 4, 9)] == [1, 1, 3, 4, 4]
+
+
+def test_sweep_1_is_the_signs_own_searches_and_sweep_2_the_source_groups() -> None:
+    first, second = (
+        make_slices(DiscoveryParams(triggers=["lease_ending"]), RULES, sweep)[0] for sweep in (1, 2)
+    )
+    own = [t.format(**VALUES) for t in RULES.queries.discovery["lease_ending"]]
+    assert sweep_searches(RULES, first, VALUES) == own
+    groups = [
+        t.format(**VALUES) for t in RULES.queries.source_groups["leases_and_tenure"].discovery
+    ]
+    assert sweep_searches(RULES, second, VALUES) == groups
+
+
+def test_a_sign_no_group_covers_has_its_own_sweep_2_searches() -> None:
+    second = make_slices(DiscoveryParams(triggers=["big_new_contract"]), RULES, 2)[0]
+    searches = sweep_searches(RULES, second, VALUES)
+    assert searches == [
+        t.format(**VALUES) for t in RULES.queries.sweeps.sources["big_new_contract"]
+    ]
+    assert any("AusTender" in search for search in searches)
+
+
+def test_sweep_3_has_one_search_for_each_sector_group_with_the_signs_words() -> None:
+    third = make_slices(DiscoveryParams(triggers=["capital_raise"]), RULES, 3)[0]
+    searches = sweep_searches(RULES, third, VALUES)
+    assert len(searches) == len(RULES.queries.sweeps.sector_groups) == 3
+    assert all("raises growth funding" in search for search in searches)
+    assert searches[0].startswith("Melbourne energy, renewables, defence or engineering company")
+
+
+def test_sweep_4_goes_from_the_cbd_to_the_inner_suburbs_as_the_area_allows() -> None:
+    whole = make_slices(DiscoveryParams(triggers=["restructure"]), RULES, 4)[0]
+    assert sweep_places(RULES, whole) == [
+        "Melbourne CBD, Docklands, Southbank",
+        "St Kilda Road, Richmond, Cremorne, Collingwood, South Melbourne",
+    ]
+    cbd = make_slices(DiscoveryParams(area={"Melbourne": "cbd"}), RULES, 4)[0]
+    assert sweep_places(RULES, cbd) == ["Melbourne CBD, Docklands, Southbank"]
+    regional = make_slices(DiscoveryParams(cities=["Geelong"]), RULES, 4)[0]
+    assert sweep_places(RULES, regional) == ["Geelong CBD"]  # no inner suburbs listed
+    searches = sweep_searches(RULES, whole, VALUES)
+    assert searches[0] == "Melbourne CBD, Docklands, Southbank company restructure 2026"
+    assert len(searches) == 2 * len(RULES.queries.sweeps.areas)
+
+
+def test_the_national_sweep_4_names_each_priority_city() -> None:
+    national = make_slices(DiscoveryParams(cities=["Australia"]), RULES, 4)[0]
+    assert sweep_places(RULES, national) == ["Melbourne", "Adelaide", "Perth"]
+
+
+def test_the_size_check_counts_sweep_1_only() -> None:
+    """A later sweep runs only while discovery's money lasts (PLAN-V21 T1-4), so the check at the
+    start counts the first sweep's searches alone."""
+    params = DiscoveryParams()  # 8 searches in each sweep
+    check_discovery_size(params, settings(), make_caps(settings()))  # 8 x US$0.60 fits US$8.00

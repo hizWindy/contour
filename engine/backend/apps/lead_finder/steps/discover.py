@@ -54,7 +54,13 @@ from apps.lead_finder.sources import (
     source_kind,
     url_key,
 )
-from apps.lead_finder.steps.plan import Slice, area_text, focus_places
+from apps.lead_finder.steps.plan import (
+    Slice,
+    area_text,
+    focus_places,
+    sweep_label,
+    sweep_searches,
+)
 from core.claude.budget import Budget, BudgetSpent
 from core.claude.client import Claude, ClaudeError, ClaudeUnavailable, Reply, WebTools
 from core.config import Settings
@@ -148,32 +154,33 @@ def discover_request(rules: LeadFinderRules, slice_: Slice, since_days: int, tod
     """The text sent with the discovery instructions. Only these parts, and nothing else:
 
     - the city and the trigger (as JSON text, with the trigger's label from the rules);
+    - for sweeps 2 to 4, which sweep it is (PLAN-V21 T1-3);
     - the places to focus on (from queries.yaml);
     - how recent the news must be, and today's date;
-    - the trigger's search templates, filled in. A template that asks for `{company}` gets an
-      empty text: discovery doesn't know a company yet.
+    - the sweep's search templates, filled in (`plan.sweep_searches`). A template that asks for
+      `{company}` gets an empty text: discovery doesn't know a company yet.
     """
     label = next(
         item.label for item in rules.criteria.triggers.every if item.id == slice_.trigger_id
     )
-    values = {
+    values: dict[str, object] = {
         "city": slice_.city,
         "area": area_text(rules, slice_.city, slice_.area),
         "year": today.year,
         "month_year": today.strftime("%B %Y"),
         "company": "",
     }
-    # The sign's own searches, then the source groups Levi names for it (PLAN-V16 T1-7)
-    templates = [
-        *rules.queries.discovery[slice_.trigger_id],
-        *(
-            template
-            for group in rules.queries.groups_for_sign(slice_.trigger_id)
-            for template in group.discovery
-        ),
-    ]
+    # The sweep's searches (PLAN-V21 T1-3): the sign's own in sweep 1; the source groups Levi names
+    # for it (PLAN-V16 T1-7) in sweep 2, where they no longer make sweep 1's request long; then by
+    # sector group and by area. Only the rules and the run's params fill them.
     searches = "\n".join(
-        f"- {' '.join(template.format(**values).split())}" for template in templates
+        f"- {' '.join(search.split())}" for search in sweep_searches(rules, slice_, values)
+    )
+    sweep = (
+        f"Sweep: {slice_.sweep} ({sweep_label(rules, slice_.sweep)}). The run already searched "
+        "this sign in another way, so look for companies a plain search would miss.\n"
+        if slice_.sweep > 1
+        else ""
     )
     focus = ", ".join(focus_places(rules, slice_.city, slice_.area))
     # The national search (PLAN-V16 T1-2) has no city: the answer form's `city` says where each
@@ -187,6 +194,7 @@ def discover_request(rules: LeadFinderRules, slice_: Slice, since_days: int, tod
     return (
         f"City: {json_text(slice_.city, 60)}\n"
         f"Trigger: {json_text(slice_.trigger_id, 60)} ({label})\n"
+        f"{sweep}"
         f"Focus on: {focus}\n"
         f"{where}"
         f"Only events from the last {since_days} days (today is {today.isoformat()}).\n\n"
@@ -403,6 +411,7 @@ async def discover_slice(
                 blocked_domains=blocked,
             ),
             model=settings.model_for("discover"),
+            effort=settings.claude_effort_discover,  # PLAN-V21 T1-1
             max_continues=DISCOVER_MAX_CONTINUES,
         )
     except BaseException as error:  # the hold goes back whatever happens, even a cancel

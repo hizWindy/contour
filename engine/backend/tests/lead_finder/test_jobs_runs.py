@@ -234,7 +234,10 @@ async def test_the_default_schedule_saves_the_cities_the_signs_and_the_look_back
     [
         ({"cities": ["Atlantis"]}, "cities: Unknown city Atlantis."),
         ({"cities": ["Perth"], "cites": ["Perth"]}, "cites: Extra inputs are not permitted"),
-        ({"cities": ["Perth"], "since_days": 10}, "since_days: Input should be 7, 14 or 30"),
+        (
+            {"cities": ["Perth"], "since_days": 10},
+            "since_days: Input should be 7, 14, 30, 90 or 180",
+        ),
         (
             {"cities": ["Perth"], "triggers": ["moon_landing"]},
             "triggers: Unknown trigger moon_landing.",

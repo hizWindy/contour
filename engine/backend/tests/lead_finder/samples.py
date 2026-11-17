@@ -302,6 +302,7 @@ def sample_scenario() -> dict[tuple[str, str], list[Candidate]]:
 _COMPANY_LINE = re.compile(r"^Company\b[^:\n]*:[ \t]*(.+?)[ \t]*$", re.MULTILINE)
 _CITY_LINE = re.compile(r'^City: (".*")[ \t]*$', re.MULTILINE)
 _TRIGGER_LINE = re.compile(r'^Trigger: ("(?:[^"\\]|\\.)*")', re.MULTILINE)
+_SWEEP_LINE = re.compile(r"^Sweep: (\d)", re.MULTILINE)  # sweeps 2 to 4 (PLAN-V21 T1-3)
 
 
 def company_of(prompt: str) -> str | None:
@@ -318,6 +319,12 @@ def company_of(prompt: str) -> str | None:
         if isinstance(decoded, str):
             return decoded
     return value
+
+
+def sweep_of(prompt: str) -> int:
+    """The sweep a discovery request is in: its `Sweep: <n>` line, else 1."""
+    match = _SWEEP_LINE.search(prompt)
+    return int(match.group(1)) if match else 1
 
 
 def _json_value(pattern: re.Pattern[str], prompt: str) -> str | None:
@@ -373,8 +380,10 @@ class FakeClaude:
       When left out, each company gets the Acme sample under its own name and website, built
       from the `Company` line of the prompt. A name with "acme" in it keeps the Acme sample.
     - `company_facts`: facts for named companies (key: the name in any case). Wins over `facts`.
-    - `scenario`: the companies discovery finds, by `(trigger_id, city)`. A slice with no entry
-      finds none. See `sample_scenario()`.
+    - `scenario`: the companies discovery finds in sweep 1, by `(trigger_id, city)`. A slice with
+      no entry finds none. See `sample_scenario()`.
+    - `sweeps`: the companies sweeps 2 to 4 find (PLAN-V21 T1-4), by `(sweep, trigger_id, city)`.
+      A later sweep with no entry finds none.
     - `Reply.model` is the model the caller passed (`DEFAULT_MODEL` when none). `Reply.sources`
       holds the links of the notes (or companies) it returns, and a page on each company's
       website; `invented_url` and `unread_websites` leave them out, as a page never read.
@@ -393,6 +402,7 @@ class FakeClaude:
       set. `reached(company)` is set when a request of that company arrives, so a test waits for
       it instead of sleeping;
     - `crash_on`: names whose requests raise `SimulatedCrash`;
+    - `crash_on_sweep`: the discovery requests of this sweep raise `SimulatedCrash`;
     - `crash_after_extracts`: once this many answer forms have been returned, every later
       request raises `SimulatedCrash`;
     - Why now (PLAN-V12): `why_answer` is the answer (else `sample_why`), `why_off_form` makes
@@ -405,6 +415,8 @@ class FakeClaude:
     facts: CompanyFacts | None = None
     company_facts: dict[str, CompanyFacts] = field(default_factory=dict)
     scenario: dict[tuple[str, str], list[Candidate]] = field(default_factory=dict)
+    sweeps: dict[tuple[int, str, str], list[Candidate]] = field(default_factory=dict)  # PLAN-V21
+    crash_on_sweep: int | None = None
     # PLAN-V9 B5: the rivals the rivals search names for a company, by its name
     rivals: dict[str, list[RivalCandidate]] = field(default_factory=dict)
     invented_url: bool = False  # the notes cite a page the search never returned
@@ -481,6 +493,8 @@ class FakeClaude:
             self.crash_after_extracts is not None and self._extracts >= self.crash_after_extracts
         ):
             raise SimulatedCrash(f"The process died at {step} for {company}")
+        if step == "discover" and self.crash_on_sweep == sweep_of(prompt):
+            raise SimulatedCrash(f"The process died in sweep {self.crash_on_sweep}")
         if self.unavailable:
             raise ClaudeUnavailable("No Claude API key", "Add ANTHROPIC_API_KEY to engine/.env.")
         if self.error is not None:
@@ -604,7 +618,12 @@ class FakeClaude:
     ) -> tuple[Any, tuple[Source, ...], tuple[str, ...], Usage, Decimal]:
         city = _json_value(_CITY_LINE, prompt) or ""
         trigger = _json_value(_TRIGGER_LINE, prompt) or ""
-        found = self.scenario.get((trigger, city), [])
+        sweep = sweep_of(prompt)
+        found = (
+            self.scenario.get((trigger, city), [])
+            if sweep == 1
+            else self.sweeps.get((sweep, trigger, city), [])
+        )
         sources: list[Source] = []
         if not self.invented_url:
             for item in found:

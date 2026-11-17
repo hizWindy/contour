@@ -22,8 +22,10 @@ from apps.lead_finder.jobs import (
     NOT_READY,
     SCHEDULED_CITIES,
     SCHEDULED_SIGNS,
+    describe_discovery,
     discovery_running,
     doesnt_fit,
+    scheduled_params,
     settings_for,
     start_discovery,
     usd,
@@ -228,12 +230,12 @@ def test_money_is_rounded_up_so_it_never_shows_less_than_it_is() -> None:
 def test_choices_that_cant_be_read_say_where_and_why() -> None:
     errors = [
         FieldError(field="body.params.cities", message="Unknown city Atlantis."),
-        FieldError(field="body.params.since_days", message="Input should be 7, 14 or 30"),
+        FieldError(field="body.params.since_days", message="Input should be 7, 14, 30, 90 or 180"),
     ]
     reason = doesnt_fit(RunEstimate(valid=False, errors=errors))
     assert reason == (
         "The saved choices can't be used. cities: Unknown city Atlantis.; "
-        "since_days: Input should be 7, 14 or 30"
+        "since_days: Input should be 7, 14, 30, 90 or 180"
     )
 
 
@@ -269,3 +271,11 @@ async def test_without_a_run_engine_the_job_is_skipped_not_failed() -> None:
     assert skipped.value.reason == NOT_READY
     with pytest.raises(JobSkipped):
         await discovery_running(context)
+
+
+def test_a_schedule_with_no_look_back_of_its_own_still_looks_back_30_days() -> None:
+    """PLAN-V21 T1-2: a run a person starts looks back 90 days by default, an automatic run 30."""
+    assert DiscoveryParams().since_days == 90
+    assert scheduled_params({"cities": ["Perth"]})["since_days"] == LOOK_BACK_DAYS == 30
+    assert scheduled_params({"cities": ["Perth"], "since_days": 7})["since_days"] == 7
+    assert describe_discovery({"cities": ["Perth"]}).endswith("looking back 30 days.")

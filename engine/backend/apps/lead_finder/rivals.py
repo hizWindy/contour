@@ -196,6 +196,8 @@ async def find_rivals(
                 blocked_domains=tuple(rules.criteria.source_domains.blocked),
             ),
             model=model or settings.model_for("discover"),
+            # It looks for new companies, like discovery, so it thinks as hard (PLAN-V21 T1-1)
+            effort=settings.claude_effort_discover,
             max_continues=1,
         )
     except BaseException as error:

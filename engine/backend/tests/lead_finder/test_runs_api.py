@@ -87,7 +87,11 @@ async def test_the_run_options_have_everything_the_start_page_draws(
     # The rivals' sign and the old office's (PLAN-V11 C1) are made by the code, never searched for
     offered = {t["id"] for t in body["triggers"]}
     assert offered.isdisjoint({"rival_growth", "long_tenure"})
-    assert body["since_days"] == {"choices": [7, 30], "default": 30}
+    # PLAN-V21 T1-2: 90 days and 6 months, with 90 first for a run a person starts
+    assert body["since_days"] == {"choices": [7, 30, 90, 180], "default": 90}
+    # PLAN-V21 T1-4 and T1-6: how many companies, and the top up (no OK from Levi in the tests)
+    assert body["target_companies"] == {"default": 20, "min": 5, "max": 20, "presets": [20]}
+    assert body["top_up"]["default"] is True and body["top_up"]["allowed"] is False
     modes = {mode["mode"]: mode for mode in body["modes"]}
     assert modes["watchlist"]["needs_approval"] is True
     assert modes["watchlist"]["approved"] is False  # no OK from Levi in the test settings

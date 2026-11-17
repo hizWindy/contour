@@ -184,7 +184,10 @@ async def test_choices_are_checked_and_saved_cleaned(client: httpx.AsyncClient) 
     ("choices", "said"),
     [
         ({"cities": ["Atlantis"]}, "cities: Unknown city Atlantis."),
-        ({"cities": ["Perth"], "since_days": 10}, "since_days: Input should be 7, 14 or 30"),
+        (
+            {"cities": ["Perth"], "since_days": 10},
+            "since_days: Input should be 7, 14, 30, 90 or 180",
+        ),
         ({"cities": ["Perth"], "cites": []}, "cites: Extra inputs are not permitted"),
     ],
 )

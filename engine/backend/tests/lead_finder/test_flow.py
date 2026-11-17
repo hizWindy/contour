@@ -118,6 +118,7 @@ async def test_start_watch_filter_open_mark_and_download(
     # What the Start page sends for "Find new leads" with nothing changed.
     defaults = options["defaults"]
     params = {key: defaults[key] for key in ("cities", "triggers", "since_days", "area")}
+    params["target_companies"] = options["target_companies"]["default"]  # PLAN-V21 T3-3
     # The sample run of the 3 pass cities and the first 4 main signs (12 slices). The Start page
     # starts with one city since PLAN-V9 C4, so they are chosen here.
     params["cities"] = ["Melbourne", "Adelaide", "Perth"]
@@ -133,7 +134,9 @@ async def test_start_watch_filter_open_mark_and_download(
 
     run = await run_to_the_end(client, manager, params)
     assert run["status"] == "done"
-    assert run["counts"]["slices"] == 12
+    # 8 companies are short of the target of 20, so the run searches its 12 slices in all four
+    # ways (PLAN-V21 T1-4). The later sweeps find none the first missed.
+    assert run["counts"]["slices"] == 12 * 4
     assert run["counts"]["researched"] == 8
     run_id = run["id"]
 

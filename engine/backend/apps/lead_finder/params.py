@@ -32,9 +32,13 @@ from core.api.models import OutModel
 from core.hubspot.matching import clean_name
 
 AreaId = Literal["cbd", "inner", "all"]  # the part of a city to look in; "all" is the whole city
-# How far back a discovery run looks. The Start page offers 7 and 30 (`options.py`). 14 is for a
-# schedule that runs every 2 weeks: its look-back matches the time between runs (PLAN-V6 D2).
-SinceDays = Literal[7, 14, 30]
+# How far back a discovery run looks. The Start page offers 7, 30, 90 and 180 days, with 90 first
+# (`options.py`, PLAN-V21 T1-2, TBC with Levi: his notes count a sign for 18 months, and the score
+# gives older news fewer points). 14 is for a schedule that runs every 2 weeks (PLAN-V6 D2). The
+# automatic runs look back 30 days (`jobs.LOOK_BACK_DAYS`).
+SinceDays = Literal[7, 14, 30, 90, 180]
+SINCE_DAYS_DEFAULT: SinceDays = 90  # a run a person starts (PLAN-V21 choice 5)
+SINCE_DAYS_CHOICES = (7, 30, 90, 180)  # what Start offers
 # Where discovery looks for companies (PLAN-V16 T1-8, the contract part 2)
 RunSource = Literal["web", "property_daily", "arealytics"]
 RUN_SOURCES: tuple[RunSource, ...] = ("web", "property_daily", "arealytics")
@@ -313,10 +317,11 @@ class _Discovery(Strict):
         ),
     )
     since_days: SinceDays = Field(
-        30,
+        SINCE_DAYS_DEFAULT,
         description=(
-            "Used by mode discovery only. Only events from the last 7, 14 or 30 days. "
-            "The Start page offers 7 and 30; 14 is for a schedule that runs every 2 weeks."
+            "Used by mode discovery only. Only events from the last 7, 14, 30, 90 or 180 days. "
+            "The Start page offers 7, 30, 90 and 180 (6 months), with 90 first; 14 is for a "
+            "schedule that runs every 2 weeks. Automatic runs look back 30."
         ),
     )
     sources: list[RunSource] | None = Field(

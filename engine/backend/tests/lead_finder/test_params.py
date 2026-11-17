@@ -44,7 +44,7 @@ def test_the_defaults_are_the_first_priority_city_and_the_main_triggers() -> Non
     # The main signs a search can look for: not the old office's, which the code adds (PLAN-V11 C1)
     assert params.triggers == [t.id for t in rules.triggers.main if t.id != "long_tenure"]
     assert len(params.triggers) == 8  # 6, and capital_raise and tenant_advisor (PLAN-V16 T1-4)
-    assert params.since_days == 30
+    assert params.since_days == 90  # a run a person starts (PLAN-V21 T1-2, TBC with Levi)
     assert params.area == {}
     assert params.companies == []
     assert params.recheck is False
@@ -114,13 +114,14 @@ def test_triggers_must_exist_and_appear_once() -> None:
     )
 
 
-@pytest.mark.parametrize("days", [7, 14, 30])
-def test_since_days_is_7_14_or_30(days: int) -> None:
-    # 14 is for a schedule that runs every 2 weeks (PLAN-V6 D2). The Start page offers 7 and 30.
+@pytest.mark.parametrize("days", [7, 14, 30, 90, 180])
+def test_since_days_is_7_14_30_90_or_180(days: int) -> None:
+    # 14 is for a schedule that runs every 2 weeks (PLAN-V6 D2). The Start page offers 7, 30, 90
+    # and 180 (PLAN-V21 T1-2).
     assert DiscoveryParams(since_days=days).since_days == days
 
 
-@pytest.mark.parametrize("days", [0, 1, 10, 15, 31, 90])
+@pytest.mark.parametrize("days", [0, 1, 10, 15, 31, 60, 365])
 def test_since_days_refuses_other_numbers(days: int) -> None:
     assert first_error(DiscoveryParams, {"since_days": days})["loc"] == ("since_days",)
 

@@ -796,20 +796,24 @@ class Sweeps(Strict):
     - `areas` (sweep 4): each sign by area, the CBD first, then the inner suburbs (`{area}`). For
       all of Australia, `{area}` is each priority city by name.
 
-    Empty until PLAN-V21 T1-3 fills queries.yaml. With no wording, a run makes sweep 1 only.
+    The backend won't start when a sign a run can search has no sweep 2 wording or no `terms`, or
+    when the sector groups don't hold each of Levi's priority sectors once
+    (`LeadFinderRules.check_together`).
     """
 
-    labels: dict[SweepId, str] = Field(default_factory=dict)
+    labels: dict[SweepId, str]
     sources: dict[str, list[str]] = Field(default_factory=dict)
-    terms: dict[str, str] = Field(default_factory=dict)
-    sector_groups: list[SectorGroup] = Field(default_factory=list)
-    sectors: list[str] = Field(default_factory=list)
-    areas: list[str] = Field(default_factory=list)
+    terms: dict[str, str]
+    sector_groups: list[SectorGroup] = Field(min_length=1)
+    sectors: list[str] = Field(min_length=1)
+    areas: list[str] = Field(min_length=1)
 
     @model_validator(mode="after")
     def check_sweeps(self) -> Self:
-        if self.labels and set(self.labels) != set(SWEEP_IDS):
+        if set(self.labels) != set(SWEEP_IDS):
             raise ValueError("sweeps.labels needs signs, sources, sectors and areas")
+        if any(not group for group in self.sources.values()):
+            raise ValueError("A sign in sweeps.sources needs at least one search")
         templates = [t for group in self.sources.values() for t in group]
         templates += [*self.sectors, *self.areas]
         for template in templates:
@@ -830,7 +834,7 @@ class Queries(Strict):
     discovery: dict[str, list[str]]
     company: dict[Literal["property", "people", "money", "tenure", "dampeners"], list[str]]
     source_groups: dict[str, SourceGroup]
-    sweeps: Sweeps = Field(default_factory=Sweeps)  # PLAN-V21 T1-3
+    sweeps: Sweeps  # PLAN-V21 T1-3
 
     def groups_for_angle(self, angle: str) -> list[SourceGroup]:
         """The source groups a company's research asks in this angle."""
@@ -1010,7 +1014,36 @@ class LeadFinderRules(Strict):
         no_areas = [city for city in cities if city not in self.queries.areas]
         if no_areas:
             raise ValueError(f"No areas in queries.yaml for: {', '.join(no_areas)}")
+        self._check_sweeps(trigger_ids)
         return self
+
+    def _check_sweeps(self, searchable: set[str]) -> None:
+        """PLAN-V21 T1-3: every sign a run can search has wording for each sweep."""
+        queries = self.queries
+        sweeps = queries.sweeps
+        no_sources = sorted(
+            sign
+            for sign in searchable
+            if not sweeps.sources.get(sign)
+            and not any(group.discovery for group in queries.groups_for_sign(sign))
+        )
+        if no_sources:
+            raise ValueError(
+                "No sweep 2 searches (a source group or sweeps.sources) for: "
+                + ", ".join(no_sources)
+            )
+        unknown = sorted((set(sweeps.sources) | set(sweeps.terms)) - searchable)
+        if unknown:
+            raise ValueError(f"sweeps names signs a run can't search: {', '.join(unknown)}")
+        no_terms = sorted(sign for sign in searchable if not sweeps.terms.get(sign, "").strip())
+        if no_terms:
+            raise ValueError(f"No sweeps.terms for: {', '.join(no_terms)}")
+        grouped = [sector for group in sweeps.sector_groups for sector in group.sectors]
+        priority = self.criteria.industries.priority_sectors
+        if sorted(grouped) != sorted(priority) or len(set(grouped)) != len(grouped):
+            raise ValueError(
+                "sweeps.sector_groups must hold each of industries.priority_sectors once"
+            )
 
 
 def rules_version(raw_files: dict[str, bytes]) -> str:

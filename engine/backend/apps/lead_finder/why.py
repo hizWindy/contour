@@ -885,6 +885,7 @@ async def write_why_now(
     now: datetime,
     on_reply: "OnReply | None" = None,
     hidden: Collection[str] = HUBSPOT_ONLY,
+    effort: str | None = None,
 ) -> WhyOutcome:
     """Writes the Why now for one judged lead (C2). One Claude request, no web search, paid from
     the company's own budget (checked first, like every other step). A failed form is retried
@@ -911,7 +912,7 @@ async def write_why_now(
         try:
             budget.check()
             reply = await claude.ask(
-                system=system.text, prompt=prompt, form=WhyNowAnswer, model=model
+                system=system.text, prompt=prompt, form=WhyNowAnswer, model=model, effort=effort
             )
         except BudgetSpent as stop:  # the company's cap, or the daily limit
             outcome.skipped = "budget"

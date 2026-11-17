@@ -14,6 +14,7 @@ anything outside the run context, so a run is testable with a fake Claude.
 """
 
 from datetime import UTC, datetime
+from decimal import ROUND_DOWN, ROUND_UP, Decimal
 from typing import Any
 
 from sqlalchemy import select
@@ -38,7 +39,12 @@ from apps.lead_finder.run_sources import (
 )
 from apps.lead_finder.schemas import WatchItem
 from apps.lead_finder.steps.discover import MAX_CANDIDATES
-from apps.lead_finder.steps.plan import check_discovery_size, make_slices
+from apps.lead_finder.steps.plan import (
+    check_discovery_size,
+    make_slices,
+    sweeps_for,
+    web_picked,
+)
 from apps.lead_finder.steps.state import CompanyTask
 from apps.lead_finder.testing import load_testset
 from apps.lead_finder.watchlist import load_watchlist, most_staff_first
@@ -90,7 +96,27 @@ def not_approved() -> Problem:
 
 def check_discovery(params: DiscoveryParams, settings: Settings, caps: RunCaps) -> None:
     check_sources(params, settings)  # a tool it names must be ready (PLAN-V16 T1-8)
+    check_target(params, caps)
     check_discovery_size(params, settings, caps)
+
+
+def check_target(params: DiscoveryParams, caps: RunCaps) -> None:
+    """The target a person picked can't be above the run's company limit (PLAN-V21 T1-4): the
+    limit is the ceiling. Left out, the target is the default, pulled down to the limit."""
+    asked = params.target_companies
+    if asked is None or asked <= caps.max_companies:
+        return
+    message = (
+        f"Pick at most {caps.max_companies}: the run's company limit. Raise the limit first to "
+        "research more."
+    )
+    raise Problem(
+        422,
+        "The target is above the company limit",
+        message,
+        code="target_above_limit",
+        errors=[{"field": "body.params.target_companies", "message": message}],
+    )
 
 
 def check_watchlist(params: WatchlistParams, settings: Settings, caps: RunCaps) -> None:
@@ -248,6 +274,40 @@ def _estimate(
     )
 
 
+CENT = Decimal("0.01")
+
+
+def _usd(amount: Decimal) -> str:
+    return f"US${amount.quantize(CENT, ROUND_UP):,.2f}"
+
+
+def target_cost(
+    ctx: EstimateContext[DiscoveryParams], target: int, slices: int, sweeps: int
+) -> tuple[Decimal, Decimal, str | None]:
+    """What a run that reaches its target costs (PLAN-V21 T1-4): low, one sweep and the target's
+    companies at what past companies cost; high, every sweep. And one sentence when that doesn't
+    fit the run's limit or what is left of today's limit."""
+    costs = ctx.unit_costs
+    research = target * costs.company_usd
+    low = slices * costs.slice_usd + research
+    high = slices * sweeps * costs.slice_usd + research
+    limit = min(ctx.caps.run_cap_usd, ctx.daily_left_usd)
+    if low <= limit:
+        return low, high, None
+    room = limit - slices * costs.slice_usd
+    fit = int((room / costs.company_usd).to_integral_value(ROUND_DOWN)) if room > 0 else 0
+    which = (
+        f"this run's limit of {_usd(ctx.caps.run_cap_usd)}"
+        if ctx.caps.run_cap_usd <= ctx.daily_left_usd
+        else f"what is left of today's limit ({_usd(ctx.daily_left_usd)})"
+    )
+    note = (
+        f"{target} companies cost about {_usd(low)}, more than {which}, so the run stops at the "
+        f"limit after about {fit}."
+    )
+    return low, high, note
+
+
 async def estimate_discovery(ctx: EstimateContext[DiscoveryParams]) -> RunEstimate:
     rules = load_rules()
     slices = len(make_slices(ctx.params, rules))
@@ -261,6 +321,8 @@ async def estimate_discovery(ctx: EstimateContext[DiscoveryParams]) -> RunEstima
         feed = len(found)
     # No goal stops a run (PLAN-V20): it researches every company it chooses, up to its limits.
     companies = min(ctx.caps.max_companies, slices * MAX_CANDIDATES + feed)
+    if slices and not ctx.scheduled:  # it has a target, and may sweep (PLAN-V21 T1-4)
+        return _estimate_target(ctx, slices, feed, tools)
     names = " and ".join(SOURCE_WORDS[tool] for tool in tools)
     items = f"{feed} new item" if feed == 1 else f"{feed} new items"
     if not slices:
@@ -280,6 +342,50 @@ async def estimate_discovery(ctx: EstimateContext[DiscoveryParams]) -> RunEstima
             f"{companies} of the companies it finds. How many it finds isn't known in advance."
         )
     return _estimate(ctx, companies, slices, warnings=[text])
+
+
+def _estimate_target(
+    ctx: EstimateContext[DiscoveryParams], slices: int, feed: int, tools: list[Any]
+) -> RunEstimate:
+    """A discovery run a person starts: it tries to research its target, and searches again in a
+    new way while it is short (PLAN-V21 T1-4). The typical cost is one sweep and the target's
+    companies; the worst case is every sweep at its full hold and the company limit at its cap."""
+    params, settings, caps = ctx.params, ctx.settings, ctx.caps
+    asked = params.target_companies
+    target = min(
+        asked if asked is not None else settings.target_companies_default, caps.max_companies
+    )
+    sweeps = sweeps_for(settings.discovery_max_sweeps) if web_picked(params) else 1
+    low, high, note = target_cost(ctx, target, slices, sweeps)
+    worst = slices * sweeps * settings.slice_reserve_usd + caps.max_companies * caps.company_cap_usd
+    names = " and ".join(SOURCE_WORDS[tool] for tool in tools)
+    items = f"{feed} new item" if feed == 1 else f"{feed} new items"
+    reads = f" and reads {items} from {names}" if tools else ""
+    if sweeps > 1:
+        text = (
+            f"Discovery searches {slices} city and sign pairs{reads}. While it has fewer than "
+            f"{target} companies, it searches them again in a new way, up to {sweeps} times in "
+            f"all, then researches what it found, up to {caps.max_companies}."
+        )
+    else:
+        text = (
+            f"Discovery searches {slices} city and sign pairs{reads}, then researches up to "
+            f"{caps.max_companies} of the companies it finds. How many it finds isn't known in "
+            "advance."
+        )
+    estimate = RunEstimate(
+        valid=True,
+        warnings=[text],
+        slices=slices,
+        companies_expected=target,
+        cost_usd_low=low,
+        cost_usd_high=max(low, worst),
+        target_companies=target,
+        target_cost_usd_low=low,
+        target_cost_usd_high=high,
+        target_note=note,
+    )
+    return estimate
 
 
 async def estimate_watchlist(ctx: EstimateContext[WatchlistParams]) -> RunEstimate:

@@ -7,6 +7,7 @@ from apps.lead_finder.geo import CITY_CENTRES, NATIONAL_CENTRE
 from apps.lead_finder.params import (
     COMPANIES_MAX,
     COMPANIES_MIN,
+    SINCE_DAYS_CHOICES,
     TARGET_MIN,
     LeadFinderRunParams,
     RunSource,
@@ -126,7 +127,7 @@ def build_run_options(
         top_up=top_up_option(settings),
         cities=city_options,
         triggers=trigger_options,
-        since_days=SinceDaysOption(choices=[7, 30], default=defaults.since_days),
+        since_days=SinceDaysOption(choices=list(SINCE_DAYS_CHOICES), default=defaults.since_days),
         modes=[
             ModeOption(
                 mode=kind.mode,
