@@ -1,12 +1,13 @@
 /**
  * The Signs tab: every sign of an office change that counts, strongest first, each with what
- * happened, its date, how sure it is, its points and its page. The first three show at once.
+ * happened, its date, how sure it is, its points and its page. The first three show at once. A sign
+ * only the search found says "From the search, not checked by the research" (PLAN-V21 T1-8).
  */
 import { useRules } from '@/api/hooks'
 import type { LeadDetail } from '@/api/types'
 import { SourceLink } from '@/components/source-link'
 import { Badge } from '@/components/ui/badge'
-import { Section, ShowFirst } from './parts'
+import { FromSearchMark, Section, ShowFirst } from './parts'
 import { LABEL_WORDS } from './words'
 
 /** The Profile's timing advice. The tool can't see when a consultant is appointed. */
@@ -36,7 +37,7 @@ export function SignsTab({ lead }: { lead: LeadDetail }) {
           items={signs}
           label="Signs of an office change"
           keyOf={({ trigger }, index) => `${trigger.id}-${String(index)}`}
-          render={({ trigger, points }) => (
+          render={({ trigger, points, from_search: fromSearch }) => (
             <div className="flex flex-col gap-1">
               <p>{trigger.what_happened}</p>
               <p className="flex flex-wrap items-center gap-2 text-caption text-muted-foreground">
@@ -44,6 +45,7 @@ export function SignsTab({ lead }: { lead: LeadDetail }) {
                 <Badge variant="outline">{LABEL_WORDS[trigger.label] ?? trigger.label}</Badge>
                 <span>{points} points</span>
                 <SourceLink href={trigger.source_url} />
+                {fromSearch ? <FromSearchMark /> : null}
               </p>
             </div>
           )}

@@ -1,8 +1,9 @@
 /**
- * Small parts every tab of the lead card uses: a titled section, and a list that shows its first
- * three items with "Show all" (PLAN-V6, F1), so a long list never pushes the rest off the screen.
+ * Small parts every tab of the lead card uses: a titled section, a list that shows its first three
+ * items with "Show all" (PLAN-V6, F1), so a long list never pushes the rest off the screen, and the
+ * quiet mark on a sign the search found that the research didn't check (PLAN-V21 T1-8).
  */
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, Search } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -81,5 +82,22 @@ export function ShowFirst<T>({
         </Button>
       ) : null}
     </div>
+  )
+}
+
+/**
+ * A sign discovery found that the research didn't find again (PLAN-V21 T1-8): its link was among
+ * the pages the search read and it passed the date check, but nobody checked it since. A quiet
+ * mark, an icon and the words in muted text, like where a company came from.
+ */
+export function FromSearchMark({ className }: { className?: string }) {
+  return (
+    <span
+      data-slot="from-search"
+      className={cn('inline-flex items-center gap-1 text-caption text-muted-foreground', className)}
+    >
+      <Search aria-hidden="true" className="size-3.5 shrink-0" />
+      From the search, not checked by the research
+    </span>
   )
 }

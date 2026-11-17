@@ -22,6 +22,7 @@ import { TierLine } from '@/components/tier-mark'
 import { Button } from '@/components/ui/button'
 import { formatDate, formatM2, formatStaff } from '@/lib/format'
 import { isTier, TIER_ACTIONS } from '@/lib/labels'
+import { FromSearchMark } from './card/parts'
 import { hasOffice, officeAddress, officeSource, STRENGTH_WORDS } from './card/v16-words'
 
 function Part({ title, children }: { title: string; children: ReactNode }) {
@@ -118,6 +119,12 @@ function Signs({ lead }: { lead: LeadDetail }) {
           {item.trigger.what_happened}{' '}
           <span className="text-muted-foreground">{item.trigger.date ?? 'Date not known'}. </span>
           <SourceLink href={item.trigger.source_url} />
+          {item.from_search ? (
+            <>
+              {' '}
+              <FromSearchMark />
+            </>
+          ) : null}
         </li>
       ))}
     </ul>

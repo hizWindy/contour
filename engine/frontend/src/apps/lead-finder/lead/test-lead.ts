@@ -294,6 +294,7 @@ export function makeLead(changes: Partial<LeadDetail> = {}): LeadDetail {
         group_points: 15,
         source_points: 5,
         timing_points: 6,
+        from_search: false,
       },
     ],
     office_m2: 2500,

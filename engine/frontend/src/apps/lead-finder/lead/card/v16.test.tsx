@@ -13,6 +13,7 @@ import { EXCLUDED, FULL_RECORD, LEAD_ID, makeLead } from '../test-lead'
 import { TierHeadline } from './headline'
 import { OverviewTab } from './tab-overview'
 import { ScoreTab } from './tab-score'
+import { SignsTab } from './tab-signs'
 
 const FULL = makeLead(FULL_RECORD)
 
@@ -285,5 +286,41 @@ describe('an excluded lead (PLAN-V16 T3-4)', () => {
       expect(screen.queryByRole('alertdialog')).toBeNull()
     })
     expect(calls.some((call) => call.path.endsWith('/override-exclusion'))).toBe(false)
+  })
+})
+
+describe('a sign the search found (PLAN-V21 T1-8)', () => {
+  it('says "From the search, not checked by the research" beside that sign only', () => {
+    const sign = (id: string, whatHappened: string, fromSearch: boolean) => ({
+      trigger: {
+        id,
+        what_happened: whatHappened,
+        date: '2026-10',
+        source_url: `https://example.com/${id}`,
+        label: fromSearch ? ('estimated' as const) : ('confirmed' as const),
+      },
+      group: 'main' as const,
+      source_kind: 'other_news',
+      points: fromSearch ? 10 : 26,
+      group_points: 15,
+      source_points: 5,
+      timing_points: 6,
+      from_search: fromSearch,
+    })
+    const lead = makeLead({
+      triggers: [
+        sign('lease_ending', "Sample Software's lease ends in 2028.", false),
+        sign('fast_growth', 'Sample Software doubled its staff this year.', true),
+      ],
+    })
+    renderWithProviders(<SignsTab lead={lead} />)
+    const marks = document.querySelectorAll('[data-slot="from-search"]')
+    expect(marks).toHaveLength(1)
+    expect(marks[0]).toHaveTextContent('From the search, not checked by the research')
+    const found = screen.getByText('Sample Software doubled its staff this year.').parentElement
+    expect(found).not.toBeNull()
+    expect(
+      within(found as HTMLElement).getByText('From the search, not checked by the research'),
+    ).toBeInTheDocument()
   })
 })

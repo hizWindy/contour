@@ -24,6 +24,7 @@ import { formatM2, formatStaff } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { Actions } from './actions'
 import { ExclusionNotice, TierHeadline } from './headline'
+import { FromSearchMark } from './parts'
 import { activeExclusion, officeSource } from './v16-words'
 import { bestTrigger, firstPerson, sourceWord } from './words'
 import { rejectReasonLabel } from '../../reject-reasons-data'
@@ -125,6 +126,7 @@ export function QuickView({ lead }: { lead: LeadDetail }) {
               <span className="flex flex-wrap items-center gap-x-2 text-caption text-muted-foreground">
                 <span>{best.trigger.date ?? 'Date not known'}</span>
                 <SourceLink href={best.trigger.source_url} />
+                {best.from_search ? <FromSearchMark /> : null}
               </span>
             </span>
           ) : (
