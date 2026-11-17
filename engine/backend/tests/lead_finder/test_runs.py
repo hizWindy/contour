@@ -38,7 +38,7 @@ from tests.core.runs_fakes import (
 )
 from tests.lead_finder.conftest import APP, MakeLeadFinderManager, lf_settings
 from tests.lead_finder.factories import add_all, make_lead
-from tests.lead_finder.samples import FakeClaude, fact, make_facts, sample_scenario
+from tests.lead_finder.samples import FakeClaude, candidate, fact, make_facts, sample_scenario
 
 pytestmark = pytest.mark.integration
 D = Decimal
@@ -548,6 +548,50 @@ async def test_one_company_failing_never_stops_the_others(
     assert [e["name"] for e in failed] == ["Boxhill Software"]
     assert "hunter2" not in failed[0]["reason"]
     assert row.counts["failed"] == 1 and row.counts["researched"] == 1
+
+
+async def test_a_research_error_still_saves_the_lead_with_the_sign_discovery_found(
+    make_lf_manager: MakeLeadFinderManager,
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """PLAN-V21 T1-8: the run reports the failure, and the lead keeps its sign (the fourth path)."""
+    from apps.lead_finder.sourcing import apply_company_details as real
+
+    calls = {"count": 0}
+
+    def broken_once(*args: Any, **kwargs: Any) -> Any:
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise RuntimeError("a fault in our own code")
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr("apps.lead_finder.research.apply_company_details", broken_once)
+    scenario = {
+        ("merger_or_takeover", "Melbourne"): [
+            candidate("Boxhill Software", "merger_or_takeover", website="boxhillsoftware.com.au")
+        ]
+    }
+    manager = make_lf_manager(FakeClaude(scenario=scenario))
+    params = {
+        "cities": ["Melbourne"],
+        "triggers": ["merger_or_takeover"],
+        "since_days": 30,
+        "target_companies": 5,
+    }
+    run_id = await start(manager, "discovery", {**params, "top_up": False})
+    row = await finished(manager, session_factory, run_id)
+
+    assert row.status == "done"
+    failed = of_type(await stored_json(session_factory, run_id), "company_failed")
+    assert [e["name"] for e in failed] == ["Boxhill Software"]
+    [lead] = await leads_of(session_factory, run_id)
+    assert (lead.trigger_id, lead.trigger_ids) == ("merger_or_takeover", ["merger_or_takeover"])
+    card = lead.card
+    assert card["triggers"][0]["from_search"] is True
+    assert card["why_it_fits"].startswith("Sign from the search, not checked by the research")
+    assert any(problem.startswith("The research failed (") for problem in card["problems"])
+    assert row.counts["failed"] == 1
 
 
 async def test_after_a_crash_the_resume_researches_only_what_was_left(

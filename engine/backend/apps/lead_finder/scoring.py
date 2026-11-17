@@ -79,6 +79,12 @@ class TriggerScore(BaseModel):
     group_points: int = Field(default=0, description="The trigger part of the score")
     source_points: int = Field(default=0, description="The trigger part of the score")
     timing_points: int = Field(default=0, description="How recent, or how near the lease end")
+    from_search: bool = Field(
+        default=False,
+        description="True for a sign discovery found that the research didn't find again: from "
+        "the search, not checked by the research (PLAN-V21 T1-8). Its link was among the pages "
+        "discovery read, and it passed the date check.",
+    )
 
 
 class ScoreCheck(BaseModel):

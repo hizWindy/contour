@@ -46,6 +46,7 @@ What a run relies on:
 import asyncio
 import logging
 import uuid
+from collections.abc import Collection, Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
@@ -57,13 +58,14 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.lead_finder.context import CreditMeter, Origin, ResearchContext
+from apps.lead_finder.context import CreditMeter, Origin, ResearchContext, Signal
 from apps.lead_finder.fields import (
     AngleNotes,
     CompanyCoreForm,
     CompanyExtrasForm,
     CompanyFacts,
     Fact,
+    TriggerFound,
     join_facts,
 )
 from apps.lead_finder.headcount import (
@@ -195,6 +197,12 @@ FORM_FAILED_SUMMARY = (
     "The facts are missing: Claude couldn't fill in the answer form. Re-check this lead."
 )
 NOTE_MAX_CHARS = 400  # a note's claim: one line, cut after parsing (a long answer is paid for)
+# A sign discovery found that the research didn't find again (PLAN-V21 T1-8): its words on the card
+SEARCH_SIGN_WORDS = "Sign from the search, not checked by the research"
+SEARCH_SIGN_CHARS = 240  # like discovery's own sentence of what happened
+RESEARCH_FAILED_SUMMARY = (
+    "The research failed, so only the sign the search found is known. Re-check this lead."
+)
 log = logging.getLogger(__name__)
 
 
@@ -459,6 +467,8 @@ class Job:
     too_small: str | None = None  # why the research stopped before Claude (PLAN-V9 B2)
     # What the property tools know (PLAN-V16 T1-8), read before the search. None: not looked up
     from_tools: CompanyProperty | None = None
+    # PLAN-V21 T1-8: a lead saved after a research error asks Signal Hire nothing
+    no_signalhire: bool = False
 
     @property
     def company(self) -> str:
@@ -502,30 +512,7 @@ async def research_company(
     context = context or ResearchContext()
     now = datetime.now(UTC)
     key = company_key(request.company)
-    cap = (
-        context.company_cap_usd if context.company_cap_usd is not None else settings.company_cap_usd
-    )
-    job = Job(
-        id=run_lead_id(context.run_id, key) if context.run_id else uuid.uuid4(),
-        request=request,
-        rules=rules,
-        settings=settings,
-        context=context,
-        # The dampener check's searches (at most 3) are on top of `company_max_searches`, so the
-        # three angles and the gap check keep the allowance the Settings page shows. The money
-        # limit above is what stops a company's cost.
-        budget=Budget(
-            cap,
-            settings.company_max_searches + MAX_DAMPENER_SEARCHES,
-            request_reserve_usd=settings.request_reserve_usd,
-        ),
-        today=today or now.date(),
-        credits=(
-            context.signalhire_credits
-            if context.signalhire_credits is not None
-            else CreditMeter(settings.signalhire_max_credits_per_run)
-        ),
-    )
+    job = _new_job(request, rules, settings, context, today or now.date())
 
     # 1. Memory first. The read ends its transaction, so no connection waits on Claude.
     covered = await _notes_from_memory(session, job, now) if request.use_memory else set()
@@ -584,6 +571,84 @@ async def research_company(
     card = await _why_now(session, job, claude, card)
     await _save(session, embedder, job, card, hubspot, key, place, metro, profile_text)
     return card
+
+
+def _new_job(
+    request: ResearchRequest,
+    rules: LeadFinderRules,
+    settings: Settings,
+    context: ResearchContext,
+    today: date,
+) -> Job:
+    key = company_key(request.company)
+    cap = (
+        context.company_cap_usd if context.company_cap_usd is not None else settings.company_cap_usd
+    )
+    return Job(
+        id=run_lead_id(context.run_id, key) if context.run_id else uuid.uuid4(),
+        request=request,
+        rules=rules,
+        settings=settings,
+        context=context,
+        # The dampener check's searches (at most 3) are on top of `company_max_searches`, so the
+        # three angles and the gap check keep the allowance the Settings page shows. The money
+        # limit above is what stops a company's cost.
+        budget=Budget(
+            cap,
+            settings.company_max_searches + MAX_DAMPENER_SEARCHES,
+            request_reserve_usd=settings.request_reserve_usd,
+        ),
+        today=today,
+        credits=(
+            context.signalhire_credits
+            if context.signalhire_credits is not None
+            else CreditMeter(settings.signalhire_max_credits_per_run)
+        ),
+    )
+
+
+async def save_after_error(
+    session: AsyncSession,
+    embedder: Embedder,
+    rules: LeadFinderRules,
+    settings: Settings,
+    request: ResearchRequest,
+    today: date,
+    context: ResearchContext,
+    error_id: str,
+) -> LeadCard | None:
+    """The research of a company found by discovery failed (PLAN-V21 T1-8): the lead is still
+    saved, with the sign the search found and a line saying the research failed, so the card and
+    the row keep the sign it was found with. No Claude request, and no Signal Hire count. Returns
+    None when the company had no sign (a typed or watchlist company) or this fails too: the run
+    then reports the failure as before."""
+    if not context.signals:
+        return None
+    try:
+        now = datetime.now(UTC)
+        job = _new_job(request, rules, settings, context, today)
+        job.problems.append(f"The research failed ({error_id}). Re-check this lead.")
+        facts = empty_facts(job.company, RESEARCH_FAILED_SUMMARY)
+        job.no_signalhire = True
+        card, hubspot, place, metro, profile_text = await _judge_and_card(
+            session, embedder, job, facts, [], set(), now, None
+        )
+        await _save(
+            session,
+            embedder,
+            job,
+            card,
+            hubspot,
+            company_key(request.company),
+            place,
+            metro,
+            profile_text,
+        )
+        return card
+    except Exception:  # the run says the research failed, as it did before PLAN-V21
+        log.exception("save_after_error_failed")
+        await session.rollback()
+        return None
 
 
 async def refill_lead(
@@ -848,6 +913,7 @@ async def _judge_and_card(
     facts, from_hubspot = office.facts, office.from_hubspot
     sources.extend(office.entries)
     facts = record_signs(facts, job.from_tools, context.signals, metro, rules, job.today)
+    facts, from_search = add_search_signs(facts, context.signals, rules)
     website = facts.website.value or request.website
     staff, from_signalhire, signalhire_people = await _signalhire_step(
         session, job, facts, metro, website, signalhire
@@ -866,7 +932,7 @@ async def _judge_and_card(
     ):
         if entry is not None:
             sources.append(entry)
-    verdict = judge(facts, hubspot, rules, job.today)
+    verdict = mark_search_signs(judge(facts, hubspot, rules, job.today), from_search)
     headcount = headcount_of(facts, rules)
     card = LeadCard(
         id=job.id,
@@ -1130,6 +1196,8 @@ async def _signalhire_step(
     company's senior people (`wants_people`), and the notes for them. Nothing without a key (or a
     fake). `choose_staff` decides whether the count is used. Whatever goes wrong is a line in the
     card's problems: the lead is still saved and the run goes on."""
+    if job.no_signalhire:
+        return None, [], []
     origin = job.context.origin
     staff = wants_signalhire(job.rules, job.settings, origin=origin, city=city)
     leaders = job.too_small is None and wants_people(
@@ -1185,14 +1253,16 @@ async def _signalhire_step(
 
 
 async def _too_small(session: AsyncSession, job: Job, given: SignalHire | None) -> str | None:
-    """Why the company is too small to research, or None (PLAN-V9 B2).
+    """Why the company is too small to research, or None (PLAN-V9 B2, PLAN-V21 T1-7).
 
-    The numbers are the ones HubSpot and Signal Hire already have for the office in the asked-for
-    city: HubSpot's LinkedIn count (doubled) for a sure match, and Signal Hire's count (x its
-    multiplier). Reading them costs no Claude request. It stops only when every known number is
-    under `size.staff_floor`, and never when discovery found the company with a growth sign
-    (`size.growth_signs`): a growing company is judged on what it plans. Signal Hire's reading is
-    kept, so step 5 doesn't ask again.
+    Only HubSpot's own count can stop a company before research: its staff in the asked-for city,
+    for a sure match, under `size.staff_floor`. Signal Hire's count is a guess (the people it has
+    on file, times its multiplier), so it never stops a company on its own (Agon Environmental was
+    dropped on Signal Hire's 48 alone, 18 Nov). When HubSpot's count is under the floor, Signal
+    Hire is still asked, and a count of its own at the floor or above lets the company through.
+    Reading them costs no Claude request. Never when discovery found the company with a growth
+    sign (`size.growth_signs`): a growing company is judged on what it plans. Signal Hire's
+    reading is kept, so step 5 doesn't ask again, and its count goes on the card there.
     """
     rules = job.rules
     size = rules.criteria.size
@@ -1216,6 +1286,8 @@ async def _too_small(session: AsyncSession, job: Job, given: SignalHire | None) 
             if found is not None:
                 numbers.append((found.staff, "HubSpot"))
         await session.rollback()  # a read only, and no connection waits on Signal Hire
+    if not numbers or numbers[0][0] >= size.staff_floor:
+        return None  # no count of HubSpot's own, or one that fits: never stopped on a guess
     if wants_signalhire(rules, job.settings, origin=job.context.origin, city=metro):
         owned = None if given is not None else get_signalhire(job.settings)
         client: SignalHire | None = given if given is not None else owned
@@ -1472,6 +1544,52 @@ def empty_facts(company: str, summary: str = "Nothing useful was found.") -> Com
     )
 
 
+def add_search_signs(
+    facts: CompanyFacts, signals: Sequence[Signal], rules: LeadFinderRules
+) -> tuple[CompanyFacts, set[tuple[str, str]]]:
+    """The facts with the signs discovery found that the research didn't find again (PLAN-V21
+    T1-8), so a card keeps the sign it was found with whatever happens next: a failed form, a
+    failed second form, the early size stop or a research error. Each is marked "estimated" and
+    counts like any sign: its link was among the pages discovery read, and it passed the date
+    check. A sign the facts already have (the same id) isn't added again. Returns the facts and
+    the (sign, link) of each sign added, for `mark_search_signs`."""
+    known = {item.id for item in rules.criteria.triggers.every}
+    have = {sign.id for sign in facts.triggers}
+    added: list[TriggerFound] = []
+    keys: set[tuple[str, str]] = set()
+    for signal in signals:
+        if signal.trigger_id not in known or signal.trigger_id in have:
+            continue
+        have.add(signal.trigger_id)
+        keys.add((signal.trigger_id, url_key(signal.url)))
+        added.append(
+            TriggerFound(
+                id=signal.trigger_id,
+                what_happened=one_line(signal.what_happened, SEARCH_SIGN_CHARS),
+                date=signal.date or signal.published,
+                source_url=signal.url,
+                label="estimated",
+            )
+        )
+    if not added:
+        return facts, keys
+    return facts.model_copy(update={"triggers": [*facts.triggers, *added]}), keys
+
+
+def mark_search_signs(verdict: Verdict, keys: Collection[tuple[str, str]]) -> Verdict:
+    """The verdict with each sign in `keys` marked "from the search, not checked by the research"
+    (`TriggerScore.from_search`)."""
+    if not keys:
+        return verdict
+    triggers = [
+        score.model_copy(update={"from_search": True})
+        if (score.trigger.id, url_key(score.trigger.source_url)) in keys
+        else score
+        for score in verdict.triggers
+    ]
+    return verdict.model_copy(update={"triggers": triggers})
+
+
 def verdict_fields(verdict: Verdict) -> dict[str, Any]:
     """The card fields a verdict decides: the one place that lists them, so a lead judged again (an
     override, a re-judge) and a lead just researched can't disagree about what a verdict sets."""
@@ -1486,7 +1604,7 @@ def verdict_fields(verdict: Verdict) -> dict[str, Any]:
         "score_parts": verdict.parts,
         "score_checked": None,  # the points the tool could judge: before PLAN-V16 T1-6
         "band": None,
-        "why_it_fits": _why(verdict.checks, verdict.result),
+        "why_it_fits": _why(verdict.checks, verdict.result, verdict.triggers),
         "checks": verdict.checks,
         "triggers": verdict.triggers,
         "office_m2": verdict.office_m2,
@@ -1500,8 +1618,14 @@ def verdict_fields(verdict: Verdict) -> dict[str, Any]:
 
 def apply_verdict(card: LeadCard, verdict: Verdict) -> LeadCard:
     """The card with a new verdict's fields. The Why now is cleared when the lead is no longer what
-    it was written for: it is written again by `why-now` or a re-check (PLAN-V12)."""
-    changes = verdict_fields(verdict)
+    it was written for: it is written again by `why-now` or a re-check (PLAN-V12). A sign from the
+    search keeps its mark (PLAN-V21 T1-8)."""
+    keys = {
+        (score.trigger.id, url_key(score.trigger.source_url))
+        for score in card.triggers
+        if score.from_search
+    }
+    changes = verdict_fields(mark_search_signs(verdict, keys))
     if verdict.result != card.result:
         changes |= {"why_now": None, "why_now_skipped": None}
     return card.model_copy(update=changes)
@@ -1526,8 +1650,12 @@ def verdict_columns(card: LeadCard) -> dict[str, Any]:
     }
 
 
-def _why(checks: list[RuleCheck], result: Result) -> str:
+def _why(checks: list[RuleCheck], result: Result, triggers: Sequence[TriggerScore] = ()) -> str:
     parts = [f"{c.rule}: {c.detail}" for c in checks if c.rule in ("City", "Size", "Office")]
+    # The sign the company was found with, when only the search saw it (PLAN-V21 T1-8)
+    best = triggers[0] if triggers else None
+    if best is not None and best.from_search:
+        parts.insert(0, f"{SEARCH_SIGN_WORDS}: {best.trigger.what_happened.rstrip('.')}")
     # A company that just moved is a Watch whatever else it shows, so that reason comes first (B3)
     moved = [c.detail for c in checks if c.rule == JUST_MOVED and result == "watch"]
     # The tier says why a good lead is only a Watch, or a Drop (PLAN-V16 T1-6)

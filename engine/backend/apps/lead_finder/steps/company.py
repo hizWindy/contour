@@ -31,6 +31,7 @@ from apps.lead_finder.research import (
     known_note_urls,
     lead_of_run,
     research_company,
+    save_after_error,
 )
 from apps.lead_finder.rivals import RIVALS_PROMPT_VERSION, find_rivals, save_rivals, wants_rivals
 from apps.lead_finder.sanitize import one_line, safe_http_url
@@ -202,6 +203,8 @@ async def research_one(run: RunCtx, task: CompanyTask) -> dict[str, Any]:
             spent += reply.cost_usd
             ctx.totals.add_reply(reply)
 
+        context: ResearchContext | None = None
+        request: ResearchRequest | None = None
         try:
             await save_signals(run, task)
             await ctx.emit_event(CompanyStartedData(name=name, origin=task["origin"]))
@@ -263,6 +266,22 @@ async def research_one(run: RunCtx, task: CompanyTask) -> dict[str, Any]:
             await ctx.emit_event(
                 CompanyFailedData(name=name, reason=f"{RESEARCH_FAILED} ({error_id})")
             )
+            # The lead keeps the sign discovery found it with (PLAN-V21 T1-8)
+            kept = None
+            if context is not None and request is not None:
+                async with ctx.session() as session:
+                    kept = await save_after_error(
+                        session,
+                        ctx.embedder,
+                        run.rules,
+                        ctx.settings,
+                        request,
+                        day_of(task["today"]),
+                        context,
+                        error_id,
+                    )
+            if kept is not None:
+                return outcome(task, "failed", lead_id=str(kept.id), error_id=error_id)
             return outcome(task, "failed", error_id=error_id)
         finally:
             hold.release(spent)

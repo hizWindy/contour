@@ -17,16 +17,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.lead_finder import research as research_module
 from apps.lead_finder.api import claude_dependency
-from apps.lead_finder.context import CreditMeter, ResearchContext
+from apps.lead_finder.context import CreditMeter, ResearchContext, Signal
 from apps.lead_finder.fields import DecisionMaker
 from apps.lead_finder.rejudge import save_rejudged
 from apps.lead_finder.research import LeadCard, ResearchRequest, refill_lead, research_company
 from apps.lead_finder.rules import MAX_DAMPENER_SEARCHES, LeadFinderRules, load_rules
+from apps.lead_finder.scoring import judge
 from apps.lead_finder.tables import Lead
 from core.api.app import create_app
 from core.claude.client import ClaudeError, ClaudeRefused
 from core.config import Settings, get_settings
 from core.db.engine import get_session
+from core.hubspot.matching import HubSpotMatch
 from core.hubspot.models import HubSpotCompany, HubSpotDeal, HubSpotOffice
 from core.memory.embedder import get_embedder
 from core.memory.models import MemoryItem
@@ -676,9 +678,9 @@ async def test_a_client_made_from_the_settings_is_used_and_closed(
     card = await research(session, FakeClaude(facts=NO_STAFF), rules=SIGNALHIRE_RULES)
 
     assert card.from_signalhire == [SIGNALHIRE_NOTE]
-    # one client each for the details, the staff count read before the search (PLAN-V9 B2), and
-    # the people
-    assert owned.closes == 3
+    # one client for the details, and one for the staff count and the people. Signal Hire is read
+    # before the search only to check HubSpot's own count under the floor (PLAN-V21 T1-7).
+    assert owned.closes == 2
 
 
 async def test_a_client_made_from_the_settings_is_closed_even_when_it_fails(
@@ -691,7 +693,7 @@ async def test_a_client_made_from_the_settings_is_closed_even_when_it_fails(
     card = await research(session, FakeClaude(facts=NO_STAFF), rules=SIGNALHIRE_RULES)
 
     assert card.problems and card.from_signalhire == []
-    assert owned.closes == 3  # the details, the early staff count and the people (PLAN-V9 B2)
+    assert owned.closes == 2  # the details, then the staff count and the people (PLAN-V21 T1-7)
 
 
 async def test_without_a_key_there_is_no_client_and_nothing_happens(
@@ -960,24 +962,59 @@ async def test_refilling_needs_fresh_notes_and_a_lead(session: AsyncSession) -> 
 # --- Too small to research (PLAN-V9 B2) -----------------------------------------------------------
 
 
-async def test_signal_hire_saying_4_staff_stops_before_any_claude_request(
+async def test_signal_hire_alone_never_stops_a_company_before_research(
     session: AsyncSession,
 ) -> None:
-    fake = FakeSignalHire([ACME_SOFTWARE], info=ACME_INFO, people=2)  # 2 on file x 2 = 4 staff
+    """PLAN-V21 T1-7: Signal Hire's 48 is a guess (24 on file x 2), so the company is researched,
+    and the count still goes on the card. Agon Environmental was dropped on it alone (18 Nov)."""
+    fake = FakeSignalHire([ACME_SOFTWARE], info=ACME_INFO, people=24)
+    claude = FakeClaude(facts=NO_STAFF)
+
+    card = await research(session, claude, rules=SIGNALHIRE_RULES, signalhire=fake)
+
+    assert claude.calls  # researched as usual
+    assert not card.summary.startswith("Too small")
+    assert card.facts.staff_in_city.value == 48  # Signal Hire's count, on the card
+    assert any("48" in note for note in card.from_signalhire)
+    assert sum(call.startswith("people:") for call in fake.calls) == 1  # counted once, not twice
+
+
+async def test_hubspot_at_20_staff_is_still_stopped_at_no_cost(session: AsyncSession) -> None:
+    """HubSpot's own count, for a sure match (10 on LinkedIn x 2), with Signal Hire saying little
+    too."""
+    session.add(HubSpotCompany(hubspot_id="102", name="Acme Software Pty Ltd", source="export"))
+    await session.flush()
+    session.add(HubSpotOffice(hubspot_company_id="102", label="Melbourne", linkedin_staff=10))
+    await session.commit()
+    fake = FakeSignalHire([ACME_SOFTWARE], info=ACME_INFO, people=2)  # 4
     claude = FakeClaude(facts=NO_STAFF)
 
     card = await research(session, claude, rules=SIGNALHIRE_RULES, signalhire=fake)
 
     assert claude.calls == []  # no Claude request at all
     assert card.result == "drop"
-    assert card.summary.startswith("Too small: 4 staff (Signal Hire), under 50.")
-    assert "no Claude request" in card.summary
-    size = next(check for check in card.checks if check.rule == "Size")
-    assert (size.outcome, size.detail.endswith("under 50 staff, too small")) == ("fail", True)
+    assert card.summary.startswith(
+        "Too small: 20 staff (HubSpot), 4 staff (Signal Hire), under 50."
+    )
     assert card.research.claude_requests == 0 and card.research.cost_usd == 0
-    assert sum(call.startswith("people:") for call in fake.calls) == 1  # counted once, not twice
     assert not any(call.startswith("leaders:") for call in fake.calls)  # no people search either
     assert await count(session, Lead, result="drop") == 1
+
+
+async def test_hubspot_small_but_signal_hire_at_the_floor_lets_the_research_go_on(
+    session: AsyncSession,
+) -> None:
+    session.add(HubSpotCompany(hubspot_id="102", name="Acme Software Pty Ltd", source="export"))
+    await session.flush()
+    session.add(HubSpotOffice(hubspot_company_id="102", label="Melbourne", linkedin_staff=10))
+    await session.commit()
+    fake = FakeSignalHire([ACME_SOFTWARE], info=ACME_INFO, people=150)  # 300
+    claude = FakeClaude(facts=NO_STAFF)
+
+    card = await research(session, claude, rules=SIGNALHIRE_RULES, signalhire=fake)
+
+    assert claude.calls
+    assert not card.summary.startswith("Too small")
 
 
 async def test_hubspot_saying_small_stops_it_too(session: AsyncSession) -> None:
@@ -1253,3 +1290,85 @@ async def test_the_card_has_the_office_the_headcount_the_space_and_what_changed(
     dropped = await research(session, FakeClaude(facts=make_facts(triggers=[])))  # its sign is gone
     assert dropped.what_changed is not None and dropped.what_changed.kind == "downgraded"
     assert "a sign no longer counts" in dropped.what_changed.text
+
+
+# --- Every card keeps its sign (PLAN-V21 T1-8) ----------------------------------------------------
+
+MERGER = Signal(
+    trigger_id="merger_or_takeover",
+    what_happened="Acme Software agreed to merge with Boxhill Systems.",
+    url="https://www.smh.com.au/business/acme-merger",
+    date="2026-10-20",
+)
+FROM_SEARCH = "Sign from the search, not checked by the research: Acme Software agreed to merge"
+
+
+async def kept_sign(session: AsyncSession, card: LeadCard) -> None:
+    """The card names discovery's sign, marked as the search's, and so does the lead's row."""
+    merger = [score for score in card.triggers if score.trigger.id == "merger_or_takeover"]
+    assert len(merger) == 1 and merger[0].from_search
+    assert merger[0].trigger.label == "estimated"
+    lead = await session.scalar(select(Lead).where(Lead.id == card.id))
+    assert lead is not None and "merger_or_takeover" in (lead.trigger_ids or [])
+    assert lead.trigger_id is not None
+
+
+async def test_a_failed_form_keeps_the_sign_discovery_found(session: AsyncSession) -> None:
+    refused = ClaudeError("Claude returned an error (400)", "The compiled grammar is too large.")
+    card = await research(
+        session,
+        FakeClaude(extract_error=refused),
+        context=ResearchContext(signals=(MERGER,)),
+    )
+    assert card.form_failed
+    await kept_sign(session, card)
+    assert card.triggers[0].trigger.id == "merger_or_takeover"  # the only sign it has
+    assert card.why_it_fits.startswith(FROM_SEARCH)
+
+
+async def test_a_failed_second_form_keeps_the_sign_discovery_found(session: AsyncSession) -> None:
+    busy = ClaudeError("Claude is busy right now", "Try again in a minute.")
+    card = await research(
+        session, FakeClaude(extras_error=busy), context=ResearchContext(signals=(MERGER,))
+    )
+    assert not card.form_failed
+    await kept_sign(session, card)
+    assert "lease_ending" in {score.trigger.id for score in card.triggers}  # the research's own
+    assert not any(s.from_search for s in card.triggers if s.trigger.id == "lease_ending")
+
+
+async def test_the_early_size_stop_keeps_the_sign_discovery_found(session: AsyncSession) -> None:
+    session.add(HubSpotCompany(hubspot_id="102", name="Acme Software Pty Ltd", source="export"))
+    await session.flush()
+    session.add(HubSpotOffice(hubspot_company_id="102", label="Melbourne", linkedin_staff=6))
+    await session.commit()
+    claude = FakeClaude(facts=NO_STAFF)
+    card = await research(session, claude, context=ResearchContext(signals=(MERGER,)))
+
+    assert claude.calls == [] and card.summary.startswith("Too small")
+    await kept_sign(session, card)
+    assert FROM_SEARCH in card.why_it_fits
+
+
+async def test_a_sign_the_research_found_again_is_not_marked(session: AsyncSession) -> None:
+    lease = Signal(
+        trigger_id="lease_ending",
+        what_happened="Acme's lease ends in 2028.",
+        url="https://www.smh.com.au/business/acme-lease",
+    )
+    card = await research(session, FakeClaude(), context=ResearchContext(signals=(lease,)))
+    leases = [score for score in card.triggers if score.trigger.id == "lease_ending"]
+    assert len(leases) == 1 and not leases[0].from_search  # the research's own, once
+    assert not card.why_it_fits.startswith("Sign from the search")
+
+
+async def test_the_mark_survives_a_judge_again(session: AsyncSession) -> None:
+    refused = ClaudeError("Claude returned an error (400)", "The compiled grammar is too large.")
+    card = await research(
+        session, FakeClaude(extract_error=refused), context=ResearchContext(signals=(MERGER,))
+    )
+    again = research_module.apply_verdict(
+        card, judge(card.facts, HubSpotMatch(status="new"), load_rules(), TODAY)
+    )
+    assert [s.from_search for s in again.triggers if s.trigger.id == "merger_or_takeover"] == [True]
+    assert again.why_it_fits.startswith(FROM_SEARCH)
