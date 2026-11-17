@@ -78,6 +78,17 @@ class RunCounts(OutModel):
         description="Leads saved, by where discovery found them (web, property_daily, "
         "arealytics). A company two sources found counts for each.",
     )
+    # PLAN-V21 T1-4 and T1-6: the target, the sweeps and the top up of a discovery run
+    target: int | None = Field(
+        None,
+        description="How many companies the run tries to research. Empty: no target (an "
+        "automatic run, or a mode that already knows its companies). It never stops a run.",
+    )
+    sweeps: int = Field(
+        0, description="The most search sweeps the run may make: 1 to 4. 0 before it plans."
+    )
+    sweeps_done: int = Field(0, description="Search sweeps finished so far")
+    topped_up: int = Field(0, description="Companies added from the HubSpot watchlist")
 
 
 class RunOut(OutModel):
@@ -195,6 +206,24 @@ class RunEstimate(OutModel):
     )
     basis: str = Field("", description="Where the numbers come from, like past runs or defaults")
     over_cap: bool = Field(False, description="True when the worst case is above the cap")
+    # PLAN-V21 T1-4: what a discovery run's target would cost, so Start can show it
+    target_companies: int | None = Field(
+        None, description="The target the estimate is for. Empty: the run has no target."
+    )
+    target_cost_usd_low: Decimal | None = Field(
+        None,
+        description="A typical run that reaches the target: one search sweep, and the target's "
+        "companies at what past companies cost",
+    )
+    target_cost_usd_high: Decimal | None = Field(
+        None,
+        description="A typical run that needs every sweep to reach the target",
+    )
+    target_note: str | None = Field(
+        None,
+        description="One plain sentence when the target doesn't fit the money limits. Empty "
+        "when it fits.",
+    )
 
 
 class RunSummaryDay(BaseModel):
@@ -262,6 +291,32 @@ class MergedData(BaseModel):
     unique: int
 
 
+class SweepStartedData(BaseModel):
+    """A discovery run starts one search sweep: one search for each sign (PLAN-V21 T1-4)."""
+
+    sweep: int = Field(ge=1, description="1 is the signs' own searches, 2 to 4 new ways")
+    of: int = Field(ge=1, description="The most sweeps the run may make")
+    label: str = Field(description="What this sweep searches, in plain words", examples=["By area"])
+
+
+class SweepDoneData(BaseModel):
+    """A sweep has ended, and the run has merged and chosen again (PLAN-V21 T1-4)."""
+
+    sweep: int = Field(ge=1)
+    found: int = Field(description="Companies this sweep's searches found, before merging")
+    companies: int = Field(description="Companies the run has chosen so far, after merging")
+    target: int | None = Field(description="How many the run tries to research")
+
+
+class ToppedUpData(BaseModel):
+    """Companies added from the HubSpot watchlist after the sweeps came up short (T1-6)."""
+
+    count: int
+    names: list[str] = Field(
+        default_factory=list, description="The companies added, in the watchlist's order"
+    )
+
+
 class CompanySkippedData(BaseModel):
     name: str
     reason: str
@@ -270,6 +325,11 @@ class CompanySkippedData(BaseModel):
 
 class CompanyStartedData(BaseModel):
     name: str
+    origin: str | None = Field(
+        None,
+        description="Where the company came from: web (discovery), hubspot (the watchlist or a "
+        "top up), typed or test. Empty in a run from before PLAN-V21.",
+    )
 
 
 class CompanyDoneData(BaseModel):
@@ -279,6 +339,7 @@ class CompanyDoneData(BaseModel):
     score: int
     cost_usd: Decimal
     hubspot_status: HubSpotStatus = Field(description="Whether HubSpot already has this company")
+    origin: str | None = Field(None, description="As in company_started")
 
 
 class CompanyFailedData(BaseModel):
@@ -349,6 +410,21 @@ class MergedEvent(_EventBase):
     data: MergedData
 
 
+class SweepStartedEvent(_EventBase):
+    type: Literal["sweep_started"]
+    data: SweepStartedData
+
+
+class SweepDoneEvent(_EventBase):
+    type: Literal["sweep_done"]
+    data: SweepDoneData
+
+
+class ToppedUpEvent(_EventBase):
+    type: Literal["topped_up"]
+    data: ToppedUpData
+
+
 class CompanySkippedEvent(_EventBase):
     type: Literal["company_skipped"]
     data: CompanySkippedData
@@ -398,6 +474,9 @@ EVENT_DATA_MODELS: dict[str, type[BaseModel]] = {
     "slice_done": SliceDoneData,
     "slice_failed": SliceFailedData,
     "merged": MergedData,
+    "sweep_started": SweepStartedData,
+    "sweep_done": SweepDoneData,
+    "topped_up": ToppedUpData,
     "company_skipped": CompanySkippedData,
     "company_started": CompanyStartedData,
     "company_done": CompanyDoneData,
@@ -425,6 +504,9 @@ type RunEvent = Annotated[
     | SliceDoneEvent
     | SliceFailedEvent
     | MergedEvent
+    | SweepStartedEvent
+    | SweepDoneEvent
+    | ToppedUpEvent
     | CompanySkippedEvent
     | CompanyStartedEvent
     | CompanyDoneEvent

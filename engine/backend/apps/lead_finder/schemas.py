@@ -118,6 +118,30 @@ class CompaniesLimit(BaseModel):
     max: int
 
 
+class TargetOption(BaseModel):
+    """How many companies a discovery run tries to research (PLAN-V21, the contract part 1)."""
+
+    default: int = Field(description="The number Start picks at first, at most `max`")
+    min: int
+    max: int = Field(description="The run's company limit: the target can't be above it")
+    presets: list[int] = Field(
+        description="The numbers Start offers as buttons, at most `max`", examples=[[25, 50, 100]]
+    )
+
+
+class TopUpOption(BaseModel):
+    """Whether a short discovery run is topped up from the HubSpot watchlist (PLAN-V21 T1-6)."""
+
+    default: bool
+    allowed: bool = Field(
+        description="False while HubSpot names may not go to Claude: then nothing is added"
+    )
+    message: str | None = Field(
+        None,
+        description="Why it isn't allowed, in one plain sentence for Start. Empty when it is.",
+    )
+
+
 class OptionCaps(BaseModel):
     run_cap_usd: Decimal
     max_companies: int
@@ -155,6 +179,12 @@ class RunOptions(BaseModel):
     )
     companies_limit: CompaniesLimit
     caps: OptionCaps
+    target_companies: TargetOption = Field(
+        description="How many companies a discovery run tries to research (PLAN-V21 T1-4)"
+    )
+    top_up: TopUpOption = Field(
+        description="The top up from the HubSpot watchlist for a short run (PLAN-V21 T1-6)"
+    )
     sources: dict[RunSource, SourceOption] = Field(
         description=(
             "Where discovery can look, by id: `web`, `property_daily` and `arealytics` (PLAN-V16 "

@@ -20,6 +20,13 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 RULES_DIR = Path(__file__).resolve().parent / "rules"
 RULE_FILES = ("criteria", "queries", "hubspot_map", "watchlist")
 PLACEHOLDERS = {"city", "area", "company", "year", "month_year"}
+# A sweep's searches (PLAN-V21 T1-3) never know a company. Sweep 3 adds a sector group's words and
+# sweep 4 a place; both add the sign's own words (`sweeps.terms`).
+SWEEP_PLACEHOLDERS = {"city", "area", "year", "month_year", "sector", "terms"}
+# The four sweeps of a discovery run, in order (PLAN-V21 choice 2): the signs' own searches, Levi's
+# source groups for them, the signs by sector group, and the signs by area.
+SweepId = Literal["signs", "sources", "sectors", "areas"]
+SWEEP_IDS: tuple[SweepId, ...] = ("signs", "sources", "sectors", "areas")
 # The search angles for one company. tenure is the lease and tenure run's office questions (C2).
 # dampeners looks for the facts that make an office project less likely (PLAN-V16 T1-5).
 ANGLES = {"property", "people", "money", "tenure", "dampeners"}
@@ -95,6 +102,10 @@ class Size(Strict):
     staff_hint_min: int = Field(gt=0)
     # Under this, a size worked out from staff is a Drop unless the company is growing (PLAN-V9 B1)
     staff_floor: int = Field(gt=0)
+    # PLAN-V21 T2-3 (TBC with Levi): a size worked out from an ESTIMATED staff number from this up
+    # to staff_floor is a Watch with "check the size", not a Drop. A known count under staff_floor
+    # stays a Drop unless the company is growing. Equal to staff_floor turns the band off.
+    estimated_floor: int = Field(30, gt=0)
     # Discovery signs that mean the company is growing: never stopped early for its size (B2)
     growth_signs: list[str] = Field(default_factory=list)
     staff_max: int = Field(gt=0)
@@ -122,6 +133,8 @@ class Size(Strict):
             raise ValueError("staff_hint_min must not be above staff_min")
         if self.staff_floor > self.staff_hint_min:
             raise ValueError("staff_floor must not be above staff_hint_min")
+        if self.estimated_floor > self.staff_floor:
+            raise ValueError("estimated_floor must not be above staff_floor")
         if len(set(self.growth_signs)) != len(self.growth_signs):
             raise ValueError("growth_signs lists a sign twice")
         if len(set(self.staff_sources)) != len(self.staff_sources):
@@ -506,6 +519,9 @@ class Score(Strict):
     procurement: int = Field(ge=0)
     warm_path: int = Field(ge=0)
     unseen: list[str]  # checks the tool can't judge yet
+    # PLAN-V21 T2-2 (TBC with Levi): the share of a check's points it earns while it is "not known
+    # yet", rounded down. A check that fails earns 0. 0 is the rule before PLAN-V21.
+    unknown_share: float = Field(0.5, ge=0, le=1)
     dampeners: DampenerPoints
     tiers: Tiers
 
@@ -753,11 +769,68 @@ class SourceGroup(Strict):
         return self
 
 
+def _placeholders(template: str) -> set[str]:
+    return {field for _, field, _, _ in string.Formatter().parse(template) if field}
+
+
+class SectorGroup(Strict):
+    """One group of Levi's priority sectors, for sweep 3 (PLAN-V21 T1-3). `words` is what
+    `{sector}` becomes in a search, like "energy, renewables or defence"."""
+
+    label: str = Field(min_length=1)
+    sectors: list[str] = Field(min_length=1)
+    words: str = Field(min_length=1, max_length=80)
+
+
+class Sweeps(Strict):
+    """The wording of a discovery run's sweeps 2 to 4 (PLAN-V21 T1-3). Sweep 1 is each sign's own
+    searches (`discovery`). A sweep makes one request for each sign, and nothing one sweep finds
+    goes into another's request: a page can't steer another search.
+
+    - `labels`: each sweep in plain words, for the run feed.
+    - `sources` (sweep 2): searches for the signs no source group covers. A sign in a group uses
+      that group's `discovery` searches, plus its own line here if it has one.
+    - `terms`: each sign in a few words, for `{terms}` in sweeps 3 and 4.
+    - `sector_groups` and `sectors` (sweep 3): each sign by sector group. Each template names the
+      `{sector}`, and the request has one search for each group.
+    - `areas` (sweep 4): each sign by area, the CBD first, then the inner suburbs (`{area}`). For
+      all of Australia, `{area}` is each priority city by name.
+
+    Empty until PLAN-V21 T1-3 fills queries.yaml. With no wording, a run makes sweep 1 only.
+    """
+
+    labels: dict[SweepId, str] = Field(default_factory=dict)
+    sources: dict[str, list[str]] = Field(default_factory=dict)
+    terms: dict[str, str] = Field(default_factory=dict)
+    sector_groups: list[SectorGroup] = Field(default_factory=list)
+    sectors: list[str] = Field(default_factory=list)
+    areas: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def check_sweeps(self) -> Self:
+        if self.labels and set(self.labels) != set(SWEEP_IDS):
+            raise ValueError("sweeps.labels needs signs, sources, sectors and areas")
+        templates = [t for group in self.sources.values() for t in group]
+        templates += [*self.sectors, *self.areas]
+        for template in templates:
+            unknown = _placeholders(template) - SWEEP_PLACEHOLDERS
+            if unknown:
+                raise ValueError(f"Unknown placeholder {sorted(unknown)} in {template!r}")
+        if any({"sector", "terms"} - _placeholders(t) for t in self.sectors):
+            raise ValueError("Each sweeps.sectors search needs {sector} and {terms}")
+        if any({"area", "terms"} - _placeholders(t) for t in self.areas):
+            raise ValueError("Each sweeps.areas search needs {area} and {terms}")
+        if any(_placeholders(t) & {"sector", "terms"} for g in self.sources.values() for t in g):
+            raise ValueError("A sweeps.sources search can't use {sector} or {terms}")
+        return self
+
+
 class Queries(Strict):
     areas: dict[str, dict[Literal["cbd", "inner"], list[str]]]
     discovery: dict[str, list[str]]
     company: dict[Literal["property", "people", "money", "tenure", "dampeners"], list[str]]
     source_groups: dict[str, SourceGroup]
+    sweeps: Sweeps = Field(default_factory=Sweeps)  # PLAN-V21 T1-3
 
     def groups_for_angle(self, angle: str) -> list[SourceGroup]:
         """The source groups a company's research asks in this angle."""
@@ -788,8 +861,7 @@ class Queries(Strict):
         for group in self.source_groups.values():
             templates += [*group.company, *group.discovery]
         for template in templates:
-            names = {field for _, field, _, _ in string.Formatter().parse(template) if field}
-            unknown = names - PLACEHOLDERS
+            unknown = _placeholders(template) - PLACEHOLDERS
             if unknown:
                 raise ValueError(f"Unknown placeholder {sorted(unknown)} in {template!r}")
         return self

@@ -46,3 +46,30 @@ def test_a_place_with_no_inner_suburbs_is_not_offered_an_empty_area() -> None:
 def test_every_place_has_a_map_centre() -> None:
     for city in options().cities:
         assert (city.lat, city.lng) != (0, 0), city.name
+
+
+# --- PLAN-V21: how many companies, and the top up -----------------------------------------------
+
+
+def test_the_target_starts_at_50_and_its_top_is_the_runs_company_limit() -> None:
+    settings = Settings(_env_file=None, run_max_companies=70)
+    target = build_run_options(RULES, settings, Decimal("50")).target_companies
+    assert (target.default, target.min, target.max) == (50, 5, 70)
+    assert target.presets == [25, 50, 70]  # 100 is over the limit, so the limit is offered
+
+
+def test_a_small_company_limit_pulls_the_target_and_its_presets_down() -> None:
+    target = options().target_companies  # the code's company limit is 20
+    assert (target.default, target.min, target.max, target.presets) == (20, 5, 20, [20])
+    tiny = build_run_options(RULES, Settings(_env_file=None, run_max_companies=3), Decimal("1"))
+    assert (tiny.target_companies.min, tiny.target_companies.max) == (3, 3)
+
+
+def test_the_top_up_waits_for_the_ok_on_hubspot_names() -> None:
+    off = options().top_up
+    assert (off.default, off.allowed) == (True, False)
+    assert off.message is not None and "Levi" in off.message
+    on = build_run_options(
+        RULES, Settings(_env_file=None, hubspot_names_to_claude_ok=True), Decimal("50")
+    ).top_up
+    assert (on.allowed, on.message) == (True, None)

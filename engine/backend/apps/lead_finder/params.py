@@ -47,6 +47,10 @@ CITIES_MAX = 24
 TRIGGERS_MAX = 24
 WATCHLIST_LIMIT_MAX = 200
 WATCHLIST_INDUSTRIES_MAX = 20  # a lease and tenure run's industries (PLAN-V11 C2)
+# How many companies a discovery run tries to research (PLAN-V21 T1-4). The top is the highest
+# company limit (`RunCapsIn.max_companies`); the run's own limit is checked when it starts.
+TARGET_MIN = 5
+TARGET_MAX = 100
 INDUSTRY_MAX_CHARS = 120
 PLACE_MAX_CHARS = 60
 NAME_MESSAGE = (
@@ -339,6 +343,27 @@ class _Discovery(Strict):
         ),
         examples=[20],
     )
+    target_companies: int | None = Field(
+        None,
+        ge=TARGET_MIN,
+        le=TARGET_MAX,
+        description=(
+            "Used by mode discovery only (PLAN-V21 T1-4). How many companies the run tries to "
+            "research, from 5 to the run's company limit. A run with fewer searches again in a new "
+            "way (a sweep), while discovery's money lasts. It is not a goal of good leads and "
+            "never ends a run early. Left out: `target_companies.default` in the run options."
+        ),
+        examples=[50],
+    )
+    top_up: bool = Field(
+        True,
+        description=(
+            "Used by mode discovery only (PLAN-V21 T1-6). When the sweeps come up short of the "
+            "target, add companies from the HubSpot watchlist in the run's places, most likely "
+            "first. It needs the OK for HubSpot names to go to Claude (`top_up.allowed` in the run "
+            "options); without it nothing is added."
+        ),
+    )
 
     @field_validator("cities")
     @classmethod
@@ -476,9 +501,9 @@ class LeadFinderRunParams(_Discovery, _Caps):
     """Every part with its default. The Start page shows these as the starting values.
 
     A real run uses the model of its mode (above), which refuses the parts it doesn't use. So
-    send only the parts of your mode: `cities`, `area`, `triggers`, `since_days`, `sources` and
-    `goal_leads` for discovery, `watchlist` for watchlist, `companies` and `recheck` for company,
-    and `caps` for every mode (testset has nothing else).
+    send only the parts of your mode: `cities`, `area`, `triggers`, `since_days`, `sources`,
+    `target_companies`, `top_up` and `goal_leads` for discovery, `watchlist` for watchlist,
+    `companies` and `recheck` for company, and `caps` for every mode (testset has nothing else).
     """
 
     watchlist: WatchlistOptions = Field(

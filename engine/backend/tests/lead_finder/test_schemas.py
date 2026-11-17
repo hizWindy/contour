@@ -456,11 +456,15 @@ def test_run_options_can_be_built_and_carry_the_defaults() -> None:
             company_cap_usd=Decimal("2.50"),
             daily_left_usd=Decimal("38.10"),
         ),
+        target_companies=schemas.TargetOption(default=20, min=5, max=20, presets=[20]),
+        top_up=schemas.TopUpOption(default=True, allowed=False, message="Needs Levi's OK."),
         sources={"web": schemas.SourceOption(on=True, ready=True, message=None)},
         defaults=LeadFinderRunParams(),
     )
     dumped = options.model_dump(mode="json")
     assert dumped["caps"]["daily_left_usd"] == "38.10"
+    assert dumped["target_companies"]["max"] == 20  # the run's company limit (PLAN-V21)
+    assert dumped["top_up"]["allowed"] is False
     assert "goal_leads" not in dumped  # PLAN-V20: the Start page no longer asks how many leads
     assert dumped["defaults"]["cities"] == ["Melbourne"]  # one city at a time (PLAN-V9 C4)
     assert dumped["cities"][0]["areas"][0]["id"] == "cbd"

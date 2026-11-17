@@ -45,6 +45,9 @@ from core.runs.schemas import (
     SliceDoneData,
     SliceFailedData,
     SliceStartedData,
+    SweepDoneData,
+    SweepStartedData,
+    ToppedUpData,
     build_event,
     dump_event,
     event_data,
@@ -84,6 +87,10 @@ SAMPLES: dict[str, BaseModel] = {
     ),
     "slice_failed": SliceFailedData(slice_id="per-lease", label="Perth: lease", reason="timeout"),
     "merged": MergedData(candidates=14, unique=11),
+    # PLAN-V21 T1-4 and T1-6: the sweeps and the top up
+    "sweep_started": SweepStartedData(sweep=2, of=4, label="Levi's source groups"),
+    "sweep_done": SweepDoneData(sweep=2, found=9, companies=31, target=50),
+    "topped_up": ToppedUpData(count=2, names=["Acme", "Boxhill Software"]),
     "company_skipped": CompanySkippedData(name="Acme", reason="open deal in HubSpot"),
     "company_started": CompanyStartedData(name="Acme"),
     "company_done": CompanyDoneData(
@@ -113,6 +120,9 @@ SPEC_EVENT_TYPES = {
     "slice_done",
     "slice_failed",
     "merged",
+    "sweep_started",
+    "sweep_done",
+    "topped_up",
     "company_skipped",
     "company_started",
     "company_done",
@@ -359,6 +369,11 @@ def test_run_counts_start_at_zero() -> None:
         "goal": None,  # PLAN-V16 T1-9: how many leads a run aims for, and found
         "good": 0,
         "by_source": {},
+        # PLAN-V21: a discovery run's target, its sweeps and its top up
+        "target": None,
+        "sweeps": 0,
+        "sweeps_done": 0,
+        "topped_up": 0,
     }
 
 

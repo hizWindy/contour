@@ -140,6 +140,18 @@ TEXT: dict[str, tuple[str, str]] = {
         "Companies in one run",
         "The most companies one run researches. The best ranked come first.",
     ),
+    "target_companies_default": (
+        "Companies a run tries to research",
+        "How many companies a run a person starts tries to research, when Start sends no number. "
+        "A run short of it searches again in a new way, while discovery's money lasts. It is not "
+        "a goal of good leads and never ends a run early. The company limit above still wins.",
+    ),
+    "discovery_max_sweeps": (
+        "Search sweeps in one run",
+        "The most times a run searches its signs, each time in a new way: the signs' own "
+        "searches, then the source groups, by sector, and by area. 1 turns the extra sweeps off. "
+        "Automatic runs always make one.",
+    ),
     "scheduled_run_cap_usd": (
         "Cap for one automatic run (US$)",
         "The most a run that a schedule started may cost. It has no company limit: it goes on "
@@ -213,7 +225,19 @@ TEXT: dict[str, tuple[str, str]] = {
     ),
     "claude_effort": (
         "Claude effort",
-        "How hard Claude thinks. Higher costs more.",
+        "How hard Claude thinks. Higher costs more. The Lead Finder's discovery and research "
+        "have their own effort below; this one is for everything else, like call prep.",
+    ),
+    "claude_effort_discover": (
+        "Claude effort for discovery",
+        "How hard Claude thinks when it searches the web for new companies. Medium cost about "
+        "US$0.15 a search request; max cost about US$1.00.",
+    ),
+    "claude_effort_research": (
+        "Claude effort for research",
+        "How hard Claude thinks when it researches one company: the searches, the two answer "
+        "forms and Why now. Medium cost about US$0.34 to 0.42 a company; max about US$1.75. TBC: "
+        "the test set decides between medium and high.",
     ),
     "claude_concurrency": (
         "Claude requests at once",

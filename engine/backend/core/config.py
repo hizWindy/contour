@@ -81,7 +81,13 @@ EDITABLE_KEYS: Final[list[str]] = [
     "why_now_enabled",
     "model_why",
     "claude_effort",
+    # The effort of the Lead Finder's two steps (PLAN-V21 T1-1)
+    "claude_effort_discover",
+    "claude_effort_research",
     "claude_concurrency",
+    # How many companies a run tries to research, and its sweeps (PLAN-V21 T1-4)
+    "target_companies_default",
+    "discovery_max_sweeps",
     "memory_fresh_days",
     "match_fuzzy_min",
     "match_profile_min",
@@ -341,6 +347,11 @@ class Settings(BaseSettings):
     anthropic_api_key: SecretStr | None = None
     claude_model: ClaudeModel = "claude-opus-5-5"
     claude_effort: ClaudeEffort = "medium"
+    # The Lead Finder's own two steps (PLAN-V21 T1-1). claude_effort stays for every other request,
+    # like call prep and the meeting forms. Discovery at medium cost US$0.11 to 0.16 a request from
+    # 6 to 17 Nov, and US$1.00 at max. The research's medium is TBC: M2 compares it with high.
+    claude_effort_discover: ClaudeEffort = "medium"
+    claude_effort_research: ClaudeEffort = "medium"
     claude_timeout_seconds: float = Field(300, gt=0, le=3600)
     claude_concurrency: int = Field(2, ge=1, le=4)  # requests at once. New keys have low limits.
     # One model per kind of step. None means use claude_model.
@@ -408,6 +419,14 @@ class Settings(BaseSettings):
     # --- Caps for one run --------------------------------------------------------------
     run_cap_usd: Decimal = Field(Decimal("20.00"), ge=Decimal("1"), le=Decimal("50"))
     run_max_companies: int = Field(20, ge=1, le=100)
+    # PLAN-V21 T1-4: how many companies a run a person starts tries to research, when Start sends
+    # no number (the run's company limit still wins: it is the ceiling). It is not a goal of good
+    # leads and never ends a run early: a run short of it searches again in a new way (a sweep),
+    # up to discovery_max_sweeps, while discovery's share of the money lasts. 50 is TBC.
+    target_companies_default: int = Field(50, ge=5, le=100)
+    # 1 turns the sweeps off: one search for each sign, as before PLAN-V21. Automatic runs always
+    # make one sweep (they get more only if Al-khair says so after M2).
+    discovery_max_sweeps: int = Field(4, ge=1, le=4)
     # --- Automatic runs: the ones a schedule starts (9 Nov, Al-khair) ----------------------
     # They have no company limit of their own: they go on until no company is left (their share of
     # the goal below is a number to report against, never a stop: PLAN-V20). This is their money

@@ -7,6 +7,7 @@ from apps.lead_finder.geo import CITY_CENTRES, NATIONAL_CENTRE
 from apps.lead_finder.params import (
     COMPANIES_MAX,
     COMPANIES_MIN,
+    TARGET_MIN,
     LeadFinderRunParams,
     RunSource,
 )
@@ -22,12 +23,39 @@ from apps.lead_finder.schemas import (
     RunOptions,
     SinceDaysOption,
     SourceOption,
+    TargetOption,
+    TopUpOption,
     TriggerOption,
 )
 from core.config import Settings
 from core.runs.types import make_caps
 
 AREA_LABELS = {"cbd": "CBD", "inner": "Inner suburbs", "all": "Whole city"}
+# The numbers Start offers for "How many companies" (PLAN-V21 choice 1, TBC). A number above the
+# run's company limit becomes the limit, so the most it allows is always one click away.
+TARGET_PRESETS = (25, 50, 100)
+TOP_UP_OFF = (
+    "Needs Levi's OK for HubSpot company names to go to Claude. An admin switches it on, so "
+    "nothing is added until then."
+)
+
+
+def target_option(settings: Settings, limit: int) -> TargetOption:
+    """The target's bounds for a run with this company limit: from 5 (or the limit, when it is
+    lower) to the limit, starting at `target_companies_default`."""
+    low = min(TARGET_MIN, limit)
+    return TargetOption(
+        default=max(low, min(settings.target_companies_default, limit)),
+        min=low,
+        max=limit,
+        presets=sorted({min(preset, limit) for preset in TARGET_PRESETS}),
+    )
+
+
+def top_up_option(settings: Settings) -> TopUpOption:
+    """The top up adds HubSpot companies, so it needs Levi's OK for their names to go to Claude."""
+    allowed = settings.hubspot_names_to_claude_ok
+    return TopUpOption(default=True, allowed=allowed, message=None if allowed else TOP_UP_OFF)
 
 
 def _areas(rules: LeadFinderRules, city: str) -> list[AreaOption]:
@@ -94,6 +122,8 @@ def build_run_options(
     ]
     caps = make_caps(settings)
     return RunOptions(
+        target_companies=target_option(settings, caps.max_companies),
+        top_up=top_up_option(settings),
         cities=city_options,
         triggers=trigger_options,
         since_days=SinceDaysOption(choices=[7, 30], default=defaults.since_days),

@@ -296,11 +296,11 @@ def test_the_health_check_keeps_its_own_503_text_and_gets_the_problem_body(
     assert response["content"]["application/json"]["schema"]["$ref"].endswith("/ProblemDetails")
 
 
-def test_the_event_union_is_in_the_file_with_all_fifteen_types(schema: dict[str, Any]) -> None:
+def test_the_event_union_is_in_the_file_with_all_eighteen_types(schema: dict[str, Any]) -> None:
     components = schema["components"]["schemas"]
     union = components["RunEvent"]
     assert union["discriminator"]["propertyName"] == "type"
-    assert len(union["oneOf"]) == 15
+    assert len(union["oneOf"]) == 18
     assert set(union["discriminator"]["mapping"]) == {
         "run_started",
         "run_resumed",
@@ -309,6 +309,9 @@ def test_the_event_union_is_in_the_file_with_all_fifteen_types(schema: dict[str,
         "slice_done",
         "slice_failed",
         "merged",
+        "sweep_started",  # PLAN-V21 T1-4
+        "sweep_done",
+        "topped_up",  # PLAN-V21 T1-6
         "company_skipped",
         "company_started",
         "company_done",
@@ -582,6 +585,8 @@ def test_every_part_of_the_run_params_says_which_mode_uses_it(schema: dict[str, 
         "since_days",
         "sources",
         "goal_leads",
+        "target_companies",  # PLAN-V21
+        "top_up",
         "caps",
         "watchlist",
         "companies",
@@ -594,6 +599,8 @@ def test_every_part_of_the_run_params_says_which_mode_uses_it(schema: dict[str, 
         "since_days": "discovery",
         "sources": "discovery",
         "goal_leads": "discovery",
+        "target_companies": "discovery",
+        "top_up": "discovery",
         "watchlist": "watchlist",
         "companies": "company",
         "recheck": "company",

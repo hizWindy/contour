@@ -421,3 +421,24 @@ def test_every_kind_gives_the_rules_and_prompt_versions() -> None:
     assert versions.prompts.startswith("research ")
     assert 0 < len(versions.rules) <= 32  # the sizes of the run row's columns
     assert 0 < len(versions.prompts) <= 128
+
+
+# --- PLAN-V21: the target and the top up ---------------------------------------------------------
+
+
+def test_the_target_is_left_out_by_default_and_takes_5_to_100() -> None:
+    assert DiscoveryParams().target_companies is None  # the run options give the default
+    assert DiscoveryParams(target_companies=5).target_companies == 5
+    assert DiscoveryParams(target_companies=100).target_companies == 100
+    for bad in (0, 4, 101):
+        assert first_error(DiscoveryParams, {"target_companies": bad})["loc"] == (
+            "target_companies",
+        )
+
+
+def test_the_top_up_is_on_by_default_and_belongs_to_discovery() -> None:
+    assert DiscoveryParams().top_up is True
+    assert DiscoveryParams(top_up=False).top_up is False
+    assert first_error(CompanyParams, {"companies": [{"name": "Acme"}], "top_up": True})[
+        "type"
+    ] == ("extra_forbidden")

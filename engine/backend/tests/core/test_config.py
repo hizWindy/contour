@@ -69,6 +69,8 @@ CHOICE_KEYS = {
     "model_prep",
     "model_why",
     "claude_effort",
+    "claude_effort_discover",  # PLAN-V21 T1-1
+    "claude_effort_research",
     "voice_tool",  # PLAN-V18
 }
 BOOL_KEYS = {  # a switch has no min or max
