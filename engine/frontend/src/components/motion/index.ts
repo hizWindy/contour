@@ -4,6 +4,7 @@
  *   MotionRoot      at the app's root: loads motion's features once, follows reduced motion
  *   springs         snappy, smooth, soft and exit; INSTANT for reduced motion
  *   Segmented       one choice from a few, the highlight slides
+ *   OptionCards     one choice from a few long ones, as cards with a title and a line each
  *   ChipGroup       chips you tap to pick, with a tick and a press
  *   TabIndicator    the sliding underline for tabs
  *   Reveal          content fades and rises 4px once, at most 8 items one after another
@@ -35,6 +36,7 @@ export {
   type ListExitProps,
 } from './list-exit'
 export { MotionRoot } from './motion-root'
+export { OptionCards, type OptionCard, type OptionCardsProps } from './option-cards'
 export { PushView, type PushViewProps } from './push-view'
 export { Reveal, type RevealProps } from './reveal'
 export { focusRadio, handleRovingKey, rovingTarget } from './roving'

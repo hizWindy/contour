@@ -527,7 +527,9 @@ async def lead_facets(session: AsyncSession, filters: LeadFilters) -> LeadFacets
             .group_by(tier_word)
         )
     ).all()
-    tier_counts = {str(value): int(count) for value, count in tier_rows}
+    # Every tier is listed, with 0 where it has no lead, so the filter's order never changes
+    tier_counts = dict.fromkeys(TIER_FACET_ORDER, 0)
+    tier_counts.update({str(value): int(count) for value, count in tier_rows})
 
     low_score, high_score = await spread(Lead.score, SKIP_SCORE)
     low_m2, high_m2 = await spread(Lead.office_m2, SKIP_M2)

@@ -1,9 +1,10 @@
 /**
  * Start a run: pick what to look for, see what it would cost, then start.
  *
- * - Three kinds of run: find new leads on the web (discovery), research the HubSpot watchlist,
- *   or research companies by name. The watchlist waits for Levi's OK to send HubSpot names to
- *   Claude; until then its Start button says so.
+ * - Four kinds of run, as cards with a line each (PLAN-V21 T3-1): find new leads on the web
+ *   (discovery), old offices, research the HubSpot watchlist, or research companies by name. The
+ *   watchlist waits for Levi's OK to send HubSpot names to Claude; until then its Start button
+ *   says so.
  * - The estimate updates as you choose (300 ms after the last change), with the run's cap and
  *   what is left of today's limit. A choice the server refuses is shown beside its field.
  * - Start is safe to double-click: the same choices send the same Idempotency-Key, so a second
@@ -50,7 +51,7 @@ import {
   FieldSet,
 } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { Segmented } from '@/components/motion'
+import { OptionCards, Segmented } from '@/components/motion'
 import { useDebounced } from '@/hooks/useDebounced'
 import { SourceChoices, WhereChoices } from './discovery'
 import {
@@ -195,18 +196,19 @@ function StartFormView({ options }: { options: RunOptions }) {
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
       <div className="flex min-w-0 flex-col gap-6">
         <Section title="What to do">
-          <Segmented
+          {/* Four cards, each with its line (PLAN-V21 T3-1): a sliding row cut the long names. */}
+          <OptionCards
             value={form.mode}
             options={(Object.keys(MODE_WORDS) as Mode[]).map((value) => ({
               value,
-              label: MODE_WORDS[value].title,
+              title: MODE_WORDS[value].title,
+              description: MODE_WORDS[value].about,
             }))}
             onChange={(value) => {
               update({ mode: value })
             }}
             aria-label="Kind of run"
           />
-          <p className="text-ui text-muted-foreground">{MODE_WORDS[form.mode].about}</p>
         </Section>
 
         {form.mode === 'discovery' ? (

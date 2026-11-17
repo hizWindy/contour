@@ -91,6 +91,35 @@ describe('the Start page', () => {
     expect(screen.getByRole('button', { name: 'Start run' })).toBeEnabled()
   })
 
+  it('shows "What to do" as four cards, each with its line, and the arrows only move the focus (PLAN-V21 T3-1)', async () => {
+    const seen = mockApi(() => estimate())
+    const { user } = renderStart()
+    const kinds = await screen.findByRole('radiogroup', { name: 'Kind of run' })
+    const cards = within(kinds).getAllByRole('radio')
+    expect(cards).toHaveLength(4)
+    expect(
+      within(kinds).getByRole('radio', { name: 'Find new leads' }),
+    ).toHaveAccessibleDescription('Search the news for companies with a sign of an office change.')
+    expect(
+      within(kinds).getByRole('radio', { name: 'Companies by name' }),
+    ).toHaveAccessibleDescription('Research the companies you type in.')
+    // Two columns from 640px, as long as the cards' own box has room for two.
+    expect(kinds).toHaveClass('sm:@min-[30rem]:grid-cols-2')
+
+    await screen.findByRole('group', { name: 'Where to look' })
+    cards[0]?.focus()
+    await user.keyboard('{ArrowRight}')
+    expect(cards[1]).toHaveFocus()
+    // The arrow moved the focus only: the form is still "Find new leads".
+    expect(screen.getByRole('group', { name: 'Where to look' })).toBeInTheDocument()
+    await user.keyboard(' ')
+    expect(await screen.findByText('Which old offices')).toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: 'Where to look' })).toBeNull()
+    await waitFor(() => {
+      expect(seen.estimates.length).toBeGreaterThan(0)
+    })
+  })
+
   it('narrows a city to its CBD and asks for a new estimate', async () => {
     const seen = mockApi(() => estimate())
     const { user } = renderStart()
@@ -244,16 +273,18 @@ describe('Old offices (lease and tenure), PLAN-V11 C3', () => {
     mockTenureApi()
     renderStart()
     const kinds = await screen.findByRole('radiogroup', { name: 'Kind of run' })
-    expect(
-      within(kinds)
-        .getAllByRole('radio')
-        .map((radio) => radio.textContent),
-    ).toEqual([
-      'Find new leads',
-      'Old offices (lease and tenure)',
-      'HubSpot watchlist',
-      'Companies by name',
-    ])
+    const cards = within(kinds).getAllByRole('radio')
+    expect(cards.map((card) => card.getAttribute('aria-labelledby'))).not.toContain(null)
+    cards.forEach((card, index) => {
+      expect(card).toHaveAccessibleName(
+        [
+          'Find new leads',
+          'Old offices (lease and tenure)',
+          'HubSpot watchlist',
+          'Companies by name',
+        ][index],
+      )
+    })
   })
 
   it('picks a city and industries, with the free count of its watchlist companies', async () => {
