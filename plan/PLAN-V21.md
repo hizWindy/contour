@@ -5,8 +5,8 @@ This plan makes the Lead Finder find, research and show many more companies, wit
 **TBC** means to be confirmed.
 
 - **Built by:** Al-khair Pama, with Claude. **Signed off by:** Al-khair, for the code and every screen. Levi confirms the rule numbers marked **TBC with Levi**.
-- **Last updated:** 18 Nov 2026 (written; no step started).
-- **Progress:** S0: 0 of 1. Part 1: 0 of 9. Part 2: 0 of 6. Part 3: 0 of 6. M1 to M4: 0 of 4. W1 and W2: 0 of 2.
+- **Last updated:** 18 Nov 2026 (S0 done; Part 1 under way).
+- **Progress:** S0: 1 of 1. Part 1: 5 of 9. Part 2: 0 of 6. Part 3: 0 of 6. M1 to M4: 0 of 4. W1 and W2: 0 of 2.
 - **Sources:**
   - Al-khair's asks in chat (18 Nov), with 3 screenshots of the Start page;
   - the audit in the same chat: the live site's runs, leads, settings, schedules and sources, read through Chrome (GET only);
@@ -151,7 +151,7 @@ One session builds every step, in order: Part 1, then Part 2, then Part 3. The b
 
 ## Before the build starts
 
-- [ ] **S0. The branch, the stubs and the settings.**
+- [x] **S0. The branch, the stubs and the settings.** Done 18 Nov 2026 (`efe47bd`, `3f8ea61`).
   - Make `plan-v21` from `master` in the worktree `../contour-v21`. Don't switch the main folder's branch.
   - Its first commit holds this plan and its lines in `CLAUDE.md`. Both were written in the main folder on 18 Nov and not committed. Copy them in. Then remove the main folder's copies, so `master` can move later: delete the untracked `plan/PLAN-V21.md`, and put `CLAUDE.md` back with `git checkout -- CLAUDE.md` only if it has no other uncommitted edit (if it has, leave it and say so in the Log).
   - Then the stubs: the new params and run options fields, the events and counts, the settings and the rule models in the contract below. Each has its default and does nothing yet.
@@ -191,21 +191,21 @@ One session builds every step, in order: Part 1, then Part 2, then Part 3. The b
 
 ## Part 1: the engine
 
-- [ ] **T1-1. Effort for each step.** The discovery request uses `claude_effort_discover`. The research's requests (search notes, the two forms, Why now) use `claude_effort_research`. Every other project keeps `claude_effort`.
+- [x] **T1-1. Effort for each step.** Done 18 Nov 2026 (`8df4be3`). The discovery request uses `claude_effort_discover`. The research's requests (search notes, the two forms, Why now) use `claude_effort_research`. Every other project keeps `claude_effort`.
   - **Done when:** a FakeClaude test sees `medium` on the discovery request and the research's own effort on the rest, and the Settings page lists both settings.
-- [ ] **T1-2. How far back: 90 days and 6 months.** `SinceDays` takes 90 and 180. The run options offer 7, 30, 90 and 180, with 90 the default for a run a person starts. The discovery request and its date check follow the choice. Automatic runs keep 30.
+- [x] **T1-2. How far back: 90 days and 6 months.** Done 18 Nov 2026 (`8df4be3`). `SinceDays` takes 90 and 180. The run options offer 7, 30, 90 and 180, with 90 the default for a run a person starts. The discovery request and its date check follow the choice. Automatic runs keep 30.
   - **Done when:** params and options tests pass, and the date check keeps a 60 day old event at 90 days and drops it at 30.
-- [ ] **T1-3. The sweeps' searches.** `queries.yaml` `sweeps`:
+- [x] **T1-3. The sweeps' searches.** Done 18 Nov 2026 (`8df4be3`). `queries.yaml` `sweeps`:
   - sweep 2 is Levi's source groups for each sign. Today they share sweep 1's request, which makes it long;
   - sweep 3 is each sign by sector group: 3 groups of Levi's priority sectors;
   - sweep 4 is each sign by area: the CBD, then the inner suburbs. For All of Australia it is the priority cities by name.
   - Nothing one sweep finds goes into another sweep's request (the discovery safety rule: a page can't steer another search).
   - **Done when:** `make_slices` tests pass for each sweep, and the backend refuses to start when a sign that is searched has no sweep 2 wording.
-- [ ] **T1-4. The target and the sweeps.** `target_companies` goes into the params and the estimate. After each sweep the run merges and chooses. If it has fewer companies than its target, sweeps are left, and discovery's share of the money isn't used up, it starts the next sweep. Then comes the top up (T1-6), then the research. `check_discovery_size` counts sweep 1 only: later sweeps run only while money is left. A resume never repeats a sweep that was paid for.
+- [x] **T1-4. The target and the sweeps.** Done 18 Nov 2026 (`8df4be3`). `target_companies` goes into the params and the estimate. After each sweep the run merges and chooses. If it has fewer companies than its target, sweeps are left, and discovery's share of the money isn't used up, it starts the next sweep. Then comes the top up (T1-6), then the research. `check_discovery_size` counts sweep 1 only: later sweeps run only while money is left. A resume never repeats a sweep that was paid for.
   - **Done when:** FakeClaude tests show that a run that meets its target in sweep 1 makes no sweep 2; a thin run goes on to sweep 4 and stops; a run at its discovery money stops sweeping and says so in the feed; and a resume in the middle of sweep 3 starts at sweep 3.
 - [ ] **T1-5. Property Daily first.** Before sweep 1, the run's plan turns Property Daily's new items for its places and how far back into companies. That part is built (PLAN-V16 T1-8). New here: when Property Daily is ready and picked on Start, and our copy's last email is older than today, the plan reads the new emails first (about 1 page a day, free). So a run doesn't depend on the job, which is switched off.
   - **Done when:** with a fake reader, a run's plan reads the email once, saves its records, and its items with a sign become companies before sweep 1. With Property Daily off, paused or not picked, the run works as today.
-- [ ] **T1-6. The HubSpot top up.** When the sweeps are done and the run is still short of its target, `choose` adds watchlist companies in the run's places, in the watchlist's own order (most likely first). It skips what `decide` skips. Each is researched like a HubSpot watchlist run. It is off when `top_up` is false or `hubspot_names_to_claude_ok` is off.
+- [x] **T1-6. The HubSpot top up.** Done 18 Nov 2026 (`8df4be3`). When the sweeps are done and the run is still short of its target, `choose` adds watchlist companies in the run's places, in the watchlist's own order (most likely first). It skips what `decide` skips. Each is researched like a HubSpot watchlist run. It is off when `top_up` is false or `hubspot_names_to_claude_ok` is off.
   - **Done when:** tests show that a run 12 short adds 12, that a run with `top_up` false adds none, and that `RunCounts.topped_up` and the row's origin (`hubspot`) say so.
 - [ ] **T1-7. No early drop on a guess.** `research._too_small` stops a company before research only on HubSpot's own count, for a sure match. A Signal Hire count alone never stops it. The count still goes on the card.
   - **Done when:** tests show that a company with only Signal Hire's 48 is researched, and that one with HubSpot's 20 staff (a sure match) is still stopped at no cost.
@@ -215,7 +215,14 @@ One session builds every step, in order: Part 1, then Part 2, then Part 3. The b
 
 ### Part 1 Log
 
-- (none yet)
+- 18 Nov, S0: the worktree `../contour-v21` on `plan-v21`, its own `.venv`, `node_modules` and `COMPANIES.xlsx`, and the database `leadfinder_v21` (a `TEMPLATE` copy of `leadfinder`, 52 leads, none with a tier, migrated from `0024` to `0025_v19_roles_access`). The main folder's `CLAUDE.md` had only this plan's line, so it was put back with `git checkout`, and its untracked `plan/PLAN-V21.md` was deleted (both are on the branch). No migration was needed: the new params are in the run's saved params and the new settings in the settings table. Checks on S0: fast tests 3,452 passed; integration 1,295 passed and 1 failed: the Companies speed gate (`test_a_page_and_the_prep_box_are_fast_on_a_full_copy`), a timing test this plan doesn't touch, known to fail under load (17 Nov). Rerun alone at T1-9.
+- 18 Nov, the contract as built (S0 left field names to fix): the estimate gains `target_companies`, `target_cost_usd_low`, `target_cost_usd_high` and `target_note`. Two small additions beyond the contract, for T3-4: `topped_up` also carries `names`, and `company_started` and `company_done` carry the company's `origin` (web, hubspot, typed or test). The run options' `top_up` also carries a `message` for Start when it isn't allowed.
+- 18 Nov, T1-1: the rivals search (a search for new companies after a booming company's research) uses the discovery effort too, since it is a discovery of companies. A FakeClaude test sees `medium` on discovery and `high` on the searches, both forms and Why now when `claude_effort` is `max`.
+- 18 Nov, T1-2: `round.look_back()` no longer means "the longest a run may": it is 30 for automatic runs. A schedule with no `since_days` saved gets 30 (`jobs.scheduled_params`), not the person's 90.
+- 18 Nov, T1-3: 10 of the 18 searched signs have no source group, so `sweeps.sources` gives them their own sweep 2 searches (AusTender, ASX announcements, Austrade, AFR Commercial Real Estate, The Urban Developer, planning approvals; first drafts, TBC). The sector groups: energy, defence and engineering; technology, finance and professional services; resources. Sweep 1's request is now the sign's own searches only.
+- 18 Nov, T1-4 (choices made while building, Al-khair can change them): sweeps, the target and the top up apply only to a run a person starts; an automatic run makes one sweep, as the plan says. A target above the run's company limit is a 422 (`target_above_limit`) on `target_companies`, so Start must keep the two together; a run with no target of its own gets `target_companies_default` pulled down to the limit. Discovery's share is a budget of its own in the run (`RunCtx.discovery_budget`, rebuilt from the search log on a resume): a slice of any sweep needs room in it, and the run sweeps again only while one more slice's hold (`slice_reserve_usd`) fits. A run with no web search has no sweeps, and its estimate is as before.
+- 18 Nov, T1-6: the top up skips names the research would refuse: the export's watchlist has "The Conversation Australia + NZ", whose "+" fails the name check, so its research failed. A watchlist run would fail on it the same way today (not changed here).
+- 18 Nov, tests after T1-6: the Lead Finder folder, `tests/e2e`, the run manager and the contract: 2,197 passed, 25 skipped. Old tests that count one sweep now pass `target_companies: 5`, and the default run's test expects 4 sweeps (32 searches) and still ends under its limit.
 
 ## Part 2: the score and the lists
 
