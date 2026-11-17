@@ -7,6 +7,11 @@ the contract part 2).
   switched on.
 - **The run options** (`source_options`): each source, on or not, ready or not, and one plain
   sentence when it isn't, for the Start page.
+- **The new emails first** (`read_new_emails`, PLAN-V21 T1-5): when the run picked Property Daily,
+  it is ready, and our copy's last daily email is older than today, the run's plan reads the new
+  emails before it looks at the feed (about 1 page a day, free), so a run doesn't depend on the
+  job that reads them, which is switched off. A failure is one line in the feed, and the run goes
+  on with our copy.
 - **The feed** (`feed_candidates`): the new items of each tool the run picked, from our copy (free
   and fast), for the run's cities and signs and since `since_days`. Each item that has a sign is a
   company found, like one a web slice found. An item that is only a dampener (a fitout already given
@@ -19,12 +24,14 @@ the contract part 2).
 settings alone (`tool_readiness`): a paused tool still has our copy, and the feed reads only that.
 """
 
+import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Final
+from zoneinfo import ZoneInfo
 
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from apps.lead_finder.params import DiscoveryParams, LeadFinderRunParams, RunSource
 from apps.lead_finder.rules import LeadFinderRules
@@ -36,7 +43,15 @@ from apps.lead_finder.steps.plan import is_national, run_cities
 from core.api.errors import Problem
 from core.config import Settings
 from core.sources.reader import recent_items, source_availability
+from core.sources.service import availability, get_sources
+from core.sources.store import last_feed_day
 from core.sources.types import SOURCE_IDS, FeedItem, SourceId
+
+log = logging.getLogger(__name__)
+MELBOURNE = ZoneInfo("Australia/Melbourne")
+EMAILS_NOT_READ = (
+    "Property Daily's new emails couldn't be read, so the run used the ones we already have."
+)
 
 FEED_SLICE: Final = "feed:{source}"  # the slice id of a company a tool's feed found
 SOURCE_WORDS: Final[dict[RunSource, str]] = {
@@ -192,6 +207,26 @@ def feed_found(
             )
         )
     return found
+
+
+async def read_new_emails(
+    factory: async_sessionmaker[AsyncSession], settings: Settings, now: datetime
+) -> str | None:
+    """Reads Property Daily's new daily emails into our copy, before the run looks at its feed
+    (PLAN-V21 T1-5): only when the tool is ready (on, with a login, and not paused after a block)
+    and our copy's last email is older than today in Melbourne. Free: about 1 page a day. Returns
+    one sentence for the run's feed when the read failed, else None. Never raises."""
+    async with factory() as session:
+        ready = (await availability(session, settings))["property_daily"].ready
+        last = await last_feed_day(session, "property_daily")
+    if not ready or (last is not None and last >= now.astimezone(MELBOURNE).date()):
+        return None
+    try:
+        await get_sources().feed(settings)
+    except Exception as error:  # a block, a login problem, no browser: our copy still works
+        log.warning("run_feed_read_failed", extra={"kind": type(error).__name__})
+        return EMAILS_NOT_READ
+    return None
 
 
 async def feed_candidates(

@@ -68,7 +68,11 @@ from apps.lead_finder.rivals import (  # noqa: E402
     rival_found,
 )
 from apps.lead_finder.rules import LeadFinderRules, load_rules  # noqa: E402
-from apps.lead_finder.run_sources import feed_candidates, picked_tools  # noqa: E402
+from apps.lead_finder.run_sources import (  # noqa: E402
+    feed_candidates,
+    picked_tools,
+    read_new_emails,
+)
 from apps.lead_finder.sources import tool_of  # noqa: E402
 from apps.lead_finder.steps.choose import (  # noqa: E402
     OVER_LIMIT_REASON,
@@ -180,6 +184,10 @@ async def plan(state: State, runtime: Runtime[RunCtx]) -> dict[str, Any]:
     # The new items of the property tools the run picked (PLAN-V16 T1-8): free, from our copy
     tools = picked_tools(ctx.params, ctx.settings)
     feed: list[Found] = []
+    if "property_daily" in tools:  # its new emails first, so the run needn't wait for the job
+        problem = await read_new_emails(ctx.session_factory, ctx.settings, datetime.now(UTC))
+        if problem is not None:
+            await ctx.emit_event(RunProblemData(message=problem))
     if tools:
         async with ctx.session() as session:
             feed = await feed_candidates(session, ctx.params, run.rules, tools, datetime.now(UTC))

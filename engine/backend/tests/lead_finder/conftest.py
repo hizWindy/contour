@@ -10,16 +10,19 @@ These use the database, so a test that asks for them is marked `integration`.
 """
 
 from collections.abc import AsyncIterator, Callable
+from dataclasses import dataclass
 from typing import Any
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from apps.lead_finder import run_sources
 from apps.lead_finder.runs import RUN_KINDS
 from apps.lead_finder.steps import graph
 from core.config import Settings
 from core.memory.embedder import Embedder
 from core.runs.manager import RunManager
+from core.sources.service import FeedDone
 from tests.core.conftest import MemorySource
 from tests.lead_finder.samples import FakeClaude
 
@@ -27,6 +30,26 @@ APP = "lead_finder"
 RUN_DAY = "2026-10-26"
 
 type MakeLeadFinderManager = Callable[..., RunManager]
+
+
+@dataclass
+class QuietSources:
+    """Stands in for Property Daily's reader when a run reads the new emails first (PLAN-V21
+    T1-5), so no test opens a browser. It reads nothing new; a test that needs records sets its
+    own with `monkeypatch.setattr(run_sources, "get_sources", ...)`."""
+
+    feeds: int = 0
+
+    async def feed(self, settings: Settings) -> FeedDone:
+        self.feeds += 1
+        return FeedDone(new_records=0, last_day=None)
+
+
+@pytest.fixture(autouse=True)
+def quiet_sources(monkeypatch: pytest.MonkeyPatch) -> QuietSources:
+    sources = QuietSources()
+    monkeypatch.setattr(run_sources, "get_sources", lambda: sources)
+    return sources
 
 
 def lf_settings(**values: Any) -> Settings:
