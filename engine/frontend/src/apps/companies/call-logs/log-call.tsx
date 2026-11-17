@@ -31,8 +31,7 @@ export interface LogTarget {
 }
 
 export type LogCallState =
-  | { from: 'picker'; picked: LogTarget | null }
-  | { from: 'direct'; target: LogTarget }
+  { from: 'picker'; picked: LogTarget | null } | { from: 'direct'; target: LogTarget }
 
 export function LogCallButton({ onOpen }: { onOpen: () => void }) {
   return (

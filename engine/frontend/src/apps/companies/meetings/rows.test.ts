@@ -122,9 +122,9 @@ describe('one status a row', () => {
 
   it('keys a meeting typed in (its HubSpot id is empty) by its form', () => {
     expect(rowKey(item())).toBe('m1')
-    expect(
-      rowKey(item({ typed: true, meeting: { id: '' }, form: formState('f9', 'draft') })),
-    ).toBe('f9')
+    expect(rowKey(item({ typed: true, meeting: { id: '' }, form: formState('f9', 'draft') }))).toBe(
+      'f9',
+    )
   })
 
   it('asks again every 3 seconds while a form is drafting, and stops after', () => {
@@ -161,12 +161,9 @@ describe('one status a row', () => {
 
   it('writes who got a sent pre-read and when (V19 choice 14, T2-4)', () => {
     const at = '2026-11-17T03:00:00Z'
-    expect(
-      sentRowWords(
-        { sent_at: at, sent_count: 1, sent_names: ['Jo Sample'] },
-        WEDNESDAY,
-      ),
-    ).toBe('Sent to Jo Sample, 17 Nov')
+    expect(sentRowWords({ sent_at: at, sent_count: 1, sent_names: ['Jo Sample'] }, WEDNESDAY)).toBe(
+      'Sent to Jo Sample, 17 Nov',
+    )
     expect(
       sentRowWords(
         { sent_at: at, sent_count: 2, sent_names: ['Jo Sample', 'Mia Sample'] },

@@ -530,7 +530,10 @@ export function useRetryMeetingTasks(formId: string) {
     },
     onError: () => {
       void client.invalidateQueries({ queryKey: key })
-      void client.invalidateQueries({ queryKey: queryKeys.companies.meetingLists(), refetchType: 'none' })
+      void client.invalidateQueries({
+        queryKey: queryKeys.companies.meetingLists(),
+        refetchType: 'none',
+      })
     },
   })
 }

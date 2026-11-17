@@ -174,7 +174,8 @@ export function CompanyDialog({
         }
       : undefined
   const canLogNotes = useCanWrite('companies.call_logs')
-  const notesOn = useCallNoteOptions(canLogNotes && onLogCall !== undefined).data?.enabled === true && canLogNotes
+  const notesOn =
+    useCallNoteOptions(canLogNotes && onLogCall !== undefined).data?.enabled === true && canLogNotes
   const logCompany =
     onLogCall && notesOn && company.data
       ? () => {

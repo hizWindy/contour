@@ -139,7 +139,10 @@ function Footer({
   onEditing,
   onToggleLeftOut,
   onRemove,
-}: Pick<NoteCardProps, 'note' | 'landing' | 'onEditing' | 'onToggleLeftOut' | 'onRemove' | 'readOnly'> & {
+}: Pick<
+  NoteCardProps,
+  'note' | 'landing' | 'onEditing' | 'onToggleLeftOut' | 'onRemove' | 'readOnly'
+> & {
   editing: boolean
   sorting: boolean
 }) {
@@ -510,7 +513,12 @@ export function NoteCard({
           )
         )}
       </div>
-      {readOnly && !note.left_out && landing !== 'logged' && landing !== 'needs_look' && landing !== 'waiting' && note.status !== 'sending' ? null : (
+      {readOnly &&
+      !note.left_out &&
+      landing !== 'logged' &&
+      landing !== 'needs_look' &&
+      landing !== 'waiting' &&
+      note.status !== 'sending' ? null : (
         <div className="flex flex-wrap items-center gap-2 border-t px-4 py-2.5 sm:px-5">
           <Footer
             note={note}

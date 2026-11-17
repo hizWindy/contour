@@ -119,7 +119,9 @@ export function CompanyList({ active, inputRef, onPick }: CompanyListProps) {
 
   useEffect(() => {
     if (!active || activeIndex < 0) return
-    const option = listRef.current?.querySelector<HTMLElement>(`[data-option-index="${activeIndex}"]`)
+    const option = listRef.current?.querySelector<HTMLElement>(
+      `[data-option-index="${activeIndex}"]`,
+    )
     if (option && typeof option.scrollIntoView === 'function') {
       option.scrollIntoView({ block: 'nearest' })
     }
@@ -357,7 +359,10 @@ export function CompanyList({ active, inputRef, onPick }: CompanyListProps) {
               })}
             </ul>
             {!searching && pages.hasNextPage ? (
-              <div ref={sentinelRef} className="flex items-center justify-center border-t px-5 py-3">
+              <div
+                ref={sentinelRef}
+                className="flex items-center justify-center border-t px-5 py-3"
+              >
                 {pages.isFetchingNextPage ? (
                   <p role="status" className="text-caption text-muted-foreground">
                     {LOADING_MORE_COMPANIES}

@@ -449,7 +449,16 @@ describe('the People tab (PLAN-V9 E1, PLAN-V19 T3-3 & T3-4)', () => {
 describe('the menu for a person without the tick (PLAN-V9 E1)', () => {
   const signedIn = (role: 'admin' | 'staff', apps: string[]): SignIn => ({
     state: 'signed_in',
-    user: { id: 'x', email: 'x@example.test', username: null, name: 'X', position: null, role, apps, features: [] },
+    user: {
+      id: 'x',
+      email: 'x@example.test',
+      username: null,
+      name: 'X',
+      position: null,
+      role,
+      apps,
+      features: [],
+    },
   })
 
   it('hides the Lead Finder from staff without the tick only', () => {

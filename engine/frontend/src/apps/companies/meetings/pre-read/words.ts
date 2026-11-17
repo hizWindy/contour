@@ -5,7 +5,14 @@
  */
 import { toApiProblem } from '@/api/client'
 import type { FormRecipient, HubSpotCopy, MeetingFormOut } from '@/api/types'
-import { formatDate, formatNumber, formatTime, melbourneDate, pluralise, TIME_ZONE } from '@/lib/format'
+import {
+  formatDate,
+  formatNumber,
+  formatTime,
+  melbourneDate,
+  pluralise,
+  TIME_ZONE,
+} from '@/lib/format'
 import { formatMoney, parseMoney } from '@/lib/money'
 import { changeDetail } from '@/lib/problems'
 import { MOST_PEOPLE, type SendBlock } from './rules'
@@ -309,7 +316,9 @@ export function recipientLabel(person: {
   address?: string | null
   owner_id?: string | null
 }): string {
-  return person.name?.trim() || person.address?.trim() || (person.owner_id ? 'Team member' : 'Someone')
+  return (
+    person.name?.trim() || person.address?.trim() || (person.owner_id ? 'Team member' : 'Someone')
+  )
 }
 
 /** "Remove mia@example.com" */
@@ -395,15 +404,10 @@ export function recipientStatusWords(recipient: FormRecipient): string {
  * "Jo Sample's HubSpot task didn't go. The email still went.", or plural / without email note
  * when no one was emailed.
  */
-export function tasksFailedWords(
-  failed: readonly FormRecipient[],
-  emailedAny: boolean,
-): string {
+export function tasksFailedWords(failed: readonly FormRecipient[], emailedAny: boolean): string {
   const who = recipientsWords(failed)
   const head =
-    failed.length === 1
-      ? `${who}'s HubSpot task didn't go.`
-      : `${who}'s HubSpot tasks didn't go.`
+    failed.length === 1 ? `${who}'s HubSpot task didn't go.` : `${who}'s HubSpot tasks didn't go.`
   return emailedAny ? `${head} The email still went.` : head
 }
 

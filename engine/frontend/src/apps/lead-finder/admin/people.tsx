@@ -436,7 +436,12 @@ function EditPerson({ person, self }: { person: Person; self: boolean }) {
   }
 
   const patch = (
-    body: { role?: AssignableRole; position?: string | null; features?: Feature[]; active?: boolean },
+    body: {
+      role?: AssignableRole
+      position?: string | null
+      features?: Feature[]
+      active?: boolean
+    },
     done: string,
     onInvalidPosition?: (message: string) => void,
   ) => {
@@ -448,7 +453,9 @@ function EditPerson({ person, self }: { person: Person; self: boolean }) {
         },
         onError: (error) => {
           if (isApiProblem(error) && error.errors.length > 0 && onInvalidPosition) {
-            const posErr = error.errors.find((item) => item.field.replace(/^body\./, '') === 'position')
+            const posErr = error.errors.find(
+              (item) => item.field.replace(/^body\./, '') === 'position',
+            )
             if (posErr) {
               onInvalidPosition(posErr.message)
               return
@@ -471,7 +478,9 @@ function EditPerson({ person, self }: { person: Person; self: boolean }) {
     const nextValue = trimmedPosition === '' ? null : trimmedPosition
     patch(
       { position: nextValue },
-      nextValue ? `${person.name}'s position is ${nextValue}.` : `${person.name}'s position cleared.`,
+      nextValue
+        ? `${person.name}'s position is ${nextValue}.`
+        : `${person.name}'s position cleared.`,
       setPositionError,
     )
   }
@@ -532,7 +541,9 @@ function EditPerson({ person, self }: { person: Person; self: boolean }) {
                     ))}
                   </SelectContent>
                 </Select>
-                {self ? <FieldDescription>You can&apos;t change your own role.</FieldDescription> : null}
+                {self ? (
+                  <FieldDescription>You can&apos;t change your own role.</FieldDescription>
+                ) : null}
               </>
             )}
           </Field>
@@ -580,13 +591,13 @@ function EditPerson({ person, self }: { person: Person; self: boolean }) {
               self={self}
               onToggle={(feature, checked) => {
                 const next = checked
-                  ? ALL_FEATURES.filter((item) => item === feature || currentFeatures.includes(item))
+                  ? ALL_FEATURES.filter(
+                      (item) => item === feature || currentFeatures.includes(item),
+                    )
                   : currentFeatures.filter((item) => item !== feature)
                 patch(
                   { features: next },
-                  checked
-                    ? `${person.name} can use this now.`
-                    : `Turned off for ${person.name}.`,
+                  checked ? `${person.name} can use this now.` : `Turned off for ${person.name}.`,
                 )
               }}
             />
@@ -914,7 +925,9 @@ function AddPerson() {
                 setPicked(changed)
               }}
             />
-            {errors.features ? <span className="text-ui text-destructive">{errors.features}</span> : null}
+            {errors.features ? (
+              <span className="text-ui text-destructive">{errors.features}</span>
+            ) : null}
             <div>
               <Button type="submit" disabled={add.isPending}>
                 <UserPlus aria-hidden="true" />

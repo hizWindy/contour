@@ -70,7 +70,12 @@ describe('the role words', () => {
 
   it('shows the role name in the account menu', async () => {
     stubAuthBackend({
-      me: signedIn({ ...SAMPLE_USER, name: 'Aria Sample', email: 'aria@example.test', role: 'admin' }),
+      me: signedIn({
+        ...SAMPLE_USER,
+        name: 'Aria Sample',
+        email: 'aria@example.test',
+        role: 'admin',
+      }),
     })
     const { user } = renderWithProviders(<UserMenu />)
     await user.click(await screen.findByRole('button', { name: 'Account menu, Aria Sample' }))

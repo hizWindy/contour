@@ -609,8 +609,7 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
   const unlisted = added.filter((addr) => !listedAddrs.has(addr))
   const extraEmails = sendEmailAddresses(emailOnlyPeople, picks)
   const totalCount = countSendRecipients(activeOwnerIds, previewPeople, picks)
-  const block =
-    totalCount === 0 ? NOBODY_TICKED : totalCount > MOST_PEOPLE ? OVER_THE_MOST : null
+  const block = totalCount === 0 ? NOBODY_TICKED : totalCount > MOST_PEOPLE ? OVER_THE_MOST : null
 
   const locked = send.isPending
   const busy = preview.isPending || locked || saving
@@ -647,7 +646,8 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
       return
     }
     const fresh = found.filter(
-      (address) => !listedAddrs.has(address) && !added.includes(address) && !sentByAddr.has(address),
+      (address) =>
+        !listedAddrs.has(address) && !added.includes(address) && !sentByAddr.has(address),
     )
     if (fresh.length === 0) {
       setAddProblem(ALREADY_LISTED)
@@ -670,9 +670,7 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
     const next = added.filter((one) => one !== key)
     setAdded(next)
     setPicks((now) =>
-      Object.fromEntries(
-        Object.entries(now).filter(([k]) => k !== key && k !== `email:${key}`),
-      ),
+      Object.fromEntries(Object.entries(now).filter(([k]) => k !== key && k !== `email:${key}`)),
     )
     setShown((now) =>
       now
@@ -760,7 +758,10 @@ export function SendDialog({ form, open, onOpenChange, onSent }: SendDialogProps
           </div>
 
           {team.isError ? (
-            <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2.5 text-ui text-destructive-ink">
+            <div
+              role="alert"
+              className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2.5 text-ui text-destructive-ink"
+            >
               <p className="flex min-w-0 items-start gap-2">
                 <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
                 <span>{TEAM_UNAVAILABLE}</span>

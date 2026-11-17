@@ -297,7 +297,9 @@ export function NoteView({
               </Button>
             </TooltipTrigger>
             <TooltipContent>
-              {backLabel ? backLabel : (
+              {backLabel ? (
+                backLabel
+              ) : (
                 <>
                   {BACK_TO_SCRIPT} <Kbd>Esc</Kbd>
                 </>

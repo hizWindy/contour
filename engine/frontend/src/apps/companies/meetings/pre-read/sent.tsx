@@ -140,13 +140,7 @@ function CopyLine({
  * When one or more recipients' HubSpot tasks didn't go, names them cleanly and offers "Try again"
  * (tries the task endpoint only, never emails).
  */
-function TasksLine({
-  form,
-  canWrite,
-}: {
-  form: MeetingFormOut
-  canWrite: boolean
-}) {
+function TasksLine({ form, canWrite }: { form: MeetingFormOut; canWrite: boolean }) {
   const retry = useRetryMeetingTasks(form.id)
   const [problem, setProblem] = useState<string | null>(null)
   const hintId = useId()
@@ -169,7 +163,10 @@ function TasksLine({
     <div className="flex flex-col gap-2">
       {failed.length > 0 ? (
         <>
-          <p data-slot="hubspot-tasks-failed" className="flex items-start gap-2 text-destructive-ink">
+          <p
+            data-slot="hubspot-tasks-failed"
+            className="flex items-start gap-2 text-destructive-ink"
+          >
             <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
             <span>{tasksFailedWords(failed, emailedAny)}</span>
           </p>
@@ -195,7 +192,10 @@ function TasksLine({
         </>
       ) : null}
       {waiting.length > 0 ? (
-        <p data-slot="hubspot-tasks-waiting" className="flex items-start gap-2 text-muted-foreground">
+        <p
+          data-slot="hubspot-tasks-waiting"
+          className="flex items-start gap-2 text-muted-foreground"
+        >
           <Hourglass aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
           <span>{tasksWaitingWords(waiting)}</span>
         </p>

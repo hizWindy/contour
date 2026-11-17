@@ -215,7 +215,12 @@ function PreReadView({ form }: { form: MeetingFormOut }) {
 
   /** Ctrl+Enter: Check and send, or the first blank still to fill. */
   const onKeyDown = (event: KeyboardEvent<HTMLElement>): void => {
-    if (!canWrite || event.key !== 'Enter' || !(event.ctrlKey || event.metaKey) || status === 'sent') {
+    if (
+      !canWrite ||
+      event.key !== 'Enter' ||
+      !(event.ctrlKey || event.metaKey) ||
+      status === 'sent'
+    ) {
       return
     }
     event.preventDefault()

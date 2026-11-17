@@ -236,9 +236,8 @@ function mockServer(changes: Partial<Omit<Server, 'calls' | 'release'>> = {}): S
         emails?: string[]
         email_them?: boolean
       }
-      const ownerIds = req.owner_ids === null || req.owner_ids === undefined
-        ? server.meetingOwners
-        : req.owner_ids
+      const ownerIds =
+        req.owner_ids === null || req.owner_ids === undefined ? server.meetingOwners : req.owner_ids
       const emailThem = req.email_them ?? false
       const added = req.emails ?? []
 
@@ -280,7 +279,7 @@ function mockServer(changes: Partial<Omit<Server, 'calls' | 'release'>> = {}): S
           continue
         }
         const prior = isAllowed ? priorForAddr(key) : undefined
-        const already = isAllowed && prior ? prior.at ?? null : null
+        const already = isAllowed && prior ? (prior.at ?? null) : null
         const willEmail = isAllowed && !prior
         people.push({
           owner_id: null,
@@ -359,7 +358,10 @@ function mockServer(changes: Partial<Omit<Server, 'calls' | 'release'>> = {}): S
         )
       }
 
-      if (server.send === 'not_set_up' && (ownerEmailable.length > 0 || newExtraEmails.length > 0)) {
+      if (
+        server.send === 'not_set_up' &&
+        (ownerEmailable.length > 0 || newExtraEmails.length > 0)
+      ) {
         return problem(
           409,
           "Email isn't set up",
@@ -368,7 +370,10 @@ function mockServer(changes: Partial<Omit<Server, 'calls' | 'release'>> = {}): S
         )
       }
 
-      if (server.send === 'email_failed' && (ownerEmailable.length > 0 || newExtraEmails.length > 0)) {
+      if (
+        server.send === 'email_failed' &&
+        (ownerEmailable.length > 0 || newExtraEmails.length > 0)
+      ) {
         return problem(
           502,
           "The email didn't go",
@@ -515,9 +520,7 @@ describe('Check and send (V19 T2-3 to T2-5)', () => {
     const { user } = renderPreRead()
     const dialog = await openDialog(user)
 
-    expect(posts(server, PREVIEW)).toEqual([
-      { owner_ids: null, emails: [], email_them: false },
-    ])
+    expect(posts(server, PREVIEW)).toEqual([{ owner_ids: null, emails: [], email_them: false }])
 
     // HubSpot task subject and due day are shown.
     const taskBox = dialog.querySelector('[data-slot=task-box]')
@@ -566,9 +569,7 @@ describe('Check and send (V19 T2-3 to T2-5)', () => {
     await waitFor(() => {
       expect(screen.queryByRole('alertdialog')).toBeNull()
     })
-    expect(posts(server, SEND)).toEqual([
-      { owner_ids: ['o-2'], emails: [], email_them: false },
-    ])
+    expect(posts(server, SEND)).toEqual([{ owner_ids: ['o-2'], emails: [], email_them: false }])
 
     await waitFor(() => {
       expect(within(status()).getByText('Sent')).toBeInTheDocument()
@@ -679,7 +680,9 @@ describe('Check and send (V19 T2-3 to T2-5)', () => {
     const dialog = await openDialog(user)
 
     expect(
-      await within(dialog).findByText("The team list didn't load. Add people by email, or try again."),
+      await within(dialog).findByText(
+        "The team list didn't load. Add people by email, or try again.",
+      ),
     ).toBeInTheDocument()
     await user.type(within(dialog).getByRole('textbox', { name: 'Add someone' }), MIA_ADDR)
     await user.click(within(dialog).getByRole('button', { name: 'Add' }))
@@ -757,7 +760,9 @@ describe('Check and send (V19 T2-3 to T2-5)', () => {
     const alert = await within(dialog).findByRole('alert')
     expect(alert).toHaveTextContent(`Take out: ${MIA_ADDR}.`)
     await waitFor(() => {
-      expect(within(person(dialog, 'Mia Sample')).getByText(/Not a Contour address/)).toBeInTheDocument()
+      expect(
+        within(person(dialog, 'Mia Sample')).getByText(/Not a Contour address/),
+      ).toBeInTheDocument()
     })
     expect(posts(server, PREVIEW)).toHaveLength(4)
   })
@@ -969,7 +974,9 @@ describe('sent, task retry, and send to more (V19 T2-4 & T2-5)', () => {
     server.retryTaskFails = false
     await user.click(retry)
     await waitFor(() => {
-      expect(screen.queryByText("Jo Sample's HubSpot task didn't go. The email still went.")).toBeNull()
+      expect(
+        screen.queryByText("Jo Sample's HubSpot task didn't go. The email still went."),
+      ).toBeNull()
     })
     expect(posts(server, RETRY_TASKS)).toHaveLength(2)
     expect(posts(server, SEND)).toEqual([])
@@ -1015,13 +1022,9 @@ describe('sent, task retry, and send to more (V19 T2-4 & T2-5)', () => {
     await waitFor(() => {
       expect(screen.queryByRole('alertdialog')).toBeNull()
     })
-    expect(posts(server, SEND)).toEqual([
-      { owner_ids: ['o-1'], emails: [], email_them: false },
-    ])
+    expect(posts(server, SEND)).toEqual([{ owner_ids: ['o-1'], emails: [], email_them: false }])
     // SentNote now lists both recipients.
-    expect(
-      await screen.findByText(/Sent to Jo Sample and Al-khair Sample/),
-    ).toBeInTheDocument()
+    expect(await screen.findByText(/Sent to Jo Sample and Al-khair Sample/)).toBeInTheDocument()
   })
 
   it('a draft again keeps who got it last, without Send to more people or task retry', async () => {

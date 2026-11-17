@@ -176,9 +176,9 @@ describe('the words', () => {
 
   it('names who got it, by name or else by address', () => {
     expect(recipientsWords([])).toBe('')
-    expect(
-      recipientsWords([recipient({ name: 'Jo Sample', address: 'jo@example.com' })]),
-    ).toBe('Jo Sample')
+    expect(recipientsWords([recipient({ name: 'Jo Sample', address: 'jo@example.com' })])).toBe(
+      'Jo Sample',
+    )
     expect(
       recipientsWords([
         recipient({ name: 'Jo Sample', address: 'jo@example.com' }),

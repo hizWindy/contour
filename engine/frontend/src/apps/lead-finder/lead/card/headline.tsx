@@ -80,30 +80,30 @@ export function ExclusionNotice({ lead }: { lead: LeadDetail }) {
             </Button>
           </AlertDialogTrigger>
           <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Override the exclusion?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {`The rules judge ${lead.company} again without the exclusion (${excluded.label}). It is free: nothing goes to Claude. Your name is saved with the change, and it can't be undone here.`}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                override.mutate(lead.id, {
-                  onSuccess: (judged) => {
-                    toast(
-                      isTier(judged.tier)
-                        ? `${judged.company} judged again: Tier ${TIER_LABELS[judged.tier]}, score ${String(judged.score)}.`
-                        : `${judged.company} judged again: score ${String(judged.score)}.`,
-                    )
-                  },
-                  onError: toastProblem,
-                })
-              }}
-            >
-              Override and judge again
-            </AlertDialogAction>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Override the exclusion?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {`The rules judge ${lead.company} again without the exclusion (${excluded.label}). It is free: nothing goes to Claude. Your name is saved with the change, and it can't be undone here.`}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  override.mutate(lead.id, {
+                    onSuccess: (judged) => {
+                      toast(
+                        isTier(judged.tier)
+                          ? `${judged.company} judged again: Tier ${TIER_LABELS[judged.tier]}, score ${String(judged.score)}.`
+                          : `${judged.company} judged again: score ${String(judged.score)}.`,
+                      )
+                    },
+                    onError: toastProblem,
+                  })
+                }}
+              >
+                Override and judge again
+              </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>

@@ -22,7 +22,13 @@ import { ALL_FEATURES, DEFAULT_FEATURES_BY_ROLE, type Feature, type Role } from 
 import { Segmented } from '@/components/motion'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
 import { routes } from '@/router'
 import { ROLE_NAMES } from '@/shell/roles'
 import { mockApi, type Call } from '@/test/mock-api'
@@ -274,7 +280,12 @@ function emptyHomeMocks(
   return {
     '/api/v1/auth/me': () => meResponse(user, options),
     '/api/v1/runs': { items: [], total: 0 },
-    '/api/v1/runs/summary': { since: '2026-10-18', total_cost_usd: '12.50', total_runs: 3, days: [] },
+    '/api/v1/runs/summary': {
+      since: '2026-10-18',
+      total_cost_usd: '12.50',
+      total_runs: 3,
+      days: [],
+    },
     '/api/v1/lead-finder/leads/facets': { result: [], trigger: [] },
     '/api/v1/lead-finder/leads': { items: [], total: 0 },
     '/api/v1/companies': { items: [], total: 0, copy_at: null, hubspot_count: 0 },
@@ -526,7 +537,9 @@ describe('PLAN-V19 T3-3: Position, ticks, generated starting/reset passwords & C
     expect(calls.some((c) => c.path === '/api/v1/people/u-sam/password')).toBe(false)
 
     await user.click(within(sheet).getByRole('button', { name: 'Reset password' }))
-    const confirm2 = await screen.findByRole('alertdialog', { name: "Reset Sam Sample's password?" })
+    const confirm2 = await screen.findByRole('alertdialog', {
+      name: "Reset Sam Sample's password?",
+    })
     await user.click(within(confirm2).getByRole('button', { name: 'Reset password' }))
 
     expect(await within(sheet).findByText('oak river stone 99')).toBeInTheDocument()
@@ -738,7 +751,9 @@ describe('PLAN-V19 T3-4: Route guards, zero 403s on Home, and Viewer read-only',
         trigger: [],
       },
     })
-    expect(await screen.findByText('Acme Software', undefined, { timeout: LAZY })).toBeInTheDocument()
+    expect(
+      await screen.findByText('Acme Software', undefined, { timeout: LAZY }),
+    ).toBeInTheDocument()
     expect(screen.queryByRole('checkbox', { name: 'Pick Acme Software' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Reject' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Send to HubSpot' })).not.toBeInTheDocument()

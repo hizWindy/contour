@@ -111,7 +111,9 @@ export function Actions({ lead }: { lead: LeadDetail }) {
               <Button
                 type="button"
                 variant="outline"
-                disabled={patchLead.isPending || lead.status === 'rejected' || lead.status === 'sent'}
+                disabled={
+                  patchLead.isPending || lead.status === 'rejected' || lead.status === 'sent'
+                }
                 onClick={() => {
                   setRejecting(true)
                 }}

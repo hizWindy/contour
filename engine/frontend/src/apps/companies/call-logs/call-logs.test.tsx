@@ -180,7 +180,13 @@ interface Server {
   notes: CallNoteOut[]
   user?: { role: 'platform_admin' | 'admin' | 'staff' | 'viewer'; features: string[] }
   /** Companies returned by GET /companies. Defaults to two rows in newest-activity order. */
-  companies?: Array<{ key: string; name: string; city: string | null; industry: string | null; staff: number | null }>
+  companies?: Array<{
+    key: string
+    name: string
+    city: string | null
+    industry: string | null
+    staff: number | null
+  }>
   /** How a sent note lands, by id. Not named: logged. */
   lands: Record<string, Partial<CallNoteOut>>
   /** What PATCH does: answer, refuse, or wait until `release()`. */
@@ -1236,9 +1242,7 @@ describe('Log call', () => {
     // 2+ letters filter via /companies/search.
     await user.type(box, 'fre')
     await waitFor(() => {
-      expect(
-        within(panel).queryByRole('option', { name: /Sample Logistics Pty Ltd/ }),
-      ).toBeNull()
+      expect(within(panel).queryByRole('option', { name: /Sample Logistics Pty Ltd/ })).toBeNull()
     })
     const freightOption = await within(panel).findByRole('option', { name: /Sample Freight Co/ })
     expect(freightOption).toHaveAttribute('aria-selected', 'true')
