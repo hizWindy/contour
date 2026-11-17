@@ -102,6 +102,14 @@ const FACETS: LeadFacets = {
   score: { min: 41, max: 78 },
   office_m2: { min: 800, max: 2500 },
   created: { min: '2026-10-26', max: '2026-10-26' },
+  // PLAN-V21: every tier is listed, with 0 where it has no lead, then "no tier yet".
+  tier: [
+    { value: 'A', count: 0 },
+    { value: 'B', count: 1 },
+    { value: 'C', count: 1 },
+    { value: 'discard', count: 3 },
+    { value: 'none', count: 21 },
+  ],
 }
 
 const POINTS: MapPoint[] = [
@@ -703,23 +711,54 @@ describe('the results page', () => {
 })
 
 describe('Results by tier (PLAN-V16 T3-5)', () => {
-  it('opens on Tier A and B, asks for them, and says so with a way to see every tier', async () => {
+  it('opens on A, B, C and no tier yet, and says so with a way to see every tier (PLAN-V21 T3-5)', async () => {
     const backend = mockApi()
     const { user } = renderResults()
     await screen.findByRole('table', { name: 'Leads' })
 
-    expect(lastQuery(backend, '/leads').getAll('tier')).toEqual(['A', 'B'])
-    expect(lastQuery(backend, '/leads/facets').getAll('tier')).toEqual(['A', 'B'])
-    expect(screen.getByText('Showing Tier A and B, the good leads.')).toBeInTheDocument()
+    expect(lastQuery(backend, '/leads').getAll('tier')).toEqual(['A', 'B', 'C', 'none'])
+    expect(lastQuery(backend, '/leads/facets').getAll('tier')).toEqual(['A', 'B', 'C', 'none'])
+    const note = 'Showing Tier A, B and C, and leads with no tier yet.'
+    expect(screen.getByText(note)).toBeInTheDocument()
     expect(address().toString()).toBe('')
 
     await user.click(screen.getByRole('button', { name: 'Show every tier' }))
 
     await waitFor(() => {
-      expect(lastQuery(backend, '/leads').getAll('tier')).toEqual(['A', 'B', 'C', 'discard'])
+      expect(lastQuery(backend, '/leads').getAll('tier')).toEqual([
+        'A',
+        'B',
+        'C',
+        'discard',
+        'none',
+      ])
     })
     expect(address().get('tier')).toBe('all')
-    expect(screen.queryByText('Showing Tier A and B, the good leads.')).toBeNull()
+    expect(screen.queryByText(note)).toBeNull()
+  })
+
+  it('offers "No tier yet" with its count, and a row with no tier says so, its result beside it', async () => {
+    const backend = mockApi({
+      rows: [makeRow({ tier: null, result: 'watch', company: 'Older Lead Co' })],
+    })
+    const { user } = renderResults()
+    const table = await screen.findByRole('table', { name: 'Leads' })
+    const row = (await within(table).findByText('Older Lead Co')).closest('tr') as HTMLElement
+    expect(within(row).getByText('No tier yet')).toBeInTheDocument()
+    expect(within(row).getByText('Watch')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /Filter by Tier/ }))
+    const none = await screen.findByRole('option', { name: /^No tier yet/ })
+    expect(none).toHaveTextContent('21')
+    expect(screen.getByRole('option', { name: /^Discard/ })).toHaveTextContent('3')
+    expect(none).toHaveAttribute('data-checked', 'true')
+
+    // Taking "no tier yet" away leaves A, B and C, and the address says so.
+    await user.click(none)
+    await waitFor(() => {
+      expect(lastQuery(backend, '/leads').getAll('tier')).toEqual(['A', 'B', 'C'])
+    })
+    expect(address().getAll('tier')).toEqual(['A', 'B', 'C'])
   })
 
   it('shows each lead tier in its own column', async () => {
@@ -772,7 +811,7 @@ describe('Results by tier (PLAN-V16 T3-5)', () => {
     await waitFor(() => {
       expect(lastQuery(backend, '/leads').get('excluded')).toBe('true')
     })
-    expect(lastQuery(backend, '/leads').getAll('tier')).toEqual(['A', 'B', 'C', 'discard'])
+    expect(lastQuery(backend, '/leads').getAll('tier')).toEqual(['A', 'B', 'C', 'discard', 'none'])
     expect(address().get('excluded')).toBe('true')
     expect(address().get('tier')).toBe('all')
   })

@@ -7,9 +7,12 @@
  * plus `view`, `sort`, `order`, `page` (from 1) and `lead`. A value that can't be read is ignored,
  * so a bad link still opens the page. Defaults are left out of the address.
  *
- * The tier (PLAN-V16 T3-5): the default view is Tier A and B, the good leads, so an address with no
- * `tier` shows those, and `tier=all` shows every tier. The API gets the tiers spelled out either
- * way, so the list never depends on what the server does with no tier.
+ * The tier (PLAN-V21 T3-5): the default view is Tier A, B and C and the leads with no tier yet, so
+ * every lead shows but the Discards, which are one click away. An address with no `tier` shows
+ * that view, and `tier=all` shows every tier, Discard and "no tier yet" too. The API gets the
+ * tiers spelled out either way, so the list never depends on what the server does with no tier.
+ * (Before PLAN-V21 the default was A and B, and "every tier" sent the four named tiers, so a lead
+ * judged before tiers existed showed in no view.)
  */
 import type {
   CityGroup,
@@ -19,7 +22,6 @@ import type {
   LeadResult,
   LeadStatus,
   QueryOf,
-  Tier,
 } from '@/api/types'
 import {
   CITY_GROUP_LABELS,
@@ -29,7 +31,6 @@ import {
   ORIGIN_LABELS,
   RESULT_LABELS,
   TIER_LABELS,
-  TIER_ORDER,
 } from '@/lib/labels'
 
 export type ResultsView = 'table' | 'map'
@@ -69,8 +70,16 @@ export const FIRST_ORDER: Record<SortKey, SortOrder> = {
   cost_usd: 'desc',
 }
 
-/** The default view: the good leads (the plan's choice 2). */
-export const DEFAULT_TIERS: readonly Tier[] = ['A', 'B']
+/** A tier as the leads filter takes it: A, B, C, Discard, or `none`, a lead with no tier yet. */
+export type TierPick = NonNullable<NonNullable<QueryOf<'list_leads'>>['tier']>[number]
+
+/** Every tier the filter offers, in the facets' order. */
+export const TIER_PICK_ORDER: readonly TierPick[] = ['A', 'B', 'C', 'discard', 'none']
+
+export const TIER_PICK_LABELS: Record<TierPick, string> = { ...TIER_LABELS, none: 'No tier yet' }
+
+/** The default view (PLAN-V21 choice 9): Tier A, B and C, and the leads with no tier yet. */
+export const DEFAULT_TIERS: readonly TierPick[] = ['A', 'B', 'C', 'none']
 
 /** A city group a lead can be in. "All of Australia" is a way to search, not a lead's place. */
 export type LeadCityGroup = Exclude<CityGroup, 'national'>
@@ -83,8 +92,8 @@ const LEAD_CITY_GROUPS: Record<LeadCityGroup, string> = {
 }
 
 export interface LeadFilters {
-  /** Tier A, B, C or Discard. Empty is every tier; the default is A and B. */
-  tier: Tier[]
+  /** Tier A, B, C, Discard or no tier yet. Empty is every tier; the default is all but Discard. */
+  tier: TierPick[]
   confidence: Confidence[]
   city_group: LeadCityGroup[]
   /** Only leads with something from Property Daily or Arealytics. */
@@ -226,13 +235,13 @@ export function readResults(params: URLSearchParams): ResultsState {
   const sort = params.get('sort')
   const order = params.get('order')
   const page = wholeNumber(params.get('page'))
-  const tiers = oneOf(params.getAll('tier'), TIER_LABELS)
+  const tiers = oneOf(params.getAll('tier'), TIER_PICK_LABELS)
   const filters: LeadFilters = {
     ...NO_FILTERS,
     tier: params.getAll('tier').includes('all')
       ? []
       : tiers.length > 0
-        ? TIER_ORDER.filter((tier) => tiers.includes(tier))
+        ? TIER_PICK_ORDER.filter((tier) => tiers.includes(tier))
         : [...DEFAULT_TIERS],
     confidence: oneOf(params.getAll('confidence'), CONFIDENCE_LABELS),
     city_group: oneOf(params.getAll('city_group'), LEAD_CITY_GROUPS),
@@ -336,8 +345,8 @@ export function writeResults(state: ResultsState): URLSearchParams {
   return params
 }
 
-/** True for the default view's tiers, A and B, in any order. */
-export function isDefaultTiers(tiers: readonly Tier[]): boolean {
+/** True for the default view's tiers, A, B, C and no tier yet, in any order. */
+export function isDefaultTiers(tiers: readonly TierPick[]): boolean {
   return (
     tiers.length === DEFAULT_TIERS.length && DEFAULT_TIERS.every((tier) => tiers.includes(tier))
   )
@@ -376,8 +385,9 @@ export type FilterQuery = NonNullable<QueryOf<'lead_facets'>>
 /** The filters as the API takes them: empty values left out. Facets and the map use these. */
 export function filterQuery(filters: LeadFilters): FilterQuery {
   const query: FilterQuery = {}
-  // Every tier is spelled out too, so "every tier" never depends on the server's default.
-  query.tier = filters.tier.length > 0 ? [...filters.tier] : [...TIER_ORDER]
+  // Every tier is spelled out too, so "every tier" never depends on the server's default: all five,
+  // so a lead with no tier yet is in it.
+  query.tier = filters.tier.length > 0 ? [...filters.tier] : [...TIER_PICK_ORDER]
   if (filters.confidence.length > 0) query.confidence = [...filters.confidence]
   if (filters.city_group.length > 0) query.city_group = [...filters.city_group]
   if (filters.has_property) query.has_property = true

@@ -15,9 +15,8 @@ import {
   ORIGIN_LABELS,
   RESULT_LABELS,
   RUN_MODE_LABELS,
-  TIER_LABELS,
 } from '@/lib/labels'
-import { isDefaultTiers, NO_FILTERS, type LeadFilters } from './params'
+import { isDefaultTiers, NO_FILTERS, TIER_PICK_LABELS, type LeadFilters } from './params'
 
 export interface FilterChip {
   /** Unique among the chips, stable while the filter stays. */
@@ -97,8 +96,9 @@ function rangeLabel(
 }
 
 /**
- * The tier chips (PLAN-V16 T3-5). The default view, A and B, has none: the line under the bar says
- * so instead. Every tier has none either. Taking the last tier away shows every tier.
+ * The tier chips (PLAN-V16 T3-5). The default view (A, B, C and no tier yet, PLAN-V21) has none:
+ * the line under the bar says so instead. Every tier has none either. Taking the last tier away
+ * shows every tier.
  */
 function tierChips(filters: LeadFilters): FilterChip[] {
   if (filters.tier.length === 0 || isDefaultTiers(filters.tier)) {
@@ -106,7 +106,7 @@ function tierChips(filters: LeadFilters): FilterChip[] {
   }
   return filters.tier.map((tier) => ({
     key: `tier:${tier}`,
-    label: `Tier: ${TIER_LABELS[tier]}`,
+    label: tier === 'none' ? TIER_PICK_LABELS.none : `Tier: ${TIER_PICK_LABELS[tier]}`,
     remove: { tier: filters.tier.filter((item) => item !== tier) },
   }))
 }
@@ -220,7 +220,7 @@ export function panelFilterCount(filters: LeadFilters, inBar: boolean): number {
   for (const key of Object.keys(NO_FILTERS) as (keyof LeadFilters)[]) {
     if (key === 'q' || barKeys.includes(key)) continue
     if (key === 'tier') {
-      // The tier counts when it isn't the default view (A and B).
+      // The tier counts when it isn't the default view (A, B, C and no tier yet).
       if (!isDefaultTiers(filters.tier)) count += 1
       continue
     }

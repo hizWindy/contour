@@ -63,7 +63,15 @@ import { PHONE, useMediaQuery } from '@/lib/use-media-query'
 import { cn } from '@/lib/utils'
 import { activeChips, panelFilterCount } from './chips'
 import { loadCalendar } from './lazy-parts'
-import { dateOf, dayOf, isDefaultTiers, oneOf, type LeadFilters } from './params'
+import {
+  dateOf,
+  dayOf,
+  isDefaultTiers,
+  oneOf,
+  TIER_PICK_LABELS,
+  TIER_PICK_ORDER,
+  type LeadFilters,
+} from './params'
 
 // The calendar library is big, so the calendar is a file of its own (PLAN-V7 D1). Results asks for
 // it when the browser is idle, and a date filter asks again when it is pointed at or opened.
@@ -266,11 +274,24 @@ function listed(values: LeadFacets['city'] | undefined, picked: readonly string[
   )
 }
 
-/** "A: pursue now": each tier with what it asks for (PLAN-V16). */
-const TIER_OPTIONS: Option[] = TIER_ORDER.map((tier) => ({
-  value: tier,
-  label: `${TIER_LABELS[tier]}: ${TIER_ACTIONS[tier].toLowerCase()}`,
-}))
+/**
+ * "A: pursue now": each tier with what it asks for (PLAN-V16), then "No tier yet" for a lead judged
+ * before tiers existed (PLAN-V21 T3-5), each with its count from the facets.
+ */
+function tierOptions(facets: LeadFacets | undefined): Option[] {
+  return [
+    ...TIER_ORDER.map((tier) => ({
+      value: tier,
+      label: `${TIER_LABELS[tier]}: ${TIER_ACTIONS[tier].toLowerCase()}`,
+      count: facets?.tier ? countOf(facets.tier, tier) : undefined,
+    })),
+    {
+      value: 'none',
+      label: TIER_PICK_LABELS.none,
+      count: facets?.tier ? countOf(facets.tier, 'none') : undefined,
+    },
+  ]
+}
 
 /** The four city groups a lead can be in. */
 const CITY_GROUP_OPTIONS: Option[] = CITY_GROUP_ORDER.map((group) => ({
@@ -290,12 +311,12 @@ function MainFilters({
       <PickList
         title="Tier"
         block={block}
-        options={TIER_OPTIONS}
+        options={tierOptions(facets)}
         picked={filters.tier}
         onChange={(values) => {
           // Clearing the tiers shows every tier.
-          const picked = oneOf(values, TIER_LABELS)
-          onChange({ tier: TIER_ORDER.filter((tier) => picked.includes(tier)) })
+          const picked = oneOf(values, TIER_PICK_LABELS)
+          onChange({ tier: TIER_PICK_ORDER.filter((tier) => picked.includes(tier)) })
         }}
       />
       <PickList
@@ -552,14 +573,17 @@ function PanelFilters({ filters, facets, onChange }: ControlsProps) {
   )
 }
 
-/** The default view in one line, under the bar: Tier A and B, and the way to see every tier. */
+/**
+ * The default view in one line, under the bar: every lead but the Discards (PLAN-V21 T3-5), and the
+ * way to see every tier.
+ */
 function TierNote({ filters, onChange }: Pick<ControlsProps, 'filters' | 'onChange'>) {
   if (!isDefaultTiers(filters.tier)) {
     return null
   }
   return (
     <p className="flex flex-wrap items-center gap-x-2 text-caption text-muted-foreground">
-      Showing Tier A and B, the good leads.
+      Showing Tier A, B and C, and leads with no tier yet.
       <Button
         type="button"
         variant="link"

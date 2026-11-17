@@ -7,6 +7,7 @@ import {
   DEFAULT_STATE,
   exportQuery,
   filterQuery,
+  isDefaultTiers,
   listQuery,
   NO_FILTERS,
   readResults,
@@ -43,8 +44,8 @@ describe('the results address', () => {
       page: 2,
       lead: LEAD,
       filters: {
-        // PLAN-V16: no tier in the address is the default view, Tier A and B.
-        tier: ['A', 'B'],
+        // PLAN-V21: no tier in the address is the default view, A, B, C and no tier yet.
+        tier: ['A', 'B', 'C', 'none'],
         confidence: [],
         city_group: [],
         has_property: false,
@@ -115,16 +116,16 @@ describe('the results address', () => {
       filters: { ...NO_FILTERS, city: ['Perth'], min_score: 0 },
     }
     expect(filterQuery(state.filters)).toEqual({
-      tier: ['A', 'B'],
+      tier: ['A', 'B', 'C', 'none'],
       city: ['Perth'],
       min_score: 0,
     })
     expect(filterQuery({ ...NO_FILTERS, origin: ['web'] })).toEqual({
-      tier: ['A', 'B'],
+      tier: ['A', 'B', 'C', 'none'],
       origin: ['web'],
     })
     expect(listQuery(state)).toEqual({
-      tier: ['A', 'B'],
+      tier: ['A', 'B', 'C', 'none'],
       city: ['Perth'],
       min_score: 0,
       sort: 'score',
@@ -133,7 +134,7 @@ describe('the results address', () => {
       offset: 100,
     })
     expect(exportQuery(state)).toEqual({
-      tier: ['A', 'B'],
+      tier: ['A', 'B', 'C', 'none'],
       city: ['Perth'],
       min_score: 0,
       sort: 'score',
@@ -172,17 +173,20 @@ describe('the CSV file name', () => {
 })
 
 describe('the tier and the other PLAN-V16 filters (T3-5)', () => {
-  it('opens on Tier A and B, and sends them spelled out', () => {
-    expect(read('').filters.tier).toEqual(['A', 'B'])
-    expect(filterQuery(read('').filters).tier).toEqual(['A', 'B'])
-    // The default isn't a filter a person set.
+  it('opens on A, B, C and no tier yet, and sends them spelled out (PLAN-V21 T3-5)', () => {
+    expect(read('').filters.tier).toEqual(['A', 'B', 'C', 'none'])
+    expect(filterQuery(read('').filters).tier).toEqual(['A', 'B', 'C', 'none'])
+    // The default isn't a filter a person set, and it stays out of the address.
     expect(activeFilterCount(read('').filters)).toBe(0)
+    expect(writeResults(read('')).toString()).toBe('')
+    expect(isDefaultTiers(['none', 'C', 'B', 'A'])).toBe(true)
+    expect(isDefaultTiers(['A', 'B'])).toBe(false)
   })
 
-  it('shows every tier with tier=all, and sends all four', () => {
+  it('shows every tier with tier=all, and sends all five, so no lead is left out', () => {
     const state = read('tier=all')
     expect(state.filters.tier).toEqual([])
-    expect(filterQuery(state.filters).tier).toEqual(['A', 'B', 'C', 'discard'])
+    expect(filterQuery(state.filters).tier).toEqual(['A', 'B', 'C', 'discard', 'none'])
     expect(writeResults(state).toString()).toBe('tier=all')
     expect(activeFilterCount(state.filters)).toBe(1)
   })
@@ -190,8 +194,11 @@ describe('the tier and the other PLAN-V16 filters (T3-5)', () => {
   it('reads picked tiers in their order, and ignores a tier it does not know', () => {
     expect(read('tier=C&tier=A').filters.tier).toEqual(['A', 'C'])
     expect(read('tier=discard').filters.tier).toEqual(['discard'])
-    expect(read('tier=Z').filters.tier).toEqual(['A', 'B'])
+    expect(read('tier=none&tier=B').filters.tier).toEqual(['B', 'none'])
+    expect(read('tier=Z').filters.tier).toEqual(['A', 'B', 'C', 'none'])
     expect(writeResults(read('tier=discard')).toString()).toBe('tier=discard')
+    expect(writeResults(read('tier=none')).toString()).toBe('tier=none')
+    expect(filterQuery(read('tier=none').filters).tier).toEqual(['none'])
   })
 
   it('reads and writes confidence, city group, property records and exclusions', () => {

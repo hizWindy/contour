@@ -17,9 +17,10 @@ export function TierMark({
   tier: Tier | null | undefined
   className?: string
 }) {
-  // A lead saved before tiers, not yet judged again, has none: it says so instead of breaking.
+  // A lead saved before tiers, not yet judged again, has none: it says so instead of breaking,
+  // in the words of Results' filter (PLAN-V21 T3-5). Its result shows in its own column.
   if (!isTier(tier)) {
-    return <span className={cn('text-muted-foreground', className)}>Not ranked yet</span>
+    return <span className={cn('text-muted-foreground', className)}>No tier yet</span>
   }
   return (
     <span className={cn('font-semibold tabular-nums', className)}>
@@ -49,7 +50,7 @@ export function TierLine({
   className?: string
 }) {
   if (!isTier(tier)) {
-    return <span className={cn('tabular-nums', className)}>Score {score}, not ranked yet</span>
+    return <span className={cn('tabular-nums', className)}>Score {score}, no tier yet</span>
   }
   return (
     <span className={cn('inline-flex flex-wrap items-baseline gap-x-1.5 tabular-nums', className)}>
