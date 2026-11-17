@@ -439,6 +439,10 @@ class LeadFacets(BaseModel):
     office_m2: IntRange
     created: DateRange
     runs: list[RunFacet]
+    tier: list[FacetValue] = Field(
+        default_factory=list,
+        description="A, B, C, discard and none (no tier yet), in that order (PLAN-V21 T2-1)",
+    )
 
 
 class MapPoint(BaseModel):
@@ -552,6 +556,9 @@ class TestSummary(BaseModel):
     companies: int
     expected: int = Field(description="Companies with an expected result")
     matched: int = Field(description="Of those, how many came out as expected")
+    # PLAN-V21 T2-5: the quality bar
+    ranged: int = Field(0, description="Companies with a tier range")
+    in_range: int = Field(0, description="Of those, how many landed inside it")
     avg_cost_usd: Decimal
     total_cost_usd: Decimal
     rules_version: str
@@ -580,6 +587,16 @@ class TestItem(BaseModel):
     ok: bool | None = Field(description="null when nothing is expected")
     lead_id: UUID | None
     note: str | None = Field(description="Why a company failed or was skipped")
+    # PLAN-V21 T2-5: the tier, and the range Al-khair confirmed for it
+    tier: Tier | None = Field(None, description="null when the company failed")
+    tier_range: list[Tier] | None = Field(
+        None,
+        description="The lowest and the highest tier it may land in, like [C, A] for C or better. "
+        "null when it has none.",
+    )
+    in_range: bool | None = Field(
+        None, description="Whether the tier is inside the range. null with no range or no tier."
+    )
 
 
 class TestReport(BaseModel):

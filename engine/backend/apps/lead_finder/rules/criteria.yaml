@@ -40,6 +40,12 @@ size:
   staff_min: 50 # Levi, 9 Nov: 50+ staff fits (PLAN-V11 B2; was 100, the brief's "100+ in one office"). The HubSpot watchlist lists companies from here
   staff_hint_min: 50 # Levi, 9 Nov: 50+ staff fits (PLAN-V11 B2; was 75, the Profile's "75+ office staff"). A size worked out from staff between staff_floor and this is a Watch with a "check office size" flag. With both at 50 there is no such band
   staff_floor: 50 # Levi, 5 Nov: "about 50 if growing". A size worked out from staff under this is a Drop, "too small", unless the company is growing (PLAN-V9 B1)
+  # PLAN-V21 T2-3 (TBC with Levi): a size worked out from an ESTIMATED staff number (LinkedIn doubled,
+  # Signal Hire, the research's guess) from this up to staff_floor is a Watch with "check the size",
+  # not a Drop. A known count under staff_floor stays a Drop unless the company is growing. HubSpot's
+  # count before research is LinkedIn doubled, so it stops a company only under this. Set it to
+  # staff_floor to turn the band off.
+  estimated_floor: 30
   # The discovery signs that mean a company is growing. A company found with one of these is never
   # stopped before research for being small (PLAN-V9 B2): its size comes from what it plans.
   growth_signs: [fast_growth, big_new_contract, new_to_australia, hot_industry_growth]
@@ -413,6 +419,10 @@ score:
   procurement: 6 # direct engagement and a values strategy, and no red flag
   warm_path: 4
   unseen: [warm_path] # the tool can't judge these yet: it needs HubSpot contacts and board lists
+  # PLAN-V21 T2-2 (TBC with Levi): a check the tool can't judge for a lead ("not known yet") earns
+  # this share of its points, rounded down; a check that fails earns 0. 0 is the rule before 18 Nov.
+  # The confidence still says what wasn't checked.
+  unknown_share: 0.5
   dampeners: { strong: 20, moderate: 10 } # taken off the score for each found dampener
   tiers: { a: 75, b: 55, c: 40 } # A 75+, B 55 to 74, C 40 to 54, Discard under 40
 

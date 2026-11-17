@@ -34,6 +34,7 @@ from sqlalchemy import (
     distinct,
     exists,
     func,
+    or_,
     select,
     tuple_,
 )
@@ -70,7 +71,7 @@ from apps.lead_finder.schemas import (
     SortOrder,
     TriggerFacet,
 )
-from apps.lead_finder.scoring import Confidence, Tier
+from apps.lead_finder.scoring import Confidence, TierFilter
 from apps.lead_finder.tables import REJECT_REASONS, Lead, Rival
 from core.api.errors import Problem
 from core.memory.embedder import Embedder
@@ -128,7 +129,7 @@ class LeadFilters:
     latest: bool | None = None
     facts_missing: bool = False  # only leads whose answer form failed
     # PLAN-V16 T1-10 (the contract, part 3)
-    tier: list[Tier] | None = None  # A, B, C or discard
+    tier: list[TierFilter] | None = None  # A, B, C, discard or none (no tier yet)
     confidence: list[Confidence] | None = None
     city_group: list[CityGroupFilter] | None = None  # priority, secondary, capital or regional
     has_property: bool | None = None  # a property tool has a record of the company
@@ -148,6 +149,7 @@ SKIP_SCORE: Final = "score"
 SKIP_M2: Final = "office_m2"
 SKIP_CREATED: Final = "created"
 SKIP_RUN: Final = "run"
+SKIP_TIER: Final = "tier"
 
 
 def result_rank(result: str) -> int:
@@ -162,6 +164,8 @@ RESULT_RANK = case(
 )
 # Tier A first. A lead with no tier yet (judged before PLAN-V16 T1-6) comes last.
 TIER_ORDER: Final = ("A", "B", "C", "discard")
+NO_TIER: Final = "none"  # the filter's word for a lead with no tier yet (PLAN-V21 T2-1)
+TIER_FACET_ORDER: Final = (*TIER_ORDER, NO_TIER)
 TIER_RANK = case(
     {name: rank for rank, name in enumerate(TIER_ORDER)},
     value=Lead.tier,
@@ -195,6 +199,17 @@ def newest_only(filters: LeadFilters) -> bool:
 def _melbourne_day() -> ColumnElement[date]:
     """The day a lead was researched, read in Australia/Melbourne."""
     return cast(func.timezone(MELBOURNE, Lead.created_at), Date)
+
+
+def _tier_condition(tiers: Collection[str]) -> ColumnElement[bool]:
+    """The tiers asked for, where `none` is a lead with no tier yet (PLAN-V21 T2-1)."""
+    named = [tier for tier in tiers if tier != NO_TIER]
+    parts: list[ColumnElement[bool]] = []
+    if named:
+        parts.append(Lead.tier.in_(named))
+    if NO_TIER in tiers:
+        parts.append(Lead.tier.is_(None))
+    return or_(*parts) if len(parts) > 1 else parts[0]
 
 
 def lead_conditions(
@@ -245,8 +260,8 @@ def lead_conditions(
         where.append(Lead.company.icontains(filters.q, autoescape=True))
     if filters.facts_missing:
         where.append(_CARD["form_failed"].as_boolean().is_(True))
-    if filters.tier:
-        where.append(Lead.tier.in_(filters.tier))
+    if filters.tier and SKIP_TIER not in skipped:
+        where.append(_tier_condition(filters.tier))
     if filters.confidence:
         where.append(Lead.confidence.in_(filters.confidence))
     if filters.city_group:
@@ -503,6 +518,17 @@ async def lead_facets(session: AsyncSession, filters: LeadFilters) -> LeadFacets
         for t in trigger_ids
     ]
 
+    tier_word = func.coalesce(Lead.tier, NO_TIER)
+    tier_rows = (
+        await session.execute(
+            select(tier_word, func.count())
+            .select_from(Lead)
+            .where(*without(SKIP_TIER))
+            .group_by(tier_word)
+        )
+    ).all()
+    tier_counts = {str(value): int(count) for value, count in tier_rows}
+
     low_score, high_score = await spread(Lead.score, SKIP_SCORE)
     low_m2, high_m2 = await spread(Lead.office_m2, SKIP_M2)
     first_day, last_day = await spread(_melbourne_day(), SKIP_CREATED)
@@ -536,6 +562,7 @@ async def lead_facets(session: AsyncSession, filters: LeadFilters) -> LeadFacets
         office_m2=IntRange(min=low_m2, max=high_m2),
         created=DateRange(min=first_day, max=last_day),
         runs=await _run_facets(session, filters),
+        tier=facet_values(tier_counts, order=TIER_FACET_ORDER, selected=filters.tier),
     )
 
 

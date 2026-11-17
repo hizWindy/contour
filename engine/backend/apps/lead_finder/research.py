@@ -1256,9 +1256,11 @@ async def _too_small(session: AsyncSession, job: Job, given: SignalHire | None) 
     """Why the company is too small to research, or None (PLAN-V9 B2, PLAN-V21 T1-7).
 
     Only HubSpot's own count can stop a company before research: its staff in the asked-for city,
-    for a sure match, under `size.staff_floor`. Signal Hire's count is a guess (the people it has
-    on file, times its multiplier), so it never stops a company on its own (Agon Environmental was
-    dropped on Signal Hire's 48 alone, 18 Nov). When HubSpot's count is under the floor, Signal
+    for a sure match, under the floor. That count is its LinkedIn count doubled, an estimate, so
+    the floor is `size.estimated_floor` (30): from 30 to 49 an estimate is a Watch after research
+    (PLAN-V21 T2-3), so it isn't dropped before. Signal Hire's count is a guess too (the people it
+    has on file, times its multiplier), so it never stops a company on its own (Agon Environmental
+    was dropped on Signal Hire's 48 alone, 18 Nov). When HubSpot's count is under the floor, Signal
     Hire is still asked, and a count of its own at the floor or above lets the company through.
     Reading them costs no Claude request. Never when discovery found the company with a growth
     sign (`size.growth_signs`): a growing company is judged on what it plans. Signal Hire's
@@ -1286,7 +1288,8 @@ async def _too_small(session: AsyncSession, job: Job, given: SignalHire | None) 
             if found is not None:
                 numbers.append((found.staff, "HubSpot"))
         await session.rollback()  # a read only, and no connection waits on Signal Hire
-    if not numbers or numbers[0][0] >= size.staff_floor:
+    floor = size.estimated_floor  # HubSpot's count is LinkedIn doubled: an estimate
+    if not numbers or numbers[0][0] >= floor:
         return None  # no count of HubSpot's own, or one that fits: never stopped on a guess
     if wants_signalhire(rules, job.settings, origin=job.context.origin, city=metro):
         owned = None if given is not None else get_signalhire(job.settings)
@@ -1310,12 +1313,12 @@ async def _too_small(session: AsyncSession, job: Job, given: SignalHire | None) 
             candidate = job.early_staff.candidate
             if candidate is not None:
                 numbers.append((candidate.staff, "Signal Hire"))
-    if not numbers or any(staff >= size.staff_floor for staff, _ in numbers):
+    if not numbers or any(staff >= floor for staff, _ in numbers):
         return None
     said = ", ".join(f"{staff:,} staff ({source})" for staff, source in numbers)
     return (
-        f"Too small: {said}, under {size.staff_floor}. Not researched, so no Claude request "
-        "was made. Re-check it if the company has grown."
+        f"Too small: {said}, under {floor}. Not researched, so no Claude request was made. "
+        "Re-check it if the company has grown."
     )
 
 

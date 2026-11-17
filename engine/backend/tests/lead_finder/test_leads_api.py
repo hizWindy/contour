@@ -292,6 +292,7 @@ async def test_facets_over_http(client: httpx.AsyncClient, session: AsyncSession
         "office_m2",
         "created",
         "runs",
+        "tier",  # PLAN-V21 T2-1
     }
     assert body["origin"] == [{"value": "typed", "count": 3}]
     assert body["result"] == [
@@ -888,16 +889,24 @@ async def test_the_list_filters_by_tier_confidence_city_group_property_and_exclu
     client: httpx.AsyncClient, session: AsyncSession
 ) -> None:
     await v16_leads(session)
-    assert await names_for(client) == ["Alpha", "Bravo", "Charlie", "Delta"]  # tier, then score
-    assert await names_for(client, order="asc") == ["Delta", "Charlie", "Bravo", "Alpha"]
+    every = ["A", "B", "C", "discard"]
+    # By default every lead but a Discard (PLAN-V21 T2-4), tier first, then the score
+    assert await names_for(client) == ["Alpha", "Bravo", "Charlie"]
+    assert await names_for(client, tier=every) == ["Alpha", "Bravo", "Charlie", "Delta"]
+    assert await names_for(client, tier=every, order="asc") == [
+        "Delta",
+        "Charlie",
+        "Bravo",
+        "Alpha",
+    ]
     assert await names_for(client, tier=["A", "B"]) == ["Alpha", "Bravo"]
     assert await names_for(client, tier="discard") == ["Delta"]
     assert await names_for(client, confidence="high") == ["Alpha"]
-    assert await names_for(client, city_group="priority") == ["Alpha", "Delta"]  # Melbourne
+    assert await names_for(client, city_group="priority", tier=every) == ["Alpha", "Delta"]
     assert await names_for(client, city_group=["secondary", "regional"]) == ["Bravo", "Charlie"]
     assert await names_for(client, has_property="true") == ["Alpha"]
-    assert await names_for(client, has_property="false") == ["Bravo", "Charlie", "Delta"]
-    assert await names_for(client, excluded="true") == ["Delta"]
+    assert await names_for(client, has_property="false") == ["Bravo", "Charlie"]
+    assert await names_for(client, excluded="true") == ["Delta"]  # one filter away
     assert await names_for(client, excluded="false") == ["Alpha", "Bravo", "Charlie"]
     assert (await client.get(BASE, params={"tier": "Z"})).status_code == 422
 
@@ -907,13 +916,15 @@ async def test_a_row_and_the_csv_carry_the_tier_and_the_new_columns(
     client: httpx.AsyncClient, session: AsyncSession
 ) -> None:
     await v16_leads(session)
-    rows = {row["company"]: row for row in (await client.get(BASE)).json()["items"]}
+    every = ["A", "B", "C", "discard"]
+    page = (await client.get(BASE, params={"tier": every})).json()
+    rows = {row["company"]: row for row in page["items"]}
     assert (rows["Alpha"]["tier"], rows["Alpha"]["confidence"]) == ("A", "high")
     assert rows["Alpha"]["has_property"] is True and rows["Alpha"]["excluded"] is None
     assert rows["Delta"]["excluded"]["reason_id"] == "law_firm"
     assert rows["Bravo"]["has_property"] is False
 
-    response = await client.get(f"{BASE}/export", params={"sort": "tier"})
+    response = await client.get(f"{BASE}/export", params={"sort": "tier", "tier": every})
     alpha, _, _, delta = csv.DictReader(
         io.StringIO(response.content.decode("utf-8-sig"), newline="")
     )
@@ -947,3 +958,77 @@ async def test_the_profile_is_for_a_tier_a_lead(
     refused = await client.get(f"{BASE}/{leads['bravo'].id}/profile")
     assert (refused.status_code, refused.json()["code"]) == (409, "not_tier_a")
     assert (await client.get(f"{BASE}/{uuid.uuid4()}/profile")).status_code == 404
+
+
+# --- No hidden leads (PLAN-V21 T2-1 and T2-4) -----------------------------------------------------
+
+
+async def thirty_one_leads(session: AsyncSession) -> None:
+    """The live site on 18 Nov: 31 leads, 21 judged before tiers existed (no tier), 10 with one."""
+    tiers = ["A", "A", "B", "B", "B", "C", "C", "discard", "discard", "discard"]
+    leads = [
+        make_lead(f"Untiered {n:02d}", score=40 + n, result="watch", tier=None) for n in range(21)
+    ]
+    leads += [
+        make_lead(
+            f"Tiered {n:02d}",
+            score=80 - 5 * n,
+            tier=tier,
+            result="drop" if tier == "discard" else "pass",
+        )
+        for n, tier in enumerate(tiers)
+    ]
+    await add_all(session, *leads)
+
+
+@db
+async def test_the_default_view_shows_the_untiered_leads_and_hides_only_discard(
+    client: httpx.AsyncClient, session: AsyncSession
+) -> None:
+    await thirty_one_leads(session)
+
+    default = (await client.get(BASE, params={"limit": 100})).json()
+    assert default["total"] == 21 + 7  # A, B, C and no tier: every lead but a Discard
+    names = {row["company"] for row in default["items"]}
+    assert {f"Untiered {n:02d}" for n in range(21)} <= names
+    assert sum(1 for row in default["items"] if row["tier"] is None) == 21
+
+    discard = (await client.get(BASE, params={"tier": "discard", "limit": 100})).json()
+    assert discard["total"] == 3 and {row["tier"] for row in discard["items"]} == {"discard"}
+    none = (await client.get(BASE, params={"tier": "none", "limit": 100})).json()
+    assert none["total"] == 21
+    asked = (await client.get(BASE, params={"tier": ["A", "none"], "limit": 100})).json()
+    assert asked["total"] == 2 + 21
+
+
+@db
+async def test_the_facets_count_the_leads_with_no_tier(
+    client: httpx.AsyncClient, session: AsyncSession
+) -> None:
+    await thirty_one_leads(session)
+    facets = (await client.get(f"{BASE}/facets")).json()
+    assert facets["tier"] == [
+        {"value": "A", "count": 2},
+        {"value": "B", "count": 3},
+        {"value": "C", "count": 2},
+        {"value": "discard", "count": 3},
+        {"value": "none", "count": 21},
+    ]  # the tier facet leaves its own filter out, so Discard is counted too
+    assert sum(item["count"] for item in facets["result"]) == 28  # the other facets: the default
+
+
+@db
+async def test_the_map_and_the_csv_take_the_same_default(
+    client: httpx.AsyncClient, session: AsyncSession
+) -> None:
+    await thirty_one_leads(session)
+    rows = list(
+        csv.DictReader(
+            io.StringIO(
+                (await client.get(f"{BASE}/export")).content.decode("utf-8-sig"), newline=""
+            )
+        )
+    )
+    assert len(rows) == 28
+    assert sum(1 for row in rows if row["tier"] == "") == 21
+    assert (await client.get(f"{BASE}/map")).json()["total"] == 28

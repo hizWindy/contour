@@ -140,9 +140,13 @@ async def test_start_watch_filter_open_mark_and_download(
     assert run["counts"]["researched"] == 8
     run_id = run["id"]
 
-    # The results of this run, best first: every result is there, all sample companies.
-    page = await ok(client.get(f"{LF}/leads", params={"run_id": run_id}))
+    # The results of this run, best first: every result is there, all sample companies. Every tier
+    # is asked for: Results hides a Discard by default (PLAN-V21 T2-4), one filter away.
+    every = {"run_id": run_id, "tier": ["A", "B", "C", "discard", "none"]}
+    page = await ok(client.get(f"{LF}/leads", params=every))
     assert page["total"] == 8
+    default = await ok(client.get(f"{LF}/leads", params={"run_id": run_id}))
+    assert default["total"] == 8 - sum(1 for row in page["items"] if row["tier"] == "discard")
     assert all(row["company"].startswith("Sample ") for row in page["items"])
     assert {row["result"] for row in page["items"]} == {
         "pass",
@@ -161,9 +165,9 @@ async def test_start_watch_filter_open_mark_and_download(
         "Sample Energy",
         "Sample Mining Services",
     }
-    facets = await ok(client.get(f"{LF}/leads/facets", params={"run_id": run_id}))
+    facets = await ok(client.get(f"{LF}/leads/facets", params=every))
     assert sum(item["count"] for item in facets["result"]) == 8
-    pins = await ok(client.get(f"{LF}/leads/map", params={"run_id": run_id}))
+    pins = await ok(client.get(f"{LF}/leads/map", params=every))
     assert pins["total"] == 8 and len(pins["items"]) == 8
 
     # Open the best lead: its card, and its look-alikes.
@@ -181,7 +185,7 @@ async def test_start_watch_filter_open_mark_and_download(
     assert [row["id"] for row in watching["items"]] == [best["id"]]
 
     # The CSV of what the table shows.
-    text = await ok(client.get(f"{LF}/leads/export", params={"run_id": run_id}))
+    text = await ok(client.get(f"{LF}/leads/export", params=every))
     rows = list(csv.DictReader(io.StringIO(text.lstrip("﻿"))))
     assert len(rows) == 8
     assert {row["company"] for row in rows} == {row["company"] for row in page["items"]}

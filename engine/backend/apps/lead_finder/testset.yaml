@@ -5,6 +5,10 @@
 # "why" says what each case tests. "expect" is set only where the rules make the result certain. The expected results are our guesses (TBC) until the
 # first run, and a person checks each card against its sources.
 #
+# "tier_range" is the quality bar (PLAN-V21 T2-5): the lowest and the highest tier the company may
+# land in, like [C, A] for "C or better". No saved test set result was in the laptop's databases on
+# 18 Nov, so each range is proposed from what the company is. Al-khair confirms them before M2 (TBC).
+#
 # Run it from engine/backend: uv run lead-finder testset --yes
 
 companies:
@@ -12,41 +16,51 @@ companies:
     city: Melbourne
     website: cultureamp.com
     why: A mid-size tech company with a Melbourne head office. Likely fits.
+    tier_range: [C, A]  # a mid-size Melbourne tech head office: C or better
   - name: Seek
     city: Melbourne
     website: seek.com.au
     why: A large Melbourne head office. Tests the over-600-staff Director rule.
+    tier_range: [C, A]  # a large Melbourne head office (a Director review): C or better
   - name: Kogan.com
     city: Melbourne
     website: kogan.com
     why: An ASX-listed retailer. Tests a mid-size office with warehouses elsewhere.
+    tier_range: [discard, B]  # warehouses elsewhere, site-heavy retail: no better than B
   - name: Elders
     city: Adelaide
     website: elders.com.au
     why: An Adelaide head office for a business spread across regional Australia.
+    tier_range: [discard, B]  # a business spread across regional Australia: no better than B
   - name: Beach Energy
     city: Adelaide
     website: beachenergy.com.au
     why: An energy company with an Adelaide head office. Tests the site-heavy flag.
+    tier_range: [C, A]  # energy is a priority sector, with an Adelaide head office
   - name: Maptek
     city: Adelaide
     website: maptek.com
     why: A private software firm. Tests what we can find with no ASX filings.
+    tier_range: [discard, B]  # a private firm, little to find: no better than B
   - name: Mineral Resources
     city: Perth
     website: mineralresources.com.au
     why: A miner with a large Perth head office. Tests the site-heavy flag and size.
+    tier_range: [C, A]  # a resources head office in Perth: C or better
   - name: Perenti
     city: Perth
     website: perenti.com
     why: A mining services firm in Perth. Tests the site-heavy flag.
+    tier_range: [discard, B]  # mining services, site-heavy: no better than B
   - name: Bankwest
     city: Perth
     website: bankwest.com.au
     why: Owned by a Sydney bank. Tests the local team rule and the finance Director list.
+    tier_range: [discard, C]  # a bank: premium banks are left out, so no better than C
   - name: Canva
     city: Sydney
     website: canva.com
     why: A Sydney company. Tests a secondary city, which can pass since PLAN-V16 T1-2.
+    tier_range: [C, A]  # a large Sydney tech company: C or better
     # No "expect": until then Sydney was a Director review city, so the result was certain (never
     # a pass). Now any place passes, so a person checks the card.

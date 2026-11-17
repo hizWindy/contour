@@ -3,8 +3,9 @@ can be judged by its score.
 
 - `load_testset()` reads `testset.yaml`. A company may say what result it expects
   (`expect.results`), but only where the rules make it certain. Since PLAN-V16 T1-2 none is (Canva
-  in Sydney used to be never a pass, and now Sydney can pass). The rest have no expectation
-  (**TBC** until a person checks the first real run).
+  in Sydney used to be never a pass, and now Sydney can pass). Since PLAN-V21 T2-5 each also has a
+  tier range (`tier_range`, like [C, A] for "C or better"): the quality bar a run is held to,
+  proposed from what each company is and confirmed by Al-khair before M2 (**TBC**).
 - A test set run is an ordinary run of mode `testset`: its leads are marked `is_test`, so they stay
   out of the results and never count as "already researched".
 - `list_testset_runs` gives one summary for each past run, newest first, so scores can be
@@ -20,12 +21,13 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.lead_finder.rules import Result
 from apps.lead_finder.schemas import TestItem, TestPage, TestReport, TestSummary
+from apps.lead_finder.scoring import Tier
 from apps.lead_finder.sources import FACT_FIELDS
 from apps.lead_finder.tables import Lead, company_key
 from core.api.errors import Problem
@@ -36,6 +38,7 @@ TESTSET = Path(__file__).resolve().parent / "testset.yaml"
 APP = "lead_finder"
 MODE = "testset"
 CENT = Decimal("0.01")
+TIER_RANK: dict[str, int] = {"discard": 0, "C": 1, "B": 2, "A": 3}  # low to high
 
 
 class TestExpect(BaseModel):
@@ -56,6 +59,23 @@ class TestCompany(BaseModel):
     website: str | None = None
     why: str
     expect: TestExpect | None = None
+    tier_range: tuple[Tier, Tier] | None = None  # (lowest, highest), PLAN-V21 T2-5
+
+    @model_validator(mode="after")
+    def _low_first(self) -> "TestCompany":
+        if self.tier_range is not None:
+            low, high = self.tier_range
+            if TIER_RANK[low] > TIER_RANK[high]:
+                raise ValueError(f"{self.name}: tier_range must go from the lowest to the highest")
+        return self
+
+
+def in_range(tier: str | None, tiers: tuple[Tier, Tier] | None) -> bool | None:
+    """Whether a tier is inside a range. None with no range, or no tier (the company failed)."""
+    if tiers is None or tier is None or tier not in TIER_RANK:
+        return None
+    low, high = tiers
+    return TIER_RANK[low] <= TIER_RANK[tier] <= TIER_RANK[high]
 
 
 class TestSet(BaseModel):
@@ -112,6 +132,7 @@ async def _why_not(session: AsyncSession, run_id: uuid.UUID) -> dict[str, str]:
 
 def _summary(run: Run, items: list[TestItem]) -> TestSummary:
     expected = [item for item in items if item.expected is not None]
+    ranged = [item for item in items if item.tier_range is not None]
     researched = [item for item in items if item.result is not None]
     total = Decimal(run.cost_usd)
     average = (total / len(researched)).quantize(CENT) if researched else Decimal(0)
@@ -122,6 +143,8 @@ def _summary(run: Run, items: list[TestItem]) -> TestSummary:
         companies=len(items),
         expected=len(expected),
         matched=sum(1 for item in expected if item.ok),
+        ranged=len(ranged),
+        in_range=sum(1 for item in ranged if item.in_range),
         avg_cost_usd=average,
         total_cost_usd=total,
         rules_version=run.rules_version,
@@ -138,6 +161,7 @@ async def _items(session: AsyncSession, run: Run, testset: TestSet) -> list[Test
         lead = leads.get(key)
         expected = list(company.expect.results) if company.expect else None
         result = lead.result if lead is not None else None
+        tier = lead.tier if lead is not None else None
         facts = lead.card.get("facts", {}) if lead is not None else {}
         items.append(
             TestItem(
@@ -151,6 +175,9 @@ async def _items(session: AsyncSession, run: Run, testset: TestSet) -> list[Test
                 ok=None if expected is None else (result is not None and result in expected),
                 lead_id=lead.id if lead is not None else None,
                 note=None if lead is not None else why_not.get(key, "Not researched"),
+                tier=tier,
+                tier_range=list(company.tier_range) if company.tier_range else None,
+                in_range=in_range(tier, company.tier_range),
             )
         )
     return items

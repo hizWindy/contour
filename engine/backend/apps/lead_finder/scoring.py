@@ -39,10 +39,14 @@ Group = Literal["main", "other", "weak"]
 # still shows its band. A lead judged now has none: it has a tier.
 Band = Literal["research_first", "investigate", "nurture"]
 Tier = Literal["A", "B", "C", "discard"]
+# The Results filter's tiers (PLAN-V21 T2-1): a tier, or `none` for a lead with no tier yet (judged
+# before PLAN-V16 T1-6, until a rejudge gives it one)
+TierFilter = Literal["A", "B", "C", "discard", "none"]
 Confidence = Literal["high", "medium", "low"]
-# "small": worked out from staff between staff_floor and staff_hint_min. The lead is a Watch at
-# best, with a "check office size" flag (PLAN-V9 B1). Since 9 Nov both are 50, so no lead is
-# "small" until the rules open that band again (PLAN-V11 B2).
+# "small": worked out from staff between staff_floor and staff_hint_min, or from an ESTIMATED staff
+# number between estimated_floor and staff_floor (PLAN-V21 T2-3). The lead is a Watch at best, with
+# a "check the size" flag (PLAN-V9 B1). Since 9 Nov both staff numbers are 50 (PLAN-V11 B2), so the
+# estimated band, 30 to 49, is the one that is open.
 SizeBasis = Literal["confirmed", "estimated", "growing", "director", "small", "below", "none"]
 DAYS_PER_YEAR = 365.25
 DAYS_PER_MONTH = 30.44
@@ -92,7 +96,10 @@ class ScoreCheck(BaseModel):
     label: str
     earned: int
     max: int
-    known: bool = Field(description="false means 'not known yet': it adds nothing to 'checked'")
+    known: bool = Field(
+        description="false means 'not known yet': it adds nothing to 'checked', and it earns "
+        "`score.unknown_share` of its points, half rounded down (PLAN-V21 T2-2)"
+    )
     detail: str = ""
 
 
@@ -478,9 +485,11 @@ def _size(facts: CompanyFacts, rules: LeadFinderRules, today: date) -> SizeJudge
     """The size rule. A known office size is judged against the range. A size worked out from
     staff follows the staff numbers (PLAN-V9 B1): `staff_hint_min` or more is fine; from
     `staff_floor` up to it is a Watch with a "check office size" flag; under the floor is a Drop,
-    "too small". Since Levi's 9 Nov meeting both are 50, so 50+ staff fits and the Watch band is
-    empty (PLAN-V11 B2). A small company that will soon need an office in range still fits
-    (`_growing`), whatever its staff today."""
+    "too small". Since Levi's 9 Nov meeting both are 50, so 50+ staff fits and that Watch band is
+    empty (PLAN-V11 B2). An ESTIMATED staff number (LinkedIn doubled, Signal Hire, the research's
+    guess) from `estimated_floor` (30) up to the floor is a Watch with "check the size" too, not a
+    Drop (PLAN-V21 T2-3, TBC with Levi); a known count under the floor stays a Drop. A small company
+    that will soon need an office in range still fits (`_growing`), whatever its staff today."""
     size = rules.criteria.size
     staff = facts.staff_in_city.value
     if staff is not None and facts.staff_from_linkedin:
@@ -522,6 +531,10 @@ def _size(facts: CompanyFacts, rules: LeadFinderRules, today: date) -> SizeJudge
             why = "small"
             detail = f"{text}: under {hint} staff, so a Watch. Check the office size"
             check = RuleCheck(rule="Size", outcome="flag", detail=detail)
+        elif staff >= size.estimated_floor and not staff_is_known(facts):
+            why = "small"
+            detail = f"{text}: an estimate under {floor} staff, so a Watch. Check the size"
+            check = RuleCheck(rule="Size", outcome="flag", detail=detail)
         else:
             detail = f"{text}: under {floor} staff, too small"
             check = RuleCheck(rule="Size", outcome="fail", detail=detail)
@@ -532,6 +545,12 @@ def _size(facts: CompanyFacts, rules: LeadFinderRules, today: date) -> SizeJudge
         check = RuleCheck(rule="Size", outcome="fail", detail=f"{text}: too small")
     grown = _growing(facts, rules, today)
     return replace(grown, staff=staff) if grown is not None else judged(check, why, estimated)
+
+
+def staff_is_known(facts: CompanyFacts) -> bool:
+    """A known staff count: confirmed, and not a LinkedIn count doubled. Anything else is an
+    estimate (Signal Hire's count, HubSpot's LinkedIn count, the research's guess)."""
+    return facts.staff_in_city.label == "confirmed" and not facts.staff_from_linkedin
 
 
 def _growing(facts: CompanyFacts, rules: LeadFinderRules, today: date) -> SizeJudgement | None:
@@ -668,6 +687,9 @@ def _filters(
     staff = sized.staff
     if sized.from_staff and sized.check.outcome == "fail" and staff is not None:
         add("headcount", "fail", f"{staff:,} staff in the city, under {size.staff_floor}")
+    elif sized.basis == "small" and staff is not None and staff < size.staff_floor:
+        under = f"About {staff:,} staff in the city, an estimate under {size.staff_floor}"
+        add("headcount", "estimated", f"{under}. Check the size")  # PLAN-V21 T2-3
     elif staff is None:
         grows = sized.basis == "growing"
         add(
@@ -678,7 +700,7 @@ def _filters(
             else "Staff in the city not known",
         )
     elif staff >= size.staff_min:
-        confirmed = facts.staff_in_city.label == "confirmed" and not facts.staff_from_linkedin
+        confirmed = staff_is_known(facts)
         counted = f"{staff:,} staff in the city"
         add(
             "headcount",
@@ -1258,6 +1280,17 @@ def _confidence(
     return level, f"{level.capitalize()}: {_words(problems)}."
 
 
+def unknown_points(most: int, share: float) -> int:
+    """What a check that is "not known yet" earns: its share of the points, rounded down."""
+    return int(Decimal(str(share)) * most)
+
+
+def unknown_words(share: float) -> str:
+    """What the card says on such a check (PLAN-V21 T2-2): "half points: not known yet"."""
+    words = "half points" if share == 0.5 else f"{round(share * 100)}% of the points"
+    return f"{words}: not known yet"
+
+
 def _score_parts(
     triggers: list[TriggerScore],
     facts: CompanyFacts,
@@ -1268,8 +1301,9 @@ def _score_parts(
     today: date,
 ) -> list[ScorePart]:
     """The three parts of the score, each with its checks (Levi's section 6). A check is "not known
-    yet" when the tool can't judge it for this lead, and then it earns nothing. This is the score
-    before the dampeners."""
+    yet" when the tool can't judge it for this lead, and then it earns `score.unknown_share` of its
+    points, rounded down: half (PLAN-V21 T2-2, TBC with Levi). A check that fails earns 0. The
+    confidence still says what wasn't checked. This is the score before the dampeners."""
     criteria = rules.criteria
     score = criteria.score
     evidence = {booster.id: booster.evidence for booster in facts.boosters}
@@ -1280,13 +1314,14 @@ def _score_parts(
         id: str, earned: int, most: int, *, known: bool = True, detail: str = ""
     ) -> ScoreCheck:
         known = known and id not in score.unseen
+        share = unknown_points(most, score.unknown_share)
         return ScoreCheck(
             id=id,
             label=score.check_labels[id],
-            earned=earned if known else 0,
+            earned=earned if known else share,
             max=most,
             known=known,
-            detail=detail if known else "",
+            detail=detail if known else unknown_words(score.unknown_share) if share else "",
         )
 
     # --- Fit (30)

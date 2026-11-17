@@ -33,7 +33,7 @@ from apps.lead_finder.schemas import (
     SimilarOut,
     SortOrder,
 )
-from apps.lead_finder.scoring import Confidence, Tier
+from apps.lead_finder.scoring import Confidence, TierFilter
 from apps.lead_finder.similar import similar_for
 from core.api.access import SignedInDep, need
 from core.api.deps import EmbedderDep, SessionDep
@@ -113,8 +113,12 @@ class LeadFilters(lead_store.LeadFilters):
         ),
     ] = False
     tier: Annotated[
-        list[Tier] | None,
-        Query(description="A, B, C or discard (PLAN-V16). Left out: every lead. " + REPEAT),
+        list[TierFilter] | None,
+        Query(
+            description="A, B, C, discard or none: a lead with no tier yet (PLAN-V16, PLAN-V21 "
+            "T2-1). Left out: A, B, C and none, so every lead but a Discard shows (and every "
+            "lead with `excluded=true`). " + REPEAT
+        ),
     ] = None
     confidence: Annotated[list[Confidence] | None, Query(description=REPEAT)] = None
     city_group: Annotated[
@@ -133,7 +137,16 @@ class LeadFilters(lead_store.LeadFilters):
         ),
     ] = None
 
+    def __post_init__(self) -> None:
+        # Results shows every lead but a Discard by default (PLAN-V21 T2-4), so the leads judged
+        # before tiers show too. A Discard is one filter away (tier=discard), and so is an excluded
+        # lead (excluded=true alone shows them all). Home's and the run page's good leads are
+        # Tier A and B, counted elsewhere.
+        if self.tier is None and self.excluded is not True:
+            self.tier = list(DEFAULT_TIERS)
 
+
+DEFAULT_TIERS: tuple[TierFilter, ...] = ("A", "B", "C", "none")
 Filters = Annotated[LeadFilters, Depends()]
 SortParam = Annotated[LeadSort, Query(description="The column to sort by")]
 OrderParam = Annotated[SortOrder, Query()]

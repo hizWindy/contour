@@ -109,8 +109,9 @@ async def test_research_searches_four_angles_and_saves_everything(session: Async
         "search:property",
     ]
     assert card.result == "pass"
-    assert card.score == 72  # see test_scoring: a good lead with nothing found for sector or rivals
-    assert (card.score_before_dampeners, card.tier, card.confidence) == (72, "B", "high")
+    # see test_scoring: a good lead with nothing found for sector or rivals, and half the warm path
+    assert card.score == 74
+    assert (card.score_before_dampeners, card.tier, card.confidence) == (74, "B", "high")
     assert card.confidence_why.startswith("High:")  # type: ignore[union-attr]
     assert (card.score_checked, card.band) == (None, None)  # the six-part score's fields
     assert [part.id for part in card.score_parts] == ["fit", "change", "access"]
@@ -149,10 +150,10 @@ async def test_saving_a_rejudge_fills_in_the_tier_and_the_confidence_of_a_saved_
     session.expire_all()
     saved = await session.get(Lead, card.id)
     assert saved is not None
-    assert (saved.tier, saved.confidence, saved.score, saved.result) == ("B", "high", 72, "pass")
+    assert (saved.tier, saved.confidence, saved.score, saved.result) == ("B", "high", 74, "pass")
     assert saved.rules_version == load_rules().version
     assert (saved.note, saved.status) == (note, status)
-    assert saved.card["tier"] == "B" and saved.card["score_before_dampeners"] == 72
+    assert saved.card["tier"] == "B" and saved.card["score_before_dampeners"] == 74
     assert saved.card["band"] is None and saved.card["rules_version"] == load_rules().version
 
 
@@ -207,7 +208,7 @@ async def test_the_card_lists_every_dampener_and_what_the_answer_found(
         ASX,
     )
     # No rule fails and nothing is excluded, but it costs points: 72 - 10 (the lock-in check) - 20
-    assert (card.score, card.tier, card.result) == (42, "C", "watch")
+    assert (card.score, card.tier, card.result) == (44, "C", "watch")
     saved = await session.scalar(select(Lead.card).where(Lead.id == card.id))
     assert saved is not None
     assert [(item["id"], item["state"]) for item in saved["dampeners"]][:2] == [
@@ -284,7 +285,7 @@ async def test_a_company_that_just_moved_is_a_watch_and_says_why(session: AsyncS
     assert card.result == "watch"
     assert card.why_it_fits.endswith(
         "Result: Watch. Because: Moved in June 2026, so probably not in the market yet; "
-        "Tier C, a score of 52 (from 40 to 54): watch for a new sign."
+        "Tier C, a score of 54 (from 40 to 54): watch for a new sign."
     )
 
 
@@ -994,7 +995,7 @@ async def test_hubspot_at_20_staff_is_still_stopped_at_no_cost(session: AsyncSes
     assert claude.calls == []  # no Claude request at all
     assert card.result == "drop"
     assert card.summary.startswith(
-        "Too small: 20 staff (HubSpot), 4 staff (Signal Hire), under 50."
+        "Too small: 20 staff (HubSpot), 4 staff (Signal Hire), under 30."
     )
     assert card.research.claude_requests == 0 and card.research.cost_usd == 0
     assert not any(call.startswith("leaders:") for call in fake.calls)  # no people search either
@@ -1027,7 +1028,7 @@ async def test_hubspot_saying_small_stops_it_too(session: AsyncSession) -> None:
     card = await research(session, claude)
 
     assert claude.calls == []
-    assert card.summary.startswith("Too small: 12 staff (HubSpot), under 50.")
+    assert card.summary.startswith("Too small: 12 staff (HubSpot), under 30.")
     assert card.result == "drop"
 
 

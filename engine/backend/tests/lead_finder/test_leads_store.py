@@ -1384,3 +1384,25 @@ async def test_reject_reasons_are_counted_over_the_last_90_days(session: AsyncSe
     ]
     assert len(counts.reasons) == 6 and counts.reasons[0].label == "Too small"
     assert {item.count for item in counts.reasons[2:]} == {0}
+
+
+# --- No hidden leads (PLAN-V21 T2-1) --------------------------------------------------------------
+
+
+@db
+async def test_the_store_filters_a_lead_with_no_tier_as_none(session: AsyncSession) -> None:
+    await add_all(
+        session,
+        make_lead("Old Lead", tier=None, result="watch"),
+        make_lead("Good Lead", tier="A"),
+        make_lead("Gone Lead", tier="discard", result="drop"),
+    )
+
+    async def names(**filters: Any) -> list[str]:
+        page = await lead_store.list_leads(session, lead_store.LeadFilters(**filters), "company")
+        return sorted(row.company for row in page.items)
+
+    assert await names() == ["Gone Lead", "Good Lead", "Old Lead"]  # no tier asked: every lead
+    assert await names(tier=["none"]) == ["Old Lead"]
+    assert await names(tier=["A", "B", "C", "none"]) == ["Good Lead", "Old Lead"]
+    assert await names(tier=["discard"]) == ["Gone Lead"]
