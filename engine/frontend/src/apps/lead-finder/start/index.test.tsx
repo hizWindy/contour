@@ -606,3 +606,17 @@ describe('How many companies and the top up (PLAN-V21 T3-3)', () => {
     expect(screen.getByRole('button', { name: 'Start run' })).toBeDisabled()
   })
 })
+
+describe('a company limit that leaves one preset (PLAN-V21 T3-3)', () => {
+  it('shows the number field alone, since one preset would only repeat it', async () => {
+    mockApi(() => estimate(), {
+      ...OPTIONS,
+      target_companies: { default: 20, min: 5, max: 20, presets: [20] },
+    })
+    renderStart()
+    const field = await screen.findByLabelText('Companies to research')
+    expect(field).toHaveValue('20')
+    expect(screen.queryByRole('radiogroup', { name: 'Suggested numbers' })).toBeNull()
+    expect(screen.getByText(/From 5 to 20\./)).toBeInTheDocument()
+  })
+})

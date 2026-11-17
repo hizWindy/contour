@@ -2,7 +2,8 @@
  * "How many companies" on "Find new leads" (PLAN-V21 T3-3), under the signs:
  *
  * - The presets as buttons (25, 50 and 100, cut to the run's company limit by the backend) and a
- *   number field that forgives "1,000" and "50 companies".
+ *   number field that forgives "1,000" and "50 companies". A single preset would only repeat the
+ *   field, so it shows only when there are two or more.
  * - The estimate's cost for that many companies ("about US$X to US$Y"), and its one sentence when
  *   the target doesn't fit the money limits.
  * - "Top up from the HubSpot watchlist": the sliding switch, with one line on what it does. While
@@ -58,17 +59,20 @@ export function TargetChoices({ options, form, update, errors, estimate }: Targe
       <Field>
         <FieldLabel htmlFor="target-companies">Companies to research</FieldLabel>
         <div className="flex flex-wrap items-center gap-2">
-          <Segmented
-            aria-label="Suggested numbers"
-            value={preset}
-            options={limits.presets.map((count) => ({
-              value: String(count),
-              label: String(count),
-            }))}
-            onChange={(value) => {
-              update({ targetCompanies: value })
-            }}
-          />
+          {/* One preset (a company limit of 20 leaves only 20) would only repeat the field. */}
+          {limits.presets.length > 1 ? (
+            <Segmented
+              aria-label="Suggested numbers"
+              value={preset}
+              options={limits.presets.map((count) => ({
+                value: String(count),
+                label: String(count),
+              }))}
+              onChange={(value) => {
+                update({ targetCompanies: value })
+              }}
+            />
+          ) : null}
           <Input
             id="target-companies"
             inputMode="numeric"
