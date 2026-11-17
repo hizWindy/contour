@@ -5,9 +5,15 @@ import { renderWithProviders } from '@/test/render'
 import { UserMenu } from './user-menu'
 
 describe('the account menu in the top bar', () => {
-  it('shows the initials and name, and opens to the email, the role and Sign out', async () => {
+  it('shows the initials, position and name, and opens to the email, the role, Change password and Sign out', async () => {
     stubAuthBackend({
-      me: signedIn({ ...SAMPLE_USER, name: 'Al-khair Pama', email: 'al@example.test' }),
+      me: signedIn({
+        ...SAMPLE_USER,
+        name: 'Al-khair Pama',
+        email: 'al@example.test',
+        position: 'Founder',
+        role: 'platform_admin',
+      }),
     })
     const { user } = renderWithProviders(<UserMenu />)
 
@@ -23,8 +29,10 @@ describe('the account menu in the top bar', () => {
     const menu = await screen.findByRole('menu')
     expect(account).toHaveAttribute('aria-expanded', 'true')
     expect(within(menu).getByText('Al-khair Pama')).toBeInTheDocument()
+    expect(within(menu).getByText('Founder')).toBeInTheDocument()
     expect(within(menu).getByText('al@example.test')).toBeInTheDocument()
-    expect(within(menu).getByText('System admin')).toBeInTheDocument()
+    expect(within(menu).getByText('Platform admin')).toBeInTheDocument()
+    expect(within(menu).getByRole('menuitem', { name: 'Change password' })).toBeInTheDocument()
     expect(within(menu).getByRole('menuitem', { name: 'Sign out' })).toBeInTheDocument()
   })
 

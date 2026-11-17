@@ -48,6 +48,7 @@ import { useCallNoteOptions } from '@/api/hooks/call-notes'
 import { prepLost } from '@/api/hooks/companies'
 import { toneInUse, useScriptStyle } from '@/api/hooks/script'
 import type { CompanyPerson } from '@/api/types'
+import { useCan, useCanWrite } from '@/auth/can'
 import { ErrorState } from '@/components/error-state'
 import { PushView } from '@/components/motion'
 import { Button } from '@/components/ui/button'
@@ -182,6 +183,9 @@ export function PrepSheet({ target, onClose, onChangeTarget, onOpenCompany }: Pr
   const started = useRef(new Set<string>())
   const start = useStartPrep()
   const me = useMe()
+  const canCompanies = useCan('companies.companies')
+  const canPrep = useCan('companies.call_prep')
+  const canWritePrep = useCanWrite('companies.call_prep')
   const today = melbourneDate()
   const onPhone = useMediaQuery(PHONE)
 
@@ -191,11 +195,11 @@ export function PrepSheet({ target, onClose, onChangeTarget, onOpenCompany }: Pr
   const choosing = shown !== null && !shown.prepId && !shown.person && !shown.cold
   // A Refresh replaces what a chip opened, so the newest prep for this key wins.
   const prepId = prepIds[key] ?? shown?.prepId
-  const prep = usePrep(prepId)
+  const prep = usePrep(canPrep ? prepId : undefined)
   const companyKey = shown?.companyKey || prep.data?.company_key || undefined
-  const company = useCompany(companyKey)
+  const company = useCompany(canCompanies ? companyKey : undefined)
   // The company's own facts (no person): the quick look, fetched while the pointer rested on Prep.
-  const quick = usePrepFacts(companyKey, null)
+  const quick = usePrepFacts(canPrep ? companyKey : undefined, null)
   // Who to call, while choosing: undefined until the facts or the record come.
   const callee = choosing
     ? calleeFrom(quick.data, company.data, Boolean(quick.error && company.error))
@@ -208,10 +212,10 @@ export function PrepSheet({ target, onClose, onChangeTarget, onOpenCompany }: Pr
       ? (callee ?? null)
       : (shown?.person ?? (prep.data?.kind === 'person' ? (prep.data.person ?? null) : null))
   const contactId = picking ? null : (person?.id ?? null)
-  const facts = usePrepFacts(companyKey, contactId)
+  const facts = usePrepFacts(canPrep ? companyKey : undefined, contactId)
 
   const ask = (refresh: boolean): void => {
-    if (!shown) return
+    if (!shown || !canWritePrep) return
     const askKey = key
     // A chip carries only the prep: its person (or the cold call) comes from the prep itself.
     const saved = shown.prepId ? prep.data : undefined
@@ -256,7 +260,7 @@ export function PrepSheet({ target, onClose, onChangeTarget, onOpenCompany }: Pr
 
   // A person or a cold call: start (or reuse) call prep once. Switched off, it answers at once.
   useEffect(() => {
-    if (!target || target.prepId || (!target.person && !target.cold)) return
+    if (!canWritePrep || !target || target.prepId || (!target.person && !target.cold)) return
     const wanted = targetKey(target)
     if (started.current.has(wanted)) return
     started.current.add(wanted)
@@ -289,7 +293,7 @@ export function PrepSheet({ target, onClose, onChangeTarget, onOpenCompany }: Pr
 
   // The tone in use, for "Written in a Friendly tone. Research again to use Direct." Unknown until
   // the style loads, so no hint shows before then.
-  const styleNow = useScriptStyle().data
+  const styleNow = useScriptStyle(canPrep).data
   const toneNow = styleNow?.tone ? toneInUse(styleNow) : null
 
   // Status checks that keep failing stop the asking: the card says so, with Try again.
@@ -329,9 +333,10 @@ export function PrepSheet({ target, onClose, onChangeTarget, onOpenCompany }: Pr
 
   const enabled = off ? false : (facts.data?.prep_enabled ?? null)
 
-  // Log call (PLAN-V17 T3-5): only while call notes are switched on.
-  const noteOptions = useCallNoteOptions()
-  const notes = noteOptions.data?.enabled ? noteOptions.data : null
+  // Log call (PLAN-V17 T3-5): only while call notes are switched on and the person may log calls.
+  const canLogNotes = useCanWrite('companies.call_logs')
+  const noteOptions = useCallNoteOptions(canLogNotes)
+  const notes = canLogNotes && noteOptions.data?.enabled ? noteOptions.data : null
   const noting = view === 'note' && notes !== null
   const panel = useRef<HTMLDivElement>(null)
   const logButton = useRef<HTMLButtonElement>(null)
@@ -595,6 +600,7 @@ export function PrepSheet({ target, onClose, onChangeTarget, onOpenCompany }: Pr
                         failed={Boolean(problem) || prep.data?.status === 'failed'}
                         toneNow={toneNow}
                         copyAt={facts.data?.copy_at ?? null}
+                        canResearch={canWritePrep}
                         onResearch={() => {
                           ask(true)
                         }}

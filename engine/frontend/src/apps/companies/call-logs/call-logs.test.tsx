@@ -1411,6 +1411,7 @@ describe('what Call logs asks for first (PLAN-V7 C1)', () => {
       }),
     )
     const client = createTestQueryClient()
+    client.setQueryData(queryKeys.auth.me(), { state: 'off' })
     prefetchPage(routes, { pathname: '/companies/call-logs', search: '' }, client)
     // The prefetch loads its own small file first.
     await waitFor(() => {

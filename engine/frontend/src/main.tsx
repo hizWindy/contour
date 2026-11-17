@@ -19,7 +19,7 @@ import { registerServiceWorker } from './pwa/register'
 import { MODULES } from './modules'
 import { createAppRouter, routes } from './router'
 import { preloadOnIntent } from './shell/intent'
-import { prefetchOnNavigation } from './shell/prefetch'
+import { prefetchOnNavigation, prefetchPage } from './shell/prefetch'
 import { preloadNextPages } from './shell/preload'
 import { applyTheme, readThemeChoice, watchBrowserBar } from './shell/theme'
 import { warmModulePages } from './shell/warm-module'
@@ -41,8 +41,14 @@ if (!root) {
 const queryClient = createQueryClient()
 const router = createAppRouter()
 prefetchOnNavigation(router, queryClient)
-// Every page waits for "who is signed in", so that goes out first too, not after the page's code.
-void queryClient.prefetchQuery(meQueryOptions())
+// Every page waits for "who is signed in", so that goes out first too, then any initial route
+// prefetch runs with the person's ticks known (never firing 403s on blocked URLs).
+void queryClient.ensureQueryData(meQueryOptions()).then(
+  () => {
+    prefetchPage(router.routes, router.state.location, queryClient)
+  },
+  () => undefined,
+)
 
 // MotionRoot loads the motion kit's features once, for every page (PLAN-V13 T2-4).
 createRoot(root).render(

@@ -26,6 +26,8 @@ import { useNavigate, useSearchParams } from 'react-router'
 import { companyQueryOptions, useCompanies, useCompanyFacets } from '@/api/hooks'
 import { useCallNoteOptions } from '@/api/hooks/call-notes'
 import type { CompanyDetail, CompanyPerson, CompanyRow } from '@/api/types'
+import { useCan, useCanWrite } from '@/auth/can'
+import { FeatureGuard } from '@/auth/guard'
 import { DataTable, DensityToggle } from '@/components/data-table'
 import { EmptyState } from '@/components/empty-state'
 import { ErrorState } from '@/components/error-state'
@@ -93,9 +95,11 @@ function Empty({ filtered, onClear }: { filtered: boolean; onClear: () => void }
   )
 }
 
-export default function CompaniesPage() {
+function CompaniesContent() {
   const [params, setParams] = useSearchParams()
   const navigate = useNavigate()
+  const canPrep = useCan('companies.call_prep')
+  const canLogNotes = useCanWrite('companies.call_logs')
   const state = readCompanies(params)
   const [compact, setCompact] = useState(savedCompact)
   const [active, setActive] = useState<string | null>(null)
@@ -175,7 +179,7 @@ export default function CompaniesPage() {
     closeCompany()
     setPrep({ companyKey: company.key, companyName: company.name, person: null, note: true })
   }
-  const notesOn = useCallNoteOptions().data?.enabled === true
+  const notesOn = useCallNoteOptions(canLogNotes).data?.enabled === true && canLogNotes
 
   const companies = useCompanies(listQuery(state))
   const facets = useCompanyFacets()
@@ -183,8 +187,12 @@ export default function CompaniesPage() {
   const leadsShown = page?.leads_shown ?? facets.data?.leads_shown ?? false
   // "Prep" at the end of each name, and "Open in HubSpot" at the end of a row (PLAN-V13 T2-8).
   const columns = useMemo(
-    () => companyColumns({ leadsShown, handlers: { onPrep: prepRow, onOpen: openCompany } }),
-    [leadsShown, prepRow, openCompany],
+    () =>
+      companyColumns({
+        leadsShown,
+        handlers: { onPrep: canPrep ? prepRow : undefined, onOpen: openCompany },
+      }),
+    [leadsShown, canPrep, prepRow, openCompany],
   )
   const rows = page?.items
   // P on the active row: the same as its Prep button. L (call notes on): Log call for it.
@@ -193,10 +201,11 @@ export default function CompaniesPage() {
       const row = rows?.find((item) => item.key === key)
       if (row) open(row)
     }
-    const letters: Record<string, (key: string) => void> = { p: onRow(prepRow) }
+    const letters: Record<string, (key: string) => void> = {}
+    if (canPrep) letters.p = onRow(prepRow)
     if (notesOn) letters.l = onRow(logRow)
     return letters
-  }, [rows, prepRow, logRow, notesOn])
+  }, [rows, canPrep, prepRow, logRow, notesOn])
   const filtered = activeFilterCount(state.filters) > 0
   const activeRow = state.company ?? active
 
@@ -222,7 +231,7 @@ export default function CompaniesPage() {
         }
         actions={<HubSpotSync />}
       />
-      <PrepBox onPick={setPrep} />
+      {canPrep ? <PrepBox onPick={setPrep} /> : null}
       <FilterBar
         filters={state.filters}
         facets={facets.data}
@@ -259,7 +268,7 @@ export default function CompaniesPage() {
             today={today}
             onOpen={openCompany}
             onIntent={startCompany}
-            onPrep={prepRow}
+            onPrep={canPrep ? prepRow : undefined}
             onPageChange={(pageIndex) => {
               go({ ...state, page: pageIndex })
               listTop.current?.scrollIntoView({
@@ -307,8 +316,8 @@ export default function CompaniesPage() {
         companyKey={state.company}
         onClose={closeCompany}
         onOpenFullPage={openFullPage}
-        onPrep={prepCall}
-        onLogCall={logCall}
+        onPrep={canPrep ? prepCall : undefined}
+        onLogCall={canLogNotes ? logCall : undefined}
         rows={page?.items}
       />
       <PrepSheet
@@ -323,5 +332,13 @@ export default function CompaniesPage() {
         }}
       />
     </>
+  )
+}
+
+export default function CompaniesPage() {
+  return (
+    <FeatureGuard feature="companies.companies" page="Companies">
+      <CompaniesContent />
+    </FeatureGuard>
   )
 }

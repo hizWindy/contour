@@ -12,7 +12,7 @@
 import { TriangleAlert } from 'lucide-react'
 import type { CityOption, RunEstimate, RunOptions } from '@/api/types'
 import { CityMap } from '@/components/city-map'
-import { ChipGroup } from '@/components/motion'
+import { ChipGroup, Segmented } from '@/components/motion'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
   Field,
@@ -24,7 +24,6 @@ import {
   FieldSet,
 } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import {
   CITY_GROUP_LABELS,
   CITY_GROUP_ORDER,
@@ -38,7 +37,6 @@ import {
   goalLine,
   pickPlaces,
   readGoal,
-  type Area,
   type StartForm,
 } from './form'
 
@@ -121,22 +119,15 @@ export function WhereChoices({ options, form, update, errors }: PartProps) {
         .map((city) => (
           <div key={city.name} className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <span className="w-28 text-ui">{city.name}</span>
-            <ToggleGroup
-              type="single"
-              variant="outline"
+            <Segmented
               size="sm"
               value={form.area[city.name] ?? 'all'}
-              onValueChange={(value) => {
-                if (value) update({ area: { ...form.area, [city.name]: value as Area } })
+              options={city.areas.map((area) => ({ value: area.id, label: area.label }))}
+              onChange={(value) => {
+                update({ area: { ...form.area, [city.name]: value } })
               }}
               aria-label={`Part of ${city.name}`}
-            >
-              {city.areas.map((area) => (
-                <ToggleGroupItem key={area.id} value={area.id}>
-                  {area.label}
-                </ToggleGroupItem>
-              ))}
-            </ToggleGroup>
+            />
           </div>
         ))}
       {errorFor(errors, 'area') ? <FieldError>{errorFor(errors, 'area')}</FieldError> : null}

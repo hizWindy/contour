@@ -20,6 +20,7 @@ import { Link, useNavigate } from 'react-router'
 import { toast } from 'sonner'
 import { usePatchLead, useRecheckLead } from '@/api/hooks'
 import type { LeadDetail, LeadPatch } from '@/api/types'
+import { useCanWrite } from '@/auth/can'
 import { Money } from '@/components/money'
 import {
   AlertDialog,
@@ -55,6 +56,10 @@ export function Actions({ lead }: { lead: LeadDetail }) {
   const patchLead = usePatchLead()
   const recheck = useRecheckLead()
   const [rejecting, setRejecting] = useState(false)
+  const canResultsWrite = useCanWrite('lead_finder.results')
+  const canSendHubSpot = useCanWrite('lead_finder.send_to_hubspot')
+  const canStartRun = useCanWrite('lead_finder.start_run')
+  const hasGroupActions = canResultsWrite || canSendHubSpot || canStartRun
 
   const change = (patch: LeadPatch, done: string, onDone?: () => void): void => {
     const undo = before(lead, patch)
@@ -80,105 +85,117 @@ export function Actions({ lead }: { lead: LeadDetail }) {
   const watching = lead.status === 'watching'
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-      <div
-        // A phone gets a tidy two-column grid of equal buttons; wider screens keep one row.
-        className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center max-sm:[&>button]:w-full"
-        role="group"
-        aria-label="Actions"
-      >
-        <Button
-          type="button"
-          variant="outline"
-          disabled={patchLead.isPending || lead.status === 'sent'}
-          onClick={() => {
-            change(
-              { status: watching ? 'new' : 'watching' },
-              watching ? 'Not watching any more.' : 'Watching.',
-            )
-          }}
+      {hasGroupActions ? (
+        <div
+          // A phone gets a tidy two-column grid of equal buttons; wider screens keep one row.
+          className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center max-sm:[&>button]:w-full"
+          role="group"
+          aria-label="Actions"
         >
-          {watching ? <BookmarkCheck aria-hidden="true" /> : <Bookmark aria-hidden="true" />}
-          {watching ? 'Stop watching' : 'Watch'}
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={patchLead.isPending || lead.status === 'rejected' || lead.status === 'sent'}
-          onClick={() => {
-            setRejecting(true)
-          }}
-        >
-          <XCircle aria-hidden="true" />
-          Reject
-        </Button>
-        <span className="inline-flex flex-col gap-2 max-sm:[&>button]:w-full sm:flex-row sm:items-center">
-          <SendLead lead={lead} />
-        </span>
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button type="button" variant="outline" disabled={recheck.isPending}>
-              <RefreshCw aria-hidden="true" />
-              Re-check
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Research {lead.company} again?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This searches the web again, even where memory is fresh. It costs money: up to the
-                company cap, last time <Money value={lead.research.cost_usd} />. It can&apos;t be
-                undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
+          {canResultsWrite ? (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={patchLead.isPending || lead.status === 'sent'}
                 onClick={() => {
-                  recheck.mutate(lead.id, {
-                    onSuccess: (run) => {
-                      void navigate(`/runs/${run.id}`)
-                    },
-                    onError: toastProblem,
-                  })
+                  change(
+                    { status: watching ? 'new' : 'watching' },
+                    watching ? 'Not watching any more.' : 'Watching.',
+                  )
                 }}
               >
-                Research again
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </div>
-      <div className="flex items-center gap-1" role="group" aria-label="Was this lead useful?">
-        <Button
-          type="button"
-          size="sm"
-          variant={lead.useful === true ? 'secondary' : 'ghost'}
-          aria-pressed={lead.useful === true}
-          disabled={patchLead.isPending}
-          onClick={() => {
-            change({ useful: lead.useful === true ? null : true }, 'Thanks. Marked as useful.')
-          }}
-        >
-          <ThumbsUp aria-hidden="true" />
-          Useful
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant={lead.useful === false ? 'secondary' : 'ghost'}
-          aria-pressed={lead.useful === false}
-          disabled={patchLead.isPending}
-          onClick={() => {
-            change(
-              { useful: lead.useful === false ? null : false },
-              'Thanks. Marked as not useful.',
-            )
-          }}
-        >
-          <ThumbsDown aria-hidden="true" />
-          Not useful
-        </Button>
-      </div>
+                {watching ? <BookmarkCheck aria-hidden="true" /> : <Bookmark aria-hidden="true" />}
+                {watching ? 'Stop watching' : 'Watch'}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={patchLead.isPending || lead.status === 'rejected' || lead.status === 'sent'}
+                onClick={() => {
+                  setRejecting(true)
+                }}
+              >
+                <XCircle aria-hidden="true" />
+                Reject
+              </Button>
+            </>
+          ) : null}
+          {canSendHubSpot ? (
+            <span className="inline-flex flex-col gap-2 max-sm:[&>button]:w-full sm:flex-row sm:items-center">
+              <SendLead lead={lead} />
+            </span>
+          ) : null}
+          {canStartRun ? (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button type="button" variant="outline" disabled={recheck.isPending}>
+                  <RefreshCw aria-hidden="true" />
+                  Re-check
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Research {lead.company} again?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This searches the web again, even where memory is fresh. It costs money: up to
+                    the company cap, last time <Money value={lead.research.cost_usd} />. It
+                    can&apos;t be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => {
+                      recheck.mutate(lead.id, {
+                        onSuccess: (run) => {
+                          void navigate(`/runs/${run.id}`)
+                        },
+                        onError: toastProblem,
+                      })
+                    }}
+                  >
+                    Research again
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          ) : null}
+        </div>
+      ) : null}
+      {canResultsWrite ? (
+        <div className="flex items-center gap-1" role="group" aria-label="Was this lead useful?">
+          <Button
+            type="button"
+            size="sm"
+            variant={lead.useful === true ? 'secondary' : 'ghost'}
+            aria-pressed={lead.useful === true}
+            disabled={patchLead.isPending}
+            onClick={() => {
+              change({ useful: lead.useful === true ? null : true }, 'Thanks. Marked as useful.')
+            }}
+          >
+            <ThumbsUp aria-hidden="true" />
+            Useful
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={lead.useful === false ? 'secondary' : 'ghost'}
+            aria-pressed={lead.useful === false}
+            disabled={patchLead.isPending}
+            onClick={() => {
+              change(
+                { useful: lead.useful === false ? null : false },
+                'Thanks. Marked as not useful.',
+              )
+            }}
+          >
+            <ThumbsDown aria-hidden="true" />
+            Not useful
+          </Button>
+        </div>
+      ) : null}
       {/* Levi's one-page profile, for a Tier A lead (PLAN-V16 T3-7). */}
       {lead.tier === 'A' ? (
         <Button asChild type="button" size="sm" variant="ghost">

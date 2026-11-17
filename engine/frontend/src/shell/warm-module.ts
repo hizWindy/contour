@@ -26,12 +26,12 @@
  */
 import type { QueryClient } from '@tanstack/react-query'
 import type { DataRouter } from 'react-router'
-import { meQueryOptions } from '@/api/hooks/auth'
+import { meQueryOptions, type SignIn } from '@/api/hooks/auth'
 import { whenIdle } from '@/lib/idle'
 import { HOME, isHere, type AppModule } from './nav'
 import { prefetchPage } from './prefetch'
 import { loadCode, sparing } from './preload'
-import { visibleModules } from './visible-modules'
+import { visibleModules, visiblePages } from './visible-modules'
 
 /** How long a project's pages count as warm: the cache keeps an unused answer for 5 minutes. */
 export const WARM_FOR_MS = 4 * 60_000
@@ -50,15 +50,21 @@ function quietly() {
   }
 }
 
-/** Fetches the code, then the first reads, of each page of `module` but the one that is open. */
-function warmPages(router: DataRouter, client: QueryClient, module: AppModule): () => void {
+/** Fetches the code, then the first reads, of each visible page of `module` but the one that is open. */
+function warmPages(
+  router: DataRouter,
+  client: QueryClient,
+  module: AppModule,
+  signIn: SignIn,
+): () => void {
   let stopped = false
   const idle = quietly()
+  const pages = visiblePages(signIn, module.pages)
   const here = (): string => router.state.location.pathname
-  const inModule = (): boolean => module.pages.some((page) => isHere(here(), page))
+  const inModule = (): boolean => pages.some((page) => isHere(here(), page))
 
   void (async () => {
-    for (const page of module.pages) {
+    for (const page of pages) {
       await idle.turn()
       if (stopped || !inModule()) return
       if (isHere(here(), page)) continue // the page on screen now
@@ -124,18 +130,20 @@ export function warmModulePages(
         const here = router.state.location.pathname
         const allowed = visibleModules(signIn, modules).filter((module) => module.warm === true)
         const module = allowed.find((candidate) =>
-          candidate.pages.some((page) => isHere(here, page)),
+          visiblePages(signIn, candidate.pages).some((page) => isHere(here, page)),
         )
         if (module) {
           if (warmed?.id === module.id && Date.now() - warmed.at < WARM_FOR_MS) return
           warmed = { id: module.id, at: Date.now() }
           stop()
-          stop = warmPages(router, client, module)
+          stop = warmPages(router, client, module, signIn)
         } else if (here === HOME.to && !codeWarmed && allowed.length > 0) {
           codeWarmed = true
           stopCode = warmCode(
             router,
-            allowed.flatMap((candidate) => candidate.pages.map((page) => page.to)),
+            allowed.flatMap((candidate) =>
+              visiblePages(signIn, candidate.pages).map((page) => page.to),
+            ),
           )
         }
       })

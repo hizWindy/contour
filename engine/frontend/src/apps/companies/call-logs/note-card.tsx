@@ -99,6 +99,7 @@ export interface NoteCardProps {
   onToggleLeftOut: () => void
   onRemove: () => void
   edit: EditNote
+  readOnly?: boolean
 }
 
 /** The words of the first step that didn't land, for "Needs a look". */
@@ -134,10 +135,11 @@ function Footer({
   landing,
   editing,
   sorting,
+  readOnly,
   onEditing,
   onToggleLeftOut,
   onRemove,
-}: Pick<NoteCardProps, 'note' | 'landing' | 'onEditing' | 'onToggleLeftOut' | 'onRemove'> & {
+}: Pick<NoteCardProps, 'note' | 'landing' | 'onEditing' | 'onToggleLeftOut' | 'onRemove' | 'readOnly'> & {
   editing: boolean
   sorting: boolean
 }) {
@@ -168,6 +170,14 @@ function Footer({
         {SENDING}
       </p>
     )
+  }
+  if (readOnly) {
+    return note.left_out ? (
+      <span className="flex items-center gap-2 text-muted-foreground">
+        <CircleMinus aria-hidden="true" className="size-4 shrink-0" />
+        {LEFT_OUT}
+      </span>
+    ) : null
   }
   const remove = (
     <Button
@@ -253,6 +263,7 @@ export function NoteCard({
   today,
   active,
   editing: editingWanted,
+  readOnly,
   landing,
   skippedWhy = null,
   onActivate,
@@ -499,17 +510,20 @@ export function NoteCard({
           )
         )}
       </div>
-      <div className="flex flex-wrap items-center gap-2 border-t px-4 py-2.5 sm:px-5">
-        <Footer
-          note={note}
-          landing={landing}
-          editing={editing}
-          sorting={sorting}
-          onEditing={onEditing}
-          onToggleLeftOut={onToggleLeftOut}
-          onRemove={onRemove}
-        />
-      </div>
+      {readOnly && !note.left_out && landing !== 'logged' && landing !== 'needs_look' && landing !== 'waiting' && note.status !== 'sending' ? null : (
+        <div className="flex flex-wrap items-center gap-2 border-t px-4 py-2.5 sm:px-5">
+          <Footer
+            note={note}
+            landing={landing}
+            editing={editing}
+            sorting={sorting}
+            readOnly={readOnly}
+            onEditing={onEditing}
+            onToggleLeftOut={onToggleLeftOut}
+            onRemove={onRemove}
+          />
+        </div>
+      )}
     </article>
   )
 }

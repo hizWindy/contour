@@ -17,6 +17,7 @@
 import { useId } from 'react'
 import { Link } from 'react-router'
 import type { MeetingFormState, MeetingItem } from '@/api/types'
+import { useCanWrite } from '@/auth/can'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
@@ -66,6 +67,7 @@ export interface RowActionProps {
 /** A row's one button, or nothing. */
 export function RowAction({ item, status, past, draftIt, context, onLogMeeting }: RowActionProps) {
   const noteId = useId()
+  const canWrite = useCanWrite('companies.meetings')
   const heard = <span className="sr-only">{context}</span>
   if (past && !item.typed) {
     if (!onLogMeeting || item.meeting.id === '' || status === 'cancelled') return null
@@ -88,7 +90,7 @@ export function RowAction({ item, status, past, draftIt, context, onLogMeeting }
     return (
       <Button asChild variant="outline" size="sm" className="touch:h-11">
         <Link to={preReadHref(item.form.id)}>
-          {status === 'draft' && !past ? CHECK_AND_SEND : OPEN}
+          {canWrite && status === 'draft' && !past ? CHECK_AND_SEND : OPEN}
           {heard}
         </Link>
       </Button>

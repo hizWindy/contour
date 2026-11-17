@@ -20,6 +20,60 @@ export const ALL_FEATURES = [
 
 export type Feature = (typeof ALL_FEATURES)[number]
 
+export interface FeatureItem {
+  key: Feature
+  label: string
+}
+
+export interface FeatureGroup {
+  app: 'lead_finder' | 'companies'
+  label: string
+  features: readonly FeatureItem[]
+}
+
+export const FEATURE_GROUPS: readonly FeatureGroup[] = [
+  {
+    app: 'lead_finder',
+    label: 'Lead Finder',
+    features: [
+      { key: 'lead_finder.start_run', label: 'Start a run' },
+      { key: 'lead_finder.results', label: 'See results' },
+      { key: 'lead_finder.rules', label: 'Rules' },
+      { key: 'lead_finder.send_to_hubspot', label: 'Send to HubSpot' },
+    ],
+  },
+  {
+    app: 'companies',
+    label: 'Relationships',
+    features: [
+      { key: 'companies.companies', label: 'Companies' },
+      { key: 'companies.call_logs', label: 'Call logs' },
+      { key: 'companies.meetings', label: 'Meetings' },
+      { key: 'companies.call_prep', label: 'Call prep' },
+    ],
+  },
+]
+
+export const FEATURE_LABELS: Readonly<Record<Feature, string>> = Object.fromEntries(
+  FEATURE_GROUPS.flatMap((group) => group.features.map((item) => [item.key, item.label])),
+) as Record<Feature, string>
+
+export const DEFAULT_FEATURES_BY_ROLE: Readonly<Record<Role, readonly Feature[]>> = {
+  platform_admin: ALL_FEATURES,
+  admin: ALL_FEATURES,
+  staff: ALL_FEATURES.filter((feature) => feature !== 'lead_finder.rules'),
+  viewer: [
+    'lead_finder.results',
+    'companies.companies',
+    'companies.call_logs',
+    'companies.meetings',
+  ],
+}
+
+export function appsToFeatures(apps: readonly string[]): Feature[] {
+  return ALL_FEATURES.filter((feature) => apps.includes(appOf(feature)))
+}
+
 const ROLE_RANK: Readonly<Record<Role, number>> = {
   viewer: 0,
   staff: 1,
@@ -100,6 +154,8 @@ export function useIsViewer(): boolean {
   return isViewer(useMe().data)
 }
 
+export const can = canUse
+
 export function useCan(...features: Feature[]): boolean {
   return canUse(useMe().data, ...features)
 }
@@ -112,4 +168,17 @@ export function usePlatformAdminName(): string | null {
   const me = useMe().data
   if (!me || me.state !== 'signed_in') return null
   return me.platformAdminName ?? null
+}
+
+export function platformAdminAsker(platformAdminName: string | null | undefined): string {
+  const trimmed = platformAdminName?.trim()
+  return trimmed || 'the Platform admin'
+}
+
+export function noAccessWords(page: string, platformAdminName?: string | null): string {
+  return `You don't have access to ${page}. Ask ${platformAdminAsker(platformAdminName)} to turn it on.`
+}
+
+export function viewerReadOnlyWords(platformAdminName?: string | null): string {
+  return `Viewers can look but not change things. Ask ${platformAdminAsker(platformAdminName)} if you need more.`
 }

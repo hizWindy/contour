@@ -27,13 +27,15 @@ import {
   useLeads,
 } from '@/api/hooks'
 import type { LeadPage, MapOut } from '@/api/types'
+import { useCanWrite } from '@/auth/can'
+import { FeatureGuard } from '@/auth/guard'
 import { CityMap } from '@/components/city-map'
 import { DataTable, DensityToggle } from '@/components/data-table'
 import { EmptyState } from '@/components/empty-state'
 import { ErrorState } from '@/components/error-state'
+import { Segmented } from '@/components/motion'
 import { PageHeader } from '@/components/page-header'
 import { Button } from '@/components/ui/button'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Pending } from '@/components/skeletons'
 import { whenIdle } from '@/lib/idle'
 import { saveFile } from '@/lib/download'
@@ -81,6 +83,7 @@ function saveCompact(compact: boolean): void {
 }
 
 function Empty({ filtered, onClear }: { filtered: boolean; onClear: () => void }) {
+  const canStart = useCanWrite('lead_finder.start_run')
   return filtered ? (
     <EmptyState
       title="No leads match these filters."
@@ -98,9 +101,11 @@ function Empty({ filtered, onClear }: { filtered: boolean; onClear: () => void }
       description="Start a run to see companies here."
       headingLevel={3}
       action={
-        <Button asChild>
-          <Link to="/start">Start a run</Link>
-        </Button>
+        canStart ? (
+          <Button asChild>
+            <Link to="/start">Start a run</Link>
+          </Button>
+        ) : undefined
       }
     />
   )
@@ -129,9 +134,10 @@ function MapSplitPending() {
   )
 }
 
-export default function ResultsPage() {
+function ResultsContent() {
   const [params, setParams] = useSearchParams()
   const navigate = useNavigate()
+  const canReviewWrite = useCanWrite('lead_finder.results')
   const state = readResults(params)
   const [compact, setCompact] = useState(savedCompact)
   const [active, setActive] = useState<string | null>(null)
@@ -313,27 +319,24 @@ export default function ResultsPage() {
         description="Every lead, best first. Open one to see why it fits, rule by rule."
         actions={
           <>
-            <ToggleGroup
-              type="single"
-              variant="outline"
+            <Segmented
               size="sm"
               aria-label="Show as"
               value={state.view}
-              onValueChange={(view) => {
-                if (view === 'table' || view === 'map') {
-                  go({ ...state, view })
-                }
+              options={[
+                { value: 'table', label: 'Table', icon: Table2 },
+                {
+                  value: 'map',
+                  label: 'Map',
+                  icon: MapIcon,
+                  onPointerEnter: startMap,
+                  onFocus: startMap,
+                },
+              ]}
+              onChange={(view) => {
+                go({ ...state, view })
               }}
-            >
-              <ToggleGroupItem value="table">
-                <Table2 aria-hidden="true" />
-                Table
-              </ToggleGroupItem>
-              <ToggleGroupItem value="map" onPointerEnter={startMap} onFocus={startMap}>
-                <MapIcon aria-hidden="true" />
-                Map
-              </ToggleGroupItem>
-            </ToggleGroup>
+            />
             <Button
               type="button"
               variant="outline"
@@ -377,15 +380,22 @@ export default function ResultsPage() {
           // A phone has no room for two columns: the map comes first, then the list.
           <div className="flex flex-col gap-4">
             {mapPart}
-            {table(listColumns(tick), 'Leads beside the map', true)}
+            {table(listColumns(canReviewWrite ? tick : undefined), 'Leads beside the map', true)}
           </div>
         ) : (
           <Suspense fallback={<MapSplitPending />}>
-            <MapSplit list={table(listColumns(tick), 'Leads beside the map', true)} map={mapPart} />
+            <MapSplit
+              list={table(
+                listColumns(canReviewWrite ? tick : undefined),
+                'Leads beside the map',
+                true,
+              )}
+              map={mapPart}
+            />
           </Suspense>
         )
       ) : (
-        table(tableColumns(tick), 'Leads', compact)
+        table(tableColumns(canReviewWrite ? tick : undefined), 'Leads', compact)
       )}
       <LeadPanel
         leadId={state.lead}
@@ -394,5 +404,13 @@ export default function ResultsPage() {
         rows={page?.items}
       />
     </>
+  )
+}
+
+export default function ResultsPage() {
+  return (
+    <FeatureGuard feature="lead_finder.results" page="Results">
+      <ResultsContent />
+    </FeatureGuard>
   )
 }

@@ -11,9 +11,9 @@
 import { useWatchlist } from '@/api/hooks'
 import type { RunOptions } from '@/api/types'
 import { PickList } from '@/components/pick-list'
+import { Segmented } from '@/components/motion'
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { pluralise } from '@/lib/format'
 import { errorFor, type StartForm } from './form'
 
@@ -61,23 +61,17 @@ export function TenureChoices({ options, form, update, errors }: TenureChoicesPr
     <>
       <Field>
         <FieldLabel id="tenure-city-label">City</FieldLabel>
-        <ToggleGroup
-          type="single"
-          variant="outline"
+        <Segmented
+          scroll={false}
           value={city}
-          onValueChange={(value) => {
+          options={cities.map((name) => ({ value: name, label: name }))}
+          onChange={(value) => {
             // A new city has other industries, so the picked ones start again.
-            if (value) update({ tenureCity: value, tenureIndustries: [] })
+            update({ tenureCity: value, tenureIndustries: [] })
           }}
           aria-labelledby="tenure-city-label"
           className="flex-wrap justify-start"
-        >
-          {cities.map((name) => (
-            <ToggleGroupItem key={name} value={name}>
-              {name}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
+        />
         {cityError ? <FieldError>{cityError}</FieldError> : null}
       </Field>
       <Field>

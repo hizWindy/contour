@@ -25,6 +25,8 @@ import { ApiProblem } from '@/api/client'
 import { refreshLeads, useCancelRun, useResumeRun, useRun } from '@/api/hooks'
 import { queryKeys } from '@/api/query'
 import type { Run } from '@/api/types'
+import { useCan, useCanWrite, useIsPlatformAdmin } from '@/auth/can'
+import { FeatureGuard } from '@/auth/guard'
 import { CostMeter } from '@/components/cost-meter'
 import { PendingDetail } from '@/components/skeletons'
 import { ErrorState } from '@/components/error-state'
@@ -98,6 +100,9 @@ function progressOf(state: RunEventsState): { value: number; words: string } | n
 
 function RunView({ runId, run }: { runId: string; run: Run }) {
   const queryClient = useQueryClient()
+  const canManageRuns = useCanWrite('lead_finder.start_run')
+  const canResults = useCan('lead_finder.results')
+  const showAdmin = useIsPlatformAdmin()
   const events = useRunEvents(runId)
   const cancel = useCancelRun()
   const resume = useResumeRun()
@@ -151,7 +156,7 @@ function RunView({ runId, run }: { runId: string; run: Run }) {
         actions={
           <>
             <StatusBadge status={status} />
-            {!ended ? (
+            {canManageRuns && !ended ? (
               <Button
                 type="button"
                 variant="outline"
@@ -164,7 +169,7 @@ function RunView({ runId, run }: { runId: string; run: Run }) {
                 {stopping ? 'Stopping.' : 'Stop'}
               </Button>
             ) : null}
-            {canResume ? (
+            {canManageRuns && canResume ? (
               <Button
                 type="button"
                 disabled={resume.isPending}
@@ -249,7 +254,7 @@ function RunView({ runId, run }: { runId: string; run: Run }) {
             </CardContent>
           </Card>
 
-          <RunLeads runId={runId} className="max-lg:order-4" />
+          {canResults ? <RunLeads runId={runId} className="max-lg:order-4" /> : null}
 
           <Card className="max-lg:order-5">
             <CardHeader>
@@ -323,33 +328,39 @@ function RunView({ runId, run }: { runId: string; run: Run }) {
                 />
                 {ended ? 'Finished' : connectionWords(connection, events.error)}
               </p>
-              <RunCostSplit runId={runId} researched={counts.researched} />
+              {canResults ? <RunCostSplit runId={runId} researched={counts.researched} /> : null}
             </CardContent>
           </Card>
           <RunSetupCard run={final} className="max-lg:order-6" />
-          <Card className="max-lg:order-3">
-            <CardContent className="flex flex-col gap-2 pt-6">
-              <Button asChild variant="outline">
-                <Link to={`/results?run_id=${encodeURIComponent(runId)}`}>
-                  <Table2 aria-hidden="true" />
-                  Review this run's leads
-                </Link>
-              </Button>
-              <Button asChild variant="ghost">
-                <Link to={`/admin/searches?run_id=${encodeURIComponent(runId)}`}>
-                  <ListChecks aria-hidden="true" />
-                  Its search log
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
+          {canResults || showAdmin ? (
+            <Card className="max-lg:order-3">
+              <CardContent className="flex flex-col gap-2 pt-6">
+                {canResults ? (
+                  <Button asChild variant="outline">
+                    <Link to={`/results?run_id=${encodeURIComponent(runId)}`}>
+                      <Table2 aria-hidden="true" />
+                      Review this run's leads
+                    </Link>
+                  </Button>
+                ) : null}
+                {showAdmin ? (
+                  <Button asChild variant="ghost">
+                    <Link to={`/admin/searches?run_id=${encodeURIComponent(runId)}`}>
+                      <ListChecks aria-hidden="true" />
+                      Its search log
+                    </Link>
+                  </Button>
+                ) : null}
+              </CardContent>
+            </Card>
+          ) : null}
         </aside>
       </div>
     </>
   )
 }
 
-export default function RunPage() {
+function RunContent() {
   const { runId = '' } = useParams()
   const run = useRun(runId, { missingIsPage: true })
   if (run.error) {
@@ -368,4 +379,12 @@ export default function RunPage() {
     return <PendingDetail label="Loading the run." />
   }
   return <RunView runId={runId} run={run.data} />
+}
+
+export default function RunPage() {
+  return (
+    <FeatureGuard feature={['lead_finder.start_run', 'lead_finder.results']} page="Runs">
+      <RunContent />
+    </FeatureGuard>
+  )
 }

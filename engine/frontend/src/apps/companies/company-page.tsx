@@ -11,6 +11,8 @@ import { useParams } from 'react-router'
 import { useCompany } from '@/api/hooks'
 import { useCallNoteOptions } from '@/api/hooks/call-notes'
 import type { CompanyDetail, CompanyPerson } from '@/api/types'
+import { useCan, useCanWrite } from '@/auth/can'
+import { FeatureGuard } from '@/auth/guard'
 import { BackButton } from '@/components/back-button'
 import { ErrorState } from '@/components/error-state'
 import { PageHeader } from '@/components/page-header'
@@ -24,11 +26,13 @@ import { companyPlace } from './words'
 import type { PrepTarget } from './prep-box'
 import { PrepSheet } from './prep-sheet'
 
-export default function CompanyPage() {
+function CompanyPageContent() {
   const { key = '' } = useParams()
   const company = useCompany(key)
   const [prep, setPrep] = useState<PrepTarget | null>(null)
   const phone = useMediaQuery(PHONE)
+  const canPrep = useCan('companies.call_prep')
+  const canLogNotes = useCanWrite('companies.call_logs')
   // The bar at the bottom of a phone: what the keyboard lands on scrolls above it.
   const barRoom = useBarRoom()
   const prepCall = (detail: CompanyDetail, person: CompanyPerson | null): void => {
@@ -38,7 +42,7 @@ export default function CompanyPage() {
       person: person ? { id: person.id, name: person.name, title: person.title } : null,
     })
   }
-  const notesOn = useCallNoteOptions().data?.enabled === true
+  const notesOn = useCallNoteOptions(canLogNotes).data?.enabled === true && canLogNotes
   const logCall =
     notesOn && company.data
       ? () => {
@@ -68,7 +72,7 @@ export default function CompanyPage() {
               company={company.data}
               // On a phone "Prep a call" and "Log call" are the buttons at the bottom instead.
               onPrep={
-                phone
+                phone || !canPrep
                   ? undefined
                   : () => {
                       prepCall(company.data, null)
@@ -79,7 +83,7 @@ export default function CompanyPage() {
           ) : null
         }
       />
-      {phone && company.data ? (
+      {phone && company.data && (canPrep || logCall) ? (
         <div
           ref={barRoom}
           data-slot="prep-bar"
@@ -91,17 +95,19 @@ export default function CompanyPage() {
               {LOG_CALL}
             </Button>
           ) : null}
-          <Button
-            type="button"
-            size="lg"
-            className="min-w-0 flex-1"
-            onClick={() => {
-              prepCall(company.data, null)
-            }}
-          >
-            <PhoneCall aria-hidden="true" />
-            Prep a call
-          </Button>
+          {canPrep ? (
+            <Button
+              type="button"
+              size="lg"
+              className="min-w-0 flex-1"
+              onClick={() => {
+                prepCall(company.data, null)
+              }}
+            >
+              <PhoneCall aria-hidden="true" />
+              Prep a call
+            </Button>
+          ) : null}
         </div>
       ) : null}
       {/* On a phone the page ends above the button at the bottom. */}
@@ -116,9 +122,13 @@ export default function CompanyPage() {
           <div className="animate-in duration-150 fade-in-0">
             <CompanyView
               company={company.data}
-              onPrep={(person) => {
-                prepCall(company.data, person)
-              }}
+              onPrep={
+                canPrep
+                  ? (person) => {
+                      prepCall(company.data, person)
+                    }
+                  : undefined
+              }
             />
           </div>
         ) : (
@@ -137,5 +147,13 @@ export default function CompanyPage() {
         }}
       />
     </>
+  )
+}
+
+export default function CompanyPage() {
+  return (
+    <FeatureGuard feature="companies.companies" page="Companies">
+      <CompanyPageContent />
+    </FeatureGuard>
   )
 }

@@ -161,9 +161,10 @@ export function useStartPrep() {
 }
 
 /** My preps from today, for the chips under the prep box. */
-export function useTodayPreps() {
+export function useTodayPreps(enabled = true) {
   return useQuery({
     queryKey: queryKeys.companies.today(),
     queryFn: async ({ signal }) => unwrap(await api.GET('/companies/preps/today', { signal })),
+    enabled,
   })
 }

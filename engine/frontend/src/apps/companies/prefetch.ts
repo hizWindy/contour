@@ -4,7 +4,10 @@
  * and asks with the same query options, built from the same address, as its page does.
  */
 import { companiesQueryOptions, companyFacetsQueryOptions, companyQueryOptions } from '@/api/hooks'
+import type { SignIn } from '@/api/hooks/auth'
+import { queryKeys } from '@/api/query'
 import type { QueryClient } from '@tanstack/react-query'
+import { canUse } from '@/auth/can'
 import type { PrefetchArgs } from '@/shell/crumbs'
 import { listQuery, readCompanies } from './params'
 
@@ -14,13 +17,19 @@ import { listQuery, readCompanies } from './params'
  */
 export const HOME_COMPANIES = listQuery(readCompanies(new URLSearchParams()))
 
+function allowed(client: QueryClient): boolean {
+  return canUse(client.getQueryData<SignIn>(queryKeys.auth.me()), 'companies.companies')
+}
+
 /** What the Companies card on Home asks for first. */
 export function prefetchCompaniesHome(client: QueryClient): void {
+  if (!allowed(client)) return
   void client.prefetchQuery(companiesQueryOptions(HOME_COMPANIES))
 }
 
 /** The page of companies for the address, the filter values, and the open company. */
 export function prefetchCompanies({ client, search }: PrefetchArgs): void {
+  if (!allowed(client)) return
   const state = readCompanies(search)
   void client.prefetchQuery(companiesQueryOptions(listQuery(state)))
   void client.prefetchQuery(companyFacetsQueryOptions())
@@ -30,6 +39,7 @@ export function prefetchCompanies({ client, search }: PrefetchArgs): void {
 }
 
 export function prefetchCompany({ client, params }: PrefetchArgs): void {
+  if (!allowed(client)) return
   if (params.key) {
     void client.prefetchQuery(companyQueryOptions(params.key))
   }

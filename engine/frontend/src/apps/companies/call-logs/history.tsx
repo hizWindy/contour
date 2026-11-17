@@ -270,7 +270,7 @@ function Opened({
 }: {
   note: CallNoteOut
   options: CallNoteOptions
-  onLogCall: (target: LogTarget) => void
+  onLogCall?: ((target: LogTarget) => void) | undefined
 }) {
   const still = useStill()
   const kinds = new Map(options.fields.map((field) => [field.id, field.kind]))
@@ -345,18 +345,20 @@ function Opened({
           company={note.company_name}
           meeting={isMeetingNotes(note)}
         />
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="touch:h-11 max-sm:w-full"
-          onClick={() => {
-            onLogCall({ companyKey: note.company_key, companyName: note.company_name })
-          }}
-        >
-          <NotebookPen aria-hidden="true" />
-          {logAnotherWords(note.company_name)}
-        </Button>
+        {onLogCall ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="touch:h-11 max-sm:w-full"
+            onClick={() => {
+              onLogCall({ companyKey: note.company_key, companyName: note.company_name })
+            }}
+          >
+            <NotebookPen aria-hidden="true" />
+            {logAnotherWords(note.company_name)}
+          </Button>
+        ) : null}
       </div>
     </m.div>
   )
@@ -379,7 +381,7 @@ function Row({
   fresh: boolean
   options: CallNoteOptions
   onToggle: () => void
-  onLogCall: (target: LogTarget) => void
+  onLogCall?: ((target: LogTarget) => void) | undefined
 }) {
   const still = useStill()
   const openedId = useId()
@@ -457,7 +459,7 @@ export interface HistoryProps {
   options: CallNoteOptions
   today: string
   /** "Log another call with" a company: the page opens Log call for it. */
-  onLogCall: (target: LogTarget) => void
+  onLogCall?: ((target: LogTarget) => void) | undefined
 }
 
 export function History({ options, today, onLogCall }: HistoryProps) {
@@ -590,7 +592,7 @@ export function History({ options, today, onLogCall }: HistoryProps) {
               >
                 <h3
                   id={`history-${day.day}`}
-                  className="sticky top-0 z-10 bg-background py-2 text-ui font-semibold text-foreground max-md:top-14"
+                  className="sticky top-14 z-10 bg-background py-2 text-ui font-semibold text-foreground"
                 >
                   {day.heading}
                 </h3>

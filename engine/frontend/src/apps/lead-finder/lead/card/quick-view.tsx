@@ -13,6 +13,7 @@
 import type { ReactNode } from 'react'
 import { useLeadHubSpot } from '@/api/hooks'
 import type { LeadDetail } from '@/api/types'
+import { useCan } from '@/auth/can'
 import { InHubSpotBadge } from '@/components/hubspot'
 import { ResultBadge } from '@/components/result-badge'
 import { SourceLink } from '@/components/source-link'
@@ -55,7 +56,8 @@ function WithSource({ value, source }: { value: string; source: string | null })
 }
 
 export function QuickView({ lead }: { lead: LeadDetail }) {
-  const sent = useLeadHubSpot(lead.id).data
+  const canSendHubSpot = useCan('lead_finder.send_to_hubspot')
+  const sent = useLeadHubSpot(lead.id, canSendHubSpot).data
   const facts = lead.facts
   const staff = typeof facts.staff_in_city.value === 'number' ? facts.staff_in_city.value : null
   // The size: the current office's own area when a source gave one (PLAN-V16 T1-8's order:

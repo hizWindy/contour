@@ -108,6 +108,9 @@ const TRANSLUCENT = new Set([
   'glass-shine',
   'glass-shadow',
   'glass-selected-fill',
+  'glass-surface',
+  'glass-bar',
+  'glass-surface-border',
 ])
 
 describe('tokens.css structure', () => {

@@ -315,65 +315,87 @@ const MARCUS = {
   last_signed_in_at: null,
 }
 
-describe('the People tab (PLAN-V9 E1)', () => {
-  it('ticks the Lead Finder for a person, and an Admin needs no tick', async () => {
+describe('the People tab (PLAN-V9 E1, PLAN-V19 T3-3 & T3-4)', () => {
+  it('ticks individual features for Staff, while an Admin keeps every tick on and greyed', async () => {
     const calls = mockApi({
       '/api/v1/auth/me': { auth_required: false, user: null, session: null },
       'GET /api/v1/people': [ADMIN, MARCUS],
       [`PATCH /api/v1/people/${MARCUS.id}`]: {
         ...MARCUS,
         apps: ['lead_finder'],
+        features: ['lead_finder.start_run'],
+      },
+    })
+    const { user } = renderWithProviders(<AdminPeopleTab />)
+    await screen.findByRole('table', { name: 'People' })
+    await user.click(screen.getByRole('button', { name: 'Edit Al Khair' }))
+    const adminDialog = await screen.findByRole('dialog')
+    const adminTick = within(
+      within(adminDialog).getByRole('group', { name: 'Lead Finder' }),
+    ).getByRole('checkbox', { name: 'Start a run' })
+    expect(adminTick).toBeChecked()
+    expect(adminTick).toBeDisabled()
+    await user.keyboard('{Escape}')
+    await user.click(await screen.findByRole('button', { name: 'Edit Marcus Lee' }))
+    const marcusDialog = await screen.findByRole('dialog')
+    await user.click(
+      within(within(marcusDialog).getByRole('group', { name: 'Lead Finder' })).getByRole(
+        'checkbox',
+        { name: 'Start a run' },
+      ),
+    )
+    await waitFor(() => {
+      expect(calls.find((call) => call.method === 'PATCH')?.body).toEqual({
+        features: ['lead_finder.start_run'],
+      })
+    })
+  })
+
+  it('ticks Relationships features too inside the Relationships group', async () => {
+    const calls = mockApi({
+      '/api/v1/auth/me': { auth_required: false, user: null, session: null },
+      'GET /api/v1/people': [
+        ADMIN,
+        {
+          ...MARCUS,
+          apps: ['lead_finder'],
+          features: [
+            'lead_finder.start_run',
+            'lead_finder.results',
+            'lead_finder.rules',
+            'lead_finder.send_to_hubspot',
+          ],
+        },
+      ],
+      [`PATCH /api/v1/people/${MARCUS.id}`]: {
+        ...MARCUS,
+        apps: ['lead_finder', 'companies'],
         features: [
           'lead_finder.start_run',
           'lead_finder.results',
           'lead_finder.rules',
           'lead_finder.send_to_hubspot',
+          'companies.companies',
         ],
       },
     })
     const { user } = renderWithProviders(<AdminPeopleTab />)
     await screen.findByRole('table', { name: 'People' })
     await user.click(screen.getByRole('button', { name: 'Edit Al Khair' }))
-    const adminTick = within(await screen.findByRole('dialog')).getByRole('checkbox', {
-      name: /Lead Finder/,
-    })
+    const adminDialog = await screen.findByRole('dialog')
+    const adminTick = within(
+      within(adminDialog).getByRole('group', { name: 'Relationships' }),
+    ).getByRole('checkbox', { name: 'Companies' })
     expect(adminTick).toBeChecked()
     expect(adminTick).toBeDisabled()
     await user.keyboard('{Escape}')
     await user.click(await screen.findByRole('button', { name: 'Edit Marcus Lee' }))
+    const marcusDialog = await screen.findByRole('dialog')
     await user.click(
-      within(await screen.findByRole('dialog')).getByRole('checkbox', { name: /Lead Finder/ }),
-    )
-    await waitFor(() => {
-      expect(calls.find((call) => call.method === 'PATCH')?.body).toEqual({
-        features: [
-          'lead_finder.start_run',
-          'lead_finder.results',
-          'lead_finder.rules',
-          'lead_finder.send_to_hubspot',
-        ],
-      })
-    })
-  })
-
-  it('ticks Relationships (once the Companies page) too, one tick per project (PLAN-V10 B1)', async () => {
-    const calls = mockApi({
-      '/api/v1/auth/me': { auth_required: false, user: null, session: null },
-      'GET /api/v1/people': [ADMIN, { ...MARCUS, apps: ['lead_finder'] }],
-      [`PATCH /api/v1/people/${MARCUS.id}`]: { ...MARCUS, apps: ['lead_finder', 'companies'] },
-    })
-    const { user } = renderWithProviders(<AdminPeopleTab />)
-    await screen.findByRole('table', { name: 'People' })
-    await user.click(screen.getByRole('button', { name: 'Edit Al Khair' }))
-    const adminTick = within(await screen.findByRole('dialog')).getByRole('checkbox', {
-      name: /Relationships/,
-    })
-    expect(adminTick).toBeChecked()
-    expect(adminTick).toBeDisabled()
-    await user.keyboard('{Escape}')
-    await user.click(await screen.findByRole('button', { name: 'Edit Marcus Lee' }))
-    await user.click(
-      within(await screen.findByRole('dialog')).getByRole('checkbox', { name: /Relationships/ }),
+      within(within(marcusDialog).getByRole('group', { name: 'Relationships' })).getByRole(
+        'checkbox',
+        { name: 'Companies' },
+      ),
     )
     await waitFor(() => {
       expect(calls.find((call) => call.method === 'PATCH')?.body).toEqual({
@@ -383,19 +405,20 @@ describe('the People tab (PLAN-V9 E1)', () => {
           'lead_finder.rules',
           'lead_finder.send_to_hubspot',
           'companies.companies',
-          'companies.call_logs',
-          'companies.meetings',
-          'companies.call_prep',
         ],
       })
     })
   })
 
-  it('adds a person with the tick', async () => {
+  it('adds a person with Staff starting ticks and no password input', async () => {
     const calls = mockApi({
       '/api/v1/auth/me': { auth_required: false, user: null, session: null },
       'GET /api/v1/people': [ADMIN],
-      'POST /api/v1/people': { ...MARCUS, apps: ['lead_finder'], starting_password: 'one-two-three-45' },
+      'POST /api/v1/people': {
+        ...MARCUS,
+        apps: ['lead_finder', 'companies'],
+        starting_password: 'maple-harbor-river-47',
+      },
     })
     const { user } = renderWithProviders(<AdminPeopleTab />)
     await screen.findByRole('table', { name: 'People' })
@@ -412,8 +435,11 @@ describe('the People tab (PLAN-V9 E1)', () => {
         features: [
           'lead_finder.start_run',
           'lead_finder.results',
-          'lead_finder.rules',
           'lead_finder.send_to_hubspot',
+          'companies.companies',
+          'companies.call_logs',
+          'companies.meetings',
+          'companies.call_prep',
         ],
       })
     })

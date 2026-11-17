@@ -15,6 +15,7 @@ import { ShieldOff, TriangleAlert } from 'lucide-react'
 import { toast } from 'sonner'
 import { useOverrideExclusion } from '@/api/hooks'
 import type { LeadDetail } from '@/api/types'
+import { useCanWrite } from '@/auth/can'
 import { SourceLink } from '@/components/source-link'
 import { TierLine } from '@/components/tier-mark'
 import {
@@ -36,6 +37,7 @@ import { activeExclusion, CHANGE_MARKS, needsVerifying } from './v16-words'
 
 export function ExclusionNotice({ lead }: { lead: LeadDetail }) {
   const override = useOverrideExclusion()
+  const canOverride = useCanWrite('lead_finder.results')
   const excluded = lead.excluded
   if (!excluded) {
     return null
@@ -65,18 +67,19 @@ export function ExclusionNotice({ lead }: { lead: LeadDetail }) {
           {excluded.url ? <SourceLink href={excluded.url} /> : null}
         </div>
       </div>
-      <AlertDialog>
-        <AlertDialogTrigger asChild>
-          <Button
-            type="button"
-            variant="outline"
-            className="shrink-0"
-            disabled={override.isPending}
-          >
-            {override.isPending ? 'Judging again.' : 'Override'}
-          </Button>
-        </AlertDialogTrigger>
-        <AlertDialogContent>
+      {canOverride ? (
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              className="shrink-0"
+              disabled={override.isPending}
+            >
+              {override.isPending ? 'Judging again.' : 'Override'}
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Override the exclusion?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -101,9 +104,10 @@ export function ExclusionNotice({ lead }: { lead: LeadDetail }) {
             >
               Override and judge again
             </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      ) : null}
     </div>
   )
 }

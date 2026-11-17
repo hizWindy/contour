@@ -40,6 +40,8 @@ import {
   useMeetingForm,
 } from '@/api/hooks/meetings'
 import type { MeetingFormOut } from '@/api/types'
+import { useCanWrite } from '@/auth/can'
+import { FeatureGuard } from '@/auth/guard'
 import { BackButton } from '@/components/back-button'
 import { EmptyState } from '@/components/empty-state'
 import { ErrorState } from '@/components/error-state'
@@ -177,6 +179,7 @@ function PreReadMissing() {
 function PreReadView({ form }: { form: MeetingFormOut }) {
   const client = useQueryClient()
   const onPhone = useMediaQuery(PHONE)
+  const canWrite = useCanWrite('companies.meetings')
   const [sending, setSending] = useState(false)
   // Sent from this page just now: "Sent" draws its tick once.
   const [justSent, setJustSent] = useState(false)
@@ -212,7 +215,9 @@ function PreReadView({ form }: { form: MeetingFormOut }) {
 
   /** Ctrl+Enter: Check and send, or the first blank still to fill. */
   const onKeyDown = (event: KeyboardEvent<HTMLElement>): void => {
-    if (event.key !== 'Enter' || !(event.ctrlKey || event.metaKey) || status === 'sent') return
+    if (!canWrite || event.key !== 'Enter' || !(event.ctrlKey || event.metaKey) || status === 'sent') {
+      return
+    }
     event.preventDefault()
     if (block === null) {
       setSending(true)
@@ -299,7 +304,7 @@ function PreReadView({ form }: { form: MeetingFormOut }) {
   )
 }
 
-export default function PreReadPage() {
+function PreReadContent() {
   const { formId = '' } = useParams()
   const form = useMeetingForm(formId)
 
@@ -325,4 +330,12 @@ export default function PreReadPage() {
     )
   }
   return <PreReadPending />
+}
+
+export default function PreReadPage() {
+  return (
+    <FeatureGuard feature="companies.meetings" page="Meetings">
+      <PreReadContent />
+    </FeatureGuard>
+  )
 }

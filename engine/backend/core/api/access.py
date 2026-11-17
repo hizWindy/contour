@@ -11,7 +11,7 @@
 - `AppAccessDep`: for core routes shared across projects (`/runs`, `/searches`).
 """
 
-from collections.abc import Awaitable, Callable, Iterable
+from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Annotated
 
@@ -204,24 +204,28 @@ class AppAccess:
         for app in apps if apps is not None else self.every:
             self.check(app)
 
-    def allowed(self, *, feature_by_app: dict[str, str] | None = None) -> list[str] | None:
+    def allowed(
+        self, *, feature_by_app: Mapping[str, str | Sequence[str]] | None = None
+    ) -> list[str] | None:
         """Projects visible to this caller, or None for Admins/sign-in-off."""
         if self.open:
             return None
-        mapping = feature_by_app or {app: feats[0] for app, feats in APP_DEFAULT_FEATURES.items()}
+        mapping: Mapping[str, str | Sequence[str]] = feature_by_app or APP_DEFAULT_FEATURES
         mine: list[str] = []
         for app in self.every:
-            feat = mapping.get(app)
-            if feat is not None:
-                if can_feature(self.auth, feat):
+            spec = mapping.get(app)
+            if spec is not None:
+                feats = (spec,) if isinstance(spec, str) else tuple(spec)
+                if any(can_feature(self.auth, feat) for feat in feats):
                     mine.append(app)
             elif can_use(self.auth, app):
                 mine.append(app)
         if not mine:
             first_app = self.every[0] if self.every else ""
-            feat = mapping.get(first_app)
-            if feat is not None:
-                raise feature_not_allowed(feat, self.platform_admin_name)
+            spec = mapping.get(first_app)
+            if spec is not None:
+                first_feat = spec if isinstance(spec, str) else spec[0]
+                raise feature_not_allowed(first_feat, self.platform_admin_name)
             raise not_allowed(first_app, self.platform_admin_name)
         return mine
 

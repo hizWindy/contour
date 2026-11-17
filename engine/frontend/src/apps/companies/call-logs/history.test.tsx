@@ -1,5 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import { queryKeys } from '@/api/query'
 import type { CallNoteOptions, CallNoteOut } from '@/api/types'
 import { formatDate, melbourneDate } from '@/lib/format'
 import { routes } from '@/router'
@@ -426,6 +427,7 @@ describe('History', () => {
     )
     vi.useFakeTimers({ shouldAdvanceTime: true, now: NOW })
     const client = createTestQueryClient()
+    client.setQueryData(queryKeys.auth.me(), { state: 'off' })
     prefetchPage(routes, { pathname: '/companies/call-logs', search: '?tab=history' }, client)
     await waitFor(() => {
       expect(asked).toEqual(['?state=history&mine=true&limit=50&offset=0'])

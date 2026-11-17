@@ -1102,6 +1102,7 @@ describe('the states', () => {
   it("the route's prefetch asks for the form in the address, and nothing else", async () => {
     const server = mockServer()
     const client = createTestQueryClient()
+    client.setQueryData(queryKeys.auth.me(), { state: 'off' })
     prefetchPage(routes, { pathname: `/companies/meetings/${FORM_ID}`, search: '' }, client)
     // The prefetch loads its own small file first.
     await waitFor(() => {

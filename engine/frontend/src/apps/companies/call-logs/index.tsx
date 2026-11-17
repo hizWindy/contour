@@ -24,6 +24,7 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { useCallNoteOptions, useCallNoteSummary } from '@/api/hooks/call-notes'
 import { useCanWrite } from '@/auth/can'
+import { FeatureGuard } from '@/auth/guard'
 import { ErrorState } from '@/components/error-state'
 import { RollingNumber, TabIndicator } from '@/components/motion'
 import { PageHeader } from '@/components/page-header'
@@ -62,7 +63,7 @@ const TAB_LABELS: Readonly<Record<CallLogsTab, string>> = {
   needs_look: TAB_NEEDS_LOOK,
 }
 
-export default function CallLogsPage() {
+function CallLogsContent() {
   const [params, setParams] = useSearchParams()
   const tab = readTab(params)
   const options = useCallNoteOptions()
@@ -177,9 +178,13 @@ export default function CallLogsPage() {
             <History
               options={notes}
               today={today}
-              onLogCall={(target: LogTarget) => {
-                if (canLog) setLogPanel({ from: 'direct', target })
-              }}
+              onLogCall={
+                canLog
+                  ? (target: LogTarget) => {
+                      setLogPanel({ from: 'direct', target })
+                    }
+                  : undefined
+              }
             />
           </TabsContent>
           <TabsContent value="needs_look">
@@ -225,5 +230,13 @@ export default function CallLogsPage() {
         }}
       />
     </>
+  )
+}
+
+export default function CallLogsPage() {
+  return (
+    <FeatureGuard feature="companies.call_logs" page="Call logs">
+      <CallLogsContent />
+    </FeatureGuard>
   )
 }

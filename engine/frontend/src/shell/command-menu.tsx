@@ -14,9 +14,11 @@ import {
 } from '@/components/ui/command'
 import { Kbd, KbdGroup } from '@/components/ui/kbd'
 import { useSidebar } from '@/components/ui/sidebar'
+import { useMe } from '@/api/hooks'
+import { isPlatformAdmin } from '@/auth/can'
 import { PLANNED } from '@/modules'
 import { install, INSTALL_STEPS, useInstallWay } from '@/pwa/install'
-import { useVisibleModules } from './visible-modules'
+import { useVisibleModules, visiblePages } from './visible-modules'
 import { ADMIN_TABS, HOME, type CommandsProps, type NavItem } from './nav'
 import { applyTheme, type ThemeChoice } from './theme'
 
@@ -61,7 +63,9 @@ function PageItem({ item, onSelect }: { item: NavItem; onSelect: (to: string) =>
  */
 export function CommandMenu(): ReactNode {
   const [open, setOpen] = useState(false)
+  const me = useMe().data
   const modules = useVisibleModules()
+  const showAdmin = isPlatformAdmin(me)
   const navigate = useNavigate()
   const { toggleSidebar } = useSidebar()
   // Install Contour as an app: the browser's own dialog, or the steps on an iPhone. Only while it
@@ -129,9 +133,10 @@ export function CommandMenu(): ReactNode {
             </CommandGroup>
             {modules.map((app) => {
               const Commands = app.commands
+              const pages = visiblePages(me, app.pages)
               return (
                 <CommandGroup key={app.id} heading={app.name}>
-                  {app.pages.map((item) => (
+                  {pages.map((item) => (
                     <PageItem key={item.to} item={item} onSelect={go} />
                   ))}
                   {Commands ? (
@@ -148,11 +153,13 @@ export function CommandMenu(): ReactNode {
                 <PageItem key={to} item={{ to, label: name, icon }} onSelect={go} />
               ))}
             </CommandGroup>
-            <CommandGroup heading="Admin">
-              {ADMIN_TABS.map((item) => (
-                <PageItem key={item.to} item={item} onSelect={go} />
-              ))}
-            </CommandGroup>
+            {showAdmin ? (
+              <CommandGroup heading="Admin">
+                {ADMIN_TABS.map((item) => (
+                  <PageItem key={item.to} item={item} onSelect={go} />
+                ))}
+              </CommandGroup>
+            ) : null}
             <CommandSeparator />
             <CommandGroup heading="Actions">
               <CommandItem

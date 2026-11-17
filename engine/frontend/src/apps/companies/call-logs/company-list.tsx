@@ -261,7 +261,7 @@ export function CompanyList({ active, inputRef, onPick }: CompanyListProps) {
 
   return (
     <div data-slot="log-call-list" className="flex h-full flex-col">
-      <div className="flex flex-col gap-3 border-b p-5 pr-14 max-sm:p-4 max-sm:pt-[max(1rem,env(safe-area-inset-top))] max-sm:pr-14">
+      <div className="glass-surface flex flex-col gap-3 border-b p-5 pr-14 max-sm:p-4 max-sm:pt-[max(1rem,env(safe-area-inset-top))] max-sm:pr-14">
         <div className="flex flex-col gap-0.5">
           <PanelTitle className="text-section">{LOG_CALL}</PanelTitle>
           <PanelDescription className="text-ui text-muted-foreground">

@@ -23,11 +23,13 @@ export interface SegmentedOption<T extends string = string> {
   label: string
   icon?: LucideIcon
   disabled?: boolean
+  onPointerEnter?: () => void
+  onFocus?: () => void
 }
 
 export interface SegmentedProps<T extends string = string> {
   options: readonly SegmentedOption<T>[]
-  value: T
+  value: T | '' | null
   onChange: (value: T) => void
   /** One of these names the group for a screen reader. */
   'aria-label'?: string
@@ -54,6 +56,8 @@ export function Segmented<T extends string = string>({
   const layoutId = `segmented-${useId()}`
   const group = useRef<HTMLDivElement>(null)
   const disabled = options.map((option) => Boolean(option.disabled))
+  const hasChecked = options.some((option) => option.value === value)
+  const firstEnabled = disabled.findIndex((item) => !item)
 
   // The chosen segment stays in view when the row scrolls sideways (a phone). It is done on the
   // next frame, and only along the row, when the row overflows. `scrollIntoView` in the effect also
@@ -97,9 +101,11 @@ export function Segmented<T extends string = string>({
             type="button"
             role="radio"
             aria-checked={checked}
-            tabIndex={checked ? 0 : -1}
+            tabIndex={checked || (!hasChecked && index === firstEnabled) ? 0 : -1}
             disabled={option.disabled}
             onClick={() => onChange(option.value)}
+            onPointerEnter={option.onPointerEnter}
+            onFocus={option.onFocus}
             onKeyDown={(event) =>
               handleRovingKey(event, index, disabled, (target) => {
                 const next = options[target]
@@ -110,7 +116,7 @@ export function Segmented<T extends string = string>({
               })
             }
             className={cn(
-              'relative inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md px-3 text-ui whitespace-nowrap transition-colors touch:min-h-10',
+              'relative inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md px-3 text-ui whitespace-nowrap transition-colors touch:min-h-11',
               size === 'sm' ? 'min-h-7' : 'min-h-8',
               checked
                 ? 'font-semibold text-accent-ink'

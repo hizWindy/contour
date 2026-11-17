@@ -112,7 +112,7 @@ describe('the menu folded to icons', () => {
   })
 })
 
-describe('the account at the foot of the menu (PLAN-V13 T1-6)', () => {
+describe('the account at the foot of the menu (PLAN-V13 T1-6, PLAN-V19 T3-2)', () => {
   it('shows the name and role, and opens the account menu', async () => {
     asLaptop()
     vi.stubGlobal(
@@ -127,7 +127,19 @@ describe('the account at the foot of the menu (PLAN-V13 T1-6)', () => {
                   email: 'al@example.test',
                   username: 'alkhair',
                   name: 'Al-khair M. Pama',
-                  role: 'admin',
+                  position: null,
+                  role: 'platform_admin',
+                  apps: ['lead_finder', 'companies'],
+                  features: [
+                    'lead_finder.start_run',
+                    'lead_finder.results',
+                    'lead_finder.rules',
+                    'lead_finder.send_to_hubspot',
+                    'companies.companies',
+                    'companies.call_logs',
+                    'companies.meetings',
+                    'companies.call_prep',
+                  ],
                 },
                 session: null,
               })
@@ -138,11 +150,11 @@ describe('the account at the foot of the menu (PLAN-V13 T1-6)', () => {
     const { user } = renderAt('/')
     const account = await screen.findByRole(
       'button',
-      { name: 'Account menu, Al-khair M. Pama, System admin' },
+      { name: 'Account menu, Al-khair M. Pama, Platform admin' },
       { timeout: LAZY },
     )
     expect(mainMenu().getByText('Al-khair M. Pama')).toBeInTheDocument()
-    expect(mainMenu().getByText('System admin')).toBeInTheDocument()
+    expect(mainMenu().getByText('Platform admin')).toBeInTheDocument()
     await user.click(account)
     const menu = await screen.findByRole('menu')
     expect(within(menu).getByText('al@example.test')).toBeInTheDocument()

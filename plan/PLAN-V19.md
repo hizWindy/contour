@@ -5,8 +5,8 @@ This plan builds Al-khair's Improvements 2 list of 17 Nov. Log call opens one pa
 **TBC** means to be confirmed.
 
 - **Built by:** Al-khair Pama. **Signed off by:** Al-khair, for the code, the roles and every screen.
-- **Last updated:** 17 Nov 2026 (Part 1 built except T1-2; Part 2 built and checked, waiting for looks on T2-2..T2-4).
-- **Progress:** S0: 1 of 1. Part 1: 8 of 9 (T1-2 blocked on HubSpot write OK). Part 2: 3 of 6 (T2-2, T2-3, T2-4 built, waiting for a look). Part 3: 0 of 7. Merge and deploy: 0 of 3.
+- **Last updated:** 17 Nov 2026 (Part 1 built except T1-2; Part 2 built and checked, waiting for looks on T2-2..T2-4; Part 3 built and checked, waiting for looks on T3-2..T3-6).
+- **Progress:** S0: 1 of 1. Part 1: 8 of 9 (T1-2 blocked on HubSpot write OK). Part 2: 3 of 6 (T2-2, T2-3, T2-4 built, waiting for a look). Part 3: 2 of 7 (T3-2..T3-6 built, waiting for a look). Merge and deploy: 0 of 3.
 - **Sources:**
   - Al-khair's Improvements 2 list (17 Nov, in chat) and his answers the same day;
   - the code on `master` (`0c9b68f`), read on 17 Nov;
@@ -357,16 +357,16 @@ Read first: `.claude/skills/ui-build/SKILL.md` and `engine/DESIGN.md`.
 
 Read first: `.claude/skills/ui-build/SKILL.md` and `engine/DESIGN.md`.
 
-- [ ] **T3-1. Test accounts.** Turn sign in on for the copy's backend. Make made-up accounts in `leadfinder_v19`: one of each role, and a Staff with only Call logs.
+- [x] **T3-1. Test accounts.** (17 Nov 2026) Turn sign in on for the copy's backend. Make made-up accounts in `leadfinder_v19`: one of each role, and a Staff with only Call logs.
   - **Done when:** each can sign in, and the Log names them (never their passwords).
 
-- [ ] **T3-2. Four roles, and Admin settings for the Platform admin** (choice 1).
+- [ ] **T3-2. Four roles, and Admin settings for the Platform admin** (choice 1). **Built, waiting for a look.** (17 Nov 2026)
   - `shell/roles.ts`: "Platform admin", "Admin", "Staff", "Viewer".
   - The Admin settings link shows for the Platform admin only. A direct link shows "Only the Platform admin can open Admin settings."
   - The People tab's role choice offers Admin, Staff and Viewer.
   - **Done when:** tests sign in as each role and check the menu, Ctrl+K and a direct link. Built, waiting for a look.
 
-- [ ] **T3-3. Adding a person, and passwords** (choices 6 to 8).
+- [ ] **T3-3. Adding a person, and passwords** (choices 6 to 8). **Built, waiting for a look.** (17 Nov 2026)
   - `AddPerson`: Name, Email, Position (optional), Role, then the ticks. No password field.
   - After Add, the made password shows once, with Copy and a line: "Send this to Jo yourself. It won't show again."
   - "Reset password" on each person, behind a real confirmation.
@@ -374,27 +374,30 @@ Read first: `.claude/skills/ui-build/SKILL.md` and `engine/DESIGN.md`.
   - The position on the People list and in the profile menu.
   - **Done when:** tests cover Add, Copy, Reset and Change password, and no password stays in the page once the sheet closes. Built, waiting for a look.
 
-- [ ] **T3-4. The ticks, and hiding what a person can't use** (choices 2 to 4).
+- [ ] **T3-4. The ticks, and hiding what a person can't use** (choices 2 to 4). **Built, waiting for a look.** (17 Nov 2026)
   - `EditPerson` and `AddPerson`: the eight ticks in two groups. Picking a role fills its starting ticks. Admin shows every tick on, greyed.
   - `src/auth/can.ts`: `can(feature)`, read from `/auth/me`.
   - Hidden without the tick: the module in the menu, Home and Ctrl+K; the Start, Results and Rules pages; Send to HubSpot on a lead; Prep call. A direct link to a page without the tick shows "You don't have access to {page}. Ask {name} to turn it on."
   - Hidden for a Viewer: every button that changes something, beyond the ones Part 2 hid.
   - **Done when:** tests sign in as a Staff with only Call logs, and as a Viewer, and check each place above. Built, waiting for a look.
 
-- [ ] **T3-5. Every small switch slides** (choice 16). The six switches become `Segmented`, and `Segmented` is 44px on a touch screen.
+- [ ] **T3-5. Every small switch slides** (choice 16). **Built, waiting for a look.** (17 Nov 2026) The six switches become `Segmented`, and `Segmented` is 44px on a touch screen.
   - **Done when:** no `ToggleGroup type="single"` is left in `apps/`, each switch keeps its keyboard keys, and the tests pass. Built, waiting for a look.
 
-- [ ] **T3-6. Subtle glass** (choice 17).
+- [ ] **T3-6. Subtle glass** (choice 17). **Built, waiting for a look.** (17 Nov 2026)
   - New `--glass-*` lines in `styles/tokens.css`, and the glass on the layers in choice 17, in `components/ui/` and `shell/top-bar.tsx`.
   - DESIGN.md: "Glass" says where it is allowed and where it isn't. The menu's **TBC** goes.
   - **Done when:** screenshots at 1440px and 390px, light and dark; reduce transparency shows solid layers; scrolling under the top bar and opening Ctrl+K drop no frames at 4x CPU. Built, waiting for a look.
 
-- [ ] **T3-7. Part 3 check.** Lint, types, every test, the build and the first visit size. Go through `.claude/skills/design-review/SKILL.md` and `.claude/skills/security-check/SKILL.md` (the password on screen).
+- [x] **T3-7. Part 3 check.** (17 Nov 2026) Lint, types, every test, the build and the first visit size. Go through `.claude/skills/design-review/SKILL.md` and `.claude/skills/security-check/SKILL.md` (the password on screen).
   - **Done when:** each passes, and both passes have nothing open.
 
 ### Part 3 Log
 
-- (none yet)
+- 17 Nov 2026 (T3-1): Seeded the five role accounts in `leadfinder_v19_imp2` (zero passwords stored or recorded anywhere): the existing Platform admin account (`platform_admin`, all 8 ticks), `aria.admin@example.test` (`Aria Sample`, `admin`, `Sales Manager`, all 8 ticks), `sam.staff@example.test` (`Sam Sample`, `staff`, `Account Executive`, 7 ticks without Rules), `pat.calls@example.test` (`Pat Sample`, `staff`, `Inside Sales`, `companies.call_logs` only), and `val.viewer@example.test` (`Val Sample`, `viewer`, `Operations`, 4 read ticks).
+- 17 Nov 2026 (T3-2..T3-6): Updated role names in `shell/roles.ts`, hid Admin settings / Test set / Runs and cost from regular Admins (`PlatformAdminGuard`), rebuilt `admin/people.tsx` (Position field, 2-group ticks with role starting defaults, greyed Admin ticks, password-free `AddPerson`, one-shot `MadePasswordBox`, `AlertDialog` confirmation before `Reset password`), added `Change password` and first-sign-in caption in `user-menu.tsx` & `home.tsx`, implemented fail-closed feature/viewer guards (`FeatureGuard`, `canSeeModule`, `canUse`, `canWrite`) and gated route prefetches (`main.tsx` waits for `meQueryOptions`), replaced every remaining `ToggleGroup type="single"` with 44px touch-ready `Segmented`, and added subtle glass (`--glass-*` tokens, `glass-surface`, `glass-bar` on scrolled `TopBar`, `glass-overlay`, `prefers-reduced-transparency` solid fallbacks, `engine/DESIGN.md` updated and `TBC` removed, enforced by `design-rules.ts`).
+- 17 Nov 2026 (T3-7): Security, access and design checks closed edge cases across backend and frontend: allowed `lead_finder.start_run`-only callers on `GET /api/v1/runs`, `/runs/{id}`, `/runs/{id}/log` (`core/api/runs_read.py`, `core/api/access.py`), gated `RunLeads`/`RunCostSplit` (`lead-finder/run/index.tsx`), disabled Viewer preview POST in `call-logs/to-confirm.tsx`, disabled `useEstimateRun` when `!canWrite` (`lead-finder/start/index.tsx`), disabled `Ctrl+Enter` send shortcut for Viewers in `meetings/pre-read/index.tsx`, gated `useCompany`/`usePrepFacts`/`usePrep`/`useScriptStyle` in `companies/prep-sheet.tsx` when logging calls without Companies/Call prep ticks, replaced plain `HomePage` zero-ticks wording to name the Platform admin (`shell/home.tsx`), and removed `/companies` links from `Prepped today` chips when `companies.companies` is unticked (`companies/home-card.tsx`).
+- 17 Nov 2026 (T3-7 verify): Backend `ruff check .` passed, `ruff format --check .` clean (434 files), `mypy .` clean (403 source files), `schema_map.py --check` (`SCHEMA-0025.md` matches DB), full `pytest` (`RUN_GATES=1`, `_v19_imp2`): `4739 passed, 25 skipped` (the 25 skipped live/env-gated checks in `test_contract_routes.py`). Frontend: `tsc -b` clean, `eslint . --max-warnings 0` clean, full `vitest run --run`: `138 files / 1983 tests passed` (`v19-access-passwords.test.tsx` 17/17 + all design/contrast/words/icons/fonts tests), `vite build` + `bundle-report.js`: first visit `240 kB gzip (746 kB raw) JS in 38 files, 24 kB gzip CSS` (+4 kB gzip JS over T1-1). Live Chromium CDP pass against `dist/` + isolated `leadfinder_v19_imp2` backend (port 8072 / 5242) exited 0 with zero runtime/console/unexpected HTTP 4xx/5xx errors across all 5 accounts, Add/Copy/Change/Reset password DOM wipe checks, `44px` `Segmented` touch target check, `4x CPU` trace (`2100` events), `Ctrl+K` `blur(16px)` and scrolled `TopBar` `blur(14px)`, `prefers-reduced-transparency` and `prefers-reduced-motion` checks, and 15 `plan/shots/v19/t3-*.png` screenshots visually inspected (`1440px` and `390px`, light and dark).
 
 ## Merge and deploy
 
@@ -423,10 +426,9 @@ Read first: `.claude/skills/ui-build/SKILL.md` and `engine/DESIGN.md`.
 ## Waiting on
 
 - **Al-khair:**
-  - the answers to "Questions for you";
   - his word for T1-2 (one test task in HubSpot), and what alerted him;
-  - a look at each screen, with sign in on;
-  - `merge v19` and `deploy v19`.
+  - a look at each screen (T2-2..T2-4 and T3-2..T3-6), with sign in on;
+  - his word for `merge v19` (M1), `deploy v19` (M2), and docs/team note (M3).
 - **Levi:** nothing in this plan needs his OK. He may want to know that each pre-read now adds HubSpot tasks.
 
 ## Risks
@@ -452,3 +454,4 @@ Read first: `.claude/skills/ui-build/SKILL.md` and `engine/DESIGN.md`.
 - 17 Nov 2026: plan written from Al-khair's Improvements 2 list and his answers: an Admin uses every module but not Admin settings; the eight ticks; after a send, who got it on the list and send to more; a HubSpot task as the alert. Nothing built.
 - 17 Nov 2026: Al-khair chose one session instead of three tracks, to build it with Gemini. The tracks became Parts 1 to 3, built in order, and the steps name plain how-to files instead of Claude's agents. The steps and choices are unchanged.
 - 17 Nov 2026 (S0): Created isolated worktree `../contour-v19-imp2` on branch `plan-v19-imp2` from `master` (`0c9b68f`) because `../contour-v19` (`plan-v19`) was already active on a separate issue. Fast backend suite passed (`3442 passed, 28 skipped`, `-m "not integration"`).
+- 17 Nov 2026 (Part 1-3): Implemented Part 1 (except T1-2, blocked on HubSpot write OK), Part 2 (`T2-1..T2-6`), and Part 3 (`T3-1..T3-7`) on branch `plan-v19-imp2` (`4739 passed, 25 skipped` backend pytest; `138 files / 1983 passed` frontend Vitest; live Chromium CDP verified across all 5 roles). Ready for Al-khair's look before M1-M3.

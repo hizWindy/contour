@@ -21,6 +21,7 @@ import { m } from 'motion/react'
 import { Suspense, useId, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { useMe } from '@/api/hooks'
+import { platformAdminAsker, useIsPlatformAdmin, usePlatformAdminName } from '@/auth/can'
 import { EmptyState } from '@/components/empty-state'
 import { Reveal, springs, useStill } from '@/components/motion'
 import { Card } from '@/components/ui/card'
@@ -28,7 +29,7 @@ import { cn } from '@/lib/utils'
 import { PLANNED } from '@/modules'
 import { RunsCostCard } from './home-cost'
 import { firstName, greetingWord, longDate } from './home-words'
-import { useVisibleModules } from './visible-modules'
+import { useVisibleModules, useVisiblePages } from './visible-modules'
 import type { AppModule, HomeCard, NavItem, PlannedModule } from './nav'
 import { TONE_CLASSES } from './tone'
 
@@ -65,6 +66,7 @@ function PageRow({ item }: { item: NavItem }) {
 function PlainCard({ app }: { app: AppModule }) {
   const Icon = app.icon
   const Summary = app.summary
+  const pages = useVisiblePages(app.pages)
   const titleId = `home-${app.id}`
   return (
     <Card role="region" aria-labelledby={titleId} className="h-full gap-0 py-0">
@@ -91,7 +93,7 @@ function PlainCard({ app }: { app: AppModule }) {
         </div>
       ) : null}
       <ul className="divide-y border-t">
-        {app.pages.map((item) => (
+        {pages.map((item) => (
           <PageRow key={item.to} item={item} />
         ))}
       </ul>
@@ -136,6 +138,7 @@ function Greeting({ modules }: { modules: readonly AppModule[] }) {
   const me = useMe().data
   const now = new Date()
   const name = me?.state === 'signed_in' ? firstName(me.user.name) : ''
+  const firstSignIn = me?.state === 'signed_in' && me.firstSignIn === true
   const lines = modules.flatMap((app) => (app.homeLine ? [{ id: app.id, Line: app.homeLine }] : []))
   return (
     <header data-slot="page-header" className="relative flex flex-col gap-2 overflow-hidden pt-2">
@@ -155,6 +158,12 @@ function Greeting({ modules }: { modules: readonly AppModule[] }) {
           ))}
         </p>
       ) : null}
+      {firstSignIn ? (
+        <p className="relative max-w-2xl text-caption text-muted-foreground">
+          You signed in with a starting password. Change it from your account menu whenever you
+          like.
+        </p>
+      ) : null}
     </header>
   )
 }
@@ -170,7 +179,7 @@ interface Placed {
  * Every card in order: each project's own cards (or its plain card), then Runs and cost, then the
  * cards that come late (`HomeCard.late`), so their coming moves none of the others.
  */
-function placeCards(modules: readonly AppModule[]): Placed[] {
+function placeCards(modules: readonly AppModule[], showRunsCost: boolean): Placed[] {
   const placed: Placed[] = modules.flatMap((app) =>
     app.homeCards && app.homeCards.length > 0
       ? app.homeCards.map(({ id, component: Component, wide, late }: HomeCard) => ({
@@ -183,13 +192,14 @@ function placeCards(modules: readonly AppModule[]): Placed[] {
   )
   const steady = placed.filter((card) => !card.late)
   const late = placed.filter((card) => card.late)
-  return modules.length > 0
+  return modules.length > 0 && showRunsCost
     ? [...steady, { key: 'runs-cost', wide: false, late: false, node: <RunsCostCard /> }, ...late]
     : [...steady, ...late]
 }
 
 function Cards({ modules }: { modules: readonly AppModule[] }) {
-  const placed = placeCards(modules)
+  const showRunsCost = useIsPlatformAdmin()
+  const placed = placeCards(modules, showRunsCost)
   // A wide card is two rows tall only when two narrow cards, always there, can stand beside it.
   const tall = placed.filter((card) => !card.wide && !card.late).length >= 2
   return (
@@ -294,6 +304,7 @@ function Planned() {
 
 export default function HomePage() {
   const modules = useVisibleModules()
+  const platformAdminName = usePlatformAdminName()
   return (
     <>
       <Greeting modules={modules} />
@@ -302,7 +313,7 @@ export default function HomePage() {
       ) : (
         <EmptyState
           title="No projects are open to you yet."
-          description="Ask an Admin to tick a project for you on the People tab."
+          description={`Ask ${platformAdminAsker(platformAdminName)} to turn one on for you.`}
         />
       )}
       <Planned />

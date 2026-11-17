@@ -39,6 +39,7 @@ import {
 } from '@/api/hooks/call-notes'
 import { queryKeys } from '@/api/query'
 import type { CallNoteOut, CallNoteStep } from '@/api/types'
+import { useCanWrite } from '@/auth/can'
 import { ErrorState } from '@/components/error-state'
 import { ListExit, ListExitItem, TickIn } from '@/components/motion'
 import { Button } from '@/components/ui/button'
@@ -115,6 +116,7 @@ function LookCard({
   /** Logged at last: the card leaves the tab. */
   onLeave: (note: CallNoteOut) => void
 }) {
+  const canWrite = useCanWrite('companies.call_logs')
   const client = useQueryClient()
   const titleId = useId()
   const reasonId = useId()
@@ -186,31 +188,35 @@ function LookCard({
   } else if (note.status === 'uncertain' && uncertain) {
     actions = (
       <>
-        <span className="text-foreground">{CHECK_HUBSPOT}</span>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="touch:h-11"
-          disabled={busy}
-          onClick={() => {
-            resolve.mutate({ id: note.id, step: uncertain.step, landed: true })
-          }}
-        >
-          {ITS_THERE}
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="touch:h-11"
-          disabled={busy}
-          onClick={() => {
-            resolve.mutate({ id: note.id, step: uncertain.step, landed: false })
-          }}
-        >
-          {ITS_NOT_THERE}
-        </Button>
+        {canWrite ? (
+          <>
+            <span className="text-foreground">{CHECK_HUBSPOT}</span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="touch:h-11"
+              disabled={busy}
+              onClick={() => {
+                resolve.mutate({ id: note.id, step: uncertain.step, landed: true })
+              }}
+            >
+              {ITS_THERE}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="touch:h-11"
+              disabled={busy}
+              onClick={() => {
+                resolve.mutate({ id: note.id, step: uncertain.step, landed: false })
+              }}
+            >
+              {ITS_NOT_THERE}
+            </Button>
+          </>
+        ) : null}
         <span className="sm:ml-auto">
           <OpenInHubSpot href={note.hubspot_url} company={note.company_name} meeting={meeting} />
         </span>
@@ -219,23 +225,27 @@ function LookCard({
   } else {
     actions = (
       <>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="touch:h-11"
-          disabled={!ready || busy}
-          aria-describedby={reasonId}
-          onClick={() => {
-            retry.mutate(note.id)
-          }}
-        >
-          <RotateCcw aria-hidden="true" />
-          {TRY_AGAIN}
-        </Button>
-        <span id={reasonId} className="text-caption text-muted-foreground">
-          {ready ? TRY_AGAIN_HINT : SEND_OFF}
-        </span>
+        {canWrite ? (
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="touch:h-11"
+              disabled={!ready || busy}
+              aria-describedby={reasonId}
+              onClick={() => {
+                retry.mutate(note.id)
+              }}
+            >
+              <RotateCcw aria-hidden="true" />
+              {TRY_AGAIN}
+            </Button>
+            <span id={reasonId} className="text-caption text-muted-foreground">
+              {ready ? TRY_AGAIN_HINT : SEND_OFF}
+            </span>
+          </>
+        ) : null}
         <span className="sm:ml-auto">
           <OpenInHubSpot href={note.hubspot_url} company={note.company_name} meeting={meeting} />
         </span>

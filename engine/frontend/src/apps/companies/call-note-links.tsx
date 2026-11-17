@@ -25,7 +25,7 @@ import { Link } from 'react-router'
 import { useCallNoteCounts, useCallNoteOptions, voiceToolOf } from '@/api/hooks/call-note-counts'
 import { useMeetingSummary } from '@/api/hooks/meeting-summary'
 import type { VoiceToolKind } from '@/api/types'
-import { useCanWrite, useIsViewer } from '@/auth/can'
+import { useCan, useCanWrite, useIsViewer } from '@/auth/can'
 import { RollingNumber } from '@/components/motion/rolling-number'
 import { Button } from '@/components/ui/button'
 import { CommandItem } from '@/components/ui/command'
@@ -46,11 +46,16 @@ import {
   toConfirmWords,
 } from './words'
 
-/** Call logs' row in the menu: how many calls wait to be confirmed. */
-export function ToConfirmCount() {
+function ToConfirmCountContent() {
   const { counts } = useCallNoteCounts()
   const count = counts?.to_confirm ?? 0
   return count > 0 ? <MenuCount value={count} words={toConfirmWords(count)} /> : null
+}
+
+/** Call logs' row in the menu: how many calls wait to be confirmed. */
+export function ToConfirmCount() {
+  if (!useCan('companies.call_logs')) return null
+  return <ToConfirmCountContent />
 }
 
 /**
@@ -95,10 +100,11 @@ export function CallNoteButtons() {
  * the switches, not the counts.
  */
 function CallNoteCommands({ go }: CommandsProps) {
-  const options = useCallNoteOptions()
+  const canSeeLogs = useCan('companies.call_logs')
+  const options = useCallNoteOptions(canSeeLogs)
   const viewer = useIsViewer()
   const canCallLogs = useCanWrite('companies.call_logs')
-  if (options.data?.enabled !== true) return null
+  if (!canSeeLogs || options.data?.enabled !== true) return null
   return (
     <>
       {!viewer && canCallLogs ? (
@@ -127,11 +133,7 @@ function CallNoteCommands({ go }: CommandsProps) {
   )
 }
 
-/**
- * Ctrl+K, under Companies, while pre-meeting forms are on (T3-11): "Pre-read for a meeting" opens
- * Meetings, upcoming, where each meeting's pre-read is drafted, checked and sent.
- */
-function PreReadCommand({ go }: CommandsProps) {
+function PreReadCommandContent({ go }: Pick<CommandsProps, 'go'>) {
   const summary = useMeetingSummary()
   if (!summary.data) return null
   return (
@@ -148,13 +150,23 @@ function PreReadCommand({ go }: CommandsProps) {
   )
 }
 
+/**
+ * Ctrl+K, under Companies, while pre-meeting forms are on (T3-11): "Pre-read for a meeting" opens
+ * Meetings, upcoming, where each meeting's pre-read is drafted, checked and sent.
+ */
+function PreReadCommand({ go }: Pick<CommandsProps, 'go'>) {
+  if (!useCan('companies.meetings')) return null
+  return <PreReadCommandContent go={go} />
+}
+
 // --- Check my mic (PLAN-V18 T3-4) -------------------------------------------------------------
 
 /** The voice tool, while the mic can be checked here: a laptop, call notes on, not typing. */
 function useCheckableTool(): VoiceToolKind | null {
-  const options = useCallNoteOptions()
+  const canLog = useCanWrite('companies.call_logs')
+  const options = useCallNoteOptions(canLog)
   const onPhone = useMediaQuery(PHONE)
-  if (onPhone || options.data?.enabled !== true) return null
+  if (!canLog || onPhone || options.data?.enabled !== true) return null
   const tool = voiceToolOf(options.data)
   return tool === 'typing' ? null : tool
 }
@@ -198,7 +210,8 @@ export function MicCheckMenuItem() {
 const MicCard = lazy(() => import('./call-notes/mic/mic-card'))
 
 function MicCheckCard({ open }: { open: boolean }) {
-  const options = useCallNoteOptions()
+  const canLog = useCanWrite('companies.call_logs')
+  const options = useCallNoteOptions(canLog)
   return (
     <Suspense fallback={null}>
       <MicCard
@@ -229,7 +242,7 @@ export function CompaniesCommands({ go, run }: CommandsProps) {
     <>
       <CallNoteCommands go={go} run={run} />
       <MicCheckCommand run={run} />
-      <PreReadCommand go={go} run={run} />
+      <PreReadCommand go={go} />
     </>
   )
 }

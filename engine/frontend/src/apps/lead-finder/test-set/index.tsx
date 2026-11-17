@@ -3,12 +3,13 @@
  * of its own (it was an Admin tab). The view is view.tsx, next to this file.
  */
 import { FlaskConical } from 'lucide-react'
+import { PlatformAdminGuard } from '@/auth/guard'
 import { PageHeader } from '@/components/page-header'
 import TestSetView from './view'
 
 export default function TestSetPage() {
   return (
-    <>
+    <PlatformAdminGuard message="Only the Platform admin can open Test set.">
       <PageHeader
         icon={FlaskConical}
         tone="lead"
@@ -16,6 +17,6 @@ export default function TestSetPage() {
         description="Ten public companies to check that a change to a prompt or a rule has not made results worse. Running it costs money."
       />
       <TestSetView />
-    </>
+    </PlatformAdminGuard>
   )
 }

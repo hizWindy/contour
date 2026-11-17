@@ -17,7 +17,7 @@ import { safeHref } from '@/lib/safe-href'
 
 export interface RowActionHandlers {
   /** "Prep" on the row: opens the prep panel. */
-  onPrep: (row: CompanyRow) => void
+  onPrep?: ((row: CompanyRow) => void) | undefined
   /** Opens the company (its dialog), where the HubSpot link always is. */
   onOpen: (key: string) => void
 }

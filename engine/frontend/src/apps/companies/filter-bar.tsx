@@ -10,6 +10,7 @@
 import { Search, SlidersHorizontal, X } from 'lucide-react'
 import { useEffect, useEffectEvent, useState, type ReactNode } from 'react'
 import type { CompanyFacets, DealState } from '@/api/types'
+import { Segmented } from '@/components/motion'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -29,7 +30,6 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useDebounced } from '@/hooks/useDebounced'
 import { formatNumber, pluralise } from '@/lib/format'
 import { PHONE, useMediaQuery } from '@/lib/use-media-query'
@@ -231,24 +231,21 @@ export function FilterBar({
             onChange({ owner })
           }}
         />
-        <ToggleGroup
-          type="single"
-          variant="outline"
+        <Segmented<DealState | typeof ANY>
           size="sm"
           aria-label="Deal"
           value={filters.deal ?? ANY}
-          onValueChange={(deal) => {
-            // Pressing the chosen one again gives "" in a single toggle group: back to any.
-            onChange({ deal: deal === '' || deal === ANY ? null : (deal as DealState) })
+          options={[
+            { value: ANY, label: 'Any deal' },
+            ...(Object.keys(DEAL_LABELS) as DealState[]).map((deal) => ({
+              value: deal,
+              label: DEAL_LABELS[deal],
+            })),
+          ]}
+          onChange={(deal) => {
+            onChange({ deal: deal === ANY ? null : deal })
           }}
-        >
-          <ToggleGroupItem value={ANY}>Any deal</ToggleGroupItem>
-          {(Object.keys(DEAL_LABELS) as DealState[]).map((deal) => (
-            <ToggleGroupItem key={deal} value={deal}>
-              {DEAL_LABELS[deal]}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
+        />
         {leadsShown ? (
           <Choice
             label="Where it came from"

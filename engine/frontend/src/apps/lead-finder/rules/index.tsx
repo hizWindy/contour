@@ -3,12 +3,13 @@
  * was an Admin tab). The view is view.tsx, next to this file.
  */
 import { ScrollText } from 'lucide-react'
+import { FeatureGuard } from '@/auth/guard'
 import { PageHeader } from '@/components/page-header'
 import RulesView from './view'
 
 export default function RulesPage() {
   return (
-    <>
+    <FeatureGuard feature="lead_finder.rules" page="Rules">
       <PageHeader
         icon={ScrollText}
         tone="lead"
@@ -16,6 +17,6 @@ export default function RulesPage() {
         description="The rules that decide each lead's result: cities, company size and signs of an office change. Read only. Points marked TBC still wait for Levi."
       />
       <RulesView />
-    </>
+    </FeatureGuard>
   )
 }

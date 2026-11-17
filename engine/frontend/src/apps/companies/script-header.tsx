@@ -99,6 +99,8 @@ export interface ScriptHeaderProps {
   toneNow?: ToneKey | null
   /** When the last HubSpot sync finished (`copy_at`), or null when not known. */
   copyAt?: string | null
+  /** False for Viewer / accounts without Companies Call prep write access. Defaults to true. */
+  canResearch?: boolean
   onResearch: () => void
 }
 
@@ -119,7 +121,7 @@ function statusWords({ madeFrom, prep, running }: ScriptHeaderProps): string {
 }
 
 export function ScriptHeader(props: ScriptHeaderProps) {
-  const { enabled, running, stage, failed, onResearch } = props
+  const { enabled, running, stage, failed, canResearch = true, onResearch } = props
   const hint = useId()
   const tone = props.madeFrom === 'claude' ? toneHint(props.prep?.tone_used, props.toneNow) : null
   const copy = copyWords(props.copyAt)
@@ -136,23 +138,25 @@ export function ScriptHeader(props: ScriptHeaderProps) {
           {copy ? <p className="basis-full text-caption text-foreground">{copy}</p> : null}
           {tone ? <p className="basis-full text-caption text-foreground">{tone}</p> : null}
         </div>
-        <div className="flex shrink-0 flex-col gap-1 sm:w-64 sm:items-end">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="max-sm:w-full"
-            disabled={enabled !== true || running}
-            aria-describedby={hint}
-            onClick={onResearch}
-          >
-            <RefreshCw aria-hidden="true" />
-            {running ? 'Researching...' : failed ? 'Try again' : 'Research again'}
-          </Button>
-          <p id={hint} className="text-caption text-muted-foreground">
-            {hintWords(props)}
-          </p>
-        </div>
+        {canResearch ? (
+          <div className="flex shrink-0 flex-col gap-1 sm:w-64 sm:items-end">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="max-sm:w-full"
+              disabled={enabled !== true || running}
+              aria-describedby={hint}
+              onClick={onResearch}
+            >
+              <RefreshCw aria-hidden="true" />
+              {running ? 'Researching...' : failed ? 'Try again' : 'Research again'}
+            </Button>
+            <p id={hint} className="text-caption text-muted-foreground">
+              {hintWords(props)}
+            </p>
+          </div>
+        ) : null}
       </div>
       {running ? <Searching stage={stage} /> : null}
     </div>

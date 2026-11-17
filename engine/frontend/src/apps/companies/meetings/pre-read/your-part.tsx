@@ -100,6 +100,7 @@ export function BlankField({
   max: number
   ref?: Ref<HTMLTextAreaElement>
 }) {
+  const canWrite = useCanWrite('companies.meetings')
   const id = useId()
   const noteId = useId()
   const wrong = blank.tooLong || blank.state === 'failed'
@@ -115,6 +116,7 @@ export function BlankField({
         ref={ref}
         id={id}
         value={blank.text}
+        readOnly={!canWrite}
         rows={2}
         placeholder={placeholder}
         aria-required="true"
@@ -122,10 +124,14 @@ export function BlankField({
         aria-describedby={noteId}
         // 16px text, so it reads like the summaries, and an iPhone doesn't zoom in on focus.
         className="text-body"
-        onChange={(event) => {
-          blank.change(event.target.value)
-        }}
-        onBlur={blank.commit}
+        onChange={
+          canWrite
+            ? (event) => {
+                blank.change(event.target.value)
+              }
+            : undefined
+        }
+        onBlur={canWrite ? blank.commit : undefined}
       />
       <SaveNote
         id={noteId}

@@ -35,11 +35,12 @@ const SYNCS_POLL_MS = 2000
  * The newest syncs, newest first. While one runs they are read again every 2 seconds, so its
  * counts climb on screen. Reading them is free: it asks our database, not HubSpot.
  */
-export function useHubSpotSyncs(limit = 10) {
+export function useHubSpotSyncs(limit = 10, enabled = true) {
   return useQuery({
     queryKey: [...queryKeys.hubspot.syncs(), limit],
     queryFn: async ({ signal }) =>
       unwrap(await api.GET('/hubspot/syncs', { params: { query: { limit } }, signal })),
+    enabled,
     refetchInterval: (query) =>
       query.state.data?.some((sync) => sync.status === 'running') ? SYNCS_POLL_MS : false,
   })
@@ -88,7 +89,7 @@ export function useHubSpotWrites(limit = 50) {
 }
 
 /** One lead's HubSpot send, if it has one (null when it has none). */
-export function useLeadHubSpot(leadId: string) {
+export function useLeadHubSpot(leadId: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.hubspot.lead(leadId),
     queryFn: async ({ signal }) =>
@@ -98,6 +99,7 @@ export function useLeadHubSpot(leadId: string) {
           signal,
         }),
       ),
+    enabled,
   })
 }
 

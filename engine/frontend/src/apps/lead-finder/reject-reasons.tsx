@@ -4,6 +4,7 @@
  * page both use the dialog here, so the choice reads the same in both places.
  */
 import { useId, useState } from 'react'
+import { Segmented } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -15,7 +16,6 @@ import {
 } from '@/components/ui/dialog'
 import { Field, FieldError, FieldLabel } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { REJECT_REASONS, type RejectReason } from './reject-reasons-data'
 
 export function RejectDialog({
@@ -67,27 +67,17 @@ export function RejectDialog({
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
-        <ToggleGroup
-          type="single"
-          variant="outline"
+        <Segmented
+          scroll={false}
           aria-label="Reason"
           value={reason ?? ''}
-          onValueChange={(value) => {
-            setReason(value === '' ? null : (value as RejectReason))
+          options={REJECT_REASONS.map((item) => ({ value: item.id, label: item.label }))}
+          onChange={(value) => {
+            setReason(value)
             setError(null)
           }}
-          className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2"
-        >
-          {REJECT_REASONS.map((item) => (
-            <ToggleGroupItem
-              key={item.id}
-              value={item.id}
-              className="justify-start rounded-md border px-3 data-[state=on]:border-primary data-[state=on]:font-semibold"
-            >
-              {item.label}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
+          className="grid w-full grid-cols-1 gap-1 p-1 sm:grid-cols-2 [&>button]:justify-start"
+        />
         <Field>
           <FieldLabel htmlFor={`${id}-note`}>
             {reason === 'other' ? 'What is the reason?' : 'A note (optional)'}

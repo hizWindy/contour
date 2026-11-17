@@ -34,6 +34,20 @@ export interface Violation {
 
 /** The one file where colours may be written. */
 const TOKENS_FILE = 'styles/tokens.css'
+const GLASS_FILE = 'styles/index.css'
+const GLASS_HOSTS = new Set([
+  'styles/index.css',
+  'shell/top-bar.tsx',
+  'components/ui/popover.tsx',
+  'components/ui/dropdown-menu.tsx',
+  'components/ui/select.tsx',
+  'components/ui/command.tsx',
+  'components/ui/sheet.tsx',
+  'components/ui/dialog.tsx',
+  'components/ui/alert-dialog.tsx',
+  'apps/companies/call-logs/company-list.tsx',
+  'apps/companies/call-notes/note-view.tsx',
+])
 
 const COLOUR_FAMILIES =
   'red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|slate|gray|zinc|neutral|stone|black|white'
@@ -93,14 +107,24 @@ export const DESIGN_RULES: DesignRule[] = [
   },
   {
     id: 'backdrop-blur',
-    message: 'No blur and no glass. Surfaces are flat.',
+    message:
+      'Backdrop blur lives only inside the shared glass classes in styles/index.css, not ad-hoc classes.',
     pattern: /\bbackdrop-(?:blur|filter)\b/,
+    skip: (path) => path === GLASS_FILE,
     bad: [
       'backdrop-blur-sm',
       'supports-backdrop-filter:backdrop-blur-xs',
       'backdrop-filter: blur(4px)',
     ],
-    good: ['bg-overlay', 'blur-none'],
+    good: ['bg-overlay', 'blur-none', 'glass-surface'],
+  },
+  {
+    id: 'glass-floating-only',
+    message: 'Glass classes belong only on approved floating layers, never cards, tables or forms.',
+    pattern: /(?<![\w-])glass-(?:surface|bar|overlay)\b/,
+    skip: (path) => GLASS_HOSTS.has(path),
+    bad: ['glass-surface', 'glass-bar', 'glass-overlay'],
+    good: ['bg-card', 'bg-background', '--glass-surface'],
   },
   {
     id: 'gradients',
@@ -226,7 +250,7 @@ export const DESIGN_RULES: DesignRule[] = [
     message: 'No blur and no glass. Surfaces are flat. Use a border or a background instead.',
     // `blur-sm`, `blur-[4px]`, `blur-(--x)` and `filter: blur(...)`. A leading hyphen is left to
     // the backdrop-blur rule, and `blur-none`, `.blur()` and the `blur` event are fine.
-    pattern: /(?<![\w.-])blur-(?!none\b)[\w[(]|filter\s*:[^;]*\bblur\(/,
+    pattern: /(?<![\w.-])blur-(?!none\b)[\w[(]|(?<![\w-])filter\s*:[^;]*\bblur\(/,
     bad: [
       'blur-sm',
       'md:blur-lg',

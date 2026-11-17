@@ -280,7 +280,7 @@ export function NoteView({
   return (
     <div data-slot="note-view" className="flex h-full flex-col" onKeyDown={onKeyDown}>
       {/* A plain block, not a header element: inside the panel that would read as a second banner. */}
-      <div className="flex items-start gap-2 border-b p-5 pr-14 max-sm:p-4 max-sm:pt-[max(1rem,env(safe-area-inset-top))] max-sm:pr-14">
+      <div className="glass-surface flex items-start gap-2 border-b p-5 pr-14 max-sm:p-4 max-sm:pt-[max(1rem,env(safe-area-inset-top))] max-sm:pr-14">
         {onBack ? (
           <Tooltip>
             <TooltipTrigger asChild>

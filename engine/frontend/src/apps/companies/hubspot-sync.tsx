@@ -21,6 +21,7 @@ import { isApiProblem } from '@/api/client'
 import { useCancelHubSpotSync, useHubSpotSyncs, useStartHubSpotSync } from '@/api/hooks'
 import { queryKeys } from '@/api/query'
 import type { HubSpotSync as Sync } from '@/api/types'
+import { useCanWrite } from '@/auth/can'
 import { isStopping, stoppedWords, syncProgress } from '@/components/hubspot/sync-progress'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
@@ -41,6 +42,7 @@ function finishedWords(sync: Sync): string {
 
 /** The button, with the copy's age or the running sync's progress and Stop beside it. */
 export function HubSpotSync() {
+  const canWrite = useCanWrite('companies.companies')
   const syncs = useHubSpotSyncs()
   const start = useStartHubSpotSync()
   const cancel = useCancelHubSpotSync()
@@ -116,7 +118,7 @@ export function HubSpotSync() {
           ) : null}
         </div>
       ) : null}
-      {running ? (
+      {canWrite && running ? (
         <Button
           type="button"
           variant="outline"
@@ -130,42 +132,44 @@ export function HubSpotSync() {
           {stopping ? 'Stopping…' : 'Stop'}
         </Button>
       ) : null}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={busy}
-            onClick={() => {
-              start.mutate('auto', {
-                onSuccess: () => {
-                  toast('Syncing with HubSpot', {
-                    description: 'You can keep working. The list refreshes when it is done.',
-                  })
-                },
-                onError: (error) => {
-                  if (isApiProblem(error) && error.code === 'hubspot_sync_running') {
-                    toast('A HubSpot sync is already running', {
-                      description: 'Its progress shows here.',
+      {canWrite ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={busy}
+              onClick={() => {
+                start.mutate('auto', {
+                  onSuccess: () => {
+                    toast('Syncing with HubSpot', {
+                      description: 'You can keep working. The list refreshes when it is done.',
                     })
-                    void syncs.refetch()
-                    return
-                  }
-                  toastProblem(error)
-                },
-              })
-            }}
-          >
-            <RefreshCw aria-hidden="true" />
-            {running ? 'Syncing' : 'Sync with HubSpot'}
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent className="max-w-72">
-          Copies what changed in HubSpot since the last sync, and everything once a week: companies,
-          offices, deals and owners. Free. A full copy is on Admin, HubSpot.
-        </TooltipContent>
-      </Tooltip>
+                  },
+                  onError: (error) => {
+                    if (isApiProblem(error) && error.code === 'hubspot_sync_running') {
+                      toast('A HubSpot sync is already running', {
+                        description: 'Its progress shows here.',
+                      })
+                      void syncs.refetch()
+                      return
+                    }
+                    toastProblem(error)
+                  },
+                })
+              }}
+            >
+              <RefreshCw aria-hidden="true" />
+              {running ? 'Syncing' : 'Sync with HubSpot'}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-72">
+            Copies what changed in HubSpot since the last sync, and everything once a week:
+            companies, offices, deals and owners. Free. A full copy is on Admin, HubSpot.
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
     </div>
   )
 }

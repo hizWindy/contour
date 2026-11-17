@@ -26,6 +26,7 @@ import { useEffect, useId, useRef, useState, type RefObject } from 'react'
 import { toast } from 'sonner'
 import { isStillDrafting, useEditMeetingForm, useRedraftMeetingForm } from '@/api/hooks/meetings'
 import type { FormSummariesPatch, MeetingFormOut, SummaryBy } from '@/api/types'
+import { useCanWrite } from '@/auth/can'
 import { Button } from '@/components/ui/button'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -92,6 +93,7 @@ interface SummaryFieldProps {
 }
 
 function SummaryField({ form, name, onSaved }: SummaryFieldProps) {
+  const canWrite = useCanWrite('companies.meetings')
   const summary = form.summaries[name]
   const title = SUMMARY_TITLES[name]
   const id = useId()
@@ -190,17 +192,22 @@ function SummaryField({ form, name, onSaved }: SummaryFieldProps) {
         <Textarea
           id={id}
           value={text}
+          readOnly={!canWrite}
           rows={3}
           placeholder={summary.by === 'ai' ? NOTHING_FROM_AI : LEFT_EMPTY}
           aria-invalid={wrong || undefined}
           aria-describedby={noteId}
           // Reading text: 16px, and an iPhone doesn't zoom in on focus.
           className="max-w-full text-body text-pretty"
-          onChange={(event) => {
-            setText(event.target.value)
-            if (state === 'saved') setState('idle')
-          }}
-          onBlur={commit}
+          onChange={
+            canWrite
+              ? (event) => {
+                  setText(event.target.value)
+                  if (state === 'saved') setState('idle')
+                }
+              : undefined
+          }
+          onBlur={canWrite ? commit : undefined}
         />
       )}
       {summary.sources.length > 0 && !writing ? (
@@ -272,6 +279,7 @@ export function SummariesSection({
   number: number
   onSaved: () => void
 }) {
+  const canWrite = useCanWrite('companies.meetings')
   const title = useRef<HTMLHeadingElement>(null)
   const redraft = useRedraftMeetingForm(form.id)
   const failed = form.status === 'failed'
@@ -294,7 +302,9 @@ export function SummariesSection({
         ))}
       </div>
       {/* A failed draft's Try again is with its reason, in the draft's steps. */}
-      {failed ? null : <RedraftRow form={form} busy={redraft.isPending} onRedraft={startRedraft} />}
+      {failed || !canWrite ? null : (
+        <RedraftRow form={form} busy={redraft.isPending} onRedraft={startRedraft} />
+      )}
     </FormSection>
   )
 }

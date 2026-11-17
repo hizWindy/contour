@@ -33,6 +33,7 @@ import { Link } from 'react-router'
 import { useMe } from '@/api/hooks'
 import { isMeetingFormsOff, useMeetings, useMeetingSummary } from '@/api/hooks/meetings'
 import type { MeetingItem } from '@/api/types'
+import { useCan } from '@/auth/can'
 import { Reveal } from '@/components/motion'
 import { melbourneDate } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -105,7 +106,7 @@ function homeView(signInOff: boolean): MeetingsView {
   return { ...FIRST_VIEW, who: signInOff ? 'all' : 'mine' }
 }
 
-export function UpcomingMeetings() {
+function UpcomingMeetingsContent() {
   const summary = useMeetingSummary()
   const on = summary.data !== undefined
   const view = homeView(useMe().data?.state === 'off')
@@ -182,4 +183,9 @@ export function UpcomingMeetings() {
       </section>
     </Reveal>
   )
+}
+
+export function UpcomingMeetings() {
+  if (!useCan('companies.meetings')) return null
+  return <UpcomingMeetingsContent />
 }

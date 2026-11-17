@@ -41,6 +41,8 @@ import { useMe } from '@/api/hooks'
 import { useCallNoteOptions } from '@/api/hooks/call-note-counts'
 import { isMeetingFormsOff, useMeetings } from '@/api/hooks/meetings'
 import type { MeetingItem, MeetingOwner, MeetingPage, MeetingWho, TeamState } from '@/api/types'
+import { useCanWrite } from '@/auth/can'
+import { FeatureGuard } from '@/auth/guard'
 import type { SegmentedOption } from '@/components/motion'
 import { EmptyState } from '@/components/empty-state'
 import { ErrorState } from '@/components/error-state'
@@ -159,11 +161,13 @@ function NoteLine({ words }: { words: string }) {
   )
 }
 
-export default function MeetingsPage() {
+function MeetingsContent() {
   const [params, setParams] = useSearchParams()
   const asked = readMeetings(params)
   const onPhone = useMediaQuery(PHONE)
   const today = melbourneDate()
+  const canWriteMeetings = useCanWrite('companies.meetings')
+  const canLogNotes = useCanWrite('companies.call_logs')
   // Whose meetings needs a "me": with sign-in off there is none, so the choice is left out and
   // the list is everyone's.
   const signIn = useMe().data
@@ -171,8 +175,8 @@ export default function MeetingsPage() {
   const view: MeetingsView = signIn?.state === 'off' ? { ...asked, who: 'all' } : asked
   const list = useMeetings(meetingsQuery(view))
   const off = isMeetingFormsOff(list.error)
-  // "Log meeting" makes a call note, so it is there only while call notes are on.
-  const notesOn = useCallNoteOptions().data?.enabled === true
+  // "Log meeting" makes a call note, so it is there only while call notes are on and writable.
+  const notesOn = useCallNoteOptions(canLogNotes).data?.enabled === true && canLogNotes
   const [logging, setLogging] = useState<MeetingItem | null>(null)
   const sync = useMeetingsSync(list.data, today)
 
@@ -282,7 +286,7 @@ export default function MeetingsPage() {
         tone="companies"
         title={MEETINGS_TITLE}
         description={onPhone ? undefined : MEETINGS_DESCRIPTION}
-        actions={formsOn && !off ? <NewPreRead /> : undefined}
+        actions={canWriteMeetings && formsOn && !off ? <NewPreRead /> : undefined}
       />
       {off ? (
         <MeetingFormsOff />
@@ -290,8 +294,14 @@ export default function MeetingsPage() {
         <>
           {line?.waiting ? <WaitingLine sentence={line.sentence} /> : null}
           <div className="flex flex-col gap-2">
-            <MeetingsToolbar view={view} onChange={change} who={who} owners={owners} sync={sync} />
-            <SyncLine line={sync.line} />
+            <MeetingsToolbar
+              view={view}
+              onChange={change}
+              who={who}
+              owners={owners}
+              sync={canWriteMeetings ? sync : undefined}
+            />
+            {canWriteMeetings ? <SyncLine line={sync.line} /> : null}
           </div>
           <ListFade view={`${view.when}-${view.who}-${view.owner ?? ''}`}>{content}</ListFade>
         </>
@@ -304,5 +314,13 @@ export default function MeetingsPage() {
         }}
       />
     </>
+  )
+}
+
+export default function MeetingsPage() {
+  return (
+    <FeatureGuard feature="companies.meetings" page="Meetings">
+      <MeetingsContent />
+    </FeatureGuard>
   )
 }

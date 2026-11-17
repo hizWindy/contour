@@ -25,6 +25,7 @@ import type {
   TeamState,
 } from '@/api/types'
 import { ApiProblem } from '@/api/client'
+import { queryKeys } from '@/api/query'
 import { problemHint } from '@/lib/problems'
 import { routes } from '@/router'
 import { prefetchPage } from '@/shell/prefetch'
@@ -1181,6 +1182,7 @@ describe('the states', () => {
   it('the prefetch asks for the list in the address, as the page does', async () => {
     const server = mockServer()
     const client = createTestQueryClient()
+    client.setQueryData(queryKeys.auth.me(), { state: 'off' })
     prefetchPage(routes, { pathname: '/companies/meetings', search: '?when=past&who=team' }, client)
     // The prefetch loads its own small file first.
     await waitFor(() => {

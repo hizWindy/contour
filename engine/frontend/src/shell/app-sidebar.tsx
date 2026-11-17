@@ -22,7 +22,8 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar'
 import { PLANNED } from '@/modules'
-import { useVisibleModules } from './visible-modules'
+import { useIsPlatformAdmin } from '@/auth/can'
+import { useVisibleModules, useVisiblePages } from './visible-modules'
 import { ADMIN, HOME, isHere, isWithin, type AppModule, type NavItem } from './nav'
 import { TONE_CLASSES } from './tone'
 import { SidebarAccount } from './user-menu'
@@ -123,8 +124,11 @@ function SubLink({ item, pathname }: { item: NavItem; pathname: string }) {
 function ModuleGroup({ app, pathname }: { app: AppModule; pathname: string }) {
   const { state, isMobile } = useSidebar()
   const [open, setOpen] = useState(true)
+  const pages = useVisiblePages(app.pages)
   const Icon = app.icon
   const labelId = `menu-${app.id}`
+
+  if (pages.length === 0) return null
 
   if (state === 'collapsed' && !isMobile) {
     return (
@@ -132,7 +136,7 @@ function ModuleGroup({ app, pathname }: { app: AppModule; pathname: string }) {
         <SidebarGroupLabel id={labelId}>{app.name}</SidebarGroupLabel>
         <SidebarGroupContent>
           <SidebarMenu>
-            {app.pages.map((item) => (
+            {pages.map((item) => (
               <MenuLink key={item.to} item={item} pathname={pathname} />
             ))}
           </SidebarMenu>
@@ -141,7 +145,7 @@ function ModuleGroup({ app, pathname }: { app: AppModule; pathname: string }) {
     )
   }
 
-  const inside = app.pages.some((item) => isHere(pathname, item))
+  const inside = pages.some((item) => isHere(pathname, item))
   return (
     <SidebarGroup role="group" aria-labelledby={labelId}>
       <SidebarMenu>
@@ -162,7 +166,7 @@ function ModuleGroup({ app, pathname }: { app: AppModule; pathname: string }) {
             </CollapsibleTrigger>
             <CollapsibleContent>
               <SidebarMenuSub>
-                {app.pages.map((item) => (
+                {pages.map((item) => (
                   <SubLink key={item.to} item={item} pathname={pathname} />
                 ))}
               </SidebarMenuSub>
@@ -252,6 +256,7 @@ function PlannedGroup({ pathname }: { pathname: string }) {
 export function AppSidebar() {
   const { pathname } = useLocation()
   const modules = useVisibleModules()
+  const showAdmin = useIsPlatformAdmin()
   // A project with one page is a plain link under Home, not a dropdown (PLAN-V10 B1).
   const single = modules.filter((app) => app.pages.length === 1)
   const grouped = modules.filter((app) => app.pages.length !== 1)
@@ -289,7 +294,7 @@ export function AppSidebar() {
         </SidebarContent>
         <SidebarFooter className="border-t border-sidebar-border">
           <SidebarMenu>
-            <MenuLink item={ADMIN} pathname={pathname} />
+            {showAdmin ? <MenuLink item={ADMIN} pathname={pathname} /> : null}
             <SidebarAccount />
           </SidebarMenu>
         </SidebarFooter>

@@ -51,8 +51,9 @@ function CommandDialog({
         <DialogDescription>{description}</DialogDescription>
       </DialogHeader>
       <DialogContent
+        data-slot="command-dialog"
         className={cn(
-          "top-1/3 translate-y-0 overflow-hidden rounded-lg! p-0",
+          "glass-surface top-1/3 translate-y-0 overflow-hidden rounded-lg! p-0",
           className
         )}
         showCloseButton={showCloseButton}

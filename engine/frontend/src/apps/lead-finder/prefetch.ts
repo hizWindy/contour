@@ -15,7 +15,10 @@ import {
   runQueryOptions,
   runsQueryOptions,
 } from '@/api/hooks'
+import type { SignIn } from '@/api/hooks/auth'
+import { queryKeys } from '@/api/query'
 import type { QueryOf } from '@/api/types'
+import { canUse, type Feature } from '@/auth/can'
 import type { PrefetchArgs } from '@/shell/crumbs'
 import { filterQuery, listQuery, readResults } from './results/params'
 import { FIRST_RUNS_PAGE } from './run/runs-query'
@@ -35,25 +38,36 @@ export const TOP_LEADS = {
   limit: 3,
 } satisfies QueryOf<'list_leads'>
 
+function allowed(client: QueryClient, ...features: Feature[]): boolean {
+  return canUse(client.getQueryData<SignIn>(queryKeys.auth.me()), ...features)
+}
+
 /**
  * What the Lead Finder asks for on Home: the newest run, the lead counts (by result and by sign)
  * and the best new good leads.
  */
 export function prefetchLeadFinderSummary(client: QueryClient): void {
-  void client.prefetchQuery(runsQueryOptions(LAST_RUN))
-  void client.prefetchQuery(leadFacetsQueryOptions())
-  void client.prefetchQuery(leadsQueryOptions(TOP_LEADS))
+  if (allowed(client, 'lead_finder.start_run', 'lead_finder.results')) {
+    void client.prefetchQuery(runsQueryOptions(LAST_RUN))
+  }
+  if (allowed(client, 'lead_finder.results')) {
+    void client.prefetchQuery(leadFacetsQueryOptions())
+    void client.prefetchQuery(leadsQueryOptions(TOP_LEADS))
+  }
 }
 
 export function prefetchStart({ client }: PrefetchArgs): void {
+  if (!allowed(client, 'lead_finder.start_run')) return
   void client.prefetchQuery(runOptionsQueryOptions())
 }
 
 export function prefetchRuns({ client }: PrefetchArgs): void {
+  if (!allowed(client, 'lead_finder.start_run', 'lead_finder.results')) return
   void client.prefetchQuery(runsQueryOptions(FIRST_RUNS_PAGE))
 }
 
 export function prefetchRun({ client, params }: PrefetchArgs): void {
+  if (!allowed(client, 'lead_finder.start_run', 'lead_finder.results')) return
   if (params.runId) {
     void client.prefetchQuery(runQueryOptions(params.runId))
   }
@@ -64,6 +78,7 @@ export function prefetchRun({ client, params }: PrefetchArgs): void {
  * (it is up to 2,000 pins and the table view never shows it); and the open lead.
  */
 export function prefetchResults({ client, search }: PrefetchArgs): void {
+  if (!allowed(client, 'lead_finder.results')) return
   const state = readResults(search)
   const filters = filterQuery(state.filters)
   void client.prefetchQuery(leadsQueryOptions(listQuery(state)))
@@ -77,11 +92,13 @@ export function prefetchResults({ client, search }: PrefetchArgs): void {
 }
 
 export function prefetchLead({ client, params }: PrefetchArgs): void {
+  if (!allowed(client, 'lead_finder.results')) return
   if (params.leadId) {
     void client.prefetchQuery(leadQueryOptions(params.leadId))
   }
 }
 
 export function prefetchRules({ client }: PrefetchArgs): void {
+  if (!allowed(client, 'lead_finder.rules')) return
   void client.prefetchQuery(rulesQueryOptions())
 }

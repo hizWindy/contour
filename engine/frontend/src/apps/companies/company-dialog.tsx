@@ -25,6 +25,7 @@ import { Link } from 'react-router'
 import { useCompany } from '@/api/hooks'
 import { useCallNoteOptions } from '@/api/hooks/call-notes'
 import type { CompanyDetail, CompanyPerson, CompanyRow } from '@/api/types'
+import { useCanWrite } from '@/auth/can'
 import { ErrorState } from '@/components/error-state'
 import { Button } from '@/components/ui/button'
 import {
@@ -172,7 +173,8 @@ export function CompanyDialog({
           onPrep(company.data, null)
         }
       : undefined
-  const notesOn = useCallNoteOptions(onLogCall !== undefined).data?.enabled === true
+  const canLogNotes = useCanWrite('companies.call_logs')
+  const notesOn = useCallNoteOptions(canLogNotes && onLogCall !== undefined).data?.enabled === true && canLogNotes
   const logCompany =
     onLogCall && notesOn && company.data
       ? () => {
@@ -274,7 +276,7 @@ export function CompanyDialog({
             <CompanyViewPending boxes={known === undefined} />
           )}
         </div>
-        {phone && onPrep ? (
+        {phone && (onPrep || logCompany) ? (
           <div className="flex gap-2 border-t bg-popover p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             {logCompany ? (
               <Button type="button" variant="outline" size="lg" onClick={logCompany}>
@@ -282,16 +284,18 @@ export function CompanyDialog({
                 {LOG_CALL}
               </Button>
             ) : null}
-            <Button
-              type="button"
-              size="lg"
-              className="min-w-0 flex-1"
-              disabled={!prepCompany}
-              onClick={prepCompany}
-            >
-              <PhoneCall aria-hidden="true" />
-              Prep a call
-            </Button>
+            {onPrep ? (
+              <Button
+                type="button"
+                size="lg"
+                className="min-w-0 flex-1"
+                disabled={!prepCompany}
+                onClick={prepCompany}
+              >
+                <PhoneCall aria-hidden="true" />
+                Prep a call
+              </Button>
+            ) : null}
           </div>
         ) : null}
       </DialogContent>

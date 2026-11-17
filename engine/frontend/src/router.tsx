@@ -9,6 +9,9 @@
  */
 import { createBrowserRouter, Navigate, Outlet, type RouteObject } from 'react-router'
 import { runSummaryQueryOptions } from '@/api/hooks'
+import type { SignIn } from '@/api/hooks/auth'
+import { queryKeys } from '@/api/query'
+import { canSeeModule, isPlatformAdmin } from '@/auth/can'
 import { MODULES, PLANNED } from '@/modules'
 import { AppFrame } from '@/shell/app-frame'
 import type { RouteHandle } from '@/shell/crumbs'
@@ -71,10 +74,13 @@ export const routes: RouteObject[] = [
           crumb: 'Home',
           // The cards on Home ask for their own data: each project's, then the shared Runs and cost.
           prefetch: ({ client }) => {
+            const me = client.getQueryData<SignIn>(queryKeys.auth.me())
             for (const app of MODULES) {
-              app.prefetchSummary?.(client)
+              if (canSeeModule(me, app.id)) app.prefetchSummary?.(client)
             }
-            void client.prefetchQuery(runSummaryQueryOptions(costSince()))
+            if (isPlatformAdmin(me)) {
+              void client.prefetchQuery(runSummaryQueryOptions(costSince()))
+            }
           },
         } satisfies RouteHandle,
         ...page(() => import('@/shell/home')),

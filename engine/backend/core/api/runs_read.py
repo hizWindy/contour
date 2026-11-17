@@ -16,7 +16,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from core.api.access import AppAccessDep
+from core.api.access import APP_DEFAULT_FEATURES, AppAccessDep
 from core.api.deps import RunManagerDep
 from core.api.models import INT32_MAX, OFFSET_MAX, SafeText
 from core.runs.schemas import (
@@ -30,6 +30,19 @@ from core.runs.schemas import (
 )
 
 router = APIRouter(prefix="/runs", tags=["runs"])
+
+_LEAD_FINDER_RUN_FEATURES = ("lead_finder.results", "lead_finder.start_run")
+_RUN_READ_FEATURES: dict[str, tuple[str, ...]] = {
+    **APP_DEFAULT_FEATURES,
+    "lead_finder": _LEAD_FINDER_RUN_FEATURES,
+}
+
+
+def _check_run_read(access: AppAccessDep, app: str) -> None:
+    if app == "lead_finder":
+        access.check_feature(*_LEAD_FINDER_RUN_FEATURES)
+    else:
+        access.check(app)
 
 
 @router.post(
@@ -84,9 +97,10 @@ async def list_runs(
 ) -> RunPage:
     apps: list[str] | None = None
     if app is not None:
-        access.check(app)
+        _check_run_read(access, app)
     else:
-        apps = access.allowed()  # only the projects this person may use
+        # Only the projects this person may use.
+        apps = access.allowed(feature_by_app=_RUN_READ_FEATURES)
     return await manager.list_runs(
         app=app,
         apps=apps,
@@ -123,7 +137,7 @@ async def run_summary(
 @router.get("/{run_id}", response_model=RunOut, summary="One run")
 async def get_run(run_id: uuid.UUID, manager: RunManagerDep, access: AppAccessDep) -> RunOut:
     run = await manager.get_run(run_id)
-    access.check(run.app)
+    _check_run_read(access, run.app)
     return run
 
 
@@ -146,5 +160,5 @@ async def get_run_log(
     limit: Annotated[int, Query(ge=1, le=200)] = 200,
 ) -> EventLog:
     if not access.open:
-        access.check((await manager.get_run(run_id)).app)
+        _check_run_read(access, (await manager.get_run(run_id)).app)
     return await manager.event_log(run_id, after, limit)

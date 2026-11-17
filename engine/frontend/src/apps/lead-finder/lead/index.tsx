@@ -5,13 +5,14 @@
 import { Table2 } from 'lucide-react'
 import { useParams } from 'react-router'
 import { useLead } from '@/api/hooks'
+import { FeatureGuard } from '@/auth/guard'
 import { BackButton } from '@/components/back-button'
 import { PendingDetail } from '@/components/skeletons'
 import { ErrorState } from '@/components/error-state'
 import { PageHeader } from '@/components/page-header'
 import { LeadCardView } from './lead-card-view'
 
-export default function LeadPage() {
+function LeadContent() {
   const { leadId = '' } = useParams()
   const lead = useLead(leadId, { missingIsPage: true })
   if (lead.error) {
@@ -46,5 +47,13 @@ export default function LeadPage() {
       />
       <LeadCardView lead={lead.data} />
     </>
+  )
+}
+
+export default function LeadPage() {
+  return (
+    <FeatureGuard feature="lead_finder.results" page="Results">
+      <LeadContent />
+    </FeatureGuard>
   )
 }

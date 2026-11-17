@@ -18,6 +18,7 @@ import { Cpu, RefreshCw, TriangleAlert } from 'lucide-react'
 import { useId } from 'react'
 import { isStillDrafting, useRedraftMeetingForm } from '@/api/hooks/meetings'
 import type { MeetingFormOut } from '@/api/types'
+import { useCanWrite } from '@/auth/can'
 import { StepTrail } from '@/components/motion'
 import { Button } from '@/components/ui/button'
 import { toastProblem } from '@/lib/problems'
@@ -37,6 +38,7 @@ import {
 } from './words'
 
 export function DraftProgress({ form, className }: { form: MeetingFormOut; className?: string }) {
+  const canWrite = useCanWrite('companies.meetings')
   const titleId = useId()
   const hintId = useId()
   const redraft = useRedraftMeetingForm(form.id)
@@ -75,29 +77,31 @@ export function DraftProgress({ form, className }: { form: MeetingFormOut; class
             <TriangleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
             {failedReason(form.error)}
           </p>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="touch:h-11"
-              disabled={redraft.isPending}
-              aria-describedby={hintId}
-              onClick={() => {
-                redraft.mutate(undefined, {
-                  onError: (error) => {
-                    if (!isStillDrafting(error)) toastProblem(error)
-                  },
-                })
-              }}
-            >
-              <RefreshCw aria-hidden="true" />
-              {withEstimate(TRY_AGAIN)}
-            </Button>
-            <p id={hintId} className="text-caption text-muted-foreground">
-              {redraftHint(form.cost_usd)}
-            </p>
-          </div>
+          {canWrite ? (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="touch:h-11"
+                disabled={redraft.isPending}
+                aria-describedby={hintId}
+                onClick={() => {
+                  redraft.mutate(undefined, {
+                    onError: (error) => {
+                      if (!isStillDrafting(error)) toastProblem(error)
+                    },
+                  })
+                }}
+              >
+                <RefreshCw aria-hidden="true" />
+                {withEstimate(TRY_AGAIN)}
+              </Button>
+              <p id={hintId} className="text-caption text-muted-foreground">
+                {redraftHint(form.cost_usd)}
+              </p>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </section>

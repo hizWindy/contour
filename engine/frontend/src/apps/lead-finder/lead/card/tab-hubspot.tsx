@@ -6,6 +6,7 @@
 import { Link } from 'react-router'
 import { useLeadHubSpot, useLeadSimilar } from '@/api/hooks'
 import type { LeadDetail } from '@/api/types'
+import { useCan } from '@/auth/can'
 import { ErrorState } from '@/components/error-state'
 import { PendingText } from '@/components/skeletons'
 import { InHubSpotBadge } from '@/components/hubspot'
@@ -16,7 +17,8 @@ import { REASON_WORDS } from './words'
 
 function HubSpot({ lead }: { lead: LeadDetail }) {
   const hubspot = lead.hubspot
-  const sent = useLeadHubSpot(lead.id).data
+  const canSendHubSpot = useCan('lead_finder.send_to_hubspot')
+  const sent = useLeadHubSpot(lead.id, canSendHubSpot).data
   return (
     <Section title="HubSpot">
       <div className="flex flex-wrap items-center gap-2">

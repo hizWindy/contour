@@ -8,13 +8,22 @@
  * `me` and `login` can be a Response, or a function of the request for answers that change.
  */
 import { vi } from 'vitest'
+import type { SignedInUser } from '@/api/hooks/auth'
 
-export const SAMPLE_USER = {
+export const SAMPLE_USER: {
+  id: string
+  email: string
+  username: string
+  name: string
+  position: string | null
+  role: SignedInUser['role']
+} = {
   id: '11111111-2222-3333-4444-555555555555',
   email: 'admin@example.test',
   username: 'admin',
   name: 'Sample Admin',
-  role: 'admin' as const,
+  position: null,
+  role: 'admin',
 }
 
 export const INVALID_LOGIN = "That email or password isn't right."

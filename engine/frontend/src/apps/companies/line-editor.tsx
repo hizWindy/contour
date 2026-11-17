@@ -15,6 +15,7 @@ import { PenLine } from 'lucide-react'
 import { useContext, useRef, useState, type ReactNode } from 'react'
 import { toApiProblem } from '@/api/client'
 import { useResetScriptEdit, useSaveScriptEdit } from '@/api/hooks/script'
+import { useCanWrite } from '@/auth/can'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { problemHint, toastProblem } from '@/lib/problems'
@@ -173,9 +174,10 @@ export interface EditableLineProps {
 /** A line of the script with its pencil, its "Yours" mark and Reset. */
 export function EditableLine({ line, slot, label, children, className }: EditableLineProps) {
   const { call, offerSlot } = useContext(LineEditContext)
+  const canWrite = useCanWrite('companies.call_prep')
   const [editing, setEditing] = useState(false)
   const pencil = useRef<HTMLButtonElement>(null)
-  if (!call) return <div className={className}>{children}</div>
+  if (!call || !canWrite) return <div className={className}>{children}</div>
   return (
     <div className={cn('flex min-w-0 flex-col gap-1.5', className)}>
       {editing ? (

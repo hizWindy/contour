@@ -18,6 +18,8 @@ import { useNavigate } from 'react-router'
 import { fieldErrorMap, newIdempotencyKey, toApiProblem } from '@/api/client'
 import { useCreateRun, useEstimateRun, useRunOptions } from '@/api/hooks'
 import type { RunCreate, RunOptions } from '@/api/types'
+import { useCanWrite, usePlatformAdminName, viewerReadOnlyWords } from '@/auth/can'
+import { FeatureGuard } from '@/auth/guard'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -48,7 +50,7 @@ import {
   FieldSet,
 } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { Segmented } from '@/components/motion'
 import { useDebounced } from '@/hooks/useDebounced'
 import { GoalChoice, SourceChoices, WhereChoices } from './discovery'
 import {
@@ -125,6 +127,8 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 
 function StartFormView({ options }: { options: RunOptions }) {
   const navigate = useNavigate()
+  const canWrite = useCanWrite('lead_finder.start_run')
+  const platformAdminName = usePlatformAdminName()
   const [form, setForm] = useState<StartForm>(() => initialForm(options))
   const update = (changes: Partial<StartForm>): void => {
     setForm((current) => ({ ...current, ...changes }))
@@ -135,7 +139,7 @@ function StartFormView({ options }: { options: RunOptions }) {
   const bodyKey = JSON.stringify(body)
   const settledKey = useDebounced(bodyKey, 300)
   const settledBody = useMemo(() => JSON.parse(settledKey) as RunCreate, [settledKey])
-  const estimate = useEstimateRun(settledBody)
+  const estimate = useEstimateRun(canWrite ? settledBody : null)
   // One key for one set of choices: a double click sends it twice and gets one run.
   const lastStart = useRef<{ body: string; key: string } | null>(null)
   const createRun = useCreateRun()
@@ -144,14 +148,15 @@ function StartFormView({ options }: { options: RunOptions }) {
   const fromServer = createRun.error ? fieldErrorMap(toApiProblem(createRun.error)) : {}
   const errors = { ...estimateErrors(result), ...fromServer }
   const mode = options.modes.find((item) => item.mode === serverMode(form.mode))
-  const settling = settledKey !== bodyKey || estimate.isFetching
+  const settling = canWrite && (settledKey !== bodyKey || estimate.isFetching)
   // An old offices run asks once more before it spends (PLAN-V11 C3).
   const [confirming, setConfirming] = useState(false)
   // "How many leads" is checked here, before the server sees it (PLAN-V16 T3-2).
   const goalProblem = goalError(form, options)
 
-  const reason: string | null =
-    mode && mode.needs_approval && !mode.approved
+  const reason: string | null = !canWrite
+    ? null
+    : mode && mode.needs_approval && !mode.approved
       ? (result?.blocked?.message ?? "This kind of run waits for Levi's OK.")
       : result?.blocked
         ? result.blocked.message
@@ -193,22 +198,17 @@ function StartFormView({ options }: { options: RunOptions }) {
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
       <div className="flex min-w-0 flex-col gap-6">
         <Section title="What to do">
-          <ToggleGroup
-            type="single"
-            variant="outline"
+          <Segmented
             value={form.mode}
-            onValueChange={(value) => {
-              if (value) update({ mode: value as Mode })
+            options={(Object.keys(MODE_WORDS) as Mode[]).map((value) => ({
+              value,
+              label: MODE_WORDS[value].title,
+            }))}
+            onChange={(value) => {
+              update({ mode: value })
             }}
             aria-label="Kind of run"
-            className="flex-wrap justify-start"
-          >
-            {(Object.keys(MODE_WORDS) as Mode[]).map((value) => (
-              <ToggleGroupItem key={value} value={value}>
-                {MODE_WORDS[value].title}
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
+          />
           <p className="text-ui text-muted-foreground">{MODE_WORDS[form.mode].about}</p>
         </Section>
 
@@ -252,23 +252,19 @@ function StartFormView({ options }: { options: RunOptions }) {
               ) : null}
               <Field>
                 <FieldLabel id="since-label">How far back</FieldLabel>
-                <ToggleGroup
-                  type="single"
-                  variant="outline"
+                <Segmented
                   size="sm"
                   value={String(form.sinceDays)}
-                  onValueChange={(value) => {
-                    if (value) update({ sinceDays: Number(value) })
+                  options={options.since_days.choices.map((days) => ({
+                    value: String(days),
+                    label: `Last ${days} days`,
+                  }))}
+                  onChange={(value) => {
+                    update({ sinceDays: Number(value) })
                   }}
                   aria-labelledby="since-label"
-                  className="justify-start"
-                >
-                  {options.since_days.choices.map((days) => (
-                    <ToggleGroupItem key={days} value={String(days)}>
-                      Last {days} days
-                    </ToggleGroupItem>
-                  ))}
-                </ToggleGroup>
+                  className="w-fit"
+                />
               </Field>
             </Section>
 
@@ -514,7 +510,7 @@ function StartFormView({ options }: { options: RunOptions }) {
               </ul>
             ) : null}
             {createRun.error ? <ErrorState error={createRun.error} /> : null}
-            {barAtBottom ? null : (
+            {!barAtBottom && canWrite ? (
               <Button
                 type="button"
                 size="lg"
@@ -524,7 +520,12 @@ function StartFormView({ options }: { options: RunOptions }) {
                 <Play aria-hidden="true" />
                 {createRun.isPending ? 'Starting.' : 'Start run'}
               </Button>
-            )}
+            ) : null}
+            {!canWrite ? (
+              <p className="text-caption text-muted-foreground" role="status">
+                {viewerReadOnlyWords(platformAdminName)}
+              </p>
+            ) : null}
             {reason ? (
               <p
                 className="flex items-start gap-2 text-caption text-muted-foreground"
@@ -545,27 +546,37 @@ function StartFormView({ options }: { options: RunOptions }) {
           className="sticky bottom-0 z-30 -mx-4 flex items-center gap-3 border-t bg-background px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:-mx-6 sm:px-6 [@media(max-height:480px)]:static"
         >
           <div className="min-w-0 flex-1">
-            {result?.valid ? (
-              <p className="font-semibold">
-                <Money value={result.cost_usd_low} about />
+            {!canWrite ? (
+              <p className="line-clamp-2 text-caption text-muted-foreground" role="status">
+                {viewerReadOnlyWords(platformAdminName)}
               </p>
-            ) : null}
-            <p className="line-clamp-2 text-caption text-muted-foreground" role="status">
-              {reason ??
-                (result?.valid
-                  ? `Run limit ${formatMoney(result.cap_usd)}. Left today ${formatMoney(result.daily_left_usd)}.`
-                  : 'Working out what it would cost.')}
-            </p>
+            ) : (
+              <>
+                {result?.valid ? (
+                  <p className="font-semibold">
+                    <Money value={result.cost_usd_low} about />
+                  </p>
+                ) : null}
+                <p className="line-clamp-2 text-caption text-muted-foreground" role="status">
+                  {reason ??
+                    (result?.valid
+                      ? `Run limit ${formatMoney(result.cap_usd)}. Left today ${formatMoney(result.daily_left_usd)}.`
+                      : 'Working out what it would cost.')}
+                </p>
+              </>
+            )}
           </div>
-          <Button
-            type="button"
-            size="lg"
-            disabled={reason !== null || settling || createRun.isPending}
-            onClick={askThenStart}
-          >
-            <Play aria-hidden="true" />
-            {createRun.isPending ? 'Starting.' : 'Start run'}
-          </Button>
+          {canWrite ? (
+            <Button
+              type="button"
+              size="lg"
+              disabled={reason !== null || settling || createRun.isPending}
+              onClick={askThenStart}
+            >
+              <Play aria-hidden="true" />
+              {createRun.isPending ? 'Starting.' : 'Start run'}
+            </Button>
+          ) : null}
         </div>
       ) : null}
 
@@ -603,7 +614,7 @@ function StartFormView({ options }: { options: RunOptions }) {
   )
 }
 
-export default function StartPage() {
+function StartContent() {
   const options = useRunOptions()
   return (
     <>
@@ -625,5 +636,13 @@ export default function StartPage() {
         <PendingForm label="Loading the choices." />
       )}
     </>
+  )
+}
+
+export default function StartPage() {
+  return (
+    <FeatureGuard feature="lead_finder.start_run" page="Start a run">
+      <StartContent />
+    </FeatureGuard>
   )
 }

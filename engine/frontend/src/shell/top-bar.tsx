@@ -1,5 +1,5 @@
 import { PanelLeft } from 'lucide-react'
-import { Fragment, useEffect } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { Link, useMatches } from 'react-router'
 import {
   Breadcrumb,
@@ -29,13 +29,31 @@ export function TopBar() {
   const crumbs = crumbsOf(useMatches())
   const here = crumbs.at(-1)?.label
 
+  const [scrolled, setScrolled] = useState(
+    () => typeof window !== 'undefined' && window.scrollY > 0,
+  )
+
   useEffect(() => {
     document.title = here ? `${here} - ${APP_NAME}` : APP_NAME
   }, [here])
 
+  useEffect(() => {
+    const onScroll = () => {
+      setScrolled(window.scrollY > 0)
+    }
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => {
+      window.removeEventListener('scroll', onScroll)
+    }
+  }, [])
+
   const expanded = isMobile ? openMobile : open
   return (
-    <header className="flex h-14 shrink-0 items-center gap-2 border-b bg-background px-3 max-md:sticky max-md:top-0 max-md:z-20 sm:gap-3 sm:px-4">
+    <header
+      data-scrolled={scrolled ? 'true' : undefined}
+      className={`sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 border-b px-3 sm:gap-3 sm:px-4 ${scrolled ? 'glass-bar' : 'bg-background'}`}
+    >
       <Button
         type="button"
         variant="ghost"

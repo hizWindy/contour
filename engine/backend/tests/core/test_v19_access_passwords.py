@@ -4,7 +4,7 @@ passphrases, and self-service password change."""
 import logging
 import re
 import uuid
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from fastapi.routing import APIRoute
@@ -20,6 +20,7 @@ from core.auth.passwords import check_rules
 from core.config import Settings
 from core.db.engine import get_engine
 from core.hubspot.models import HubSpotMeeting
+from core.runs.manager import RunManager
 from tests.companies.helpers import API as COMPANIES_API
 from tests.companies.helpers import a_small_copy, add, soon
 from tests.companies.helpers import person as company_person
@@ -39,6 +40,7 @@ from tests.core.auth_world import (
     me,
     sign_in,
 )
+from tests.lead_finder.factories import make_run
 
 # Routes that explicitly do NOT carry a tick/role guard beyond session sign-in / public status:
 PUBLIC_ROUTES = {("GET", "/api/v1/health"), ("POST", "/api/v1/auth/login")}
@@ -532,3 +534,71 @@ async def test_self_service_password_change_ends_other_sessions_and_throttles_wr
     assert sum(1 for s in sessions if s.ended_at is None) == 2  # laptop + check_login
     assert sum(1 for s in sessions if s.ended_at is not None) >= 1  # phone was ended
     assert set(APPS_ORDER) == {"lead_finder", "companies"} and ALL_EIGHT
+
+
+@pytest.mark.integration
+async def test_start_run_only_staff_reads_lead_finder_runs_but_not_leads_or_other_apps(
+    world: World,
+) -> None:
+    """Staff with only `lead_finder.start_run` can watch/list Lead Finder runs (including via
+    `GET /runs`, `/runs?app=lead_finder`, `/runs/{id}`, `/runs/{id}/log`, `/runs/{id}/events`),
+    while still getting 403 on leads, searches, and other projects' runs."""
+    await make_platform_admin(world, name="Al-khair Pama")
+    lf_run = make_run(app="lead_finder", mode="discovery", status="done")
+    co_run = make_run(app="companies", mode="meeting_form", status="done")
+    await add(world, lf_run, co_run)
+
+    async with world.factory() as db:
+        await admin.create_person(
+            db,
+            email="starter@example.test",
+            username="starter",
+            name="Start Only",
+            role="staff",
+            features=["lead_finder.start_run"],
+            password=GOOD,
+            now=world.clock.now,
+            hasher=FAST,
+        )
+
+    world.app.dependency_overrides[settings_dependency] = lambda: Settings(
+        _env_file=None,
+        auth_required=True,
+    )
+
+    async def settings_provider() -> Settings:
+        return Settings(_env_file=None, auth_required=True)
+
+    world.app.state.run_manager = RunManager(
+        session_factory=world.factory,
+        embedder=cast(Any, None),
+        claude_provider=lambda: cast(Any, None),
+        checkpointer_source=cast(Any, None),
+        settings_provider=settings_provider,
+        kinds={},
+    )
+    async with world.browser() as browser:
+        assert (await sign_in(browser, login="starter")).status_code == 200
+
+        listed = await browser.get("/api/v1/runs")
+        assert listed.status_code == 200, listed.text
+        assert [item["id"] for item in listed.json()["items"]] == [str(lf_run.id)]
+
+        by_app = await browser.get("/api/v1/runs", params={"app": "lead_finder"})
+        assert by_app.status_code == 200, by_app.text
+        assert [item["id"] for item in by_app.json()["items"]] == [str(lf_run.id)]
+
+        assert (await browser.get(f"/api/v1/runs/{lf_run.id}")).status_code == 200
+        assert (await browser.get(f"/api/v1/runs/{lf_run.id}/log")).status_code == 200
+        assert (await browser.get(f"/api/v1/runs/{lf_run.id}/events")).status_code == 204
+
+        for blocked_path in (
+            f"/api/v1/runs/{co_run.id}",
+            f"/api/v1/runs/{co_run.id}/log",
+            "/api/v1/runs?app=companies",
+            "/api/v1/lead-finder/leads",
+            f"/api/v1/searches?run_id={lf_run.id}",
+        ):
+            denied = await browser.get(blocked_path)
+            assert denied.status_code == 403, (blocked_path, denied.status_code, denied.text)
+            assert denied.json()["code"] == "feature_not_allowed", blocked_path

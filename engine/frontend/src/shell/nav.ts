@@ -22,6 +22,7 @@ import {
 import type { QueryClient } from '@tanstack/react-query'
 import type { ComponentType } from 'react'
 import type { RouteObject } from 'react-router'
+import type { Feature } from '@/auth/can'
 import type { ProjectTone } from './tone'
 
 export interface NavItem {
@@ -41,6 +42,13 @@ export interface NavItem {
    * Call logs ("/companies/call-logs") is not Companies.
    */
   notActiveOn?: readonly string[]
+  /**
+   * Any of these feature ticks unlocks the page in menus and Home. Omit for pages open to anyone
+   * who sees the project (or use `platformAdminOnly`).
+   */
+  features?: readonly Feature[]
+  /** True when only the Platform admin can open the page (Admin settings and Test set). */
+  platformAdminOnly?: boolean
   /**
    * A count at the end of the page's row in the menu, like Call logs' calls to confirm (PLAN-V17
    * T3-7). It asks for its own data, gives the link its words for a screen reader ("Call logs, 7
@@ -174,7 +182,12 @@ export interface PlannedModule {
 export const HOME: NavItem = { to: '/', label: 'Home', icon: House }
 
 /** The shared Admin page, at the bottom of the menu. The command menu lists its tabs instead. */
-export const ADMIN: NavItem = { to: '/admin', label: 'Admin', icon: Settings2 }
+export const ADMIN: NavItem = {
+  to: '/admin',
+  label: 'Admin',
+  icon: Settings2,
+  platformAdminOnly: true,
+}
 
 /**
  * The tabs of the Admin page, in tab order. Each has its own address under /admin, and its purpose

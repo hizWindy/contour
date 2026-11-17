@@ -12,8 +12,10 @@ export type ReviewResult = Schemas['ReviewResult']
 export type ReviewStatusBody = Schemas['ReviewStatusBody']
 export type RejectReasonCounts = Schemas['RejectReasonCounts']
 export type Person = Schemas['PersonOut']
+export type PersonCreated = Schemas['PersonCreatedOut']
 export type PersonIn = Schemas['PersonIn']
 export type PersonPatch = Schemas['PersonPatch']
+export type ResetPassword = Schemas['ResetPasswordOut']
 
 const KEYS = {
   review: (runId: string) => ['review', runId] as const,
@@ -86,8 +88,23 @@ export function usePeople() {
 
 export function useAddPerson() {
   const queryClient = useQueryClient()
-  return useMutation<Person, ApiProblem, PersonIn>({
+  return useMutation<PersonCreated, ApiProblem, PersonIn>({
     mutationFn: async (body) => unwrap(await api.POST('/people', { body })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: KEYS.people })
+    },
+  })
+}
+
+export function useResetPersonPassword() {
+  const queryClient = useQueryClient()
+  return useMutation<ResetPassword, ApiProblem, string>({
+    mutationFn: async (userId) =>
+      unwrap(
+        await api.POST('/people/{user_id}/password', {
+          params: { path: { user_id: userId } },
+        }),
+      ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: KEYS.people })
     },

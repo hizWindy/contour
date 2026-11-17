@@ -431,3 +431,67 @@
     background: transparent;
   }
 }
+
+/*
+  Subtle glass on floating layers (PLAN-V19 T3-6, choice 17). Cards, tables, forms and pages stay
+  solid. Static backdrop blur never animates and falls back cleanly when transparency is reduced or
+  when backdrop-filter is unsupported.
+*/
+.glass-surface {
+  background-color: var(--popover);
+  transition-property: none;
+}
+
+.glass-bar {
+  background-color: var(--background);
+  transition-property: none;
+}
+
+.glass-overlay {
+  background-color: var(--overlay);
+  transition-property: none;
+}
+
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass-surface {
+    background-color: var(--glass-surface);
+    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
+  }
+
+  .glass-bar {
+    background-color: var(--glass-bar);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+  }
+
+  .glass-overlay {
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .glass-surface {
+    background-color: var(--popover);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .glass-bar {
+    background-color: var(--background);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .glass-overlay {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+/* Let inner Command containers show the subtle glass of Popover / CommandDialog cleanly. */
+[data-slot='popover-content'] [data-slot='command'],
+[data-slot='command-dialog'] [data-slot='command'] {
+  background-color: transparent;
+}

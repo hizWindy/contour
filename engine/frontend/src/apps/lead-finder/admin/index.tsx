@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router'
+import { PlatformAdminGuard } from '@/auth/guard'
 import { TabIndicator } from '@/components/motion'
 import { PageHeader } from '@/components/page-header'
 import { cn } from '@/lib/utils'
@@ -19,7 +20,7 @@ import { ADMIN_TABS, adminTabAt, isWithin } from '@/shell/nav'
  * the open tab is scrolled into view, so it is never hidden. Three rows of wrapped tabs would push
  * the content a third of a screen down.
  */
-export default function AdminPage() {
+function AdminContent() {
   const { pathname } = useLocation()
   const tab = adminTabAt(pathname)
   const tabs = useRef<HTMLElement>(null)
@@ -66,5 +67,13 @@ export default function AdminPage() {
       ) : null}
       <Outlet />
     </>
+  )
+}
+
+export default function AdminPage() {
+  return (
+    <PlatformAdminGuard>
+      <AdminContent />
+    </PlatformAdminGuard>
   )
 }

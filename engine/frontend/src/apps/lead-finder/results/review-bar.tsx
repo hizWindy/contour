@@ -15,6 +15,7 @@ import { Bookmark, Send, XCircle } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { useReview, useReviewSend, useReviewStatus, type ReviewResult } from '@/api/hooks'
+import { useCanWrite } from '@/auth/can'
 import { Money } from '@/components/money'
 import { PendingText } from '@/components/skeletons'
 import { Button } from '@/components/ui/button'
@@ -55,6 +56,8 @@ export function ReviewBar({
   onDone: (ids: string[]) => void
 }) {
   const selected = [...tick.selected]
+  const canReview = useCanWrite('lead_finder.results')
+  const canSendHubSpot = useCanWrite('lead_finder.send_to_hubspot')
   const review = useReview(runId)
   const status = useReviewStatus()
   const send = useReviewSend()
@@ -93,74 +96,80 @@ export function ReviewBar({
         ) : (
           <PendingText className="w-72" />
         )}
-        <p className="text-muted-foreground">
-          Tick the leads, then approve them for HubSpot, reject them or watch them. Nothing goes to
-          HubSpot until you approve it.
-        </p>
+        {canReview ? (
+          <p className="text-muted-foreground">
+            Tick the leads, then approve them for HubSpot, reject them or watch them. Nothing goes
+            to HubSpot until you approve it.
+          </p>
+        ) : null}
       </div>
-      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-        <span className="flex items-center gap-3">
-          <PageTick tick={tick} />
-          <span className="font-semibold tabular-nums" aria-live="polite">
-            {none ? 'No lead ticked' : `${pluralise(selected.length, 'lead')} ticked`}
+      {canReview ? (
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+          <span className="flex items-center gap-3">
+            <PageTick tick={tick} />
+            <span className="font-semibold tabular-nums" aria-live="polite">
+              {none ? 'No lead ticked' : `${pluralise(selected.length, 'lead')} ticked`}
+            </span>
           </span>
-        </span>
-        <div
-          role="group"
-          aria-label="What to do with the ticked leads"
-          className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-center"
-        >
-          <Button
-            type="button"
-            disabled={none || busy || writeOff}
-            aria-describedby={writeOff ? 'review-write-off' : undefined}
-            onClick={() => {
-              send.mutate([...selected], {
-                onSuccess: (result) => {
-                  report(result, 'sent to HubSpot')
-                  finished(result)
-                },
-                onError: toastProblem,
-              })
-            }}
+          <div
+            role="group"
+            aria-label="What to do with the ticked leads"
+            className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-center"
           >
-            <Send aria-hidden="true" />
-            {send.isPending ? 'Sending.' : 'Approve and send to HubSpot'}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={none || busy}
-            onClick={() => {
-              setRejecting(true)
-            }}
-          >
-            <XCircle aria-hidden="true" />
-            Reject
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={none || busy}
-            onClick={() => {
-              status.mutate(
-                { lead_ids: [...selected], status: 'watching' },
-                {
-                  onSuccess: (result) => {
-                    report(result, 'watched')
-                    finished(result)
+            {canSendHubSpot ? (
+              <Button
+                type="button"
+                disabled={none || busy || writeOff}
+                aria-describedby={writeOff ? 'review-write-off' : undefined}
+                onClick={() => {
+                  send.mutate([...selected], {
+                    onSuccess: (result) => {
+                      report(result, 'sent to HubSpot')
+                      finished(result)
+                    },
+                    onError: toastProblem,
+                  })
+                }}
+              >
+                <Send aria-hidden="true" />
+                {send.isPending ? 'Sending.' : 'Approve and send to HubSpot'}
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              disabled={none || busy}
+              onClick={() => {
+                setRejecting(true)
+              }}
+            >
+              <XCircle aria-hidden="true" />
+              Reject
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={none || busy}
+              onClick={() => {
+                status.mutate(
+                  { lead_ids: [...selected], status: 'watching' },
+                  {
+                    onSuccess: (result) => {
+                      report(result, 'watched')
+                      finished(result)
+                    },
+                    onError: toastProblem,
                   },
-                  onError: toastProblem,
-                },
-              )
-            }}
-          >
-            <Bookmark aria-hidden="true" />
-            Watch
-          </Button>
+                )
+              }}
+            >
+              <Bookmark aria-hidden="true" />
+              Watch
+            </Button>
+          </div>
         </div>
-      </div>
-      {data && writeOff ? (
+      ) : null}
+      {canReview && canSendHubSpot && data && writeOff ? (
         <p id="review-write-off" className="text-caption text-muted-foreground">
           {data.hubspot_write_off ?? 'HubSpot writing is off'}. Sending waits for HubSpot write
           access. Reject and Watch still work.

@@ -7,6 +7,7 @@
 import { useNavigate } from 'react-router'
 import { useStartMeetingForm } from '@/api/hooks/meetings'
 import type { MeetingItem } from '@/api/types'
+import { useCanWrite } from '@/auth/can'
 import { toastProblem } from '@/lib/problems'
 import { preReadHref } from './params'
 
@@ -20,11 +21,12 @@ export interface DraftIt {
 
 export function useDraftIt(item: MeetingItem): DraftIt {
   const start = useStartMeetingForm()
+  const canWrite = useCanWrite('companies.meetings')
   const navigate = useNavigate()
   const meetingId = item.typed ? '' : item.meeting.id
   return {
     pending: start.isPending,
-    possible: meetingId !== '',
+    possible: canWrite && meetingId !== '',
     draft: () => {
       start.mutate(
         // The server reads a HubSpot meeting's own place; `where` must still be sent.

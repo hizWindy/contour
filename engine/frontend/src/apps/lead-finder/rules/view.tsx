@@ -260,7 +260,7 @@ function RulesLoaded({ rules }: { rules: Rules }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="sticky top-0 z-10 -mx-4 flex flex-wrap items-center gap-x-4 gap-y-2 bg-background px-4 py-2 sm:mx-0 sm:px-0">
+      <div className="sticky top-14 z-10 -mx-4 flex flex-wrap items-center gap-x-4 gap-y-2 bg-background px-4 py-2 sm:mx-0 sm:px-0">
         <JumpBar main={main} />
         <p className="text-caption text-muted-foreground">
           Version <span className="font-semibold text-foreground">{version}</span>. {c.label}.
@@ -671,7 +671,7 @@ function RulesLoaded({ rules }: { rules: Rules }) {
 
         <aside
           aria-labelledby="waiting-title"
-          className="flex flex-col gap-2 rounded-lg border bg-card p-4 lg:sticky lg:top-16"
+          className="flex flex-col gap-2 rounded-lg border bg-card p-4 lg:sticky lg:top-28"
         >
           <h2 id="waiting-title" className="text-section font-semibold">
             Waiting on Levi{' '}

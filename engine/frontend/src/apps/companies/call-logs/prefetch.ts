@@ -9,12 +9,15 @@
  * the other two tabs (Improvements 1, #10), so a click on a tab shows its rows at once.
  */
 import type { QueryClient } from '@tanstack/react-query'
+import type { SignIn } from '@/api/hooks/auth'
 import {
   callNoteHistoryQueryOptions,
   callNoteOptionsQueryOptions,
   callNoteSummaryQueryOptions,
   callNotesQueryOptions,
 } from '@/api/hooks/call-notes'
+import { queryKeys } from '@/api/query'
+import { canUse } from '@/auth/can'
 import { melbourneDate } from '@/lib/format'
 import type { PrefetchArgs } from '@/shell/crumbs'
 import { warmAfter } from '@/shell/warm'
@@ -51,6 +54,7 @@ function startTab(
 }
 
 export function prefetchCallLogs({ client, search }: PrefetchArgs): void {
+  if (!canUse(client.getQueryData<SignIn>(queryKeys.auth.me()), 'companies.call_logs')) return
   void client.prefetchQuery(callNoteOptionsQueryOptions())
   void client.prefetchQuery(callNoteSummaryQueryOptions())
   void startTab(client, readTab(search), readHistory(search))

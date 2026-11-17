@@ -440,7 +440,7 @@ describe('Check my mic (PLAN-V18 T3-4)', () => {
       // The row loads late, with the rest of Companies' parts.
       await screen.findByRole('menuitem', { name: 'Check my mic' }, { timeout: LAZY })
       const names = screen.getAllByRole('menuitem').map((item) => item.textContent)
-      expect(names).toEqual(['Check my mic', 'Sign out'])
+      expect(names).toEqual(['Check my mic', 'Change password', 'Sign out'])
       await user.click(screen.getByRole('menuitem', { name: 'Check my mic' }))
       // Whisper waits for T3-3: the card checks the mic and says speech to words isn't set up yet.
       expect(

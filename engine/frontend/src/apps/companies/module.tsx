@@ -89,6 +89,7 @@ export const COMPANIES: AppModule = {
       to: '/companies',
       label: 'Companies',
       icon: Building2,
+      features: ['companies.companies'],
       keywords: ['clients', 'prospects', 'call', 'prep', 'script', 'hubspot'],
       purpose: 'Find a company, see what we know, and prep a call in seconds.',
       notActiveOn: [MEETINGS, CALL_LOGS, OLD_PATH],
@@ -97,6 +98,7 @@ export const COMPANIES: AppModule = {
       to: MEETINGS,
       label: 'Meetings',
       icon: CalendarCheck,
+      features: ['companies.meetings'],
       keywords: ['pre-read', 'pre-meeting form', 'client meeting', 'teams', 'in person'],
       purpose: 'Draft the pre-read for each client meeting, then send it to the team.',
     },
@@ -104,6 +106,7 @@ export const COMPANIES: AppModule = {
       to: CALL_LOGS,
       label: 'Call logs',
       icon: PhoneLog,
+      features: ['companies.call_logs'],
       // "activity" is its old name (PLAN-V18 T3-2), so old habits still find it.
       keywords: ['activity', 'call notes', 'log a call', 'confirm', 'history', 'send', 'hubspot'],
       purpose: 'Check the calls you logged, send them to HubSpot, and look back at old ones.',

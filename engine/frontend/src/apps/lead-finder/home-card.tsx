@@ -19,6 +19,7 @@ import { m } from 'motion/react'
 import { Link } from 'react-router'
 import { useLeadFacets, useLeads, useRuns } from '@/api/hooks'
 import type { LeadResult, LeadRow } from '@/api/types'
+import { useCan, useCanWrite } from '@/auth/can'
 import { ResultBadge } from '@/components/result-badge'
 // By their own files: this card is in the first visit (see the kit's index.ts).
 import { RollingNumber } from '@/components/motion/rolling-number'
@@ -273,6 +274,7 @@ function StartWith() {
 
 /** The newest run in one line, and the main button. */
 function LastRun() {
+  const canStart = useCanWrite('lead_finder.start_run')
   const runs = useRuns(LAST_RUN)
   const last = runs.data?.items.at(0)
   const where = last ? whereWords(last) : ''
@@ -300,17 +302,21 @@ function LastRun() {
           </>
         )}
       </div>
-      <Button asChild>
-        <Link to="/start">
-          <MapPinned aria-hidden="true" />
-          Start a run
-        </Link>
-      </Button>
+      {canStart ? (
+        <Button asChild>
+          <Link to="/start">
+            <MapPinned aria-hidden="true" />
+            Start a run
+          </Link>
+        </Button>
+      ) : null}
     </div>
   )
 }
 
 export function LeadFinderHomeCard() {
+  const canResults = useCan('lead_finder.results')
+  const canRuns = useCan('lead_finder.results', 'lead_finder.start_run')
   return (
     <Card role="region" aria-labelledby={TITLE_ID} className="h-full gap-0 py-0">
       <div className="flex items-start gap-3 px-6 pt-6">
@@ -331,30 +337,41 @@ export function LeadFinderHomeCard() {
             Companies that fit Contour and show signs of an office change.
           </p>
         </div>
-        <Link
-          to="/results"
-          className="inline-flex shrink-0 items-center gap-1 rounded-sm text-ui text-link underline-offset-4 hover:underline"
-        >
-          Open results
-          <ArrowRight aria-hidden="true" className="size-4" />
-        </Link>
+        {canResults ? (
+          <Link
+            to="/results"
+            className="inline-flex shrink-0 items-center gap-1 rounded-sm text-ui text-link underline-offset-4 hover:underline"
+          >
+            Open results
+            <ArrowRight aria-hidden="true" className="size-4" />
+          </Link>
+        ) : null}
       </div>
-      <div className="grid flex-1 grid-cols-1 gap-8 px-6 py-6 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
-        <Leads />
-        <Signs />
-      </div>
-      <div className="px-6 pb-6">
-        <StartWith />
-      </div>
-      <LastRun />
+      {canResults ? (
+        <>
+          <div className="grid flex-1 grid-cols-1 gap-8 px-6 py-6 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+            <Leads />
+            <Signs />
+          </div>
+          <div className="px-6 pb-6">
+            <StartWith />
+          </div>
+        </>
+      ) : null}
+      {canRuns ? <LastRun /> : null}
     </Card>
   )
 }
 
-/** The sentence under the greeting: what the newest run did. Nothing while it loads or fails. */
-export function LeadFinderHomeLine() {
+function LeadFinderRunLine() {
   const runs = useRuns(LAST_RUN)
   const last = runs.data?.items.at(0)
   if (runs.isPending || runs.isError) return null
   return <>{last ? runLine(last) : 'No runs yet. Start one to find leads.'}</>
+}
+
+/** The sentence under the greeting: what the newest run did. Nothing while it loads or fails. */
+export function LeadFinderHomeLine() {
+  if (!useCan('lead_finder.results', 'lead_finder.start_run')) return null
+  return <LeadFinderRunLine />
 }

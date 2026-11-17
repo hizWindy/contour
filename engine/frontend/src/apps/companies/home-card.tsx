@@ -15,6 +15,7 @@ import { Suspense, useId, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useCompanies, useHubSpotSyncs, useTodayPreps } from '@/api/hooks'
 import type { PrepChip } from '@/api/types'
+import { useCan } from '@/auth/can'
 // By its own file: this card is in the first visit (see the kit's index.ts).
 import { RollingNumber } from '@/components/motion/rolling-number'
 import { PendingText } from '@/components/skeletons'
@@ -113,7 +114,7 @@ function chipName(chip: PrepChip): string {
 }
 
 /** The calls I prepped today, newest first. */
-function Today() {
+function Today({ linkToCompany }: { linkToCompany: boolean }) {
   const preps = useTodayPreps()
   if (preps.isPending || preps.isError) return null
   const chips = preps.data
@@ -128,12 +129,18 @@ function Today() {
       <ul className="flex flex-wrap gap-1.5">
         {chips.slice(0, 4).map((chip) => (
           <li key={chip.id}>
-            <Link
-              to={`/companies?${new URLSearchParams({ company: chip.company_key }).toString()}`}
-              className="inline-flex max-w-56 items-center rounded-md border px-2 py-1 text-caption text-foreground transition-colors duration-150 hover:bg-muted"
-            >
-              <span className="truncate">{chipName(chip)}</span>
-            </Link>
+            {linkToCompany ? (
+              <Link
+                to={`/companies?${new URLSearchParams({ company: chip.company_key }).toString()}`}
+                className="inline-flex max-w-56 items-center rounded-md border px-2 py-1 text-caption text-foreground transition-colors duration-150 hover:bg-muted"
+              >
+                <span className="truncate">{chipName(chip)}</span>
+              </Link>
+            ) : (
+              <span className="inline-flex max-w-56 items-center rounded-md border px-2 py-1 text-caption text-foreground">
+                <span className="truncate">{chipName(chip)}</span>
+              </span>
+            )}
           </li>
         ))}
       </ul>
@@ -142,6 +149,17 @@ function Today() {
 }
 
 export function CompaniesHomeCard() {
+  const canCompanies = useCan('companies.companies')
+  const canPrep = useCan('companies.call_prep')
+  const canCallLogs = useCan('companies.call_logs')
+  const canMeetings = useCan('companies.meetings')
+  const openTo = canCompanies
+    ? { to: '/companies', label: 'Open Companies' }
+    : canCallLogs
+      ? { to: '/companies/call-logs', label: 'Open Call logs' }
+      : canMeetings
+        ? { to: '/companies/meetings', label: 'Open Meetings' }
+        : null
   return (
     <Card role="region" aria-labelledby={TITLE_ID} className="h-full gap-5">
       <div className="flex items-center gap-3 px-6">
@@ -157,22 +175,32 @@ export function CompaniesHomeCard() {
         <h2 id={TITLE_ID} className="flex-1 text-section font-semibold text-foreground">
           Relationships
         </h2>
-        <Link
-          to="/companies"
-          aria-label="Open Companies"
-          className="inline-flex shrink-0 items-center gap-1 rounded-sm text-ui text-link underline-offset-4 hover:underline"
-        >
-          Open
-          <ArrowRight aria-hidden="true" className="size-4" />
-        </Link>
+        {openTo ? (
+          <Link
+            to={openTo.to}
+            aria-label={openTo.label}
+            className="inline-flex shrink-0 items-center gap-1 rounded-sm text-ui text-link underline-offset-4 hover:underline"
+          >
+            Open
+            <ArrowRight aria-hidden="true" className="size-4" />
+          </Link>
+        ) : null}
       </div>
       <div className="flex flex-col gap-5 px-6">
-        <Count />
-        <FindCompany />
-        <Today />
-        <Suspense fallback={null}>
-          <CallNoteButtons />
-        </Suspense>
+        {canCompanies ? (
+          <>
+            <Count />
+            <FindCompany />
+          </>
+        ) : canCallLogs && !canPrep ? (
+          <p className="text-ui text-muted-foreground">Calls to confirm and call history.</p>
+        ) : null}
+        {canPrep ? <Today linkToCompany={canCompanies} /> : null}
+        {canCallLogs ? (
+          <Suspense fallback={null}>
+            <CallNoteButtons />
+          </Suspense>
+        ) : null}
       </div>
     </Card>
   )

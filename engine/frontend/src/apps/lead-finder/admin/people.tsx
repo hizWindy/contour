@@ -1,28 +1,53 @@
 /**
- * Admin, People (PLAN-V9 E1, shorter in PLAN-V13 T1-9): who has an account, and which projects each
- * may use. A table with each person's role as a word and an icon; "Edit" opens a side sheet with
- * the project ticks, the role and whether they can sign in, and "Add a person" opens one with the
- * form. One tick per
- * project (from src/modules.ts, so a new project gets its tick by itself): "Lead Finder" and, since
- * PLAN-V10, "Companies". An Admin may use everything. Adding a person needs a starting
- * password under today's rules: give it to them in person, not by email. Changing your own
- * password is PLAN-V6 C4, still to come; a forgotten one is reset with `engine reset-password`.
- *
- * Each person's HubSpot owner (PLAN-V17 T3-7): the calls they send to HubSpot go in under it. The
- * table says who it is and how it was found ("Matched by email", "Set by hand", or "No HubSpot
- * owner"); the Edit sheet changes it with a pick list of HubSpot's owners, with "None" to clear it.
- * Owners come with names only: an owner's email never shows here.
+ * Admin, People (PLAN-V9 E1, PLAN-V17 T3-7, PLAN-V19 T3-2..T3-4): who has an account, their
+ * role, optional position, feature ticks across two groups, HubSpot owner, and starting/reset
+ * passwords.
  */
-import { ChevronsUpDown, Eye, Pencil, ShieldCheck, UserPlus, UserRound } from 'lucide-react'
-import { useId, useState } from 'react'
+import {
+  Check,
+  ChevronsUpDown,
+  Copy,
+  Eye,
+  KeyRound,
+  Pencil,
+  Shield,
+  ShieldCheck,
+  UserPlus,
+  UserRound,
+} from 'lucide-react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { useAddPerson, useChangePerson, useMe, usePeople, type Person } from '@/api/hooks'
 import { isApiProblem } from '@/api/client'
+import {
+  useAddPerson,
+  useChangePerson,
+  useMe,
+  usePeople,
+  useResetPersonPassword,
+  type Person,
+} from '@/api/hooks'
 import { ownerOf, useHubSpotOwners, useSetHubSpotOwner } from '@/api/hooks/hubspot-owners'
 import type { HubSpotOwnerLink, HubSpotOwnerOption } from '@/api/types'
-import { ALL_FEATURES, appOf, type Feature } from '@/auth/can'
+import {
+  ALL_FEATURES,
+  DEFAULT_FEATURES_BY_ROLE,
+  FEATURE_GROUPS,
+  appsToFeatures,
+  type Feature,
+} from '@/auth/can'
 import { ErrorState } from '@/components/error-state'
 import { PendingCards } from '@/components/skeletons'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -72,96 +97,25 @@ import {
 import { formatRelative } from '@/lib/format'
 import { toastProblem } from '@/lib/problems'
 import { cn } from '@/lib/utils'
-import { MODULES } from '@/modules'
+import { firstName } from '@/shell/home-words'
 import { ROLE_NAMES, roleName } from '@/shell/roles'
 
-const LEAD_FINDER = 'lead_finder'
-
-interface Project {
-  /** The backend's name, like "lead_finder". */
-  app: string
-  /** Its name on the tick, like "Lead Finder". */
-  name: string
-  /** In a sentence, like "the Lead Finder". */
-  phrase: string
-}
-
-const PHRASES: Record<string, string> = {
-  lead_finder: 'the Lead Finder',
-  companies: 'Relationships',
-}
-
-/** Every project that has a tick, in menu order. */
-const PROJECTS: readonly Project[] = MODULES.flatMap((module) =>
-  module.app
-    ? [{ app: module.app, name: module.name, phrase: PHRASES[module.app] ?? module.name }]
-    : [],
-)
 const ROLES = [
-  { id: 'staff', label: ROLE_NAMES.staff },
   { id: 'admin', label: ROLE_NAMES.admin },
+  { id: 'staff', label: ROLE_NAMES.staff },
   { id: 'viewer', label: ROLE_NAMES.viewer },
 ] as const
-type Role = (typeof ROLES)[number]['id']
+type AssignableRole = (typeof ROLES)[number]['id']
 
-function featuresForApps(apps: readonly string[]): Feature[] {
-  return ALL_FEATURES.filter((feature) => apps.includes(appOf(feature)))
-}
-
-function ProjectTick({ person, project }: { person: Person; project: Project }) {
-  const change = useChangePerson()
-  const id = useId()
-  const admin = person.role === 'admin' || person.role === 'platform_admin'
-  const ticked = admin || person.apps.includes(project.app)
-  return (
-    <label htmlFor={id} className="flex items-center gap-2 text-ui">
-      <Checkbox
-        id={id}
-        checked={ticked}
-        disabled={admin || change.isPending}
-        onCheckedChange={(next) => {
-          const apps = next
-            ? [...person.apps.filter((app) => app !== project.app), project.app]
-            : person.apps.filter((app) => app !== project.app)
-          change.mutate(
-            { userId: person.id, patch: { features: featuresForApps(apps) } },
-            {
-              onSuccess: () => {
-                toast(
-                  next
-                    ? `${person.name} can use ${project.phrase}.`
-                    : `${project.name} closed to ${person.name}.`,
-                )
-              },
-              onError: toastProblem,
-            },
-          )
-        }}
-      />
-      {project.name}
-    </label>
-  )
-}
-
-function ProjectTicks({ person, self }: { person: Person; self: boolean }) {
-  return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-      {PROJECTS.map((project) => (
-        <ProjectTick key={project.app} person={person} project={project} />
-      ))}
-      {person.role === 'admin' ? (
-        <span className="text-caption text-muted-foreground">
-          {self ? '(you are a System admin)' : '(a System admin has every project)'}
-        </span>
-      ) : null}
-    </div>
-  )
-}
-
-const ROLE_ICONS = { admin: ShieldCheck, staff: UserRound, viewer: Eye } as const
+const ROLE_ICONS = {
+  platform_admin: ShieldCheck,
+  admin: Shield,
+  staff: UserRound,
+  viewer: Eye,
+} as const
 
 function RoleBadge({ role }: { role: string }) {
-  const Icon = ROLE_ICONS[role as Role] ?? UserRound
+  const Icon = role in ROLE_ICONS ? ROLE_ICONS[role as keyof typeof ROLE_ICONS] : UserRound
   return (
     <Badge variant="outline">
       <Icon aria-hidden="true" />
@@ -170,13 +124,152 @@ function RoleBadge({ role }: { role: string }) {
   )
 }
 
-/** The projects a person may use, in words. */
-function projectsOf(person: Person): string {
-  if (person.role === 'admin') return 'Every project'
-  const names = PROJECTS.filter((project) => person.apps.includes(project.app)).map(
-    (project) => project.name,
+function personFeatures(person: Person): Feature[] {
+  if (person.role === 'platform_admin' || person.role === 'admin') {
+    return [...ALL_FEATURES]
+  }
+  const features = person.features ?? []
+  if (features.length > 0) {
+    return ALL_FEATURES.filter((feature) => features.includes(feature))
+  }
+  if (person.apps.length > 0) {
+    return appsToFeatures(person.apps)
+  }
+  return []
+}
+
+function adminTicksNote(role: string, self: boolean): string | null {
+  if (role === 'platform_admin') {
+    return self ? '(you are the Platform admin)' : '(the Platform admin has everything)'
+  }
+  if (role === 'admin') {
+    return '(an Admin has everything)'
+  }
+  return null
+}
+
+function FeatureGroups({
+  idPrefix,
+  role,
+  selected,
+  disabled = false,
+  self = false,
+  onToggle,
+}: {
+  idPrefix: string
+  role: string
+  selected: readonly Feature[]
+  disabled?: boolean
+  self?: boolean
+  onToggle: (feature: Feature, checked: boolean) => void
+}) {
+  const allOn = role === 'platform_admin' || role === 'admin'
+  const selectedSet = new Set<string>(selected)
+  const note = adminTicksNote(role, self)
+  return (
+    <div className="flex flex-col gap-4">
+      {FEATURE_GROUPS.map((group) => (
+        <fieldset key={group.app} className="flex flex-col gap-2">
+          <legend className="text-ui font-semibold text-foreground">{group.label}</legend>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {group.features.map((item) => {
+              const boxId = `${idPrefix}-${item.key}`
+              const checked = allOn || selectedSet.has(item.key)
+              return (
+                <label key={item.key} htmlFor={boxId} className="flex items-center gap-2 text-ui">
+                  <Checkbox
+                    id={boxId}
+                    checked={checked}
+                    disabled={allOn || disabled}
+                    onCheckedChange={(next) => {
+                      onToggle(item.key, next === true)
+                    }}
+                  />
+                  <span>{item.label}</span>
+                </label>
+              )
+            })}
+          </div>
+        </fieldset>
+      ))}
+      {note ? <span className="text-caption text-muted-foreground">{note}</span> : null}
+    </div>
   )
-  return names.length > 0 ? names.join(', ') : 'None yet'
+}
+
+/** What a person can use, summarised in plain words for the People list. */
+function accessOf(person: Person): string {
+  if (person.role === 'platform_admin' || person.role === 'admin') return 'Everything'
+  const enabled = new Set(personFeatures(person))
+  if (enabled.size === 0) return 'None yet'
+  if (enabled.size === ALL_FEATURES.length) return 'Everything'
+  const parts: string[] = []
+  for (const group of FEATURE_GROUPS) {
+    const picked = group.features.filter((item) => enabled.has(item.key))
+    if (picked.length === group.features.length) {
+      parts.push(group.label)
+    } else {
+      parts.push(...picked.map((item) => item.label))
+    }
+  }
+  return parts.join(', ')
+}
+
+function MadePasswordBox({
+  name,
+  password,
+  onDone,
+}: {
+  name: string
+  password: string
+  onDone?: () => void
+}) {
+  const [copied, setCopied] = useState(false)
+  const timerRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current !== null) {
+        window.clearTimeout(timerRef.current)
+      }
+    }
+  }, [])
+
+  const copy = (): void => {
+    void navigator.clipboard?.writeText(password).catch(() => undefined)
+    setCopied(true)
+    if (timerRef.current !== null) {
+      window.clearTimeout(timerRef.current)
+    }
+    timerRef.current = window.setTimeout(() => {
+      setCopied(false)
+      timerRef.current = null
+    }, 2000)
+  }
+
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border bg-card p-4">
+      <p className="text-ui text-foreground">
+        Send this to {firstName(name)} yourself. It won&apos;t show again.
+      </p>
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/40 px-3 py-2">
+        <code className="font-mono text-body font-semibold text-foreground select-all">
+          {password}
+        </code>
+        <Button type="button" variant="outline" size="sm" onClick={copy}>
+          {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+          {copied ? 'Copied' : 'Copy'}
+        </Button>
+      </div>
+      {onDone ? (
+        <div>
+          <Button type="button" onClick={onDone}>
+            Done
+          </Button>
+        </div>
+      ) : null}
+    </div>
+  )
 }
 
 // --- The HubSpot owner (PLAN-V17 T3-7) ---------------------------------------------------------
@@ -208,12 +301,6 @@ function OwnerCell({ person }: { person: Person }) {
   )
 }
 
-/**
- * The owner in the Edit sheet: a pick list of HubSpot's owners that filters as you type (DESIGN.md
- * "Pick one from many"), with "None" first, which clears it. A pick saves at once and shows at once.
- * A list that can't load, or has nobody in it, says so inside the pick list, and the rest of the
- * sheet still works.
- */
 function OwnerField({ person }: { person: Person }) {
   const id = useId()
   const [open, setOpen] = useState(false)
@@ -324,30 +411,90 @@ function OwnerField({ person }: { person: Person }) {
   )
 }
 
-/** Edits to one person, applied at once as before: the ticks, the role, and signing in. */
+/** Edits to one person, applied at once: role, position, ticks, owner, sign-in and password reset. */
 function EditPerson({ person, self }: { person: Person; self: boolean }) {
   const change = useChangePerson()
+  const resetPassword = useResetPersonPassword()
   const id = useId()
-  const patch = (body: { role?: Role; active?: boolean }, done: string) => {
+  const [open, setOpen] = useState(false)
+  const [confirmReset, setConfirmReset] = useState(false)
+  const [resetResult, setResetResult] = useState<string | null>(null)
+  const [positionDraft, setPositionDraft] = useState(person.position ?? '')
+  const [positionError, setPositionError] = useState<string | null>(null)
+
+  const handleOpenChange = (nextOpen: boolean): void => {
+    setOpen(nextOpen)
+    if (nextOpen) {
+      setPositionDraft(person.position ?? '')
+      setPositionError(null)
+    } else {
+      setConfirmReset(false)
+      setResetResult(null)
+      setPositionError(null)
+      resetPassword.reset()
+    }
+  }
+
+  const patch = (
+    body: { role?: AssignableRole; position?: string | null; features?: Feature[]; active?: boolean },
+    done: string,
+    onInvalidPosition?: (message: string) => void,
+  ) => {
     change.mutate(
       { userId: person.id, patch: body },
       {
         onSuccess: () => {
           toast(done)
         },
-        onError: toastProblem,
+        onError: (error) => {
+          if (isApiProblem(error) && error.errors.length > 0 && onInvalidPosition) {
+            const posErr = error.errors.find((item) => item.field.replace(/^body\./, '') === 'position')
+            if (posErr) {
+              onInvalidPosition(posErr.message)
+              return
+            }
+          }
+          toastProblem(error)
+        },
       },
     )
   }
+
+  const trimmedPosition = positionDraft.trim()
+  const positionChanged = trimmedPosition !== (person.position ?? '')
+  const currentFeatures = personFeatures(person)
+  const isPlatformAdminPerson = person.role === 'platform_admin'
+
+  const savePosition = (): void => {
+    if (!positionChanged || change.isPending) return
+    setPositionError(null)
+    const nextValue = trimmedPosition === '' ? null : trimmedPosition
+    patch(
+      { position: nextValue },
+      nextValue ? `${person.name}'s position is ${nextValue}.` : `${person.name}'s position cleared.`,
+      setPositionError,
+    )
+  }
+
+  const runReset = (): void => {
+    resetPassword.mutate(person.id, {
+      onSuccess: (answer) => {
+        setConfirmReset(false)
+        setResetResult(answer.starting_password)
+      },
+      onError: toastProblem,
+    })
+  }
+
   return (
-    <Sheet>
+    <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetTrigger asChild>
         <Button type="button" variant="ghost" size="sm" aria-label={`Edit ${person.name}`}>
           <Pencil aria-hidden="true" />
           Edit
         </Button>
       </SheetTrigger>
-      <SheetContent className="flex flex-col gap-6">
+      <SheetContent className="flex flex-col gap-6 overflow-y-auto pb-6">
         <SheetHeader>
           <SheetTitle>{person.name}</SheetTitle>
           <SheetDescription>{person.email}</SheetDescription>
@@ -355,31 +502,98 @@ function EditPerson({ person, self }: { person: Person; self: boolean }) {
         <div className="flex flex-col gap-6 px-4">
           <Field>
             <FieldLabel htmlFor={`${id}-role`}>Role</FieldLabel>
-            <Select
-              value={person.role}
-              disabled={self || change.isPending}
-              onValueChange={(value) => {
-                patch({ role: value as Role }, `${person.name} is ${roleName(value)} now.`)
-              }}
-            >
-              <SelectTrigger id={`${id}-role`} className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {ROLES.map((item) => (
-                  <SelectItem key={item.id} value={item.id}>
-                    {item.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {self ? <FieldDescription>You can't change your own role.</FieldDescription> : null}
+            {isPlatformAdminPerson ? (
+              <>
+                <Input id={`${id}-role`} value={roleName(person.role)} disabled />
+                <FieldDescription>The Platform admin role can&apos;t be changed.</FieldDescription>
+              </>
+            ) : (
+              <>
+                <Select
+                  value={person.role}
+                  disabled={self || change.isPending}
+                  onValueChange={(value) => {
+                    const nextRole = value as AssignableRole
+                    const features = [...DEFAULT_FEATURES_BY_ROLE[nextRole]]
+                    patch(
+                      { role: nextRole, features },
+                      `${person.name} is ${roleName(nextRole)} now.`,
+                    )
+                  }}
+                >
+                  <SelectTrigger id={`${id}-role`} className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ROLES.map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {self ? <FieldDescription>You can&apos;t change your own role.</FieldDescription> : null}
+              </>
+            )}
           </Field>
+
+          <form
+            onSubmit={(event) => {
+              event.preventDefault()
+              savePosition()
+            }}
+          >
+            <Field>
+              <FieldLabel htmlFor={`${id}-position`}>Position</FieldLabel>
+              <div className="flex items-center gap-2">
+                <Input
+                  id={`${id}-position`}
+                  value={positionDraft}
+                  maxLength={80}
+                  placeholder="Optional, e.g. Sales Director"
+                  aria-invalid={positionError ? true : undefined}
+                  onChange={(event) => {
+                    setPositionDraft(event.target.value)
+                    setPositionError(null)
+                  }}
+                />
+                <Button
+                  type="submit"
+                  variant="outline"
+                  size="sm"
+                  disabled={!positionChanged || change.isPending}
+                >
+                  Save
+                </Button>
+              </div>
+              {positionError ? <FieldError>{positionError}</FieldError> : null}
+            </Field>
+          </form>
+
           <div className="flex flex-col gap-2">
-            <span className="text-ui font-semibold">Projects</span>
-            <ProjectTicks person={person} self={self} />
+            <span className="text-ui font-semibold text-foreground">Access</span>
+            <FeatureGroups
+              idPrefix={id}
+              role={person.role}
+              selected={currentFeatures}
+              disabled={change.isPending}
+              self={self}
+              onToggle={(feature, checked) => {
+                const next = checked
+                  ? ALL_FEATURES.filter((item) => item === feature || currentFeatures.includes(item))
+                  : currentFeatures.filter((item) => item !== feature)
+                patch(
+                  { features: next },
+                  checked
+                    ? `${person.name} can use this now.`
+                    : `Turned off for ${person.name}.`,
+                )
+              }}
+            />
           </div>
+
           <OwnerField person={person} />
+
           <label
             htmlFor={`${id}-active`}
             className="flex items-center justify-between gap-3 text-ui"
@@ -393,7 +607,7 @@ function EditPerson({ person, self }: { person: Person; self: boolean }) {
             <Switch
               id={`${id}-active`}
               checked={person.active}
-              disabled={self || change.isPending}
+              disabled={self || isPlatformAdminPerson || change.isPending}
               onCheckedChange={(on) => {
                 patch(
                   { active: on },
@@ -402,6 +616,55 @@ function EditPerson({ person, self }: { person: Person; self: boolean }) {
               }}
             />
           </label>
+
+          <div className="flex flex-col gap-3 border-t pt-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-col">
+                <span className="text-ui font-semibold">Password</span>
+                <span className="text-caption text-muted-foreground">
+                  Make a new starting password and sign them out on every device.
+                </span>
+              </div>
+              <AlertDialog open={confirmReset} onOpenChange={setConfirmReset}>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={resetPassword.isPending}
+                  >
+                    <KeyRound aria-hidden="true" />
+                    Reset password
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Reset {person.name}&apos;s password?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      {self
+                        ? "We'll make a new starting password for you and sign you out."
+                        : `We'll make a new starting password for ${person.name} and sign them out on every device.`}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      disabled={resetPassword.isPending}
+                      onClick={(event) => {
+                        event.preventDefault()
+                        runReset()
+                      }}
+                    >
+                      {resetPassword.isPending ? 'Resetting.' : 'Reset password'}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+            {resetResult !== null ? (
+              <MadePasswordBox name={person.name} password={resetResult} />
+            ) : null}
+          </div>
         </div>
       </SheetContent>
     </Sheet>
@@ -415,7 +678,7 @@ function PeopleTable({ people, myId }: { people: Person[]; myId: string | null }
         <TableRow>
           <TableHead>Name</TableHead>
           <TableHead>Role</TableHead>
-          <TableHead className="max-md:hidden">Projects</TableHead>
+          <TableHead className="max-md:hidden">Access</TableHead>
           <TableHead className="max-lg:hidden">HubSpot owner</TableHead>
           <TableHead className="max-sm:hidden">Last signed in</TableHead>
           <TableHead>
@@ -436,6 +699,11 @@ function PeopleTable({ people, myId }: { people: Person[]; myId: string | null }
                       <span className="text-caption font-normal text-muted-foreground">You</span>
                     ) : null}
                   </span>
+                  {person.position ? (
+                    <span className="truncate text-caption text-muted-foreground">
+                      {person.position}
+                    </span>
+                  ) : null}
                   <span className="truncate text-caption text-muted-foreground">
                     {person.email}
                   </span>
@@ -447,7 +715,7 @@ function PeopleTable({ people, myId }: { people: Person[]; myId: string | null }
                   {!person.active ? <Badge variant="outline">Can&apos;t sign in</Badge> : null}
                 </span>
               </TableCell>
-              <TableCell className="max-md:hidden">{projectsOf(person)}</TableCell>
+              <TableCell className="max-md:hidden">{accessOf(person)}</TableCell>
               <TableCell className="max-lg:hidden">
                 <OwnerCell person={person} />
               </TableCell>
@@ -468,12 +736,34 @@ function PeopleTable({ people, myId }: { people: Person[]; myId: string | null }
 function AddPerson() {
   const add = useAddPerson()
   const id = useId()
+  const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
-  const [role, setRole] = useState<Role>('staff')
-  // The Lead Finder starts ticked, as before.
-  const [picked, setPicked] = useState<ReadonlySet<string>>(() => new Set([LEAD_FINDER]))
+  const [position, setPosition] = useState('')
+  const [role, setRole] = useState<AssignableRole>('staff')
+  const [picked, setPicked] = useState<ReadonlySet<Feature>>(
+    () => new Set(DEFAULT_FEATURES_BY_ROLE.staff),
+  )
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [created, setCreated] = useState<{ name: string; password: string } | null>(null)
+
+  const resetForm = (): void => {
+    setName('')
+    setEmail('')
+    setPosition('')
+    setRole('staff')
+    setPicked(new Set(DEFAULT_FEATURES_BY_ROLE.staff))
+    setErrors({})
+  }
+
+  const handleOpenChange = (nextOpen: boolean): void => {
+    setOpen(nextOpen)
+    if (!nextOpen) {
+      setCreated(null)
+      resetForm()
+      add.reset()
+    }
+  }
 
   const submit = (): void => {
     const missing: Record<string, string> = {}
@@ -481,20 +771,22 @@ function AddPerson() {
     if (email.trim() === '') missing.email = 'Give an email.'
     setErrors(missing)
     if (Object.keys(missing).length > 0) return
-    const apps = role === 'admin' ? [] : PROJECTS.map((item) => item.app).filter((app) => picked.has(app))
+    const features =
+      role === 'admin' ? [...ALL_FEATURES] : ALL_FEATURES.filter((feature) => picked.has(feature))
+    const trimmedPosition = position.trim()
     add.mutate(
       {
         name: name.trim(),
         email: email.trim(),
         role,
-        features: role === 'admin' ? [...ALL_FEATURES] : featuresForApps(apps),
+        ...(trimmedPosition ? { position: trimmedPosition } : {}),
+        features,
       },
       {
         onSuccess: (person) => {
-          toast(`${person.name} can sign in now. Give them the password in person.`)
-          setName('')
-          setEmail('')
-          setErrors({})
+          toast(`${person.name} can sign in now.`)
+          setCreated({ name: person.name, password: person.starting_password })
+          resetForm()
         },
         onError: (error) => {
           if (isApiProblem(error) && error.errors.length > 0) {
@@ -511,106 +803,126 @@ function AddPerson() {
     )
   }
 
+  const selectedFeatures =
+    role === 'admin' ? [...ALL_FEATURES] : ALL_FEATURES.filter((feature) => picked.has(feature))
+
   return (
-    <Sheet>
+    <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetTrigger asChild>
         <Button type="button" size="sm">
           <UserPlus aria-hidden="true" />
           Add a person
         </Button>
       </SheetTrigger>
-      <SheetContent className="flex flex-col gap-4 overflow-y-auto">
+      <SheetContent className="flex flex-col gap-4 overflow-y-auto pb-6">
         <SheetHeader>
           <SheetTitle>Add a person</SheetTitle>
           <SheetDescription>
-            They sign in with this email and a starting password of 14 characters or more. Give it
-            to them in person.
+            We make a starting password for them once. Send it to them yourself.
           </SheetDescription>
         </SheetHeader>
-        <form
-          className="grid gap-4 px-4"
-          onSubmit={(event) => {
-            event.preventDefault()
-            submit()
-          }}
-        >
-          <Field>
-            <FieldLabel htmlFor={`${id}-name`}>Name</FieldLabel>
-            <Input
-              id={`${id}-name`}
-              value={name}
-              autoComplete="off"
-              aria-invalid={errors.name ? true : undefined}
-              onChange={(event) => {
-                setName(event.target.value)
+        {created ? (
+          <div className="px-4">
+            <MadePasswordBox
+              name={created.name}
+              password={created.password}
+              onDone={() => {
+                handleOpenChange(false)
               }}
             />
-            {errors.name ? <FieldError>{errors.name}</FieldError> : null}
-          </Field>
-          <Field>
-            <FieldLabel htmlFor={`${id}-email`}>Email</FieldLabel>
-            <Input
-              id={`${id}-email`}
-              type="email"
-              value={email}
-              autoComplete="off"
-              aria-invalid={errors.email ? true : undefined}
-              onChange={(event) => {
-                setEmail(event.target.value)
-              }}
-            />
-            {errors.email ? <FieldError>{errors.email}</FieldError> : null}
-          </Field>
-          <Field>
-            <FieldLabel htmlFor={`${id}-role`}>Role</FieldLabel>
-            <Select
-              value={role}
-              onValueChange={(value) => {
-                setRole(value as Role)
-              }}
-            >
-              <SelectTrigger id={`${id}-role`} className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {ROLES.map((item) => (
-                  <SelectItem key={item.id} value={item.id}>
-                    {item.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          <div className="flex flex-col gap-2">
-            {PROJECTS.map((project) => (
-              <label
-                key={project.app}
-                htmlFor={`${id}-${project.app}`}
-                className="flex items-center gap-2 text-ui"
+          </div>
+        ) : (
+          <form
+            className="grid gap-4 px-4"
+            onSubmit={(event) => {
+              event.preventDefault()
+              submit()
+            }}
+          >
+            <Field>
+              <FieldLabel htmlFor={`${id}-name`}>Name</FieldLabel>
+              <Input
+                id={`${id}-name`}
+                value={name}
+                autoComplete="off"
+                aria-invalid={errors.name ? true : undefined}
+                onChange={(event) => {
+                  setName(event.target.value)
+                }}
+              />
+              {errors.name ? <FieldError>{errors.name}</FieldError> : null}
+            </Field>
+            <Field>
+              <FieldLabel htmlFor={`${id}-email`}>Email</FieldLabel>
+              <Input
+                id={`${id}-email`}
+                type="email"
+                value={email}
+                autoComplete="off"
+                aria-invalid={errors.email ? true : undefined}
+                onChange={(event) => {
+                  setEmail(event.target.value)
+                }}
+              />
+              {errors.email ? <FieldError>{errors.email}</FieldError> : null}
+            </Field>
+            <Field>
+              <FieldLabel htmlFor={`${id}-position`}>Position (optional)</FieldLabel>
+              <Input
+                id={`${id}-position`}
+                value={position}
+                maxLength={80}
+                placeholder="e.g. Sales Director"
+                autoComplete="off"
+                aria-invalid={errors.position ? true : undefined}
+                onChange={(event) => {
+                  setPosition(event.target.value)
+                }}
+              />
+              {errors.position ? <FieldError>{errors.position}</FieldError> : null}
+            </Field>
+            <Field>
+              <FieldLabel htmlFor={`${id}-role`}>Role</FieldLabel>
+              <Select
+                value={role}
+                onValueChange={(value) => {
+                  const nextRole = value as AssignableRole
+                  setRole(nextRole)
+                  setPicked(new Set(DEFAULT_FEATURES_BY_ROLE[nextRole]))
+                }}
               >
-                <Checkbox
-                  id={`${id}-${project.app}`}
-                  checked={picked.has(project.app) || role === 'admin'}
-                  disabled={role === 'admin'}
-                  onCheckedChange={(next) => {
-                    const changed = new Set(picked)
-                    if (next === true) changed.add(project.app)
-                    else changed.delete(project.app)
-                    setPicked(changed)
-                  }}
-                />
-                Can use {project.phrase}
-              </label>
-            ))}
-            {errors.apps ? <span className="text-ui text-destructive">{errors.apps}</span> : null}
-          </div>
-          <div>
-            <Button type="submit" disabled={add.isPending}>
-              <UserPlus aria-hidden="true" />
-              {add.isPending ? 'Adding.' : 'Add the person'}
-            </Button>
-          </div>
-        </form>
+                <SelectTrigger id={`${id}-role`} className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ROLES.map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <FeatureGroups
+              idPrefix={id}
+              role={role}
+              selected={selectedFeatures}
+              onToggle={(feature, checked) => {
+                const changed = new Set(picked)
+                if (checked) changed.add(feature)
+                else changed.delete(feature)
+                setPicked(changed)
+              }}
+            />
+            {errors.features ? <span className="text-ui text-destructive">{errors.features}</span> : null}
+            <div>
+              <Button type="submit" disabled={add.isPending}>
+                <UserPlus aria-hidden="true" />
+                {add.isPending ? 'Adding.' : 'Add the person'}
+              </Button>
+            </div>
+          </form>
+        )}
       </SheetContent>
     </Sheet>
   )
@@ -637,7 +949,9 @@ export default function AdminPeopleTab() {
       <Card>
         <CardHeader>
           <CardTitle className="text-section font-semibold">Everyone with an account</CardTitle>
-          <CardDescription>A project closed to someone isn&apos;t in their menu.</CardDescription>
+          <CardDescription>
+            Turn ticks on or off for each person, or reset their password.
+          </CardDescription>
           <CardAction>
             <AddPerson />
           </CardAction>

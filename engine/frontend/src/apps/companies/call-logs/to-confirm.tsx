@@ -35,6 +35,7 @@ import {
 } from '@/api/hooks/call-notes'
 import { queryKeys } from '@/api/query'
 import type { CallNoteOptions, CallNoteOut } from '@/api/types'
+import { useCanWrite } from '@/auth/can'
 import { ErrorState } from '@/components/error-state'
 import { ListExit, ListExitItem, RollingNumber } from '@/components/motion'
 import { Button } from '@/components/ui/button'
@@ -138,9 +139,10 @@ export const ToConfirm = memo(function ToConfirm({
   // On a phone the bar is fixed at the bottom: a card the keyboard lands on scrolls above it.
   const barRoom = useBarRoom(onPhone)
 
+  const canWrite = useCanWrite('companies.call_logs')
   // Opening the tab asks for HubSpot's values now, once, for the notes with changes.
   const [previewFor, setPreviewFor] = useState<readonly string[] | null>(null)
-  if (previewFor === null && list.data) {
+  if (canWrite && previewFor === null && list.data) {
     setPreviewFor(
       list.data.items
         .filter((note) => note.status === 'to_confirm' && note.changes.length > 0)
@@ -148,7 +150,7 @@ export const ToConfirm = memo(function ToConfirm({
         .sort(),
     )
   }
-  const opening = useCallNotePreview(previewFor ?? [])
+  const opening = useCallNotePreview(canWrite ? (previewFor ?? []) : [])
   useEffect(() => {
     if (opening.data) applyPreview(client, opening.data)
   }, [client, opening.data])
@@ -223,7 +225,7 @@ export const ToConfirm = memo(function ToConfirm({
   const leftOut = notes.filter((note) => note.left_out && !locked(note)).length
   const sorting = notes.filter((note) => note.status === 'sorting').length
   const ready = options.sending_ready
-  const canSend = ready && included.length > 0 && !batch.running && !confirm.isPending
+  const canSend = canWrite && ready && included.length > 0 && !batch.running && !confirm.isPending
 
   const edit =
     (id: string): EditNote =>
@@ -306,13 +308,13 @@ export const ToConfirm = memo(function ToConfirm({
     letters: {
       e: (id) => {
         const note = byId.get(id)
-        if (note && note.status !== 'sorting' && !note.left_out && !locked(note)) {
+        if (canWrite && note && note.status !== 'sorting' && !note.left_out && !locked(note)) {
           startEditing(id)
         }
       },
       x: (id) => {
         const note = byId.get(id)
-        if (note && !locked(note)) toggleLeftOut(note)
+        if (canWrite && note && !locked(note)) toggleLeftOut(note)
       },
     },
   })
@@ -368,62 +370,64 @@ export const ToConfirm = memo(function ToConfirm({
   const more = list.data.total > list.data.items.length
 
   return (
-    <div className={cn('flex flex-col gap-4', onPhone && 'pb-36')}>
-      <div
-        ref={barRoom}
-        data-slot="send-bar"
-        className={cn(
-          'z-10 flex flex-wrap items-center gap-x-4 gap-y-2',
-          onPhone
-            ? 'fixed inset-x-0 bottom-0 z-20 flex-col items-stretch border-t bg-popover p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]'
-            : 'sticky top-0 -mx-1 border-b bg-background px-1 py-3 max-md:top-14',
-        )}
-      >
-        {/* On a laptop it holds the button at the right even when empty; a phone stacks it. */}
-        {onPhone && !batch.running && !described ? null : (
-          <div className="min-w-0 flex-1">
-            {batch.running ? (
-              <div className="flex flex-col gap-1.5">
-                <p aria-live="polite" className="text-ui text-foreground">
-                  {sendingWords(batch.done, total)}
+    <div className={cn('flex flex-col gap-4', canWrite && onPhone && 'pb-36')}>
+      {canWrite ? (
+        <div
+          ref={barRoom}
+          data-slot="send-bar"
+          className={cn(
+            'z-10 flex flex-wrap items-center gap-x-4 gap-y-2',
+            onPhone
+              ? 'fixed inset-x-0 bottom-0 z-20 flex-col items-stretch border-t bg-popover p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]'
+              : 'sticky top-14 -mx-1 border-b bg-background px-1 py-3',
+          )}
+        >
+          {/* On a laptop it holds the button at the right even when empty; a phone stacks it. */}
+          {onPhone && !batch.running && !described ? null : (
+            <div className="min-w-0 flex-1">
+              {batch.running ? (
+                <div className="flex flex-col gap-1.5">
+                  <p aria-live="polite" className="text-ui text-foreground">
+                    {sendingWords(batch.done, total)}
+                  </p>
+                  <Progress
+                    value={total > 0 ? (batch.done / total) * 100 : 0}
+                    aria-label="Sending to HubSpot"
+                  />
+                </div>
+              ) : described ? (
+                <p id={reasonId} className="text-ui text-muted-foreground text-pretty">
+                  {reason}
                 </p>
-                <Progress
-                  value={total > 0 ? (batch.done / total) * 100 : 0}
-                  aria-label="Sending to HubSpot"
-                />
-              </div>
-            ) : described ? (
-              <p id={reasonId} className="text-ui text-muted-foreground text-pretty">
-                {reason}
-              </p>
-            ) : null}
+              ) : null}
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <KbdGroup aria-hidden="true" className="touch:hidden max-sm:hidden">
+              <Kbd>{mac ? 'Cmd' : 'Ctrl'}</Kbd>
+              <Kbd>Enter</Kbd>
+            </KbdGroup>
+            <Button
+              type="button"
+              size={onPhone ? 'lg' : 'default'}
+              className={onPhone ? 'w-full' : undefined}
+              disabled={!canSend}
+              aria-describedby={described ? reasonId : undefined}
+              aria-keyshortcuts="Control+Enter Meta+Enter"
+              onClick={openSend}
+            >
+              <Send aria-hidden="true" />
+              {included.length > 0 && !batch.running ? (
+                <span className="inline-flex items-baseline gap-1">
+                  Send <RollingNumber value={included.length} /> to HubSpot
+                </span>
+              ) : (
+                'Send to HubSpot'
+              )}
+            </Button>
           </div>
-        )}
-        <div className="flex items-center gap-2">
-          <KbdGroup aria-hidden="true" className="touch:hidden max-sm:hidden">
-            <Kbd>{mac ? 'Cmd' : 'Ctrl'}</Kbd>
-            <Kbd>Enter</Kbd>
-          </KbdGroup>
-          <Button
-            type="button"
-            size={onPhone ? 'lg' : 'default'}
-            className={onPhone ? 'w-full' : undefined}
-            disabled={!canSend}
-            aria-describedby={described ? reasonId : undefined}
-            aria-keyshortcuts="Control+Enter Meta+Enter"
-            onClick={openSend}
-          >
-            <Send aria-hidden="true" />
-            {included.length > 0 && !batch.running ? (
-              <span className="inline-flex items-baseline gap-1">
-                Send <RollingNumber value={included.length} /> to HubSpot
-              </span>
-            ) : (
-              'Send to HubSpot'
-            )}
-          </Button>
         </div>
-      </div>
+      ) : null}
       <ListExit aria-label={LIST_LABEL} className="flex flex-col gap-3">
         {notes.map((note) => (
           <ListExitItem key={note.id}>
@@ -433,6 +437,7 @@ export const ToConfirm = memo(function ToConfirm({
               today={today}
               active={note.id === activeId}
               editing={note.id === editingId}
+              readOnly={!canWrite}
               landing={landingOf(note.id)}
               skippedWhy={leftBehind.get(note.id) ?? null}
               onActivate={() => {

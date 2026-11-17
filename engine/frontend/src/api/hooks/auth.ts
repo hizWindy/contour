@@ -142,6 +142,33 @@ export function useLogin() {
   })
 }
 
+export type ChangePasswordBody = Schemas['ChangePasswordIn']
+
+/**
+ * Changes the signed-in person's password (`POST /auth/password`). The backend ends all other
+ * sessions and clears any first-sign-in prompt.
+ */
+export function useChangePassword() {
+  const queryClient = useQueryClient()
+  return useMutation<undefined, ApiProblem, ChangePasswordBody>({
+    mutationFn: async (body) => {
+      unwrap(await api.POST('/auth/password', { body }))
+      return undefined
+    },
+    onSuccess: () => {
+      const current = queryClient.getQueryData<SignIn>(queryKeys.auth.me())
+      if (current?.state === 'signed_in') {
+        const next: SignIn = { state: 'signed_in', user: current.user }
+        if (current.platformAdminName !== undefined) {
+          next.platformAdminName = current.platformAdminName
+        }
+        queryClient.setQueryData(queryKeys.auth.me(), next)
+      }
+      void queryClient.invalidateQueries({ queryKey: queryKeys.auth.me() })
+    },
+  })
+}
+
 /**
  * Signs this browser out (`POST /auth/logout`). Whatever the answer, the page forgets the user,
  * and each `onSignOut` step runs for the person who pressed it.

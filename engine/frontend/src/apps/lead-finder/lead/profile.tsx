@@ -14,6 +14,7 @@ import type { ReactNode } from 'react'
 import { Link, useParams } from 'react-router'
 import { useLead } from '@/api/hooks'
 import type { LeadDetail } from '@/api/types'
+import { FeatureGuard } from '@/auth/guard'
 import { ErrorState } from '@/components/error-state'
 import { PendingDetail } from '@/components/skeletons'
 import { SourceLink } from '@/components/source-link'
@@ -239,7 +240,7 @@ export function Profile({ lead }: { lead: LeadDetail }) {
   )
 }
 
-export default function ProfilePage() {
+function ProfileContent() {
   const { leadId = '' } = useParams()
   const lead = useLead(leadId, { missingIsPage: true })
   return (
@@ -274,5 +275,13 @@ export default function ProfilePage() {
         <PendingDetail label="Loading the profile." />
       )}
     </main>
+  )
+}
+
+export default function ProfilePage() {
+  return (
+    <FeatureGuard feature="lead_finder.results" page="Results">
+      <ProfileContent />
+    </FeatureGuard>
   )
 }

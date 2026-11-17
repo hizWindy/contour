@@ -28,6 +28,7 @@ import {
   type ToneKey,
 } from '@/api/hooks/script'
 import type { ScriptStyleOut } from '@/api/types'
+import { useCanWrite } from '@/auth/can'
 import { ErrorState } from '@/components/error-state'
 import { Segmented } from '@/components/motion'
 import { Pending, SkeletonLines } from '@/components/skeletons'
@@ -526,9 +527,11 @@ export interface StyleSheetProps {
 
 /** The side sheet: Team style, then Your style. */
 export function StyleSheet({ open, onOpenChange, prefill = null, onChanged }: StyleSheetProps) {
+  const canWrite = useCanWrite('companies.call_prep')
   const style = useScriptStyle()
   const id = useId()
   const data = style.data
+  const canDecide = canWrite && Boolean(data?.can_decide)
   const waiting = data?.suggestions.filter((note) => note.status === 'suggested') ?? []
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -562,7 +565,7 @@ export function StyleSheet({ open, onOpenChange, prefill = null, onChanged }: St
             </Pending>
           ) : (
             <>
-              {data.tone ? (
+              {data.tone && canWrite ? (
                 <Section
                   id={`${id}-tone`}
                   title="Tone"
@@ -584,14 +587,14 @@ export function StyleSheet({ open, onOpenChange, prefill = null, onChanged }: St
                       <TeamNote
                         key={note.id}
                         note={note}
-                        canDecide={data.can_decide}
+                        canDecide={canDecide}
                         onChanged={onChanged}
                       />
                     ))}
                   </ul>
                 )}
-                <SuggestBox style={data} onChanged={onChanged} />
-                {data.can_decide && waiting.length > 0 ? (
+                {canWrite ? <SuggestBox style={data} onChanged={onChanged} /> : null}
+                {canDecide && waiting.length > 0 ? (
                   <div className="flex flex-col gap-2">
                     <h4 className="text-ui font-semibold">Waiting for a decision</h4>
                     <ul aria-label="Waiting for a decision" className="flex flex-col gap-2">
@@ -601,7 +604,7 @@ export function StyleSheet({ open, onOpenChange, prefill = null, onChanged }: St
                     </ul>
                   </div>
                 ) : null}
-                {!data.can_decide && data.suggestions.length > 0 ? (
+                {!canDecide && data.suggestions.length > 0 ? (
                   <div className="flex flex-col gap-2">
                     <h4 className="text-ui font-semibold">Your suggestions</h4>
                     <ul aria-label="Your suggestions" className="flex flex-col gap-2">
@@ -617,13 +620,15 @@ export function StyleSheet({ open, onOpenChange, prefill = null, onChanged }: St
                   </div>
                 ) : null}
               </Section>
-              <Section
-                id={`${id}-mine`}
-                title="Your style"
-                lead="Only you see it. It goes into your next scripts. Nothing here is shared."
-              >
-                <MineBox style={data} prefill={prefill} onChanged={onChanged} />
-              </Section>
+              {canWrite ? (
+                <Section
+                  id={`${id}-mine`}
+                  title="Your style"
+                  lead="Only you see it. It goes into your next scripts. Nothing here is shared."
+                >
+                  <MineBox style={data} prefill={prefill} onChanged={onChanged} />
+                </Section>
+              ) : null}
             </>
           )}
         </div>
