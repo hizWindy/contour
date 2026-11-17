@@ -4,7 +4,16 @@ import { describe, expect, it } from 'vitest'
 import type { LeadResult, TestReport } from '@/api/types'
 import { mockApi, TEST_RUN_ID, type Call } from '@/test/mock-api'
 import { renderWithProviders } from '@/test/render'
-import { buildGrid, changeWords, compared, resultOf, type TestItem, type TestSummary } from './grid'
+import {
+  buildGrid,
+  changeWords,
+  compared,
+  rangeWords,
+  resultOf,
+  summaryLine,
+  type TestItem,
+  type TestSummary,
+} from './grid'
 import TestSetView from './view'
 
 const RUN_B = '0f3c9a2e-2222-2222-3333-444444444444'
@@ -22,6 +31,8 @@ function summary(run_id: string, created_at: string, matched: number, total: str
     total_cost_usd: total,
     rules_version: 'r1',
     prompt_versions: 'p1',
+    ranged: 0,
+    in_range: 0,
   }
 }
 
@@ -113,6 +124,7 @@ describe('Test set', () => {
       '20 Oct 20261 of 2',
       '27 Oct 20261 of 2',
       '3 Nov 20262 of 2',
+      'Newest tier',
     ])
     const canva = within(grid).getByRole('row', { name: /Canva/ })
     expect(await within(canva).findAllByText(/^(Watch|Director review)$/)).toHaveLength(3)
@@ -223,5 +235,71 @@ describe('Test set', () => {
     expect(changeWords(item('a', 'watch', 30), item('a', 'watch', 30), label)).toBeNull()
     expect(changeWords(undefined, item('a', 'pass', 80), label)).toBe('New: pass')
     expect(changeWords(item('a', 'pass', 80), undefined, label)).toBe('Not in this run (was pass)')
+  })
+})
+
+describe('the tier ranges (PLAN-V21 T2-5)', () => {
+  /** The newest run with tiers and ranges: Canva lands inside C or better, Atlassian outside. */
+  function ranged() {
+    const newest = { ...RUNS[0], ranged: 2, in_range: 1 }
+    return answers({
+      '/api/v1/lead-finder/tests': { total: RUNS.length, items: [newest, RUNS[1], RUNS[2]] },
+      [`/api/v1/lead-finder/tests/${TEST_RUN_ID}`]: {
+        summary: newest,
+        items: [
+          item('Canva', 'director_review', 61, {
+            tier: 'B',
+            tier_range: ['C', 'A'],
+            in_range: true,
+          }),
+          item('Atlassian', 'drop', 22, {
+            tier: 'discard',
+            tier_range: ['C', 'A'],
+            in_range: false,
+          }),
+        ],
+      },
+    })
+  }
+
+  it('counts the companies inside their range in the line at the top', async () => {
+    mockApi(ranged())
+    renderWithProviders(<TestSetView />)
+    expect(
+      await screen.findByText(
+        '2 of 2 as expected, 1 of 2 inside their tier range, US$4.10, 3 Nov 2026',
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it("shows each company's range, its newest tier and whether it landed inside", async () => {
+    mockApi(ranged())
+    const { user } = renderWithProviders(<TestSetView />)
+    const grid = await screen.findByRole('table', { name: 'Test set grid' })
+    const canva = await within(grid).findByRole('row', { name: /Canva/ })
+    expect(await within(canva).findByText('Tier range: C or better')).toBeInTheDocument()
+    expect(within(canva).getByText('Inside its range')).toBeInTheDocument()
+    const atlassian = within(grid).getByRole('row', { name: /Atlassian/ })
+    expect(within(atlassian).getByText('Discard')).toBeInTheDocument()
+    expect(within(atlassian).getByText('Outside its range')).toBeInTheDocument()
+
+    await user.click(within(grid).getByRole('button', { name: /Atlassian/ }))
+    const panel = await screen.findByRole('dialog', { name: 'Atlassian' })
+    expect(within(panel).getByText(/Tier range: C or better\./)).toBeInTheDocument()
+    const newest = within(panel).getAllByRole('listitem')[0]
+    expect(newest).toHaveTextContent('TierDiscard')
+    expect(newest).toHaveTextContent('Tier rangeC or better')
+    expect(newest).toHaveTextContent('Inside the rangeNo')
+  })
+
+  it('words a range, and leaves the count out of the line until there are ranges', () => {
+    expect(rangeWords(['C', 'A'])).toBe('C or better')
+    expect(rangeWords(['discard', 'B'])).toBe('No better than B')
+    expect(rangeWords(['discard', 'C'])).toBe('No better than C')
+    expect(rangeWords(['C', 'B'])).toBe('C to B')
+    expect(rangeWords(['B', 'B'])).toBe('B only')
+    expect(rangeWords(null)).toBeNull()
+    const words = { money: (value: string) => `US$${value}`, date: () => '3 Nov 2026' }
+    expect(summaryLine(RUNS[0], words)).toBe('2 of 2 as expected, US$4.10, 3 Nov 2026')
   })
 })

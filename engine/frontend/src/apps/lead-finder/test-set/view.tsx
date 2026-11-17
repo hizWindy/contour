@@ -5,11 +5,13 @@
  *
  * At the top, the last run in one line and the run before it for comparison. Then a grid: the
  * companies down the side, the last 5 runs across, each cell the result's icon and colour; a cell
- * that changed from the run before gets a small mark. A company opens a side panel with what each
- * run said and what changed. "Run the test set" keeps its cost confirm, from the estimate.
+ * that changed from the run before gets a small mark. Each company shows its tier range, and the
+ * last column its newest tier and whether it landed inside (PLAN-V21 T2-5). A company opens a side
+ * panel with what each run said and what changed. "Run the test set" keeps its cost confirm, from
+ * the estimate.
  */
 import { useQueries } from '@tanstack/react-query'
-import { CircleX, FlaskConical } from 'lucide-react'
+import { Check, CircleAlert, CircleX, FlaskConical } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { api, unwrap } from '@/api/client'
@@ -45,7 +47,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { formatDate, pluralise, shortId } from '@/lib/format'
-import { isLeadResult, RESULT_LABELS, resultLabel } from '@/lib/labels'
+import { isLeadResult, RESULT_LABELS, resultLabel, TIER_LABELS } from '@/lib/labels'
 import { formatMoney } from '@/lib/money'
 import { toastProblem } from '@/lib/problems'
 import { cn } from '@/lib/utils'
@@ -53,11 +55,13 @@ import {
   buildGrid,
   changeWords,
   compared,
+  rangeWords,
   resultOf,
   RUNS_ACROSS,
   summaryLine,
   type GridCell,
   type GridRow,
+  type TestItem,
   type TestSummary,
 } from './grid'
 
@@ -125,9 +129,43 @@ function Cell({ cell, loading }: { cell: GridCell; loading: boolean }) {
   )
 }
 
+/** Whether a run's tier landed inside the company's range (PLAN-V21 T2-5), in words. */
+function insideWords(item: TestItem): string {
+  if (item.in_range === true) return 'Yes'
+  if (item.in_range === false) return 'No'
+  return item.tier_range ? 'Not known: no tier' : 'No range set'
+}
+
+/**
+ * The newest run's tier, and whether it landed inside the company's range: an icon and a word, so
+ * it never rests on colour (PLAN-V21 T2-5).
+ */
+function NewestTier({ item }: { item: TestItem | undefined }) {
+  if (!item?.tier) {
+    return <span className="text-muted-foreground">None</span>
+  }
+  return (
+    <span className="inline-flex items-center gap-2 whitespace-nowrap">
+      <span className="font-semibold">{TIER_LABELS[item.tier]}</span>
+      {item.in_range === true ? (
+        <span className="inline-flex items-center gap-1 text-caption text-muted-foreground">
+          <Check aria-hidden="true" className="size-3.5" />
+          Inside its range
+        </span>
+      ) : item.in_range === false ? (
+        <span className="inline-flex items-center gap-1 text-caption text-review-ink">
+          <CircleAlert aria-hidden="true" className="size-3.5" />
+          Outside its range
+        </span>
+      ) : null}
+    </span>
+  )
+}
+
 /** The side panel for one company: what each run said, and what changed between them. */
 function CompanyPanel({ row, onClose }: { row: GridRow | null; onClose: () => void }) {
   const cells = row ? [...row.cells].reverse() : []
+  const panelRange = rangeWords(row?.range)
   return (
     <Sheet
       open={row !== null}
@@ -143,6 +181,7 @@ function CompanyPanel({ row, onClose }: { row: GridRow | null; onClose: () => vo
             {row?.expected?.length
               ? `Expected: ${row.expected.map((result) => RESULT_LABELS[result]).join(' or ')}.`
               : 'Nothing expected.'}
+            {panelRange ? ` Tier range: ${panelRange}.` : null}
           </SheetDescription>
         </SheetHeader>
         <ol className="flex flex-col px-4 pb-6">
@@ -169,6 +208,12 @@ function CompanyPanel({ row, onClose }: { row: GridRow | null; onClose: () => vo
                   <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-0.5 text-caption">
                     <dt className="text-muted-foreground">Score</dt>
                     <dd className="tabular-nums">{item.score ?? 'None'}</dd>
+                    <dt className="text-muted-foreground">Tier</dt>
+                    <dd>{item.tier ? TIER_LABELS[item.tier] : 'None'}</dd>
+                    <dt className="text-muted-foreground">Tier range</dt>
+                    <dd>{rangeWords(item.tier_range) ?? 'None set'}</dd>
+                    <dt className="text-muted-foreground">Inside the range</dt>
+                    <dd>{insideWords(item)}</dd>
                     <dt className="text-muted-foreground">As expected</dt>
                     <dd>{item.ok === null ? 'Nothing expected' : item.ok ? 'Yes' : 'No'}</dd>
                     <dt className="text-muted-foreground">Cost</dt>
@@ -320,7 +365,8 @@ export default function TestSetView() {
               <CardTitle className="text-section font-semibold">Company by company</CardTitle>
               <CardDescription>
                 The last {pluralise(grid.runs.length, 'run')}, oldest on the left. A marked cell
-                changed from the run before. Open a company for the details.
+                changed from the run before. The last column says whether the newest tier landed
+                inside the company&apos;s range. Open a company for the details.
               </CardDescription>
             </CardHeader>
             <CardContent className="overflow-x-auto p-0">
@@ -345,6 +391,9 @@ export default function TestSetView() {
                         </span>
                       </th>
                     ))}
+                    <th scope="col" className="px-4 py-2 text-left font-semibold whitespace-nowrap">
+                      Newest tier
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -365,11 +414,19 @@ export default function TestSetView() {
                               ? `Expected ${row.expected.map((result) => RESULT_LABELS[result]).join(' or ')}`
                               : 'Nothing expected'}
                           </span>
+                          {rangeWords(row.range) ? (
+                            <span className="text-caption font-normal text-muted-foreground">
+                              Tier range: {rangeWords(row.range)}
+                            </span>
+                          ) : null}
                         </button>
                       </th>
                       {row.cells.map((cell) => (
                         <Cell key={cell.run.run_id} cell={cell} loading={loading} />
                       ))}
+                      <td className="px-4 py-1 text-ui">
+                        <NewestTier item={row.newest} />
+                      </td>
                     </tr>
                   ))}
                 </tbody>

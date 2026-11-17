@@ -3,7 +3,8 @@
  * which cells changed from the run before. Pure functions, so the view stays about layout and
  * the tests can check the sums.
  */
-import type { LeadResult, TestPage, TestReport } from '@/api/types'
+import type { LeadResult, TestPage, TestReport, Tier } from '@/api/types'
+import { TIER_LABELS } from '@/lib/labels'
 
 export type TestSummary = TestPage['items'][number]
 export type TestItem = TestReport['items'][number]
@@ -23,6 +24,10 @@ export interface GridRow {
   name: string
   city: string | null
   expected: readonly LeadResult[] | null
+  /** The lowest and the highest tier it may land in (PLAN-V21 T2-5), from the newest run. */
+  range: readonly Tier[] | null
+  /** What the newest run with a row for it said: its tier, and whether it landed inside. */
+  newest: TestItem | undefined
   cells: GridCell[]
 }
 
@@ -66,7 +71,14 @@ export function buildGrid(
       return { run, item, changed }
     })
     const newest = [...cells].reverse().find((cell) => cell.item)?.item
-    return { name, city: newest?.city ?? null, expected: newest?.expected ?? null, cells }
+    return {
+      name,
+      city: newest?.city ?? null,
+      expected: newest?.expected ?? null,
+      range: newest?.tier_range ?? null,
+      newest,
+      cells,
+    }
   })
   return { runs, rows }
 }
@@ -77,12 +89,32 @@ export function resultOf(item: TestItem | undefined): string | null {
   return item.result ?? 'failed'
 }
 
-/** "8 of 10 as expected, US$4.10, 3 Nov 2026". */
+/**
+ * "8 of 10 as expected, US$4.10, 3 Nov 2026", with "4 of 5 inside their tier range" once the
+ * companies have ranges (PLAN-V21 T2-5).
+ */
 export function summaryLine(
   run: TestSummary,
   words: { money: (value: string) => string; date: (value: string) => string },
 ): string {
-  return `${run.matched} of ${run.expected} as expected, ${words.money(run.total_cost_usd)}, ${words.date(run.created_at)}`
+  const ranged =
+    run.ranged > 0
+      ? `, ${String(run.in_range)} of ${String(run.ranged)} inside their tier range`
+      : ''
+  return `${run.matched} of ${run.expected} as expected${ranged}, ${words.money(run.total_cost_usd)}, ${words.date(run.created_at)}`
+}
+
+/**
+ * A tier range in words (PLAN-V21 T2-5): ["C", "A"] is "C or better", ["discard", "B"] is "No
+ * better than B", and ["C", "B"] is "C to B". Null when there is none.
+ */
+export function rangeWords(range: readonly Tier[] | null | undefined): string | null {
+  const [low, high] = range ?? []
+  if (low === undefined || high === undefined) return null
+  if (low === high) return `${TIER_LABELS[low]} only`
+  if (high === 'A') return `${TIER_LABELS[low]} or better`
+  if (low === 'discard') return `No better than ${TIER_LABELS[high]}`
+  return `${TIER_LABELS[low]} to ${TIER_LABELS[high]}`
 }
 
 /** How the newest run compares with the one before: better, the same, or worse. */
