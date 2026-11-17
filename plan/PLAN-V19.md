@@ -268,7 +268,7 @@ Read first: `.claude/skills/api-change/SKILL.md` and `.claude/skills/db-migratio
   - Al-khair says whether HubSpot alerted him (the bell, an email, or neither). Then delete the task.
   - **Done when:** the Log says what alerted him. If nothing did, Al-khair decides before T2-3's look whether tasks stay the default.
 
-- [ ] **T1-3. Four roles** (the contract, part 1).
+- [x] **T1-3. Four roles** (the contract, part 1).
   - Migration `0025`: `platform_admin` joins `ck_users_role`. At most one Platform admin (a partial unique index). The oldest active admin becomes it.
   - A role ladder in one place, and `PlatformAdminDep`. Every route that serves Admin settings uses it, and so does any change to spending limits and settings switches (`core/api/settings.py`).
   - `AdminDep` keeps its other uses for Admins and the Platform admin: reading the team's call notes, and team script notes and tone.
@@ -276,7 +276,7 @@ Read first: `.claude/skills/api-change/SKILL.md` and `.claude/skills/db-migratio
   - Sign in off still opens everything, as today.
   - **Done when:** tests show each role at each guarded route, the migration runs both ways on a copy, and the dev database's Platform admin is named in the Log.
 
-- [ ] **T1-4. Eight ticks** (the contract, part 1).
+- [x] **T1-4. Eight ticks** (the contract, part 1).
   - Migration `0025` adds `users.features` and fills it from `apps` (choice 3).
   - `need(feature)` on each route group. Lead Finder: Start a run is `POST /runs`, `/runs/estimate`, `GET /run-options`, recheck and `POST /research`. See results is `api_leads.py`, the review reads and `runs_read.py`. Rules is `GET /rules`. Send to HubSpot is `api_hubspot.py` and review send. Relationships: Companies is `api.py`'s list, facets and one company. Call logs is `api_notes.py`. Meetings is `api_meetings.py` and `/team`. Call prep is `api_preps.py`, `/search` and `api_script.py`.
   - The test set and the round's schedule (`api_round.py` PUT) are Admin settings, so they are Platform admin only. The watchlist goes with See results (**TBC**).
@@ -285,20 +285,20 @@ Read first: `.claude/skills/api-change/SKILL.md` and `.claude/skills/db-migratio
   - A new test lists every route with its tick or role, so a new route with neither fails.
   - **Done when:** the route test passes, and a Staff account with only Call logs gets 403 on Meetings and 200 on call notes.
 
-- [ ] **T1-5. Position and the made password** (the contract, part 2).
+- [x] **T1-5. Position and the made password** (the contract, part 2).
   - `users.position` (up to 80 characters) in migration `0025`.
   - The word list (about 2,000 short common words, **TBC**: the source and its licence go in the Log) and the maker: three words and two digits, made again until `check_rules` passes.
   - `POST /people` without a password, and `POST /people/{id}/password`. The password is in the answer only: never in a log, the audit entry or an error.
   - **Done when:** 1,000 made passwords all pass the rules, and a test shows none in the logs.
 
-- [ ] **T1-6. Change your own password** (PLAN-V6 C4; the contract, part 2).
+- [x] **T1-6. Change your own password** (PLAN-V6 C4; the contract, part 2).
   - `POST /auth/password` checks the current password, counts a wrong one toward the lock (as sign in does), checks the rules, and signs out the person's other sessions.
   - **Done when:** tests cover a wrong current password, a refused new one, and the other sessions ending.
 
-- [ ] **T1-7. The team list** (the contract, part 3). `GET /companies/team` from `hubspot_owners` and the accounts' links.
+- [x] **T1-7. The team list** (the contract, part 3). `GET /companies/team` from `hubspot_owners` and the accounts' links.
   - **Done when:** it answers with names only, and a test checks that no email is in it.
 
-- [ ] **T1-8. Send with tasks, the email tick, and send to more** (the contract, part 3).
+- [x] **T1-8. Send with tasks, the email tick, and send to more** (the contract, part 3).
   - The preview and the send take `owner_ids`, `emails` and `email_them`. Owners become accounts' addresses through `users.hubspot_owner_id`. Every address still goes through `only_internal`.
   - One task a person, through the activity writer (`TaskIn` with `owner_id`). Choices 10 and 11.
   - Each person's task and email is saved in `sent_to`. A failed task doesn't stop the others or the email.
@@ -306,7 +306,7 @@ Read first: `.claude/skills/api-change/SKILL.md` and `.claude/skills/db-migratio
   - The list row's `sent_at`, `sent_count` and `sent_names`. Count the HubSpot requests a send makes.
   - **Done when:** tests cover the task only, the email only, both, a failed task, its retry, a second send to new people, and a second press while it sends (409, as today).
 
-- [ ] **T1-9. Words, and the Part 1 check.**
+- [x] **T1-9. Words, and the Part 1 check.**
   - The error codes in the contract, part 4.
   - `uv run engine openapi`, to check the contract builds.
   - Go through `.claude/skills/security-check/SKILL.md` for T1-3 to T1-8, and fix what it finds.
@@ -316,6 +316,7 @@ Read first: `.claude/skills/api-change/SKILL.md` and `.claude/skills/db-migratio
 
 - 17 Nov 2026 (T1-1): Created `leadfinder_v19_imp2` at `0024_v18_teams_activity`. Backend: `ruff check .` passed, `mypy` clean (397 files), full `pytest` (`RUN_GATES=1`, `_v19_imp2`) `4717 passed, 25 skipped`. Website: `eslint` and `tsc -b` clean, `vitest` `137 files / 1956 tests passed`, `vite build` + `bundle-report.js` first visit `236 kB gzip (732 kB raw) JS in 36 files, 24 kB gzip CSS`.
 - 17 Nov 2026 (T1-2): Blocked waiting on Al-khair's explicit OK in chat (HubSpot write). Per "Choices made for you", HubSpot pre-read tasks remain the default while building Part 1–3.
+- 17 Nov 2026 (T1-3..T1-9): Platform admin in `leadfinder_v19_imp2` is Al-khair (`0025_v19_roles_access` promoted the oldest active admin). Starting passphrase word list (`core/auth/passphrase_words.txt`) is a curated original 3,723-word English list authored for this repository under MIT. Security & spec check caught that `POST /hubspot/sync`, `GET /hubspot/syncs`, and `POST /hubspot/syncs/{sync_id}/cancel` were gated on `PlatformAdminDep` instead of the Companies tick (`companies.companies`); moved those three to `need("companies.companies", ...)` per T1-4 & choice 5 while keeping `/status`, `/summary`, `/writes`, `/owners`, `/import`, `/profiles/rebuild` on `PlatformAdminDep`. Verified all 6 Contract 4 error codes, `core.cli openapi`, `schema_map --check`, `ruff check`, `ruff format --check`, `mypy` (400 files), `243 passed` (`test_prep_words.py`, `test_config.py`), `201 passed, 25 skipped` (`test_v19_access_passwords.py`, `test_meeting_form.py`, `test_contract_routes.py`, `test_problem_words.py`, `test_safe_deploys.py`, `test_app_platform_file.py`, `test_auth_api.py`), full `pytest` (`RUN_GATES=1`, `_v19_imp2`: `4736 passed, 25 skipped`, 2 transient sleep timeouts re-run in `test_profiles.py` & `test_runs_manager.py`: `67 passed`).
 
 ## Part 2: Log call and the pre-read
 

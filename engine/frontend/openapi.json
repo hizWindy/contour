@@ -4545,7 +4545,7 @@
         "type": "object"
       },
       "FormEmailPreview": {
-        "description": "The email as it would arrive, and the people it would go to.",
+        "description": "The email and HubSpot task as they would arrive, and who would get them.",
         "properties": {
           "html": {
             "description": "The HTML version, with every value escaped",
@@ -4575,6 +4575,17 @@
             "title": "Subject",
             "type": "string"
           },
+          "task_due": {
+            "description": "Due date (Melbourne working day) for HubSpot tasks",
+            "format": "date",
+            "title": "Task Due",
+            "type": "string"
+          },
+          "task_subject": {
+            "description": "Subject line of the HubSpot task created per owner",
+            "title": "Task Subject",
+            "type": "string"
+          },
           "text": {
             "description": "The plain text version",
             "title": "Text",
@@ -4585,6 +4596,8 @@
           "subject",
           "text",
           "html",
+          "task_subject",
+          "task_due",
           "people",
           "meeting_note"
         ],
@@ -4687,14 +4700,41 @@
       "FormPerson": {
         "description": "Someone the pre-read would go to.",
         "properties": {
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Their Contour email, if emailed or added",
+            "title": "Address"
+          },
           "allowed": {
-            "description": "False for an address that isn't Contour's: it can't",
+            "description": "False for an outside address that cannot receive it",
             "title": "Allowed",
             "type": "boolean"
           },
+          "already": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When they already got this pre-read",
+            "title": "Already"
+          },
           "email": {
+            "default": false,
+            "description": "True if sending emails them",
             "title": "Email",
-            "type": "string"
+            "type": "boolean"
           },
           "name": {
             "anyOf": [
@@ -4705,24 +4745,45 @@
                 "type": "null"
               }
             ],
-            "description": "Their name, when they have an account here",
+            "description": "Their name, when known",
             "title": "Name"
           },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "task": {
+            "default": false,
+            "description": "True if sending creates a HubSpot task for them",
+            "title": "Task",
+            "type": "boolean"
+          },
           "ticked": {
-            "description": "Ticked to get it. Never ticked when it isn't allowed",
+            "description": "Ticked to get it. Never ticked when disallowed or already sent",
             "title": "Ticked",
             "type": "boolean"
           },
           "why": {
-            "description": "Like 'on the meeting', or 'added by you'",
+            "description": "Like 'on the meeting', 'picked by you', or 'added by you'",
             "title": "Why",
             "type": "string"
           }
         },
         "required": [
+          "owner_id",
           "name",
+          "address",
+          "task",
           "email",
           "why",
+          "already",
           "ticked",
           "allowed"
         ],
@@ -4730,18 +4791,44 @@
         "type": "object"
       },
       "FormPreviewIn": {
-        "description": "The addresses the rep added, to see the email with them. Empty: only the people on the\nmeeting.",
+        "additionalProperties": false,
+        "description": "Who the rep picked (or null on first open to start from the people on the meeting).",
         "properties": {
-          "to": {
-            "description": "Addresses the rep added, each checked against Contour's own domains",
+          "email_them": {
+            "default": false,
+            "description": "True to also email selected HubSpot owners who have a Contour account",
+            "title": "Email Them",
+            "type": "boolean"
+          },
+          "emails": {
+            "description": "Extra email addresses added by hand, checked against Contour's own domains",
             "items": {
               "maxLength": 254,
               "pattern": "^[^\\x00]*$",
               "type": "string"
             },
             "maxItems": 20,
-            "title": "To",
+            "title": "Emails",
             "type": "array"
+          },
+          "owner_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxLength": 32,
+                  "minLength": 1,
+                  "pattern": "^[A-Za-z0-9_-]+$",
+                  "type": "string"
+                },
+                "maxItems": 20,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Selected HubSpot owner ids, or null to start from the meeting attendees",
+            "title": "Owner Ids"
           }
         },
         "title": "FormPreviewIn",
@@ -4749,10 +4836,36 @@
       },
       "FormRecipient": {
         "properties": {
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A Contour email address, if emailed",
+            "title": "Address"
+          },
+          "at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When this person got it",
+            "title": "At"
+          },
           "email": {
-            "description": "A Contour address",
+            "default": false,
+            "description": "True when an email was sent to them",
             "title": "Email",
-            "type": "string"
+            "type": "boolean"
           },
           "name": {
             "anyOf": [
@@ -4763,35 +4876,78 @@
                 "type": "null"
               }
             ],
-            "description": "Their name, when they have an account here",
+            "description": "Their name, when known",
             "title": "Name"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The HubSpot owner id, if linked to an owner",
+            "title": "Owner Id"
+          },
+          "task": {
+            "default": "none",
+            "description": "HubSpot task outcome: none, sent, waiting, or failed",
+            "enum": [
+              "none",
+              "sent",
+              "waiting",
+              "failed"
+            ],
+            "title": "Task",
+            "type": "string"
           }
         },
         "required": [
+          "owner_id",
           "name",
+          "address",
+          "at",
+          "task",
           "email"
         ],
         "title": "FormRecipient",
         "type": "object"
       },
       "FormSendIn": {
+        "additionalProperties": false,
         "properties": {
-          "to": {
-            "description": "Who gets it: Contour addresses only. One that isn't refuses the whole send",
+          "email_them": {
+            "default": false,
+            "description": "True to also email selected HubSpot owners who have a Contour account",
+            "title": "Email Them",
+            "type": "boolean"
+          },
+          "emails": {
+            "description": "Extra Contour email addresses added by hand (always emailed)",
             "items": {
               "maxLength": 254,
               "pattern": "^[^\\x00]*$",
               "type": "string"
             },
             "maxItems": 20,
-            "minItems": 1,
-            "title": "To",
+            "title": "Emails",
+            "type": "array"
+          },
+          "owner_ids": {
+            "description": "Selected HubSpot owner ids for HubSpot tasks (and email when email_them)",
+            "items": {
+              "maxLength": 32,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-]+$",
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Owner Ids",
             "type": "array"
           }
         },
-        "required": [
-          "to"
-        ],
         "title": "FormSendIn",
         "type": "object"
       },
@@ -8570,6 +8726,30 @@
             "title": "Id",
             "type": "string"
           },
+          "sent_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent At"
+          },
+          "sent_count": {
+            "default": 0,
+            "title": "Sent Count",
+            "type": "integer"
+          },
+          "sent_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Sent Names",
+            "type": "array"
+          },
           "status": {
             "description": "drafting (being written), draft (ready to check), sent, or failed",
             "enum": [
@@ -8584,7 +8764,10 @@
         },
         "required": [
           "id",
-          "status"
+          "status",
+          "sent_at",
+          "sent_count",
+          "sent_names"
         ],
         "title": "MeetingFormState",
         "type": "object"
@@ -16605,6 +16788,39 @@
         "title": "TbcNote",
         "type": "object"
       },
+      "TeamMember": {
+        "description": "One active HubSpot owner selectable on the pre-read send list (never exposes emails).",
+        "properties": {
+          "has_account": {
+            "description": "True when linked to an active Contour account",
+            "title": "Has Account",
+            "type": "boolean"
+          },
+          "is_me": {
+            "description": "True when linked to the signed-in user",
+            "title": "Is Me",
+            "type": "boolean"
+          },
+          "name": {
+            "description": "Display name from HubSpot, never an email",
+            "title": "Name",
+            "type": "string"
+          },
+          "owner_id": {
+            "description": "Active HubSpot owner id",
+            "title": "Owner Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "owner_id",
+          "name",
+          "has_account",
+          "is_me"
+        ],
+        "title": "TeamMember",
+        "type": "object"
+      },
       "TeamToneIn": {
         "properties": {
           "tone": {
@@ -22427,7 +22643,7 @@
     },
     "/companies/meetings/forms/{form_id}/preview": {
       "post": {
-        "description": "The email as it would arrive (a subject, plain text, and HTML with every value escaped), and the people it would go to, each with why: the Contour people on the meeting who have an account here, then the addresses I add (`to`). Each says whether it may get it: only Contour addresses can, and only they are ticked. Nothing is sent. 404 `form_not_found`. 409 `meeting_forms_off`.",
+        "description": "What Send will do: the HubSpot task subject and working-day due date, email preview, and each person with whether they get a task and/or email (and if they already got it). Nothing is sent. 404 `form_not_found`. 409 `meeting_forms_off`.",
         "operationId": "preview_form",
         "parameters": [
           {
@@ -22580,7 +22796,7 @@
             "sessionCookie": []
           }
         ],
-        "summary": "See the pre-read's email",
+        "summary": "See the pre-read's HubSpot tasks and email",
         "tags": [
           "Companies"
         ]
@@ -22739,7 +22955,7 @@
     },
     "/companies/meetings/forms/{form_id}/send": {
       "post": {
-        "description": "Emails the pre-read to these addresses (in the body, never an attachment), then saves its copy in HubSpot: a note on the company, and on its deal when it has exactly one open deal. Every address must be Contour's: one that isn't refuses the whole send (422 `outside_address`, naming it). The ideal next step and who is going must be filled in (422 `blanks_empty`). Sent already: nobody is emailed again, and a copy that is waiting or failed is tried again. `hubspot_copy` says how the copy went: saved, waiting (writing to HubSpot isn't on: the email still went), off (the company isn't in HubSpot), or failed. 422 `no_one` when there is nobody to send it to. 409 `form_not_ready` while it is drafting or failed, `form_sending` while it is being sent, `email_not_set_up`. 502 `email_failed`: nothing was sent. 404 `form_not_found`. 409 `meeting_forms_off`.",
+        "description": "Creates HubSpot follow-up tasks for picked team members and optionally emails them (and any added Contour addresses), once per new recipient unless the pre-read text changed. Saves the company/meeting copy in HubSpot. 422 `blanks_empty`, `outside_address`, `no_one`. 409 `hubspot_writes_off`, `form_not_ready`, `form_sending`, `email_not_set_up`. 502 `email_failed`. 404 `form_not_found`. 409 `meeting_forms_off`.",
         "operationId": "send_form",
         "parameters": [
           {
@@ -22893,6 +23109,157 @@
           }
         ],
         "summary": "Send the pre-read",
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/meetings/forms/{form_id}/tasks/retry": {
+      "post": {
+        "description": "Retries HubSpot task creation only for people whose task previously failed, without sending any email. Partial successes are saved. Raises 502 `task_failed` if any task still fails. 409 `hubspot_writes_off`, `form_not_ready`. 404 `form_not_found`.",
+        "operationId": "retry_form_tasks",
+        "parameters": [
+          {
+            "description": "The pre-read's id",
+            "in": "path",
+            "name": "form_id",
+            "required": true,
+            "schema": {
+              "description": "The pre-read's id",
+              "format": "uuid",
+              "title": "Form Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeetingFormOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Retry failed HubSpot tasks for a sent pre-read",
         "tags": [
           "Companies"
         ]
@@ -25761,6 +26128,147 @@
           }
         ],
         "summary": "Matches for the prep box",
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/team": {
+      "get": {
+        "description": "Active HubSpot owners ordered by name, with whether each has an active Contour account and whether they are the signed-in user. Never exposes email addresses. 503 `team_unavailable` if loading fails.",
+        "operationId": "list_team",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TeamMember"
+                  },
+                  "title": "Response List Team",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request can't be understood"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not signed in (code `auth_required`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Blocked, or this isn't allowed"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not possible in the current state"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too much data"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "A value in the request isn't valid"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not built yet"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A part of the engine isn't available"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Contour team owners for pre-read sending",
         "tags": [
           "Companies"
         ]

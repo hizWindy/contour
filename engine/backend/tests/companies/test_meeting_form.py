@@ -615,7 +615,13 @@ async def test_a_typed_meeting_gets_a_pre_read_and_shows_in_meetings(
     assert listed["meetings_state"] == "waiting" and listed["total"] == 1
     [item] = listed["items"]
     assert (item["typed"], item["meeting"]["id"], item["group"]) == (True, "", "tomorrow")
-    assert item["form"] == {"id": typed["id"], "status": "draft"}
+    assert item["form"] == {
+        "id": typed["id"],
+        "status": "draft",
+        "sent_at": None,
+        "sent_count": 0,
+        "sent_names": [],
+    }
     assert counts == {"need_pre_read": 0, "draft_ready": 1}
 
 

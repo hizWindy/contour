@@ -135,11 +135,9 @@ async def test_role_ladder_platform_admin_vs_admin_for_admin_settings_and_team_t
         ("POST", "/api/v1/sources/property_daily/resume", None),
         ("GET", "/api/v1/hubspot/summary", None),
         ("GET", "/api/v1/hubspot/status", None),
-        ("POST", "/api/v1/hubspot/sync", None),
-        ("GET", "/api/v1/hubspot/syncs", None),
-        ("POST", "/api/v1/hubspot/syncs/1/cancel", None),
         ("GET", "/api/v1/hubspot/writes", None),
         ("GET", "/api/v1/hubspot/owners", None),
+        ("POST", "/api/v1/hubspot/profiles/rebuild", None),
         ("POST", "/api/v1/lead-finder/tests/run", None),
         ("GET", "/api/v1/lead-finder/tests", None),
         ("GET", f"/api/v1/lead-finder/tests/{uuid.uuid4()}", None),
@@ -323,12 +321,38 @@ async def test_staff_with_only_call_logs_and_viewer_read_only_enforcement(world:
         denied_company_card = await staff_browser.get(f"{COMPANIES_API}/101")
         assert denied_company_card.status_code == 403
         assert denied_company_card.json()["code"] == "feature_not_allowed"
+        assert (await staff_browser.get("/api/v1/hubspot/syncs")).status_code == 403
+        assert (await staff_browser.post("/api/v1/hubspot/sync")).status_code == 403
+
+        # Staff with Companies tick can read sync status and run Sync with HubSpot (choice 5).
+        async with world.factory() as db:
+            await admin.create_person(
+                db,
+                email="companies@example.test",
+                username="companiesonly",
+                name="Companies Rep",
+                role="staff",
+                features=["companies.companies"],
+                password=GOOD,
+                now=world.clock.now,
+                hasher=FAST,
+            )
+        async with world.browser() as companies_browser:
+            assert (await sign_in(companies_browser, login="companiesonly")).status_code == 200
+            assert (await companies_browser.get("/api/v1/hubspot/syncs")).status_code == 200
+            assert (await companies_browser.post("/api/v1/hubspot/sync")).status_code != 403
+            assert (
+                await companies_browser.post("/api/v1/hubspot/syncs/9999/cancel")
+            ).status_code == 404
 
         # Viewer: reads open, every change gives 403 `viewer_read_only`.
         assert (await viewer_browser.get(f"{COMPANIES_API}")).status_code == 200
         assert (await viewer_browser.get(f"{COMPANIES_API}/call-notes")).status_code == 200
         assert (await viewer_browser.get(f"{COMPANIES_API}/meetings")).status_code == 200
+        assert (await viewer_browser.get("/api/v1/hubspot/syncs")).status_code == 200
         for method, path, body in (
+            ("POST", "/api/v1/hubspot/sync", None),
+            ("POST", "/api/v1/hubspot/syncs/1/cancel", None),
             ("POST", f"{COMPANIES_API}/call-notes", {"company_key": "101", "text": "Hi"}),
             ("POST", f"{COMPANIES_API}/preps", {"company_key": "101", "cold": True}),
             ("POST", f"{COMPANIES_API}/meetings/sync", None),

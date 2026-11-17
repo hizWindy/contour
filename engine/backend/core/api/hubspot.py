@@ -9,9 +9,10 @@ import logging
 import uuid
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, Query, Request, UploadFile
 from pydantic import BaseModel, Field
 
+from core.api.access import need
 from core.api.deps import EmbedderDep, SessionDep
 from core.api.errors import Problem
 from core.api.signin import PlatformAdminDep
@@ -104,6 +105,7 @@ async def get_hubspot_status(
     "/sync",
     status_code=202,
     response_model=SyncOut,
+    dependencies=[Depends(need("companies.companies", write=True))],
     summary="Start a HubSpot sync in the background",
     description=(
         "Copies HubSpot's companies, offices, deals and owners into our copy. Reading is free. "
@@ -113,7 +115,6 @@ async def get_hubspot_status(
 )
 async def start_hubspot_sync(
     request: Request,
-    admin: PlatformAdminDep,
     mode: Annotated[Literal["auto", "full", "changes"], Query(description="What to read")] = "auto",
 ) -> SyncOut:
     try:
@@ -133,11 +134,11 @@ async def start_hubspot_sync(
 @router.get(
     "/syncs",
     response_model=list[SyncOut],
+    dependencies=[Depends(need("companies.companies"))],
     summary="The newest HubSpot syncs",
 )
 async def list_hubspot_syncs(
     session: SessionDep,
-    admin: PlatformAdminDep,
     limit: Annotated[int, Query(ge=1, le=50)] = 10,
 ) -> list[SyncOut]:
     return await recent_syncs(session, limit=limit)
@@ -147,6 +148,7 @@ async def list_hubspot_syncs(
     "/syncs/{sync_id}/cancel",
     status_code=202,
     response_model=SyncOut,
+    dependencies=[Depends(need("companies.companies", write=True))],
     summary="Stop a running HubSpot sync",
     description=(
         "Saves the Stop on the sync, then stops it, within about 5 seconds when this backend "
@@ -156,7 +158,7 @@ async def list_hubspot_syncs(
         "while the other backend (during a deploy) stops it. Follow it with GET /hubspot/syncs."
     ),
 )
-async def cancel_hubspot_sync(request: Request, sync_id: int, admin: PlatformAdminDep) -> SyncOut:
+async def cancel_hubspot_sync(request: Request, sync_id: int) -> SyncOut:
     try:
         return await sync_runner(request.app).cancel(sync_id)
     except SyncNotFound as error:
