@@ -372,6 +372,13 @@ class OwnerTarget:
 type RepLookup = Callable[[AsyncSession, str], Awaitable[tuple[str, str] | None]]
 
 
+def _emailable(address: str, domains: Sequence[str]) -> bool:
+    """Whether a teammate's own address may get the pre-read email. An account can sign up with
+    any address (a Gmail one, say), and the email goes to Contour addresses only (`only_internal`).
+    Someone outside still gets their HubSpot task."""
+    return bool(only_internal([address], domains).allowed)
+
+
 def _rep_lookup(app: FastAPI | None, source: MeetingSource | None = None) -> RepLookup:
     if source is not None:
         return source.rep_of_owner
@@ -521,7 +528,9 @@ async def preview(
             prior = by_addr.get(target.address)
         already = prior.at if prior is not None else None
         task_needed = prior is None
-        email_needed = bool(prior is None and email_them and target.address)
+        email_needed = bool(
+            prior is None and email_them and target.address and _emailable(target.address, domains)
+        )
         idx = len(people)
         people.append(
             FormPerson(
@@ -773,7 +782,13 @@ async def _send_once(
     emailed_set: set[str] = set()
     for t in owner_targets:
         prior = _prior_for_owner(t)
-        if email_them and t.address and prior is None and t.address not in emailed_set:
+        if (
+            email_them
+            and t.address
+            and _emailable(t.address, settings.internal_email_domains)
+            and prior is None
+            and t.address not in emailed_set
+        ):
             pending_emails.append(t.address)
             emailed_set.add(t.address)
     for addr in clean_emails:
@@ -984,7 +999,32 @@ async def retry_tasks(
     writer: ActivityWriter,
     now: datetime,
 ) -> MeetingForm:
-    """Retries failed HubSpot tasks on a sent pre-read without sending emails (PLAN-V19 T1-8)."""
+    """Retries failed HubSpot tasks on a sent pre-read without sending emails (PLAN-V19 T1-8).
+
+    It takes the same claim as a send, so a second press, or a send to more people at that
+    moment, answers 409 `form_sending` instead of making the tasks twice."""
+    if form.id in _SENDING:  # no await between the check and the claim
+        raise being_sent()
+    _SENDING.add(form.id)
+    try:
+        return await _retry_once(session, form, app=app, settings=settings, writer=writer, now=now)
+    finally:
+        _SENDING.discard(form.id)
+
+
+async def _retry_once(
+    session: AsyncSession,
+    form: MeetingForm,
+    *,
+    app: FastAPI,
+    settings: Settings,
+    writer: ActivityWriter,
+    now: datetime,
+) -> MeetingForm:
+    """One retry. The send's write is applied again when it holds every failed task: the writer
+    redoes only the steps that aren't done, and looks in HubSpot first for a task it may have
+    made ("uncertain"), so a task is never made twice (core/hubspot/activities.py, "Never
+    twice")."""
     if form.status != "sent":
         raise not_ready()
     recipients = [
@@ -1009,7 +1049,7 @@ async def retry_tasks(
     )
     can_reapply_existing = False
     existing_step_owners: dict[str, str] = {}
-    if existing_row is not None and existing_row.status in ("partial", "failed"):
+    if existing_row is not None and existing_row.status in ("partial", "failed", "uncertain"):
         plan_req = (existing_row.plan or {}).get("request") or {}
         plan_tasks = plan_req.get("tasks") or []
         step_statuses = {

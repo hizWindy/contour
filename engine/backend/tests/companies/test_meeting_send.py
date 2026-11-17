@@ -82,6 +82,7 @@ class CopyWriter:
     breaks: bool = False
     steps: list[tuple[str, str]] = field(default_factory=list)  # (name, status), if set
     fail_owners: set[str] = field(default_factory=set)
+    uncertain_owners: set[str] = field(default_factory=set)  # HubSpot didn't answer their task
     requests: list[ActivityRequest] = field(default_factory=list)
     applies: list[uuid.UUID] = field(default_factory=list)
     _plans: dict[uuid.UUID, list[str]] = field(default_factory=dict)
@@ -127,10 +128,17 @@ class CopyWriter:
         if self.steps:
             steps_out = [step(name, status) for name, status in self.steps]
             row.status = self.outcome
-        elif self.fail_owners:
+        elif self.fail_owners or self.uncertain_owners:
             owners = self._plans.get(write_id, [])
             steps_out = [
-                step(f"task:{idx}", "failed" if oid in self.fail_owners else "done")
+                step(
+                    f"task:{idx}",
+                    "failed"
+                    if oid in self.fail_owners
+                    else "uncertain"
+                    if oid in self.uncertain_owners
+                    else "done",
+                )
                 for idx, oid in enumerate(owners, start=1)
             ]
             steps_out.append(step("note", "done"))
@@ -740,6 +748,37 @@ async def test_send_with_tasks_and_email_emails_only_accounts(
     ]
 
 
+async def test_a_teammate_with_an_outside_address_gets_the_task_and_no_email(
+    world: World, sending: Sending
+) -> None:
+    """An account can use any address. Picked with "Also email them", someone whose address isn't
+    Contour's gets the HubSpot task, and the email goes to Contour addresses only (T1-8)."""
+    form = await a_saved_draft(world)
+    await _seed_team(world)
+    outside = "lee@elsewhere.example"
+
+    async def reps(session: AsyncSession, owner_id: str) -> tuple[str, str] | None:
+        return {"o1": ("Lee Sample", outside), "o2": ("Sam Sample", SAM)}.get(owner_id)
+
+    world.app.state.meeting_source = dataclasses.replace(Meetings().source(), rep_of_owner=reps)
+    async with signed_in_as(world, "mia", ["companies"]) as client:
+        shown = await client.post(
+            f"{FORMS}/{form.id}/preview",
+            json={"emails": [], "owner_ids": ["o1", "o2"], "email_them": True},
+        )
+        response = await send(client, form, owner_ids=["o1", "o2"], email_them=True)
+    assert shown.status_code == 200, shown.text
+    people = [(p["owner_id"], p["task"], p["email"], p["address"]) for p in shown.json()["people"]]
+    assert people == [("o1", True, False, None), ("o2", True, True, SAM)]
+    assert response.status_code == 200, response.text
+    assert [message[0].to for message in sending.emails.sent] == [[SAM]]
+    assert [(r["owner_id"], r["task"], r["email"]) for r in response.json()["sent_to"]] == [
+        ("o1", "sent", False),
+        ("o2", "sent", True),
+    ]
+    assert outside not in response.text
+
+
 async def test_task_only_refuses_when_hubspot_writing_is_off(
     world: World, settings: dict[str, Any], sending: Sending
 ) -> None:
@@ -788,6 +827,51 @@ async def test_partial_task_failure_and_retry_tasks_without_email(
         ]
         assert len(sending.emails.sent) == 1  # zero emails on retry
         assert len(sending.copies.requests) == 1  # re-applied the same HubSpotWrite!
+
+
+async def test_a_task_hubspot_may_have_is_looked_for_again_not_made_twice(
+    world: World, sending: Sending
+) -> None:
+    """HubSpot didn't answer one task, so it may be there ("uncertain"). Try again applies the
+    same write, whose writer looks for the task first. It never makes a new task for that person."""
+    form = await a_saved_draft(world)
+    await _seed_team(world)
+    sending.copies.uncertain_owners = {"o3"}
+    async with signed_in_as(world, "mia", ["companies"]) as client:
+        sent = await send(client, form, owner_ids=["o1", "o3"])
+        assert sent.status_code == 200, sent.text
+        assert [(r["owner_id"], r["task"]) for r in sent.json()["sent_to"]] == [
+            ("o1", "sent"),
+            ("o3", "failed"),
+        ]
+        sending.copies.uncertain_owners = set()
+        fixed = await client.post(f"{FORMS}/{form.id}/tasks/retry")
+    assert fixed.status_code == 200, fixed.text
+    assert [(r["owner_id"], r["task"]) for r in fixed.json()["sent_to"]] == [
+        ("o1", "sent"),
+        ("o3", "sent"),
+    ]
+    assert len(sending.copies.requests) == 1  # no second write, so no second task
+    assert len(sending.copies.applies) == 2 and len(set(sending.copies.applies)) == 1
+
+
+async def test_try_again_while_the_pre_read_is_being_sent_answers_409(
+    world: World, sending: Sending
+) -> None:
+    """Try again takes the same claim as a send, so two at once can't make a task twice."""
+    form = await a_saved_draft(world)
+    await _seed_team(world)
+    sending.copies.fail_owners = {"o3"}
+    async with signed_in_as(world, "mia", ["companies"]) as client:
+        sent = await send(client, form, owner_ids=["o1", "o3"])
+        assert sent.status_code == 200, sent.text
+        meeting_send._SENDING.add(form.id)
+        try:
+            busy = await client.post(f"{FORMS}/{form.id}/tasks/retry")
+        finally:
+            meeting_send._SENDING.discard(form.id)
+    assert (busy.status_code, busy.json()["code"]) == (409, "form_sending")
+    assert len(sending.copies.requests) == 1
 
 
 async def test_send_to_more_only_reaches_new_people_and_updates_list_row(
