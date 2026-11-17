@@ -1891,6 +1891,18 @@
             "title": "Name",
             "type": "string"
           },
+          "origin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "As in company_started",
+            "title": "Origin"
+          },
           "result": {
             "description": "The lead's result, like pass or director_review",
             "title": "Result",
@@ -3005,6 +3017,18 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where the company came from: web (discovery), hubspot (the watchlist or a top up), typed or test. Empty in a run from before PLAN-V21.",
+            "title": "Origin"
           }
         },
         "required": [
@@ -6954,6 +6978,14 @@
             "title": "Status",
             "type": "array"
           },
+          "tier": {
+            "description": "A, B, C, discard and none (no tier yet), in that order (PLAN-V21 T2-1)",
+            "items": {
+              "$ref": "#/components/schemas/FacetValue"
+            },
+            "title": "Tier",
+            "type": "array"
+          },
           "trigger": {
             "items": {
               "$ref": "#/components/schemas/TriggerFacet"
@@ -7011,7 +7043,7 @@
       },
       "LeadFinderRunParams": {
         "additionalProperties": false,
-        "description": "Every part with its default. The Start page shows these as the starting values.\n\nA real run uses the model of its mode (above), which refuses the parts it doesn't use. So\nsend only the parts of your mode: `cities`, `area`, `triggers`, `since_days`, `sources` and\n`goal_leads` for discovery, `watchlist` for watchlist, `companies` and `recheck` for company,\nand `caps` for every mode (testset has nothing else).",
+        "description": "Every part with its default. The Start page shows these as the starting values.\n\nA real run uses the model of its mode (above), which refuses the parts it doesn't use. So\nsend only the parts of your mode: `cities`, `area`, `triggers`, `since_days`, `sources`,\n`target_companies`, `top_up` and `goal_leads` for discovery, `watchlist` for watchlist,\n`companies` and `recheck` for company, and `caps` for every mode (testset has nothing else).",
         "properties": {
           "area": {
             "additionalProperties": {
@@ -7083,12 +7115,14 @@
             "type": "boolean"
           },
           "since_days": {
-            "default": 30,
-            "description": "Used by mode discovery only. Only events from the last 7, 14 or 30 days. The Start page offers 7 and 30; 14 is for a schedule that runs every 2 weeks.",
+            "default": 90,
+            "description": "Used by mode discovery only. Only events from the last 7, 14, 30, 90 or 180 days. The Start page offers 7, 30, 90 and 180 (6 months), with 90 first; 14 is for a schedule that runs every 2 weeks. Automatic runs look back 30.",
             "enum": [
               7,
               14,
-              30
+              30,
+              90,
+              180
             ],
             "title": "Since Days",
             "type": "integer"
@@ -7121,6 +7155,29 @@
             ],
             "title": "Sources"
           },
+          "target_companies": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 5.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Used by mode discovery only (PLAN-V21 T1-4). How many companies the run tries to research, from 5 to the run's company limit. A run with fewer searches again in a new way (a sweep), while discovery's money lasts. It is not a goal of good leads and never ends a run early. Left out: `target_companies.default` in the run options.",
+            "examples": [
+              50
+            ],
+            "title": "Target Companies"
+          },
+          "top_up": {
+            "default": true,
+            "description": "Used by mode discovery only (PLAN-V21 T1-6). When the sweeps come up short of the target, add companies from the HubSpot watchlist in the run's places, most likely first. It needs the OK for HubSpot names to go to Claude (`top_up.allowed` in the run options); without it nothing is added.",
+            "title": "Top Up",
+            "type": "boolean"
+          },
           "triggers": {
             "description": "Used by mode discovery only. Trigger ids to look for, each once. The default is the main triggers.",
             "items": {
@@ -7144,6 +7201,8 @@
           "since_days",
           "sources",
           "goal_leads",
+          "target_companies",
+          "top_up",
           "watchlist",
           "companies",
           "recheck"
@@ -11730,13 +11789,17 @@
             },
             "title": "Source Groups",
             "type": "object"
+          },
+          "sweeps": {
+            "$ref": "#/components/schemas/Sweeps"
           }
         },
         "required": [
           "areas",
           "discovery",
           "company",
-          "source_groups"
+          "source_groups",
+          "sweeps"
         ],
         "title": "Queries",
         "type": "object"
@@ -12984,6 +13047,36 @@
             "title": "Slices Failed",
             "type": "integer"
           },
+          "sweeps": {
+            "default": 0,
+            "description": "The most search sweeps the run may make: 1 to 4. 0 before it plans.",
+            "title": "Sweeps",
+            "type": "integer"
+          },
+          "sweeps_done": {
+            "default": 0,
+            "description": "Search sweeps finished so far",
+            "title": "Sweeps Done",
+            "type": "integer"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many companies the run tries to research. Empty: no target (an automatic run, or a mode that already knows its companies). It never stops a run.",
+            "title": "Target"
+          },
+          "topped_up": {
+            "default": 0,
+            "description": "Companies added from the HubSpot watchlist",
+            "title": "Topped Up",
+            "type": "integer"
+          },
           "unique": {
             "default": 0,
             "description": "Companies left after merging duplicates",
@@ -13005,7 +13098,11 @@
           "resumes",
           "goal",
           "good",
-          "by_source"
+          "by_source",
+          "target",
+          "sweeps",
+          "sweeps_done",
+          "topped_up"
         ],
         "title": "RunCounts",
         "type": "object"
@@ -13127,6 +13224,54 @@
             "title": "Slices",
             "type": "integer"
           },
+          "target_companies": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The target the estimate is for. Empty: the run has no target.",
+            "title": "Target Companies"
+          },
+          "target_cost_usd_high": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A typical run that needs every sweep to reach the target",
+            "title": "Target Cost Usd High"
+          },
+          "target_cost_usd_low": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A typical run that reaches the target: one search sweep, and the target's companies at what past companies cost",
+            "title": "Target Cost Usd Low"
+          },
+          "target_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "One plain sentence when the target doesn't fit the money limits. Empty when it fits.",
+            "title": "Target Note"
+          },
           "valid": {
             "title": "Valid",
             "type": "boolean"
@@ -13151,7 +13296,11 @@
           "cap_usd",
           "daily_left_usd",
           "basis",
-          "over_cap"
+          "over_cap",
+          "target_companies",
+          "target_cost_usd_low",
+          "target_cost_usd_high",
+          "target_note"
         ],
         "title": "RunEstimate",
         "type": "object"
@@ -13173,7 +13322,10 @@
             "run_started": "#/components/schemas/RunStartedEvent",
             "slice_done": "#/components/schemas/SliceDoneEvent",
             "slice_failed": "#/components/schemas/SliceFailedEvent",
-            "slice_started": "#/components/schemas/SliceStartedEvent"
+            "slice_started": "#/components/schemas/SliceStartedEvent",
+            "sweep_done": "#/components/schemas/SweepDoneEvent",
+            "sweep_started": "#/components/schemas/SweepStartedEvent",
+            "topped_up": "#/components/schemas/ToppedUpEvent"
           },
           "propertyName": "type"
         },
@@ -13198,6 +13350,15 @@
           },
           {
             "$ref": "#/components/schemas/MergedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/SweepStartedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/SweepDoneEvent"
+          },
+          {
+            "$ref": "#/components/schemas/ToppedUpEvent"
           },
           {
             "$ref": "#/components/schemas/CompanySkippedEvent"
@@ -13418,6 +13579,14 @@
             "title": "Sources",
             "type": "object"
           },
+          "target_companies": {
+            "$ref": "#/components/schemas/TargetOption",
+            "description": "How many companies a discovery run tries to research (PLAN-V21 T1-4)"
+          },
+          "top_up": {
+            "$ref": "#/components/schemas/TopUpOption",
+            "description": "The top up from the HubSpot watchlist for a short run (PLAN-V21 T1-6)"
+          },
           "triggers": {
             "items": {
               "$ref": "#/components/schemas/TriggerOption"
@@ -13441,6 +13610,8 @@
           "modes",
           "companies_limit",
           "caps",
+          "target_companies",
+          "top_up",
           "sources",
           "defaults"
         ],
@@ -14544,6 +14715,13 @@
             "title": "Undated",
             "type": "integer"
           },
+          "unknown_share": {
+            "default": 0.5,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Unknown Share",
+            "type": "number"
+          },
           "unseen": {
             "items": {
               "type": "string"
@@ -14598,7 +14776,7 @@
             "type": "string"
           },
           "known": {
-            "description": "false means 'not known yet': it adds nothing to 'checked'",
+            "description": "false means 'not known yet': it adds nothing to 'checked', and it earns `score.unknown_share` of its points, half rounded down (PLAN-V21 T2-2)",
             "title": "Known",
             "type": "boolean"
           },
@@ -15013,6 +15191,38 @@
           "items"
         ],
         "title": "SearchPage",
+        "type": "object"
+      },
+      "SectorGroup": {
+        "additionalProperties": false,
+        "description": "One group of Levi's priority sectors, for sweep 3 (PLAN-V21 T1-3). `words` is what\n`{sector}` becomes in a search, like \"energy, renewables or defence\".",
+        "properties": {
+          "label": {
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "sectors": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Sectors",
+            "type": "array"
+          },
+          "words": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Words",
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "sectors",
+          "words"
+        ],
+        "title": "SectorGroup",
         "type": "object"
       },
       "SendBody": {
@@ -15615,6 +15825,12 @@
             ],
             "title": "Director Band M2",
             "type": "array"
+          },
+          "estimated_floor": {
+            "default": 30,
+            "exclusiveMinimum": 0.0,
+            "title": "Estimated Floor",
+            "type": "integer"
           },
           "grow_into_range_months": {
             "exclusiveMinimum": 0.0,
@@ -16412,6 +16628,211 @@
         "title": "StyleUsed",
         "type": "object"
       },
+      "SweepDoneData": {
+        "description": "A sweep has ended, and the run has merged and chosen again (PLAN-V21 T1-4).",
+        "properties": {
+          "companies": {
+            "description": "Companies the run has chosen so far, after merging",
+            "title": "Companies",
+            "type": "integer"
+          },
+          "found": {
+            "description": "Companies this sweep's searches found, before merging",
+            "title": "Found",
+            "type": "integer"
+          },
+          "sweep": {
+            "minimum": 1.0,
+            "title": "Sweep",
+            "type": "integer"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many the run tries to research",
+            "title": "Target"
+          }
+        },
+        "required": [
+          "sweep",
+          "found",
+          "companies",
+          "target"
+        ],
+        "title": "SweepDoneData",
+        "type": "object"
+      },
+      "SweepDoneEvent": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/SweepDoneData"
+          },
+          "seq": {
+            "description": "1, 2, 3 ... in the order the events happened",
+            "minimum": 1.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "type": {
+            "const": "sweep_done",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "seq",
+          "created_at",
+          "type",
+          "data"
+        ],
+        "title": "SweepDoneEvent",
+        "type": "object"
+      },
+      "SweepStartedData": {
+        "description": "A discovery run starts one search sweep: one search for each sign (PLAN-V21 T1-4).",
+        "properties": {
+          "label": {
+            "description": "What this sweep searches, in plain words",
+            "examples": [
+              "By area"
+            ],
+            "title": "Label",
+            "type": "string"
+          },
+          "of": {
+            "description": "The most sweeps the run may make",
+            "minimum": 1.0,
+            "title": "Of",
+            "type": "integer"
+          },
+          "sweep": {
+            "description": "1 is the signs' own searches, 2 to 4 new ways",
+            "minimum": 1.0,
+            "title": "Sweep",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sweep",
+          "of",
+          "label"
+        ],
+        "title": "SweepStartedData",
+        "type": "object"
+      },
+      "SweepStartedEvent": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/SweepStartedData"
+          },
+          "seq": {
+            "description": "1, 2, 3 ... in the order the events happened",
+            "minimum": 1.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "type": {
+            "const": "sweep_started",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "seq",
+          "created_at",
+          "type",
+          "data"
+        ],
+        "title": "SweepStartedEvent",
+        "type": "object"
+      },
+      "Sweeps": {
+        "additionalProperties": false,
+        "description": "The wording of a discovery run's sweeps 2 to 4 (PLAN-V21 T1-3). Sweep 1 is each sign's own\nsearches (`discovery`). A sweep makes one request for each sign, and nothing one sweep finds\ngoes into another's request: a page can't steer another search.\n\n- `labels`: each sweep in plain words, for the run feed.\n- `sources` (sweep 2): searches for the signs no source group covers. A sign in a group uses\n  that group's `discovery` searches, plus its own line here if it has one.\n- `terms`: each sign in a few words, for `{terms}` in sweeps 3 and 4.\n- `sector_groups` and `sectors` (sweep 3): each sign by sector group. Each template names the\n  `{sector}`, and the request has one search for each group.\n- `areas` (sweep 4): each sign by area, the CBD first, then the inner suburbs (`{area}`). For\n  all of Australia, `{area}` is each priority city by name.\n\nThe backend won't start when a sign a run can search has no sweep 2 wording or no `terms`, or\nwhen the sector groups don't hold each of Levi's priority sectors once\n(`LeadFinderRules.check_together`).",
+        "properties": {
+          "areas": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Areas",
+            "type": "array"
+          },
+          "labels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "enum": [
+                "signs",
+                "sources",
+                "sectors",
+                "areas"
+              ]
+            },
+            "title": "Labels",
+            "type": "object"
+          },
+          "sector_groups": {
+            "items": {
+              "$ref": "#/components/schemas/SectorGroup"
+            },
+            "minItems": 1,
+            "title": "Sector Groups",
+            "type": "array"
+          },
+          "sectors": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Sectors",
+            "type": "array"
+          },
+          "sources": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Sources",
+            "type": "object"
+          },
+          "terms": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Terms",
+            "type": "object"
+          }
+        },
+        "required": [
+          "labels",
+          "terms",
+          "sector_groups",
+          "sectors",
+          "areas"
+        ],
+        "title": "Sweeps",
+        "type": "object"
+      },
       "SyncOut": {
         "description": "One sync, for the website and the command.",
         "properties": {
@@ -16705,6 +17126,48 @@
         "title": "SystemCheckOut",
         "type": "object"
       },
+      "TargetOption": {
+        "description": "How many companies a discovery run tries to research (PLAN-V21, the contract part 1).",
+        "properties": {
+          "default": {
+            "description": "The number Start picks at first, at most `max`",
+            "title": "Default",
+            "type": "integer"
+          },
+          "max": {
+            "description": "The run's company limit: the target can't be above it",
+            "title": "Max",
+            "type": "integer"
+          },
+          "min": {
+            "title": "Min",
+            "type": "integer"
+          },
+          "presets": {
+            "description": "The numbers Start offers as buttons, at most `max`",
+            "examples": [
+              [
+                25,
+                50,
+                100
+              ]
+            ],
+            "items": {
+              "type": "integer"
+            },
+            "title": "Presets",
+            "type": "array"
+          }
+        },
+        "required": [
+          "default",
+          "min",
+          "max",
+          "presets"
+        ],
+        "title": "TargetOption",
+        "type": "object"
+      },
       "TbcNote": {
         "additionalProperties": false,
         "properties": {
@@ -16815,6 +17278,18 @@
             "description": "null when nothing is expected",
             "title": "Expected"
           },
+          "in_range": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whether the tier is inside the range. null with no range or no tier.",
+            "title": "In Range"
+          },
           "lead_id": {
             "anyOf": [
               {
@@ -16883,6 +17358,45 @@
               }
             ],
             "title": "Score"
+          },
+          "tier": {
+            "anyOf": [
+              {
+                "enum": [
+                  "A",
+                  "B",
+                  "C",
+                  "discard"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null when the company failed",
+            "title": "Tier"
+          },
+          "tier_range": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "A",
+                    "B",
+                    "C",
+                    "discard"
+                  ],
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The lowest and the highest tier it may land in, like [C, A] for C or better. null when it has none.",
+            "title": "Tier Range"
           },
           "unknown_facts": {
             "items": {
@@ -16969,6 +17483,12 @@
             "title": "Expected",
             "type": "integer"
           },
+          "in_range": {
+            "default": 0,
+            "description": "Of those, how many landed inside it",
+            "title": "In Range",
+            "type": "integer"
+          },
           "matched": {
             "description": "Of those, how many came out as expected",
             "title": "Matched",
@@ -16977,6 +17497,12 @@
           "prompt_versions": {
             "title": "Prompt Versions",
             "type": "string"
+          },
+          "ranged": {
+            "default": 0,
+            "description": "Companies with a tier range",
+            "title": "Ranged",
+            "type": "integer"
           },
           "rules_version": {
             "title": "Rules Version",
@@ -17284,6 +17810,91 @@
         "title": "ToolOut",
         "type": "object"
       },
+      "TopUpOption": {
+        "description": "Whether a short discovery run is topped up from the HubSpot watchlist (PLAN-V21 T1-6).",
+        "properties": {
+          "allowed": {
+            "description": "False while HubSpot names may not go to Claude: then nothing is added",
+            "title": "Allowed",
+            "type": "boolean"
+          },
+          "default": {
+            "title": "Default",
+            "type": "boolean"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it isn't allowed, in one plain sentence for Start. Empty when it is.",
+            "title": "Message"
+          }
+        },
+        "required": [
+          "default",
+          "allowed"
+        ],
+        "title": "TopUpOption",
+        "type": "object"
+      },
+      "ToppedUpData": {
+        "description": "Companies added from the HubSpot watchlist after the sweeps came up short (T1-6).",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "names": {
+            "description": "The companies added, in the watchlist's order",
+            "items": {
+              "type": "string"
+            },
+            "title": "Names",
+            "type": "array"
+          }
+        },
+        "required": [
+          "count"
+        ],
+        "title": "ToppedUpData",
+        "type": "object"
+      },
+      "ToppedUpEvent": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ToppedUpData"
+          },
+          "seq": {
+            "description": "1, 2, 3 ... in the order the events happened",
+            "minimum": 1.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "type": {
+            "const": "topped_up",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "seq",
+          "created_at",
+          "type",
+          "data"
+        ],
+        "title": "ToppedUpEvent",
+        "type": "object"
+      },
       "TriggerFacet": {
         "properties": {
           "count": {
@@ -17391,6 +18002,12 @@
       },
       "TriggerScore": {
         "properties": {
+          "from_search": {
+            "default": false,
+            "description": "True for a sign discovery found that the research didn't find again: from the search, not checked by the research (PLAN-V21 T1-8). Its link was among the pages discovery read, and it passed the date check.",
+            "title": "From Search",
+            "type": "boolean"
+          },
           "group": {
             "enum": [
               "main",
@@ -28745,7 +29362,7 @@
             }
           },
           {
-            "description": "A, B, C or discard (PLAN-V16). Left out: every lead. Repeat the key to match several values",
+            "description": "A, B, C, discard or none: a lead with no tier yet (PLAN-V16, PLAN-V21 T2-1). Left out: A, B, C and none, so every lead but a Discard shows (and every lead with `excluded=true`). Repeat the key to match several values",
             "in": "query",
             "name": "tier",
             "required": false,
@@ -28757,7 +29374,8 @@
                       "A",
                       "B",
                       "C",
-                      "discard"
+                      "discard",
+                      "none"
                     ],
                     "type": "string"
                   },
@@ -28767,7 +29385,7 @@
                   "type": "null"
                 }
               ],
-              "description": "A, B, C or discard (PLAN-V16). Left out: every lead. Repeat the key to match several values",
+              "description": "A, B, C, discard or none: a lead with no tier yet (PLAN-V16, PLAN-V21 T2-1). Left out: A, B, C and none, so every lead but a Discard shows (and every lead with `excluded=true`). Repeat the key to match several values",
               "title": "Tier"
             }
           },
@@ -29429,7 +30047,7 @@
             }
           },
           {
-            "description": "A, B, C or discard (PLAN-V16). Left out: every lead. Repeat the key to match several values",
+            "description": "A, B, C, discard or none: a lead with no tier yet (PLAN-V16, PLAN-V21 T2-1). Left out: A, B, C and none, so every lead but a Discard shows (and every lead with `excluded=true`). Repeat the key to match several values",
             "in": "query",
             "name": "tier",
             "required": false,
@@ -29441,7 +30059,8 @@
                       "A",
                       "B",
                       "C",
-                      "discard"
+                      "discard",
+                      "none"
                     ],
                     "type": "string"
                   },
@@ -29451,7 +30070,7 @@
                   "type": "null"
                 }
               ],
-              "description": "A, B, C or discard (PLAN-V16). Left out: every lead. Repeat the key to match several values",
+              "description": "A, B, C, discard or none: a lead with no tier yet (PLAN-V16, PLAN-V21 T2-1). Left out: A, B, C and none, so every lead but a Discard shows (and every lead with `excluded=true`). Repeat the key to match several values",
               "title": "Tier"
             }
           },
@@ -30081,7 +30700,7 @@
             }
           },
           {
-            "description": "A, B, C or discard (PLAN-V16). Left out: every lead. Repeat the key to match several values",
+            "description": "A, B, C, discard or none: a lead with no tier yet (PLAN-V16, PLAN-V21 T2-1). Left out: A, B, C and none, so every lead but a Discard shows (and every lead with `excluded=true`). Repeat the key to match several values",
             "in": "query",
             "name": "tier",
             "required": false,
@@ -30093,7 +30712,8 @@
                       "A",
                       "B",
                       "C",
-                      "discard"
+                      "discard",
+                      "none"
                     ],
                     "type": "string"
                   },
@@ -30103,7 +30723,7 @@
                   "type": "null"
                 }
               ],
-              "description": "A, B, C or discard (PLAN-V16). Left out: every lead. Repeat the key to match several values",
+              "description": "A, B, C, discard or none: a lead with no tier yet (PLAN-V16, PLAN-V21 T2-1). Left out: A, B, C and none, so every lead but a Discard shows (and every lead with `excluded=true`). Repeat the key to match several values",
               "title": "Tier"
             }
           },
@@ -30725,7 +31345,7 @@
             }
           },
           {
-            "description": "A, B, C or discard (PLAN-V16). Left out: every lead. Repeat the key to match several values",
+            "description": "A, B, C, discard or none: a lead with no tier yet (PLAN-V16, PLAN-V21 T2-1). Left out: A, B, C and none, so every lead but a Discard shows (and every lead with `excluded=true`). Repeat the key to match several values",
             "in": "query",
             "name": "tier",
             "required": false,
@@ -30737,7 +31357,8 @@
                       "A",
                       "B",
                       "C",
-                      "discard"
+                      "discard",
+                      "none"
                     ],
                     "type": "string"
                   },
@@ -30747,7 +31368,7 @@
                   "type": "null"
                 }
               ],
-              "description": "A, B, C or discard (PLAN-V16). Left out: every lead. Repeat the key to match several values",
+              "description": "A, B, C, discard or none: a lead with no tier yet (PLAN-V16, PLAN-V21 T2-1). Left out: A, B, C and none, so every lead but a Discard shows (and every lead with `excluded=true`). Repeat the key to match several values",
               "title": "Tier"
             }
           },

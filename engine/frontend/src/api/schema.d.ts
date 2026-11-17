@@ -2906,6 +2906,11 @@ export interface components {
             /** Name */
             name: string;
             /**
+             * Origin
+             * @description As in company_started
+             */
+            origin?: string | null;
+            /**
              * Result
              * @description The lead's result, like pass or director_review
              */
@@ -3345,6 +3350,11 @@ export interface components {
         CompanyStartedData: {
             /** Name */
             name: string;
+            /**
+             * Origin
+             * @description Where the company came from: web (discovery), hubspot (the watchlist or a top up), typed or test. Empty in a run from before PLAN-V21.
+             */
+            origin?: string | null;
         };
         /** CompanyStartedEvent */
         CompanyStartedEvent: {
@@ -4966,6 +4976,11 @@ export interface components {
             score: components["schemas"]["IntRange"];
             /** Status */
             status: components["schemas"]["FacetValue"][];
+            /**
+             * Tier
+             * @description A, B, C, discard and none (no tier yet), in that order (PLAN-V21 T2-1)
+             */
+            tier?: components["schemas"]["FacetValue"][];
             /** Trigger */
             trigger: components["schemas"]["TriggerFacet"][];
         };
@@ -4983,9 +4998,9 @@ export interface components {
          * @description Every part with its default. The Start page shows these as the starting values.
          *
          *     A real run uses the model of its mode (above), which refuses the parts it doesn't use. So
-         *     send only the parts of your mode: `cities`, `area`, `triggers`, `since_days`, `sources` and
-         *     `goal_leads` for discovery, `watchlist` for watchlist, `companies` and `recheck` for company,
-         *     and `caps` for every mode (testset has nothing else).
+         *     send only the parts of your mode: `cities`, `area`, `triggers`, `since_days`, `sources`,
+         *     `target_companies`, `top_up` and `goal_leads` for discovery, `watchlist` for watchlist,
+         *     `companies` and `recheck` for company, and `caps` for every mode (testset has nothing else).
          */
         LeadFinderRunParams: {
             /**
@@ -5028,11 +5043,11 @@ export interface components {
             recheck: boolean;
             /**
              * Since Days
-             * @description Used by mode discovery only. Only events from the last 7, 14 or 30 days. The Start page offers 7 and 30; 14 is for a schedule that runs every 2 weeks.
-             * @default 30
+             * @description Used by mode discovery only. Only events from the last 7, 14, 30, 90 or 180 days. The Start page offers 7, 30, 90 and 180 (6 months), with 90 first; 14 is for a schedule that runs every 2 weeks. Automatic runs look back 30.
+             * @default 90
              * @enum {integer}
              */
-            since_days: 7 | 14 | 30;
+            since_days: 7 | 14 | 30 | 90 | 180;
             /**
              * Sources
              * @description Used by mode discovery only. Where discovery looks for companies: `web`, `property_daily` and `arealytics`, each once. Left out, every source that is ready (see `sources` in the run options). A tool that isn't ready is a 422 `source_not_ready`. Without `web`, the run makes no web searches for companies: they come from the tools' new items, free. The research of each company still uses every tool that is switched on (PLAN-V16 T1-8).
@@ -5042,6 +5057,18 @@ export interface components {
              *     ]
              */
             sources: ("web" | "property_daily" | "arealytics")[] | null;
+            /**
+             * Target Companies
+             * @description Used by mode discovery only (PLAN-V21 T1-4). How many companies the run tries to research, from 5 to the run's company limit. A run with fewer searches again in a new way (a sweep), while discovery's money lasts. It is not a goal of good leads and never ends a run early. Left out: `target_companies.default` in the run options.
+             * @example 50
+             */
+            target_companies: number | null;
+            /**
+             * Top Up
+             * @description Used by mode discovery only (PLAN-V21 T1-6). When the sweeps come up short of the target, add companies from the HubSpot watchlist in the run's places, most likely first. It needs the OK for HubSpot names to go to Claude (`top_up.allowed` in the run options); without it nothing is added.
+             * @default true
+             */
+            top_up: boolean;
             /**
              * Triggers
              * @description Used by mode discovery only. Trigger ids to look for, each once. The default is the main triggers.
@@ -6904,6 +6931,7 @@ export interface components {
             source_groups: {
                 [key: string]: components["schemas"]["SourceGroup"];
             };
+            sweeps: components["schemas"]["Sweeps"];
         };
         /** RebuildResult */
         RebuildResult: {
@@ -7512,6 +7540,29 @@ export interface components {
              */
             slices_failed: number;
             /**
+             * Sweeps
+             * @description The most search sweeps the run may make: 1 to 4. 0 before it plans.
+             * @default 0
+             */
+            sweeps: number;
+            /**
+             * Sweeps Done
+             * @description Search sweeps finished so far
+             * @default 0
+             */
+            sweeps_done: number;
+            /**
+             * Target
+             * @description How many companies the run tries to research. Empty: no target (an automatic run, or a mode that already knows its companies). It never stops a run.
+             */
+            target: number | null;
+            /**
+             * Topped Up
+             * @description Companies added from the HubSpot watchlist
+             * @default 0
+             */
+            topped_up: number;
+            /**
              * Unique
              * @description Companies left after merging duplicates
              * @default 0
@@ -7606,12 +7657,32 @@ export interface components {
              * @default 0
              */
             slices: number;
+            /**
+             * Target Companies
+             * @description The target the estimate is for. Empty: the run has no target.
+             */
+            target_companies: number | null;
+            /**
+             * Target Cost Usd High
+             * @description A typical run that needs every sweep to reach the target
+             */
+            target_cost_usd_high: string | null;
+            /**
+             * Target Cost Usd Low
+             * @description A typical run that reaches the target: one search sweep, and the target's companies at what past companies cost
+             */
+            target_cost_usd_low: string | null;
+            /**
+             * Target Note
+             * @description One plain sentence when the target doesn't fit the money limits. Empty when it fits.
+             */
+            target_note: string | null;
             /** Valid */
             valid: boolean;
             /** Warnings */
             warnings: string[];
         };
-        RunEvent: components["schemas"]["RunStartedEvent"] | components["schemas"]["RunResumedEvent"] | components["schemas"]["PlanReadyEvent"] | components["schemas"]["SliceStartedEvent"] | components["schemas"]["SliceDoneEvent"] | components["schemas"]["SliceFailedEvent"] | components["schemas"]["MergedEvent"] | components["schemas"]["CompanySkippedEvent"] | components["schemas"]["CompanyStartedEvent"] | components["schemas"]["CompanyDoneEvent"] | components["schemas"]["CompanyFailedEvent"] | components["schemas"]["ProgressEvent"] | components["schemas"]["RunProblemEvent"] | components["schemas"]["CapReachedEvent"] | components["schemas"]["RunFinishedEvent"];
+        RunEvent: components["schemas"]["RunStartedEvent"] | components["schemas"]["RunResumedEvent"] | components["schemas"]["PlanReadyEvent"] | components["schemas"]["SliceStartedEvent"] | components["schemas"]["SliceDoneEvent"] | components["schemas"]["SliceFailedEvent"] | components["schemas"]["MergedEvent"] | components["schemas"]["SweepStartedEvent"] | components["schemas"]["SweepDoneEvent"] | components["schemas"]["ToppedUpEvent"] | components["schemas"]["CompanySkippedEvent"] | components["schemas"]["CompanyStartedEvent"] | components["schemas"]["CompanyDoneEvent"] | components["schemas"]["CompanyFailedEvent"] | components["schemas"]["ProgressEvent"] | components["schemas"]["RunProblemEvent"] | components["schemas"]["CapReachedEvent"] | components["schemas"]["RunFinishedEvent"];
         /** RunFacet */
         RunFacet: {
             /** Count */
@@ -7703,6 +7774,10 @@ export interface components {
             sources: {
                 [key: string]: components["schemas"]["SourceOption"];
             };
+            /** @description How many companies a discovery run tries to research (PLAN-V21 T1-4) */
+            target_companies: components["schemas"]["TargetOption"];
+            /** @description The top up from the HubSpot watchlist for a short run (PLAN-V21 T1-6) */
+            top_up: components["schemas"]["TopUpOption"];
             /** Triggers */
             triggers: components["schemas"]["TriggerOption"][];
             /**
@@ -8219,6 +8294,11 @@ export interface components {
             };
             /** Undated */
             undated: number;
+            /**
+             * Unknown Share
+             * @default 0.5
+             */
+            unknown_share: number;
             /** Unseen */
             unseen: string[];
             /** Warm Path */
@@ -8237,7 +8317,7 @@ export interface components {
             id: string;
             /**
              * Known
-             * @description false means 'not known yet': it adds nothing to 'checked'
+             * @description false means 'not known yet': it adds nothing to 'checked', and it earns `score.unknown_share` of its points, half rounded down (PLAN-V21 T2-2)
              */
             known: boolean;
             /** Label */
@@ -8416,6 +8496,19 @@ export interface components {
             items: components["schemas"]["SearchOut"][];
             /** Total */
             total: number;
+        };
+        /**
+         * SectorGroup
+         * @description One group of Levi's priority sectors, for sweep 3 (PLAN-V21 T1-3). `words` is what
+         *     `{sector}` becomes in a search, like "energy, renewables or defence".
+         */
+        SectorGroup: {
+            /** Label */
+            label: string;
+            /** Sectors */
+            sectors: string[];
+            /** Words */
+            words: string;
         };
         /** SendBody */
         SendBody: {
@@ -8686,6 +8779,11 @@ export interface components {
                 number,
                 number
             ];
+            /**
+             * Estimated Floor
+             * @default 30
+             */
+            estimated_floor: number;
             /** Grow Into Range Months */
             grow_into_range_months: number;
             /** Growth Signs */
@@ -9044,6 +9142,128 @@ export interface components {
             team_notes: number;
         };
         /**
+         * SweepDoneData
+         * @description A sweep has ended, and the run has merged and chosen again (PLAN-V21 T1-4).
+         */
+        SweepDoneData: {
+            /**
+             * Companies
+             * @description Companies the run has chosen so far, after merging
+             */
+            companies: number;
+            /**
+             * Found
+             * @description Companies this sweep's searches found, before merging
+             */
+            found: number;
+            /** Sweep */
+            sweep: number;
+            /**
+             * Target
+             * @description How many the run tries to research
+             */
+            target: number | null;
+        };
+        /** SweepDoneEvent */
+        SweepDoneEvent: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            data: components["schemas"]["SweepDoneData"];
+            /**
+             * Seq
+             * @description 1, 2, 3 ... in the order the events happened
+             */
+            seq: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "sweep_done";
+        };
+        /**
+         * SweepStartedData
+         * @description A discovery run starts one search sweep: one search for each sign (PLAN-V21 T1-4).
+         */
+        SweepStartedData: {
+            /**
+             * Label
+             * @description What this sweep searches, in plain words
+             * @example By area
+             */
+            label: string;
+            /**
+             * Of
+             * @description The most sweeps the run may make
+             */
+            of: number;
+            /**
+             * Sweep
+             * @description 1 is the signs' own searches, 2 to 4 new ways
+             */
+            sweep: number;
+        };
+        /** SweepStartedEvent */
+        SweepStartedEvent: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            data: components["schemas"]["SweepStartedData"];
+            /**
+             * Seq
+             * @description 1, 2, 3 ... in the order the events happened
+             */
+            seq: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "sweep_started";
+        };
+        /**
+         * Sweeps
+         * @description The wording of a discovery run's sweeps 2 to 4 (PLAN-V21 T1-3). Sweep 1 is each sign's own
+         *     searches (`discovery`). A sweep makes one request for each sign, and nothing one sweep finds
+         *     goes into another's request: a page can't steer another search.
+         *
+         *     - `labels`: each sweep in plain words, for the run feed.
+         *     - `sources` (sweep 2): searches for the signs no source group covers. A sign in a group uses
+         *       that group's `discovery` searches, plus its own line here if it has one.
+         *     - `terms`: each sign in a few words, for `{terms}` in sweeps 3 and 4.
+         *     - `sector_groups` and `sectors` (sweep 3): each sign by sector group. Each template names the
+         *       `{sector}`, and the request has one search for each group.
+         *     - `areas` (sweep 4): each sign by area, the CBD first, then the inner suburbs (`{area}`). For
+         *       all of Australia, `{area}` is each priority city by name.
+         *
+         *     The backend won't start when a sign a run can search has no sweep 2 wording or no `terms`, or
+         *     when the sector groups don't hold each of Levi's priority sectors once
+         *     (`LeadFinderRules.check_together`).
+         */
+        Sweeps: {
+            /** Areas */
+            areas: string[];
+            /** Labels */
+            labels: {
+                [key: string]: string;
+            };
+            /** Sector Groups */
+            sector_groups: components["schemas"]["SectorGroup"][];
+            /** Sectors */
+            sectors: string[];
+            /** Sources */
+            sources?: {
+                [key: string]: string[];
+            };
+            /** Terms */
+            terms: {
+                [key: string]: string;
+            };
+        };
+        /**
          * SyncOut
          * @description One sync, for the website and the command.
          */
@@ -9183,6 +9403,34 @@ export interface components {
              */
             took_ms: number;
         };
+        /**
+         * TargetOption
+         * @description How many companies a discovery run tries to research (PLAN-V21, the contract part 1).
+         */
+        TargetOption: {
+            /**
+             * Default
+             * @description The number Start picks at first, at most `max`
+             */
+            default: number;
+            /**
+             * Max
+             * @description The run's company limit: the target can't be above it
+             */
+            max: number;
+            /** Min */
+            min: number;
+            /**
+             * Presets
+             * @description The numbers Start offers as buttons, at most `max`
+             * @example [
+             *       25,
+             *       50,
+             *       100
+             *     ]
+             */
+            presets: number[];
+        };
         /** TbcNote */
         TbcNote: {
             /** Key */
@@ -9238,6 +9486,11 @@ export interface components {
              * @description null when nothing is expected
              */
             expected: ("pass" | "director_review" | "watch" | "drop")[] | null;
+            /**
+             * In Range
+             * @description Whether the tier is inside the range. null with no range or no tier.
+             */
+            in_range?: boolean | null;
             /** Lead Id */
             lead_id: string | null;
             /** Name */
@@ -9259,6 +9512,16 @@ export interface components {
             result: ("pass" | "director_review" | "watch" | "drop") | null;
             /** Score */
             score: number | null;
+            /**
+             * Tier
+             * @description null when the company failed
+             */
+            tier?: ("A" | "B" | "C" | "discard") | null;
+            /**
+             * Tier Range
+             * @description The lowest and the highest tier it may land in, like [C, A] for C or better. null when it has none.
+             */
+            tier_range?: ("A" | "B" | "C" | "discard")[] | null;
             /** Unknown Facts */
             unknown_facts: string[];
         };
@@ -9295,12 +9558,24 @@ export interface components {
              */
             expected: number;
             /**
+             * In Range
+             * @description Of those, how many landed inside it
+             * @default 0
+             */
+            in_range: number;
+            /**
              * Matched
              * @description Of those, how many came out as expected
              */
             matched: number;
             /** Prompt Versions */
             prompt_versions: string;
+            /**
+             * Ranged
+             * @description Companies with a tier range
+             * @default 0
+             */
+            ranged: number;
             /** Rules Version */
             rules_version: string;
             /**
@@ -9437,6 +9712,56 @@ export interface components {
              */
             signed_in: boolean | null;
         };
+        /**
+         * TopUpOption
+         * @description Whether a short discovery run is topped up from the HubSpot watchlist (PLAN-V21 T1-6).
+         */
+        TopUpOption: {
+            /**
+             * Allowed
+             * @description False while HubSpot names may not go to Claude: then nothing is added
+             */
+            allowed: boolean;
+            /** Default */
+            default: boolean;
+            /**
+             * Message
+             * @description Why it isn't allowed, in one plain sentence for Start. Empty when it is.
+             */
+            message?: string | null;
+        };
+        /**
+         * ToppedUpData
+         * @description Companies added from the HubSpot watchlist after the sweeps came up short (T1-6).
+         */
+        ToppedUpData: {
+            /** Count */
+            count: number;
+            /**
+             * Names
+             * @description The companies added, in the watchlist's order
+             */
+            names?: string[];
+        };
+        /** ToppedUpEvent */
+        ToppedUpEvent: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            data: components["schemas"]["ToppedUpData"];
+            /**
+             * Seq
+             * @description 1, 2, 3 ... in the order the events happened
+             */
+            seq: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "topped_up";
+        };
         /** TriggerFacet */
         TriggerFacet: {
             /** Count */
@@ -9490,6 +9815,12 @@ export interface components {
         };
         /** TriggerScore */
         TriggerScore: {
+            /**
+             * From Search
+             * @description True for a sign discovery found that the research didn't find again: from the search, not checked by the research (PLAN-V21 T1-8). Its link was among the pages discovery read, and it passed the date check.
+             * @default false
+             */
+            from_search: boolean;
             /**
              * Group
              * @enum {string}
@@ -17698,8 +18029,8 @@ export interface operations {
                 latest?: boolean | null;
                 /** @description Only leads whose facts are missing, because Claude couldn't fill in the answer form. Re-check them. */
                 facts_missing?: boolean;
-                /** @description A, B, C or discard (PLAN-V16). Left out: every lead. Repeat the key to match several values */
-                tier?: ("A" | "B" | "C" | "discard")[] | null;
+                /** @description A, B, C, discard or none: a lead with no tier yet (PLAN-V16, PLAN-V21 T2-1). Left out: A, B, C and none, so every lead but a Discard shows (and every lead with `excluded=true`). Repeat the key to match several values */
+                tier?: ("A" | "B" | "C" | "discard" | "none")[] | null;
                 /** @description Repeat the key to match several values */
                 confidence?: ("high" | "medium" | "low")[] | null;
                 /** @description priority, secondary, capital or regional: the city's group. Repeat the key to match several values */
@@ -17866,8 +18197,8 @@ export interface operations {
                 latest?: boolean | null;
                 /** @description Only leads whose facts are missing, because Claude couldn't fill in the answer form. Re-check them. */
                 facts_missing?: boolean;
-                /** @description A, B, C or discard (PLAN-V16). Left out: every lead. Repeat the key to match several values */
-                tier?: ("A" | "B" | "C" | "discard")[] | null;
+                /** @description A, B, C, discard or none: a lead with no tier yet (PLAN-V16, PLAN-V21 T2-1). Left out: A, B, C and none, so every lead but a Discard shows (and every lead with `excluded=true`). Repeat the key to match several values */
+                tier?: ("A" | "B" | "C" | "discard" | "none")[] | null;
                 /** @description Repeat the key to match several values */
                 confidence?: ("high" | "medium" | "low")[] | null;
                 /** @description priority, secondary, capital or regional: the city's group. Repeat the key to match several values */
@@ -18033,8 +18364,8 @@ export interface operations {
                 latest?: boolean | null;
                 /** @description Only leads whose facts are missing, because Claude couldn't fill in the answer form. Re-check them. */
                 facts_missing?: boolean;
-                /** @description A, B, C or discard (PLAN-V16). Left out: every lead. Repeat the key to match several values */
-                tier?: ("A" | "B" | "C" | "discard")[] | null;
+                /** @description A, B, C, discard or none: a lead with no tier yet (PLAN-V16, PLAN-V21 T2-1). Left out: A, B, C and none, so every lead but a Discard shows (and every lead with `excluded=true`). Repeat the key to match several values */
+                tier?: ("A" | "B" | "C" | "discard" | "none")[] | null;
                 /** @description Repeat the key to match several values */
                 confidence?: ("high" | "medium" | "low")[] | null;
                 /** @description priority, secondary, capital or regional: the city's group. Repeat the key to match several values */
@@ -18198,8 +18529,8 @@ export interface operations {
                 latest?: boolean | null;
                 /** @description Only leads whose facts are missing, because Claude couldn't fill in the answer form. Re-check them. */
                 facts_missing?: boolean;
-                /** @description A, B, C or discard (PLAN-V16). Left out: every lead. Repeat the key to match several values */
-                tier?: ("A" | "B" | "C" | "discard")[] | null;
+                /** @description A, B, C, discard or none: a lead with no tier yet (PLAN-V16, PLAN-V21 T2-1). Left out: A, B, C and none, so every lead but a Discard shows (and every lead with `excluded=true`). Repeat the key to match several values */
+                tier?: ("A" | "B" | "C" | "discard" | "none")[] | null;
                 /** @description Repeat the key to match several values */
                 confidence?: ("high" | "medium" | "low")[] | null;
                 /** @description priority, secondary, capital or regional: the city's group. Repeat the key to match several values */
