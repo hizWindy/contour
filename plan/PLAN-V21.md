@@ -1,0 +1,288 @@
+# More leads, still good ones: plan, version 21
+
+This plan makes the Lead Finder find, research and show many more companies, without loosening its evidence rules. A person who starts a run says how many companies they want, and the run keeps searching in new ways until it has them. Property Daily's own items come first, and a run that comes up short is topped up from the HubSpot watchlist. The score stops punishing what the tool can't see, every lead shows on Results, and the Start page works on a phone. One session builds it, in three parts, one after another.
+
+**TBC** means to be confirmed.
+
+- **Built by:** Al-khair Pama, with Claude. **Signed off by:** Al-khair, for the code and every screen. Levi confirms the rule numbers marked **TBC with Levi**.
+- **Last updated:** 18 Nov 2026 (written; no step started).
+- **Progress:** S0: 0 of 1. Part 1: 0 of 9. Part 2: 0 of 6. Part 3: 0 of 6. M1 to M4: 0 of 4. W1 and W2: 0 of 2.
+- **Sources:**
+  - Al-khair's asks in chat (18 Nov), with 3 screenshots of the Start page;
+  - the audit in the same chat: the live site's runs, leads, settings, schedules and sources, read through Chrome (GET only);
+  - the code on `master` (`4af47fd`);
+  - [PLAN-V16.md](PLAN-V16.md) (Levi's notes, the score and the tiers) and [PLAN-V20.md](PLAN-V20.md) (its "Not done here, on purpose").
+- **Comes after:** [PLAN-V20.md](PLAN-V20.md), deployed 17 Nov. The live database is at `0025_v19_roles_access`.
+
+## Go signals
+
+Say the line in the session. The same line starts the work, and continues it later from the first step that isn't ticked. Saying `implement v21` counts as Al-khair's word for S0.
+
+| Say | What it does |
+|---|---|
+| `implement v21` | Builds Part 1 (the engine), then Part 2 (the score and the lists), then Part 3 (the website) |
+| `merge v21` | Checks everything, then moves `master` to `plan-v21` |
+| `deploy v21` | Pushes `master`, deploys to App Platform, and does the live steps in M3 |
+
+You'll also answer things along the way:
+- **Each screen waits for your look.** The session marks it "built, waiting for a look" and carries on.
+- **The choices in "Choices made for you"** stand unless you change them before that step starts.
+- **Paid checks (M2), live changes (M3) and the schedule switches (W1)** happen only on your own words in chat.
+
+## In short
+
+| You asked (18 Nov) | Steps |
+|---|---|
+| More companies and more leads, not narrow | T1-3 to T1-7 |
+| Keep the quality, but don't be strict | T1-8, T2-2, T2-3, T2-5, M2 |
+| Fix the score | T2-2, T2-3, W2 |
+| Bring back the number of companies | T1-4, T3-3 |
+| "What to do" on a phone | T3-1, T3-6 |
+| "How far back" | T1-2, T3-2 |
+| My leads went missing from Results | T2-1, T2-4, T3-5, M3 |
+
+## What is wrong today
+
+From the audit of 18 Nov, on the live site.
+
+| What | The numbers |
+|---|---|
+| Hidden leads | The database holds 31 leads. Results always asks for a tier. Its default (A and B) matches 0 leads, and "every tier" matches 10. The other 21 were researched on 6 and 11 Nov, before tiers existed, so no view shows them. They include 5 Pass and 4 Director review leads. |
+| Empty cards | The 9 leads researched on 16 and 17 Nov have `form_failed` (Claude refused the old form). Their refill (PLAN-V20 M3, about US$3) has not run. |
+| Few companies | Run `f7182b66` (18 Nov, Adelaide, 10 signs): 9 search requests, 17 finds, 13 companies after merging, 10 chosen. Sydney on 17 Nov: 8 requests, 2 finds. Nothing searches more when a run comes up short. |
+| Property Daily's items | The tool is on and signed in, and the research reads it (8 pages on 18 Nov). But discovery reads only our saved copy, and the two schedule jobs that fill it are switched off. The daily email job ran once (17 Nov). The lease endings job never ran. The copy holds 10 records, and run `f7182b66` took 0 companies from it. |
+| Cost of a search | The live Settings are saved at effort `max`, 8 searches a discovery request, 5 a research request and 10 page reads (the defaults are `medium`, 6, 3 and 3). A discovery request now costs US$1.00 and writes about 16,000 tokens. From 6 to 17 Nov it cost US$0.11 to 0.16 and wrote about 1,000. A company costs about US$1.75 to research at `max`, and US$0.34 to 0.42 at `medium`. |
+| Early drops | 12 of 31 leads are a Drop for "too small". Agon Environmental was dropped with no research, on one number: Signal Hire's 48 (its people on file, doubled, which is a guess). |
+| Lost signs | None of the 10 newest cards shows the sign discovery found it with. A failed form, or the early size stop, saves no sign. |
+| A strict score | A check the tool can't judge earns 0 points. A Pass needs 55, and the best possible score is 96. |
+| The Start page | "What to do" is a sliding row of 4 long labels. It scrolls sideways with no scrollbar, so "Companies by na" is cut, even on a laptop. "How far back" offers only 7 and 30 days, and its track stretches across the card. |
+
+## What this plan aims for
+
+Measured in M2, on one city.
+
+| | Today (run `f7182b66`) | After this plan |
+|---|---|---|
+| Companies found, after merging | 13 | 50 or more |
+| Companies researched | 10 | 40 or more |
+| Cost for each researched company | about US$2.65 (US$0.90 of search, about US$1.75 of research) | US$0.60 or less (**TBC**) |
+| Leads shown on Results | 10 of 31 | every lead, with Discard one click away |
+| Quality | not measured | the test set lands inside the ranges Al-khair confirms (T2-5), and Al-khair finds at least 7 of 10 sampled leads worth a call (**TBC**) |
+
+## Words used here
+
+- **Sweep:** one search request for each sign. Sweep 1 is today's search. Sweeps 2 to 4 search the same signs in new ways.
+- **Target:** how many companies a run tries to research. It is not a goal of good leads. It never ends a run early; it only makes the run search more.
+- **Top up:** when the sweeps come up short, the run adds companies from the HubSpot watchlist in its places.
+- **Tier:** A (pursue now), B (nurture), C (watch) or Discard, set by the score (PLAN-V16).
+- **Not known yet:** a check the tool can't judge for a lead, like a warm path in.
+- **Rejudge:** `uv run lead-finder rejudge` judges the saved leads again with the current rules. It is free. With `--save` it saves the new verdict.
+
+## Choices made for you
+
+These are recommendations. They stand unless Al-khair changes them before the step starts. The rule ones are **TBC with Levi**.
+
+**Volume:**
+1. **A target of companies, not a goal of good leads.** Start asks "How many companies", with 25, 50 and 100 to pick, and 50 picked (**TBC**). The run's company limit (70 on the live site) and its money limits still win. PLAN-V20's rule stays: nothing stops a run for want of good leads.
+2. **At most four sweeps, in this order, stopping once the target is met:** the signs' own searches (today's), then Levi's source groups for those signs, then the signs by sector group, then the signs by area (the CBD, then the inner suburbs; for All of Australia, the priority cities by name). Property Daily's new items come before sweep 1, and cost nothing.
+3. **A run that comes up short is topped up from the HubSpot watchlist** in its places, most likely first. It skips what a run skips today: a company researched in the last 30 days, sent, rejected or with an open deal. It is on by default (**TBC**), and each company is marked "From HubSpot". It needs `hubspot_names_to_claude_ok`, which is on live.
+4. **Discovery runs at `medium` effort with 6 searches a request** (US$0.11 to 0.16, measured). The research effort is picked in M2 from the test set: `medium`, unless `high` finds clearly better facts.
+5. **How far back: 7 days, 30 days, 90 days or 6 months, with 90 days picked** for a run a person starts (**TBC with Levi**). Levi's notes count a sign for 18 months, and the score already gives older news fewer points. Automatic runs keep 30 days.
+
+**Quality, without being strict:**
+6. **Not known yet counts half.** A check the tool can't judge earns half its points. A check that fails earns 0 (**TBC with Levi**). The confidence still says what wasn't checked, so a lead built on guesses reads as one.
+7. **No drop before research on a guess.** Only HubSpot's own count, for a sure match, can stop a company before research. After research, an estimated 30 to 49 staff is a Watch with "check the size", not a Drop (**TBC with Levi**). A known count under 50 stays a Drop unless the company is growing (Levi, 5 and 9 Nov).
+8. **Levi's tier cuts stay** (A 75, B 55, C 40) until the rejudge with half points is measured (T2-2). Then Al-khair and Levi decide whether B moves (W2).
+9. **Results shows Tier A, B and C by default, plus leads with no tier yet.** Discard is one click away. A good lead for Levi's round goal is still Tier A or B.
+10. **The results keep their names:** Pass, Director review, Watch and Drop.
+
+**What stays the same:**
+- Every sign still needs a link among the pages read, and passes the date check. No company comes from Claude's memory.
+- Never suggest: open deals, already sent, rejected (unless a newer sign), do not contact.
+- Levi's exclusions (with the override) and his dampeners.
+- A company researched in the last 30 days is skipped, so nothing is paid for twice.
+- HubSpot stays read only. No emails or phone numbers are stored or sent to Claude.
+- The money limits. No limit rises by itself.
+
+## What it costs
+
+- **To build:** time only.
+- **The paid checks (M2), on Al-khair's word:** the test set at `medium` and at `high` research effort (about US$5.51 each by the 11 Nov estimate, **TBC** at today's prices; `high` costs more), and one city run with a target of 50 and a US$30 cap.
+- **To run, at `medium` (M2 measures it):**
+  - a discovery request is about US$0.15, so a sweep of 8 signs is about US$1.20, and four sweeps about US$5;
+  - a researched company is about US$0.34 to 0.42;
+  - so a run of 50 companies is about US$22 to 27. At `max` the same run would cost about US$90, over the run limit.
+- **Levi's price:** US$100 to 200 for 100 good leads (8 Nov).
+- **The live steps (M3):** the rejudge is free. The refill of the 9 empty leads is about US$3.
+- **Time:** a run of 50 companies at 2 Claude requests at once may take 1 to 2 hours (**TBC**, M2 measures it).
+
+## Who builds it
+
+One session builds every step, in order: Part 1, then Part 2, then Part 3. The backend parts come first, so the website is built against the real API.
+
+## How to work this plan
+
+**The copy.**
+- One branch, `plan-v21`, made from `master`, in its own copy: `git worktree add ../contour-v21 -b plan-v21 master` (see S0). The main folder stays on `master`.
+- In the new copy: `uv sync --frozen` in `engine/backend`, `npm ci` in `engine/frontend`, and copy `projects/leads/research/COMPANIES.xlsx` from the main folder.
+
+**Ports and database.**
+- Backend `API_PORT=8081`. Website on port 5251, with its proxy to 8081. Database `leadfinder_v21`, a copy of the dev database migrated to `0025_v19_roles_access`. Test database suffix `LEADFINDER_TEST_DB_SUFFIX=_v21`.
+- The copy's `engine/.env` holds the `POSTGRES_*` lines only. `API_PORT` and `CORS_ORIGINS` go on the command line.
+- **No Claude key.** The copy's backend starts with none. `ANTHROPIC_API_KEY` is also a Windows user setting on this laptop, so blank it for that process, and check that `GET /api/v1/health/details` says "No Claude key is set".
+- Leave ports 8000 and 5173 alone: the running app uses them.
+
+**What to expect.**
+- **No migration is expected.** The new params live in the run's saved params, and the new settings in the settings table (**TBC** in S0). If one is needed, it is `0026_v21_...` after `0025_v19_roles_access`.
+- **No new package.**
+- The API contract and the website's types are made again after Part 2 (`uv run --no-sync engine openapi`, then `npm run types`), before Part 3 starts.
+
+**Every working session.**
+- **At the start:** read this section, go to `../contour-v21`, find the first step that isn't ticked, and run `brain context`.
+- **Rule and score steps** follow the `rule-change` skill: one rule at a time, with the rejudge counts before and after in the Log.
+- **API steps** follow the `api-change` skill. **Screens** follow the `ui-build` skill and `engine/DESIGN.md`.
+- **One heavy thing at a time:** `bash engine/scripts/heavy.sh <cmd>` for full test runs, builds and browser checks.
+- **Windows Application Control** blocks a new venv's `pytest.exe` and `engine.exe`. Use `uv run python -m pytest` and `python -m core.cli <command>`.
+- **Commits:** make small ones, and run `git branch --show-current` before each.
+- **Ticking a step:** when its "Done when" is true, tick it with the date and the commit. Update the Progress line and add a line to that part's Log.
+- **Only on Al-khair's word:** merging, pushing, deploying, spending money, changing a live setting, or switching a schedule on.
+- **Screens:** check each at 1440px, 1280px, 768px and 390px, in light and dark, with the keyboard. Screenshots go in `plan/shots/v21/`, which git ignores.
+- **When usage runs low** (80% of the 5-hour or weekly limit, or of the session's context), save to the AI Brain. At 95%, start no new step.
+
+## Before the build starts
+
+- [ ] **S0. The branch, the stubs and the settings.**
+  - Make `plan-v21` from `master` in the worktree `../contour-v21`. Don't switch the main folder's branch.
+  - Its first commit holds this plan and its lines in `CLAUDE.md`. Both were written in the main folder on 18 Nov and not committed. Copy them in. Then remove the main folder's copies, so `master` can move later: delete the untracked `plan/PLAN-V21.md`, and put `CLAUDE.md` back with `git checkout -- CLAUDE.md` only if it has no other uncommitted edit (if it has, leave it and say so in the Log).
+  - Then the stubs: the new params and run options fields, the events and counts, the settings and the rule models in the contract below. Each has its default and does nothing yet.
+  - **Done when:** `git branch --list plan-v21` shows it, it holds `plan/PLAN-V21.md`, and the backend tests pass on it.
+
+## The contract
+
+### 1. Run params and options (Part 1 builds, Part 3 reads)
+
+- `POST /runs`, mode `discovery`, gains:
+  - `target_companies` (a whole number, optional, from 5 to the run's company limit; the default comes from the run options): how many companies the run tries to research;
+  - `top_up` (true or false, default true): fill a short run from the HubSpot watchlist;
+  - `since_days` also takes 90 and 180 (7, 14 and 30 stay).
+- `GET /lead-finder/run-options` gains `target_companies` (`default`, `min`, `max`, `presets`) and `top_up` (`default`, `allowed`). `allowed` is false while `hubspot_names_to_claude_ok` is off. `since_days.choices` becomes 7, 30, 90 and 180, with 90 the default (choice 5).
+- `POST /runs/estimate`, for discovery, gains a cost range for the target, and one sentence when the target doesn't fit the money limits. S0 fixes the field names.
+
+### 2. Run progress (Part 1 builds, Part 3 reads)
+
+- New events: `sweep_started` (`sweep`, `of`, `label`), `sweep_done` (`sweep`, `found`, `companies`, `target`) and `topped_up` (`count`). `companies` is how many the run has chosen so far, after merging.
+- `RunCounts` gains `target`, `sweeps`, `sweeps_done` and `topped_up`.
+- The run merges after each sweep, so "companies after merging" is never 0 while searches still run.
+
+### 3. Leads (Part 2 builds, Part 3 reads)
+
+- `GET /lead-finder/leads`, its facets, the map and the CSV: `tier` also takes `none`, a lead with no tier yet. When `tier` is left out, it means A, B, C and none.
+- Every lead discovery found carries its sign: `trigger_id` and `trigger_ids` on the row, and the sign on the card, even when the research failed or stopped early (Part 1 writes them).
+
+### 4. Settings (S0 adds them)
+
+- `claude_effort_discover` (default `medium`) and `claude_effort_research` (default `medium`, **TBC** in M2). `claude_effort` stays for every other request, like call prep and the meeting forms.
+- `target_companies_default` (50) and `discovery_max_sweeps` (4).
+
+### 5. Rules (S0 adds the models, the parts fill them)
+
+- `queries.yaml` gains `sweeps` (Part 1): the wording of sweeps 2 to 4.
+- `criteria.yaml` gains `score.unknown_share` (0.5) and `size.estimated_floor` (30) (Part 2).
+
+## Part 1: the engine
+
+- [ ] **T1-1. Effort for each step.** The discovery request uses `claude_effort_discover`. The research's requests (search notes, the two forms, Why now) use `claude_effort_research`. Every other project keeps `claude_effort`.
+  - **Done when:** a FakeClaude test sees `medium` on the discovery request and the research's own effort on the rest, and the Settings page lists both settings.
+- [ ] **T1-2. How far back: 90 days and 6 months.** `SinceDays` takes 90 and 180. The run options offer 7, 30, 90 and 180, with 90 the default for a run a person starts. The discovery request and its date check follow the choice. Automatic runs keep 30.
+  - **Done when:** params and options tests pass, and the date check keeps a 60 day old event at 90 days and drops it at 30.
+- [ ] **T1-3. The sweeps' searches.** `queries.yaml` `sweeps`:
+  - sweep 2 is Levi's source groups for each sign. Today they share sweep 1's request, which makes it long;
+  - sweep 3 is each sign by sector group: 3 groups of Levi's priority sectors;
+  - sweep 4 is each sign by area: the CBD, then the inner suburbs. For All of Australia it is the priority cities by name.
+  - Nothing one sweep finds goes into another sweep's request (the discovery safety rule: a page can't steer another search).
+  - **Done when:** `make_slices` tests pass for each sweep, and the backend refuses to start when a sign that is searched has no sweep 2 wording.
+- [ ] **T1-4. The target and the sweeps.** `target_companies` goes into the params and the estimate. After each sweep the run merges and chooses. If it has fewer companies than its target, sweeps are left, and discovery's share of the money isn't used up, it starts the next sweep. Then comes the top up (T1-6), then the research. `check_discovery_size` counts sweep 1 only: later sweeps run only while money is left. A resume never repeats a sweep that was paid for.
+  - **Done when:** FakeClaude tests show that a run that meets its target in sweep 1 makes no sweep 2; a thin run goes on to sweep 4 and stops; a run at its discovery money stops sweeping and says so in the feed; and a resume in the middle of sweep 3 starts at sweep 3.
+- [ ] **T1-5. Property Daily first.** Before sweep 1, the run's plan turns Property Daily's new items for its places and how far back into companies. That part is built (PLAN-V16 T1-8). New here: when Property Daily is ready and picked on Start, and our copy's last email is older than today, the plan reads the new emails first (about 1 page a day, free). So a run doesn't depend on the job, which is switched off.
+  - **Done when:** with a fake reader, a run's plan reads the email once, saves its records, and its items with a sign become companies before sweep 1. With Property Daily off, paused or not picked, the run works as today.
+- [ ] **T1-6. The HubSpot top up.** When the sweeps are done and the run is still short of its target, `choose` adds watchlist companies in the run's places, in the watchlist's own order (most likely first). It skips what `decide` skips. Each is researched like a HubSpot watchlist run. It is off when `top_up` is false or `hubspot_names_to_claude_ok` is off.
+  - **Done when:** tests show that a run 12 short adds 12, that a run with `top_up` false adds none, and that `RunCounts.topped_up` and the row's origin (`hubspot`) say so.
+- [ ] **T1-7. No early drop on a guess.** `research._too_small` stops a company before research only on HubSpot's own count, for a sure match. A Signal Hire count alone never stops it. The count still goes on the card.
+  - **Done when:** tests show that a company with only Signal Hire's 48 is researched, and that one with HubSpot's 20 staff (a sure match) is still stopped at no cost.
+- [ ] **T1-8. Every card keeps its sign.** The signs discovery found go on the card and the row whatever happens next: a failed form, a failed second form, the early size stop or a research error. Each is marked "from the search, not checked by the research".
+  - **Done when:** a test for each of the four paths passes, the row's `trigger_id` is set, and the card's "Why it fits" names the sign.
+- [ ] **T1-9. Check.** ruff, ruff format, mypy, the fast tests and the full backend run (`RUN_GATES=1`). The numbers go in the Log.
+
+### Part 1 Log
+
+- (none yet)
+
+## Part 2: the score and the lists
+
+- [ ] **T2-1. No hidden leads.** `tier` takes `none`. When `tier` is left out, it means A, B, C and none. The facets count `none`.
+  - **Done when:** store and API tests with 21 untiered leads out of 31 show the untiered ones in the default view, and `tier=discard` alone shows only Discard.
+- [ ] **T2-2. Not known yet counts half.** `score.unknown_share` is 0.5: a check that is "not known yet" earns half its points, rounded down. A failed check earns 0. The card and the Rules page say "half points: not known yet". The confidence is unchanged.
+  - **Done when:** the scoring tests pass, and the rejudge tables (the dev leads and the test set) before and after, by tier, are in the Log.
+- [ ] **T2-3. The size band.** After research, a size worked out from an estimated staff number between `size.estimated_floor` (30) and `staff_floor` (50) is a Watch with "check the size". A known count under 50 stays a Drop unless the company is growing.
+  - **Done when:** the scoring tests pass, and the rejudge counts are in the Log.
+- [ ] **T2-4. Results' default view.** The API's default is Tier A, B and C plus no tier. Discard and the excluded leads stay one filter away. Home's and the run page's counts of good leads stay A and B.
+  - **Done when:** an API test checks the default.
+- [ ] **T2-5. The quality bar.** The test set has no expected results today (since PLAN-V16 T1-2). Propose a tier range for each test set company from its last saved result, like "C or better" or "Discard or C". Al-khair confirms them before M2. The test set report shows each company's tier, and whether it is inside its range.
+  - **Done when:** the ranges are in `testset.yaml`, Al-khair has said yes in chat, and a free report on the saved results shows them.
+- [ ] **T2-6. Check.** ruff, mypy, the fast tests and the full backend run. Make the API contract and the website's types again for Part 3. The rejudge tables go in the Log.
+
+### Part 2 Log
+
+- (none yet)
+
+## Part 3: the website
+
+- [ ] **T3-1. "What to do" as cards.** Four option cards in a radio group, each with its title and its one line. Two columns from 640px, one below. Arrow keys move and Space picks. No sideways scroll. `Segmented` stays for 2 or 3 short choices, as `engine/DESIGN.md` says.
+  - **Done when:** tests check the radio group and the arrow keys, and the screenshots at 1440, 1280, 768 and 390px, light and dark, show no label cut.
+- [ ] **T3-2. "How far back".** 7 days, 30 days, 90 days and 6 months, from the run options. The control hugs its labels (find out why `w-fit` doesn't hold today) and fits on one line at 390px.
+  - **Done when:** tests pass, and the screenshots show it.
+- [ ] **T3-3. "How many companies".** Under the signs: 25, 50 and 100, a number field, and the cost range from the estimate. A "Top up from the HubSpot watchlist" switch with one line on what it does, greyed with the reason when it isn't allowed. "Most companies to research" stays in Limits, as the ceiling.
+  - **Done when:** the form sends `target_companies` and `top_up`, the tests pass, and the screenshots show it.
+- [ ] **T3-4. The run page shows the sweeps.** "Sweep 2 of 4: 31 of 50 companies", with a bar. Companies from the top up are marked "From HubSpot". "Companies after merging" updates after each sweep.
+  - **Done when:** tests with fake events pass, and a screenshot shows a run in the middle of a sweep.
+- [ ] **T3-5. Results shows every lead.** The default view is A, B, C and "No tier yet". The Tier filter offers "No tier yet". A lead with no tier shows its result instead.
+  - **Done when:** the tests pass, and a screenshot shows old and new leads together.
+- [ ] **T3-6. The phone pass and the check.** Start, the run page and Results at 390px: no sideways scroll, 44px controls and nothing cut, in light and dark. Then the website's lint, types, tests and build.
+  - **Done when:** the screenshots are in `plan/shots/v21/`, the website checks pass, and Al-khair has looked.
+
+### Part 3 Log
+
+- (none yet)
+
+## Merge, checks and going live
+
+- [ ] **M1. Merge** (`merge v21`). Make the contract and the website types again. Run the full backend and website checks, the `merge-check` skill and the `review-agent`. Then move `master` to `plan-v21`.
+  - **Done when:** everything passes and `master` has moved.
+- [ ] **M2. The paid checks**, only on Al-khair's word in chat:
+  1. the test set at `medium` and at `high` research effort, to pick `claude_effort_research`;
+  2. one city run: Melbourne, the 8 main signs, 90 days, a target of 50 and a US$30 cap. Record the companies found and researched, the tiers, the cost for each company and the time taken;
+  3. Al-khair looks at 10 of its leads and marks each one Useful or not.
+  - **Done when:** the numbers are in the Log, set against "What this plan aims for".
+- [ ] **M3. Deploy** (`deploy v21`). Push `master` and deploy. Then, on the live site:
+  1. `lead-finder rejudge --save` in the DigitalOcean console (free), so the 21 old leads get a tier;
+  2. check that Results shows every lead;
+  3. set the live Settings to M2's choice: discovery `medium`, research as picked, and the searches back to their defaults. Claude requests at once go to 4 if the key's limits allow it (**TBC**);
+  4. refill the 9 empty leads (`lead-finder refill --yes`, about US$3), on Al-khair's word.
+- [ ] **M4. The docs.** `CLAUDE.md` (this plan's line), the map in `engine/AGENTS.md`, `projects/leads/LEADS.md` (the sweeps, the target and the top up), `projects/leads/criteria/Criteria_v3.md` (half points and the size band, TBC with Levi), and a save to the AI Brain.
+
+## Waiting on people
+
+- [ ] **W1. Property Daily's two jobs** (Al-khair, in Admin, Schedules): "Read Property Daily's daily email" (working days, 6:15 am) and "Read Property Daily's leases that end in 12 to 36 months" (Mondays, 6:45 am, for all of Australia). Both are free and switched off today. A lease ending is one of Levi's two strongest signs (very high), and these come with the floor area and the date. Levi's green light of 15 Nov covers the tool. The vendor email in PLAN-V16 W1 is still recommended, because Property Daily's terms ask for written approval to store its material.
+- [ ] **W2. Levi confirms:** half points for "not known yet", the 30 to 49 Watch band, 90 days on Start, and whether B moves after T2-2's rejudge.
+
+## Not in this plan
+
+- Arealytics. It refused automated access, and waits on an API or written approval.
+- New signs or new sources.
+- The automatic runs. They keep 30 days and Levi's goal of 100 good leads. They get the sweeps and the top up only if Al-khair says so after M2.
+- Any limit rising by itself.
+
+## Log
+
+- 18 Nov 2026: written from Al-khair's asks and the audit of the same day. No step started.
+- 18 Nov 2026: Al-khair chose one implementation instead of three tracks. The tracks became Parts 1 to 3, built in order by one session, with one go signal (`implement v21`). The steps and choices are unchanged.
