@@ -574,6 +574,7 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
   - **Decide (choice 8):** (a) if it gets at most 1 name wrong in 10 and writes out a 60 second note in 10 seconds or less. Else (b), but only once Levi says yes. Until then, `typing`.
   - No recording is kept. The notes' text stays out of git.
   - **Done when:** the Log has the numbers and the decision, and `voice_tool` is set to match.
+  - Moved to PLAN-V22 (S1 and T3-2).
 
 - [ ] **T3-4. The mic card and the mic check.** This works before any voice tool: it shows the bars and checks the mic. Built 2026-11-16 (`1ec532d`, `3e75301`, `dda777a`, `625d6ec`), waiting for a look. The 30 frames a second at 4x CPU slowdown is not measured yet (no browser tonight).
   - **The mic button:** round, 44px, in the corner of the note box on Log call, named "Speak" for screen readers. The Win+H line is gone.
@@ -598,6 +599,7 @@ Errors: 409 `meeting_forms_off`. 503 `hubspot_not_connected`: "HubSpot isn't con
   - The audio is never stored. With (a), a test proves no request carries it.
   - The first visit doesn't grow.
   - **Done when:** tests with a fake tool cover each state, and Al-khair has said one real note in the real page.
+  - Moved to PLAN-V22 (S1 and T3-2).
 
 - [ ] **T3-6. History.** Built 2026-11-16 (`ae22de0`), waiting for a look.
   - The calls are grouped by day: "Today", "Yesterday", "Mon 14 Nov". Each day's heading stays at the top while you scroll its calls.
