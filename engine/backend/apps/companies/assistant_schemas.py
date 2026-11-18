@@ -313,3 +313,39 @@ class Today(Out):
         description="When the tasks shown were read from HubSpot. When none could be read: when "
         "this answer was made"
     )
+
+
+# --- A task on its own (T1-4, the contract's part 3) ---------------------------------------------
+
+TASK_SUBJECT_MAX_CHARS = 200
+TASK_BODY_MAX_CHARS = 2_000
+
+
+class AssistantTaskIn(BaseModel):
+    """One HubSpot task, as the review card sends it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    company_key: SafeText = Field(
+        max_length=64,
+        description="The company: its HubSpot id. A Lead Finder company that isn't in HubSpot "
+        "yet (lead:<id>) can't have a task",
+        examples=["201"],
+    )
+    subject: SafeText = Field(
+        max_length=TASK_SUBJECT_MAX_CHARS,
+        description="What to do, 1 to 200 characters once trimmed (422 `task_empty`). An email "
+        "address or a phone number in it is sent as [email left out] or [number left out]",
+        examples=["Send Sample Logistics the floor plan"],
+    )
+    body: SafeText = Field(
+        "", max_length=TASK_BODY_MAX_CHARS, description="More words, if any, up to 2,000"
+    )
+    due: date = Field(description="The day it is due: today or later, Melbourne time")
+    kind: NoteTaskKind = Field("todo", description="call, email or todo")
+    owner_id: str | None = Field(
+        None,
+        max_length=32,
+        pattern=r"^[A-Za-z0-9_-]+$",
+        description="A teammate's HubSpot owner id, from GET /team. None: me",
+    )

@@ -73,6 +73,7 @@ READ_SECONDS: Final = 10.0  # the longest wait for HubSpot's tasks (TBC)
 SOON_DAYS: Final = 7  # tasks due in the next 7 days show, folded (choice 6)
 DEALS_CAP: Final = 50
 MEETING_DAYS_READ: Final = 3  # read ahead, then only today and tomorrow (Melbourne) are kept
+BEFORE_CAP: Final = 200  # the most tasks a person's copy remembers as they were before
 MONTHS: Final = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 
 # --- The words (PLAN-V22 "Words for when things go wrong") ---------------------------------------
@@ -98,14 +99,16 @@ type TaskReader = Callable[[], Awaitable[TaskRead]]
 
 @dataclass
 class _Entry:
-    """One person's tasks: the last good read, the last try, how it ended, and the changes made
-    here (task id -> the task as it is now, or None once done, and when)."""
+    """One person's tasks: the last good read, the last try, how it ended, the changes made here
+    (task id -> the task as it is now, or None once done, and when), and each changed task as it
+    was before its change (so a reopen keeps its company)."""
 
     read: TaskRead | None = None
     read_at: datetime | None = None
     tried_at: datetime | None = None
     problem: ReadProblem | None = None
     changes: dict[str, tuple[OpenTask | None, datetime]] = field(default_factory=dict)
+    before: dict[str, OpenTask] = field(default_factory=dict)
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
 
@@ -165,20 +168,29 @@ class TaskCopy:
         """A change made here (T1-4): `task` as it is now, or None once it is done. The kept copy
         changes at once, and the reads of the next 2 minutes get it too."""
         entry = self._entry(owner)
+        known = self.kept(owner, task_id)
+        if known is not None:
+            entry.before.pop(task_id, None)
+            entry.before[task_id] = known
+            while len(entry.before) > BEFORE_CAP:  # the oldest go first
+                del entry.before[next(iter(entry.before))]
+        self._prune(entry, now)
         entry.changes[task_id] = (task, now)
         if entry.read is not None:
             entry.read = _with_change(entry.read, task_id, task)
 
     def kept(self, owner: str, task_id: str) -> OpenTask | None:
-        """A task as the copy (or a change made here) has it, or None."""
+        """A task as the copy has it now, else as a change made here left it, else as it was
+        before its last change here (a task ticked done). None when it was never kept."""
         entry = self._entries.get(owner)
         if entry is None:
             return None
-        changed = entry.changes.get(task_id)
-        if changed is not None and changed[0] is not None:
-            return changed[0]
         found = entry.read.tasks if entry.read is not None else ()
-        return next((task for task in found if task.id == task_id), None)
+        kept = next((task for task in found if task.id == task_id), None)
+        changed = entry.changes.get(task_id)
+        if kept is None and changed is not None:
+            kept = changed[0]
+        return kept or entry.before.get(task_id)
 
     @staticmethod
     def _due(entry: _Entry, now: datetime, fresh: bool) -> bool:
@@ -190,12 +202,22 @@ class TaskCopy:
 
     @staticmethod
     def _laid_over(entry: _Entry, found: TaskRead, now: datetime) -> TaskRead:
+        """A fresh read, with the changes of the last 2 minutes that HubSpot's search may not
+        show yet: a task done here is left out, and one added or opened again here is added when
+        the read doesn't have it (when it does, HubSpot's own record wins)."""
+        TaskCopy._prune(entry, now)
+        read_ids = {task.id for task in found.tasks}
+        for task_id, (task, _) in entry.changes.items():
+            if task is None or task_id not in read_ids:
+                found = _with_change(found, task_id, task)
+        return found
+
+    @staticmethod
+    def _prune(entry: _Entry, now: datetime) -> None:
+        """Forgets the changes made here over 2 minutes ago: HubSpot's search shows them now."""
         for task_id, (_, at) in list(entry.changes.items()):
             if now - at >= CHANGES_HOLD:
                 del entry.changes[task_id]
-        for task_id, (task, _) in entry.changes.items():
-            found = _with_change(found, task_id, task)
-        return found
 
     @staticmethod
     def _shown(entry: _Entry) -> KeptTasks:

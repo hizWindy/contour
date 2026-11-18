@@ -18,11 +18,12 @@ list. The core then:
    note that may have landed is not sent again (the log says to check HubSpot).
 4. Our copy of the company is updated at once after it is written, so pages show it.
 5. **Shared with the activity writer** (PLAN-V17 T1-5, `activities.py`: a call, field changes,
-   tasks and a note): the one open write per subject (`latest_write`, `save_preview`), the claim
-   (`claim_write`, `take_over_write`, `Claim`), the step log (`steps_of`, `steps_json`,
-   `save_steps`, `failed_step`, `status_of`, `error_of`), `note_html`, `choice_code`,
-   `refresh_copy` and the `core.hubspot_writes` table. One log for both. A plan's `kind` says
-   which writer made a row, and each writer refuses the other's rows.
+   tasks and a note) and a task's status (PLAN-V22 T1-4, `tasks.py`: Done and reopen): the one
+   open write per subject (`latest_write`, `save_preview`), the claim (`claim_write`,
+   `take_over_write`, `Claim`), the step log (`steps_of`, `steps_json`, `save_steps`,
+   `failed_step`, `status_of`, `error_of`), `note_html`, `choice_code`, `refresh_copy` and the
+   `core.hubspot_writes` table. One log for all three. A plan's `kind` says which writer made a
+   row, and each writer refuses the others' rows.
 
 It is off unless `HUBSPOT_WRITE_ENABLED=true` (`HubSpotWritesOff`, "Waiting for write access").
 """
@@ -62,12 +63,13 @@ from core.logs import scrub
 log = logging.getLogger(__name__)
 
 StepName = Literal["company", "note", "list"]  # the Lead Finder's steps
-# Every step's name: the Lead Finder's, and an activity's (PLAN-V17): call, fields, task:1 ...,
-# note, meeting. Text with a pattern, so old rows and new ones read the same way.
-STEP_NAME = r"^(?:company|note|list|call|fields|task:[1-9][0-9]*|meeting)$"
+# Every step's name, as text with a pattern, so old rows and new ones read the same way: the Lead
+# Finder's; an activity's (PLAN-V17): call, fields, task:1 ..., note, meeting; and a task's status
+# (PLAN-V22 T1-4): status.
+STEP_NAME = r"^(?:company|note|list|call|fields|task:[1-9][0-9]*|meeting|status)$"
 StepStatus = Literal["done", "failed", "uncertain", "skipped"]
 WriteStatus = Literal["previewed", "writing", "done", "partial", "failed", "uncertain"]
-PlanKind = Literal["company", "activity"]
+PlanKind = Literal["company", "activity", "task"]
 OPEN = ("previewed", "failed")  # a new preview may plan these again
 CONTINUE = ("partial", "uncertain")  # applying again finishes these
 NOTE_MAX_CHARS = 60_000  # HubSpot's note body limit is 65,536
@@ -158,7 +160,8 @@ class WritePlan(BaseModel):
         "company",
         description=(
             "company: the Lead Finder's send (a company, a note, a list). activity: a call, "
-            "field changes, follow-up tasks and a note on one company (PLAN-V17)"
+            "field changes, follow-up tasks and a note on one company (PLAN-V17). task: one "
+            "task ticked done or opened again (PLAN-V22)"
         ),
     )
     contact_id: str | None = Field(None, description="An activity's person in HubSpot")
@@ -188,7 +191,7 @@ class StepResult(BaseModel):
         pattern=STEP_NAME,
         description=(
             "company, note or list (the Lead Finder); call, fields, task:1, task:2 ..., note or "
-            "meeting (an activity)"
+            "meeting (an activity); status (a task ticked done or opened again)"
         ),
         examples=["task:1"],
     )
@@ -488,6 +491,13 @@ def is_activity(row: HubSpotWrite) -> bool:
     return (row.plan or {}).get("kind") == "activity"
 
 
+def is_company(row: HubSpotWrite) -> bool:
+    """Whether the Lead Finder's writer made this row: its plan's kind is company, or it has none
+    (a row saved before kinds). Only `apply_write` writes it."""
+    kind: object = (row.plan or {}).get("kind", "company")
+    return kind == "company"
+
+
 async def apply_write(
     session: AsyncSession,
     hubspot: HubSpot,
@@ -497,7 +507,7 @@ async def apply_write(
 ) -> WriteOut:
     """Writes a previewed plan, step by step. A finished write is returned as it is."""
     row = await get_write(session, write_id)
-    if is_activity(row):  # a call note's write: `activities.apply_activity` writes it
+    if not is_company(row):  # a call note's write or a task's status: their own writers
         raise WriteNotFound(str(write_id))
     if row.status == "done":
         return write_out(row)

@@ -100,6 +100,10 @@ ROUTES = [
     # The Assistant (PLAN-V22 T1-1).
     ("POST", f"{API}/companies/assistant/command"),
     ("GET", f"{API}/companies/assistant/today"),  # PLAN-V22 T1-3
+    ("POST", f"{API}/companies/assistant/tasks/preview"),  # PLAN-V22 T1-4
+    ("POST", f"{API}/companies/assistant/tasks"),
+    ("POST", f"{API}/companies/assistant/tasks/{{task_id}}/done"),
+    ("POST", f"{API}/companies/assistant/tasks/{{task_id}}/reopen"),
     ("POST", f"{API}/auth/login"),
     ("POST", f"{API}/auth/logout"),
     ("POST", f"{API}/auth/logout-everywhere"),

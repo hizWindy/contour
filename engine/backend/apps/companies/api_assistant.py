@@ -2,24 +2,32 @@
 /api/v1/companies/assistant.
 
 Behind the Call logs or the Meetings tick. Viewers get no V (choice 18), so the command step
-refuses one, though it changes nothing. The services are assistant.py (the command) and today.py
-(Today).
+refuses one, though it changes nothing; every route that changes something refuses one too. The
+services are assistant.py (the command), today.py (Today) and assistant_tasks.py (a task on its
+own, Done and reopen).
 """
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Header, Path, Query, Request, Response
 
-from apps.companies import today
-from apps.companies.api_meetings import SourceDep
+from apps.companies import assistant_tasks, today
+from apps.companies.api_meetings import SourceDep, WriterDep
 from apps.companies.assistant import Assistant, check_on, read_command
-from apps.companies.assistant_schemas import AssistantCommand, AssistantCommandIn, Today
+from apps.companies.assistant_schemas import (
+    AssistantCommand,
+    AssistantCommandIn,
+    AssistantTaskIn,
+    Today,
+)
 from apps.companies.deps import LeadsDep
 from apps.companies.today import TaskCopy
 from core.api.access import SignedInDep, need
 from core.api.deps import SessionDep, SettingsDep
+from core.api.runs import IDEMPOTENCY_PATTERN
 from core.api.signin import NowDep
 from core.config import Settings
+from core.hubspot.writer import WriteOut
 
 router = APIRouter(prefix="/assistant")
 
@@ -51,6 +59,20 @@ def task_copy(request: Request) -> TaskCopy:
 AssistantDep = Annotated[Assistant, Depends(assistant_state)]
 AssistantOnDep = Annotated[Settings, Depends(assistant_on)]
 TaskCopyDep = Annotated[TaskCopy, Depends(task_copy)]
+TaskId = Annotated[
+    str, Path(min_length=1, max_length=32, pattern=r"^[0-9]+$", description="HubSpot's task id")
+]
+TaskKey = Annotated[
+    str,
+    Header(
+        min_length=1,
+        max_length=64,
+        pattern=IDEMPOTENCY_PATTERN,
+        description="Any unique text (a UUID is fine), made when the card opens. Send the same "
+        "key on the preview and the send: a repeated key gives back the first task",
+    ),
+]
+CHANGES = need("companies.call_logs", "companies.meetings", write=True)
 
 
 @router.post(
@@ -145,3 +167,164 @@ async def read_today(
         now=now,
         fresh=fresh,
     )
+
+
+# --- A task on its own, Done and reopen (T1-4) ---------------------------------------------------
+
+
+@router.post(
+    "/tasks/preview",
+    response_model=WriteOut,
+    dependencies=[Depends(CHANGES)],
+    summary="Check a task before adding it",
+    description=(
+        "What adding this task would do: the company as HubSpot has it now (one free read), "
+        "the task in words (`plan.tasks`: what, its kind, when it is due and for whom), any "
+        "warning (like no HubSpot owner linked to my account, so HubSpot shows it unassigned), "
+        "and whether HubSpot can be written now (`can_write`, `waiting_for`). Nothing is sent; "
+        "it works while writing is off. `owner_id`: me by default, or a teammate from GET "
+        "/team. The task is due at 9:00 am on its day, Melbourne time. Send the card's "
+        "`Idempotency-Key`: the send with the same key adds this task once. 404 "
+        "`company_not_found`. 422 `not_in_hubspot` (a Lead Finder company), `task_empty`, "
+        "`task_in_past`, `day_out_of_range`, `owner_not_found`. 503 `hubspot_not_connected` or "
+        "`hubspot_unavailable` (HubSpot didn't answer). A Viewer gets 403 `viewer_read_only`."
+    ),
+)
+async def preview_assistant_task(
+    body: AssistantTaskIn,
+    request: Request,
+    session: SessionDep,
+    auth: SignedInDep,
+    writer: WriterDep,
+    now: NowDep,
+    idempotency_key: TaskKey,
+) -> WriteOut:
+    return await assistant_tasks.preview_task(
+        session, body, app=request.app, auth=auth, writer=writer, key=idempotency_key, now=now
+    )
+
+
+@router.post(
+    "/tasks",
+    response_model=WriteOut,
+    status_code=201,
+    dependencies=[Depends(CHANGES)],
+    summary="Add a task",
+    description=(
+        "Adds one HubSpot task on the company, for me or a teammate, through the same writer "
+        "as a call note's follow-ups, and answers with the write: `status` (`done` when it is "
+        "in HubSpot, `failed` or `uncertain` otherwise) and its step `task:1` in words, with "
+        "HubSpot's id once made. HubSpot's search may take a few seconds to show it; Today "
+        "shows it at once. Send an `Idempotency-Key`: the same key from the same person gives "
+        "back the first write (200), so HubSpot gets one task, even for a double press. A send "
+        "that timed out is never sent again blind: HubSpot is searched for it first. 409 "
+        "`hubspot_writing_off` while HubSpot can't be written (nothing is sent), `task_sending` "
+        "while the same task is being sent. 404 `company_not_found`. 422 `not_in_hubspot`, "
+        "`task_empty`, `task_in_past`, `day_out_of_range`, `owner_not_found`. 503 "
+        "`hubspot_unavailable`. A Viewer gets 403 `viewer_read_only`."
+    ),
+    responses={200: {"model": WriteOut, "description": "The first task added with this key"}},
+)
+async def add_assistant_task(
+    body: AssistantTaskIn,
+    request: Request,
+    response: Response,
+    session: SessionDep,
+    settings: SettingsDep,
+    auth: SignedInDep,
+    writer: WriterDep,
+    copy: TaskCopyDep,
+    now: NowDep,
+    idempotency_key: TaskKey,
+) -> WriteOut:
+    written, new = await assistant_tasks.add_task(
+        session,
+        body,
+        app=request.app,
+        auth=auth,
+        settings=settings,
+        writer=writer,
+        copy=copy,
+        key=idempotency_key,
+        now=now,
+    )
+    if not new:
+        response.status_code = 200
+    return written
+
+
+@router.post(
+    "/tasks/{task_id}/done",
+    status_code=204,
+    dependencies=[Depends(CHANGES)],
+    summary="Tick a task done",
+    description=(
+        "Ticks my HubSpot task done at once (choice 7: Undo is reopen). HubSpot is read first: "
+        "a task that isn't mine is never changed (403 `not_your_task`, also when my account has "
+        "no HubSpot link). A task done already sends nothing. Each change is a row in HubSpot's "
+        "write log. Today shows it at once. 404 `task_not_found`. 409 `hubspot_writing_off` "
+        "while HubSpot can't be written. 502 `task_not_changed` when HubSpot didn't take it "
+        "(trying again is safe). 503 `hubspot_unavailable`. A Viewer gets 403 "
+        "`viewer_read_only`."
+    ),
+)
+async def tick_assistant_task_done(
+    task_id: TaskId,
+    request: Request,
+    session: SessionDep,
+    settings: SettingsDep,
+    auth: SignedInDep,
+    source: SourceDep,
+    copy: TaskCopyDep,
+    now: NowDep,
+) -> Response:
+    await assistant_tasks.change_status(
+        session,
+        task_id,
+        done=True,
+        app=request.app,
+        auth=auth,
+        settings=settings,
+        source=source,
+        copy=copy,
+        now=now,
+    )
+    return Response(status_code=204)
+
+
+@router.post(
+    "/tasks/{task_id}/reopen",
+    status_code=204,
+    dependencies=[Depends(CHANGES)],
+    summary="Open a task again",
+    description=(
+        "Opens my HubSpot task again (the Undo of Done): it gets back the status it had before "
+        "its last Done here, like In progress, else Not started. HubSpot is read first: a task "
+        "that isn't mine is never changed (403 `not_your_task`). A task open already sends "
+        "nothing. Each change is a row in HubSpot's write log. 404 `task_not_found`. 409 "
+        "`hubspot_writing_off`. 502 `task_not_changed`. 503 `hubspot_unavailable`. A Viewer "
+        "gets 403 `viewer_read_only`."
+    ),
+)
+async def reopen_assistant_task(
+    task_id: TaskId,
+    request: Request,
+    session: SessionDep,
+    settings: SettingsDep,
+    auth: SignedInDep,
+    source: SourceDep,
+    copy: TaskCopyDep,
+    now: NowDep,
+) -> Response:
+    await assistant_tasks.change_status(
+        session,
+        task_id,
+        done=False,
+        app=request.app,
+        auth=auth,
+        settings=settings,
+        source=source,
+        copy=copy,
+        now=now,
+    )
+    return Response(status_code=204)
