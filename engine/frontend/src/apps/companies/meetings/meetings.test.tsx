@@ -473,11 +473,11 @@ function PreReadStub() {
   return <h1>{`Pre-read ${formId ?? ''}`}</h1>
 }
 
-function renderMeetings(path = '/companies/meetings') {
+function renderMeetings(path = '/assistant/meetings') {
   const router = createMemoryRouter(
     [
-      { path: '/companies/meetings', element: <MeetingsPage /> },
-      { path: '/companies/meetings/:formId', element: <PreReadStub /> },
+      { path: '/assistant/meetings', element: <MeetingsPage /> },
+      { path: '/assistant/meetings/:formId', element: <PreReadStub /> },
     ],
     { initialEntries: [path] },
   )
@@ -560,7 +560,7 @@ describe('Upcoming', () => {
       expect(one.getByText(status)).toBeInTheDocument()
       expect(one.getByRole('link', { name: link })).toHaveAttribute(
         'href',
-        `/companies/meetings/${id}`,
+        `/assistant/meetings/${id}`,
       )
       expect(one.getAllByRole('link').length + one.queryAllByRole('button').length).toBe(1)
     }
@@ -608,7 +608,7 @@ describe('Upcoming', () => {
 
     server.release()
     expect(await screen.findByRole('heading', { name: 'Pre-read f-m1' })).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/companies/meetings/f-m1')
+    expect(router.state.location.pathname).toBe('/assistant/meetings/f-m1')
   })
 
   it('a refused draft puts the row back and says why', async () => {
@@ -622,7 +622,7 @@ describe('Upcoming', () => {
     const logistics = within(row('Sample Logistics Pty Ltd'))
     expect(logistics.getByText('Needs pre-read')).toBeInTheDocument()
     expect(logistics.getByRole('button', { name: /^Draft it/ })).toBeEnabled()
-    expect(router.state.location.pathname).toBe('/companies/meetings')
+    expect(router.state.location.pathname).toBe('/assistant/meetings')
   })
 })
 
@@ -701,7 +701,7 @@ describe('the search', () => {
 
   it('says when nothing matches, and where else to look', async () => {
     mockServer()
-    renderMeetings('/companies/meetings?q=vitera+26+nov')
+    renderMeetings('/assistant/meetings?q=vitera+26+nov')
     expect(
       await screen.findByRole('heading', { name: 'No meeting matches "vitera 26 nov".' }),
     ).toBeInTheDocument()
@@ -772,7 +772,7 @@ describe('whose meetings', () => {
 
   it("opens All from an old link to the team's meetings", async () => {
     const server = mockServer()
-    renderMeetings('/companies/meetings?team=1')
+    renderMeetings('/assistant/meetings?team=1')
     expect(await screen.findByText('Sample Energy Pty Ltd')).toBeInTheDocument()
     expect(lists(server).at(-1)?.get('who')).toBe('all')
     expect(screen.getByRole('radio', { name: 'All' })).toHaveAttribute('aria-checked', 'true')
@@ -792,7 +792,7 @@ describe('whose meetings', () => {
 
   it("leaves the choice out while sign-in is off, and asks for everyone's", async () => {
     const server = mockServer({ signIn: 'off' })
-    renderMeetings('/companies/meetings?who=mine')
+    renderMeetings('/assistant/meetings?who=mine')
     expect(await screen.findByText('Sample Energy Pty Ltd')).toBeInTheDocument()
     expect(lists(server).at(-1)?.get('who')).toBe('all')
     expect(screen.queryByRole('radiogroup', { name: 'Whose meetings' })).toBeNull()
@@ -806,7 +806,7 @@ describe('whose meetings', () => {
     const notLinked =
       "Your account isn't linked to a HubSpot owner yet, so My meetings is empty. All shows everyone's. An admin can link you in Admin, People."
     mockServer({ linked: false, teamState: 'not_linked', whoSentence: notLinked })
-    const { user, router } = renderMeetings('/companies/meetings?who=mine')
+    const { user, router } = renderMeetings('/assistant/meetings?who=mine')
     expect(
       await screen.findByRole('heading', { name: 'No meetings of your own to show yet.' }),
     ).toHaveClass('font-serif')
@@ -823,7 +823,7 @@ describe('whose meetings', () => {
   it("says why My team is empty while the rep is in no HubSpot team, in the server's words", async () => {
     const noTeam = "You aren't in a HubSpot team yet, so My team is empty. All shows everyone's."
     mockServer({ teamState: 'no_team', whoSentence: noTeam })
-    renderMeetings('/companies/meetings?who=team')
+    renderMeetings('/assistant/meetings?who=team')
     expect(
       await screen.findByRole('heading', { name: 'No team meetings to show yet.' }),
     ).toBeInTheDocument()
@@ -833,7 +833,7 @@ describe('whose meetings', () => {
 
   it('says why in its own words when the server sends none', async () => {
     mockServer({ teamState: 'no_team' })
-    renderMeetings('/companies/meetings?who=team')
+    renderMeetings('/assistant/meetings?who=team')
     expect(
       await screen.findByText(
         "You aren't in a HubSpot team yet, so My team is empty. All shows everyone's.",
@@ -892,7 +892,7 @@ describe('the Owner filter (Improvements 1, #5)', () => {
 
   it('sits beside the three choices when signed in, and narrows whichever is picked', async () => {
     const server = mockServer()
-    const { user } = renderMeetings('/companies/meetings?who=team')
+    const { user } = renderMeetings('/assistant/meetings?who=team')
     await screen.findByText('Sample Energy Pty Ltd')
     expect(screen.getByRole('radiogroup', { name: 'Whose meetings' })).toBeInTheDocument()
     await user.click(screen.getByRole('combobox', { name: 'Owner' }))
@@ -909,7 +909,7 @@ describe('the Owner filter (Improvements 1, #5)', () => {
 
   it('keeps a person from a link, and says whose when they have none, with Show all meetings', async () => {
     const server = mockServer()
-    const { user, router } = renderMeetings('/companies/meetings?owner=o-9')
+    const { user, router } = renderMeetings('/assistant/meetings?owner=o-9')
     expect(
       await screen.findByRole('heading', { name: 'No meetings for This person this week.' }),
     ).toBeInTheDocument()
@@ -925,7 +925,7 @@ describe('the Owner filter (Improvements 1, #5)', () => {
 
   it('says whose, by name, when a person has no past meetings', async () => {
     mockServer({ past: [] })
-    renderMeetings('/companies/meetings?when=past&owner=o-2')
+    renderMeetings('/assistant/meetings?when=past&owner=o-2')
     // No past meetings at all: the server offers nobody, so the name is not known.
     expect(
       await screen.findByRole('heading', { name: 'No past meetings for This person.' }),
@@ -1149,7 +1149,7 @@ describe('the states', () => {
     expect(companies(today)).toEqual(['Sample Logistics Pty Ltd'])
     expect(
       within(row('Sample Logistics Pty Ltd')).getByRole('link', { name: /^Check and send/ }),
-    ).toHaveAttribute('href', '/companies/meetings/f-typed')
+    ).toHaveAttribute('href', '/assistant/meetings/f-typed')
     await user.click(screen.getByRole('button', { name: 'New pre-read' }))
     expect(await screen.findByRole('dialog', { name: 'New pre-read' })).toBeInTheDocument()
   })
@@ -1183,7 +1183,7 @@ describe('the states', () => {
     const server = mockServer()
     const client = createTestQueryClient()
     client.setQueryData(queryKeys.auth.me(), { state: 'off' })
-    prefetchPage(routes, { pathname: '/companies/meetings', search: '?when=past&who=team' }, client)
+    prefetchPage(routes, { pathname: '/assistant/meetings', search: '?when=past&who=team' }, client)
     // The prefetch loads its own small file first.
     await waitFor(() => {
       expect(server.sent).toHaveLength(1)
@@ -1243,8 +1243,8 @@ describe('warming the next views (Improvements 1, #10)', () => {
     const queryClient = appCache()
     const { user } = renderWithProviders(
       <RouterProvider
-        router={createMemoryRouter([{ path: '/companies/meetings', element: <MeetingsPage /> }], {
-          initialEntries: ['/companies/meetings'],
+        router={createMemoryRouter([{ path: '/assistant/meetings', element: <MeetingsPage /> }], {
+          initialEntries: ['/assistant/meetings'],
         })}
       />,
       { withRouter: false, queryClient },
@@ -1287,7 +1287,7 @@ describe('warming the next views (Improvements 1, #10)', () => {
   it('keeps the owner, and asks for no more of the owners', async () => {
     const browser = fakeIdle()
     const server = mockServer()
-    renderMeetings(`/companies/meetings?owner=${MINE}`)
+    renderMeetings(`/assistant/meetings?owner=${MINE}`)
     await afterIdle(browser)
     await waitFor(() => {
       expect([...views(server)].sort()).toEqual([
@@ -1302,7 +1302,7 @@ describe('warming the next views (Improvements 1, #10)', () => {
   it('asks for nothing more while a search is typed in the address', async () => {
     const browser = fakeIdle()
     const server = mockServer()
-    renderMeetings('/companies/meetings?q=logistics')
+    renderMeetings('/assistant/meetings?q=logistics')
     await screen.findByRole('list', { name: 'Today' })
     expect(browser.waiting()).toBe(0)
     expect(views(server)).toEqual(['upcoming/all'])
@@ -1395,7 +1395,7 @@ describe('words for when things go wrong (PLAN-V18 T2-7)', () => {
     const notLinked =
       "Your account isn't linked to a HubSpot owner yet, so My meetings is empty. All shows everyone's. An admin can link you in Admin, People."
     mockServer({ linked: false, teamState: 'no_team', whoSentence: null })
-    const { user } = renderMeetings('/companies/meetings?who=mine')
+    const { user } = renderMeetings('/assistant/meetings?who=mine')
     expect(await screen.findByText(notLinked)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Show all meetings' })).toBeInTheDocument()
     await user.click(screen.getByRole('radio', { name: 'My team' }))
@@ -1545,7 +1545,7 @@ describe('New pre-read', () => {
     await user.click(dialog.getByRole('button', { name: 'Draft the pre-read' }))
 
     expect(await screen.findByRole('heading', { name: 'Pre-read f-typed' })).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/companies/meetings/f-typed')
+    expect(router.state.location.pathname).toBe('/assistant/meetings/f-typed')
     const started = server.sent.filter((one) => one.path === FORMS)
     expect(started).toHaveLength(1)
     expect(started[0]?.body).toEqual({
@@ -1589,7 +1589,7 @@ describe('New pre-read', () => {
       }
       expect(dialog.getByRole('textbox', { name: 'Title' })).toHaveValue('Lease chat')
       expect(day).toHaveValue('26 nov')
-      expect(router.state.location.pathname).toBe('/companies/meetings')
+      expect(router.state.location.pathname).toBe('/assistant/meetings')
     },
   )
 

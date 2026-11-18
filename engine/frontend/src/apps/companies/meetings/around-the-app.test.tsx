@@ -239,13 +239,13 @@ describe("Home's Upcoming meetings", () => {
       card.getByRole('link', {
         name: 'Check and send: Sample Freight Pty Ltd, Tomorrow, 11:00 am',
       }),
-    ).toHaveAttribute('href', '/companies/meetings/f3')
+    ).toHaveAttribute('href', '/assistant/meetings/f3')
     expect(
       card.getByRole('link', { name: 'Open: Sample Health Pty Ltd, Fri 20 Nov, 9:30 am' }),
-    ).toHaveAttribute('href', '/companies/meetings/f4')
+    ).toHaveAttribute('href', '/assistant/meetings/f4')
     expect(card.getByRole('link', { name: 'Open Meetings' })).toHaveAttribute(
       'href',
-      '/companies/meetings',
+      '/assistant/meetings',
     )
     // Sign-in is off: there is no "me", and the counts cover everyone's, so the rows are
     // everyone's too (All), as Meetings asks then. My meetings would be empty.
@@ -286,7 +286,7 @@ describe("Home's Upcoming meetings", () => {
     // Home has no All of its own: the sentence's All is on Meetings, which opens on it.
     expect(card.getByRole('link', { name: 'Show all meetings' })).toHaveAttribute(
       'href',
-      '/companies/meetings',
+      '/assistant/meetings',
     )
     expect(card.getByText('No meetings in the next few days.')).toBeInTheDocument()
   })
@@ -360,7 +360,7 @@ describe("Ctrl+K's Pre-read for a meeting", () => {
     await user.type(await screen.findByPlaceholderText('Type a page or an action'), 'pre-read')
     await user.click(await screen.findByRole('option', { name: 'Pre-read for a meeting' }))
     await waitFor(() => {
-      expect(router.state.location.pathname).toBe('/companies/meetings')
+      expect(router.state.location.pathname).toBe('/assistant/meetings')
     })
     expect(router.state.location.search).toBe('')
   })
@@ -466,17 +466,17 @@ describe("a company's record", () => {
     expect(coming.getByText('Draft ready')).toBeInTheDocument()
     expect(
       coming.getByRole('link', { name: 'Check and send: Fit-out budget, Tomorrow, 11:00 am' }),
-    ).toHaveAttribute('href', '/companies/meetings/f3')
+    ).toHaveAttribute('href', '/assistant/meetings/f3')
     // No pre-read yet: Meetings, found by the company's name, everyone's.
     expect(coming.getByText('Needs pre-read')).toBeInTheDocument()
     expect(
       coming.getByRole('link', { name: 'Open Meetings: Site visit, Tue 24 Nov, 3:00 pm' }),
-    ).toHaveAttribute('href', '/companies/meetings?q=Sample+Logistics+Pty+Ltd')
+    ).toHaveAttribute('href', '/assistant/meetings?q=Sample+Logistics+Pty+Ltd')
     // A past one says whether its notes are logged, and opens Meetings' Past.
     expect(past.getByText('No notes yet')).toBeInTheDocument()
     expect(past.getByRole('link', { name: /^Open Meetings: Lease review/ })).toHaveAttribute(
       'href',
-      '/companies/meetings?when=past&q=Sample+Logistics+Pty+Ltd',
+      '/assistant/meetings?when=past&q=Sample+Logistics+Pty+Ltd',
     )
   })
 

@@ -1,6 +1,7 @@
 /**
- * The pre-read (PLAN-V17 T3-10, "The screens" part 6), at /companies/meetings/{form_id}: its own
+ * The pre-read (PLAN-V17 T3-10, "The screens" part 6), at /assistant/meetings/{form_id}: its own
  * page under Meetings, so the morning email can link to it and it opens straight from that link.
+ * An older link, at /companies/meetings/{form_id}, sends you on (PLAN-V22 T2-1).
  *
  * **One centered form** (PLAN-V18 T2-5), about 840px wide (TBC after Al-khair's look), one card on
  * the page's background, like a sheet of paper, in HubSpot's form pattern with Contour's look. Top

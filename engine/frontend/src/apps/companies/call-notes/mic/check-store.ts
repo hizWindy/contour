@@ -1,7 +1,7 @@
 /**
  * Whether "Check my mic" is open (PLAN-V18 T3-4). Ctrl+K and the account menu open it, and the
- * frame's part shows the mic card in check only mode (`call-note-links.tsx`). One small store in
- * the page, shared by the three: they load together, in one late file.
+ * frame's part shows the mic card in check only mode (`apps/assistant/links.tsx`). One small
+ * store in the page, shared by the three: they load together, in one late file.
  */
 import { useSyncExternalStore } from 'react'
 

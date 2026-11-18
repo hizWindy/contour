@@ -1,6 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ASSISTANT } from '@/apps/assistant/module'
 import { COMPANIES } from '@/apps/companies/module'
 import { LEAD_FINDER } from '@/apps/lead-finder/module'
 import { MODULES, PLANNED } from '@/modules'
@@ -55,19 +56,19 @@ describe('the router', () => {
     ['/leads/99999999-2222-3333-4444-555555555555', 'Lead', ['Lead']],
     ['/rules', 'Rules', ['Rules']],
     ['/test-set', 'Test set', ['Test set']],
-    // Before a company's own address, so neither is ever read as one (PLAN-V17 T3-6, T3-9).
+    // The Assistant's pages (PLAN-V22 T2-1): Today, Meetings and Call logs, under its name.
     // Call logs was Activity until PLAN-V18 T3-2.
-    ['/companies/call-logs', 'Call logs', ['Relationships', 'Call logs']],
-    ['/companies/meetings', 'Client meetings', ['Relationships', 'Meetings']],
-    // The group is Relationships (17 Nov 2026); its first page keeps the name Companies, so the
-    // trail reads "Relationships > Companies" rather than the one word twice.
-    ['/companies', 'Companies', ['Relationships', 'Companies']],
+    ['/assistant', 'Today', ['Assistant', 'Today']],
+    ['/assistant/call-logs', 'Call logs', ['Assistant', 'Call logs']],
+    ['/assistant/meetings', 'Client meetings', ['Assistant', 'Meetings']],
+    // Companies is one page again (PLAN-V22), so its trail is one word.
+    ['/companies', 'Companies', ['Companies']],
     // A pre-read's own page sits under Meetings (T3-10). Every call answers 404 here, so it
     // says, under its own title, that it can't find the pre-read.
     [
-      '/companies/meetings/0f3c9a2e-1111-2222-3333-444444444444',
+      '/assistant/meetings/0f3c9a2e-1111-2222-3333-444444444444',
       'Pre-read',
-      ['Relationships', 'Meetings', 'Pre-read'],
+      ['Assistant', 'Meetings', 'Pre-read'],
     ],
   ])('shows the page at %s with its title and breadcrumbs', async (path, title, trail) => {
     renderAt(path)
@@ -207,16 +208,19 @@ describe('the router', () => {
         expect(group.getByRole('link', { name: item.label })).toHaveAttribute('href', item.to)
       }
     }
-    // Relationships (once Companies) is a group of its own since Call logs (PLAN-V17 T3-6, then
-    // called Activity): the Companies list first, then Meetings (T3-9), then Call logs. The group
-    // follows the order of the projects (T3-7).
-    expect(COMPANIES.name).toBe('Relationships')
-    const companies = within(menu.getByRole('group', { name: COMPANIES.name }))
-    expect(companies.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual([
-      '/companies',
-      '/companies/meetings',
-      '/companies/call-logs',
+    // PLAN-V22 choice 1: Home, Companies (one page, so a plain link), the Assistant's group
+    // (Today, Meetings, Call logs), then the Lead Finder's. "Relationships" is gone.
+    expect(COMPANIES.pages).toHaveLength(1)
+    expect(menu.queryByRole('group', { name: 'Relationships' })).toBeNull()
+    const assistant = within(menu.getByRole('group', { name: ASSISTANT.name }))
+    expect(assistant.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual([
+      '/assistant',
+      '/assistant/meetings',
+      '/assistant/call-logs',
     ])
+    const links = menu.getAllByRole('link').map((link) => link.getAttribute('href'))
+    expect(links.slice(0, 3)).toEqual(['/', '/companies', '/assistant'])
+    expect(links.indexOf('/assistant/call-logs')).toBeLessThan(links.indexOf('/start'))
     expect(menu.getByRole('link', { name: ADMIN.label })).toHaveAttribute('href', '/admin')
     // Rules and the Test set are the Lead Finder's own, not shared Admin tabs.
     const leadFinder = within(menu.getByRole('group', { name: LEAD_FINDER.name }))
@@ -228,15 +232,26 @@ describe('the router', () => {
     expect(menu.getByRole('link', { name: 'Home' })).not.toHaveAttribute('aria-current')
   })
 
-  it('marks Call logs in the menu on its page, and not Companies, whose address it sits in', async () => {
-    renderAt('/companies/call-logs')
+  it('marks Call logs in the menu on its page, and not Today, whose address it sits in', async () => {
+    renderAt('/assistant/call-logs')
     await screen.findByRole('heading', { level: 1, name: 'Call logs' }, { timeout: LAZY })
     const menu = within(screen.getByRole('navigation', { name: 'Main menu' }))
     expect(menu.getByRole('link', { name: 'Call logs' })).toHaveAttribute('aria-current', 'page')
+    expect(menu.getByRole('link', { name: 'Today' })).not.toHaveAttribute('aria-current')
     expect(menu.getByRole('link', { name: 'Companies' })).not.toHaveAttribute('aria-current')
   })
 
-  // Call logs was Activity, at /companies/activity, until PLAN-V18 T3-2: an old link still works.
+  it('marks Today in the menu on its page, and only Today', async () => {
+    renderAt('/assistant')
+    await screen.findByRole('heading', { level: 1, name: 'Today' }, { timeout: LAZY })
+    const menu = within(screen.getByRole('navigation', { name: 'Main menu' }))
+    expect(menu.getByRole('link', { name: 'Today' })).toHaveAttribute('aria-current', 'page')
+    expect(menu.getByRole('link', { name: 'Meetings' })).not.toHaveAttribute('aria-current')
+    expect(menu.getByRole('link', { name: 'Call logs' })).not.toHaveAttribute('aria-current')
+  })
+
+  // Call logs was Activity, at /companies/activity, until PLAN-V18 T3-2, and sat under Companies
+  // until PLAN-V22: an old link still works. The other old addresses: apps/assistant/module.test.tsx.
   it.each([
     ['/companies/activity', ''],
     ['/companies/activity?tab=logged', '?tab=history'],
@@ -244,11 +259,11 @@ describe('the router', () => {
   ])('sends the old address %s on to Call logs, with its tab', async (old, search) => {
     const { router } = renderAt(old)
     await screen.findByRole('heading', { level: 1, name: 'Call logs' }, { timeout: LAZY })
-    expect(router.state.location.pathname).toBe('/companies/call-logs')
+    expect(router.state.location.pathname).toBe('/assistant/call-logs')
     // `log=1` opens the company picker once call notes are known, then leaves the address
     // (every call answers 404 here, so the page drops it at once or keeps it a moment).
     expect([search, search.replace(/&?log=1/, '')]).toContain(router.state.location.search)
-    expect(crumbs()).toEqual(['Relationships', 'Call logs'])
+    expect(crumbs()).toEqual(['Assistant', 'Call logs'])
     expect(document.title).toBe('Call logs - Contour')
     // The old address is replaced, so Back doesn't bounce to it.
     expect(router.state.historyAction).toBe('REPLACE')
@@ -262,19 +277,20 @@ describe('the router', () => {
     expect(await screen.findByRole('option', { name: 'Call logs' })).toBeInTheDocument()
     await user.click(screen.getByRole('option', { name: 'Call logs' }))
     await waitFor(() => {
-      expect(router.state.location.pathname).toBe('/companies/call-logs')
+      expect(router.state.location.pathname).toBe('/assistant/call-logs')
     })
   })
 
   it.each([
-    ['/companies/meetings', 'Client meetings'],
+    ['/assistant/meetings', 'Client meetings'],
     // A pre-read's own page sits under Meetings (T3-10): here every call answers 404.
-    ['/companies/meetings/0f3c9a2e-1111-2222-3333-444444444444', 'Pre-read'],
-  ])('marks Meetings in the menu at %s, and not Companies', async (path, title) => {
+    ['/assistant/meetings/0f3c9a2e-1111-2222-3333-444444444444', 'Pre-read'],
+  ])('marks Meetings in the menu at %s, and not Today or Companies', async (path, title) => {
     renderAt(path)
     await screen.findByRole('heading', { level: 1, name: title }, { timeout: LAZY })
     const menu = within(screen.getByRole('navigation', { name: 'Main menu' }))
     expect(menu.getByRole('link', { name: 'Meetings' })).toHaveAttribute('aria-current', 'page')
+    expect(menu.getByRole('link', { name: 'Today' })).not.toHaveAttribute('aria-current')
     expect(menu.getByRole('link', { name: 'Companies' })).not.toHaveAttribute('aria-current')
   })
 

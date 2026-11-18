@@ -7,15 +7,18 @@
  * takes it out of the address with `replace`, so Back, Forward or a reload never opens the picker
  * again.
  *
- * The page was called Activity until PLAN-V18 (T3-2). Its old address still works: the route sends
- * it on with its tab and `log=1` (`old-address.ts`), and the old tab `logged` reads as History.
+ * The page was called Activity until PLAN-V18 (T3-2), and sat under Companies until PLAN-V22
+ * (T2-1): it is the Assistant's now, at `/assistant/call-logs`. Its old addresses still work: the
+ * route sends them on with their tab and `log=1` (`apps/assistant/old-addresses.ts`), and the old
+ * tab `logged` reads as History.
  */
 import type { CallNoteOutcomeFilter, CallNoteQuery, CallNoteState } from '@/api/types'
+import { CALL_LOGS_PATH } from '@/apps/assistant/paths'
 
 export type CallLogsTab = 'to_confirm' | 'history' | 'needs_look'
 
-/** Call logs' address. */
-export const CALL_LOGS_PATH = '/companies/call-logs'
+/** Call logs' address, kept with the Assistant's others. */
+export { CALL_LOGS_PATH }
 
 /** The tabs, in order. */
 export const CALL_LOGS_TABS: readonly CallLogsTab[] = ['to_confirm', 'history', 'needs_look']
@@ -67,7 +70,7 @@ export function withoutLog(search: URLSearchParams): URLSearchParams {
 }
 
 /**
- * A link to Call logs on one tab, like "/companies/call-logs?tab=needs-look". With `log`, the page
+ * A link to Call logs on one tab, like "/assistant/call-logs?tab=needs-look". With `log`, the page
  * opens with its company picker open.
  */
 export function callLogsHref(tab: CallLogsTab = 'to_confirm', { log = false } = {}): string {

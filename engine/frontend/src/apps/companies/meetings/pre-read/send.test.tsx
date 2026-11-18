@@ -473,11 +473,11 @@ function posts(server: Server, path: string): unknown[] {
 function renderPreRead(signIn: SignIn = { state: 'off' }) {
   const router = createMemoryRouter(
     [
-      { path: '/companies/meetings', element: <h1>Client meetings</h1> },
-      { path: '/companies/meetings/:formId', element: <PreReadPage /> },
+      { path: '/assistant/meetings', element: <h1>Client meetings</h1> },
+      { path: '/assistant/meetings/:formId', element: <PreReadPage /> },
       { path: '/companies/:key', element: <h1>Company</h1> },
     ],
-    { initialEntries: [`/companies/meetings/${FORM_ID}`] },
+    { initialEntries: [`/assistant/meetings/${FORM_ID}`] },
   )
   const queryClient = createTestQueryClient()
   queryClient.setQueryData(queryKeys.auth.me(), signIn)

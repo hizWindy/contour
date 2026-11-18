@@ -644,8 +644,10 @@ describe('PLAN-V19 T3-4: Route guards, zero 403s on Home, and Viewer read-only',
     expect(paths.some((p) => p.includes('/companies/meetings'))).toBe(false)
     expect(paths.some((p) => p.includes('/prep/today'))).toBe(false)
 
-    // Sidebar shows Call logs only (not Companies, Meetings, or Lead Finder).
+    // Sidebar shows the Assistant's Today and Call logs only (not Companies, Meetings, or Lead
+    // Finder), PLAN-V22 T2-1.
     const sidebar = document.querySelector('[data-sidebar="sidebar"]') as HTMLElement
+    expect(within(sidebar).getByRole('link', { name: 'Today' })).toBeInTheDocument()
     expect(within(sidebar).getByRole('link', { name: 'Call logs' })).toBeInTheDocument()
     expect(within(sidebar).queryByRole('link', { name: 'Companies' })).not.toBeInTheDocument()
     expect(within(sidebar).queryByRole('link', { name: 'Meetings' })).not.toBeInTheDocument()
@@ -665,7 +667,7 @@ describe('PLAN-V19 T3-4: Route guards, zero 403s on Home, and Viewer read-only',
       ['/results', 'Results'],
       ['/rules', 'Rules'],
       ['/companies', 'Companies'],
-      ['/companies/meetings', 'Meetings'],
+      ['/assistant/meetings', 'Meetings'],
     ] as const) {
       const blockedCalls: string[] = []
       mockApi({
@@ -802,7 +804,7 @@ describe('PLAN-V19 T3-4: Route guards, zero 403s on Home, and Viewer read-only',
     cleanup()
 
     // Call logs (To confirm): no Log call, Send to HubSpot, Edit, Leave out, or preview POST.
-    const callLogView = renderAppAt('/companies/call-logs', {
+    const callLogView = renderAppAt('/assistant/call-logs', {
       ...emptyHomeMocks(val),
       '/api/v1/companies/call-notes/summary': {
         to_confirm: 1,
@@ -824,7 +826,7 @@ describe('PLAN-V19 T3-4: Route guards, zero 403s on Home, and Viewer read-only',
     cleanup()
 
     // Meetings & Pre-read: no New pre-read, Sync, Draft it, Log meeting, Redraft, Check and send.
-    renderAppAt('/companies/meetings', {
+    renderAppAt('/assistant/meetings', {
       ...emptyHomeMocks(val),
       '/api/v1/companies/meetings': {
         items: [MEETING_ITEM],
@@ -849,7 +851,7 @@ describe('PLAN-V19 T3-4: Route guards, zero 403s on Home, and Viewer read-only',
     }
     cleanup()
 
-    const preReadView = renderAppAt('/companies/meetings/f1', {
+    const preReadView = renderAppAt('/assistant/meetings/f1', {
       ...emptyHomeMocks(val),
       '/api/v1/companies/meetings/forms/f1': {
         ...PRE_READ_FORM,
@@ -881,7 +883,11 @@ describe('PLAN-V19 T3-4: Route guards, zero 403s on Home, and Viewer read-only',
     expect(screen.queryByText(/People tab/i)).not.toBeInTheDocument()
   })
 
-  it('renders Prepped today chips without /companies links when Companies tick is missing', async () => {
+  // Until PLAN-V22 the Relationships card showed a person with Call prep and Call logs, but not
+  // Companies, their prepped calls as plain words. Since T2-1 Companies is a project of its own,
+  // so its card (with "Prepped today") needs the Companies tick, and Call logs is the Assistant's.
+  // Call prep opens only from Companies, so without that tick there is nothing prepped to list.
+  it('shows the Assistant, and no Companies card or /companies link, when Companies tick is missing', async () => {
     const prepWithoutCompanies = makeSignedInUser(
       'staff',
       ['companies.call_prep', 'companies.call_logs'],
@@ -902,11 +908,15 @@ describe('PLAN-V19 T3-4: Route guards, zero 403s on Home, and Viewer read-only',
       ],
     })
     expect(
-      await screen.findByText('Pat Buyer, Sample Logistics Pty Ltd', undefined, { timeout: LAZY }),
+      await screen.findByRole('region', { name: 'Assistant' }, { timeout: LAZY }),
     ).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Companies' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Pat Buyer, Sample Logistics Pty Ltd')).not.toBeInTheDocument()
     expect(
-      screen.queryByRole('link', { name: 'Pat Buyer, Sample Logistics Pty Ltd' }),
-    ).not.toBeInTheDocument()
+      screen
+        .queryAllByRole('link')
+        .filter((link) => link.getAttribute('href')?.startsWith('/companies')),
+    ).toEqual([])
     expect(prepHome.calls.filter((call) => call.path === '/api/v1/companies')).toHaveLength(0)
   })
 

@@ -220,7 +220,7 @@ describe('what it serves', () => {
     const worker = startWorker()
     await worker.install()
     worker.fetched.length = 0
-    for (const path of ['/', '/companies/call-logs', '/runs/0f3c9a2e', '/login?next=%2Fstart']) {
+    for (const path of ['/', '/assistant/call-logs', '/runs/0f3c9a2e', '/login?next=%2Fstart']) {
       const answer = await worker.request(path, { mode: 'navigate' })
       expect(answer.handled && (await answer.response.text())).toBe('net')
     }

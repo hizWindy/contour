@@ -200,7 +200,7 @@ function server(notes: CallNoteOut[], { fail = false } = {}): URLSearchParams[] 
 function renderHistory(search = '') {
   vi.useFakeTimers({ shouldAdvanceTime: true, now: NOW })
   return renderWithProviders(<CallLogsPage />, {
-    route: `/companies/call-logs?tab=history${search}`,
+    route: `/assistant/call-logs?tab=history${search}`,
   })
 }
 
@@ -428,12 +428,12 @@ describe('History', () => {
     vi.useFakeTimers({ shouldAdvanceTime: true, now: NOW })
     const client = createTestQueryClient()
     client.setQueryData(queryKeys.auth.me(), { state: 'off' })
-    prefetchPage(routes, { pathname: '/companies/call-logs', search: '?tab=history' }, client)
+    prefetchPage(routes, { pathname: '/assistant/call-logs', search: '?tab=history' }, client)
     await waitFor(() => {
       expect(asked).toEqual(['?state=history&mine=true&limit=50&offset=0'])
     })
     renderWithProviders(<CallLogsPage />, {
-      route: '/companies/call-logs?tab=history',
+      route: '/assistant/call-logs?tab=history',
       queryClient: client,
     })
     expect(await screen.findByRole('searchbox', { name: 'Search your calls' })).toBeInTheDocument()

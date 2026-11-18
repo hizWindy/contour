@@ -2,13 +2,18 @@
  * The projects on the website, in menu order. Each one is a module from its own folder under
  * src/apps/. The router, the sidebar, the command menu and Home all read this list, so adding a
  * project is its folder plus one line here.
+ *
+ * The menu reads Home, Companies, the Assistant (Today, Meetings, Call logs), then the Lead Finder
+ * (PLAN-V22 choice 1): Companies has one page, so it is a plain link right under Home. Ctrl+K lists
+ * them in the same order. Home places its wide card first, whatever this order (`home.tsx`).
  */
 import { Briefcase, CalendarDays, LayoutDashboard, Megaphone, Telescope } from 'lucide-react'
+import { ASSISTANT } from '@/apps/assistant/module'
 import { COMPANIES } from '@/apps/companies/module'
 import { LEAD_FINDER } from '@/apps/lead-finder/module'
 import type { AppModule, PlannedModule } from '@/shell/nav'
 
-export const MODULES: readonly AppModule[] = [LEAD_FINDER, COMPANIES]
+export const MODULES: readonly AppModule[] = [COMPANIES, ASSISTANT, LEAD_FINDER]
 
 /**
  * The projects still to be developed, in Levi's order: the 30 Oct meeting put calendar scheduling
@@ -17,7 +22,8 @@ export const MODULES: readonly AppModule[] = [LEAD_FINDER, COMPANIES]
  * When one is built, it moves to MODULES. On Home, a project with `when` gets its own card and the
  * rest share one "Later" card. Meeting prep left the list on 9 Nov: the Companies page
  * and its call prep replace it (PLAN-V10 B1). Call notes left it on 15 Nov: Log call and the
- * Activity page, under Companies, replace it (PLAN-V17 T3-7).
+ * Activity page, under Companies, replace it (PLAN-V17 T3-7). Deal review's daily task list went
+ * on 19 Nov: the Assistant's Today lists the deals that need a nudge (PLAN-V22 T2-1).
  */
 export const PLANNED: readonly PlannedModule[] = [
   {
@@ -38,7 +44,7 @@ export const PLANNED: readonly PlannedModule[] = [
     icon: Briefcase,
     to: '/deal-review',
     description:
-      'Reads every open deal in HubSpot and rates it green, amber or red, with the main flags and a next step. A daily task list shows deals nobody has spoken to for weeks.',
+      'Reads every open deal in HubSpot and rates it green, amber or red, with the main flags and a next step.',
     status: "Third in Levi's list. Needs good HubSpot data first.",
     when: 'Third',
     short: 'Rates every open deal green, amber or red, with the main flags and a next step.',

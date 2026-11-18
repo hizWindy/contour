@@ -225,8 +225,8 @@ function transcripts(server: Server): Sent[] {
 }
 
 function renderPast(queryClient = createTestQueryClient()) {
-  const router = createMemoryRouter([{ path: '/companies/meetings', element: <MeetingsPage /> }], {
-    initialEntries: ['/companies/meetings?when=past'],
+  const router = createMemoryRouter([{ path: '/assistant/meetings', element: <MeetingsPage /> }], {
+    initialEntries: ['/assistant/meetings?when=past'],
   })
   return renderWithProviders(<RouterProvider router={router} />, {
     withRouter: false,
@@ -284,7 +284,7 @@ describe('Log meeting on a past meeting', () => {
     expect(typed.getByText('Sent')).toBeInTheDocument()
     expect(typed.getByRole('link', { name: /^Open/ })).toHaveAttribute(
       'href',
-      '/companies/meetings/f-typed',
+      '/assistant/meetings/f-typed',
     )
   })
 

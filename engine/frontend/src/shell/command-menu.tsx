@@ -1,3 +1,4 @@
+import { useCommandState } from 'cmdk'
 import { Download, Moon, Monitor, PanelLeft, Search, Sun } from 'lucide-react'
 import { Suspense, useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
@@ -18,6 +19,7 @@ import { useMe } from '@/api/hooks'
 import { isPlatformAdmin } from '@/auth/can'
 import { PLANNED } from '@/modules'
 import { install, INSTALL_STEPS, useInstallWay } from '@/pwa/install'
+import { byBestMatch, pageValue } from './command-order'
 import { useVisibleModules, visiblePages } from './visible-modules'
 import { ADMIN_TABS, HOME, type CommandsProps, type NavItem } from './nav'
 import { applyTheme, type ThemeChoice } from './theme'
@@ -43,7 +45,7 @@ function PageItem({ item, onSelect }: { item: NavItem; onSelect: (to: string) =>
   const Icon = item.icon
   return (
     <CommandItem
-      value={`${item.label} ${item.to}`}
+      value={pageValue(item)}
       keywords={item.keywords}
       onSelect={() => {
         onSelect(item.to)
@@ -56,15 +58,41 @@ function PageItem({ item, onSelect }: { item: NavItem; onSelect: (to: string) =>
 }
 
 /**
+ * Each project's pages and its own actions, a group each, in the menu's order, or the best match
+ * first while something is typed (`command-order.ts`). It reads what is typed from the menu itself,
+ * so it is drawn inside the `Command`.
+ */
+function ProjectGroups({ go, run }: CommandsProps) {
+  const me = useMe().data
+  const modules = useVisibleModules()
+  const search = useCommandState((state) => state.search)
+  return byBestMatch(modules, me, search).map((app) => {
+    const Commands = app.commands
+    return (
+      <CommandGroup key={app.id} heading={app.name}>
+        {visiblePages(me, app.pages).map((item) => (
+          <PageItem key={item.to} item={item} onSelect={go} />
+        ))}
+        {Commands ? (
+          // A module's own entries may load late (the Assistant's do): nothing shows till then.
+          <Suspense fallback={null}>
+            <Commands go={go} run={run} />
+          </Suspense>
+        ) : null}
+      </CommandGroup>
+    )
+  })
+}
+
+/**
  * Jump to any page, or run an action, from the keyboard: Ctrl+K (Cmd+K on a Mac) opens it from
  * anywhere, also while typing in a field. It lists Home, each project's pages and its own actions
- * (Companies' "Log a call", PLAN-V17 T3-7), the projects still to be developed, the Admin tabs, and
- * a few actions. Only the projects this person may use are listed.
+ * (the Assistant's "Log a call", PLAN-V17 T3-7, PLAN-V22 T2-1), the projects still to be developed,
+ * the Admin tabs, and a few actions. Only the projects this person may use are listed.
  */
 export function CommandMenu(): ReactNode {
   const [open, setOpen] = useState(false)
   const me = useMe().data
-  const modules = useVisibleModules()
   const showAdmin = isPlatformAdmin(me)
   const navigate = useNavigate()
   const { toggleSidebar } = useSidebar()
@@ -131,23 +159,7 @@ export function CommandMenu(): ReactNode {
             <CommandGroup heading="Pages">
               <PageItem item={HOME} onSelect={go} />
             </CommandGroup>
-            {modules.map((app) => {
-              const Commands = app.commands
-              const pages = visiblePages(me, app.pages)
-              return (
-                <CommandGroup key={app.id} heading={app.name}>
-                  {pages.map((item) => (
-                    <PageItem key={item.to} item={item} onSelect={go} />
-                  ))}
-                  {Commands ? (
-                    // A module's own entries may load late (Companies' do): nothing shows till then.
-                    <Suspense fallback={null}>
-                      <Commands go={go} run={run} />
-                    </Suspense>
-                  ) : null}
-                </CommandGroup>
-              )
-            })}
+            <ProjectGroups go={go} run={run} />
             <CommandGroup heading="To be developed">
               {PLANNED.map(({ to, name, icon }) => (
                 <PageItem key={to} item={{ to, label: name, icon }} onSelect={go} />

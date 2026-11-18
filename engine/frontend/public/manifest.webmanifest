@@ -2,7 +2,7 @@
   "id": "/",
   "name": "Contour",
   "short_name": "Contour",
-  "description": "Contour's work tools: the Lead Finder, companies, client meetings and call logs.",
+  "description": "Contour's work tools: companies, the Assistant for today's work, client meetings and call logs, and the Lead Finder.",
   "lang": "en-AU",
   "dir": "ltr",
   "start_url": "/",
@@ -23,17 +23,24 @@
   ],
   "shortcuts": [
     {
+      "name": "Today",
+      "short_name": "Today",
+      "description": "Your tasks, meetings and calls to confirm, the most urgent first",
+      "url": "/assistant",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
       "name": "Call logs",
       "short_name": "Call logs",
       "description": "Check the calls you logged and send them to HubSpot",
-      "url": "/companies/call-logs",
+      "url": "/assistant/call-logs",
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
       "name": "Meetings",
       "short_name": "Meetings",
       "description": "Client meetings and their pre-reads",
-      "url": "/companies/meetings",
+      "url": "/assistant/meetings",
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {

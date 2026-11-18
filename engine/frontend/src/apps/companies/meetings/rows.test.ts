@@ -255,9 +255,9 @@ describe("Meetings' address", () => {
     expect(writeMeetings(new URLSearchParams('team=1'), { when: 'past' }).toString()).toBe(
       'when=past',
     )
-    expect(meetingsHref()).toBe('/companies/meetings')
-    expect(meetingsHref({ when: 'past' })).toBe('/companies/meetings?when=past')
-    expect(meetingsHref({ who: 'team' })).toBe('/companies/meetings?who=team')
+    expect(meetingsHref()).toBe('/assistant/meetings')
+    expect(meetingsHref({ when: 'past' })).toBe('/assistant/meetings?when=past')
+    expect(meetingsHref({ who: 'team' })).toBe('/assistant/meetings?who=team')
   })
 
   it('asks the server with every value, and q only when there are words', () => {
@@ -273,6 +273,6 @@ describe("Meetings' address", () => {
   })
 
   it('links each pre-read to its own page', () => {
-    expect(preReadHref('f 1')).toBe('/companies/meetings/f%201')
+    expect(preReadHref('f 1')).toBe('/assistant/meetings/f%201')
   })
 })

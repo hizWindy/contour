@@ -176,8 +176,11 @@ interface Placed {
 }
 
 /**
- * Every card in order: each project's own cards (or its plain card), then Runs and cost, then the
- * cards that come late (`HomeCard.late`), so their coming moves none of the others.
+ * Every card in order: the wide cards (the Lead Finder's), then each project's own narrow cards (or
+ * its plain card) in the menu's order, then Runs and cost, then the cards that come late
+ * (`HomeCard.late`), so their coming moves none of the others. The wide card leads whatever the
+ * menu's order, so the narrow cards stack beside it: PLAN-V22 T2-1 put Companies and the Assistant
+ * before the Lead Finder in the menu, and Home kept its shape (TBC at T2-3's look).
  */
 function placeCards(modules: readonly AppModule[], showRunsCost: boolean): Placed[] {
   const placed: Placed[] = modules.flatMap((app) =>
@@ -190,7 +193,10 @@ function placeCards(modules: readonly AppModule[], showRunsCost: boolean): Place
         }))
       : [{ key: app.id, wide: false, late: false, node: <PlainCard app={app} /> }],
   )
-  const steady = placed.filter((card) => !card.late)
+  const steady = [
+    ...placed.filter((card) => !card.late && card.wide),
+    ...placed.filter((card) => !card.late && !card.wide),
+  ]
   const late = placed.filter((card) => card.late)
   return modules.length > 0 && showRunsCost
     ? [...steady, { key: 'runs-cost', wide: false, late: false, node: <RunsCostCard /> }, ...late]

@@ -1,7 +1,7 @@
 /**
  * Admin, People (PLAN-V9 E1, PLAN-V17 T3-7, PLAN-V19 T3-2..T3-4): who has an account, their
- * role, optional position, feature ticks across two groups, HubSpot owner, and starting/reset
- * passwords.
+ * role, optional position, feature ticks in three groups (Companies, Assistant and Lead Finder,
+ * PLAN-V22 choice 4), HubSpot owner, and starting/reset passwords.
  */
 import {
   Check,
@@ -169,7 +169,7 @@ function FeatureGroups({
   return (
     <div className="flex flex-col gap-4">
       {FEATURE_GROUPS.map((group) => (
-        <fieldset key={group.app} className="flex flex-col gap-2">
+        <fieldset key={group.id} className="flex flex-col gap-2">
           <legend className="text-ui font-semibold text-foreground">{group.label}</legend>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {group.features.map((item) => {
