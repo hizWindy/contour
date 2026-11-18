@@ -5,15 +5,23 @@ sees its good leads that aren't in HubSpot yet, and its column and panel section
 those out for anyone else: hiding them in the browser would not be enough (PLAN-V10 B2).
 
 This file has the reads. The call prep routes are in api_preps.py, the script edits and style
-notes (PLAN-V14) in api_script.py, the call notes (PLAN-V17) in api_notes.py, and Meetings
-(PLAN-V17) in api_meetings.py.
+notes (PLAN-V14) in api_script.py, the call notes (PLAN-V17) in api_notes.py, Meetings
+(PLAN-V17) in api_meetings.py, and the Assistant (PLAN-V22) in api_assistant.py.
 """
 
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path, Query
 
-from apps.companies import api_meetings, api_notes, api_preps, api_script, meeting_store, store
+from apps.companies import (
+    api_assistant,
+    api_meetings,
+    api_notes,
+    api_preps,
+    api_script,
+    meeting_store,
+    store,
+)
 from apps.companies.deals import DealState
 from apps.companies.deps import LeadsDep
 from apps.companies.schemas import (
@@ -134,12 +142,14 @@ async def search_companies(
     return await store.search(session, q, leads)
 
 
-# The prep, script, call note and meeting routes have fixed paths (/preps/..., /script-edits,
-# /script-style/..., /call-notes/..., /meetings/...), so they go before /{key}.
+# The prep, script, call note, meeting and Assistant routes have fixed paths (/preps/...,
+# /script-edits, /script-style/..., /call-notes/..., /meetings/..., /assistant/...), so they go
+# before /{key}.
 router.include_router(api_preps.router)
 router.include_router(api_script.router)
 router.include_router(api_notes.router)
 router.include_router(api_meetings.router)
+router.include_router(api_assistant.router)
 
 
 @router.get(
