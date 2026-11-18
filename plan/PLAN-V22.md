@@ -5,8 +5,8 @@ This plan builds what Levi asked for on 18 Nov: fewer clicks, and voice for the 
 **TBC** means to be confirmed.
 
 - **Built by:** Al-khair Pama, with Claude. **Signed off by:** Al-khair, for the code and every screen. Levi confirms what is marked **TBC with Levi**.
-- **Last updated:** 19 Nov 2026 (T1-3, T1-4 and T3-1 done, T3-2 built).
-- **Progress:** Before the build: 1 of 2 (S1 waits for Al-khair at the keyboard). Part 1: 4 of 7. Part 2: 1 of 4. Part 3: 1 of 6 (T3-2 built, waiting for Al-khair's one real command). M1 to M4: 0 of 4.
+- **Last updated:** 19 Nov 2026 (T1-5 and T1-6 done, T2-2 and T2-3 built).
+- **Progress:** Before the build: 1 of 2 (S1 waits for Al-khair at the keyboard). Part 1: 6 of 7 (T1-7 waits for a rerun of three core test parts, on Al-khair's word). Part 2: 1 of 4 (T2-2 and T2-3 built, waiting for Al-khair's look). Part 3: 1 of 6 (T3-2 built, waiting for Al-khair's one real command). M1 to M4: 0 of 4.
 - **Sources:**
   - the meeting with Levi on 18 Nov (Gemini's notes in `minutes of meeting/`, which git ignores);
   - Al-khair's answers in chat (19 Nov);
@@ -287,12 +287,14 @@ All new routes sit under `/api/v1/companies/assistant/`, behind the Call logs or
 `POST /assistant/tasks/preview`, then `POST /assistant/tasks` (with an Idempotency-Key).
 - `company_key`, `subject` (1 to 200 characters), `body` (optional, up to 2,000), `due` (a day), `kind` (call, email or to-do), and `owner_id` (optional: me by default, or a teammate from `GET /team`).
 - The answer is the HubSpot write's result, as a call note's steps are.
+- At most 20 new tasks a minute a person: 429 `too_many_tasks` (added at T1-6). A repeated key isn't counted.
 
 ### 4. The team email (T1-5 builds, T3-3 reads)
 
 `POST /assistant/email/preview`, then `POST /assistant/email` (with an Idempotency-Key).
 - `owner_ids` (teammates with a Contour account), `emails` (Contour addresses), `subject` (1 to 120 characters), `body` (1 to 4,000), and `company_key` (optional: it adds a link to the company).
 - 1 to 20 people. 422 `outside_address` names the refused addresses. 409 `email_not_set_up`. 429 `too_many_emails`.
+- Also (T1-5): 422 `no_account` (a teammate whose account address isn't a Contour one; it names the person, never the address), `owner_not_found`, `no_one`, `too_many_recipients`, `subject_empty`, `body_empty` and `not_in_hubspot`; 404 `company_not_found`; 409 `email_sending`; 502 `email_failed`. The answer's `html` is escaped, but the website shows it as text.
 
 ### 5. Changes to what exists (T1-6)
 
@@ -310,7 +312,7 @@ No new switch. The command step follows `call_notes_enabled` and `call_notes_ai_
 
 ## Part 1: the backend
 
-**Progress:** 4 of 7. Every step is `backend-agent` work.
+**Progress:** 6 of 7. Every step is `backend-agent` work.
 
 - [x] **T1-1. The command step.** Done 19 Nov 2026 (`4515649`). The route, the prompt, the form and the limits, with a test for each line of "Done when".
   - `apps/companies/assistant.py`, with its prompt inline as `notes.py` has it, and the route in `api_assistant.py`.
@@ -335,15 +337,16 @@ No new switch. The command step follows `call_notes_enabled` and `call_notes_ai_
   - Adding goes through the activity writer (`TaskIn`, `ActivityRequest`), behind `hubspot_write_enabled`, with an Idempotency-Key.
   - Done and reopen set the task's status in HubSpot, after reading it again to check it is mine. Each write is a row in `core.hubspot_writes`, as every write is.
   - **Done when:** tests pass: a task for me and one for a teammate; writing off gives 409 with its words; done, then reopen; another person's task gives 403; and a repeated key adds one task.
-- [ ] **T1-5. The team email.** `apps/companies/team_email.py`.
+- [x] **T1-5. The team email.** Done 19 Nov 2026 (`dbb725b`). `apps/companies/team_email.py`.
   - Every address goes through `only_internal`. One outside address refuses the whole send and names it. Teammates come from the team list, and only those with an account.
   - The email has the subject, the body (every value HTML escaped), "Sent by {name} from Contour HQ", and the company's link if given. A reply goes to the rep's own address, if our sender can set it (**TBC**).
   - At most 30 sends a day a person (**TBC**).
   - **Done when:** tests pass: an outside address refuses the send; a teammate with no account can't be picked, with why; a repeated key sends once; no sender set up gives 409; and the limit holds.
-- [ ] **T1-6. The changes to what exists.** `voice_tool`'s default, the morning email's link, `today_quiet_days`'s Settings help (the setting itself came with T1-3), the words for every new error (each file's words block), the new routes in `test_contract_routes.py`, and at most 20 tasks added a minute a person (**TBC**, as for commands; found at T1-4).
+- [x] **T1-6. The changes to what exists.** Done 19 Nov 2026 (`a17d19a`). `voice_tool`'s default, the morning email's link, `today_quiet_days`'s Settings help (the setting itself came with T1-3), the words for every new error (each file's words block), the new routes in `test_contract_routes.py`, and at most 20 tasks added a minute a person (**TBC**, as for commands; found at T1-4).
   - **Done when:** the settings, words and route tests pass.
 - [ ] **T1-7. Check.** ruff, ruff format, mypy, the fast tests, the Companies and core tests, and the contract gate (`RUN_GATES=1`). Then make the contract and the website's types again for Part 2.
   - **Done when:** all pass, and the numbers are in the Log.
+  - 19 Nov 2026: all pass but three parts of the core tests (the files a to g, h, and s to z), which Claude Code stopped for low memory. They wait for a rerun on Al-khair's word. The contract and types are in (`11260f5`).
 
 ### Part 1 Log
 
@@ -362,6 +365,11 @@ No new switch. The command step follows `call_notes_enabled` and `call_notes_ai_
   - **The contract gained** `tasks_state: failed` and 409 `no_hubspot_link` (both now in "The contract"). A 403 there broke the test that says the Companies tick opens every route. The task routes keep the contract's `hubspot_writing_off`; call notes use `hubspot_writes_off`, so the website gives each its own words.
   - Companies' list of HubSpot permissions now includes reading tasks.
   - **TBC, checked live at M3** (the agent had no web access): that HubSpot's search gives no links to other records, sorts by latest due as asked, and gives each task its own link (`url`); the task statuses (`COMPLETED`, `NOT_STARTED` and the rest); the 2-minute overlay and the 10-second read limit. Today should hide "Open in HubSpot" when a task has no link.
+- 19 Nov 2026, T1-5, T1-6 and T1-7 (`dbb725b`, `a17d19a`, then the contract and the website's types in `11260f5`): built by `backend-agent`. ruff, ruff format (455 files) and mypy (421 files) clean. The fast tests: 3,543 passed, 28 skipped. The Companies tests: 574 passed. The core tests in files i to r: 720 passed. The contract gates: 3 passed. The `security-check` skill on T1-5: no blockers. **Not run:** the core tests in files a to g, h, and s to z (Claude Code stopped them for low memory; their fast tests passed in the fast suite). They wait for a rerun on Al-khair's word, and M1 runs everything again.
+  - **The team email:** `team_email.py` (who it goes to, the preview, the send, the 30 a day count), routes in `api_assistant.py`. Core's `Email` gained an optional `reply_to`, sent to Resend as `reply_to` (**TBC**: Resend's field name) and masked in the log. It is set only when the rep's own address is a Contour one. Emails and phone numbers in its words go out blanked, as in tasks and call notes. So a rep can't pass a client's number to a colleague this way (**TBC** at Al-khair's look). A teammate whose account address isn't a Contour one can't be picked (`no_account`), and the error names the person, never the address. Nothing is saved, and nothing goes to HubSpot or Claude.
+  - **T1-6:** `voice_tool` now defaults to the speech service. A Whisper choice saved while the service was off isn't kept once it turns on; live already uses the service. The morning email's and the pre-read's links go to `/assistant/meetings/{id}`. That also fixed an older broken link: the pre-read's HubSpot task pointed to `/meetings?form=`, a page that doesn't exist. At most 20 new tasks a minute (429 `too_many_tasks`).
+  - **In memory, so they start again on a restart (TBC):** the 30 emails a day, the 20 tasks a minute and the email keys.
+  - `engine/AGENTS.md` still calls Whisper the default. That changes at M4.
 
 ## Part 2: the Assistant tab and Today
 
@@ -377,14 +385,14 @@ No new switch. The command step follows `call_notes_enabled` and `call_notes_ai_
   - The People tab groups the ticks as choice 4 says.
   - The planned "Deal review" (`src/modules.ts:41`) loses its "daily task list" line, because Today does it now.
   - **Done when:** tests pass for each new address, each old address with its query, the menu for each set of ticks (Call logs alone shows the Assistant with Today and Call logs, and no Companies; Companies alone shows Companies only), and Ctrl+K found by its old words.
-- [ ] **T2-2. Today.** Built against the contract with `mockApi`.
+- [ ] **T2-2. Today.** Built against the contract with `mockApi`. Built 19 Nov 2026 (`95a57e8` on `plan-v22-web`), waiting for Al-khair's look.
   - The four parts of choice 6, and the keys of choice 8 (`useListKeyboard`).
   - "Done" with Undo, Sync with "Checked 8:12 am", "Open in HubSpot", and each row's main action: Log a call, Draft the pre-read, or Open.
   - **Every state:** loading (a still skeleton at the real size, after 200ms), empty ("Nothing due today. Press V to log a call or add a task."), and each Today error in "Words for when things go wrong".
   - On a phone: one column, with "Speak" pinned at the bottom.
   - Settings shows `today_quiet_days` with the other call notes settings (`settings-groups.ts`).
   - **Done when:** tests cover each part, each state, each key, Done and Undo, and Sync. Al-khair has seen it.
-- [ ] **T2-3. Home.** The Assistant card and the Companies card (choice 5).
+- [ ] **T2-3. Home.** The Assistant card and the Companies card (choice 5). Built 19 Nov 2026 (`9cbfa72`, `3b7b657` on `plan-v22-web`), waiting for Al-khair's look.
   - **Done when:** tests pass, and Al-khair has seen it.
 - [ ] **T2-4. Part 2 check.** Lint, types, the tests, the build and `node scripts/bundle-report.js` (the first visit may grow by 1 kB at most). The `design-review` skill on Today and Home. Each screen at 1440, 1280, 768 and 390px, light and dark, by keyboard only.
   - **Done when:** all checks pass, and the numbers are in the Log.
@@ -397,6 +405,10 @@ No new switch. The command step follows `call_notes_enabled` and `call_notes_ai_
   - **Where things are:** the addresses in `apps/assistant/paths.ts` (`TODAY_PATH`, `MEETINGS_PATH`, `CALL_LOGS_PATH`), the old ones in `old-addresses.ts` (`/companies/activity?tab=logged` goes to `/assistant/call-logs?tab=history`), and the parts around the app (Ctrl+K, the account menu's "Check my mic", the frame's `MicCheckHost`) in `links.tsx`, loaded late through `parts.ts`. Today is `today/index.tsx`.
   - **The menu keeps its shape:** Meetings and Call logs stay in it while call notes or pre-meeting forms are off (each page says so). Ctrl+K follows the switches.
   - **TBC at Al-khair's look:** the Assistant's icon (a headset) and its colour (Companies' Heath).
+- 19 Nov 2026, T2-2 and T2-3 (`95a57e8`, `9cbfa72` on `plan-v22-web`): built by `frontend-agent`. Its own tests: Today 38, the Home card 8, Settings 9, and the areas it touched 1,332 passed. Its closing full run was stopped for low memory. Its shell was gone, but the run itself went on and wrote to the session's scratchpad: 2,223 passed and 1 failed. The failure was the router's Home test: it read each project's card at once, and the Assistant's only card comes late. The lead session made it wait for the card (`3b7b657`): 50 of 50 pass. Lint, types and the build pass. The first visit: 242 kB gzip (751 kB raw) in 39 files, the same as after T3-1. No browser look yet.
+  - **Where things are:** `apps/assistant/today/` (the page, `rows.ts`, `rows-view.tsx`, Done and Undo in `use-done.ts` with a task's own words for each error, Sync in `use-sync.ts`, the phone's pinned Speak in `speak-bar.tsx`, and the Log call panel opened straight on the row's company). The hooks are in `api/hooks/assistant.ts`. The active row's company goes to the voice bar's `on_page` (`voice/on-screen.ts`). The Home card is `apps/assistant/home-card.tsx`. Settings has `today_quiet_days` under call notes.
+  - **Home:** the Companies card loses its quick buttons. `meetings/upcoming-card.tsx` is deleted, with the 5 words only it used, because the Assistant card takes over "Upcoming meetings" (choice 5). The Assistant card comes late, after Runs and cost, where "Upcoming meetings" was. It reads "Press V to speak, on any page." on a laptop, and shows a Speak button on a touch screen.
+  - **TBC at Al-khair's look:** Today's layout (two columns on a laptop, tasks on the left), its part titles, "Draft the pre-read" (Meetings says "Draft it"), the Done toast and the task error words; keep "Upcoming meetings" gone; after L's Log call panel closes, the focus goes to the page, not back to the row (J and K carry on from the active row). Viewers see Today, with no Done and no Speak.
 
 ## Part 3: the voice and the review card
 
@@ -503,3 +515,4 @@ No new switch. The command step follows `call_notes_enabled` and `call_notes_ai_
 - 19 Nov 2026: the first account's 5-hour limit stopped both agents at 03:50, after their checks and before their commits. The session went on in the second account at 03:54. It read both agents' work, reran the tests and committed it (`4515649`, `d956204`). From now on, each agent commits each step as soon as its tests pass.
 - 19 Nov 2026: one change to the order. The website builds T3-1 and T3-2 (the V key, the voice bar and its words) next, while the backend builds T1-3 and T1-4. T3-1 and T3-2 need only T1-1's contract, which is in (`4b13c39`), and Today's rows use V (choice 8). T2-2 and T2-3 follow once T1-3's contract is in.
 - 19 Nov 2026, after T1-4 and T3-2: the safety check refused joining `plan-v22-web` into `plan-v22`, because the `git-workflow` skill says a merge needs Al-khair's own word. So the copies stay apart until he says so. The website copy got the same two generated files as `4a70341` instead (`474a41a` on `plan-v22-web`, types and lint pass), so it can build Today and the tasks. Both sides match, so the join stays clean. Each later contract change is copied the same way. The website copy reads this plan from `../contour-v22`. Next: the backend builds T1-5, T1-6 and T1-7, and the website builds T2-2 and T2-3.
+- 19 Nov 2026, after T1-6 and T2-3: the laptop ran low on memory with both agents' test runs, and Claude Code stopped three of the backend's core test parts and the website's closing run. The website's run carried on without its shell and finished (Part 2 Log). Per the rule for stopped jobs, the core parts wait for Al-khair's word. The contract after T1-5 and T1-6 is copied to the website copy (`4e088cf`). Part 1's backend work is built. Next: the website builds T3-3 and T3-4 (the review card and sending), one agent at a time, to spare the memory.
