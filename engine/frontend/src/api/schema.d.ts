@@ -197,6 +197,106 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/assistant/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a task
+         * @description Adds one HubSpot task on the company, for me or a teammate, through the same writer as a call note's follow-ups, and answers with the write: `status` (`done` when it is in HubSpot, `failed` or `uncertain` otherwise) and its step `task:1` in words, with HubSpot's id once made. HubSpot's search may take a few seconds to show it; Today shows it at once. Send an `Idempotency-Key`: the same key from the same person gives back the first write (200), so HubSpot gets one task, even for a double press. A send that timed out is never sent again blind: HubSpot is searched for it first. 409 `hubspot_writing_off` while HubSpot can't be written (nothing is sent), `task_sending` while the same task is being sent. 404 `company_not_found`. 422 `not_in_hubspot`, `task_empty`, `task_in_past`, `day_out_of_range`, `owner_not_found`. 503 `hubspot_unavailable`. A Viewer gets 403 `viewer_read_only`.
+         */
+        post: operations["add_assistant_task"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/assistant/tasks/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check a task before adding it
+         * @description What adding this task would do: the company as HubSpot has it now (one free read), the task in words (`plan.tasks`: what, its kind, when it is due and for whom), any warning (like no HubSpot owner linked to my account, so HubSpot shows it unassigned), and whether HubSpot can be written now (`can_write`, `waiting_for`). Nothing is sent; it works while writing is off. `owner_id`: me by default, or a teammate from GET /team. The task is due at 9:00 am on its day, Melbourne time. Send the card's `Idempotency-Key`: the send with the same key adds this task once. 404 `company_not_found`. 422 `not_in_hubspot` (a Lead Finder company), `task_empty`, `task_in_past`, `day_out_of_range`, `owner_not_found`. 503 `hubspot_not_connected` or `hubspot_unavailable` (HubSpot didn't answer). A Viewer gets 403 `viewer_read_only`.
+         */
+        post: operations["preview_assistant_task"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/assistant/tasks/{task_id}/done": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Tick a task done
+         * @description Ticks my HubSpot task done at once (choice 7: Undo is reopen). HubSpot is read first: a task that isn't mine is never changed (403 `not_your_task`). A task done already sends nothing. Each change is a row in HubSpot's write log. Today shows it at once. 404 `task_not_found`. 409 `hubspot_writing_off` while HubSpot can't be written, `no_hubspot_link` when my account has no HubSpot owner linked. 502 `task_not_changed` when HubSpot didn't take it (trying again is safe). 503 `hubspot_unavailable`. A Viewer gets 403 `viewer_read_only`.
+         */
+        post: operations["tick_assistant_task_done"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/assistant/tasks/{task_id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open a task again
+         * @description Opens my HubSpot task again (the Undo of Done): it gets back the status it had before its last Done here, like In progress, else Not started. HubSpot is read first: a task that isn't mine is never changed (403 `not_your_task`). A task open already sends nothing. Each change is a row in HubSpot's write log. 404 `task_not_found`. 409 `hubspot_writing_off`, `no_hubspot_link`. 502 `task_not_changed`. 503 `hubspot_unavailable`. A Viewer gets 403 `viewer_read_only`.
+         */
+        post: operations["reopen_assistant_task"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/assistant/today": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Today
+         * @description The Assistant's first page, the most urgent first (`parts` says which this person sees). `tasks`: my open HubSpot tasks, overdue first, then today's, then the next 7 days' (Melbourne days), at most 100, latest due kept (`tasks_more` counts older overdue ones). They are read from HubSpot (two free requests: the tasks, then their companies) and kept for 5 minutes a person; `fresh=true` (Sync) reads them again, but HubSpot is asked at most once a minute a person. `tasks_state`: `ok`, `no_owner` (no HubSpot link: the rest still shows), `no_access` (HubSpot won't let the key read tasks), `off` (HubSpot isn't connected) or `failed` (HubSpot didn't answer and no earlier read is kept), with `tasks_sentence` in plain words; a read that fails after a good one keeps the good one, and the sentence says from when. `meetings`: mine today and tomorrow, not cancelled, each with its pre-read (`form`), and my typed-in pre-reads. `calls`: my notes to confirm and those that need a look. `deals`: my open deals whose close date has passed or whose company nobody has talked to for `quiet_days` days, at most 50 (`deals_more`). `checked_at`: when the tasks were read. No Claude request: it is free. Behind the Call logs or the Meetings tick (403 `feature_not_allowed`); a Viewer may read it.
+         */
+        get: operations["read_today"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/call-notes": {
         parameters: {
             query?: never;
@@ -2438,6 +2538,48 @@ export interface components {
             /**
              * Subject
              * @description What to do, up to 200 characters. Empty when none was said
+             */
+            subject: string;
+        };
+        /**
+         * AssistantTaskIn
+         * @description One HubSpot task, as the review card sends it.
+         */
+        AssistantTaskIn: {
+            /**
+             * Body
+             * @description More words, if any, up to 2,000
+             * @default
+             */
+            body: string;
+            /**
+             * Company Key
+             * @description The company: its HubSpot id. A Lead Finder company that isn't in HubSpot yet (lead:<id>) can't have a task
+             * @example 201
+             */
+            company_key: string;
+            /**
+             * Due
+             * Format: date
+             * @description The day it is due: today or later, Melbourne time
+             */
+            due: string;
+            /**
+             * Kind
+             * @description call, email or todo
+             * @default todo
+             * @enum {string}
+             */
+            kind: "call" | "email" | "todo";
+            /**
+             * Owner Id
+             * @description A teammate's HubSpot owner id, from GET /team. None: me
+             */
+            owner_id?: string | null;
+            /**
+             * Subject
+             * @description What to do, 1 to 200 characters once trimmed (422 `task_empty`). An email address or a phone number in it is sent as [email left out] or [number left out]
+             * @example Send Sample Logistics the floor plan
              */
             subject: string;
         };
@@ -9381,7 +9523,7 @@ export interface components {
             status: "done" | "failed" | "uncertain" | "skipped";
             /**
              * Step
-             * @description company, note or list (the Lead Finder); call, fields, task:1, task:2 ..., note or meeting (an activity)
+             * @description company, note or list (the Lead Finder); call, fields, task:1, task:2 ..., note or meeting (an activity); status (a task ticked done or opened again)
              * @example task:1
              */
             step: string;
@@ -9910,6 +10052,201 @@ export interface components {
             b: number;
             /** C */
             c: number;
+        };
+        /**
+         * Today
+         * @description The Assistant's first page: my day, the most urgent first. Free: no Claude request.
+         */
+        Today: {
+            calls: components["schemas"]["TodayCalls"];
+            /**
+             * Checked At
+             * Format: date-time
+             * @description When the tasks shown were read from HubSpot. When none could be read: when this answer was made
+             */
+            checked_at: string;
+            /**
+             * Deals
+             * @description My open deals that need a nudge: close date passed first, then the longest without contact
+             */
+            deals: components["schemas"]["TodayDeal"][];
+            /**
+             * Deals More
+             * @description More such deals beyond the ones listed (50 at most)
+             */
+            deals_more: number;
+            /**
+             * Meetings
+             * @description My meetings today and tomorrow, soonest first
+             */
+            meetings: components["schemas"]["TodayMeeting"][];
+            /**
+             * Parts
+             * @description The parts this person sees, in order. A part left out also comes back empty
+             */
+            parts: ("tasks" | "meetings" | "calls" | "deals")[];
+            /**
+             * Quiet Days
+             * @description The days without contact that make a deal quiet
+             */
+            quiet_days: number;
+            /**
+             * Tasks
+             * @description My open HubSpot tasks: overdue first, then today's, then the next 7 days', each group soonest due first
+             */
+            tasks: components["schemas"]["TodayTask"][];
+            /**
+             * Tasks More
+             * @description Older overdue tasks HubSpot has beyond the ones listed (100 at most are read)
+             */
+            tasks_more: number;
+            /**
+             * Tasks Sentence
+             * @description Plain words when the tasks can't show, or show from an earlier read
+             */
+            tasks_sentence: string | null;
+            /**
+             * Tasks State
+             * @enum {string}
+             */
+            tasks_state: "ok" | "no_owner" | "no_access" | "off" | "failed";
+        };
+        /** TodayCalls */
+        TodayCalls: {
+            /**
+             * Needs Look
+             * @description My call notes that failed, were partly saved, or unsure
+             */
+            needs_look: number;
+            /**
+             * To Confirm
+             * @description My call notes waiting for me to confirm them
+             */
+            to_confirm: number;
+        };
+        /** TodayCompany */
+        TodayCompany: {
+            /**
+             * Key
+             * @description The company's key: its HubSpot id
+             * @example 201
+             */
+            key: string;
+            /** Name */
+            name: string;
+        };
+        /** TodayDeal */
+        TodayDeal: {
+            /** Close Date */
+            close_date: string | null;
+            company: components["schemas"]["TodayCompany"];
+            /** Hubspot Url */
+            hubspot_url: string | null;
+            /**
+             * Id
+             * @description HubSpot's deal id
+             */
+            id: string;
+            /**
+             * Last Contact
+             * @description The last time anyone talked to the company: the newest of its last activity and last contacted, and the deal's last contacted. None when there is none
+             */
+            last_contact: string | null;
+            /** Name */
+            name: string;
+            /**
+             * Reasons
+             * @description close_date_passed, quiet, or both
+             */
+            reasons: ("close_date_passed" | "quiet")[];
+            /**
+             * Stage
+             * @description HubSpot's stage, like Qualified Deal
+             */
+            stage: string | null;
+            /**
+             * Why
+             * @description Why it needs a nudge, like 'Close date passed, 12 Nov' or 'No contact for 21 days'
+             */
+            why: string;
+        };
+        /** TodayMeeting */
+        TodayMeeting: {
+            company: components["schemas"]["TodayCompany"];
+            /**
+             * Day
+             * @description today or tomorrow, Melbourne time
+             * @enum {string}
+             */
+            day: "today" | "tomorrow";
+            /** Ends At */
+            ends_at: string | null;
+            /** @description Its pre-read, if it has one */
+            form: components["schemas"]["MeetingFormState"] | null;
+            /** Hubspot Url */
+            hubspot_url: string | null;
+            /**
+             * Id
+             * @description HubSpot's meeting id. None for a meeting typed in for a pre-read
+             */
+            id: string | null;
+            /**
+             * Starts At
+             * Format: date-time
+             */
+            starts_at: string;
+            /** Title */
+            title: string;
+        };
+        /** TodayTask */
+        TodayTask: {
+            /** @description Its company, when it is linked to one in our HubSpot copy */
+            company: components["schemas"]["TodayCompany"] | null;
+            /**
+             * Due
+             * Format: date
+             * @description The day it is due, Melbourne time
+             */
+            due: string;
+            /**
+             * Due At
+             * Format: date-time
+             * @description HubSpot's due time
+             */
+            due_at: string;
+            /**
+             * Group
+             * @description overdue, today, or soon (the next 7 days)
+             * @enum {string}
+             */
+            group: "overdue" | "today" | "soon";
+            /**
+             * Hubspot Url
+             * @description The task in HubSpot, when HubSpot gave it
+             */
+            hubspot_url: string | null;
+            /**
+             * Id
+             * @description HubSpot's task id
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "call" | "email" | "todo";
+            /**
+             * Overdue
+             * @description Due before today, Melbourne time
+             */
+            overdue: boolean;
+            /** Priority */
+            priority: ("high" | "medium" | "low") | null;
+            /**
+             * Subject
+             * @description One line, with email addresses and phone numbers left out
+             */
+            subject: string;
         };
         /** ToneChoice */
         ToneChoice: {
@@ -10658,11 +10995,11 @@ export interface components {
             fields: components["schemas"]["FieldChange"][];
             /**
              * Kind
-             * @description company: the Lead Finder's send (a company, a note, a list). activity: a call, field changes, follow-up tasks and a note on one company (PLAN-V17)
+             * @description company: the Lead Finder's send (a company, a note, a list). activity: a call, field changes, follow-up tasks and a note on one company (PLAN-V17). task: one task ticked done or opened again (PLAN-V22)
              * @default company
              * @enum {string}
              */
-            kind: "company" | "activity";
+            kind: "company" | "activity" | "task";
             /** List Id */
             list_id: string | null;
             /** List Name */
@@ -11695,6 +12032,629 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AssistantCommand"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    add_assistant_task: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Any unique text (a UUID is fine), made when the card opens. Send the same key on the preview and the send: a repeated key gives back the first task */
+                "idempotency-key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssistantTaskIn"];
+            };
+        };
+        responses: {
+            /** @description The first task added with this key */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WriteOut"];
+                };
+            };
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WriteOut"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    preview_assistant_task: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Any unique text (a UUID is fine), made when the card opens. Send the same key on the preview and the send: a repeated key gives back the first task */
+                "idempotency-key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssistantTaskIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WriteOut"];
+                };
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    tick_assistant_task_done: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description HubSpot's task id */
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    reopen_assistant_task: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description HubSpot's task id */
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request can't be understood */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not signed in (code `auth_required`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Blocked, or this isn't allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not possible in the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too much data */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A value in the request isn't valid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Something went wrong */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not built yet */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A part of the engine isn't available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    read_today: {
+        parameters: {
+            query?: {
+                /** @description Sync: read the tasks from HubSpot again (at most once a minute) */
+                fresh?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Today"];
                 };
             };
             /** @description The request can't be understood */
