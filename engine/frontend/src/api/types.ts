@@ -217,3 +217,11 @@ export type AssistantCommandIn = Schemas['AssistantCommandIn']
 export type AssistantOnPage = Schemas['AssistantOnPage']
 export type AssistantOpen = Schemas['AssistantOpen']
 export type CommandSource = AssistantCommandIn['source']
+
+// The Assistant (PLAN-V22): Today (T1-3, the contract part 2) and its tasks (T1-4)
+export type Today = Schemas['Today']
+export type TodayPart = Today['parts'][number]
+export type TodayTask = Schemas['TodayTask']
+export type TodayMeeting = Schemas['TodayMeeting']
+export type TodayDeal = Schemas['TodayDeal']
+export type TodayCompany = Schemas['TodayCompany']

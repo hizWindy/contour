@@ -58,6 +58,7 @@ import { handOver } from './hand-over'
 import { isPlainV, somethingElseOpen, VOICE_BAR } from './keys'
 import { namesOnPage } from './names'
 import { onPageOf } from './on-page'
+import { onScreen } from './on-screen'
 import { closeVoiceBar, useVoiceBarOpen } from './store'
 import {
   CANCEL,
@@ -224,11 +225,13 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
   if (open !== opened) {
     setOpened(open)
     if (open) {
-      const onPage = onPageOf(location.pathname, location.search)
+      // A row the page says is on screen (Today's active row, choice 8), else the address.
+      const row = onScreen()
+      const onPage = row?.onPage ?? onPageOf(location.pathname, location.search)
       setSession(
         new BarSession({
           onPage,
-          names: namesOnPage(client, onPage),
+          names: row ? row.names : namesOnPage(client, onPage),
           read,
           hand: (heard) =>
             handOver(heard, {

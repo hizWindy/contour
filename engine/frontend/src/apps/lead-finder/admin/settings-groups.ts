@@ -70,6 +70,7 @@ const GROUP_OF: Record<string, GroupId> = {
   call_notes_ai_enabled: 'notes',
   meeting_forms_enabled: 'notes',
   voice_tool: 'notes', // PLAN-V18: which voice to text tool the mic uses
+  today_quiet_days: 'notes', // PLAN-V22 T2-2: the days without contact that make a deal quiet on Today
 }
 
 /**

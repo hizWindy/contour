@@ -256,6 +256,35 @@ describe('Admin, Settings', () => {
     ])
   })
 
+  it("puts Today's quiet days with the call notes settings (PLAN-V22 T2-2)", async () => {
+    mockApi({
+      '/api/v1/settings': {
+        ...settingsOut(),
+        fields: [
+          ...settingsOut().fields,
+          {
+            ...SETTING,
+            key: 'today_quiet_days',
+            label: 'Days before a deal is quiet',
+            description:
+              'Today lists an open deal whose company nobody has talked to for this long.',
+            type: 'int',
+            min: 1,
+            max: 90,
+            default: 14,
+            value: 14,
+          },
+        ],
+      },
+    })
+    const { user } = renderWithProviders(<AdminSettingsTab />)
+    await screen.findByRole('list', { name: 'Money' })
+    expect(screen.queryByText('Days before a deal is quiet')).toBeNull()
+    await user.click(screen.getByRole('radio', { name: 'Call notes' }))
+    const notes = screen.getByRole('list', { name: 'Call notes' })
+    expect(within(notes).getByText('Days before a deal is quiet')).toBeInTheDocument()
+  })
+
   it("offers the browser's speech service once the server lists it (after Levi's OK)", async () => {
     const calls = mockApi({
       '/api/v1/settings': {
