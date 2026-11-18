@@ -139,7 +139,8 @@ async def test_the_browser_speech_service_waits_for_levis_ok_on_the_server(
     saved = await client.patch(SETTINGS, json={"values": {"voice_tool": "browser_service"}})
     assert saved.status_code == 200, saved.text
     chosen = by_key(saved.json())["voice_tool"]
-    assert (chosen["value"], chosen["overridden"]) == ("browser_service", True)
+    # The speech service is the default (PLAN-V22 T1-6), so saving it is no override.
+    assert (chosen["value"], chosen["overridden"]) == ("browser_service", False)
     assert chosen["choices"] == ["browser_model", "browser_service", "typing"]
 
 

@@ -17,7 +17,16 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
-from apps.companies import meeting_form, meeting_send, meeting_store
+from apps.companies import (
+    assistant,
+    assistant_find,
+    assistant_tasks,
+    meeting_form,
+    meeting_send,
+    meeting_store,
+    team_email,
+    today,
+)
 from core.hubspot import meetings
 from tests.core.test_safe_deploys import FORBIDDEN, SETTING_NAMES
 
@@ -161,3 +170,34 @@ def test_the_next_step_check_tells_a_step_from_none() -> None:
     assert NEXT_STEP.search("Meetings are switched off. An admin can switch them on in Settings.")
     assert not NEXT_STEP.search("It may have been removed, or it isn't open to your account.")
     assert not NEXT_STEP.search("Only an active team note can be retired.")
+
+
+def test_the_plan_v22_words_are_the_ones_sent() -> None:
+    """PLAN-V22 "Words for when things go wrong", the Assistant's, as the server sends them."""
+    assert assistant.command_empty().detail == (
+        "We didn't hear anything. Press V and speak, or type what to do."
+    )
+    assert assistant.too_many_commands(5).detail == (
+        "That's a lot of commands in one minute. Wait a moment, then try again."
+    )
+    assert assistant.too_slow().detail == "That took too long. Your words are kept. Try again."
+    outside = "Emails from the Assistant go to Contour people only. Remove jo@out.example to send."
+    assert assistant_find.outside("jo@out.example") == outside
+    assert team_email.outside_address(["jo@out.example"]).detail == outside
+    assert assistant_find.not_in_hubspot("North Wind") == (
+        "We couldn't find 'North Wind' in HubSpot. Pick the company."
+    )
+    assert assistant_find.which("James") == "Which James?"
+    assert assistant_find.no_meeting_ahead("Northwind has") == (
+        "Northwind has no meeting in HubSpot in the next 60 days. Start a pre-read and type the date."
+    )
+    assert today.NO_LINK.format(asker="Al Khair") == (
+        "Today needs your account linked to HubSpot. Ask Al Khair to link it."
+    )
+    assert today.CANT_READ == (
+        "We can't read your HubSpot tasks yet. Your meetings and calls still show."
+    )
+    # Found while building (T1-4 and T1-6): the same shape, for tasks.
+    assert assistant_tasks.too_many_tasks(5).detail == (
+        "That's a lot of tasks in one minute. Wait a moment, then try again."
+    )

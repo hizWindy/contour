@@ -965,7 +965,7 @@ def test_task_body_keeps_contour_links_when_truncated() -> None:
     settings = Settings(_env_file=None, app_url=SITE)
     body = meeting_send.task_body(form, settings)
     assert len(body) <= BODY_MAX_CHARS
-    assert f"Pre-read in Contour: {SITE}/meetings?form={form.id}" in body
+    assert f"Pre-read in Contour: {SITE}/assistant/meetings/{form.id}" in body
     assert f"Sample Logistics Pty Ltd in Contour: {SITE}/companies/201" in body
     assert "What they do (Written by AI)" in body
 

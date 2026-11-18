@@ -22,6 +22,7 @@ import httpx
 import pytest
 from sqlalchemy import select
 
+from apps.companies.assistant import CommandLimit
 from core.api.deps import settings_dependency
 from core.hubspot.models import HubSpotOwner, HubSpotWrite
 from tests.companies.helpers import API, add, company
@@ -295,3 +296,24 @@ async def test_a_viewer_and_nobody_signed_in_are_refused(
             refused = await nobody.post(path, json=body, headers={"Idempotency-Key": "card-1"})
             assert (refused.status_code, refused.json()["code"]) == (401, "auth_required")
     assert hubspot.calls == []
+
+
+async def test_at_most_20_tasks_a_minute_and_a_repeated_key_isnt_counted(
+    world: World, settings: dict[str, Any], hubspot: FakeHubSpot
+) -> None:
+    """T1-6 (TBC): 2 a minute here, to keep the test short."""
+    await a_copy(world)
+    world.app.state.task_limit = CommandLimit(per_minute=2)
+    async with signed_in(world, "mia", owner="o1") as (client, _):
+        assert (await post(client, TASKS, a_task(), key="k1")).status_code == 201
+        assert (await post(client, TASKS, a_task(), key="k2")).status_code == 201
+        assert (await post(client, TASKS, a_task(), key="k1")).status_code == 200  # not counted
+        over = await post(client, TASKS, a_task(), key="k3")
+        assert (over.status_code, over.json()["code"]) == (429, "too_many_tasks")
+        assert over.headers["Retry-After"] == "60"
+        assert over.json()["detail"] == (
+            "That's a lot of tasks in one minute. Wait a moment, then try again."
+        )
+        world.clock.advance(minutes=1)
+        assert (await post(client, TASKS, a_task(), key="k3")).status_code == 201
+    assert len(made(hubspot)) == 3

@@ -34,7 +34,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.companies.meeting_form import SUMMARY_NAMES, form_not_found, when_words
-from apps.companies.meeting_job import app_url, email_sender
+from apps.companies.meeting_job import app_url, email_sender, form_link
 from apps.companies.meeting_store import EMPTY_SUMMARY, MeetingSource
 from apps.companies.note_batch import ActivityWriter, one_open_deal
 from apps.companies.note_store import WAITING_FOR_WRITES, sending_state
@@ -230,9 +230,10 @@ def task_subject(form: MeetingForm) -> str:
 
 
 def task_body(form: MeetingForm, settings: Settings) -> str:
-    """Plain-text HubSpot task body, always preserving links at the bottom when truncated."""
-    site = app_url(settings)
-    form_link = f"{site}/meetings?form={form.id}"
+    """Plain-text HubSpot task body, always preserving links at the bottom when truncated. The
+    pre-read's link is the morning email's (PLAN-V22 T1-6): the old `/meetings?form=` had no
+    page on the website."""
+    pre_read = form_link(settings, form.id)
     comp_link = company_link(settings, form.company_key)
     parts: list[str] = []
     if form.next_step and form.next_step.strip():
@@ -245,7 +246,7 @@ def task_body(form: MeetingForm, settings: Settings) -> str:
         title = SUMMARY_TITLES[heading]
         label = f"{title} ({AI_MARK})" if item.by == "ai" else title
         parts.append(f"{label}\n{item.text.strip()}")
-    footer = f"Pre-read in Contour: {form_link}\n{form.company_name} in Contour: {comp_link}"
+    footer = f"Pre-read in Contour: {pre_read}\n{form.company_name} in Contour: {comp_link}"
     head = "\n\n".join(parts)
     if not head:
         return footer[:BODY_MAX_CHARS]

@@ -510,11 +510,12 @@ class Settings(BaseSettings):
     notes_max_chars: int = Field(6_000, ge=500, le=60_000)  # about 6 minutes of talk (TBC)
     notes_soft_seconds: int = Field(180, ge=30, le=1_800)  # the timer turns Ochre (TBC, Levi)
     transcript_max_chars: int = Field(60_000, ge=1_000, le=200_000)  # a meeting's (TBC)
-    # Which voice to text tool the mic uses (PLAN-V18, the contract's part 4). browser_model is
-    # Whisper in the browser: the voice stays on the laptop. browser_service is the browser's own
-    # speech service, which sends the voice to Google or Microsoft: used only while
-    # browser_speech_ok is on (Levi's OK, TBC), and browser_model until then. typing hides the mic.
-    voice_tool: VoiceTool = "browser_model"
+    # Which voice to text tool the mic uses (PLAN-V18, the contract's part 4). browser_service,
+    # the default since PLAN-V22 (choice 10), is the browser's own speech service, which sends the
+    # voice to Google or Microsoft: used only while browser_speech_ok is on (Levi's OK, TBC), and
+    # browser_model until then. browser_model is Whisper in the browser: the voice stays on the
+    # laptop. typing hides the mic.
+    voice_tool: VoiceTool = "browser_service"
     meeting_forms_enabled: StrictBool = False  # shows Meetings and the pre-read
     model_meeting_form: ClaudeModel = "claude-sonnet-5-5"
     meeting_form_cap_usd: Decimal = Field(Decimal("0.10"), ge=Decimal("0.01"), le=Decimal("2"))

@@ -11,7 +11,8 @@ meeting coming up soon.
 - **Cost:** each draft keeps to its own cap (`meeting_form_cap_usd`), and the morning stops at
   the daily limit for all Claude spending. One morning costs about US$0.03 a meeting (TBC).
 - **Telling the rep:** when a draft is ready, the meeting's owner gets one email, "Your pre-read
-  for Sample Logistics is ready", with a link to `/companies/meetings/<form id>` on the website.
+  for Sample Logistics is ready", with a link to `/assistant/meetings/<form id>` on the website
+  (PLAN-V22 T1-6: the Assistant's Meetings; the old address still sends you on).
   The owner's name and address come through the `rep_of_owner` seam: the account linked to that
   HubSpot owner (Track 1's link). No rep, or no email set up: no email, and the pre-read still
   shows on the website.
@@ -121,8 +122,8 @@ def app_url(settings: Settings) -> str:
 
 
 def form_link(settings: Settings, form_id: uuid.UUID) -> str:
-    """The pre-read's page on the website (TBC with Track 3: its route for a pre-read)."""
-    return f"{app_url(settings)}/companies/meetings/{quote(str(form_id))}"
+    """The pre-read's page on the website: the Assistant's Meetings (PLAN-V22 T1-6)."""
+    return f"{app_url(settings)}/assistant/meetings/{quote(str(form_id))}"
 
 
 # --- Which meetings -------------------------------------------------------------------------------

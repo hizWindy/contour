@@ -600,12 +600,12 @@ class CallNoteOptions(Out):
         "taken out. A longer one answers 422 `transcript_too_long`"
     )
     voice_tool: VoiceTool = Field(
-        "browser_model",
-        description="Which voice to text tool the mic uses: browser_model (Whisper in the "
-        "browser: the voice stays on the laptop), browser_service (the browser's own speech "
-        "service, which sends the voice to Google or Microsoft) or typing (no mic). "
-        "browser_service comes only once the server allows it, after Levi's OK: until then a "
-        "saved or server value of it comes as browser_model",
+        "browser_service",
+        description="Which voice to text tool the mic uses: browser_service (the browser's own "
+        "speech service, the default since PLAN-V22, which sends the voice to Google or "
+        "Microsoft), browser_model (Whisper in the browser: the voice stays on the laptop) or "
+        "typing (no mic). browser_service comes only once the server allows it, after Levi's "
+        "OK: until then a saved or server value of it comes as browser_model",
     )
 
 

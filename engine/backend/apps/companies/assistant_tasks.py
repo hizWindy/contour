@@ -16,6 +16,9 @@ routes are in api_assistant.py.
   Reopen gives back the status the task had before its last Done here, else Not started.
 - **Writing** is behind `hubspot_write_enabled` and the key's write access (409
   `hubspot_writing_off`, in the task's own words: the call notes' code says calls wait).
+- **At most 20 tasks added a minute a person** (T1-6, TBC, as for commands: 429
+  `too_many_tasks`). A repeated key gives back its first task, so it isn't counted. Kept in
+  memory, so the count starts again when the backend restarts.
 - **Today's copy** changes at once (`TaskCopy.change`), so Today shows the change before HubSpot's
   search does.
 - No database connection is held while HubSpot answers. Log lines hold ids and states only.
@@ -30,6 +33,7 @@ from fastapi import FastAPI
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from apps.companies.assistant import CommandLimit, person_key
 from apps.companies.assistant_schemas import AssistantTaskIn
 from apps.companies.facts import scrub
 from apps.companies.meeting_store import MeetingSource, company_names, my_owner
@@ -47,7 +51,8 @@ from core.hubspot.client import HubSpotError, HubSpotNotFound, HubSpotWritesOff
 from core.hubspot.connection import open_hubspot
 from core.hubspot.models import HubSpotCompany, HubSpotOwner
 from core.hubspot.tasks import OPEN, OpenTask, subject_of
-from core.hubspot.writer import WriteInProgress, WriteOut
+from core.hubspot.writer import OPEN as REPLANNED
+from core.hubspot.writer import WriteInProgress, WriteOut, latest_write
 
 log = logging.getLogger(__name__)
 
@@ -57,6 +62,7 @@ ANYONE: Final = "anyone"  # the person, while sign-in is off
 PRIORITY: Final = "medium"
 RETRY_SECONDS: Final = 30
 PLATFORM_ADMIN: Final = "the Platform admin"
+TASKS_PER_MINUTE: Final = 20  # added by one person (T1-6, TBC, as for commands)
 
 # --- The words (PLAN-V15 "Words for errors", PLAN-V22 "Words for when things go wrong") ---------
 
@@ -134,6 +140,21 @@ def hubspot_not_connected() -> Problem:
         "HubSpot page in Admin.",
         code="hubspot_not_connected",
     )
+
+
+def too_many_tasks(wait_seconds: int) -> Problem:
+    return Problem(
+        429,
+        "Too many tasks",
+        "That's a lot of tasks in one minute. Wait a moment, then try again.",
+        code="too_many_tasks",
+        headers={"Retry-After": str(wait_seconds)},
+    )
+
+
+def task_limit() -> CommandLimit:
+    """The tasks a person may add in a minute (T1-6, TBC)."""
+    return CommandLimit(per_minute=TASKS_PER_MINUTE)
 
 
 def task_sending() -> Problem:
@@ -295,14 +316,21 @@ async def add_task(
     settings: Settings,
     writer: ActivityWriter,
     copy: TaskCopy,
+    limit: CommandLimit,
     key: str,
     now: datetime,
 ) -> tuple[WriteOut, bool]:
     """Adds the task to HubSpot, once for this key: the write, and whether this call made it (a
-    repeated key gives back the first write, and sends nothing). Writing off: 409, nothing sent."""
+    repeated key gives back the first write, and sends nothing). Writing off: 409, nothing sent.
+    Over 20 new tasks in a minute: 429, before HubSpot is asked."""
     request, _ = await task_request(session, body, auth=auth, writer=writer, key=key, now=now)
     if not sending_state(app, settings).ready:
         raise writing_off("the task wasn't added")
+    known = await latest_write(session, APP, request.subject)
+    if known is None or known.status in REPLANNED:  # a repeated key isn't a new task
+        wait = limit.take(person_key(auth), now)
+        if wait is not None:
+            raise too_many_tasks(wait)
     await session.commit()  # no connection waits on HubSpot
     try:
         async with open_hubspot(app) as hubspot:

@@ -499,6 +499,17 @@ def test_the_browser_speech_service_in_the_env_waits_for_the_ok_too(
     assert Settings(_env_file=None).voice_tool == "browser_service"
 
 
+def test_the_speech_service_is_the_default_once_levi_says_yes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """PLAN-V22 T1-6 (choice 10): the browser's speech service is the default. While its switch
+    is off, it still reads as Whisper in the browser, as before."""
+    assert Settings.model_fields["voice_tool"].default == "browser_service"
+    assert Settings(_env_file=None).voice_tool == "browser_model"
+    monkeypatch.setenv("BROWSER_SPEECH_OK", "true")
+    assert Settings(_env_file=None).voice_tool == "browser_service"
+
+
 # --- Loopback only -----------------------------------------------------------------------
 
 

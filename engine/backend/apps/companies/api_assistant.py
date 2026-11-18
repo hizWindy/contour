@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, Header, Path, Query, Request, Response
 
 from apps.companies import assistant_tasks, team_email, today
 from apps.companies.api_meetings import SourceDep, WriterDep
-from apps.companies.assistant import Assistant, check_on, read_command
+from apps.companies.assistant import Assistant, CommandLimit, check_on, read_command
 from apps.companies.assistant_schemas import (
     AssistantCommand,
     AssistantCommandIn,
@@ -59,6 +59,16 @@ def task_copy(request: Request) -> TaskCopy:
     return found
 
 
+def task_limit(request: Request) -> CommandLimit:
+    """The tasks each person may add in a minute (20, TBC), made on first use. A test puts its
+    own in app.state."""
+    found: CommandLimit | None = getattr(request.app.state, "task_limit", None)
+    if found is None:
+        found = assistant_tasks.task_limit()
+        request.app.state.task_limit = found
+    return found
+
+
 def team_email_book(request: Request) -> TeamEmailBook:
     """Each person's team emails today and the keys already sent, made on first use. A test
     puts its own in app.state."""
@@ -73,6 +83,7 @@ AssistantDep = Annotated[Assistant, Depends(assistant_state)]
 AssistantOnDep = Annotated[Settings, Depends(assistant_on)]
 TaskCopyDep = Annotated[TaskCopy, Depends(task_copy)]
 EmailBookDep = Annotated[TeamEmailBook, Depends(team_email_book)]
+TaskLimitDep = Annotated[CommandLimit, Depends(task_limit)]
 TaskId = Annotated[
     str, Path(min_length=1, max_length=32, pattern=r"^[0-9]+$", description="HubSpot's task id")
 ]
@@ -233,9 +244,11 @@ async def preview_assistant_task(
         "back the first write (200), so HubSpot gets one task, even for a double press. A send "
         "that timed out is never sent again blind: HubSpot is searched for it first. 409 "
         "`hubspot_writing_off` while HubSpot can't be written (nothing is sent), `task_sending` "
-        "while the same task is being sent. 404 `company_not_found`. 422 `not_in_hubspot`, "
-        "`task_empty`, `task_in_past`, `day_out_of_range`, `owner_not_found`. 503 "
-        "`hubspot_unavailable`. A Viewer gets 403 `viewer_read_only`."
+        "while the same task is being sent. 429 `too_many_tasks` over 20 new tasks in a "
+        "minute for one person (TBC), with `Retry-After`; a repeated key isn't counted. 404 "
+        "`company_not_found`. 422 `not_in_hubspot`, `task_empty`, `task_in_past`, "
+        "`day_out_of_range`, `owner_not_found`. 503 `hubspot_unavailable`. A Viewer gets 403 "
+        "`viewer_read_only`."
     ),
     responses={200: {"model": WriteOut, "description": "The first task added with this key"}},
 )
@@ -248,6 +261,7 @@ async def add_assistant_task(
     auth: SignedInDep,
     writer: WriterDep,
     copy: TaskCopyDep,
+    limit: TaskLimitDep,
     now: NowDep,
     idempotency_key: CardKey,
 ) -> WriteOut:
@@ -259,6 +273,7 @@ async def add_assistant_task(
         settings=settings,
         writer=writer,
         copy=copy,
+        limit=limit,
         key=idempotency_key,
         now=now,
     )

@@ -284,10 +284,11 @@ TEXT: dict[str, tuple[str, str]] = {
     ),
     "voice_tool": (
         "Voice to text",
-        "Which tool turns a rep's voice into words on Log call. Whisper in the browser keeps "
-        "the voice on the laptop. The browser's own speech service sends the voice to Google or "
-        "Microsoft, so it is offered only once the server allows it, after Levi's OK (TBC). "
-        "Until then the mic uses Whisper in the browser in its place. Typing hides the mic.",
+        "Which tool turns a rep's voice into words, on Log call and for the Assistant's V key. "
+        "The browser's own speech service, the default, sends the voice to Google or Microsoft, "
+        "so it is offered only once the server allows it, after Levi's OK (TBC). Until then the "
+        "mic uses Whisper in the browser in its place, which keeps the voice on the laptop. "
+        "Typing hides the mic.",
     ),
     "meeting_forms_enabled": (
         "Pre-meeting forms are on",
@@ -295,9 +296,10 @@ TEXT: dict[str, tuple[str, str]] = {
         "by the rep, and emailed to the Contour team. About US$0.03 a draft (TBC).",
     ),
     "today_quiet_days": (
-        "Days before a deal is quiet",
-        "Today lists your open deal when nobody has talked to its company for this many days. "
-        "TBC with Levi.",
+        "Days without contact before Today lists a deal",
+        "Today lists each of your open deals whose company has had no contact in HubSpot (no "
+        "call, email, meeting, note or task) for this many days, so it gets a nudge. A deal whose "
+        "close date has passed is listed too. 14 days to start, TBC with Levi.",
     ),
     "memory_fresh_days": (
         "Days a note stays fresh",

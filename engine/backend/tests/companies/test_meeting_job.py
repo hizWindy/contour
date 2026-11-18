@@ -235,7 +235,7 @@ async def test_each_meeting_is_drafted_once_and_its_rep_gets_one_email(world: Wo
     assert [email.to for email in setup.emails.sent] == [["lee@contour.example"]] * 3
     email = setup.emails.sent[0]
     assert email.subject == "Your pre-read for Sample Logistics Pty Ltd is ready"
-    link = f"{SITE}/companies/meetings/{made['9201'].id}"
+    link = f"{SITE}/assistant/meetings/{made['9201'].id}"  # the Assistant's (PLAN-V22)
     assert email.text.startswith("Hi Lee,\n\nYour pre-read for the meeting with Sample Logistics")
     assert link in email.text
     assert email.html is not None and f'href="{link}"' in email.html

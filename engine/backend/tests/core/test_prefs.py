@@ -131,6 +131,16 @@ def test_every_editable_key_has_words_a_type_and_shows_as_editable() -> None:
     assert out.daily_left_usd == D("50.00")
 
 
+def test_todays_quiet_days_is_on_the_settings_page_in_plain_words() -> None:
+    """PLAN-V22 T1-3 and T1-6: a whole number of days, 14 to start (TBC with Levi)."""
+    out = build_settings_out(resolve_settings(base(), {}), D("50.00"))
+    field = fields_of(out)["today_quiet_days"]
+    label, words = TEXT["today_quiet_days"]
+    assert (field.type, field.value, field.min, field.max) == ("int", 14, 1, 365)
+    assert label == "Days without contact before Today lists a deal"
+    assert "close date has passed" in words and "TBC with Levi" in words
+
+
 def test_no_secret_is_ever_on_the_page() -> None:
     env = base(anthropic_api_key="sk-ant-api03-secret-key", postgres_password="pw-secret-1")
     text = build_settings_out(resolve_settings(env, {}), D("1")).model_dump_json()
@@ -194,7 +204,8 @@ def test_a_saved_browser_speech_service_waits_for_the_ok(allowed: bool) -> None:
     field = fields_of(build_settings_out(resolved, D("1")))["voice_tool"]
     used = "browser_service" if allowed else "browser_model"
     assert resolved.settings.voice_tool == used
-    assert (field.value, field.default, field.overridden) == (used, "browser_model", allowed)
+    # The speech service is the default (PLAN-V22 T1-6), so a saved one is never an override.
+    assert (field.value, field.default, field.overridden) == (used, used, False)
     assert resolved.ignored == ()  # kept, for when the OK comes
 
 
@@ -375,7 +386,10 @@ async def test_the_browser_speech_service_cant_be_saved_until_the_server_allows_
     monkeypatch.setattr(service, "get_settings", lambda: base(browser_speech_ok=True))
     out = await patch_settings(session, {"voice_tool": "browser_service"})
     assert fields_of(out)["voice_tool"].value == "browser_service"
-    assert await stored(session) == {"voice_tool": "browser_service"}
+    assert await stored(session) == {}  # the default since PLAN-V22 T1-6: nothing to keep
+    out = await patch_settings(session, {"voice_tool": "browser_model"})
+    assert fields_of(out)["voice_tool"].overridden is True
+    assert await stored(session) == {"voice_tool": "browser_model"}  # Whisper, by choice
 
 
 @pytest.mark.integration
