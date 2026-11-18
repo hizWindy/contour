@@ -5,8 +5,8 @@ This plan builds what Levi asked for on 18 Nov: fewer clicks, and voice for the 
 **TBC** means to be confirmed.
 
 - **Built by:** Al-khair Pama, with Claude. **Signed off by:** Al-khair, for the code and every screen. Levi confirms what is marked **TBC with Levi**.
-- **Last updated:** 19 Nov 2026 (T1-5 and T1-6 done, T2-2 and T2-3 built).
-- **Progress:** Before the build: 1 of 2 (S1 waits for Al-khair at the keyboard). Part 1: 7 of 7. Part 2: 1 of 4 (T2-2 and T2-3 built, waiting for Al-khair's look). Part 3: 1 of 6 (T3-2 built, waiting for Al-khair's one real command). M1 to M4: 0 of 4.
+- **Last updated:** 19 Nov 2026 (T1-7, T3-3 and T3-4 done, T3-5 built).
+- **Progress:** Before the build: 1 of 2 (S1 waits for Al-khair at the keyboard). Part 1: 7 of 7. Part 2: 1 of 4 (T2-2 and T2-3 built, waiting for Al-khair's look). Part 3: 3 of 6 (T3-2 and T3-5 built, waiting for Al-khair to try them in the real page). M1 to M4: 0 of 4.
 - **Sources:**
   - the meeting with Levi on 18 Nov (Gemini's notes in `minutes of meeting/`, which git ignores);
   - Al-khair's answers in chat (19 Nov);
@@ -413,7 +413,7 @@ No new switch. The command step follows `call_notes_enabled` and `call_notes_ai_
 
 ## Part 3: the voice and the review card
 
-**Progress:** 1 of 6. Every step is `frontend-agent` work.
+**Progress:** 3 of 6. Every step is `frontend-agent` work.
 
 - [x] **T3-1. The V key and the voice bar.** Done 19 Nov 2026 (`da2d840` on `plan-v22-web`, not joined yet). In `apps/assistant/voice/`, mounted on every page through the module's frame, as `MicCheckHost` is.
   - A shared `isTyping(event)` in `src/lib/`, for V. The five old copies stay as they are.
@@ -428,17 +428,17 @@ No new switch. The command step follows `call_notes_enabled` and `call_notes_ai_
   - Whisper only if S1 picked it, with PLAN-V18 T3-5 (a)'s rules.
   - The audio is never stored.
   - **Done when:** tests with a fake tool cover each state, and Al-khair has said one real command in the real page.
-- [ ] **T3-3. The review card.** One card, with a layout for each action in choice 24.
+- [x] **T3-3. The review card.** Done 19 Nov 2026 (`2f550b4` on `plan-v22-web`). One card, with a layout for each action in choice 24.
   - The read-back, the boxes, the choices ("Which James?", picked with the arrow keys and Enter), and the keys and hint bar of choices 19 and 20.
   - V on the card sends the words with `card`, and applies the `change`. Each box's own mic writes straight into it.
   - **A call:** the note is saved (`POST /call-notes`, `source: mic`). The card shows the sort when it is ready, and a fresh `/call-notes/preview` gives the old and new values.
   - **Done when:** tests cover each layout, each key rule, the half second guard, the jump to an empty required box, each choice, and a change by voice.
-- [ ] **T3-4. Sending: the 5 second hold, Undo and "send it".**
+- [x] **T3-4. Sending: the 5 second hold, Undo and "send it".** Done 19 Nov 2026 (`e65b254` on `plan-v22-web`).
   - Enter or "send it" starts the hold. Undo stops it. Then the send runs once. For a call, that is `/call-notes/confirm` with its one id.
   - After a spoken command, the card listens 5 seconds for "send it" or "cancel" only (choice 23).
   - **The pre-read:** Enter on the page (not in a box) does "Check and send", and the send dialog opens with Send in focus.
   - **Done when:** tests with fake timers pass: Undo inside 5 seconds sends nothing; after 5 seconds it sends once; a page closed inside the 5 seconds sends nothing and keeps the draft; "send it" sends; other words are ignored; and any key stops the listening.
-- [ ] **T3-5. Each action, start to end:** a pre-read, a call (with a follow-up and a field change), a task, an email and opening a page, each from V to sent. Then V with the AI off (dictation into Log call).
+- [ ] **T3-5. Each action, start to end:** a pre-read, a call (with a follow-up and a field change), a task, an email and opening a page, each from V to sent. Then V with the AI off (dictation into Log call). Built 19 Nov 2026 (`8764986`, `419ef96` on `plan-v22-web`), waiting for Al-khair to try each one in the real page.
   - **Done when:** a test for each passes with `mockApi`, and Al-khair has tried each one in the real page.
 - [ ] **T3-6. Part 3 check.** Lint, types, the tests, the build and the bundle report. The `design-review` skill on the bar and the card. The `speed-check` skill: V shows the bar within 100ms, and there are no dropped frames at 4x CPU slowdown. Each screen at 1440, 1280, 768 and 390px, light and dark, by keyboard only, and with reduced motion. A screen reader hears "Listening", and the card's read-back.
   - **Done when:** all checks pass, and the numbers are in the Log.
@@ -451,6 +451,12 @@ No new switch. The command step follows `call_notes_enabled` and `call_notes_ai_
   - **V and open things:** V does nothing while any dialog, menu or list box is open. So Today's rows must not be a list box, or V stops working on Today.
   - **TBC at Al-khair's look:** the timings (6 seconds to wait for the first word, 60 seconds at most, 1.5 seconds of silence); new words ("Speak to the Assistant", "Type what to do", and "Turning speech into words isn't set up here yet. Type what to do."); where the voice can't work (no Whisper, or Firefox), the bar opens on its text line and never opens the mic; the bar's look (centred at the bottom, 40rem wide, rising 24px on `smooth`).
   - **For Al-khair:** V does nothing while call prep's panel is open, because it counts as a dialog ("Speak (V)" in the top bar still works there). Should V work over call prep on a laptop? And three of PLAN-V18's mic messages end "type the note", kept word for word as the plan says; "type what to do" may read better in the bar.
+- 19 Nov 2026, T3-3, T3-4 and T3-5 (`2f550b4`, `e65b254`, `8764986`, `419ef96` on `plan-v22-web`): built by a fresh `frontend-agent`. T3-3's commit already holds the hold, "send it" and the send code, because the card's Send button uses them; T3-4 adds Undo, the listening and Enter on the pre-read page. T3-5 needed one missing piece, V with the AI off, so it was built too. Lint, types and the build pass. No browser look yet.
+  - **The full run:** 2,285 passed, 5 failed, in 148 seconds with about 1 GB free. The 5 are older tests that ran past their 5-second limit under the load (passwords, call notes, the pre-read and its send dialog); their 4 files pass alone, 96 of 96. T3-6 makes them steady.
+  - **The first visit grew:** 248,269 bytes gzip (769,352 raw) in 41 files, from 247,788 in 39. The card's late file splits `lib/is-typing.ts` and `motion/use-still.ts` out of the main file. That is 1,241 bytes over the plan's start (247,028), so about 240 over the 1 kB budget. T3-6 fixes it: taking the card's own `isTyping` import out puts that file back.
+  - **Where things are:** `apps/assistant/card/`: `card.tsx` (its keys, Esc, the send check and V), `hold.tsx` (the 5 second hold), `listen.ts` ("send it"), `send.ts`, `draft.ts` and `drafts.ts` (the browser's drafts), `dictation.tsx` and `host.tsx`. The bar sends `card` (`voice/bar-session.ts`), and the seam opens the card (`voice/hand-over.ts`). The pre-read page and `send-dialog.tsx` take Enter. `test/mock-api.ts` now records headers.
+  - **TBC at Al-khair's look:** every new word in `card/words.ts`; the card's width (32rem) and the countdown bar (the progress colour, an even speed). The call card is read-only: V can change the follow-up's day, the outcome and the summary, and a follow-up added by voice is called "Follow up". A typed command saves its call with `source: typed`. "New pre-read" opens Meetings, and its dialog doesn't open by itself.
+  - **For Al-khair:** the pre-read's send has no 5 second hold, because its send dialog is already the confirmation (choice 22 says every send waits; recommended: keep it so, and check it at the look). Dictation opens Log call only for a rep with the Call logs tick and call notes on; anyone else sees "can't read commands yet".
 
 ## Merge, checks and going live
 
@@ -517,3 +523,4 @@ No new switch. The command step follows `call_notes_enabled` and `call_notes_ai_
 - 19 Nov 2026: one change to the order. The website builds T3-1 and T3-2 (the V key, the voice bar and its words) next, while the backend builds T1-3 and T1-4. T3-1 and T3-2 need only T1-1's contract, which is in (`4b13c39`), and Today's rows use V (choice 8). T2-2 and T2-3 follow once T1-3's contract is in.
 - 19 Nov 2026, after T1-4 and T3-2: the safety check refused joining `plan-v22-web` into `plan-v22`, because the `git-workflow` skill says a merge needs Al-khair's own word. So the copies stay apart until he says so. The website copy got the same two generated files as `4a70341` instead (`474a41a` on `plan-v22-web`, types and lint pass), so it can build Today and the tasks. Both sides match, so the join stays clean. Each later contract change is copied the same way. The website copy reads this plan from `../contour-v22`. Next: the backend builds T1-5, T1-6 and T1-7, and the website builds T2-2 and T2-3.
 - 19 Nov 2026, after T1-6 and T2-3: the laptop ran low on memory with both agents' test runs, and Claude Code stopped three of the backend's core test parts and the website's closing run. The website's run carried on without its shell and finished (Part 2 Log). Per the rule for stopped jobs, the core parts wait for Al-khair's word. The contract after T1-5 and T1-6 is copied to the website copy (`4e088cf`). Part 1's backend work is built. Next: the website builds T3-3 and T3-4 (the review card and sending), one agent at a time, to spare the memory.
+- 19 Nov 2026, after T3-5: T2-4 and T3-6 (the two closing checks) run together. First the code: the first visit back under the budget, the 5 slow tests made steady, and the `design-review` and `speed-check` skills on Today, Home, the bar and the card. Then the browser pass on the real backend of `../contour-v22` (port 8091) with the website of `../contour-v22-web` (port 5261), which also lets Al-khair look at every screen.
