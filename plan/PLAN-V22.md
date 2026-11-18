@@ -6,7 +6,7 @@ This plan builds what Levi asked for on 18 Nov: fewer clicks, and voice for the 
 
 - **Built by:** Al-khair Pama, with Claude. **Signed off by:** Al-khair, for the code and every screen. Levi confirms what is marked **TBC with Levi**.
 - **Last updated:** 19 Nov 2026 (T1-5 and T1-6 done, T2-2 and T2-3 built).
-- **Progress:** Before the build: 1 of 2 (S1 waits for Al-khair at the keyboard). Part 1: 6 of 7 (T1-7 waits for a rerun of three core test parts, on Al-khair's word). Part 2: 1 of 4 (T2-2 and T2-3 built, waiting for Al-khair's look). Part 3: 1 of 6 (T3-2 built, waiting for Al-khair's one real command). M1 to M4: 0 of 4.
+- **Progress:** Before the build: 1 of 2 (S1 waits for Al-khair at the keyboard). Part 1: 7 of 7. Part 2: 1 of 4 (T2-2 and T2-3 built, waiting for Al-khair's look). Part 3: 1 of 6 (T3-2 built, waiting for Al-khair's one real command). M1 to M4: 0 of 4.
 - **Sources:**
   - the meeting with Levi on 18 Nov (Gemini's notes in `minutes of meeting/`, which git ignores);
   - Al-khair's answers in chat (19 Nov);
@@ -312,7 +312,7 @@ No new switch. The command step follows `call_notes_enabled` and `call_notes_ai_
 
 ## Part 1: the backend
 
-**Progress:** 6 of 7. Every step is `backend-agent` work.
+**Progress:** 7 of 7. Every step is `backend-agent` work.
 
 - [x] **T1-1. The command step.** Done 19 Nov 2026 (`4515649`). The route, the prompt, the form and the limits, with a test for each line of "Done when".
   - `apps/companies/assistant.py`, with its prompt inline as `notes.py` has it, and the route in `api_assistant.py`.
@@ -344,9 +344,9 @@ No new switch. The command step follows `call_notes_enabled` and `call_notes_ai_
   - **Done when:** tests pass: an outside address refuses the send; a teammate with no account can't be picked, with why; a repeated key sends once; no sender set up gives 409; and the limit holds.
 - [x] **T1-6. The changes to what exists.** Done 19 Nov 2026 (`a17d19a`). `voice_tool`'s default, the morning email's link, `today_quiet_days`'s Settings help (the setting itself came with T1-3), the words for every new error (each file's words block), the new routes in `test_contract_routes.py`, and at most 20 tasks added a minute a person (**TBC**, as for commands; found at T1-4).
   - **Done when:** the settings, words and route tests pass.
-- [ ] **T1-7. Check.** ruff, ruff format, mypy, the fast tests, the Companies and core tests, and the contract gate (`RUN_GATES=1`). Then make the contract and the website's types again for Part 2.
+- [x] **T1-7. Check.** Done 19 Nov 2026. ruff, ruff format, mypy, the fast tests, the Companies and core tests, and the contract gate (`RUN_GATES=1`). Then make the contract and the website's types again for Part 2.
   - **Done when:** all pass, and the numbers are in the Log.
-  - 19 Nov 2026: all pass but three parts of the core tests (the files a to g, h, and s to z), which Claude Code stopped for low memory. They wait for a rerun on Al-khair's word. The contract and types are in (`11260f5`).
+  - 19 Nov 2026: all pass. Claude Code stopped three parts of the core tests (the files a to g, h, and s to z) for low memory. They passed on a rerun on Al-khair's word the same day (Part 1 Log). The contract and types are in (`11260f5`).
 
 ### Part 1 Log
 
@@ -370,6 +370,7 @@ No new switch. The command step follows `call_notes_enabled` and `call_notes_ai_
   - **T1-6:** `voice_tool` now defaults to the speech service. A Whisper choice saved while the service was off isn't kept once it turns on; live already uses the service. The morning email's and the pre-read's links go to `/assistant/meetings/{id}`. That also fixed an older broken link: the pre-read's HubSpot task pointed to `/meetings?form=`, a page that doesn't exist. At most 20 new tasks a minute (429 `too_many_tasks`).
   - **In memory, so they start again on a restart (TBC):** the 30 emails a day, the 20 tasks a minute and the email keys.
   - `engine/AGENTS.md` still calls Whisper the default. That changes at M4.
+- 19 Nov 2026, T1-7's rerun, on Al-khair's word: the core tests in files a to g: 775 passed, 25 skipped. h: 352 passed. s to z: 432 passed. With i to r's 720, all the core tests pass: 2,279 passed, 25 skipped. The first account's session ran it, one part at a time through `heavy.sh`, each part started with at least 0.7 GB free, while the website agent built T3-3 and T3-4.
 
 ## Part 2: the Assistant tab and Today
 
