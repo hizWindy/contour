@@ -9,7 +9,8 @@
  *   turns its line Terracotta, with its fix under it and its buttons (the plan's table), and the
  *   card never shakes. Everything else still works: Type instead, or Cancel.
  * - **The words** fade in a chunk at a time (150ms), with no typewriter. Words still being heard
- *   are quieter. A name heard nearly right is fixed, and the card says so once.
+ *   are quieter (`LiveWords`, which the voice bar shares). A name heard nearly right is fixed, and
+ *   the card says so once.
  * - **Which mic:** its name, with Change to pick another, remembered on this computer.
  * - **Keys:** Enter is Done, Esc is Cancel (nothing goes in the box).
  * - **Check only** ("Check my mic", from Ctrl+K or the profile menu): the same check, the bars,
@@ -44,6 +45,7 @@ import { Kbd } from '@/components/ui/kbd'
 import { cn } from '@/lib/utils'
 import { ChoiceItem } from '../../choice-item'
 import { clockText } from '../words'
+import { LiveWords } from './live-words'
 import type { NameFix } from './name-fix'
 import { CHECK_STEPS, MicSession, type MicEnv, type MicSnapshot } from './session'
 import type { VoiceToolKind, VoiceToolMaker } from './voice-tool'
@@ -66,7 +68,6 @@ import {
   speakingFor,
   STEP_WORDS,
   WHICH_MIC,
-  WORDS_SHOW_HERE,
   WRITING,
   type CheckStep,
   type MicAction,
@@ -75,7 +76,7 @@ import {
 /** The check's ticks show at least this far apart, so two that land together still read. */
 const TICK_GAP_MS = 40
 
-/** A chunk of words fades in this long (150ms, the one curve). */
+/** A problem's words fade in this long (150ms, the one curve). */
 const WORDS_IN = { duration: 0.15, ease: EASE } as const
 
 export interface MicCardProps {
@@ -427,29 +428,7 @@ export default function MicCard({
             data-slot="mic-words"
             className="max-h-40 min-h-[6.5rem] overflow-y-auto rounded-md border bg-card p-3 text-body text-foreground"
           >
-            {snapshot.chunks.length === 0 && snapshot.hearing === '' ? (
-              <p className="text-muted-foreground">{WORDS_SHOW_HERE}</p>
-            ) : (
-              <p className="text-pretty">
-                {snapshot.chunks.map((chunk, index) => (
-                  <m.span
-                    // Chunks only ever join at the end: the place is the chunk.
-                    key={index}
-                    initial={still ? false : { opacity: 0 }}
-                    animate={{ opacity: 1, transition: still ? INSTANT : WORDS_IN }}
-                  >
-                    {index > 0 ? ' ' : ''}
-                    {chunk}
-                  </m.span>
-                ))}
-                {snapshot.hearing ? (
-                  <span className="text-muted-foreground">
-                    {snapshot.chunks.length > 0 ? ' ' : ''}
-                    {snapshot.hearing}
-                  </span>
-                ) : null}
-              </p>
-            )}
+            <LiveWords chunks={snapshot.chunks} hearing={snapshot.hearing} />
           </div>
         ) : null}
 

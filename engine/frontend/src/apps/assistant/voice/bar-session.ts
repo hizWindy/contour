@@ -32,6 +32,7 @@ import {
   type MicEnv,
   type MicSnapshot,
 } from '@/apps/companies/call-notes/mic/session'
+import type { NameFix } from '@/apps/companies/call-notes/mic/name-fix'
 import type { VoiceToolMaker } from '@/apps/companies/call-notes/mic/voice-tool'
 import type { MicProblem } from '@/apps/companies/call-notes/mic/words'
 import type { AfterAnswer, Heard } from './hand-over'
@@ -93,6 +94,8 @@ export interface BarSnapshot {
   answer: ShownAnswer | null
   /** The voice can work here. False: the bar is the text line only. */
   voice: boolean
+  /** Names the mic heard nearly right and the name fix put right, kept once the talk is over. */
+  fixes: readonly NameFix[]
 }
 
 export interface BarSessionOptions {
@@ -120,6 +123,7 @@ const STARTING: BarSnapshot = {
   problem: null,
   answer: null,
   voice: true,
+  fixes: [],
 }
 
 /** The words alone, for telling new words from the same words written out ("Log a call."). */
@@ -261,6 +265,7 @@ export class BarSession {
   typeInstead(): void {
     if (this.snapshot.phase === 'typing') return
     const said = this.mic ? this.mic.text() : this.snapshot.words
+    this.keepFixes()
     this.stopListening()
     this.abortRequest()
     this.set({
@@ -380,6 +385,7 @@ export class BarSession {
   /** The talk is over, the last words in: the mic is let go, and the words go on. */
   private talkOver(): void {
     const text = (this.mic?.text() ?? '').trim()
+    this.keepFixes()
     this.stopListening()
     if (text === '') {
       this.set({ phase: 'problem', mic: null, words: '', problem: { kind: 'nothing_heard' } })
@@ -388,18 +394,28 @@ export class BarSession {
     this.send(text, 'mic')
   }
 
+  /** The names the mic put right stay on show once the mic is let go. */
+  private keepFixes(): void {
+    const fixes = this.mic?.getSnapshot().fixes ?? []
+    if (fixes.length > 0) this.set({ fixes })
+  }
+
   /**
    * The mic can't go on. Words said so far are kept, with the problem and its buttons. With no
    * words, the bar opens on the text line and says why.
    */
   private micFailed(problem: MicProblem): void {
     const said = (this.mic?.text() ?? '').trim()
+    this.keepFixes()
     this.stopListening()
     if (said === '') {
       this.set({ phase: 'typing', mic: null, draft: '', problem: { kind: 'mic', problem } })
-    } else {
-      this.set({ phase: 'problem', mic: null, words: said, problem: { kind: 'mic', problem } })
+      return
     }
+    // Words came, so the mic worked: one gone now (unplugged, or taken) has stopped. The mic
+    // card's check calls it "no mic" while its own check runs, which may still be the case here.
+    const shown: MicProblem = problem === 'no_mic' ? 'cut_off' : problem
+    this.set({ phase: 'problem', mic: null, words: said, problem: { kind: 'mic', problem: shown } })
   }
 
   private stopListening(): void {
@@ -448,12 +464,33 @@ export class BarSession {
     })
   }
 
-  /** The command step said no, or didn't answer. */
+  /**
+   * The command step said no, or didn't answer. The words stay in each case, so Try again or Type
+   * instead can use them.
+   */
   private failed(error: unknown, text: string, source: CommandSource): void {
     const problem = toApiProblem(error)
     if (problem.status === 409 && problem.code === 'assistant_off') {
       // The AI that reads commands is off: the words are dictation (choice 17).
       this.answered({ kind: 'dictation', words: text, source })
+      return
+    }
+    if (problem.status === 429) {
+      // Over 20 commands in a minute (choice 18).
+      this.set({ phase: 'problem', problem: { kind: 'too_many' } })
+      return
+    }
+    if (
+      (problem.status === 503 && problem.code === 'claude_unavailable') ||
+      problem.code === 'timeout'
+    ) {
+      // Claude took over 15 seconds or is down, or the answer didn't come in time.
+      this.set({ phase: 'problem', problem: { kind: 'too_slow' } })
+      return
+    }
+    if (problem.status === 422 && problem.code === 'command_empty') {
+      // Only spaces or marks reached the server: nothing to read.
+      this.set({ phase: 'problem', words: '', problem: { kind: 'nothing_heard' } })
       return
     }
     this.set({

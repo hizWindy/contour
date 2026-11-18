@@ -5,10 +5,16 @@
  * no mic, and the answer goes to the seam (a page opens, or the read-back shows until the review
  * card). Made-up names only: Sample Logistics Pty Ltd, Jo Sample.
  */
+import type { QueryClient } from '@tanstack/react-query'
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { useLocation } from 'react-router'
-import type { AssistantCommand, AssistantCommandIn, CallNoteOptions } from '@/api/types'
+import type {
+  AssistantCommand,
+  AssistantCommandIn,
+  CallNoteOptions,
+  CompanyDetail,
+} from '@/api/types'
 import { FakeMic, type FakeMicOptions } from '@/apps/companies/call-notes/mic/fake-mic'
 import { PROBLEMS } from '@/apps/companies/call-notes/mic/words'
 import type { SignIn } from '@/api/hooks/auth'
@@ -66,6 +72,11 @@ interface Open {
   /** Who is signed in. Left out: sign-in is off. */
   signIn?: SignIn
   mic?: FakeMicOptions
+  /** The voice tool setting. Left out: the browser's speech service. */
+  voiceTool?: CallNoteOptions['voice_tool']
+  /** The page the bar opens on, and what the page has loaded. */
+  route?: string
+  loaded?: (client: QueryClient) => void
   /** The command step's answer, as JSON or a function of the call. */
   answer?: AssistantCommand | Answer
   read?: (body: AssistantCommandIn, signal: AbortSignal) => Promise<AssistantCommand>
@@ -74,20 +85,24 @@ interface Open {
 function openBar({
   signIn = { state: 'off' },
   mic: micOptions,
+  voiceTool,
+  route = '/',
+  loaded,
   answer = command({}),
   read,
 }: Open = {}) {
   const mic = new FakeMic(micOptions)
-  const calls = mockApi({ [OPTIONS]: options(), [COMMAND]: answer })
+  const calls = mockApi({ [OPTIONS]: options(voiceTool), [COMMAND]: answer })
   const queryClient = createTestQueryClient()
   queryClient.setQueryData(queryKeys.auth.me(), signIn)
+  loaded?.(queryClient)
   const view = renderWithProviders(
     <>
       <button type="button">Where I was</button>
       <VoiceBar env={mic.env()} makeTool={mic.tool} times={QUIET} {...(read ? { read } : {})} />
       <Where />
     </>,
-    { queryClient },
+    { queryClient, route },
   )
   screen.getByRole('button', { name: 'Where I was' }).focus()
   act(() => {
@@ -281,5 +296,223 @@ describe('the voice bar', () => {
     })
     expect(screen.queryByRole('dialog', { name: BAR })).toBeNull()
     expect(mic.asked).toEqual([])
+  })
+})
+
+/** The command step's answer for a refusal, as the server writes one. */
+function refusal(status: number, code: string): Answer {
+  return () =>
+    Response.json(
+      { title: "That didn't work", status, detail: 'Try again.', code },
+      { status, headers: status === 429 || status === 503 ? { 'Retry-After': '30' } : {} },
+    )
+}
+
+/** The bar's buttons, in the order they show. */
+function buttons(found: HTMLElement): string[] {
+  return within(found)
+    .getAllByRole('button')
+    .map((button) => button.textContent.replace(/(Esc|V|Enter)$/, '').trim())
+}
+
+/** Says something and presses V, as a rep would. */
+async function say(
+  found: HTMLElement,
+  mic: FakeMic,
+  words: string,
+  user: { keyboard: (keys: string) => Promise<void> },
+) {
+  act(() => {
+    mic.say(words)
+  })
+  expect(within(found).getByText(words)).toBeInTheDocument()
+  await user.keyboard('v')
+}
+
+const VITERA: CompanyDetail = {
+  key: '201',
+  name: 'Vitera Pty Ltd',
+  source: 'hubspot',
+  deal: 'open',
+  city: 'Melbourne',
+  state: 'VIC',
+  domain: null,
+  website: null,
+  industry: null,
+  description: null,
+  hubspot_url: null,
+  owner: null,
+  staff: null,
+  linkedin_staff: null,
+  lifecycle_stage: null,
+  last_talk: null,
+  last_talk_note: null,
+  next_lease_end: null,
+  lead: null,
+  calls: [],
+  deals: [],
+  notes: [],
+  offices: [],
+  people: [
+    { id: '9', name: 'Jo Sample', title: 'Office manager', phone: null, last_activity: null },
+  ],
+  people_status: 'ready',
+}
+
+describe('what each state shows (T3-2)', () => {
+  it('listening: each chunk of words is its own part, so a new one fades in alone, and words still being heard are quieter', async () => {
+    const { mic } = openBar()
+    const found = await listening()
+    act(() => {
+      mic.say('Add a task')
+    })
+    act(() => {
+      mic.say('to send the quote')
+      mic.hear('on Monday')
+    })
+    const chunks = Array.from(found.querySelectorAll('[data-slot=live-chunk]'))
+    expect(chunks.map((chunk) => chunk.textContent.trim())).toEqual([
+      'Add a task',
+      'to send the quote',
+    ])
+    expect(found.querySelector('[data-slot=live-hearing]')).toHaveTextContent('on Monday')
+    expect(found.querySelector('[data-slot=live-hearing]')).toHaveClass('text-muted-foreground')
+  })
+
+  it('the name fix: on a company’s page, a name heard nearly right is put right, and the bar says so', async () => {
+    const { mic, commands, user } = openBar({
+      route: '/companies/201',
+      loaded: (client) => {
+        client.setQueryData(queryKeys.companies.detail('201'), VITERA)
+      },
+    })
+    const found = await listening()
+    act(() => {
+      mic.say('Log a call with Jo at Vitara')
+    })
+    expect(within(found).getByText('Log a call with Jo at Vitera')).toBeInTheDocument()
+    expect(within(found).getByText('Changed Vitara to Vitera.')).toBeInTheDocument()
+    await user.keyboard('v')
+    await waitFor(() => {
+      expect(commands().map((call) => call.body)).toEqual([
+        { text: 'Log a call with Jo at Vitera', source: 'mic', on_page: { company_key: '201' } },
+      ])
+    })
+  })
+
+  it('nothing heard: the plan’s words, with Try again and Type instead, and Try again listens again', async () => {
+    const { mic, user } = openBar()
+    const found = await listening()
+    await user.keyboard('v')
+    expect(await within(found).findByRole('alert')).toHaveTextContent(
+      "We didn't hear anything. Press V and speak, or type what to do.",
+    )
+    expect(buttons(found)).toEqual(['Type instead', 'Close', 'Try again'])
+    await user.click(within(found).getByRole('button', { name: 'Try again' }))
+    await listening()
+    expect(mic.tools).toHaveLength(2)
+  })
+
+  it('working it out: the words stay, the title says so, and nothing spins', async () => {
+    const { mic, user } = openBar({ read: () => new Promise(() => undefined) })
+    const found = await listening()
+    await say(found, mic, SAID, user)
+    await waitFor(() => {
+      expect(title(found)).toHaveTextContent('Working it out')
+    })
+    expect(within(found).getByText(SAID)).toBeInTheDocument()
+    expect(found.querySelector('svg.animate-spin, [role=progressbar]')).toBeNull()
+    expect(buttons(found)).toEqual(['Cancel'])
+  })
+
+  it('too many commands: the plan’s words, and no button but Close', async () => {
+    const { mic, user } = openBar({ answer: refusal(429, 'too_many_commands') })
+    const found = await listening()
+    await say(found, mic, SAID, user)
+    expect(await within(found).findByRole('alert')).toHaveTextContent(
+      "That's a lot of commands in one minute. Wait a moment, then try again.",
+    )
+    expect(buttons(found)).toEqual(['Close'])
+    expect(within(found).getByText(SAID)).toBeInTheDocument()
+  })
+
+  it('Claude slow or down: the plan’s words, the words kept, and Try again sends them again', async () => {
+    let tries = 0
+    const { mic, commands, user } = openBar({
+      answer: (call) => {
+        tries += 1
+        return tries === 1 ? refusal(503, 'claude_unavailable')(call) : Response.json(command({}))
+      },
+    })
+    const found = await listening()
+    await say(found, mic, SAID, user)
+    expect(await within(found).findByRole('alert')).toHaveTextContent(
+      'That took too long. Your words are kept. Try again.',
+    )
+    expect(buttons(found)).toEqual(['Type instead', 'Close', 'Try again'])
+    await user.click(within(found).getByRole('button', { name: 'Try again' }))
+    await waitFor(() => {
+      expect(found.querySelector('[data-slot=voice-answer]')).not.toBeNull()
+    })
+    expect(commands().map((call) => call.body)).toEqual([
+      { text: SAID, source: 'mic' },
+      { text: SAID, source: 'mic' },
+    ])
+  })
+
+  it('Claude slow or down: Type instead puts the words in the text line', async () => {
+    const { mic, user } = openBar({ answer: refusal(503, 'claude_unavailable') })
+    const found = await listening()
+    await say(found, mic, SAID, user)
+    await within(found).findByRole('alert')
+    await user.click(within(found).getByRole('button', { name: 'Type instead' }))
+    const line = within(found).getByRole('textbox', { name: 'Type what to do' })
+    expect(line).toHaveValue(SAID)
+    expect(line).toHaveFocus()
+  })
+
+  it('the mic stops mid-talk: the mic’s own words, and Carry on keeps what was said', async () => {
+    const { mic, user } = openBar()
+    const found = await listening()
+    act(() => {
+      mic.say('Spoke to Jo Sample about the lease')
+      mic.unplug()
+    })
+    expect(await within(found).findByRole('alert')).toHaveTextContent(PROBLEMS.cut_off.words)
+    await user.click(within(found).getByRole('button', { name: 'Carry on' }))
+    expect(within(found).getByRole('textbox', { name: 'Type what to do' })).toHaveValue(
+      'Spoke to Jo Sample about the lease',
+    )
+  })
+
+  it('a browser with no speech service: the text line, and a quiet line that says why', async () => {
+    const { mic } = openBar({ mic: { speech: false } })
+    const found = await bar()
+    const line = await within(found).findByRole('textbox', { name: 'Type what to do' })
+    await waitFor(() => {
+      expect(line).toHaveFocus()
+    })
+    expect(within(found).getByText(PROBLEMS.no_speech_tool.words)).not.toHaveAttribute('role')
+    expect(mic.asked).toEqual([])
+  })
+
+  it('while Whisper isn’t built: the text line, and says so', async () => {
+    openBar({ voiceTool: 'browser_model' })
+    const found = await bar()
+    await within(found).findByRole('textbox', { name: 'Type what to do' })
+    expect(
+      within(found).getByText("Turning speech into words isn't set up here yet. Type what to do."),
+    ).toBeInTheDocument()
+  })
+
+  it('with the AI that reads commands off: says the Assistant can’t read commands yet (T3-5 opens Log call)', async () => {
+    const { mic, user } = openBar({ answer: refusal(409, 'assistant_off') })
+    const found = await listening()
+    await say(found, mic, SAID, user)
+    await waitFor(() => {
+      expect(found.querySelector('[data-slot=voice-answer]')).toHaveTextContent(
+        "The Assistant can't read commands yet.",
+      )
+    })
   })
 })

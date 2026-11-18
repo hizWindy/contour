@@ -29,17 +29,19 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useLocation, useNavigate } from 'react-router'
 import { readCommand } from '@/api/hooks/assistant'
 import { useCallNoteOptions, voiceToolOf } from '@/api/hooks/call-note-counts'
 import type { AssistantCommand, AssistantCommandIn } from '@/api/types'
-import type { MicEnv, MicSnapshot } from '@/apps/companies/call-notes/mic/session'
+import { LiveWords } from '@/apps/companies/call-notes/mic/live-words'
+import type { MicEnv } from '@/apps/companies/call-notes/mic/session'
 import type { VoiceToolMaker } from '@/apps/companies/call-notes/mic/voice-tool'
 import {
+  fixedWords,
   problemActions,
   problemWords,
   STEP_WORDS,
-  WORDS_SHOW_HERE,
   type MicAction,
 } from '@/apps/companies/call-notes/mic/words'
 import { useIsViewer } from '@/auth/can'
@@ -54,6 +56,7 @@ import { useBarRoom } from '@/lib/use-bar-room'
 import { BarSession, MAX_CHARS, type BarProblem, type BarSnapshot, type Times } from './bar-session'
 import { handOver } from './hand-over'
 import { isPlainV, somethingElseOpen, VOICE_BAR } from './keys'
+import { namesOnPage } from './names'
 import { onPageOf } from './on-page'
 import { closeVoiceBar, useVoiceBarOpen } from './store'
 import {
@@ -85,6 +88,7 @@ const CLOSED: BarSnapshot = {
   problem: null,
   answer: null,
   voice: true,
+  fixes: [],
 }
 
 const noSubscribe = (): (() => void) => () => undefined
@@ -203,26 +207,6 @@ function KeyHint({ children }: { children: ReactNode }) {
   )
 }
 
-/** The words as they come: final words, then the words still being heard, quieter. */
-function MicWords({ mic }: { mic: MicSnapshot | null }) {
-  const chunks = mic?.chunks ?? []
-  const hearing = mic?.hearing ?? ''
-  if (chunks.length === 0 && hearing === '') {
-    return <p className="text-muted-foreground">{WORDS_SHOW_HERE}</p>
-  }
-  return (
-    <p className="text-pretty">
-      {chunks.join(' ')}
-      {hearing ? (
-        <span className="text-muted-foreground">
-          {chunks.length > 0 ? ' ' : ''}
-          {hearing}
-        </span>
-      ) : null}
-    </p>
-  )
-}
-
 export default function VoiceBar({ env, makeTool, read = readCommand, times }: VoiceBarProps) {
   // Never for a Viewer (choice 18), whatever asked for it: V and "Speak (V)" don't either.
   const viewer = useIsViewer()
@@ -231,6 +215,7 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
   const options = useCallNoteOptions()
   const navigate = useNavigate()
   const location = useLocation()
+  const client = useQueryClient()
   const still = useStill()
 
   // A new session each time the bar opens, with what is on screen as it opens.
@@ -239,9 +224,11 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
   if (open !== opened) {
     setOpened(open)
     if (open) {
+      const onPage = onPageOf(location.pathname, location.search)
       setSession(
         new BarSession({
-          onPage: onPageOf(location.pathname, location.search),
+          onPage,
+          names: namesOnPage(client, onPage),
           read,
           hand: (heard) =>
             handOver(heard, {
@@ -335,6 +322,8 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
   const main = phase === 'typing' ? undefined : first
   const others = phase === 'typing' ? actions : rest
   const problem = snapshot.problem
+  // A name the mic heard nearly right, and put right: said once, under the words.
+  const fixes = listening ? (snapshot.mic?.fixes ?? []) : snapshot.fixes
   const act = (action: BarAction): void => {
     if (!session) return
     if (action === 'try_again') session.tryAgain()
@@ -417,12 +406,21 @@ export default function VoiceBar({ env, makeTool, read = readCommand, times }: V
               className="max-h-32 min-h-12 overflow-y-auto text-body text-foreground"
             >
               {listening ? (
-                <MicWords mic={snapshot.mic} />
+                <LiveWords
+                  chunks={snapshot.mic?.chunks ?? []}
+                  hearing={snapshot.mic?.hearing ?? ''}
+                />
               ) : snapshot.words ? (
                 <p className="text-pretty">{snapshot.words}</p>
               ) : null}
             </div>
           )}
+
+          {fixes.length > 0 && phase !== 'answer' ? (
+            <p data-slot="voice-fixes" className="text-caption text-muted-foreground">
+              {fixedWords(fixes)}
+            </p>
+          ) : null}
 
           {problem ? (
             isQuiet(problem) ? (

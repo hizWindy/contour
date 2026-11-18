@@ -1,8 +1,10 @@
 /**
- * One opening of the voice bar (PLAN-V22 T3-1), with a fake mic, a fake voice tool, a fake command
- * step and an exact clock: the mic opens and listens, about 1.5 seconds of silence ends the talk,
- * V keeps the words, Esc throws them away, typing always works, and the answer goes to the seam.
- * Made-up names only: Sample Logistics Pty Ltd, Jo Sample. No sound is ever kept.
+ * One opening of the voice bar (PLAN-V22 T3-1 and T3-2), with a fake mic, a fake voice tool, a fake
+ * command step and an exact clock: the mic opens and listens, about 1.5 seconds of silence ends the
+ * talk, V keeps the words, Esc throws them away, typing always works, and the answer goes to the
+ * seam. Then each state of T3-2: nothing heard, the name fix, too many commands, Claude slow or
+ * down, and the mic's own problems. Made-up names only: Sample Logistics Pty Ltd, Vitera Pty Ltd,
+ * Jo Sample. No sound is ever kept.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiProblem } from '@/api/client'
@@ -30,13 +32,15 @@ const SAID = 'Add a task to send Sample Logistics the quote on Monday'
 interface SetUp {
   mic?: FakeMicOptions
   onPage?: AssistantOnPage | null
+  /** The names on screen, for the name fix. */
+  names?: readonly string[]
   /** The command step's answer. Default: the task above. */
   answer?: (body: AssistantCommandIn, signal: AbortSignal) => Promise<AssistantCommand>
   /** What the seam does with an answer. Default: shows its read-back. */
   after?: (heard: Heard) => AfterAnswer
 }
 
-function setUp({ mic: micOptions, onPage, answer, after }: SetUp = {}) {
+function setUp({ mic: micOptions, onPage, names, answer, after }: SetUp = {}) {
   const mic = new FakeMic(micOptions)
   const sent: AssistantCommandIn[] = []
   const handed: Heard[] = []
@@ -45,6 +49,7 @@ function setUp({ mic: micOptions, onPage, answer, after }: SetUp = {}) {
     env: mic.env(),
     makeTool: mic.tool,
     onPage: onPage ?? null,
+    names: names ?? [],
     read: (body, signal) => {
       sent.push(body)
       return answer ? answer(body, signal) : Promise.resolve(TASK)
@@ -370,5 +375,182 @@ describe('V while the bar shows a line or a problem', () => {
     expect(session.pressV()).toBe(false)
     session.typeInstead()
     expect(session.pressV()).toBe(false)
+  })
+})
+
+/** The command step said no, as the server says it. */
+function refused(status: number, code: string): Promise<never> {
+  return Promise.reject(new ApiProblem({ title: "That didn't work", status, code }))
+}
+
+describe('each state (T3-2)', () => {
+  it('nothing heard: no word 6 seconds after the mic opened, and the mic is let go', async () => {
+    const { mic, session, sent, now } = setUp()
+    session.start('browser_service')
+    // The mic opens at once here, so the 6 seconds count from now.
+    await tick(0)
+    expect(now().phase).toBe('listening')
+    await tick(TIMES.firstWords - 1)
+    expect(now().phase).toBe('listening')
+    await tick(1)
+    expect(now()).toMatchObject({ phase: 'problem', problem: { kind: 'nothing_heard' } })
+    expect(mic.live()).toBe(0)
+    expect(sent).toEqual([])
+  })
+
+  it('nothing heard: V before any word says so at once, and V again listens again', async () => {
+    const { mic, session, now } = await listening()
+    session.pressV()
+    expect(now().problem).toEqual({ kind: 'nothing_heard' })
+    session.pressV()
+    await tick(100)
+    expect(now().phase).toBe('listening')
+    expect(mic.tools).toHaveLength(2)
+  })
+
+  it('nothing heard: Try again listens again, and Type instead opens the text line', async () => {
+    const { session, now } = await listening()
+    session.pressV()
+    session.tryAgain()
+    await tick(100)
+    expect(now().phase).toBe('listening')
+    session.pressV()
+    session.typeInstead()
+    expect(now()).toMatchObject({ phase: 'typing', draft: '' })
+  })
+
+  it('the name fix: a name heard nearly right is put right, and the bar keeps saying so', async () => {
+    const { mic, session, sent, now } = await listening({
+      names: ['Vitera Pty Ltd', 'Jo Sample'],
+    })
+    mic.say('Log a call with Jo at Vitara')
+    expect(now().mic?.chunks).toEqual(['Log a call with Jo at Vitera'])
+    session.pressV()
+    await tick(0)
+    expect(sent[0]?.text).toBe('Log a call with Jo at Vitera')
+    expect(now().fixes).toEqual([{ from: 'Vitara', to: 'Vitera' }])
+  })
+
+  it('too many commands: the words stay, and nothing more is sent', async () => {
+    const { mic, session, sent, now } = await listening({
+      answer: () => refused(429, 'too_many_commands'),
+    })
+    mic.say(SAID)
+    session.pressV()
+    await tick(0)
+    expect(now()).toMatchObject({ phase: 'problem', problem: { kind: 'too_many' }, words: SAID })
+    expect(sent).toHaveLength(1)
+  })
+
+  it('Claude slow or down: the words stay, and Try again sends the same words again', async () => {
+    let down = true
+    const { mic, session, sent, now } = await listening({
+      answer: () => (down ? refused(503, 'claude_unavailable') : Promise.resolve(TASK)),
+    })
+    mic.say(SAID)
+    session.pressV()
+    await tick(0)
+    expect(now()).toMatchObject({ phase: 'problem', problem: { kind: 'too_slow' }, words: SAID })
+    down = false
+    session.tryAgain()
+    await tick(0)
+    expect(sent.map((body) => body.text)).toEqual([SAID, SAID])
+    expect(now().phase).toBe('answer')
+  })
+
+  it('an answer that doesn’t come in time is Claude slow too, and Type instead keeps the words', async () => {
+    const { mic, session, now } = await listening({ answer: () => refused(0, 'timeout') })
+    mic.say(SAID)
+    session.pressV()
+    await tick(0)
+    expect(now().problem).toEqual({ kind: 'too_slow' })
+    session.typeInstead()
+    expect(now()).toMatchObject({ phase: 'typing', draft: SAID })
+  })
+
+  it('words the server finds empty read as nothing heard', async () => {
+    const { mic, session, now } = await listening({
+      answer: () => refused(422, 'command_empty'),
+    })
+    mic.say('...')
+    session.pressV()
+    await tick(0)
+    expect(now().problem).toEqual({ kind: 'nothing_heard' })
+  })
+
+  it('the mic stops mid-talk: the words so far stay, and Carry on puts them in the text line', async () => {
+    const { mic, session, sent, now } = await listening()
+    mic.say('Spoke to Jo Sample about the lease')
+    mic.unplug()
+    expect(now()).toMatchObject({
+      phase: 'problem',
+      words: 'Spoke to Jo Sample about the lease',
+      problem: { kind: 'mic', problem: 'cut_off' },
+    })
+    expect(mic.live()).toBe(0)
+    session.typeInstead()
+    expect(now()).toMatchObject({ phase: 'typing', draft: 'Spoke to Jo Sample about the lease' })
+    expect(sent).toEqual([])
+  })
+
+  it('the mic goes before its own check heard a voice: still "the mic stopped", with the words', async () => {
+    const { mic, session, now } = setUp({ mic: { level: 0 } })
+    session.start('browser_service')
+    await tick(0)
+    expect(now().phase).toBe('listening')
+    mic.say('Spoke to Jo Sample')
+    mic.unplug()
+    expect(now()).toMatchObject({
+      phase: 'problem',
+      words: 'Spoke to Jo Sample',
+      problem: { kind: 'mic', problem: 'cut_off' },
+    })
+  })
+
+  it('writing the last words out takes too long: the words so far stay, with the mic’s words', async () => {
+    const { mic, session, now } = await listening({ mic: { toolNeverFinishes: true } })
+    mic.say('The lease ends in June')
+    session.pressV()
+    expect(now().phase).toBe('working')
+    await tick(5000)
+    expect(now()).toMatchObject({
+      phase: 'problem',
+      words: 'The lease ends in June',
+      problem: { kind: 'mic', problem: 'too_slow' },
+    })
+  })
+
+  it('the voice tool fails before any word: the text line, and Try again listens again', async () => {
+    const { mic, session, now } = await listening()
+    mic.fail('tool_failed')
+    expect(now()).toMatchObject({
+      phase: 'typing',
+      problem: { kind: 'mic', problem: 'tool_failed' },
+    })
+    session.tryAgain()
+    await tick(100)
+    expect(now().phase).toBe('listening')
+  })
+
+  it('the browser blocks the mic: the text line, with the words to fix it', async () => {
+    const { session, now } = setUp({ mic: { refuse: { name: 'NotAllowedError' } } })
+    session.start('browser_service')
+    await tick(0)
+    expect(now()).toMatchObject({
+      phase: 'typing',
+      problem: { kind: 'mic', problem: 'blocked_browser' },
+    })
+  })
+
+  it('never keeps the sound: nothing records, and only the words go to the server', async () => {
+    const recorder = vi.fn()
+    vi.stubGlobal('MediaRecorder', recorder)
+    const { mic, session, sent } = await listening({ onPage: { company_key: '201' } })
+    mic.say(SAID)
+    session.pressV()
+    await tick(0)
+    expect(recorder).not.toHaveBeenCalled()
+    expect(sent).toEqual([{ text: SAID, source: 'mic', on_page: { company_key: '201' } }])
+    expect(mic.live()).toBe(0)
   })
 })
